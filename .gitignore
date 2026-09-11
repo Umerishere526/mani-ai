@@ -1,0 +1,23 @@
+# Per-app .gitignore files in web/ and mobile/ still apply. This file
+# covers backend/ (which has none) and noise that spans the whole repo.
+
+# Python
+backend/.venv/
+__pycache__/
+*.py[cod]
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Editors
+.vscode/
+.idea/
+
+# Claude Code reads project settings only from the session's working directory,
+# so a .claude/ in an app subdirectory is never loaded. Keep settings at the root.
+*/.claude/
+
+# macOS
+.DS_Store
