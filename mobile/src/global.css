@@ -3,3 +3,81 @@
 @import "tailwindcss/utilities.css";
 
 @import "nativewind/theme";
+
+@source "./app/**/*.{ts,tsx}";
+@source "./components/**/*.{ts,tsx}";
+@source "./hooks/**/*.{ts,tsx}";
+
+/*
+  Design tokens ported from @mani/design-tokens (apps/mani-app/packages/design-tokens).
+  This file is the single source of truth for the palette — src/lib/tokens.ts mirrors
+  these same values for the cases that can't be a className (gradients, SVG, Reanimated
+  interpolation outputs). Keep the two in sync by hand; there is no code generation step.
+*/
+@theme {
+  /* Primary - Mani branded green, 500 is the base */
+  --color-primary-50: #f2f6f0;
+  --color-primary-100: #e0e9dc;
+  --color-primary-200: #c5d6bc;
+  --color-primary-300: #a5bb88;
+  --color-primary-325: #8ba872;
+  --color-primary-350: #749a5e;
+  --color-primary-375: #5e874c;
+  --color-primary-400: #4d7640;
+  --color-primary-500: #43653a;
+  --color-primary-600: #395631;
+  --color-primary-700: #2e4628;
+  --color-primary-800: #24371f;
+  --color-primary-900: #1a2816;
+
+  /* Secondary - cream, 500 is the base */
+  --color-secondary-50: #fffcf7;
+  --color-secondary-100: #fff9f0;
+  --color-secondary-200: #fff7e9;
+  --color-secondary-300: #fff5e5;
+  --color-secondary-400: #fff4e3;
+  --color-secondary-500: #fff4e1;
+  --color-secondary-600: #f5e4cc;
+  --color-secondary-700: #e6d1b3;
+  --color-secondary-800: #d4bc99;
+  --color-secondary-900: #c2a780;
+
+  /* Backgrounds */
+  --color-bg-default: #fafaf8;
+  --color-bg-card: #ffffff;
+  --color-bg-sidebar: #1c1c1a;
+  --color-bg-sidebar-hover: #2a2a28;
+  --color-bg-user-bubble: #f0f0ed;
+
+  /* Text */
+  --color-text-default: #1c1c1a;
+  --color-text-muted: #6b6b68;
+  --color-text-light: #9a9a96;
+  --color-text-inverse: #ffffff;
+
+  /* Borders */
+  --color-border-default: #e8e8e4;
+  --color-border-sidebar: #2a2a28;
+
+  /* Accent */
+  --color-accent-default: #2d5a4a;
+  --color-accent-hover: #3d7a6a;
+  --color-accent-light: #e8f2ee;
+
+  /* Semantic */
+  --color-error-default: #c53030;
+  --color-error-light: #fed7d7;
+  --color-error-dark: #a02828;
+  --color-success-default: #2d5a4a;
+  --color-success-light: #e8f2ee;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Fonts */
+  --font-sans: "Montserrat-Regular";
+}

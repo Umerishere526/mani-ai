@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mobile",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "ios": {
       "icon": "./assets/expo.icon"
     },
@@ -32,7 +32,20 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./node_modules/@expo-google-fonts/montserrat/400Regular/Montserrat_400Regular.ttf",
+            "./node_modules/@expo-google-fonts/montserrat/500Medium/Montserrat_500Medium.ttf",
+            "./node_modules/@expo-google-fonts/montserrat/600SemiBold/Montserrat_600SemiBold.ttf",
+            "./node_modules/@expo-google-fonts/montserrat/700Bold/Montserrat_700Bold.ttf"
+          ]
+        }
+      ],
+      "@react-native-vector-icons/feather",
+      "@react-native-vector-icons/ionicons"
     ],
     "experiments": {
       "typedRoutes": true,
