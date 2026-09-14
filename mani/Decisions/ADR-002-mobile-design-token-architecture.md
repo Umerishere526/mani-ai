@@ -39,6 +39,8 @@ Option C. `mobile/src/global.css` carries the full palette in an `@theme` block 
 
 Spacing was **not** re-declared: the reference project's 4px-based spacing scale (`spacing[4]` = 16px) is numerically identical to Tailwind's built-in default scale (`p-4` = 16px), so overriding `--spacing-*` would just reimplement what Tailwind already provides for free.
 
+**Font weights are declared as separate `--font-*` family tokens, not via `--font-weight-*`.** Each Montserrat weight (Regular/Medium/SemiBold/Bold) is a discrete embedded font file/family, not a single variable font — so Tailwind's stock `font-semibold`/`font-bold` utilities (which only ever emit CSS `font-weight`) do nothing on native, where weight selection means swapping `fontFamily`. `global.css` instead declares `--font-sans`, `--font-sans-medium`, `--font-sans-semibold`, `--font-sans-bold`, each mapped to the exact PostScript name baked into the corresponding ttf (verified by parsing each file's `name` table, not assumed from the filename). Components use `font-sans-semibold`, never `font-semibold`.
+
 ## Consequences
 
 - Adding shared components is straightforward: `className="bg-primary-900"` works immediately, matching the skill.
