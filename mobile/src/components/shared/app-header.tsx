@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@react-native-vector-icons/feather/static';
+import { Feather } from '@react-native-vector-icons/feather';
 import { colors } from '@/lib/tokens';
 import { cn } from '@/lib/utils';
 import en from '@/dictionaries/en.json';

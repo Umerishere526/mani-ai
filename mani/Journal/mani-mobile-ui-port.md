@@ -339,6 +339,89 @@ ChangePassword/ChangeEmail together with no errors — the first point in
 this port where every route actually resolves as one app, not isolated
 component exports.
 
+## Correction: the reanimated version drift was not harmless
+
+Every stage of this port, `expo-doctor` flagged one thing: `react-native-
+reanimated` expected `4.5.1`, found `4.6.0`. I noted it each time as
+"pre-existing drift, unrelated to my changes, not blocking" — true as far
+as it went (`tsc`/lint/tests/every `expo export` I ran stayed green), but
+**wrong that it wasn't blocking**: muhammad ran the actual dev server and
+hit a hard runtime crash — `[Reanimated] Your installed version of Worklets
+(0.10.1) is not compatible with installed version of Reanimated (4.6.0)` —
+that took down every route's module graph at once (cascading into a wall
+of unrelated-looking "missing default export" warnings on every screen,
+which were downstream noise from this one import failure, not separate
+bugs).
+
+Root cause: `package.json` had `"react-native-reanimated": "^4.5.1"` — the
+caret let npm resolve it forward to `4.6.0` on some install, while
+`react-native-worklets` stayed pinned at exactly `0.10.1` (no caret).
+`reanimated@4.5.1`'s own peer dependency requires `worklets: '0.10.x'`;
+whatever `reanimated@4.6.0` requires, it isn't `0.10.1`. Fix: `npm view
+react-native-reanimated@4.5.1 peerDependencies` to confirm the matched
+pair, then pin reanimated to exactly `4.5.1` (no caret) rather than
+bumping worklets forward — SDK 57's own compatibility table (surfaced by
+`npx expo install --check`) wants `4.5.1` specifically, so pinning down to
+the tested pair is correct, not bumping up to chase the newer one.
+`expo-doctor` went from "1 check failed" to "21/21 checks passed" and
+`tsc`/lint/tests stayed green (a patch-level downgrade, no API break).
+
+**The lesson isn't "run the dev server every time"** (this environment
+can't launch a simulator) — it's that **a version-mismatch warning between
+two packages with a direct peer-dependency relationship is a different
+class of risk than an isolated "there's a newer version available" notice**,
+and deserves fixing immediately when first seen rather than carried forward
+as an accepted, monitored discrepancy. `expo-doctor` passing should have
+been a blocking gate before calling any stage done, not a status line noted
+in passing.
+
+## Correction: icons never rendered — Stage 1's /static import choice assumed a native build that doesn't exist
+
+muhammad reported icons not working. Root cause: **there is no `ios/` or
+`android/` directory in this project at all** — `expo prebuild` has never
+been run, so every config plugin in `app.json` (the font-embedding one, and
+the two icon-package plugins) has never actually executed. Nothing has
+been embedded into a native project because no native project exists; the
+app is running through Expo Go or an unrebuilt dev client.
+
+Stage 1 chose the `/static` icon import specifically *because* it avoids a
+runtime `await` before glyphs paint — reasoning that since custom-font
+embedding already required a dev build, riding on that same requirement for
+icons was free. That reasoning had an unexamined premise: it assumed a dev
+build would exist by the time this mattered. It doesn't, and nothing in
+the port up to that point had actually created one — I verified the plugin
+*declarations* compiled into a valid config and left it there, without
+ever checking whether `ios/`/`android/` directories existed. That's the
+same category of mistake as the Reanimated version drift: treating "the
+config is declared correctly" as equivalent to "the feature works," when
+the two are only the same thing after a step (prebuild) that hadn't
+happened.
+
+Fix: switched every icon import from the `/static` subpath to the default
+(dynamic) import, e.g. `@react-native-vector-icons/feather` instead of
+`@react-native-vector-icons/feather/static`, across all 10 files that
+import Feather/Ionicons. The dynamic import carries a `fontSource` that
+`expo-font`'s runtime loader (`ExpoFontLoader`/`ExpoAsset`, both already
+installed as `expo-font`/`expo-asset` deps) downloads and registers on
+mount via a `useEffect` inside the icon component itself — confirmed this
+by reading `@react-native-vector-icons/common`'s `dynamic-font-loading.js`
+directly rather than assuming the fallback path "just works" the way I'd
+assumed the `/static` path did. This works in Expo Go with no native
+rebuild, at the cost of a brief async load before each icon set's first
+glyph paints.
+
+Left the `app.json` config plugins in place (both the font-embedding one
+and the two icon-package ones) — they're inert until someone eventually
+runs `expo prebuild`, at which point switching back to `/static` becomes
+correct again (no runtime download, no first-paint flash). Removing them
+now would just mean re-adding them later for no benefit.
+
+**Generalizes:** any Expo config-plugin-dependent choice (custom fonts,
+native module configuration, anything in `app.json`'s `plugins` array) is
+silently inert without a corresponding native build. Before relying on one
+in code, check `ls ios android` — a plugin declaration compiling cleanly
+proves nothing about whether it has ever actually run.
+
 ## Links
 
 - [[ADR-002]]
@@ -350,3 +433,23 @@ component exports.
   ChangeEmail) are done. Onboarding (Stage 4 phase E, by far the largest
   remaining piece — 11 steps + animated background + a UI-only state
   machine) has not been started as of this entry.
+
+## Correction: the icon-clipping diagnosis was wrong, reverted
+
+After the dynamic-import fix above, muhammad reported one icon looked cut
+off and I diagnosed it as a generic RN custom-icon-font line-height issue,
+built `FeatherIcon`/`Ionicon` wrapper components forcing `lineHeight`, and
+swept all ~15 call sites to use them. That diagnosis was wrong — the app
+hadn't been refreshed yet after the actual fix (the `/static` →
+dynamic-import switch); a reload was all that was needed. muhammad asked
+for the wrappers to be reverted, which was done: both wrapper files
+deleted, every call site back to importing `Feather`/`Ionicons` directly
+from `@react-native-vector-icons/*`. The two incidental real fixes found
+during that detour were kept, since they were correct independent of the
+wrapper theory: `app-header.tsx`'s phone icon was genuinely missing
+`size={14}` (diffed against source to confirm), and a few files had
+duplicate `@/components/shared` imports from an earlier sed sweep.
+
+**Lesson: when a symptom shows up right after a fix, check whether the fix
+was actually picked up (dev server refreshed/reloaded) before building a
+second, independent theory and a real code change on top of it.**

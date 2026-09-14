@@ -4,7 +4,7 @@
 import { useEffect } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@react-native-vector-icons/feather/static';
+import { Feather } from '@react-native-vector-icons/feather';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { colors } from '@/lib/tokens';
 import { ANIMATION_TIMINGS } from '@/lib/animation-timings';

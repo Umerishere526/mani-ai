@@ -1,7 +1,7 @@
 // ABOUTME: Circular send button for the chat input bar. Scales down with a spring on
 // ABOUTME: press for tactile feedback, independent of the pill's own active: state.
 
-import { Feather } from '@react-native-vector-icons/feather/static';
+import { Feather } from '@react-native-vector-icons/feather';
 import { Pressable, type GestureResponderEvent } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { colors } from '@/lib/tokens';

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Feather } from "@react-native-vector-icons/feather/static";
+import { Feather } from "@react-native-vector-icons/feather";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from "react-native-reanimated";
 import { AppHeader, CircularProgressButton, GradientSphere, SecondaryButton, Text } from "@/components/shared";
@@ -120,7 +120,7 @@ export default function ExercisePlayerScreen() {
           >
             <Pressable
               onPress={handleTogglePlayback}
-              className={isPlaying ? "h-18 w-18 items-center justify-center rounded-full bg-white/[0.08]" : "h-18 w-18 items-center justify-center rounded-full bg-secondary-500"}
+              className={isPlaying ? "h-18 w-18 items-center justify-center rounded-full bg-white/8" : "h-18 w-18 items-center justify-center rounded-full bg-secondary-500"}
               accessibilityRole="button"
               accessibilityLabel={isPlaying ? en.exercises.pauseLabel : en.exercises.playLabel}
             >

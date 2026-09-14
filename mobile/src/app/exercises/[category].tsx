@@ -7,7 +7,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
-import { Feather } from "@react-native-vector-icons/feather/static";
+import { Feather } from "@react-native-vector-icons/feather";
 import { AppHeader, Text } from "@/components/shared";
 import { useResponsiveTypography } from "@/hooks/useResponsiveTypography";
 import { formatDuration } from "@/lib/utils";

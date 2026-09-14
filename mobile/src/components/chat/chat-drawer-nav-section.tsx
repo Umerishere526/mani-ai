@@ -1,7 +1,7 @@
 // ABOUTME: The three top-level nav links inside ChatDrawer — Home, Library, Get Help Now.
 
 import { Pressable, View } from 'react-native';
-import { Feather, type FeatherIconName } from '@react-native-vector-icons/feather/static';
+import { Feather, type FeatherIconName } from '@react-native-vector-icons/feather';
 import { colors } from '@/lib/tokens';
 import en from '@/dictionaries/en.json';
 import { Text } from '@/components/shared';

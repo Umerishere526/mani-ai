@@ -4,7 +4,7 @@
 import { useEffect, type ReactNode } from "react";
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@react-native-vector-icons/ionicons/static";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from "react-native-reanimated";
 import { colors } from "@/lib/tokens";
 import { Text } from "@/components/shared";

@@ -4,7 +4,7 @@
 
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@react-native-vector-icons/feather/static';
+import { Feather } from '@react-native-vector-icons/feather';
 import { AppHeader, GradientSphere, Text } from '@/components/shared';
 import { colors } from '@/lib/tokens';
 import { useResponsiveTypography } from '@/hooks/useResponsiveTypography';

@@ -2,7 +2,7 @@
 // ABOUTME: or a toggle switch (in-place preference). One row is one setting.
 
 import { Pressable, Switch, View } from 'react-native';
-import { Feather, type FeatherIconName } from '@react-native-vector-icons/feather/static';
+import { Feather, type FeatherIconName } from '@react-native-vector-icons/feather';
 import { colors } from '@/lib/tokens';
 import { cn } from '@/lib/utils';
 import { Text } from '@/components/shared';

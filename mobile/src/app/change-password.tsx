@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { router } from "expo-router";
 import { Alert, Pressable, View, type TextInput as RNTextInput } from "react-native";
-import { Ionicons } from "@react-native-vector-icons/ionicons/static";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { AuthScreenShell } from "@/components/auth";
 import { PrimaryButton, Text, TextInput } from "@/components/shared";
 import en from "@/dictionaries/en.json";
