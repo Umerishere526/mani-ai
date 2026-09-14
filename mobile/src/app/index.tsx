@@ -1,9 +1,22 @@
-import { Text, View } from "react-native";
+import { useState } from "react";
+import { router } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { HomeScreenContent } from "@/components/home";
+import { HOME_EXERCISES } from "@/lib/placeholder-exercises";
 
 export default function Index() {
+  const [isLoading] = useState(false);
+
   return (
-    <View className="min-h-screen flex items-center justify-center">
-      <Text className="font-bold text-amber-700 text-3xl">Home Screen.</Text>
-    </View>
+    <>
+      <HomeScreenContent
+        homeExercises={HOME_EXERCISES}
+        isLoading={isLoading}
+        onExercisePress={(exerciseId) => router.push(`/exercises/player/${exerciseId}`)}
+        onLibraryPress={() => router.push("/exercises")}
+        onNewChatPress={() => router.push({ pathname: "/chat", params: { requestNewThread: "true" } })}
+      />
+      <StatusBar style="light" />
+    </>
   );
 }

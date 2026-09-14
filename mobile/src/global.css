@@ -78,6 +78,17 @@
   --radius-xl: 24px;
   --radius-full: 9999px;
 
-  /* Fonts */
+  /*
+    Fonts. Each Montserrat weight ships as its own discrete font file/family name
+    (see app.json's expo-font plugin config), not a single variable font — so RN's
+    fontWeight can't switch between them the way CSS font-weight does on web.
+    Tailwind's stock font-weight-* utilities (font-semibold, font-bold, ...) only
+    ever emit `font-weight`, which native ignores for weight selection. Use these
+    font-* family utilities instead: font-sans (regular, the default body copy),
+    font-sans-medium, font-sans-semibold, font-sans-bold.
+  */
   --font-sans: "Montserrat-Regular";
+  --font-sans-medium: "Montserrat-Medium";
+  --font-sans-semibold: "Montserrat-SemiBold";
+  --font-sans-bold: "Montserrat-Bold";
 }

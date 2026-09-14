@@ -1,12 +1,12 @@
-// ABOUTME: TypeScript mirror of the color tokens defined in src/global.css, for values
-// ABOUTME: that can't be a className — gradient arrays, SVG strokes, Reanimated outputs.
+// ABOUTME: TypeScript mirror of the color/font tokens defined in src/global.css, for
+// ABOUTME: values that can't be a className — gradient arrays, SVG strokes, library style props.
 
 /**
  * Keep this in sync with the `@theme` block in src/global.css by hand — there is no
- * codegen step linking them. Prefer Tailwind classNames (`bg-primary-900`) everywhere
- * a className is possible; reach for these constants only where the API takes a raw
- * color value instead of a class (expo-linear-gradient's `colors` prop, react-native-svg
- * `stroke`, Reanimated `interpolateColor` outputs).
+ * codegen step linking them. Prefer Tailwind classNames (`bg-primary-900`, `font-sans-bold`)
+ * everywhere a className is possible; reach for these constants only where the API takes a
+ * raw value instead of a class (expo-linear-gradient's `colors` prop, react-native-svg
+ * `stroke`, Reanimated `interpolateColor` outputs, react-native-marked's `styles` prop).
  */
 export const colors = {
   primary: {
@@ -78,5 +78,13 @@ export const radii = {
   full: 9999,
 } as const;
 
+export const fonts = {
+  regular: 'Montserrat-Regular',
+  medium: 'Montserrat-Medium',
+  semibold: 'Montserrat-SemiBold',
+  bold: 'Montserrat-Bold',
+} as const;
+
 export type Colors = typeof colors;
 export type Radii = typeof radii;
+export type Fonts = typeof fonts;
