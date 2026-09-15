@@ -1,4 +1,4 @@
-// ABOUTME: Admin login page — password and magic-link tabs. Visual only, no auth backend yet.
+// ABOUTME: Login page — password and magic-link tabs. Visual only, no auth backend yet.
 // ABOUTME: Ported from mani-app's app/admin/login/page.tsx.
 
 "use client";

@@ -57,7 +57,7 @@ export function AdminNav({ user, editingEnabled = false }: AdminNavProps) {
   const router = useRouter();
 
   const handleSignOut = () => {
-    router.push("/admin/login");
+    router.push("/auth/login");
     router.refresh();
   };
 

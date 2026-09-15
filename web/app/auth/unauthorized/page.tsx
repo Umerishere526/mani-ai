@@ -1,5 +1,5 @@
 // ABOUTME: Shown when a user lacks admin access. Visual only — nothing redirects here yet.
-// ABOUTME: Ported from mani-app's app/admin/unauthorized/page.tsx.
+// ABOUTME: Lives under auth/ (an access-denied state), not admin/ (the section it denies).
 
 import Link from "next/link";
 import dictionary from "@/dictionaries/en.json";
@@ -16,7 +16,7 @@ export default function UnauthorizedPage() {
         <h1 className="mb-4 text-2xl font-bold text-mani-text">{STRINGS.title}</h1>
         <p className="mb-6 text-mani-text-muted">{STRINGS.body}</p>
         <Link
-          href="/admin/login"
+          href="/auth/login"
           className="inline-block rounded-mani-md bg-mani-accent px-4 py-2 font-medium text-white transition-colors duration-200 hover:bg-mani-accent-hover"
         >
           {STRINGS.backToLogin}
