@@ -3,5 +3,16 @@
     "loading": "Loading",
     "error": "Something went wrong",
     "retry": "Try again"
+  },
+  "admin": {
+    "nav": {
+      "brand": "Mani Admin",
+      "prompts": "Prompts",
+      "providers": "Providers",
+      "exercises": "Exercises",
+      "chats": "Chats",
+      "adminBadge": "Admin",
+      "signOut": "Sign out"
+    }
   }
 }
