@@ -453,3 +453,56 @@ duplicate `@/components/shared` imports from an earlier sed sweep.
 **Lesson: when a symptom shows up right after a fix, check whether the fix
 was actually picked up (dev server refreshed/reloaded) before building a
 second, independent theory and a real code change on top of it.**
+
+## Bug: CircularProgressButton's ring rendered above the play button, not around it
+
+muhammad reported the play/pause button in the exercise player
+(`src/app/exercises/player/[id].tsx`) wasn't centered inside its progress
+ring. Screenshot showed the SVG ring and the `Pressable` circle as two
+separate, vertically stacked shapes — not overlapping at all — in
+`CircularProgressButton` (`src/components/shared/circular-progress-button.tsx`).
+
+**First (wrong) diagnosis**: assumed the geometry was fine — outer `View`
+88x88 with `items-center justify-center`, `Svg` marked `className="absolute"`,
+children wrapped in a second `View` with `items-center justify-center`. On
+paper, RN's default `flexDirection: column` plus an absolutely-positioned
+sibling should center the one remaining in-flow child perfectly. Tried
+`className="absolute inset-0"` on the `Svg` first — muhammad reverted it,
+correctly, since it didn't address the real mechanism.
+
+**Root cause**: `Svg` from `react-native-svg` is not a RN `View` — NativeWind
+has to bridge a `className` string onto whatever style prop that specific
+component actually accepts, and that bridging is not guaranteed to apply
+`position: absolute` the same way it does on a real `View`. When it doesn't
+take effect correctly, the `Svg` still reserves space in the parent's column
+flow instead of being pulled out of it, so the second child (the
+children-wrapper `View`) gets laid out *after* it rather than centered on
+top of it — exactly the stacked-not-overlapping look in the screenshot.
+
+**Fix**: stopped relying on className for positioning either child and gave
+both explicit inline `style` with `position: "absolute", top: 0, left: 0`
+(plus explicit `width`/`height` on the children wrapper, since an
+absolutely-positioned view with no size shrinks to content instead of
+filling its parent). This removes any dependency on how NativeWind's
+className bridge handles a non-`View` component — both children are pinned
+to the same `size × size` box independently, and the children wrapper
+centers its content within its own explicit bounds via `alignItems`/
+`justifyContent`.
+
+**Generalizes**: when composing a `className`-styled RN `View` with a
+non-`View` component from a third-party library (SVG, vector icons, anything
+that isn't a base RN primitive) in the same absolute/relative positioning
+group, don't trust `className` to carry positioning-critical styles
+(`absolute`, `inset-*`) on the non-`View` component — use inline `style`
+for those specific properties instead, even if `className` works fine for
+that same component's non-positioning styles elsewhere. Same family of risk
+as the earlier Stage 2 finding above about vector icons and `className`
+layout classes, now confirmed for `react-native-svg`'s `Svg` too.
+
+**Lesson on process**: muhammad's own read of the bug (flex properties only
+do something when both parent *and child* participate in the same flex
+layout — not just "the parent has `items-center`/`justify-center`") pointed
+straight at the interaction between the `Svg`'s actual computed `position`
+and its column-flow neighbor. Take a reported symptom's re-framing from
+muhammad seriously and re-derive the mechanism from it, rather than
+defending the first static read of the code.
