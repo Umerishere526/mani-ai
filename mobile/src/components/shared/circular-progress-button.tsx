@@ -31,8 +31,8 @@ export function CircularProgressButton({
   const strokeDashoffset = circumference * (1 - clampedProgress);
 
   return (
-    <View className="relative items-center justify-center" style={{ width: size, height: size }}>
-      <Svg width={size} height={size} className="absolute">
+    <View style={{ width: size, height: size }}>
+      <Svg width={size} height={size} style={{ position: "absolute", top: 0, left: 0 }}>
         <Circle cx={size / 2} cy={size / 2} r={radius} stroke={trackColor} strokeWidth={strokeWidth} fill="none" />
         <Circle
           cx={size / 2}
@@ -48,7 +48,9 @@ export function CircularProgressButton({
           origin={`${size / 2}, ${size / 2}`}
         />
       </Svg>
-      <View className="items-center justify-center">{children}</View>
+      <View style={{ position: "absolute", top: 0, left: 0, width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+        {children}
+      </View>
     </View>
   );
 }

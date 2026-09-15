@@ -16,12 +16,12 @@ const GRADIENT_COLORS = [colors.primary[700], colors.primary[900]] as const;
 const SIMULATED_DURATION_MS = 30_000;
 const PROGRESS_TICK_MS = 250;
 
-function formatTime(millis: number): string {
-  const totalSeconds = Math.floor(millis / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-}
+// function formatTime(millis: number): string {
+//   const totalSeconds = Math.floor(millis / 1000);
+//   const minutes = Math.floor(totalSeconds / 60);
+//   const seconds = totalSeconds % 60;
+//   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+// }
 
 export default function ExercisePlayerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -104,19 +104,20 @@ export default function ExercisePlayerScreen() {
 
       {hasStarted && (
         <View className="absolute left-0 right-0 items-center" style={{ bottom: insets.bottom + 32 }}>
-          <Text
+          {/* <Text
             className="mb-4 font-sans-semibold text-2xl text-white"
             accessibilityLabel={`${en.exercises.elapsedTimeLabel} ${formatTime(elapsedMs)}`}
             accessibilityRole="timer"
           >
             {formatTime(elapsedMs)}
-          </Text>
+          </Text> */}
           <CircularProgressButton
             progress={elapsedMs / SIMULATED_DURATION_MS}
             size={88}
             strokeWidth={4}
             progressColor="rgba(255,255,255,0.5)"
             trackColor="rgba(255,255,255,0.15)"
+
           >
             <Pressable
               onPress={handleTogglePlayback}
