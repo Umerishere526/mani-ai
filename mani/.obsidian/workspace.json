@@ -199,6 +199,8 @@
   },
   "active": "15e2d2f99fae0f5f",
   "lastOpenFiles": [
+    "Journal/mani-web-admin-ui-port.md",
+    "Decisions/ADR-003-web-admin-styling-tailwind-only.md",
     "Journal/claude-settings-load-from-working-directory-only.md",
     "Decisions/ADR-001-project-knowledge-lives-in-two-places.md",
     "Journal/Journal.md",
