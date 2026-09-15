@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useState, useTransition, type SubmitEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminExercise } from "@/types";
 import dictionary from "@/dictionaries/en.json";
@@ -47,7 +47,7 @@ export function ExerciseForm({ exercise, onSubmit, submitLabel = STRINGS.default
     }, 600);
   };
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
