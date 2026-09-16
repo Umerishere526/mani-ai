@@ -62,6 +62,18 @@ class Registry:
     def get(self, framework_id: str | None) -> Framework | None:
         return self._by_id.get(framework_id) if framework_id else None
 
+    def is_final(self, framework_id: str | None, phase: str | None) -> bool:
+        """Whether this phase is the last one in the framework's sequence.
+
+        Completion is a position, not a name. Comparing against a literal phase id can
+        only ever recognise the frameworks that happen to end on it, and makes any phase
+        appended after it unreachable.
+        """
+        framework = self.get(framework_id)
+        if framework is None or phase is None:
+            return False
+        return bool(framework.phases) and framework.phases[-1] == phase
+
     def validate_transition(
         self,
         framework_id: str | None,

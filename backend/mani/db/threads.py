@@ -220,16 +220,23 @@ class ThreadUpdates:
 
     title: str | None = None
     technique: TechniqueState | None = None
-    clear_technique: bool = False
+    retire_technique: bool = False
     offer_frameworks: list[str] = field(default_factory=list)
     style: ResponseStyle | None = None
     library_offered: bool = False
 
     def __bool__(self) -> bool:
-        return any([
-            self.title, self.technique, self.clear_technique,
-            self.offer_frameworks, self.style, self.library_offered,
-        ])
+        # Each optional field is tested for presence, not for truth. A field whose
+        # meaningful value is falsy - a zeroed counter, an empty title - would otherwise
+        # make this report "nothing to do" and silently drop every other write with it.
+        return (
+            self.title is not None
+            or self.technique is not None
+            or self.retire_technique
+            or bool(self.offer_frameworks)
+            or self.style is not None
+            or self.library_offered
+        )
 
 
 async def apply(
@@ -247,9 +254,13 @@ async def apply(
             updates.title, thread_id, user_id,
         )
 
-    if updates.clear_technique:
+    if updates.retire_technique:
+        # Retired, not removed. at_message_count is what the cooldown is measured from,
+        # so deleting the row tells the next turn no technique has ever run and lets a
+        # second framework start immediately. A finished technique is one whose outcome
+        # is accepted and whose phase is null.
         await conn.execute(
-            "delete from public.thread_technique_state "
+            "update public.thread_technique_state set phase = null "
             "where thread_id = $1 and user_id = $2",
             thread_id, user_id,
         )
