@@ -22,14 +22,22 @@ Requires Node 22.13+ (this machine runs v24).
 ```
 mobile/src/
 ├── app/                    # expo-router routes only
-├── components/shared/      # reusable UI
+├── components/
+│   ├── shared/             # generic, reusable UI primitives (Text, buttons, inputs, …)
+│   └── <feature>/          # domain-specific composites (chat/, settings/, …), one folder
+│                           # per feature area, each with its own barrel — siblings of shared/
 ├── hooks/                  # custom hooks, max 80 lines each
+├── providers/              # React context providers (state + a useX hook to read it)
 ├── lib/utils/              # utility functions (cn() lives here)
 ├── types/                  # shared TypeScript types
 └── dictionaries/           # user-facing strings (en.json, …)
 ```
 
 Anything inside `src/app/` becomes a route. Shared code goes in the siblings above, imported via `@/*` (`@/lib/utils`, `@/components/shared/button`).
+
+A context provider (state + a `useX()` hook to read it, e.g. a drawer-open/closed provider) belongs in `providers/`, not `hooks/` or `components/shared/` — it's neither pure hook logic (the 80-line hook cap doesn't fit a component that renders `<Context.Provider>`) nor rendered UI on its own.
+
+`components/shared/` is for primitives with no domain knowledge — a component doesn't care whether it's used in chat or settings. Once a cluster of components only makes sense together for one feature area (a chat drawer's nav section, thread list, and profile footer; a settings row and section), give that feature its own top-level folder under `components/` — `components/chat/`, `components/settings/` — as a sibling of `shared/`, each with its own `index.ts` barrel. Don't nest feature folders inside `shared/`; that folder is reserved for things any feature could reach for.
 
 ---
 
