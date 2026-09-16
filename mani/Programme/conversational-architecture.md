@@ -587,7 +587,61 @@ Worth stating plainly, because this is the part that must not drift:
 - **Every write still runs through `UserConn`**, which sets `mani_service` and the caller's JWT
   claims, so RLS decides row ownership whether or not a query remembers its filter.
 
-## 12. Blocked on muhammad
+## 12. Offering an exercise when a framework ends
+
+### Tool calling is not required, and would cost the invariant
+
+A tool call is a round trip: the model asks, code answers, the model writes. That is two
+provider calls minimum and a *variable* number in the general case, which is the failure mode
+the port existed to remove and the reason [[ADR-002-one-model-call-per-chat-turn]] rejected
+route-then-speak. It would buy nothing here, because **the answer is already known before the
+model speaks.** The exercise that follows a completed framework is a lookup on a row the
+backend has, not a judgement the model needs to make.
+
+Tool calling would only earn its place if the catalog were too large to put in front of the
+model and needed searching. The candidate set here is one to five rows. That is not retrieval.
+
+### The flow
+
+The `closing` phase (§6) already substitutes its capsules in `repairs.py` rather than trusting
+the model. The exercise capsule is one of them, so **code chooses it end to end** and the model
+is never asked for an identifier it could get wrong:
+
+1. The turn reaches `closing`, which `Registry.is_final` now detects by position rather than by
+   the string `"ground"`.
+2. `repairs.py` builds two capsules: "Chat More", and the exercise — title and duration read
+   from `exercises.for_framework(framework_id)`.
+3. The capsule carries **`exercise_id`**, so the client deep-links to that exercise rather than
+   dropping the person on a category screen to find it themselves.
+4. `library_offered_since` records the offer — which **works only once the row is retired by
+   UPDATE instead of deleted**, per §6. Today this write lands on a row the same turn destroyed.
+
+Free-conversation library offers keep using `SmartPrompt.library` and a `LibrarySection`. The
+two coexist: a section is "go and browse", an `exercise_id` is "here is the one that follows
+what we just did."
+
+### What it costs
+
+One nullable column: **`admin.exercises.framework_id text references admin.frameworks(id)`**.
+One framework may have several exercises (a three-minute and a ten-minute version); an exercise
+belongs to one framework or to none. `null` is the ordinary library exercise — which is what
+"Two Worry Buckets" becomes under §1 conflict 10. No join table, no new RLS, no new policy:
+`admin.exercises` is already the shared read-only catalog.
+
+`SmartPrompt` gains `exercise_id: uuid | None`, **validated against the catalog before it is
+persisted or used as control flow** — the same discipline `technique` and `library` already
+follow. It is validated even though code writes it, because the field is reachable by the model
+and an untrusted identifier is untrusted whatever usually fills it.
+
+### It cannot be tested end to end yet
+
+**`admin.exercises` holds zero rows and no audio file exists anywhere in the repository.**
+`mani/storage.py` signs paths to a bucket nothing has uploaded to. So this section is
+implementable and unit-testable against a fixture catalog, and unverifiable in a real
+conversation until the catalog and its audio land. Do not let a green test suite imply
+otherwise.
+
+## 13. Blocked on muhammad
 
 Each of these is a judgement, not an engineering task.
 
@@ -603,3 +657,6 @@ Each of these is a judgement, not an engineering task.
    the five persisted content phases (`surface, externalize, explore, land, ground`). It may be
    1:1; that is a clinical judgement, not a guess. Needed before `seed.py` is written.
 6. **Rate limit and per-user cost ceiling** (unchanged from [[Backend|PORT-STATUS]]).
+7. **The exercise catalog and its audio.** `admin.exercises` is empty and the bucket holds
+   nothing, so §12 cannot be verified in a real conversation. Which exercise corresponds to
+   which framework is also a clinical judgement, not a mapping to be guessed.
