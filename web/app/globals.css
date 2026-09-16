@@ -1,15 +1,137 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafaf8;
+  --foreground: #1c1c1a;
+
+  /* Mani design system — ported from @mani/design-tokens (mani-app) */
+  --color-mani-bg: #fafaf8;
+  --color-mani-bg-card: #ffffff;
+  --color-mani-sidebar: #1c1c1a;
+  --color-mani-sidebar-hover: #2a2a28;
+
+  --color-mani-text: #1c1c1a;
+  --color-mani-text-muted: #6b6b68;
+  --color-mani-text-light: #9a9a96;
+
+  --color-mani-border: #e8e8e4;
+
+  --color-mani-primary-50: #f2f6f0;
+  --color-mani-primary-100: #e0e9dc;
+  --color-mani-primary-200: #c5d6bc;
+  --color-mani-primary-300: #a5bb88;
+  --color-mani-primary-400: #4d7640;
+  --color-mani-primary-500: #43653a;
+  --color-mani-primary-600: #395631;
+  --color-mani-primary-700: #2e4628;
+  --color-mani-primary-800: #24371f;
+  --color-mani-primary-900: #1a2816;
+
+  --color-mani-secondary-50: #fffcf7;
+  --color-mani-secondary-100: #fff9f0;
+  --color-mani-secondary-200: #fff7e9;
+  --color-mani-secondary-300: #fff5e5;
+  --color-mani-secondary-400: #fff4e3;
+  --color-mani-secondary-500: #fff4e1;
+  --color-mani-secondary-600: #f5e4cc;
+  --color-mani-secondary-700: #e6d1b3;
+  --color-mani-secondary-800: #d4bc99;
+  --color-mani-secondary-900: #c2a780;
+
+  --color-mani-accent: #2d5a4a;
+  --color-mani-accent-hover: #3d7a6a;
+  --color-mani-accent-light: #e8f2ee;
+
+  --color-mani-error: #c53030;
+  --color-mani-error-light: #fed7d7;
+  --color-mani-error-dark: #a02828;
+
+  --color-mani-success: #2d5a4a;
+  --color-mani-success-light: #e8f2ee;
+
+  --radius-mani-sm: 6px;
+  --radius-mani-md: 10px;
+  --radius-mani-lg: 16px;
+  --radius-mani-xl: 24px;
+
+  --shadow-mani-sm: 0 1px 2px rgba(28, 28, 26, 0.04);
+  --shadow-mani-card:
+    0 1px 3px rgba(28, 28, 26, 0.04), 0 6px 16px rgba(28, 28, 26, 0.06);
+  --shadow-mani-lg:
+    0 4px 12px rgba(28, 28, 26, 0.08), 0 12px 32px rgba(28, 28, 26, 0.1);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-montserrat);
+  --font-mono: var(--font-jetbrains-mono);
+
+  --color-mani-bg: var(--color-mani-bg);
+  --color-mani-bg-card: var(--color-mani-bg-card);
+  --color-mani-sidebar: var(--color-mani-sidebar);
+  --color-mani-sidebar-hover: var(--color-mani-sidebar-hover);
+
+  --color-mani-text: var(--color-mani-text);
+  --color-mani-text-muted: var(--color-mani-text-muted);
+  --color-mani-text-light: var(--color-mani-text-light);
+
+  --color-mani-border: var(--color-mani-border);
+
+  --color-mani-primary-50: var(--color-mani-primary-50);
+  --color-mani-primary-100: var(--color-mani-primary-100);
+  --color-mani-primary-200: var(--color-mani-primary-200);
+  --color-mani-primary-300: var(--color-mani-primary-300);
+  --color-mani-primary-400: var(--color-mani-primary-400);
+  --color-mani-primary-500: var(--color-mani-primary-500);
+  --color-mani-primary-600: var(--color-mani-primary-600);
+  --color-mani-primary-700: var(--color-mani-primary-700);
+  --color-mani-primary-800: var(--color-mani-primary-800);
+  --color-mani-primary-900: var(--color-mani-primary-900);
+
+  --color-mani-secondary-50: var(--color-mani-secondary-50);
+  --color-mani-secondary-100: var(--color-mani-secondary-100);
+  --color-mani-secondary-200: var(--color-mani-secondary-200);
+  --color-mani-secondary-300: var(--color-mani-secondary-300);
+  --color-mani-secondary-400: var(--color-mani-secondary-400);
+  --color-mani-secondary-500: var(--color-mani-secondary-500);
+  --color-mani-secondary-600: var(--color-mani-secondary-600);
+  --color-mani-secondary-700: var(--color-mani-secondary-700);
+  --color-mani-secondary-800: var(--color-mani-secondary-800);
+  --color-mani-secondary-900: var(--color-mani-secondary-900);
+
+  --color-mani-accent: var(--color-mani-accent);
+  --color-mani-accent-hover: var(--color-mani-accent-hover);
+  --color-mani-accent-light: var(--color-mani-accent-light);
+
+  --color-mani-error: var(--color-mani-error);
+  --color-mani-error-light: var(--color-mani-error-light);
+  --color-mani-error-dark: var(--color-mani-error-dark);
+
+  --color-mani-success: var(--color-mani-success);
+  --color-mani-success-light: var(--color-mani-success-light);
+
+  --radius-mani-sm: var(--radius-mani-sm);
+  --radius-mani-md: var(--radius-mani-md);
+  --radius-mani-lg: var(--radius-mani-lg);
+  --radius-mani-xl: var(--radius-mani-xl);
+
+  --shadow-mani-sm: var(--shadow-mani-sm);
+  --shadow-mani-card: var(--shadow-mani-card);
+  --shadow-mani-lg: var(--shadow-mani-lg);
+
+  --animate-fade-in: fade-in 300ms ease-out;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,5 +144,5 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
