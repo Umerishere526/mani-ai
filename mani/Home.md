@@ -7,10 +7,13 @@ tags: [index]
 
 Project vault for the `mani` codebase — three apps in one directory: a Next.js web app, an Expo mobile app, and a FastAPI backend.
 
+**Building Mani itself? Start at [[START-HERE]]**, not here. This page maps the vault; that one carries the product, the route, and what to do next.
+
 ## Map
 
 | Folder | Holds |
 |--------|-------|
+| `Programme/` | The product roadmap, decisions and contracts — enter at [[START-HERE]] |
 | [[Journal]] | Claude's engineering notes — insights, failed approaches, preferences |
 | `Decisions/` | Architecture decision records (ADRs) |
 | `Features/` | Feature specs, written before building |
