@@ -25,11 +25,20 @@ that is a judgement about the conversation. [[conversational-architecture]] §3,
 on 2026-09-15, concluded that the decision must therefore precede generation, and proposed
 **route-then-speak**: a small structured call that decides, then a second call that writes.
 
-That analysis predates the prompt-caching measurement. A live turn was measured at
-**8,260 input / 195 output / 3,572 cached / 4,633 ms / exactly one provider call**. The
-cached fraction is 43%, and it is 43% rather than higher only because two volatile layers
-(`title_generation`, `techniques_used`) sit above the 3,070-token `response_format` layer
-in `composer.py`'s fixed order and invalidate the prefix behind them.
+What the system prompt costs today is known exactly. The three layers every chat turn
+carries measure 33,507 characters in `admin.prompts` — `mani_base` 8,923,
+`techniques` 10,960, `response_format` 13,624 — which is **~8,380 tokens at 4 characters
+per token**, before history, the `[ctx]` block or the user's message.
+
+What it costs *after caching* is not known. `admin.llm_calls` holds two rows, byte-identical
+at 8,230 in / 385 out / 4,200 ms, which is the scripted model in the integration tests rather
+than a provider. **`cached_input_tokens` is 0 on both, and no live turn has ever been
+recorded.** The plumbing is correct — `llm/client.py:205-210` asks OpenRouter for
+`usage: {include: true}` and reads `prompt_tokens_details.cached_tokens` — so the field is
+blind only because nothing has exercised it. The model is `google/gemini-3-flash-preview`.
+
+This decision therefore rests on token *arithmetic*, which is verifiable, and not on a cache
+hit rate, which is not yet. See Consequences.
 
 The port's single largest win was collapsing ~21 provider calls per turn to one.
 `tests/integration/test_turn.py::test_a_turn_costs_exactly_one_provider_call` asserts it.
@@ -38,12 +47,13 @@ The port's single largest win was collapsing ~21 provider calls per turn to one.
 
 ### Option A — One call per turn, stage content in the `[ctx]` block
 
-- Pros: keeps the invariant and its test. With the layer reorder the prompt projects to
-  ~5,880 tokens at ~91% cached — roughly 530 tokens billed at full rate, *cheaper than
-  today* while carrying three times the framework content. One round trip, so latency is
-  unchanged. Framework selection stays measurable: the router question can be run as an
-  **offline** eval against the routing set, which yields the accuracy number without
-  paying for a second call in production.
+- Pros: keeps the invariant and its test. One round trip, so latency is unchanged. The
+  prompt projects to ~7,900 tokens on a free-conversation turn and ~8,530 in-framework
+  against ~8,380 today — **flat on raw tokens while carrying three times the framework
+  content**, with ~7,650 of it in a static prefix that is cacheable where today's is not.
+  Framework selection stays measurable: the router question runs as an **offline** eval
+  against the routing set, which yields the accuracy number without paying for a second
+  call in production.
 - Cons: the turn on which Mani *offers* a framework is composed from a compact framework
   index plus activation conditions, not from full stage content. Selection quality rests
   on that index being good enough.
@@ -77,9 +87,14 @@ accuracy is measured offline rather than by a runtime router call.
 ## Consequences
 
 **Makes easy.** The invariant test stays an equality. Latency stays at one round trip.
-Prompt caching does the work the router was meant to do on cost, and does it better —
-because the expensive content is static and cacheable while the router prompt would not
-have been. Adding a seventh framework stays a content change.
+Adding a seventh framework stays a content change.
+
+**Robust to the open question.** The decision does not depend on caching working. If it
+works, one call is far cheaper than two, because the expensive content is static and
+cacheable while an ~800-token router prompt could never be. If it does not work, one call is
+*still* cheaper than two, because two prompts are strictly more tokens than one. The cache
+question changes how much the three-zone reorder in
+[[conversational-architecture]] §3 is worth; it does not change the turn shape.
 
 **Makes hard.** The offering turn has less context than a two-call design would give it.
 If routing accuracy on the eval set proves unacceptable, the fix is not free.

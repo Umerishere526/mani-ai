@@ -113,9 +113,9 @@ only. Do not take it pre-emptively.
 `mani_base → techniques → user_context → [title_generation] → techniques_used →
 response_format → debug → summary`. Two of those — `title_generation`, which appears on
 exactly one turn, and `techniques_used`, which grows as frameworks are offered — are **volatile
-and sit above `response_format`**, the 3,070-token layer. Everything behind a changed layer
-falls out of the provider's cache, which is why a measured turn cached 3,572 of 8,260 tokens
-rather than nearly all of them.
+and sit above `response_format`**, the largest layer at 13,624 characters. Everything behind a changed layer
+falls out of the provider's cache, so today the biggest static block in the prompt is paid in
+full on turns where a title is requested or a technique has been offered.
 
 **The rule: the system prompt is ordered strictly by volatility, most stable first, and
 anything that can change within a single conversation does not belong in it at all.**
@@ -148,13 +148,48 @@ history behind it*, precisely on the turns where the prompt is largest.
 in Zone A, its framework list becomes `framework_index`, and its per-framework prose becomes
 the `stages` jsonb of §4, reaching the model through Zone C one framework at a time.
 
-Projected: **~5,880 tokens on an ordinary turn** against 8,260 today, at ~91% cached — roughly
-530 tokens billed at full rate — and ~6,680 in-framework, while carrying content for six fully
-specified frameworks that today's 8,260 does not contain at all.
+### What it actually costs
 
-Do the reordering and the Zone C move **first, and measure**, before trimming any prose.
-`mani_base` and `response_format` hold the word-for-word audit and the no-adjectives list —
-the guardrails that stop replies sounding like a chatbot.
+Sizes are exact, from `admin.prompts`. Tokens are at 4 characters per token, which the one
+recorded `input_tokens` of 8,230 against 33,507 characters of system prompt corroborates.
+
+| | Today | Free conversation | In framework |
+|---|---|---|---|
+| Zone A — static prefix | — | 7,450 | 7,450 |
+| Zone B — per conversation | — | 200 | 200 |
+| Zone C — `[ctx]` | ~250 | 250 | 875 |
+| System prompt as it stands | 8,380 | — | — |
+| **Total, excluding history** | **8,380** | **7,900** | **8,530** |
+| **Cacheable** | **0 measured** | **7,650** | **7,650** |
+
+**Raw token count barely moves. The entire benefit is the cached fraction**, and that fraction
+has never been measured. `admin.llm_calls` holds two byte-identical rows from the scripted test
+model, with `cached_input_tokens` at 0 on both. The plumbing is right — `llm/client.py:205-210`
+asks OpenRouter for `usage: {include: true}` and reads `prompt_tokens_details.cached_tokens` —
+so the field is blind only because no live turn has ever been recorded.
+
+**Therefore step 0 of §9 is a caching spike**, before any reordering: two identical
+back-to-back chat turns against `google/gemini-3-flash-preview`, then read
+`cached_input_tokens`. It is an hour's work and it decides whether this section is worth doing.
+If the number comes back 0, reordering buys nothing and the work becomes *cutting* the prompt
+rather than arranging it.
+
+### The cut that pays either way
+
+`response_format.md` is 13,624 characters, the largest layer, and roughly two thirds of it —
+`# Field Descriptions` through `## Library Navigation` — **restates the Pydantic `Field`
+descriptions in `llm/schema.py`, which are already sent to the model as the JSON schema of the
+structured output.** The same rules, twice, every turn.
+
+Cutting that duplication is worth on the order of **1,700 tokens per turn, cached or not**, and
+it is the only large saving in the prompt that does not depend on an unproven cache. Do it in
+the same pass as the §4 removal of the hardcoded framework and shape lists, which live in the
+same block.
+
+What stays: `## User Message Format`, `# Constraints`, `## Tone`, `## Response Length`,
+`## Security` and `# Self-Check`, along with `mani_base` in full. Those hold the word-for-word
+audit and the no-adjectives list — the guardrails that stop replies sounding like a chatbot,
+and the reason this is a targeted cut rather than a trim.
 
 ---
 
@@ -229,6 +264,42 @@ options, exactly as it does for technique offers. What it needs:
 
 `profiles.support_style` stays as the onboarding answer and is not overwritten — it becomes the
 default, and the per-conversation choice overrides it.
+
+### What the first screen returns, before and after
+
+`POST /v1/threads/current`, first-time user. Today:
+
+```jsonc
+{ "thread": { "title": null, "message_count": 1, … },
+  "messages": [ { "role": "mani",
+                  "content": "Hi there. It's Mani. How can I support you today?",
+                  "prompts": [] } ],
+  "is_new": true }
+```
+
+One opener for everyone — and it is the *supportive* one, so a person who chose `direct` at
+onboarding is greeted in a style they did not pick. After:
+
+```jsonc
+{ "thread": { "conversation_style": null, … },
+  "messages": [ { "role": "mani",
+                  "content": "Hi Sam. It's Mani.",
+                  "prompts": [
+                    { "label": "Tell me what to do",      "style": "direct" },
+                    { "label": "Just be with me",         "style": "supportive" },
+                    { "label": "Help me think it through","style": "reflective" } ] } ],
+  "is_new": true }
+```
+
+The tap is an ordinary send. `find_tapped_prompt` matches the label, `threads.conversation_style`
+is written, the matching capsule enters Zone B, and Mani's reply is the style-specific opener.
+
+**Why this is worth doing.** Style stops being one interpolated sentence
+(`composer.py:46`) and becomes structural instruction that changes who leads, how often Mani
+asks rather than reflects, and how early a framework is offered. It costs **no extra model
+call** — the capsules are static text on a message that was already being written — and no new
+endpoint. `_history()` already marks the newest Mani message's buttons as live
+(`routers/threads.py:75-79`), so the greeting's capsules render with no serializer change.
 
 ---
 
@@ -358,15 +429,14 @@ Two existing defects in the crisis path, in scope because this work touches them
 
 ## 9. Sequence
 
+0. **The caching spike** (§3). An hour, and it decides how much of §3 is worth doing.
 1. **The two bugs in §6** — retire-by-update, `Registry.is_final` — with the tests they never
    had. Everything downstream is wrong without them.
-2. **Migration `002`.** `threads.conversation_style` + `vague_streak`, `frameworks.stages`,
-   the appended phases, the widened `create_greeting` and `mark_thread_crisis`. Both new thread
-   columns need **explicit column grants** — `grant update (title, last_message_at, deleted_at)
-   on public.threads` (`:713`) is column-scoped, so a new column inherits nothing and fails at
-   runtime with `42501`, rolling back the whole turn. Add both to `threads.COLUMNS`
-   (`threads.py:22`) or they never reach `TurnContext`.
-3. **Prompt re-ordering into three zones.** Measure `cached_input_tokens` before and after.
+2. **Migration `002`** — see §11 for the full plumbing, which is five places per column and
+   silent at four of them.
+3. **The `response_format` cut** (§3), which pays regardless of the spike's result, then the
+   three-zone re-ordering if the spike says caching works. Measure `cached_input_tokens`
+   before and after each.
 4. **Framework content** — six `backend/frameworks/<id>.md` files with YAML frontmatter, loaded
    by `seed.py` reusing its existing `parse_prompt()` split. *Blocked until the specification
    documents are committed.*
@@ -414,7 +484,110 @@ Exchange count needs no column: `threads.message_count // 2`, already in context
 
 ---
 
-## 11. Blocked on muhammad
+## 11. Migration 002, and how each change is proved
+
+### What changes
+
+| Change | For | Grant |
+|---|---|---|
+| `threads.conversation_style text` + CHECK `in ('direct','supportive','reflective')` | §5 | `grant update (conversation_style) … to authenticated` |
+| `threads.vague_streak smallint not null default 0` | §7 pivot | `grant update (vague_streak) … to mani_service` **only** |
+| `frameworks.stages jsonb not null default '{}'` | §4 | none — `admin.frameworks` is already the shared read-only catalog |
+| `frameworks.phases` gains `somatic`, `closing`; CHECK the last two | §6 | none |
+| `create_greeting(uuid, text, jsonb)` | §5 capsules | `drop` the 2-arg function, `revoke all … from public`, grant to `mani_service` |
+| `mark_thread_crisis(…, category, locked_thread)` | §8 | same drop / revoke / grant |
+| `crisis_events.category`, `.locked_thread` | §8 | none — `admin` is unreachable by the Data API |
+
+**`vague_streak` goes to `mani_service`, not `authenticated`, on purpose.** It is a pacing
+counter the backend maintains; a user who could write it could reset their own pivot and never
+be moved off a vague loop. This is the rule from `.claude/SUPABASE.md` — a privilege only the
+backend needs never goes to the user's role.
+
+### The five places a column has to be added
+
+`grant update (title, last_message_at, deleted_at) on public.threads`
+(`001_initial_schema.sql:713`) is **column-scoped**. A new column inherits nothing.
+
+| # | Place | If forgotten |
+|---|---|---|
+| 1 | `002_*.sql` — the column | Loud. Everything fails. |
+| 2 | `002_*.sql` — the column grant | **Runtime `42501`, which rolls back the whole turn** — the message pair is lost, not just the style |
+| 3 | `db/threads.py:22` `COLUMNS` | Silent. Never reaches `TurnContext`, reads as the default forever |
+| 4 | `models/rows.py:58` `Thread` | Silent. `extra="ignore"` drops it on validation |
+| 5 | `db/threads.py:211` `ThreadUpdates` + its `apply()` branch | Silent. Never written |
+
+Four of the five fail silently, and #2 fails in the most expensive way available. `ThreadOut`
+in `models/api.py:15` is a sixth if the client needs to render the value.
+
+### Two existing hazards this trips
+
+- **`ThreadUpdates.__bool__` (`db/threads.py:228-232`) tests bare truthiness over a list.**
+  `vague_streak = 0` is falsy, so a present-but-falsy field makes `apply()` return early and
+  silently drop the title and style writes in the same turn. It must test `is not None`.
+- **`orchestrator.replace_technique()` (`:338-347`) enumerates fields positionally** and will
+  silently reset any field added later. Replace it with `dataclasses.replace()`.
+
+### Reuse, do not duplicate
+
+`models/rows.py:44-47` already defines `SupportStyle` as `supportive | reflective | direct`.
+`conversation_style` is the same closed set and must reuse that enum. A parallel
+`ConversationStyle` would be two spellings of one vocabulary, which is how conflict 5 in §1
+started.
+
+`prompts/cache.py:22` pins `REQUIRED_PROMPTS = ("mani_base", "techniques", "response_format")`.
+Zone A adds `pacing`, `safety`, `framework_index` and `post_framework`, and **removes
+`techniques`**. Update that tuple and seed every name in it in the same commit, or
+`config.require()` raises `CONFIG_ERROR` and every turn 500s.
+
+`models/rows.py:118` `Framework` needs a `stages: dict` field, or the registry cannot serve
+what §4 stores.
+
+### How each change is proved
+
+Extend `tests/sql/test_grants.sql`, which already asserts this class of thing with
+`has_column_privilege` and `has_function_privilege` (`:75-91`, `:155-219`):
+
+```sql
+-- the style is the user's to choose
+select pg_temp.want('a user can choose their conversation style',
+  has_column_privilege('authenticated','public.threads','conversation_style','UPDATE'), true);
+
+-- the pacing counter is not
+select pg_temp.want('a user cannot reset their own vague streak',
+  has_column_privilege('authenticated','public.threads','vague_streak','UPDATE'), false);
+
+-- a widened definer function is a NEW function, and PUBLIC gets EXECUTE by default
+select pg_temp.want('anon cannot write a greeting',
+  has_function_privilege('anon','public.create_greeting(uuid,text,jsonb)','EXECUTE'), false);
+select pg_temp.want('a user cannot write a greeting either',
+  has_function_privilege('authenticated','public.create_greeting(uuid,text,jsonb)','EXECUTE'),
+  false);
+```
+
+Plus an assertion that the **old 2-argument `create_greeting` no longer exists** — a `create or
+replace` with a new signature leaves the old one in place, still granted, still callable.
+
+In pytest: one integration turn that writes `conversation_style` and asserts it survives the
+round trip, which is the only thing that catches a missing grant, since #2 above is invisible
+to unit tests.
+
+### The authentication surface does not change
+
+Worth stating plainly, because this is the part that must not drift:
+
+- **No new endpoints.** Style selection rides on `POST /v1/threads` and
+  `POST /v1/threads/current` through `StartOut.messages[].prompts`, which already exists, and
+  the tap is an ordinary `POST /v1/threads/{id}/messages`.
+- **Identity still comes only from the verified JWT.** `models/api.py` carries no `user_id` on
+  any request body and none is added. The style is chosen by tapping a capsule, so the client
+  names a *label*, not a user and not a privilege.
+- **`SmartPrompt.style` is a model- and client-supplied identifier**, so it is validated against
+  the `SupportStyle` closed set before it is persisted or used as control flow — exactly as
+  `library` is validated against `LibrarySection` and `technique` against the registry.
+- **Every write still runs through `UserConn`**, which sets `mani_service` and the caller's JWT
+  claims, so RLS decides row ownership whether or not a query remembers its filter.
+
+## 12. Blocked on muhammad
 
 Each of these is a judgement, not an engineering task.
 
