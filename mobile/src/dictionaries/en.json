@@ -5,6 +5,188 @@
     "retry": "Try again"
   },
   "home": {
-    "title": "Home Screen."
+    "greeting": "Support starts here",
+    "loadingExercisesLabel": "Loading exercises",
+    "exerciseCardHint": "Tap to start this exercise",
+    "libraryLink": "For more tools, explore the library",
+    "libraryLinkHint": "Opens the exercise library"
+  },
+  "settings": {
+    "title": "Settings",
+    "preferencesSection": "Preferences",
+    "accountSection": "Account",
+    "notifications": "Notifications",
+    "changePassword": "Change Password",
+    "changeEmail": "Change Email",
+    "logOut": "Log Out",
+    "loggingOut": "Logging out...",
+    "goBackLabel": "Go back"
+  },
+  "changeEmail": {
+    "titleEnterEmail": "Change Email",
+    "titleVerify": "Verify Email",
+    "intro": "Enter a new email address for your account. We'll send a verification code to confirm it's yours.",
+    "currentEmailLabel": "Current Email",
+    "newEmailLabel": "New Email",
+    "newEmailPlaceholder": "Enter new email address",
+    "newEmailAccessibilityLabel": "New email address",
+    "newEmailHint": "Enter your new email address",
+    "sendCode": "Send Code",
+    "sending": "Sending...",
+    "verifyIntro": "We sent a verification code to",
+    "otpPlaceholder": "000000",
+    "otpAccessibilityLabel": "Verification code",
+    "otpHint": "Enter the 6-digit code sent to your email",
+    "verify": "Verify",
+    "verifying": "Verifying...",
+    "resendCode": "Resend code",
+    "resendCodeLabel": "Resend verification code",
+    "wrongEmail": "Wrong email?",
+    "wrongEmailLabel": "Change to a different email address",
+    "invalidEmailTitle": "Invalid Email",
+    "invalidEmailMessage": "Please enter a valid email address.",
+    "sameEmailTitle": "Same Email",
+    "sameEmailMessage": "Please enter a different email address.",
+    "invalidCodeTitle": "Invalid Code",
+    "invalidCodeMessage": "Please enter the 6-digit code from your email.",
+    "genericError": "Please try again.",
+    "successTitle": "Success",
+    "successMessage": "Your email has been updated.",
+    "ok": "OK",
+    "codeSentTitle": "Code Sent",
+    "codeSentMessage": "A new verification code has been sent."
+  },
+  "changePassword": {
+    "title": "Change Password",
+    "intro": "Create a new password for your account. Make sure it's at least 8 characters long.",
+    "newPasswordLabel": "New Password",
+    "newPasswordPlaceholder": "Enter new password",
+    "newPasswordAccessibilityLabel": "New password",
+    "newPasswordHint": "Enter your new password, at least 8 characters",
+    "confirmPasswordLabel": "Confirm Password",
+    "confirmPasswordPlaceholder": "Confirm new password",
+    "confirmPasswordAccessibilityLabel": "Confirm password",
+    "confirmPasswordHint": "Re-enter your new password to confirm",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "update": "Update Password",
+    "updating": "Updating...",
+    "invalidPasswordTitle": "Invalid Password",
+    "invalidPasswordMessage": "Password must be at least 8 characters",
+    "passwordsMismatchTitle": "Passwords Do Not Match",
+    "passwordsMismatchMessage": "Please make sure your passwords match.",
+    "successTitle": "Success",
+    "successMessage": "Your password has been updated.",
+    "ok": "OK"
+  },
+  "exercises": {
+    "comingSoon": "150+ topics coming soon",
+    "failedToLoad": "Failed to load exercises",
+    "empty": "No exercises available yet",
+    "loadingExerciseLabel": "Loading exercise",
+    "failedToLoadExercise": "Failed to load exercise",
+    "failedToLoadAudio": "Failed to load audio. Please try again.",
+    "playbackFailed": "Playback failed. Please try again.",
+    "begin": "Begin",
+    "loadingAudio": "Loading...",
+    "loadingAudioLabel": "Loading audio",
+    "beginLabel": "Begin exercise",
+    "beginHint": "Starts playing the exercise audio",
+    "pauseLabel": "Pause exercise",
+    "playLabel": "Play exercise",
+    "elapsedTimeLabel": "Elapsed time",
+    "categories": {
+      "EmotionalIntelligence": {
+        "title": "Emotional Intelligence",
+        "description": "Develop awareness and understanding of your emotions"
+      },
+      "NarcissisticDynamics": {
+        "title": "Narcissistic Dynamics",
+        "description": "Navigate challenging relationship patterns"
+      },
+      "BuildingHabits": {
+        "title": "Building New Habits",
+        "description": "Create lasting positive changes in your life"
+      },
+      "Boundaries": {
+        "title": "Boundaries",
+        "description": "Learn to set and maintain healthy boundaries"
+      },
+      "Anxiety": {
+        "title": "Anxiety",
+        "description": "Tools and techniques to manage anxious feelings"
+      },
+      "Burnout": {
+        "title": "Burnout",
+        "description": "Recover and prevent emotional exhaustion"
+      }
+    }
+  },
+  "shared": {
+    "gradientSphereLabel": "Mani sphere",
+    "sendButtonLabel": "Send message"
+  },
+  "chat": {
+    "typingIndicatorLabel": "Mani is typing",
+    "openMenuLabel": "Open menu",
+    "getHelpNowLabel": "Get help now",
+    "getHelpNow": "Get Help Now",
+    "newConversationLabel": "New conversation",
+    "messageInputLabel": "Message input",
+    "messageInputHint": "Type your message here",
+    "messagePlaceholder": "Message",
+    "getHelpLabel": "Get help",
+    "getHelp": "Get Help",
+    "closeDrawerLabel": "Close drawer",
+    "closeMenuLabel": "Close menu",
+    "startNewConversationLabel": "Start new conversation",
+    "startNewConversation": "Start New Conversation",
+    "openSettingsLabel": "Open settings",
+    "goBackLabel": "Go back",
+    "newConversationFallbackTitle": "New conversation",
+    "dateGroups": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "older": "Older"
+    },
+    "navHome": "Home",
+    "navLibrary": "Library",
+    "navGetHelpNow": "Get Help Now",
+    "messagesListLabel": "Chat messages",
+    "crisisBannerText": "Chat is paused. Tap to view support resources.",
+    "crisisBannerLabel": "View crisis resources",
+    "crisisBannerHint": "Opens a drawer with safety support information and helpline resources"
+  },
+  "crisis": {
+    "buttonLabel": "I need support",
+    "closeDrawerLabel": "Close crisis support drawer",
+    "closeLabel": "Close",
+    "title": "Safety Support",
+    "intro": [
+      "You deserve support that keeps you safe.",
+      "If you are in immediate danger or feel at risk, you need real human help right now.",
+      "Mani cannot provide emergency care — but Mani can guide you to the right place."
+    ],
+    "guidance": [
+      {
+        "label": "If you feel unsafe",
+        "body": "Call your local emergency number."
+      },
+      {
+        "label": "If you need to talk to someone",
+        "body": "Reach out to a trusted person in your life. A real conversation can help you stay grounded."
+      },
+      {
+        "label": "If you need professional support",
+        "body": "Use one of the helplines below. These are confidential and available at all hours."
+      }
+    ],
+    "actions": [
+      "Grounding support",
+      "Create a safety plan",
+      "Crisis helplines",
+      "Child helplines"
+    ],
+    "disclaimer": "Mani offers emotional support and simple tools to help you sort what you're feeling. It does not replace medical, psychiatric, or crisis intervention services."
   }
 }
