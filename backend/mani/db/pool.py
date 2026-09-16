@@ -89,7 +89,11 @@ async def as_user(claims: Claims) -> AsyncIterator[asyncpg.Connection]:
         async with conn.transaction():
             # `set local` reverts when the transaction ends, so a pooled connection
             # cannot leak one caller's identity into the next request.
-            await conn.execute("set local role authenticated")
+            # mani_service, not authenticated: it holds the privileges only the backend
+            # should have - writing Mani's half of a turn, recording a crisis - which a
+            # user must not hold through PostgREST with their own JWT. RLS applies to it
+            # the same way, so this is a wider privilege set, not a wider view of rows.
+            await conn.execute("set local role mani_service")
             # set_config rather than SET LOCAL, which takes no parameters. auth.uid()
             # reads `sub` out of this, so it must be the verified claims, never input.
             await conn.execute(

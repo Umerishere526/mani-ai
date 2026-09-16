@@ -105,7 +105,13 @@ def create_app() -> FastAPI:
         FastAPI's default returns `{"detail": [...]}`, so a client branching on
         `error.category` silently falls through to its unknown-error path.
         """
-        logger.warning("invalid request: %s", exc.errors())
+        # Only which field failed and how. The rest of a pydantic error carries the
+        # rejected value, which for a too-long message is the whole thing the person
+        # typed. Nothing else in this service logs conversation content.
+        logger.warning(
+            "invalid request: %s",
+            [(e.get("type"), e.get("loc")) for e in exc.errors()],
+        )
         return JSONResponse(
             status_code=422,
             content=error_body(

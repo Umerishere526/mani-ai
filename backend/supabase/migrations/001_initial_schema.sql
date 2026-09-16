@@ -448,6 +448,10 @@ create policy technique_state_insert on public.thread_technique_state for insert
 create policy technique_state_update on public.thread_technique_state for update
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
+-- Finishing a technique removes the row. The DELETE privilege is held by mani_service
+-- alone, but the policy still has to exist or the delete matches nothing.
+create policy technique_state_delete on public.thread_technique_state for delete
+  using ((select auth.uid()) = user_id);
 
 create policy techniques_offered_select on public.thread_techniques_offered for select
   using ((select auth.uid()) = user_id);
@@ -479,7 +483,7 @@ create policy completions_update on public.exercise_completions for update
 -- a written turn is not editable by its author.
 --
 -- These policies are the active control, not decoration. The application runs ordinary
--- traffic - reads and writes both - as `authenticated` with the caller's claims set, so
+-- traffic - reads and writes both - as `mani_service` with the caller's claims set, so
 -- Postgres enforces ownership even where an endpoint forgets its own filter. That is
 -- the failure the previous system shipped: RLS existed, and a service-role client
 -- walked past it.
@@ -487,9 +491,15 @@ create policy completions_update on public.exercise_completions for update
 -- ============================================================================
 -- Privileged operations - the two writes a user must not be able to make directly
 -- ============================================================================
--- Everything else is a plain DML grant below. These two are security definer because
--- granting them to a user would let anyone with their own JWT forge Mani's side of a
--- conversation, or switch off their own crisis flag, straight through PostgREST.
+-- Everything else is a plain DML grant below. These are security definer because they
+-- write rows no plain grant should allow: Mani's side of a conversation, and a crisis
+-- event in the admin schema.
+--
+-- Security definer is only half the control. EXECUTE on all three is granted to
+-- mani_service and to nothing else, because a definer function that `authenticated`
+-- may call is a privilege `authenticated` holds: the caller supplies p_mani_content
+-- and the function writes it as Mani. Withholding the INSERT grant on public.messages
+-- means nothing while the function that replaces it is reachable with a user's own JWT.
 
 -- Writes both sides of a turn in one statement. Idempotent on client_message_id, so a
 -- retried request returns the original pair instead of duplicating it.
@@ -539,8 +549,12 @@ begin
     if found then
       return query
         select v_existing.id,
+               -- The unique key is (user_id, client_message_id), so the original may
+               -- sit in a different thread than the one this call names. Look for its
+               -- reply where the original actually is, or the pair comes back half
+               -- empty and the client renders a blank turn.
                (select m.id from public.messages m
-                 where m.thread_id = p_thread_id
+                 where m.thread_id = v_existing.thread_id
                    and m.role = 'mani'
                    and m.created_at >= v_existing.created_at
                  order by m.created_at
@@ -645,6 +659,31 @@ $$;
 -- Grants
 -- ============================================================================
 
+-- The role the backend acts as. It exists because the backend is the only thing that
+-- talks to this database, and some of what it needs - writing Mani's half of a turn,
+-- recording a crisis, clearing finished technique state - is exactly what a user must
+-- not be able to do. While the backend acted as `authenticated`, every privilege it
+-- needed was one the end user also held, reachable through PostgREST with their own
+-- anon-key JWT.
+--
+-- RLS still applies to it: the policies above carry no TO clause, so they target
+-- PUBLIC, and mani_service owns no tables and has no BYPASSRLS. It is a superset of
+-- `authenticated`, not an escape from ownership checks.
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'mani_service') then
+    create role mani_service nologin;
+  end if;
+end
+$$;
+
+grant authenticated to mani_service;
+
+-- The backend connects as `postgres` and switches with SET LOCAL ROLE, which needs
+-- membership. Deliberately never granted to `authenticator`: PostgREST would then be
+-- able to assume the role and the separation would be undone.
+grant mani_service to postgres;
+
 -- The admin schema is unreachable by users at all: configuration and analytics are not
 -- theirs to read, and it is never added to PostgREST's exposed schema list.
 revoke all on schema admin from anon, authenticated;
@@ -659,8 +698,10 @@ grant select on admin.exercises, admin.frameworks to authenticated;
 revoke all on all tables in schema public from anon, authenticated;
 grant usage on schema public to anon, authenticated;
 
--- Ordinary traffic runs as `authenticated`, which is what makes the policies above
--- apply to real requests rather than to nothing.
+-- Ordinary traffic runs as `mani_service`, which inherits every grant below, and the
+-- policies above apply to it - which is what makes them apply to real requests rather
+-- than to nothing. These grants are also what `authenticated` may reach directly
+-- through PostgREST, so they stay the floor, not the ceiling.
 grant select, insert on public.profiles to authenticated;
 -- user_id is excluded: a profile cannot be reassigned to another account.
 grant update (nickname, topics, support_style, age_bracket) on public.profiles
@@ -672,11 +713,14 @@ grant select, insert, delete on public.threads to authenticated;
 grant update (title, last_message_at, deleted_at) on public.threads
   to authenticated;
 
--- No insert grant: messages are written only through create_message_pair, so Mani's
--- side of a conversation cannot be forged.
+-- No insert grant: messages are written only through create_message_pair, and EXECUTE
+-- on that belongs to mani_service alone.
 grant select on public.messages to authenticated;
 
 grant select, insert, update on public.thread_technique_state to authenticated;
+-- Removing the row is how a finished technique is cleared, which is the backend's
+-- decision about the conversation, not the user's about their data.
+grant delete on public.thread_technique_state to mani_service;
 grant select, insert, delete on public.thread_techniques_offered to authenticated;
 grant select, insert on public.thread_response_styles to authenticated;
 grant select, insert, update on public.thread_summaries to authenticated;
@@ -692,7 +736,10 @@ revoke all on function public.create_message_pair(uuid, text, text, text, jsonb,
 revoke all on function public.mark_thread_crisis(uuid, text, uuid) from public;
 revoke all on function public.create_greeting(uuid, text) from public;
 
+-- To mani_service and to nothing else. `authenticated` gets none of them: each one
+-- takes content from its caller and writes it under privilege the caller does not have
+-- - Mani's words, or a row in admin.crisis_events.
 grant execute on function public.create_message_pair(uuid, text, text, text, jsonb, uuid)
-  to authenticated;
-grant execute on function public.mark_thread_crisis(uuid, text, uuid) to authenticated;
-grant execute on function public.create_greeting(uuid, text) to authenticated;
+  to mani_service;
+grant execute on function public.mark_thread_crisis(uuid, text, uuid) to mani_service;
+grant execute on function public.create_greeting(uuid, text) to mani_service;

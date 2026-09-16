@@ -177,6 +177,35 @@ async def test_tapping_the_offer_records_acceptance(alice, model):
     assert ctx.technique.phase == "activate"
 
 
+async def test_finishing_a_technique_clears_it_without_losing_the_turn(alice, model):
+    """The turn after a technique lands is the normal successful path, not an edge case.
+
+    Clearing the row is a DELETE, and the whole turn shares one transaction: if that
+    statement is refused, the user's message and Mani's reply go down with it.
+    """
+    model(Reply(text="How has the rest of the week been?"))
+    from mani.db import pool
+
+    thread = await start(alice)
+    # The phase clamp only advances one step per turn, so the landed state is set
+    # directly rather than walked through all six of abcde's phases.
+    async with pool.as_user(alice) as conn:
+        await threads.set_technique_outcome(
+            conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
+            at_message_count=2, phase="ground",
+        )
+
+    turn = await send(alice, thread.id, "that helped, thanks")
+
+    assert turn.content == "How has the rest of the week been?"
+
+    async with pool.as_user(alice) as conn:
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+
+    assert ctx.technique is None
+    assert [m.role for m in (await _history(alice, thread.id))][-2:] == ["user", "mani"]
+
+
 async def test_free_text_during_an_offer_leaves_it_open(alice, model):
     """The reference read silence as a decline, quietly halving the cooldown."""
     model(

@@ -136,9 +136,26 @@ Ordered by what breaks first.
    a deploy or a crash drops it silently. Correct on one instance, lossy on more.
 6. **`CORS_ORIGINS` must name the deployed web origin**, or `web/` gets no response at
    all from a browser. Mobile is unaffected.
-7. **No load has been run.** The pool is `min 2 / max 10` with a 90-second command
-   timeout, sized by reasoning rather than measurement — a turn holds its connection
-   across a ~5-second model call, so 10 concurrent turns saturate it.
+7. **No load has been run, and a turn is idle-in-transaction across the model call.**
+   The pool is `min 2 / max 10` with a 90-second command timeout, sized by reasoning
+   rather than measurement. `as_user()` opens the transaction for the whole request and
+   `orchestrator.send()` awaits the provider inside it, which buys the atomicity the
+   turn needs and costs three things worth stating plainly:
+   - **10 concurrent turns per process is the ceiling.** The 11th blocks on the pool.
+   - **Each in-flight turn holds an open transaction for ~5 s**, holding back vacuum and
+     pinning the xmin horizon on every table the turn touches.
+   - **Any `idle_in_transaction_session_timeout` below the model's latency kills turns
+     outright.** Supabase sets none by default; a platform or pooler in front of it may.
+     Check before assuming, and if one exists it must exceed `COMMAND_TIMEOUT_SECONDS`.
+
+   The atomicity is worth keeping — the alternative is a user message stored with no
+   reply. Raising `max_size` trades memory for concurrency and is the cheap first move;
+   splitting the turn into two transactions is not, and needs a decision, not a tweak.
+8. **The backend's database role must exist and be assumable.** `001_initial_schema.sql`
+   creates `mani_service` and grants it to `postgres`. If the deployed `DATABASE_URL`
+   connects as anything other than `postgres`, `set local role mani_service` fails and
+   every request 500s. Grant membership to that role too. Never to `authenticator` —
+   PostgREST would then be able to assume it and the separation would be undone.
 
 ---
 
@@ -205,6 +222,39 @@ Behaviour that was ported deliberately differently, with the reason.
 | Nickname only, from auth metadata | Nickname, topics and support style, from a table |
 | "New chat" could leave a trail of empty threads | One statement reuses an unused thread |
 | Stale buttons cleared by an UPDATE on history | Buttons returned only on Mani's newest message |
+
+## Fixed from review
+
+- **A user could forge Mani's side of their own conversation.** Withholding the INSERT
+  grant on `public.messages` did nothing while `create_message_pair` — a definer
+  function that takes Mani's words from its caller — was granted to `authenticated` and
+  reachable at `POST /rest/v1/rpc/create_message_pair` with the user's own anon-key JWT.
+  `mark_thread_crisis` was the same shape: a self-lockout plus arbitrary text into
+  `admin.crisis_events`, a table users are otherwise walled out of. The root cause was
+  that the backend acted as `authenticated`, so every privilege it needed was one the
+  user also held. Ordinary traffic now runs as `mani_service`, which holds the three
+  EXECUTE grants alone. RLS still applies to it: the policies carry no `TO` clause and
+  it owns no tables. Asserted in `tests/sql/test_rls.sql` and `test_grants.sql`.
+- **Completing a technique crashed the turn.** `apply()` deletes the technique state row
+  when a technique reaches `ground` accepted — the ordinary successful path — but the
+  table had neither a DELETE grant nor a DELETE policy. Since the turn shares one
+  transaction, the abort took the user's message and Mani's reply with it. Both halves
+  added, and both are covered: `test_finishing_a_technique_clears_it_without_losing_the_turn`
+  fails with `InsufficientPrivilegeError` without the grant and on a silent no-op
+  without the policy.
+- **Conversation content reached the logs on a validation failure.** Pydantic's
+  `errors()` carries the rejected value, so a message over the 4,000-character cap was
+  written to the log in full at WARNING — the only place in the service that leaked
+  content. Now only the error type and field are logged.
+- **Two statements in `apply()` relied on RLS alone.** The clear-technique DELETE and
+  the `library_offered` UPDATE carried no `user_id` predicate while the title UPDATE
+  beside them did. Made consistent; RLS was already catching it, defence in depth is
+  the point.
+- **A reused `client_message_id` returned a half-empty pair.** The unique key is
+  `(user_id, client_message_id)` but `create_message_pair` looked for the matching Mani
+  reply in the thread the *call* named, so a reuse across threads yielded NULL. It now
+  looks in the thread the original message is actually in, matching what
+  `find_pair_by_client_id` already did in Python.
 
 ## Bugs found and fixed while porting
 

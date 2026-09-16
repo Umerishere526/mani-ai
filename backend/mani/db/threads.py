@@ -249,7 +249,9 @@ async def apply(
 
     if updates.clear_technique:
         await conn.execute(
-            "delete from public.thread_technique_state where thread_id = $1", thread_id
+            "delete from public.thread_technique_state "
+            "where thread_id = $1 and user_id = $2",
+            thread_id, user_id,
         )
     elif updates.technique is not None:
         t = updates.technique
@@ -292,8 +294,8 @@ async def apply(
     if updates.library_offered:
         await conn.execute(
             "update public.thread_technique_state set library_offered_since = true "
-            "where thread_id = $1",
-            thread_id,
+            "where thread_id = $1 and user_id = $2",
+            thread_id, user_id,
         )
 
 

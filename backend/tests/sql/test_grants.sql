@@ -139,16 +139,73 @@ select pg_temp.want('a user cannot edit the exercise catalog',
   has_table_privilege('authenticated', 'admin.exercises', 'UPDATE'), false);
 
 -- ---------------------------------------------------------------------------
--- The two privileged paths are reachable, and are what they claim to be
+-- The privileged paths belong to the backend's role, not to the user's
 -- ---------------------------------------------------------------------------
+-- A definer function that `authenticated` may call is a privilege `authenticated`
+-- holds. create_message_pair takes Mani's words from its caller, so a user able to
+-- call it can forge Mani's half of their own transcript - which is exactly what
+-- withholding the INSERT grant on public.messages was meant to stop.
 
-select pg_temp.want('a user can write a turn through the function',
+select pg_temp.want('a user cannot write a turn through the function',
   has_function_privilege('authenticated',
+    'public.create_message_pair(uuid, text, text, text, jsonb, uuid)', 'EXECUTE'), false);
+
+select pg_temp.want('a user cannot record a crisis through the function',
+  has_function_privilege('authenticated',
+    'public.mark_thread_crisis(uuid, text, uuid)', 'EXECUTE'), false);
+
+select pg_temp.want('a user cannot write a greeting through the function',
+  has_function_privilege('authenticated',
+    'public.create_greeting(uuid, text)', 'EXECUTE'), false);
+
+select pg_temp.want('the backend can write a turn through the function',
+  has_function_privilege('mani_service',
     'public.create_message_pair(uuid, text, text, text, jsonb, uuid)', 'EXECUTE'), true);
 
-select pg_temp.want('a user can record a crisis through the function',
-  has_function_privilege('authenticated',
+select pg_temp.want('the backend can record a crisis through the function',
+  has_function_privilege('mani_service',
     'public.mark_thread_crisis(uuid, text, uuid)', 'EXECUTE'), true);
+
+select pg_temp.want('the backend can write a greeting through the function',
+  has_function_privilege('mani_service',
+    'public.create_greeting(uuid, text)', 'EXECUTE'), true);
+
+-- Clearing a finished technique is a backend decision. Both halves matter: without the
+-- grant the delete raises, without the policy it silently matches nothing.
+select pg_temp.want('the backend can clear technique state',
+  has_table_privilege('mani_service', 'public.thread_technique_state', 'DELETE'), true);
+
+select pg_temp.want('a user cannot delete technique state directly',
+  has_table_privilege('authenticated', 'public.thread_technique_state', 'DELETE'), false);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+     where schemaname = 'public' and tablename = 'thread_technique_state'
+       and cmd = 'DELETE'
+  ) then
+    raise exception 'FAIL: thread_technique_state has no DELETE policy, so the grant deletes nothing';
+  end if;
+  raise notice 'PASS: technique state has a DELETE policy behind the grant';
+end
+$$;
+
+-- The separation is only real while PostgREST cannot assume the role.
+do $$
+begin
+  if pg_has_role('authenticator', 'mani_service', 'USAGE') then
+    raise exception 'FAIL: authenticator can assume mani_service, so PostgREST can too';
+  end if;
+  raise notice 'PASS: PostgREST cannot assume the backend role';
+exception
+  when undefined_object then
+    raise notice 'SKIP: no authenticator role on this database';
+end
+$$;
+
+select pg_temp.want('the backend role does not bypass RLS',
+  (select rolbypassrls from pg_roles where rolname = 'mani_service'), false);
 
 -- Postgres grants EXECUTE to PUBLIC by default, so these are only closed if the default
 -- was explicitly revoked. Forgetting is how the previous project left its message-writing

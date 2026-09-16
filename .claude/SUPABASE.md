@@ -34,6 +34,28 @@ Two clients, and the distinction must be visible at every call site:
 
 **Derive the user id from the verified JWT. Never from the request body, a query parameter, or a header.** A client-supplied `user_id` is an authorization bypass: the caller simply names someone else. Verify the token, extract the subject, ignore anything the request claims about identity.
 
+### The user-scoped connection acts as `mani_service`, not `authenticated`
+
+A backend that acts as `authenticated` can hold no privilege the end user does not also
+hold — anything it needs is reachable through PostgREST with an anon-key JWT. That is
+not theoretical: it made `create_message_pair` callable by users, and since the function
+takes Mani's reply text from its caller, anyone could forge Mani's half of their own
+transcript while the missing INSERT grant on `messages` looked like it prevented exactly
+that. A `security definer` function is a privilege held by every role that may EXECUTE
+it; revoking the DML grant and granting the function to the same role changes nothing.
+
+So `backend/mani/db/pool.py` does `set local role mani_service`. The role is a member of
+`authenticated`, so it inherits the ordinary grants, and holds the few the user must not
+have: EXECUTE on the three definer functions, and DELETE on `thread_technique_state`.
+
+RLS still applies to it — the policies carry no `TO` clause, so they target `PUBLIC`, and
+`mani_service` owns no tables and has no `BYPASSRLS`. It is a wider set of privileges,
+never a wider view of rows. Two rules follow:
+
+- **A privilege only the backend needs goes to `mani_service`, never to `authenticated`.**
+- **Never grant `mani_service` to `authenticator`.** PostgREST could then assume it, and
+  the separation would be undone. `backend/tests/sql/test_grants.sql` asserts this.
+
 Test both paths as an unprivileged user. A policy that passes under service role proves nothing.
 
 ## What the Data API exposes — set this deliberately, per environment

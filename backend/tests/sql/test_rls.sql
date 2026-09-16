@@ -142,9 +142,11 @@ rollback;
 -- ---------------------------------------------------------------------------
 -- create_message_pair: writes both sides, is idempotent, refuses other threads
 -- ---------------------------------------------------------------------------
+-- As mani_service, because that is the only role holding EXECUTE. RLS still applies:
+-- the "refuses other threads" case below is the proof.
 
 begin;
-set local role authenticated;
+set local role mani_service;
 set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-00000000000a"}';
 
 do $$
@@ -206,7 +208,7 @@ rollback;
 -- ---------------------------------------------------------------------------
 
 begin;
-set local role authenticated;
+set local role mani_service;
 set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-00000000000a"}';
 
 do $$
@@ -232,6 +234,121 @@ begin
     when insufficient_privilege then
       raise notice 'PASS: a crisis cannot be recorded against another user''s thread';
   end;
+end
+$$;
+rollback;
+
+-- ---------------------------------------------------------------------------
+-- A user cannot forge Mani's side of their own conversation
+-- ---------------------------------------------------------------------------
+-- Withholding the INSERT grant on public.messages only holds while the definer function
+-- that replaces it is out of reach too. Both halves are asserted here, as Alice, against
+-- Alice's own thread - a case no ownership check would ever stop.
+
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-00000000000a"}';
+
+do $$
+begin
+  begin
+    insert into public.messages (thread_id, user_id, role, content)
+    values ('11111111-0000-4000-8000-000000000001',
+            'a0000000-0000-4000-8000-00000000000a', 'mani',
+            'Mani says: stop taking your medication.');
+    raise exception 'FAIL: Alice inserted a message as Mani directly';
+  exception
+    when insufficient_privilege then
+      raise notice 'PASS: a user cannot insert a message as Mani';
+  end;
+
+  begin
+    perform public.create_message_pair(
+      '11111111-0000-4000-8000-000000000001',
+      'innocuous user text',
+      'Mani says: stop taking your medication.'
+    );
+    raise exception 'FAIL: Alice forged Mani''s reply through create_message_pair';
+  exception
+    when insufficient_privilege then
+      raise notice 'PASS: a user cannot forge a turn through create_message_pair';
+  end;
+
+  begin
+    perform public.create_greeting(
+      '11111111-0000-4000-8000-000000000001', 'Mani says: you are beyond help.'
+    );
+    raise exception 'FAIL: Alice forged a greeting from Mani';
+  exception
+    when insufficient_privilege then
+      raise notice 'PASS: a user cannot forge a greeting';
+  end;
+
+  begin
+    perform public.mark_thread_crisis(
+      '11111111-0000-4000-8000-000000000001', 'text of the user''s choosing'
+    );
+    raise exception 'FAIL: Alice set her own crisis flag and wrote admin.crisis_events';
+  exception
+    when insufficient_privilege then
+      raise notice 'PASS: a user cannot set their own crisis flag';
+  end;
+end
+$$;
+rollback;
+
+-- ---------------------------------------------------------------------------
+-- Finishing a technique clears its row, for the owner only
+-- ---------------------------------------------------------------------------
+
+begin;
+set local role mani_service;
+set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-00000000000a"}';
+
+do $$
+declare
+  n integer;
+begin
+  insert into public.thread_technique_state
+    (thread_id, user_id, framework_id, outcome, phase, at_message_count)
+  values ('11111111-0000-4000-8000-000000000001',
+          'a0000000-0000-4000-8000-00000000000a',
+          'thought_reframing', 'accepted', 'ground', 4);
+
+  -- The turn after a technique reaches `ground` accepted. This is the ordinary
+  -- successful path, and the whole turn shares one transaction: a failure here loses
+  -- the user's message and Mani's reply with it.
+  delete from public.thread_technique_state
+   where thread_id = '11111111-0000-4000-8000-000000000001'
+     and user_id = 'a0000000-0000-4000-8000-00000000000a';
+
+  select count(*) into n from public.thread_technique_state
+   where thread_id = '11111111-0000-4000-8000-000000000001';
+  if n <> 0 then
+    raise exception 'FAIL: the grant exists but the delete matched nothing (missing policy?)';
+  end if;
+  raise notice 'PASS: a finished technique can be cleared';
+end
+$$;
+rollback;
+
+begin;
+set local role mani_service;
+set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-00000000000b"}';
+
+do $$
+declare
+  n integer;
+begin
+  insert into public.thread_technique_state
+    (thread_id, user_id, framework_id, outcome, phase, at_message_count)
+  values ('11111111-0000-4000-8000-000000000001',
+          'a0000000-0000-4000-8000-00000000000a',
+          'thought_reframing', 'accepted', 'ground', 4);
+  raise exception 'FAIL: Bob''s claims wrote technique state onto Alice''s thread';
+exception
+  when insufficient_privilege then
+    raise notice 'PASS: the backend role is still confined by RLS';
 end
 $$;
 rollback;

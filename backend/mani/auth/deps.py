@@ -27,8 +27,6 @@ def current_user(
 
 def require_admin(user: Annotated[Claims, Depends(current_user)]) -> Claims:
     if not user.is_admin:
-        # Deliberately the same shape a signed-out caller gets: whether an account has
-        # admin rights is not something an ordinary caller should be able to probe.
         raise ServiceError(
             f"user {user.user_id} is not an admin",
             ErrorCategory.FORBIDDEN,

@@ -1,10 +1,12 @@
 # ABOUTME: Checks the app boots and turns a ServiceError into its HTTP shape.
 # ABOUTME: The error contract is what every frontend branches on, so it is asserted here.
 
+import logging
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from mani.errors import ErrorCategory, ServiceError
 from main import create_app
@@ -20,6 +22,30 @@ def test_health_reports_ok(client):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_a_rejected_message_is_not_written_to_the_log(client, caplog):
+    """The rejected value is what the person typed. It must not reach the log."""
+    app: FastAPI = client.app
+    disclosure = "I have been having thoughts about hurting myself"
+
+    class Body(BaseModel):
+        content: str = Field(max_length=10)
+
+    @app.post("/echo")
+    def echo(body: Body):  # pragma: no cover - the request never gets this far
+        return {}
+
+    with caplog.at_level(logging.WARNING):
+        response = client.post("/echo", json={"content": disclosure})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["category"] == "invalid_request"
+    assert caplog.records, "the rejection was not logged at all"
+    assert disclosure not in caplog.text
+    # Still diagnostic: which field failed, and how.
+    assert "string_too_long" in caplog.text
+    assert "content" in caplog.text
 
 
 def test_service_error_becomes_its_category_status(client):
