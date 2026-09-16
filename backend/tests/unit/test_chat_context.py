@@ -69,6 +69,40 @@ def test_an_accepted_technique_waits_for_the_library_offer():
     assert "current_phase: ground" in block
 
 
+def test_a_retired_technique_still_holds_the_cooldown_closed():
+    """Completion used to delete this row. That destroyed at_message_count, so the next
+    turn reported that nothing had ever run and a second framework could start at once."""
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+        phase=None, at_message_count=8,
+    )
+    block = context.build(TurnContext(thread=thread(10), profile=None, technique=state))
+    assert "cooldown_passed: no" in block
+    assert "since_last: 2" in block
+    assert "this_thread: abcde (accepted)" in block
+    # Retired, so there is no phase to be in.
+    assert "current_phase" not in block
+
+
+def test_a_finished_framework_waits_longer_than_a_declined_one():
+    """45 messages against 20. The longer wait was unreachable while completion deleted
+    the row it is measured from."""
+    started_at = 10
+    long_enough_for_a_decline = thread(started_at + context.COOLDOWN_AFTER_DECLINE)
+    finished = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+        phase=None, at_message_count=started_at,
+    )
+    declined = finished.model_copy(update={"outcome": TechniqueOutcome.DECLINED})
+
+    assert "cooldown_passed: no" in context.build(
+        TurnContext(thread=long_enough_for_a_decline, profile=None, technique=finished)
+    )
+    assert "cooldown_passed: yes" in context.build(
+        TurnContext(thread=long_enough_for_a_decline, profile=None, technique=declined)
+    )
+
+
 def test_recent_styles_are_listed_so_a_reply_can_avoid_repeating_one():
     block = context.build(
         TurnContext(

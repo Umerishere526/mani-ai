@@ -7,7 +7,7 @@ import asyncpg
 import pytest
 
 from mani.auth.jwt import Claims
-from mani.chat import crisis, orchestrator
+from mani.chat import context, crisis, orchestrator
 from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
@@ -177,11 +177,12 @@ async def test_tapping_the_offer_records_acceptance(alice, model):
     assert ctx.technique.phase == "activate"
 
 
-async def test_finishing_a_technique_clears_it_without_losing_the_turn(alice, model):
+async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, model):
     """The turn after a technique lands is the normal successful path, not an edge case.
 
-    Clearing the row is a DELETE, and the whole turn shares one transaction: if that
-    statement is refused, the user's message and Mani's reply go down with it.
+    Retiring the row is an UPDATE inside the turn's one transaction: if it is refused,
+    the user's message and Mani's reply go down with it. The row has to survive, because
+    at_message_count is what the next turn's cooldown is measured from.
     """
     model(Reply(text="How has the rest of the week been?"))
     from mani.db import pool
@@ -202,7 +203,12 @@ async def test_finishing_a_technique_clears_it_without_losing_the_turn(alice, mo
     async with pool.as_user(alice) as conn:
         ctx = await threads.load_turn_context(conn, thread.id, ALICE)
 
-    assert ctx.technique is None
+    # Retired, not deleted: the framework is finished but the thread remembers running it.
+    assert ctx.technique is not None
+    assert ctx.technique.phase is None
+    assert ctx.technique.outcome is TechniqueOutcome.ACCEPTED
+    assert ctx.technique.at_message_count == 2
+    assert "cooldown_passed: no" in context.build(ctx)
     assert [m.role for m in (await _history(alice, thread.id))][-2:] == ["user", "mani"]
 
 

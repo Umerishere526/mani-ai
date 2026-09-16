@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -36,8 +37,6 @@ TITLE_AFTER_MESSAGES = 3
 
 # How many new messages accumulate before the rolling summary is refreshed.
 SUMMARY_THRESHOLD = 30
-
-GROUND = "ground"
 
 
 @dataclass(frozen=True)
@@ -157,16 +156,20 @@ async def send(
     updates = threads.ThreadUpdates()
 
     technique = ctx.technique
-    # A technique that reached its closing phase and was accepted is finished; clearing
-    # it is what lets a new one be offered later.
+    # A technique that reached its last phase and was accepted is finished. The row is
+    # retired rather than removed, and the snapshot keeps it with its phase cleared, so
+    # this turn's [ctx] reports the cooldown the completion just started instead of
+    # reporting that nothing has ever run.
     if (
         technique is not None
-        and technique.phase == GROUND
         and technique.outcome is TechniqueOutcome.ACCEPTED
+        and config.registry.is_final(technique.framework_id, technique.phase)
     ):
-        updates.clear_technique = True
+        updates.retire_technique = True
+        ctx = dataclasses.replace(
+            ctx, technique=technique.model_copy(update={"phase": None})
+        )
         technique = None
-        ctx = replace_technique(ctx, None)
 
     tapped = find_tapped_prompt(history, content)
     offer = pending_offer(history)
@@ -272,7 +275,7 @@ async def send(
     library_offer = next((p for p in fixed.prompts if p.library), None)
 
     if new_offer is not None:
-        updates.clear_technique = False
+        updates.retire_technique = False
         updates.technique = TechniqueState(
             thread_id=ctx.thread.id,
             framework_id=new_offer.technique,
@@ -282,7 +285,7 @@ async def send(
         )
         updates.offer_frameworks.append(new_offer.technique)
     elif fixed.framework_id and outcome is not None:
-        updates.clear_technique = False
+        updates.retire_technique = False
         updates.technique = TechniqueState(
             thread_id=ctx.thread.id,
             framework_id=fixed.framework_id,
@@ -332,18 +335,6 @@ async def send(
         needs_summary=count_after - summarized >= SUMMARY_THRESHOLD,
         llm_call_id=call.call_id,
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
-    )
-
-
-def replace_technique(ctx: threads.TurnContext, technique) -> threads.TurnContext:
-    """A snapshot with the technique replaced, since the snapshot itself is frozen."""
-    return threads.TurnContext(
-        thread=ctx.thread,
-        profile=ctx.profile,
-        technique=technique,
-        techniques_offered=ctx.techniques_offered,
-        recent_styles=ctx.recent_styles,
-        summary=ctx.summary,
     )
 
 
