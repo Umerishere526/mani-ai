@@ -431,20 +431,41 @@ async def _offer_exercise(
     return next((c for c in candidates if str(c.id) == chosen_id), candidates[0])
 
 
+# FastAPI's own documented order is response sent -> background tasks run -> yield
+# dependencies' exit code, which is where UserConn's transaction actually commits. So this
+# background task starts running *before* the message it wants to reference is guaranteed
+# visible to another connection - confirmed live: attach_message raised a foreign key
+# violation on every turn. A short, bounded retry is the fix, not a bigger one: the commit
+# in question happens within milliseconds of the background task starting, once at all.
+LINK_RETRY_ATTEMPTS = 5
+LINK_RETRY_DELAY_SECONDS = 0.05
+
+
 async def link_call(call_id: uuid.UUID, message_id: uuid.UUID) -> None:
     """Point a recorded model call at the message it produced.
 
-    Deliberately after the turn's transaction: admin.llm_calls carries a foreign key to
-    public.messages, and the reply does not exist to any other connection until the turn
-    commits. A failure here costs a forensic link, not a delivered reply.
+    admin.llm_calls carries a foreign key to public.messages, and the turn that wrote the
+    message has not necessarily committed yet when this runs - see the note above. A
+    failure after every retry costs a forensic link, not a delivered reply, so it is logged
+    and swallowed rather than raised.
     """
+    import asyncio
+
     from mani.db import pool
 
-    try:
-        async with pool.as_admin() as conn:
-            await llm_calls.attach_message(conn, call_id, message_id)
-    except Exception:
-        logger.exception("failed to link llm call %s to message %s", call_id, message_id)
+    for attempt in range(1, LINK_RETRY_ATTEMPTS + 1):
+        try:
+            async with pool.as_admin() as conn:
+                await llm_calls.attach_message(conn, call_id, message_id)
+            return
+        except asyncpg.PostgresError:
+            if attempt == LINK_RETRY_ATTEMPTS:
+                logger.exception(
+                    "failed to link llm call %s to message %s after %d attempts",
+                    call_id, message_id, LINK_RETRY_ATTEMPTS,
+                )
+                return
+            await asyncio.sleep(LINK_RETRY_DELAY_SECONDS)
 
 
 async def _handle_crisis(
