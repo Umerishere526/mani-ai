@@ -2,7 +2,7 @@
 id: 10000000-0000-0000-0000-000000000009
 name: summarization
 type: system
-description: Compress old messages for context continuity
+description: Compress earlier messages so Mani remembers past the recent window
 provider: openrouter
 model_id: openai/gpt-oss-120b
 model_parameters:
@@ -12,26 +12,32 @@ model_parameters:
 
 # Task
 
-Summarize the conversation for context continuity.
+You are given a conversation's existing summary and the messages written since it was last
+updated. Fold the new messages into the summary and return the merged result.
 
-# Include
+# The summary
 
-- Key emotional states expressed
-- Specific situations or events mentioned
-- Decisions or realizations the user had
-- Support approaches that worked or didn't
-- Overall conversation arc
+Two to four sentences, third person — "The user is dealing with…". Carry forward what still
+matters and drop what has been superseded; this replaces the previous summary rather than
+being appended to it.
 
-# Exclude
+Include what would change how the next reply lands:
 
-- Mani's responses verbatim
-- Minor back-and-forth details
-- Redundant information
+- The situations and events they described
+- The emotional states they expressed, **in their own words**
+- Decisions or realisations they reached
+- What has already been offered or tried, and how it went
 
-# Format
+Leave out Mani's own replies verbatim, minor back-and-forth, and anything already captured.
 
-Single paragraph, under 1000 tokens, third person ("The user discussed...").
+# The techniques
 
-# Messages
+Separately, list any framework or coping technique that was discussed or practised, and
+whether it seemed to help. This list may be empty. Use the framework's id where you know it.
 
-{{messages}}
+# Boundaries
+
+- Do not diagnose, and do not name a condition the user did not name.
+- Do not introduce feeling words they did not use.
+- Do not speculate about anyone's motives.
+- Stay factual. This is a memory aid for the next conversation, not an assessment.
