@@ -4,9 +4,10 @@
 import datetime as dt
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Query
+from fastapi import APIRouter, Query
 
 from mani.auth.deps import CurrentUser
+from mani.background import fire_and_forget
 from mani.chat import orchestrator
 from mani.db import messages as messages_db
 from mani.db.deps import UserConn
@@ -39,7 +40,6 @@ async def send(
     conn: UserConn,
     thread_id: uuid.UUID,
     body: SendMessageIn,
-    background: BackgroundTasks,
 ) -> TurnOut:
     """One user message in, one reply out.
 
@@ -51,13 +51,16 @@ async def send(
         conn, user, thread_id, body.content, body.client_message_id
     )
 
+    # Not FastAPI's BackgroundTasks: both of these read or reference what this turn just
+    # wrote, on a separate connection, and BackgroundTasks run before UserConn's
+    # transaction commits - see mani/background.py for how that was confirmed.
     if turn.llm_call_id and turn.message_id:
-        background.add_task(orchestrator.link_call, turn.llm_call_id, turn.message_id)
+        fire_and_forget(
+            orchestrator.link_call(turn.llm_call_id, turn.message_id), name="link_call"
+        )
 
     if turn.needs_summary:
-        # After the response, on its own connection. The reference started an un-awaited
-        # coroutine inside the request, which the runtime was free to abandon.
-        background.add_task(update_quietly, user, thread_id)
+        fire_and_forget(update_quietly(user, thread_id), name="update_summary")
 
     # The exercise a completed framework hands off to, signed here rather than in the
     # orchestrator - the audio link is a wire concern, and the row model carries a path.
