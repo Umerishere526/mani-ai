@@ -17,6 +17,7 @@ from mani.models.api import (
     ThreadCreateIn,
     ThreadListOut,
     ThreadOut,
+    ThreadUpdateIn,
 )
 from mani.routers.serializers import to_messages, to_thread
 
@@ -81,6 +82,32 @@ async def _history(conn, thread_id: uuid.UUID, user_id: str) -> list[MessageOut]
 
 @router.get("/{thread_id}", response_model=ThreadOut)
 async def get_thread(user: CurrentUser, conn: UserConn, thread_id: uuid.UUID) -> ThreadOut:
+    thread = await threads.get(conn, thread_id, user.user_id)
+    if thread is None:
+        raise ServiceError(
+            f"thread {thread_id} not found for user {user.user_id}",
+            ErrorCategory.NOT_FOUND,
+            user_message="That conversation is not available.",
+        )
+    return to_thread(thread)
+
+
+@router.patch("/{thread_id}", response_model=ThreadOut)
+async def update_thread(
+    user: CurrentUser, conn: UserConn, thread_id: uuid.UUID, body: ThreadUpdateIn
+) -> ThreadOut:
+    """Change how Mani speaks in this conversation.
+
+    The style is a label from a closed set, not a privilege: the caller names which of
+    the three tones they want, never who they are. Ownership is enforced by RLS and by
+    the predicate on the write, as everywhere else.
+    """
+    if body.conversation_style is not None:
+        await threads.apply(
+            conn, thread_id, user.user_id,
+            threads.ThreadUpdates(conversation_style=body.conversation_style),
+        )
+
     thread = await threads.get(conn, thread_id, user.user_id)
     if thread is None:
         raise ServiceError(

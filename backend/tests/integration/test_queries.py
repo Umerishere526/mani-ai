@@ -157,6 +157,27 @@ async def test_the_composed_read_returns_the_whole_turn(alice):
     assert ctx.summary.techniques_tried[0].name == "thought_reframe"
 
 
+async def test_a_conversation_style_survives_the_round_trip(alice):
+    """The only thing that catches a missing column grant. `grant update (...)` in 001 is
+    column-scoped, so a new column inherits nothing and fails at runtime with 42501 -
+    taking the whole turn's transaction with it, message pair included."""
+    from mani.models.rows import SupportStyle
+
+    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    assert thread.conversation_style is None
+
+    await threads.apply(
+        alice, thread.id, ALICE,
+        threads.ThreadUpdates(conversation_style=SupportStyle.DIRECT),
+    )
+
+    reread = await threads.get(alice, thread.id, ALICE)
+    assert reread.conversation_style is SupportStyle.DIRECT
+
+    ctx = await threads.load_turn_context(alice, thread.id, ALICE)
+    assert ctx.thread.conversation_style is SupportStyle.DIRECT
+
+
 async def test_the_composed_read_refuses_another_users_thread(alice, users):
     from mani.db import pool
 

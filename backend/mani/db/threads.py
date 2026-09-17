@@ -13,6 +13,7 @@ import asyncpg
 from mani.models.rows import (
     Profile,
     ResponseStyle,
+    SupportStyle,
     TechniqueOutcome,
     TechniqueState,
     Thread,
@@ -21,7 +22,7 @@ from mani.models.rows import (
 
 COLUMNS = (
     "id, user_id, title, message_count, crisis_detected, "
-    "created_at, last_message_at, deleted_at"
+    "created_at, last_message_at, deleted_at, conversation_style"
 )
 
 DEFAULT_PAGE = 20
@@ -224,6 +225,7 @@ class ThreadUpdates:
     offer_frameworks: list[str] = field(default_factory=list)
     style: ResponseStyle | None = None
     library_offered: bool = False
+    conversation_style: SupportStyle | None = None
 
     def __bool__(self) -> bool:
         # Each optional field is tested for presence, not for truth. A field whose
@@ -236,6 +238,7 @@ class ThreadUpdates:
             or bool(self.offer_frameworks)
             or self.style is not None
             or self.library_offered
+            or self.conversation_style is not None
         )
 
 
@@ -252,6 +255,16 @@ async def apply(
         await conn.execute(
             "update public.threads set title = $1 where id = $2 and user_id = $3",
             updates.title, thread_id, user_id,
+        )
+
+    if updates.conversation_style is not None:
+        # Its own column grant, added by migration 002 - the grant in 001 is
+        # column-scoped and covers title, last_message_at and deleted_at only, so a
+        # missing grant here would fail at runtime with 42501 and roll back the turn.
+        await conn.execute(
+            "update public.threads set conversation_style = $1 "
+            "where id = $2 and user_id = $3",
+            updates.conversation_style.value, thread_id, user_id,
         )
 
     if updates.retire_technique:
