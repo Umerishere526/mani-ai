@@ -305,6 +305,7 @@ async def send(
         current_phase=technique.phase if technique else None,
         selected_label=tapped.label if tapped else None,
         accepted_this_turn=accepted_this_turn,
+        framework_running=outcome is TechniqueOutcome.ACCEPTED,
         wants_title=wants_title,
     )
     if fixed.notes:

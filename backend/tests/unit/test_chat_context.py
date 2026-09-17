@@ -186,7 +186,7 @@ def test_a_confident_candidate_adds_its_offer_line_resolved_to_style():
     profile = Profile(user_id=USER, support_style="direct")
     block = context.build(
         TurnContext(thread=thread(), profile=profile, technique=None),
-        shortlist=[Signal("abcde", 2.6, ["she said"])],
+        shortlist=[Signal("abcde", 2.6, ["she said"], spread=2)],
         candidate=framework(),
     )
     assert "offer_purpose: Offer the framework once the event and belief are understood." in block

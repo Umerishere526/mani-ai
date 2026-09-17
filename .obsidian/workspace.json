@@ -1,0 +1,219 @@
+{
+  "main": {
+    "id": "6a0e0c377d737734",
+    "type": "split",
+    "children": [
+      {
+        "id": "32f458d3a1045f21",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "cdd65dfc38f81a74",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "d4180f8c243ea27e",
+    "type": "split",
+    "children": [
+      {
+        "id": "1a458b62ea3b989f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "6a57a53dc903f2bd",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "450ea4a73fed303d",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "53b6375c89e4c0c3",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "a95978f7bf34ecd2",
+    "type": "split",
+    "children": [
+      {
+        "id": "e0078577699fd5c4",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "0f05d680c5297c45",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "CLAUDE.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "b38b28de80bd9d42",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "CLAUDE.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "a96a4ab108f76201",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "9c2a7ee881a19aab",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "23d37680bbddd494",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "CLAUDE.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "cdd65dfc38f81a74",
+  "lastOpenFiles": [
+    "mani/Programme/archive/TECHNICAL-ASSESSMENT.md",
+    "mani/Programme/archive/SETUP_REPORT.md",
+    "mani/Programme/archive/README.md",
+    "mani/Programme/archive/2026-09-08-technical-assessment.md",
+    "mani/Programme/archive/ExpoGO(Setup).md",
+    "mani/Programme/archive/2026-09-08-repo-setup-and-doc-gaps.md",
+    "mani/Programme/archive/2026-09-08-repo-audit.md",
+    "mani/Programme/archive/2026-09-08-mobile-review-and-consolidation.md",
+    "mani/Programme/archive",
+    "mani/Programme/ai-service-contract.md",
+    "mani/Programme/START-HERE.md",
+    "mani/Programme/SETUP.md",
+    "mani/Programme/DEV-START.md",
+    "mani/Programme/AUDIT-TICKET-MAP.md",
+    "mani/Programme/2026-09-14-architecture-decisions.md",
+    "mani/Programme/2026-09-13-fundamental-review.md",
+    "mani/Programme/2026-09-09-fast-api-infra-from-scratch.md",
+    "mani/Programme",
+    "CLAUDE.md",
+    "MD Files/archive/START-HERE.md",
+    "MD Files/archive/SETUP.md",
+    "MD Files/archive/DEV-START.md",
+    "MD Files/archive/AUDIT-TICKET-MAP.md",
+    "MD Files/archive/ai-service-contract.md",
+    "MD Files/archive/2026-09-14-architecture-decisions.md",
+    "MD Files/archive/2026-09-13-fundamental-review.md",
+    "MD Files/archive/2026-09-09-fast-api-infra-from-scratch.md",
+    "MD Files/archive",
+    "MD Files/START-HERE copy.md"
+  ]
+}

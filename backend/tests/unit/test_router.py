@@ -160,13 +160,33 @@ def test_the_shortlist_is_bounded():
 
 
 def test_confidence_decides_how_much_content_the_prompt_carries():
-    clear = shortlist(["I cannot make myself start anything"], ACTIVATIONS)
-    assert is_confident(clear)
-
     assert not is_confident([])
     # One incidental phrase is a suggestion, not a finding.
     weak = shortlist(["I keep canceling plans"], ACTIVATIONS)
     assert weak and not is_confident(weak)
+
+
+def test_a_strong_phrase_said_once_is_not_yet_confident():
+    """A central-indication phrase clears the score and margin on its own, but a single mention
+    could be a passing line rather than an established situation. Confidence needs it said more
+    than once - across messages, or twice within one - before the model gets the full offer."""
+    single_mention = shortlist(["I cannot make myself start anything"], ACTIVATIONS)
+    assert single_mention[0].score >= 2.0
+    assert not is_confident(single_mention)
+
+
+def test_corroboration_across_two_messages_is_confident():
+    corroborated = shortlist(
+        ["I keep avoiding the task", "I cannot make myself start anything"], ACTIVATIONS
+    )
+    assert is_confident(corroborated)
+
+
+def test_corroboration_within_one_message_is_confident():
+    corroborated = shortlist(
+        ["I cannot make myself start, and I have stopped cooking too"], ACTIVATIONS
+    )
+    assert is_confident(corroborated)
 
 
 def test_a_framework_absent_from_the_registry_is_never_returned():

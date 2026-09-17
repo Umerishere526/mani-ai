@@ -34,6 +34,7 @@ def fix(registry, model_reply, **overrides):
         "current_phase": None,
         "selected_label": None,
         "accepted_this_turn": False,
+        "framework_running": False,
         "wants_title": False,
     }
     return repairs.apply(model_reply, registry, **(defaults | overrides))
@@ -74,6 +75,27 @@ def test_the_technique_being_offered_is_not_a_duplicate_of_itself(registry):
         registry, still_offering, already_offered=["abcde"], current_framework_id="abcde"
     )
     assert len(fixed.prompts) == 1
+
+
+def test_no_framework_is_offered_from_inside_a_running_one(registry):
+    """A framework in progress is the whole conversation until it completes or the person
+    stops it. The same one restarting itself and a second one opening underneath it are the
+    same failure - the person is left inside two at once."""
+    nested = reply(
+        prompts=[
+            SmartPrompt(label="Try ABCDE", technique="abcde"),
+            SmartPrompt(label="Try reframing", technique="thought_reframing"),
+            SmartPrompt(label="Keep talking", technique=None),
+        ]
+    )
+    fixed = fix(
+        registry,
+        nested,
+        current_framework_id="abcde",
+        current_phase="belief",
+        framework_running=True,
+    )
+    assert [p.label for p in fixed.prompts] == ["Keep talking"]
 
 
 def test_an_invented_technique_id_is_refused(registry):

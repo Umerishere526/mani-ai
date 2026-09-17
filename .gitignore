@@ -3,6 +3,7 @@
 
 # Python
 backend/.venv/
+chat-tester/.venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
