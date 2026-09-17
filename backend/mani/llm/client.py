@@ -22,6 +22,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_MAX_TOKENS = 2048
 
+# One retry, schema failures only. Without it a malformed reply loses the person's typed
+# message entirely - complete() is called before the turn writes anything, so a raise here
+# leaves nothing in the thread to show for the turn that was attempted.
+MAX_SCHEMA_ATTEMPTS = 2
+
 
 @dataclass(frozen=True)
 class Call[T: BaseModel]:
@@ -173,24 +178,37 @@ async def complete[T: BaseModel](
     started = time.perf_counter()
     usage = llm_calls.Usage()
     try:
-        result = await runnable.ainvoke(messages)
-        usage = chain.usage_from(result.get("raw"))
-        parsed = result.get("parsed")
-        failure = result.get("parsing_error")
-        if failure is not None or parsed is None:
-            raise ServiceError(
-                f"model returned no parseable reply: {failure or 'empty'}",
-                ErrorCategory.LLM_UNAVAILABLE,
-                retryable=True,
-                user_message="Mani had trouble responding. Please try again.",
+        parsed = None
+        for attempt in range(1, MAX_SCHEMA_ATTEMPTS + 1):
+            result = await runnable.ainvoke(messages)
+            usage = chain.usage_from(result.get("raw"))
+            parsed = result.get("parsed")
+            failure = result.get("parsing_error")
+            if failure is None and parsed is not None:
+                break
+
+            # A schema failure still cost a real provider call, so it gets its own row
+            # rather than being silently absorbed into whichever attempt finally works -
+            # both a retried success and an exhausted retry are fully accounted for.
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            await _record(
+                purpose=purpose, model=model, outcome=llm_calls.Outcome.SCHEMA_INVALID,
+                usage=usage, latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
+                prompt_version_id=prompt_version_id,
+                error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}: {failure or 'empty'}",
             )
-    except ServiceError as exc:
-        latency_ms = int((time.perf_counter() - started) * 1000)
-        await _record(
-            purpose=purpose, model=model, outcome=llm_calls.Outcome.SCHEMA_INVALID,
-            usage=usage, latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-            prompt_version_id=prompt_version_id, error_message=str(exc),
-        )
+            if attempt == MAX_SCHEMA_ATTEMPTS:
+                raise ServiceError(
+                    f"model returned no parseable reply after {MAX_SCHEMA_ATTEMPTS} "
+                    f"attempts: {failure or 'empty'}",
+                    ErrorCategory.LLM_UNAVAILABLE,
+                    retryable=True,
+                    user_message="Mani had trouble responding. Please try again.",
+                )
+    except ServiceError:
+        # Already recorded above, per attempt - re-raising bare avoids a second row for
+        # the same failure and keeps this from falling through to the generic handler
+        # below, which would call _as_service_error() on an error that already is one.
         raise
     except Exception as exc:
         latency_ms = int((time.perf_counter() - started) * 1000)
