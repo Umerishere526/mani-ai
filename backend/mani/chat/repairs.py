@@ -82,6 +82,7 @@ def apply(
     current_phase: str | None,
     selected_label: str | None,
     accepted_this_turn: bool,
+    framework_running: bool,
     wants_title: bool,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again.
@@ -97,8 +98,11 @@ def apply(
         notes.append(f"stripped script metadata: {', '.join(leaked)}")
 
     offered = {_normalize(name) for name in already_offered}
-    # The technique currently being offered is not a duplicate of itself.
-    if current_framework_id:
+    # While a framework is only being *offered*, the capsule naming it is the offer itself,
+    # not a duplicate of one - so it survives the already-offered check. Once the person has
+    # accepted and the framework is running, that exemption would do the opposite of its job:
+    # it is what lets the running framework be offered again from inside itself.
+    if current_framework_id and not framework_running:
         offered.discard(_normalize(current_framework_id))
 
     selected = selected_label.strip().lower() if selected_label else None
@@ -119,6 +123,15 @@ def apply(
             notes.append(f"dropped the button the user just tapped: {label}")
             continue
         if prompt.technique is not None:
+            # A framework in progress is the whole conversation until it completes or the
+            # person stops it. Any technique button while one is running is a framework
+            # offered inside a framework - the same one restarting itself, or a second one
+            # opening underneath the first - and the person is the one left holding both.
+            if framework_running:
+                notes.append(
+                    f"dropped a technique offered inside a running framework: {prompt.technique}"
+                )
+                continue
             # A model-supplied identifier is untrusted until it matches the registry.
             if prompt.technique not in registry:
                 notes.append(f"dropped an unknown technique: {prompt.technique}")

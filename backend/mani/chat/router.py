@@ -21,6 +21,14 @@ SIGNAL_WEIGHT = 1.0
 CONFIDENT_SCORE = 2.0
 CONFIDENT_MARGIN = 1.0
 
+# A single phrase, said once, is not the same as an understood situation - it could be an
+# offhand line the person moves past a moment later. Confidence requires the match to be
+# corroborated: either it recurs across more than one of their recent messages, or more than
+# one distinct phrase backs it within the messages seen. One message, one passing phrase, is
+# not clarity yet - it is a first hint, and the model still owes the person a clarifying
+# question before it names a framework.
+MIN_CORROBORATION = 2
+
 # A framework promoted by a discriminator but with no phrase match of its own still needs a
 # score, or it sorts below frameworks that matched one incidental phrase.
 PROMOTED_FLOOR = 1.5
@@ -36,6 +44,8 @@ class Signal:
     score: float
     matched: list[str] = field(default_factory=list)
     promoted_by: str | None = None
+    spread: int = 0
+    """How many distinct recent messages contributed a match - the corroboration count."""
 
 
 @dataclass(frozen=True)
@@ -118,13 +128,18 @@ DISCRIMINATORS: tuple[Rule, ...] = (
 )
 
 
-def _score_one(activation: dict, messages: list[str]) -> tuple[float, list[str]]:
-    """Recency-weighted score for a single framework against recent user messages."""
+def _score_one(activation: dict, messages: list[str]) -> tuple[float, list[str], int]:
+    """Recency-weighted score for a single framework against recent user messages.
+
+    Also returns the spread: how many distinct messages contributed at least one match, which
+    is what tells a single well-matched line apart from a pattern corroborated over time.
+    """
     strong = [normalize(p) for p in activation.get("strong_signals", [])]
     signals = [normalize(p) for p in activation.get("signals", [])]
 
     total = 0.0
     matched: list[str] = []
+    contributing_distances: set[int] = set()
     # messages arrive oldest first, as recent_for_context returns them.
     for distance, text in enumerate(reversed(messages)):
         if distance >= len(RECENCY_WEIGHTS):
@@ -135,12 +150,14 @@ def _score_one(activation: dict, messages: list[str]) -> tuple[float, list[str]]
             if phrase and phrase in normalized and phrase not in matched:
                 total += weight * recency
                 matched.append(phrase)
+                contributing_distances.add(distance)
         for phrase, weight in ((p, SIGNAL_WEIGHT) for p in signals):
             if phrase and phrase in normalized and phrase not in matched:
                 total += weight * recency
                 matched.append(phrase)
+                contributing_distances.add(distance)
 
-    return total, matched
+    return total, matched, len(contributing_distances)
 
 
 def _fired(rule: Rule, messages: list[str]) -> bool:
@@ -165,13 +182,17 @@ def _promote(signals: list[Signal], rule: Rule) -> list[Signal]:
             return ordered
 
     if index is None:
-        promoted = Signal(rule.prefer, PROMOTED_FLOOR, [], promoted_by=rule.name)
+        promoted = Signal(rule.prefer, PROMOTED_FLOOR, [], promoted_by=rule.name, spread=0)
     else:
         existing = ordered.pop(index)
         if index < target:
             target -= 1
         promoted = Signal(
-            existing.framework_id, existing.score, existing.matched, promoted_by=rule.name
+            existing.framework_id,
+            existing.score,
+            existing.matched,
+            promoted_by=rule.name,
+            spread=existing.spread,
         )
 
     ordered.insert(target, promoted)
@@ -197,9 +218,9 @@ def shortlist(
         return []
 
     scored = [
-        Signal(framework_id, score, matched)
+        Signal(framework_id, score, matched, spread=spread)
         for framework_id, activation in activations.items()
-        for score, matched in [_score_one(activation, messages)]
+        for score, matched, spread in [_score_one(activation, messages)]
         if score > 0
     ]
     scored.sort(key=lambda s: (-s.score, s.framework_id))
@@ -224,8 +245,17 @@ def is_confident(signals: list[Signal]) -> bool:
 
     When it is not, the prompt ships two or three one-line indications instead and lets the
     model choose. Either way it never ships all six.
+
+    Score and margin say the top candidate is a strong, unambiguous match. They do not say the
+    situation has actually been established rather than mentioned once in passing - a single
+    strong-signal phrase in one message clears both on its own. Corroboration closes that gap:
+    either the same framework's phrases showed up in more than one recent message, or more than
+    one distinct phrase backed it, before the offer guidance goes out. Below that, the shortlist
+    still reaches the prompt as a suggestion, but the model is left to ask rather than offer.
     """
     if not signals or signals[0].score < CONFIDENT_SCORE:
+        return False
+    if signals[0].spread < 2 and len(signals[0].matched) < MIN_CORROBORATION:
         return False
     runner_up = signals[1].score if len(signals) > 1 else 0.0
     return signals[0].score - runner_up >= CONFIDENT_MARGIN

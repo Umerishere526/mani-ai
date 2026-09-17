@@ -27,19 +27,27 @@ activation:
     - "The user needs to respond to something that cannot be controlled"
     - "The user cannot participate in reflective questions"
     - "A safety concern requires the approved safety protocol"
+  # Short fragments, not the full example sentences from the spec. router.py matches these as
+  # plain substrings against what the person actually typed - a real message practically never
+  # contains a whole authored sentence verbatim, but it very often contains the three or four
+  # words that carry the pattern ("so i must be", "proves i will never"). Confidence now also
+  # requires corroboration (two fragments, or one repeated) before a framework is offered, so
+  # shortening these to raise recall no longer trades away precision the way it would have
+  # before that gate existed.
   strong_signals:
-    - "I made one mistake, so I am terrible at my job"
-    - "she did not respond because I do not matter"
-    - "this proves I will never succeed"
-    - "everyone must think I am incompetent"
+    - "so i must be"
+    - "this proves i"
+    - "proves i will never"
+    - "must mean i am"
+    - "everyone must think i am"
   signals:
-    - "I always ruin everything"
-    - "if this relationship ends I will always be alone"
-    - "I failed once I know I will fail again"
+    - "i always ruin everything"
+    - "i will always be alone"
+    - "i know i will fail again"
     - "nothing will ever improve"
-    - "he criticized me so he has no respect for me"
-    - "she did not answer because she is angry"
-    - "they excluded me because nobody likes me"
+    - "has no respect for me"
+    - "did not answer because"
+    - "because nobody likes me"
   redirects:
     - signal: "Nobody cares about me, and I want a quick way to look at that thought."
       instead: thought_reframe
@@ -105,11 +113,11 @@ stages:
       - "must not investigate several beliefs at once"
     if_unclear:
       - when: "a feeling instead of a belief - \"I felt embarrassed.\""
-        reply: "You felt embarrassed. What were you telling yourself at that point? - may repeat \"embarrassed\" because the user used it, and adds no other feeling"
+        reply: "You felt embarrassed. What were you telling yourself at that point? - stay at the user's own weight, in their word or a same-weight synonym; adds no other feeling"
       - when: "several beliefs at once"
         reply: "Several thoughts came at once. Which one affected you most?"
     ask:
-      supportive: "You felt embarrassed. What made the event feel embarrassing? - use \"embarrassed\" only if the user used it"
+      supportive: "You felt embarrassed. What made the event feel embarrassing? - the feeling word should match what the user named, at the same weight, in their word or a fair synonym"
       reflective: "You felt embarrassed. What were you telling yourself at that point?"
       direct: "You felt embarrassed. What belief was behind that?"
   consequence:
