@@ -20,7 +20,8 @@ PROMPT_COLUMNS = (
     "model_parameters, routing, is_active"
 )
 FRAMEWORK_COLUMNS = (
-    "id, name, summary, body, activation_conditions, phases, display_order"
+    "id, name, summary, body, activation_conditions, phases, display_order, "
+    "activation, stages"
 )
 
 

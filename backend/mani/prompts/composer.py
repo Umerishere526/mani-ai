@@ -98,7 +98,8 @@ def compose(
 
     candidates: list[tuple[str, str | None]] = [
         ("mani_base", config.require("mani_base").content),
-        ("techniques", config.require("techniques").content),
+        ("framework_index", config.require("framework_index").content),
+        ("post_framework", config.require("post_framework").content),
         ("user_context", user_context(profile)),
     ]
 

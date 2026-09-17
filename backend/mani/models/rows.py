@@ -125,6 +125,12 @@ class Framework(Row):
     activation_conditions: str = ""
     phases: list[str]
     display_order: int = 0
+    # The router's input (central indication, weighted phrase lists, distinctions) and the
+    # per-phase clinical content (purpose, listening cues, readiness, boundaries, the styled
+    # `ask`). activation_conditions is left in place and simply stops being read for routing -
+    # a flat string cannot hold either shape.
+    activation: dict[str, Any] = Field(default_factory=dict)
+    stages: dict[str, Any] = Field(default_factory=dict)
 
     def phase_index(self, phase: str | None) -> int:
         """Position in the sequence, or -1 for nothing started / unknown."""

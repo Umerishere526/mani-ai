@@ -27,7 +27,8 @@ def prompt(name: str, content: str):
 def config() -> Config:
     named = [
         prompt("mani_base", "IDENTITY"),
-        prompt("techniques", "LIBRARY"),
+        prompt("framework_index", "INDEX"),
+        prompt("post_framework", "RULES"),
         prompt("response_format", "FORMAT"),
         prompt("title_generation", "TITLE"),
     ]
@@ -50,7 +51,7 @@ def test_the_layers_come_in_a_fixed_order(config):
         ),
     )
     assert [name for name, _ in built.layers] == [
-        "mani_base", "techniques", "user_context", "title_generation",
+        "mani_base", "framework_index", "post_framework", "user_context", "title_generation",
         "techniques_used", "response_format", "summary",
     ]
 
@@ -58,7 +59,7 @@ def test_the_layers_come_in_a_fixed_order(config):
 def test_optional_layers_are_simply_absent(config):
     built = composer.compose(config, None)
     assert [name for name, _ in built.layers] == [
-        "mani_base", "techniques", "response_format"
+        "mani_base", "framework_index", "post_framework", "response_format"
     ]
 
 
