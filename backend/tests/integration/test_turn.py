@@ -32,9 +32,11 @@ class ScriptedModel:
     def __init__(self, *replies: Reply) -> None:
         self._replies = list(replies)
         self.calls = 0
+        self.last_messages: list[dict] | None = None
 
     async def __call__(self, messages, schema, **kwargs):
         self.calls += 1
+        self.last_messages = messages
         reply = self._replies[min(self.calls - 1, len(self._replies) - 1)]
         return client.Call(
             value=reply,
@@ -113,7 +115,7 @@ async def test_a_turn_costs_exactly_one_provider_call(alice, model):
                 SmartPrompt(label="Later"),
                 SmartPrompt(label="Not now"),
             ],
-            state=TechniqueState(technique="abcde", step="dispute"),
+            state=TechniqueState(technique="abcde", step="examine"),
             style=Style(shape="mirror and ask", voice="naming"),
         )
     )
@@ -193,7 +195,7 @@ async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, m
     async with pool.as_user(alice) as conn:
         await threads.set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="ground",
+            at_message_count=2, phase="closing",
         )
 
     turn = await send(alice, thread.id, "that helped, thanks")
@@ -258,6 +260,43 @@ async def test_a_crisis_answers_with_real_words_and_records_the_event(alice, mod
         )
     assert event["reason"] == "expressed suicidal ideation"
     assert event["message_id"] is not None
+
+
+async def test_the_safety_screen_locks_a_thread_with_no_provider_call(alice, model):
+    """An explicit statement is caught before the model is ever asked anything - the
+    scripted model has no reply queued, so a call here would raise, not just cost extra."""
+    from mani.db import pool
+
+    scripted = model()
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "I am going to kill myself tonight.")
+
+    assert scripted.calls == 0
+    assert turn.crisis_detected is True
+    assert turn.content.strip()
+
+    async with pool.as_admin() as conn:
+        event = await conn.fetchrow(
+            "select reason from admin.crisis_events where thread_id = $1", thread.id
+        )
+    assert event["reason"] == "safety screen: suicide"
+
+
+async def test_the_router_shortlist_reaches_the_prompt_without_a_second_call(alice, model):
+    """The router runs in process; it must narrow the field without paying for it."""
+    scripted = model(
+        Reply(text="How is that affecting your days?"),
+        Reply(text="What would it look like to take one step?"),
+        Reply(text="What keeps that feeling from arriving?"),
+    )
+    thread = await start(alice)
+    await send(alice, thread.id, "I have stopped answering people for a week now.")
+    await send(alice, thread.id, "I know what I need to do, I just cannot make myself begin.")
+    await send(alice, thread.id, "I keep waiting to want to do something, but it never comes.")
+
+    assert scripted.calls == 3
+    final_prompt = scripted.last_messages[-1]["content"]
+    assert "framework_shortlist: behavioral_activation" in final_prompt
 
 
 async def test_a_crisis_thread_refuses_another_turn(alice, model):

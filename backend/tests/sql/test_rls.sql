@@ -22,8 +22,8 @@ insert into auth.users (id, email) values
   (:alice, 'alice@example.test'),
   (:bob, 'bob@example.test');
 
--- `do nothing` because a seeded database already has this row, and the seeded copy
--- is the one the application uses. The test only needs it to exist.
+-- A fixture id distinct from any real seeded framework, cleaned up at the end of this
+-- file - the test only needs a row that satisfies the foreign key, not real content.
 insert into admin.frameworks (id, name, summary, body, phases) values
   ('thought_reframing', 'Thought Reframing', 'Reframe a painful thought.', '...',
    array['offering', 'surface', 'externalize', 'explore', 'land', 'ground'])
@@ -391,11 +391,11 @@ rollback;
 -- ---------------------------------------------------------------------------
 
 -- Scoped to the fixtures by id. This file is also run against a real local Supabase,
--- where an unqualified `delete from auth.users` would take real accounts with it.
--- Scoped to the fixtures by id. This file also runs against a real local Supabase,
 -- where an unqualified delete would take real accounts and seeded config with it.
--- admin.frameworks is deliberately left alone: the row may be seeded application data.
+-- The frameworks row is deleted by its own fixture id only, never a blanket delete, so a
+-- real seeded framework can never be caught by it.
 delete from admin.crisis_events where user_id in (:alice, :bob);
 delete from public.messages where user_id in (:alice, :bob);
 delete from public.threads where user_id in (:alice, :bob);
 delete from auth.users where id in (:alice, :bob);
+delete from admin.frameworks where id = 'thought_reframing';
