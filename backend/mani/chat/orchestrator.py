@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import context, crisis, repairs
+from mani.chat import context, crisis, repairs, router, safety
 from mani.chat.greeting import greeting
 from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, summaries, threads
@@ -37,6 +37,10 @@ TITLE_AFTER_MESSAGES = 3
 
 # How many new messages accumulate before the rolling summary is refreshed.
 SUMMARY_THRESHOLD = 30
+
+# The router narrows once there is enough to narrow from. Below this, one or two messages
+# is not a pattern - it is the start of a conversation.
+ROUTER_MIN_EXCHANGES = 2
 
 
 @dataclass(frozen=True)
@@ -194,6 +198,33 @@ async def send(
     # which silently shortened the cooldown on every ambiguous turn.
     deferred = offer is not None and tapped is None and outcome is TechniqueOutcome.OFFERED
 
+    # The deterministic screen runs on every turn, before the model is asked anything. It
+    # costs nothing and cannot be skipped for budget reasons. Crisis short-circuits the model
+    # call entirely; concern only suppresses the router below, so the model still answers.
+    assessment = safety.screen(content)
+    if assessment.level is safety.Level.CRISIS:
+        return await _handle_crisis(
+            conn, ctx, content,
+            reason=f"safety screen: {assessment.category.value if assessment.category else 'unspecified'}",
+            reply_text=safety.protocol_for(assessment.category),
+            tapped=tapped, client_message_id=client_message_id, settings=settings,
+        )
+
+    # The router narrows the field it is not the caller's job to decide; the model still
+    # confirms whatever it offers, and repairs.apply still validates that choice against the
+    # registry. No model call, so a false or missing shortlist costs relevance, never safety.
+    shortlist: list[router.Signal] = []
+    candidate = None
+    if (
+        technique is None
+        and assessment.level is safety.Level.NONE
+        and ctx.thread.message_count // 2 >= ROUTER_MIN_EXCHANGES
+    ):
+        user_texts = [m.content for m in history if m.role is MessageRole.USER] + [content]
+        shortlist = router.shortlist(user_texts, config.registry.activations)
+        if shortlist and router.is_confident(shortlist):
+            candidate = config.registry.get(shortlist[0].framework_id)
+
     wants_title = (
         ctx.thread.message_count >= TITLE_AFTER_MESSAGES and not ctx.thread.title
     )
@@ -206,7 +237,10 @@ async def send(
     )
     model, parameters, routing = composer.model_settings(config)
 
-    prefix = context.build(ctx)
+    active_framework = config.registry.get(technique.framework_id) if technique else None
+    prefix = context.build(
+        ctx, shortlist=shortlist, framework=active_framework, candidate=candidate
+    )
     for_model = (
         f'User selected: "{tapped.label}". They want to continue the conversation.'
         if tapped
@@ -233,7 +267,10 @@ async def send(
     # while rewriting something else.
     if reply.crisis is not None:
         return await _handle_crisis(
-            conn, ctx, content, reply, tapped, client_message_id, settings
+            conn, ctx, content,
+            reason=reply.crisis.reason,
+            reply_text=crisis.CRISIS_REPLY,
+            tapped=tapped, client_message_id=client_message_id, settings=settings,
         )
 
     if deferred:
@@ -358,7 +395,9 @@ async def _handle_crisis(
     conn: asyncpg.Connection,
     ctx: threads.TurnContext,
     content: str,
-    reply: Reply,
+    *,
+    reason: str,
+    reply_text: str,
     tapped: SmartPrompt | None,
     client_message_id: uuid.UUID | str | None,
     settings,
@@ -366,7 +405,9 @@ async def _handle_crisis(
     """Store the turn, flag the thread, and answer with something a person can read.
 
     The reference stored only the user's message and returned an empty string, so the
-    screen went blank at the one moment it mattered most.
+    screen went blank at the one moment it mattered most. Called from two places: the
+    deterministic safety screen, before any model call, and the model's own judgment,
+    reported through the reply schema - either way the thread locks the same way.
     """
     logger.warning("crisis signal on thread %s", ctx.thread.id)
 
@@ -374,17 +415,15 @@ async def _handle_crisis(
         conn,
         ctx.thread.id,
         content,
-        crisis.CRISIS_REPLY,
+        reply_text,
         selected_prompt=tapped.label if tapped else None,
         client_message_id=client_message_id,
     )
-    await threads.mark_crisis(
-        conn, ctx.thread.id, reply.crisis.reason, pair.user_message_id
-    )
+    await threads.mark_crisis(conn, ctx.thread.id, reason, pair.user_message_id)
 
     return Turn(
         message_id=pair.mani_message_id,
-        content=crisis.CRISIS_REPLY,
+        content=reply_text,
         created_at=pair.created_at,
         prompts=[],
         title=ctx.thread.title,
