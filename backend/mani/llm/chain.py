@@ -88,6 +88,40 @@ def build(
     return chat.with_structured_output(schema, method="json_schema", include_raw=True)
 
 
+def build_tool_choice(
+    tool: type[BaseModel],
+    *,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    routing: dict[str, Any] | None,
+    settings: Settings,
+) -> Runnable:
+    """A runnable bound to exactly one tool, forced - real tool-calling, not structured
+    output. `with_structured_output` and `bind_tools` are two different invocation modes
+    in langchain-openai and do not merge into one call, so this is kept separate from
+    `build()` rather than added as an option to it. Used for exactly one turn shape: the
+    exercise hand-off, on the turn a framework completes.
+
+    Returns the model's raw `AIMessage` - `bind_tools` has no `include_raw`/`parsed` split
+    of its own, so the caller reads `.tool_calls` directly.
+    """
+    extra_body = {
+        "provider": settings.routing(routing),
+        "usage": {"include": True},
+    }
+    chat = _model(
+        settings.openrouter_api_key,
+        settings.openrouter_base_url,
+        settings.llm_timeout_seconds,
+        model,
+        temperature,
+        max_tokens,
+        json.dumps(extra_body, sort_keys=True),
+    )
+    return chat.bind_tools([tool], tool_choice=tool.__name__)
+
+
 def usage_from(raw: Any) -> llm_calls.Usage:
     """Token counts off the provider's response, whichever shape LangChain hands back."""
     if raw is None:

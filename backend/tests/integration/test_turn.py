@@ -47,6 +47,25 @@ class ScriptedModel:
         )
 
 
+class ScriptedChooser:
+    """Stands in for the exercise-selection tool call, counting when it was needed.
+
+    A completing framework is the only turn shape that reaches it, and only when the
+    catalog actually has something for that framework - so `calls` is the regression test
+    for the second provider call staying rare rather than becoming routine.
+    """
+
+    def __init__(self, chosen: str | None = None) -> None:
+        self._chosen = chosen
+        self.calls = 0
+        self.kwargs: dict = {}
+
+    async def __call__(self, candidates, framework_name, **kwargs):
+        self.calls += 1
+        self.kwargs = kwargs
+        return self._chosen if self._chosen is not None else candidates[0]["id"]
+
+
 async def reachable() -> bool:
     try:
         conn = await asyncpg.connect(get_settings().database_url, timeout=3)
@@ -212,6 +231,95 @@ async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, m
     assert ctx.technique.at_message_count == 2
     assert "cooldown_passed: no" in context.build(ctx)
     assert [m.role for m in (await _history(alice, thread.id))][-2:] == ["user", "mani"]
+
+
+async def _retire_abcde_on(alice, thread_id) -> None:
+    """Land a thread on ABCDE's final phase, so the next turn is the completing one."""
+    from mani.db import pool
+
+    async with pool.as_user(alice) as conn:
+        await threads.set_technique_outcome(
+            conn, thread_id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
+            at_message_count=2, phase="closing",
+        )
+
+
+@pytest.fixture
+async def abcde_exercise(alice):
+    """One exercise that names abcde, for the turns where the hand-off should fire.
+
+    A fixture rather than seed content: the real catalog is empty, and the mechanism has
+    to be provable before there is anything real in it.
+    """
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        exercise_id = await conn.fetchval(
+            "insert into admin.exercises (title, category, audio_path, framework_id) "
+            "values ('Settling after ABCDE', 'grounding', 'abcde/settle.mp3', 'abcde') "
+            "returning id"
+        )
+    try:
+        yield exercise_id
+    finally:
+        async with pool.as_admin() as conn:
+            await conn.execute("delete from admin.exercises where id = $1", exercise_id)
+
+
+async def test_a_completing_framework_with_no_exercise_still_costs_one_call(
+    alice, model, monkeypatch
+):
+    """The production case today - the catalog is empty, so the hand-off's second call
+    never happens and a completing turn costs exactly what every other turn costs."""
+    scripted = model(Reply(text="How has the rest of the week been?"))
+    chooser = ScriptedChooser()
+    monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
+
+    thread = await start(alice)
+    await _retire_abcde_on(alice, thread.id)
+
+    turn = await send(alice, thread.id, "that helped, thanks")
+
+    assert scripted.calls == 1
+    assert chooser.calls == 0
+    assert turn.exercise is None
+
+
+async def test_a_completing_framework_hands_off_to_its_exercise(
+    alice, model, monkeypatch, abcde_exercise
+):
+    """With something in the catalog for that framework, the turn spends a second call -
+    a bound tool call - and the reply carries the exercise it chose."""
+    scripted = model(Reply(text="How has the rest of the week been?"))
+    chooser = ScriptedChooser()
+    monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
+
+    thread = await start(alice)
+    await _retire_abcde_on(alice, thread.id)
+
+    turn = await send(alice, thread.id, "that helped, thanks")
+
+    assert scripted.calls == 1
+    assert chooser.calls == 1
+    assert chooser.kwargs["purpose"] is llm_calls.Purpose.EXERCISE_SELECT
+    assert turn.exercise is not None
+    assert turn.exercise.id == abcde_exercise
+    assert turn.exercise.framework_id == "abcde"
+
+
+async def test_an_ordinary_turn_never_reaches_the_exercise_hand_off(
+    alice, model, monkeypatch, abcde_exercise
+):
+    """The second call is scoped to a completing framework, not to having a catalog."""
+    model(Reply(text="Tell me more about that."))
+    chooser = ScriptedChooser()
+    monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
+
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "I had a hard day")
+
+    assert chooser.calls == 0
+    assert turn.exercise is None
 
 
 async def test_free_text_during_an_offer_leaves_it_open(alice, model):

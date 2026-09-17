@@ -14,11 +14,19 @@ from mani.auth.jwt import Claims
 from mani.chat import context, crisis, repairs, router, safety
 from mani.chat.greeting import greeting
 from mani.config import get_settings
-from mani.db import llm_calls, messages as messages_db, profiles, summaries, threads
+from mani.db import (
+    exercises as exercises_db,
+    llm_calls,
+    messages as messages_db,
+    profiles,
+    summaries,
+    threads,
+)
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
 from mani.llm.schema import Reply, SmartPrompt
 from mani.models.rows import (
+    Exercise,
     Message,
     MessageRole,
     ResponseStyle,
@@ -59,6 +67,10 @@ class Turn:
     llm_call_id: uuid.UUID | None = None
     # Present only when AI_DEBUG_MODE is on; never sent to an ordinary client.
     reasoning: str | None = None
+    # Set only on the turn a framework completes, and only when the catalog has a
+    # matching exercise. A row model, not the wire shape - the router builds ExerciseOut
+    # (and signs the audio URL) when it serializes this.
+    exercise: Exercise | None = None
 
 
 def find_tapped_prompt(history: list[Message], content: str) -> SmartPrompt | None:
@@ -164,11 +176,13 @@ async def send(
     # retired rather than removed, and the snapshot keeps it with its phase cleared, so
     # this turn's [ctx] reports the cooldown the completion just started instead of
     # reporting that nothing has ever run.
+    retiring_framework_id: str | None = None
     if (
         technique is not None
         and technique.outcome is TechniqueOutcome.ACCEPTED
         and config.registry.is_final(technique.framework_id, technique.phase)
     ):
+        retiring_framework_id = technique.framework_id
         updates.retire_technique = True
         ctx = dataclasses.replace(
             ctx, technique=technique.model_copy(update={"phase": None})
@@ -356,6 +370,12 @@ async def send(
 
     await threads.apply(conn, ctx.thread.id, user_id, updates)
 
+    exercise = None
+    if retiring_framework_id is not None:
+        exercise = await _offer_exercise(
+            conn, retiring_framework_id, config, model, routing, user_id, ctx.thread.id
+        )
+
     summarized = ctx.summary.summarized_message_count if ctx.summary else 0
     return Turn(
         message_id=pair.mani_message_id,
@@ -371,8 +391,44 @@ async def send(
         # fired on two different units and drifted further apart with every summary.
         needs_summary=count_after - summarized >= SUMMARY_THRESHOLD,
         llm_call_id=call.call_id,
+        exercise=exercise,
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
     )
+
+
+async def _offer_exercise(
+    conn: asyncpg.Connection,
+    framework_id: str,
+    config,
+    model: str,
+    routing: dict | None,
+    user_id: str,
+    thread_id: uuid.UUID,
+) -> Exercise | None:
+    """The exercise that follows a just-completed framework, chosen by a bound tool call.
+
+    A second, small model call - real tool-calling, not the turn's structured reply - and
+    only reached here because a framework just finished. Skipped entirely, at zero cost,
+    when the catalog has nothing for this framework yet - true for every framework today.
+    """
+    candidates = await exercises_db.list_for_framework(conn, framework_id)
+    if not candidates:
+        return None
+
+    framework = config.registry.get(framework_id)
+    chosen_id = await client.choose_exercise(
+        [
+            {"id": str(c.id), "title": c.title, "subtitle": c.subtitle or ""}
+            for c in candidates
+        ],
+        framework.name if framework else framework_id,
+        model=model,
+        purpose=llm_calls.Purpose.EXERCISE_SELECT,
+        routing=routing,
+        user_id=user_id,
+        thread_id=thread_id,
+    )
+    return next((c for c in candidates if str(c.id) == chosen_id), candidates[0])
 
 
 async def link_call(call_id: uuid.UUID, message_id: uuid.UUID) -> None:

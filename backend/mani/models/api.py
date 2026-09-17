@@ -65,6 +65,9 @@ class TurnOut(BaseModel):
     crisis_blocks_chat: bool = True
     was_duplicate: bool = False
     reasoning: str | None = None
+    # Set only on the turn a framework completes, and only once the catalog has a
+    # matching exercise.
+    exercise: "ExerciseOut | None" = None
 
 
 class StartOut(BaseModel):
