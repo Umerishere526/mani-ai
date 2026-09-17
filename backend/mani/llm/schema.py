@@ -47,13 +47,12 @@ class TechniqueState(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     technique: str = Field(
-        description='The technique ID: "thought_reframing" or "abcde"'
+        description="The framework id, exactly as listed in the Framework Index."
     )
     step: str = Field(
         description=(
-            "The current step ID you are executing. "
-            "Thought Reframing steps: offering, surface, externalize, explore, land, ground. "
-            "ABCDE steps: offering, activate, belief, consequence, dispute, effect, ground."
+            "The current stage id you are executing, from that framework's stage list in "
+            "active_framework. Stages must follow that list's order - you cannot skip one."
         )
     )
     accepted: bool | None = Field(
