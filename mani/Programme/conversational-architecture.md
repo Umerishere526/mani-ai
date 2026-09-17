@@ -162,17 +162,33 @@ recorded `input_tokens` of 8,230 against 33,507 characters of system prompt corr
 | **Total, excluding history** | **8,380** | **7,900** | **8,530** |
 | **Cacheable** | **0 measured** | **7,650** | **7,650** |
 
-**Raw token count barely moves. The entire benefit is the cached fraction**, and that fraction
-has never been measured. `admin.llm_calls` holds two byte-identical rows from the scripted test
-model, with `cached_input_tokens` at 0 on both. The plumbing is right — `llm/client.py:205-210`
-asks OpenRouter for `usage: {include: true}` and reads `prompt_tokens_details.cached_tokens` —
-so the field is blind only because no live turn has ever been recorded.
+**Raw token count barely moves. The entire benefit is the cached fraction.**
 
-**Therefore step 0 of §9 is a caching spike**, before any reordering: two identical
-back-to-back chat turns against `google/gemini-3-flash-preview`, then read
-`cached_input_tokens`. It is an hour's work and it decides whether this section is worth doing.
-If the number comes back 0, reordering buys nothing and the work becomes *cutting* the prompt
-rather than arranging it.
+Measured on 2026-09-16 against `google/gemini-3-flash-preview` through OpenRouter, two
+identical calls back to back:
+
+| | Input | Cached | Latency |
+|---|---|---|---|
+| First call in a process | 8,194 | 0 (0%) | 4,330 ms |
+| Identical call after it | 8,194 | 3,568 (44%) | 2,487 ms |
+
+**Caching works, and it is worth having** — 44% of the input and roughly 1.8 seconds off the
+reply. Two things about the shape of that number matter more than the number itself:
+
+- **It caps at 3,568 tokens on a byte-identical prompt**, not at the full 8,194. The provider
+  caches a prefix, not everything it could. Whatever that boundary is, only content *above* it
+  benefits — which is the argument for volatility ordering, and the reason a volatile layer
+  sitting at position four is expensive out of proportion to its size.
+- **A fresh process starts at 0% and the pattern repeats.** Two runs a minute apart each went
+  0% then 44%, so the cache did not survive between them.
+
+**Open, and it decides how much §3 is worth: does the cache survive the gap between two real
+turns?** A person takes tens of seconds to read and reply. If the entry has expired by then,
+every production turn is a first call and the reorder buys latency on retries only. Measure it
+before committing to the reorder: one call, a ninety-second pause, a second identical call.
+
+This is why **the `response_format` cut below is sequenced first**. It is the one saving that
+does not depend on the answer.
 
 ### The cut that pays either way
 
@@ -429,9 +445,10 @@ Two existing defects in the crisis path, in scope because this work touches them
 
 ## 9. Sequence
 
-0. **The caching spike** (§3). An hour, and it decides how much of §3 is worth doing.
-1. **The two bugs in §6** — retire-by-update, `Registry.is_final` — with the tests they never
-   had. Everything downstream is wrong without them.
+0. ~~**The caching spike**~~ — done, §3. Caching works at 44%; whether it survives a real
+   inter-turn gap is still open and gates the reorder, not the cut.
+1. ~~**The two bugs in §6**~~ — done. Retire-by-update and `Registry.is_final`, with the tests
+   they never had.
 2. **Migration `002`** — see §11 for the full plumbing, which is five places per column and
    silent at four of them.
 3. **The `response_format` cut** (§3), which pays regardless of the spike's result, then the
