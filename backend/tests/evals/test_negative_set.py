@@ -138,6 +138,75 @@ def test_a_long_explanation_is_caught():
     assert "long explanation" in {f.rule for f in validators.check(lecture, "", in_framework=True)}
 
 
+def test_consecutive_replies_that_open_the_same_way_are_caught():
+    """Observed live: all three styles opened with "I'm here." A formula forming is exactly
+    the drift a person notices by eye and no per-reply check can see, since each reply is
+    fine on its own."""
+    findings = validators.repeated_openers([
+        "I'm here. What happened?",
+        "I'm here with you. What was it about the text?",
+    ])
+    assert [f.rule for f in findings] == ["repeated opener"]
+
+
+def test_replies_that_start_differently_are_left_alone():
+    assert validators.repeated_openers([
+        "I'm here. What happened?",
+        "She was short with you. What did that mean to you?",
+        "You keep replaying it. Which part comes back?",
+    ]) == []
+
+
+def test_presence_in_words_belongs_to_one_style():
+    """Directive leads and Reflective mirrors; neither expresses care by announcing it. The
+    prompt now says so - this pins the intent so a future edit cannot quietly undo it."""
+    voice = (FRAMEWORKS_DIR.parent / "prompts" / "mani_base.md").read_text()
+    assert "is a\n**Supportive** move" in voice or "**Supportive** move" in voice
+    assert "off-style, not extra warmth" in voice
+
+
+def test_every_mirroring_voice_the_schema_allows_is_taught():
+    """The schema asks the model to declare which voice it used. Any value it can return
+    and was never taught is one it will either avoid entirely or use without meaning."""
+    from mani.llm.schema import Style
+
+    voice_field = Style.model_fields["voice"].description or ""
+    allowed = {w.strip('",.') for w in voice_field.split() if w.startswith('"')}
+    voice = (FRAMEWORKS_DIR.parent / "prompts" / "mani_base.md").read_text().lower()
+
+    for name in allowed:
+        assert f"**{name}**" in voice, f"schema allows voice {name!r}, prompt never teaches it"
+
+
+def test_a_capsule_that_judges_the_person_is_caught():
+    """Observed live: a reply offered "I'm overthinking it" as a button. A label is the one
+    thing in a reply the person may send back as their own words, so it cannot hand them a
+    judgment about themselves to press."""
+    findings = validators.check_capsules(
+        ["Tell me more", "I'm overthinking it"], "She was short with me."
+    )
+    assert "capsule judges them" in {f.rule for f in findings}
+
+
+def test_a_capsule_naming_a_feeling_they_did_not_use_is_caught():
+    findings = validators.check_capsules(
+        ["It's frustrating", "Not sure yet"], "She ended the conversation."
+    )
+    assert "capsule puts feelings in their mouth" in {f.rule for f in findings}
+
+
+def test_neutral_capsules_pass():
+    """The replacements the specification itself gives for the bad examples above."""
+    assert validators.check_capsules(
+        ["Tell me more", "Not sure yet", "Something else"], "She was short with me."
+    ) == []
+
+
+def test_a_capsule_mirroring_their_own_word_is_allowed():
+    """Same rule as the prose: their word is theirs to reflect back."""
+    assert validators.check_capsules(["Still hurt"], "it still hurt afterwards") == []
+
+
 def test_every_framework_still_carries_its_negative_set():
     """The examples above are transcribed from these tables. If a framework file loses
     its table, this set silently stops reflecting the specification it came from."""

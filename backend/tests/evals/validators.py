@@ -17,6 +17,11 @@ FEELING_WORDS = frozenset(
         "isolated", "lonely", "lost", "miserable", "overwhelmed", "panicked", "rejected",
         "resentful", "sad", "scared", "stressed", "terrified", "trapped", "unloved",
         "unwanted", "upset", "worried", "worthless",
+        # The adjectival forms, which describe the situation rather than the person and are
+        # the shape a capsule label usually takes: "It's frustrating", "It's exhausting".
+        "depressing", "devastating", "draining", "embarrassing", "exhausting",
+        "frustrating", "humiliating", "isolating", "overwhelming", "terrifying",
+        "upsetting", "worrying",
     }
 )
 
@@ -98,6 +103,93 @@ def introduced_feelings(reply: str, user_message: str) -> list[str]:
 
 def question_count(reply: str) -> int:
     return reply.count("?")
+
+
+# Two shared leading words is an opening, not a coincidence: "I'm here", "You said", "I hear".
+# One is - "What" begins a great many different questions.
+SHARED_OPENER_WORDS = 2
+
+
+def _shared_prefix(first: str, second: str) -> list[str]:
+    """The words two replies begin with in common.
+
+    A prefix rather than a fixed-width slice, because the repetition that matters is not a
+    fixed length: "I'm here." and "I'm here with you." share an opening, and comparing the
+    first three words of each would call them different.
+    """
+    a, b = _WORD.findall(first.lower()), _WORD.findall(second.lower())
+    shared: list[str] = []
+    for x, y in zip(a, b, strict=False):
+        if x != y:
+            break
+        shared.append(x)
+    return shared
+
+
+def repeated_openers(replies: list[str]) -> list[Finding]:
+    """Replies that begin the same way as the one before them.
+
+    The prompt states this rule, but the model cannot reliably self-police it: it has no
+    count of what it has already said, and on the first turn of a conversation there is no
+    history to check against at all. Every reply here is fine read on its own - the fault
+    only exists in the sequence, which is why it needs checking here and not per reply.
+    """
+    findings: list[Finding] = []
+    for previous, current in zip(replies, replies[1:], strict=False):
+        shared = _shared_prefix(previous, current)
+        if len(shared) >= SHARED_OPENER_WORDS:
+            findings.append(
+                Finding("repeated opener", f"two replies in a row open {' '.join(shared)!r}")
+            )
+    return findings
+
+
+# Judgments a person may hold about themselves but must never be handed as a button to press.
+# Observed live: a reply offered "I'm overthinking it" as a capsule.
+SELF_JUDGMENTS = (
+    "overthinking", "over thinking", "being dramatic", "too sensitive", "overreacting",
+    "over reacting", "being silly", "being stupid", "my fault", "i'm weak", "i am weak",
+    "i'm broken", "i am broken", "not enough", "being needy", "being difficult",
+)
+
+MAX_CAPSULES = 3
+MAX_CAPSULE_WORDS = 4
+
+
+def check_capsules(labels: list[str], user_message: str) -> list[Finding]:
+    """The buttons under a reply, which are a separate surface from its text.
+
+    A label is the one thing in a reply the person may send back as their own words, so it
+    carries a stricter rule than the prose does: it may not name a feeling, characterise the
+    situation, or judge them. Checking only the reply text misses it entirely.
+    """
+    findings: list[Finding] = []
+    said = _words(user_message)
+
+    for label in labels:
+        introduced = sorted(w for w in _words(label) & FEELING_WORDS if w not in said)
+        if introduced:
+            findings.append(
+                Finding("capsule puts feelings in their mouth", f"{label!r}: {introduced}")
+            )
+        judgments = [p for p in SELF_JUDGMENTS if p in label.lower()]
+        if judgments:
+            findings.append(
+                Finding("capsule judges them", f"{label!r}: {judgments}")
+            )
+        if len(label.split()) > MAX_CAPSULE_WORDS:
+            findings.append(
+                Finding("capsule too long", f"{label!r} is {len(label.split())} words")
+            )
+
+    if len(labels) > MAX_CAPSULES:
+        findings.append(Finding("too many capsules", f"{len(labels)} offered"))
+
+    lowered = [label.strip().lower() for label in labels]
+    if len(set(lowered)) != len(lowered):
+        findings.append(Finding("duplicate capsule", f"{labels}"))
+
+    return findings
 
 
 def check(reply: str, user_message: str, *, in_framework: bool = False) -> list[Finding]:
