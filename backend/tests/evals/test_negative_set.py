@@ -9,7 +9,9 @@ import pytest
 
 from tests.evals import validators
 
-FRAMEWORKS_DIR = pathlib.Path(__file__).resolve().parents[2] / "frameworks"
+CONTENT_DIR = pathlib.Path(__file__).resolve().parents[2] / "content"
+FRAMEWORKS_DIR = CONTENT_DIR / "frameworks"
+PROMPTS_DIR = CONTENT_DIR / "prompts"
 
 # Transcribed from the "Responses MANI must avoid" table in each framework file, with the
 # user message that preceded them in that framework's worked example. The rule named is
@@ -160,7 +162,7 @@ def test_replies_that_start_differently_are_left_alone():
 def test_presence_in_words_belongs_to_one_style():
     """Directive leads and Reflective mirrors; neither expresses care by announcing it. The
     prompt now says so - this pins the intent so a future edit cannot quietly undo it."""
-    voice = (FRAMEWORKS_DIR.parent / "prompts" / "mani_base.md").read_text()
+    voice = (PROMPTS_DIR / "mani_base.md").read_text()
     assert "is a\n**Supportive** move" in voice or "**Supportive** move" in voice
     assert "off-style, not extra warmth" in voice
 
@@ -172,7 +174,7 @@ def test_every_mirroring_voice_the_schema_allows_is_taught():
 
     voice_field = Style.model_fields["voice"].description or ""
     allowed = {w.strip('",.') for w in voice_field.split() if w.startswith('"')}
-    voice = (FRAMEWORKS_DIR.parent / "prompts" / "mani_base.md").read_text().lower()
+    voice = (PROMPTS_DIR / "mani_base.md").read_text().lower()
 
     for name in allowed:
         assert f"**{name}**" in voice, f"schema allows voice {name!r}, prompt never teaches it"

@@ -26,7 +26,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and tested
       round trips; one composed write (`ThreadUpdates.apply`) replaces fourteen.
 - [x] **6. Techniques** — `mani/chat/techniques.py`. Unknown framework or phase fails
       closed; the reference returned valid for both. The registry is loaded from
-      `admin.frameworks`, which now carries all six frameworks from `frameworks/*.md`:
+      `admin.frameworks`, which now carries all six frameworks from `content/frameworks/*.md`:
       per-stage content (purpose, listening cues, readiness, boundaries, unclear-answer
       handling, one `ask` per style) and the router's activation data.
 - [x] **7. Prompt composition** — `mani/prompts/`. Fixed layer order, TTL cache,
