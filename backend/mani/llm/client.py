@@ -7,16 +7,15 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Any
 
 import openai
-from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
 from mani.config import Settings, get_settings
 from mani.db import llm_calls
 from mani.errors import ErrorCategory, ServiceError
+from mani.llm import chain
 
 logger = logging.getLogger(__name__)
 
@@ -33,30 +32,6 @@ class Call[T: BaseModel]:
     usage: llm_calls.Usage
     latency_ms: int
     call_id: uuid.UUID | None
-
-
-@lru_cache
-def _client(api_key: str, base_url: str, timeout: float) -> AsyncOpenAI:
-    return AsyncOpenAI(
-        api_key=api_key,
-        base_url=base_url,
-        timeout=timeout,
-        # The SDK retries three times by default, silently multiplying the bill and the
-        # latency of a turn that is already slow. One attempt; a retry is the caller's
-        # decision to make, with its own budget.
-        max_retries=0,
-    )
-
-
-def _usage(raw: Any) -> llm_calls.Usage:
-    if raw is None:
-        return llm_calls.Usage()
-    details = getattr(raw, "prompt_tokens_details", None)
-    return llm_calls.Usage(
-        input_tokens=getattr(raw, "prompt_tokens", 0) or 0,
-        output_tokens=getattr(raw, "completion_tokens", 0) or 0,
-        cached_input_tokens=getattr(details, "cached_tokens", 0) or 0,
-    )
 
 
 def _as_service_error(exc: Exception) -> tuple[ServiceError, llm_calls.Outcome]:
@@ -172,8 +147,9 @@ async def complete[T: BaseModel](
 ) -> Call[T]:
     """Ask the model for one structured reply.
 
-    OpenRouter is the only provider. The OpenAI SDK is the client because OpenRouter
-    speaks that protocol - there is no second provider and no key to decrypt.
+    OpenRouter is the only provider. LangChain composes the call and parses the reply into
+    the schema; the base_url points at OpenRouter, so it is one protocol and one bill, not a
+    second provider. Exactly one provider call happens here, which is the whole design.
     """
     settings = settings or get_settings()
     if not settings.openrouter_api_key:
@@ -183,10 +159,13 @@ async def complete[T: BaseModel](
             user_message="Mani is not available right now.",
         )
 
-    client = _client(
-        settings.openrouter_api_key,
-        settings.openrouter_base_url,
-        settings.llm_timeout_seconds,
+    runnable = chain.build(
+        schema,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        routing=routing,
+        settings=settings,
     )
 
     messages = _apply_model_quirks(messages, model)
@@ -194,25 +173,13 @@ async def complete[T: BaseModel](
     started = time.perf_counter()
     usage = llm_calls.Usage()
     try:
-        completion = await client.chat.completions.parse(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_completion_tokens=max_tokens,
-            response_format=schema,
-            extra_body={
-                "provider": settings.routing(routing),
-                # Without this OpenRouter omits the cached-token count, which is the
-                # only way to tell whether prompt caching is actually happening.
-                "usage": {"include": True},
-            },
-        )
-        usage = _usage(completion.usage)
-        parsed = completion.choices[0].message.parsed
-        if parsed is None:
+        result = await runnable.ainvoke(messages)
+        usage = chain.usage_from(result.get("raw"))
+        parsed = result.get("parsed")
+        failure = result.get("parsing_error")
+        if failure is not None or parsed is None:
             raise ServiceError(
-                f"model returned no parseable reply: "
-                f"{completion.choices[0].message.refusal or 'empty'}",
+                f"model returned no parseable reply: {failure or 'empty'}",
                 ErrorCategory.LLM_UNAVAILABLE,
                 retryable=True,
                 user_message="Mani had trouble responding. Please try again.",
