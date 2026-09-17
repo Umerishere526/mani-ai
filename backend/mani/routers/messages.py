@@ -11,7 +11,8 @@ from mani.chat import orchestrator
 from mani.db import messages as messages_db
 from mani.db.deps import UserConn
 from mani.models.api import MessageListOut, SendMessageIn, TurnOut
-from mani.routers.serializers import to_messages
+from mani.routers.serializers import to_exercise, to_messages
+from mani.storage import signed_audio_url
 from mani.summarize import update_quietly
 
 router = APIRouter(prefix="/v1/threads/{thread_id}/messages", tags=["chat"])
@@ -58,6 +59,14 @@ async def send(
         # coroutine inside the request, which the runtime was free to abandon.
         background.add_task(update_quietly, user, thread_id)
 
+    # The exercise a completed framework hands off to, signed here rather than in the
+    # orchestrator - the audio link is a wire concern, and the row model carries a path.
+    exercise = (
+        to_exercise(turn.exercise, await signed_audio_url(turn.exercise.audio_path))
+        if turn.exercise
+        else None
+    )
+
     return TurnOut(
         id=turn.message_id,
         content=turn.content,
@@ -68,4 +77,5 @@ async def send(
         crisis_blocks_chat=turn.crisis_blocks_chat,
         was_duplicate=turn.was_duplicate,
         reasoning=turn.reasoning,
+        exercise=exercise,
     )

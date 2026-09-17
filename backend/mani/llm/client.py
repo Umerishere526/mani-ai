@@ -15,7 +15,7 @@ from pydantic import BaseModel, ValidationError
 from mani.config import Settings, get_settings
 from mani.db import llm_calls
 from mani.errors import ErrorCategory, ServiceError
-from mani.llm import chain
+from mani.llm import chain, tools
 
 logger = logging.getLogger(__name__)
 
@@ -229,3 +229,91 @@ async def complete[T: BaseModel](
     return Call(
         value=parsed, model=model, usage=usage, latency_ms=latency_ms, call_id=call_id
     )
+
+
+async def choose_exercise(
+    candidates: list[dict[str, str]],
+    framework_name: str,
+    *,
+    model: str,
+    purpose: llm_calls.Purpose,
+    temperature: float = DEFAULT_TEMPERATURE,
+    max_tokens: int = 200,
+    routing: dict[str, Any] | None = None,
+    user_id: uuid.UUID | str | None = None,
+    thread_id: uuid.UUID | str | None = None,
+    prompt_version_id: uuid.UUID | str | None = None,
+    settings: Settings | None = None,
+) -> str | None:
+    """Ask the model which exercise fits, from a short, real, closed list.
+
+    Real tool-calling, not structured output - a deliberate, scoped exception to one call
+    per turn, only reached when a framework just completed and at least one exercise names
+    it. `candidates` is `[{"id": ..., "title": ..., "subtitle": ...}, ...]` - never the
+    whole catalog, never free text.
+
+    Never raises. A failure here costs the exercise offer, not the turn - the caller falls
+    back to the plain library offer the ordinary reply already makes.
+    """
+    settings = settings or get_settings()
+    if not settings.openrouter_api_key or not candidates:
+        return None
+
+    runnable = chain.build_tool_choice(
+        tools.StartExercise, model=model, temperature=temperature, max_tokens=max_tokens,
+        routing=routing, settings=settings,
+    )
+
+    listing = "\n".join(
+        f"- {c['id']}: {c['title']}" + (f" - {c['subtitle']}" if c.get("subtitle") else "")
+        for c in candidates
+    )
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                f"The person just completed the {framework_name} framework. Call "
+                "start_exercise with the id of the exercise from this list that best "
+                f"fits what they just worked through:\n{listing}"
+            ),
+        }
+    ]
+
+    started = time.perf_counter()
+    usage = llm_calls.Usage()
+    valid_ids = {c["id"] for c in candidates}
+
+    try:
+        message = await runnable.ainvoke(messages)
+    except Exception as exc:
+        logger.warning("exercise selection call failed: %s", exc)
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        _, outcome = _as_service_error(exc)
+        await _record(
+            purpose=purpose, model=model, outcome=outcome, usage=usage,
+            latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
+            prompt_version_id=prompt_version_id, error_message=str(exc),
+        )
+        return None
+
+    usage = chain.usage_from(message)
+    tool_calls = getattr(message, "tool_calls", None) or []
+    exercise_id: str | None = None
+    outcome = llm_calls.Outcome.SCHEMA_INVALID
+    error_message: str | None = "model made no tool call"
+
+    if tool_calls:
+        requested = tool_calls[0].get("args", {}).get("exercise_id")
+        # Untrusted until checked against the same closed list just given to the model -
+        # the same rule already applied to every other model-supplied identifier here.
+        exercise_id = requested if requested in valid_ids else candidates[0]["id"]
+        outcome = llm_calls.Outcome.OK
+        error_message = None
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    await _record(
+        purpose=purpose, model=model, outcome=outcome, usage=usage,
+        latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
+        prompt_version_id=prompt_version_id, error_message=error_message,
+    )
+    return exercise_id

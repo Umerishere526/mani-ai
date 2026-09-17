@@ -109,6 +109,111 @@ async def test_two_schema_failures_raise_and_record_both_attempts(monkeypatch, r
     ]
 
 
+class FakeToolMessage:
+    """What a bind_tools() runnable hands back - an AIMessage with tool_calls on it."""
+
+    def __init__(self, *, exercise_id: str | None) -> None:
+        self.tool_calls = (
+            [{"name": "StartExercise", "args": {"exercise_id": exercise_id}, "id": "1"}]
+            if exercise_id is not None
+            else []
+        )
+        self.usage_metadata = {"input_tokens": 40, "output_tokens": 8}
+        self.response_metadata: dict = {}
+
+
+class FakeToolRunnable:
+    def __init__(self, message: FakeToolMessage) -> None:
+        self._message = message
+        self.calls = 0
+
+    async def ainvoke(self, messages: list[dict]) -> FakeToolMessage:
+        self.calls += 1
+        return self._message
+
+
+CANDIDATES = [
+    {"id": "11111111-1111-4111-8111-111111111111", "title": "One", "subtitle": ""},
+    {"id": "22222222-2222-4222-8222-222222222222", "title": "Two", "subtitle": ""},
+]
+
+
+async def test_the_chosen_exercise_is_the_one_the_tool_call_named(monkeypatch, recorded):
+    runnable = FakeToolRunnable(FakeToolMessage(exercise_id=CANDIDATES[1]["id"]))
+    monkeypatch.setattr(client.chain, "build_tool_choice", lambda *a, **kw: runnable)
+
+    chosen = await client.choose_exercise(
+        CANDIDATES, "ABCDE", model="m",
+        purpose=llm_calls.Purpose.EXERCISE_SELECT, settings=settings(),
+    )
+
+    assert chosen == CANDIDATES[1]["id"]
+    assert [c["outcome"] for c in recorded] == [llm_calls.Outcome.OK]
+
+
+async def test_an_invented_exercise_id_is_corrected_not_trusted(monkeypatch, recorded):
+    """A model-supplied identifier is checked against the closed list it was given, the
+    same rule repairs.py already applies to a technique id. It corrects; it never fails."""
+    runnable = FakeToolRunnable(FakeToolMessage(exercise_id="not-in-the-catalogue"))
+    monkeypatch.setattr(client.chain, "build_tool_choice", lambda *a, **kw: runnable)
+
+    chosen = await client.choose_exercise(
+        CANDIDATES, "ABCDE", model="m",
+        purpose=llm_calls.Purpose.EXERCISE_SELECT, settings=settings(),
+    )
+
+    assert chosen == CANDIDATES[0]["id"]
+
+
+async def test_no_tool_call_offers_no_exercise(monkeypatch, recorded):
+    runnable = FakeToolRunnable(FakeToolMessage(exercise_id=None))
+    monkeypatch.setattr(client.chain, "build_tool_choice", lambda *a, **kw: runnable)
+
+    chosen = await client.choose_exercise(
+        CANDIDATES, "ABCDE", model="m",
+        purpose=llm_calls.Purpose.EXERCISE_SELECT, settings=settings(),
+    )
+
+    assert chosen is None
+    assert [c["outcome"] for c in recorded] == [llm_calls.Outcome.SCHEMA_INVALID]
+
+
+async def test_an_empty_candidate_list_costs_no_call_at_all(monkeypatch, recorded):
+    """The production case today: the catalog has nothing for this framework, so the
+    second call never happens and the turn stays at exactly one."""
+
+    def explode(*a, **kw):
+        raise AssertionError("no runnable should be built with nothing to choose from")
+
+    monkeypatch.setattr(client.chain, "build_tool_choice", explode)
+
+    chosen = await client.choose_exercise(
+        [], "ABCDE", model="m",
+        purpose=llm_calls.Purpose.EXERCISE_SELECT, settings=settings(),
+    )
+
+    assert chosen is None
+    assert recorded == []
+
+
+async def test_a_failed_selection_call_costs_the_offer_not_the_turn(monkeypatch, recorded):
+    class Boom(FakeToolRunnable):
+        async def ainvoke(self, messages: list[dict]):
+            self.calls += 1
+            raise RuntimeError("provider unreachable")
+
+    runnable = Boom(FakeToolMessage(exercise_id=None))
+    monkeypatch.setattr(client.chain, "build_tool_choice", lambda *a, **kw: runnable)
+
+    chosen = await client.choose_exercise(
+        CANDIDATES, "ABCDE", model="m",
+        purpose=llm_calls.Purpose.EXERCISE_SELECT, settings=settings(),
+    )
+
+    assert chosen is None
+    assert [c["outcome"] for c in recorded] == [llm_calls.Outcome.PROVIDER_ERROR]
+
+
 async def test_a_provider_error_is_not_retried_by_the_schema_loop(monkeypatch, recorded):
     """The retry is scoped to a schema failure - anything else must still surface on the
     first attempt, exactly as it did before this loop existed."""

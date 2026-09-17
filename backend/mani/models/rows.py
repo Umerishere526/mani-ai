@@ -168,3 +168,6 @@ class Exercise(Row):
     duration_minutes: float | None = None
     display_order: int = 0
     show_on_home_screen: bool = False
+    # Which framework this exercise follows when it finishes. Null for the ordinary
+    # library exercise, which is most of them.
+    framework_id: str | None = None

@@ -14,7 +14,7 @@ from mani.models.rows import Exercise, Row
 
 COLUMNS = (
     "id, title, subtitle, description, type, category, audio_path, "
-    "duration_minutes, display_order, show_on_home_screen"
+    "duration_minutes, display_order, show_on_home_screen, framework_id"
 )
 ADMIN_COLUMNS = COLUMNS + ", is_active, created_at, updated_at"
 
@@ -47,6 +47,9 @@ class ExerciseInput(BaseModel):
     display_order: int | None = None
     show_on_home_screen: bool | None = None
     is_active: bool | None = None
+    # Which framework this exercise follows when it finishes. Null is the ordinary
+    # library exercise, which is most of them.
+    framework_id: str | None = None
 
 
 async def list_active(
@@ -118,16 +121,33 @@ async def create(conn: asyncpg.Connection, values: ExerciseInput) -> AdminExerci
         f"""
         insert into admin.exercises
             (title, subtitle, description, type, category, audio_path,
-             duration_minutes, display_order, show_on_home_screen, is_active)
+             duration_minutes, display_order, show_on_home_screen, is_active, framework_id)
         values ($1, $2, coalesce($3, ''), $4, $5, $6,
-                $7, coalesce($8, 0), coalesce($9, false), coalesce($10, true))
+                $7, coalesce($8, 0), coalesce($9, false), coalesce($10, true), $11)
         returning {ADMIN_COLUMNS}
         """,
         values.title, values.subtitle, values.description, values.type,
         values.category, values.audio_path, values.duration_minutes,
         values.display_order, values.show_on_home_screen, values.is_active,
+        values.framework_id,
     )
     return AdminExercise.model_validate(dict(row))
+
+
+async def list_for_framework(
+    conn: asyncpg.Connection, framework_id: str
+) -> list[Exercise]:
+    """The active exercise(s) that follow a framework when it finishes.
+
+    Usually zero, until the catalog carries real content - the caller treats that as
+    "nothing to offer," not an error.
+    """
+    rows = await conn.fetch(
+        f"select {COLUMNS} from admin.exercises "
+        "where framework_id = $1 and is_active order by display_order, title",
+        framework_id,
+    )
+    return Exercise.from_records(rows)
 
 
 async def update(
