@@ -64,6 +64,9 @@ class Thread(Row):
     created_at: dt.datetime
     last_message_at: dt.datetime
     deleted_at: dt.datetime | None = None
+    # Chosen per conversation. Null means this thread has not chosen, and the profile's
+    # support_style stands as the default - the same closed set, deliberately.
+    conversation_style: SupportStyle | None = None
 
 
 class Message(Row):

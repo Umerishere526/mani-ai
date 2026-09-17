@@ -40,7 +40,13 @@ def cooldown_for(outcome: TechniqueOutcome) -> int:
 
 
 def resolve_style(ctx: TurnContext) -> str:
-    """Which of the framework's three `ask` variants to surface this turn."""
+    """Which of the framework's three `ask` variants to surface this turn.
+
+    The conversation's own choice wins over the profile's, which is the point of having
+    both: onboarding sets a default, and a thread may differ from it without changing it.
+    """
+    if ctx.thread.conversation_style:
+        return ctx.thread.conversation_style.value
     if ctx.profile and ctx.profile.support_style:
         return ctx.profile.support_style.value
     return DEFAULT_STYLE

@@ -242,6 +242,28 @@ def test_the_last_stage_has_no_next_stage():
     assert "next_stage" not in block
 
 
+def test_the_conversations_own_style_wins_over_the_profile_default():
+    """Onboarding sets a default; a thread may differ from it without changing it. That
+    is the whole reason threads.conversation_style exists beside profiles.support_style."""
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+        phase="activate", at_message_count=4,
+    )
+    chose_direct = Thread(
+        id=THREAD, user_id=USER, message_count=10, created_at=NOW, last_message_at=NOW,
+        conversation_style="direct",
+    )
+    block = context.build(
+        TurnContext(
+            thread=chose_direct,
+            profile=Profile(user_id=USER, support_style="supportive"),
+            technique=state,
+        ),
+        framework=framework(),
+    )
+    assert "stage_ask: State the facts." in block
+
+
 def test_style_falls_back_to_supportive_with_no_profile_or_choice():
     state = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
