@@ -13,8 +13,12 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani.config import get_settings  # noqa: E402
 
-PROMPTS_DIR = pathlib.Path(__file__).resolve().parent.parent / "prompts"
-FRAMEWORKS_DIR = pathlib.Path(__file__).resolve().parent.parent / "frameworks"
+# Authored content, not code: markdown is the input this script loads, and once loaded the
+# database is what the application reads. Kept outside the `mani` package for that reason -
+# nothing in the running service ever opens these files.
+CONTENT_DIR = pathlib.Path(__file__).resolve().parent.parent / "content"
+PROMPTS_DIR = CONTENT_DIR / "prompts"
+FRAMEWORKS_DIR = CONTENT_DIR / "frameworks"
 
 
 def parse_prompt(path: pathlib.Path) -> dict:
