@@ -19,7 +19,9 @@ logger = logging.getLogger(__name__)
 # The layers a turn cannot be composed without. The implementation this replaces pushed
 # each layer only `if (prompt)`, so a prompt renamed or deactivated in the portal simply
 # vanished from the system prompt and Mani quietly changed personality.
-REQUIRED_PROMPTS = ("mani_base", "framework_index", "post_framework", "response_format")
+# Two authored layers. The framework catalogue between them is generated from the registry
+# rather than stored as a prompt, so it is not listed here and cannot go missing.
+REQUIRED_PROMPTS = ("mani_base", "response_format")
 
 # Used by particular paths rather than every turn, but still misconfiguration if absent.
 EXPECTED_PROMPTS = REQUIRED_PROMPTS + ("title_generation", "summarization")

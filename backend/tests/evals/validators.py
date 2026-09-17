@@ -48,9 +48,9 @@ ASSUMED_MOTIVE = (
 # Scale and weight the person did not put there themselves. This one is already a rule in
 # response_format.md's own constraints, which is why it belongs in the same set.
 ADDED_SCALE = (
-    "a lot to deal with", "so much to carry", "weighing on you", "that is tough",
-    "that's tough", "that is hard", "that's hard", "so exhausting", "must be so",
-    "such a big", "really significant",
+    "a lot", "so much", "weighing on you", "that is tough", "that's tough",
+    "that is hard", "that's hard", "so exhausting", "must be so", "such a big",
+    "really significant", "so heavy", "overwhelming",
 )
 
 _WORD = re.compile(r"[a-z']+")
@@ -117,11 +117,17 @@ def check(reply: str, user_message: str, *, in_framework: bool = False) -> list[
         ("clinical label", CLINICAL_TERMS),
         ("forced positivity", FORCED_POSITIVITY),
         ("assumed motive", ASSUMED_MOTIVE),
-        ("added scale", ADDED_SCALE),
     ):
         hits = _hits(reply, phrases)
         if hits:
             findings.append(Finding(rule, f"{hits}"))
+
+    # Scale gets the same treatment as feeling words: the rule is "if they did not describe
+    # the scale, neither do you", so a phrase the person used first is theirs to mirror.
+    said = user_message.lower()
+    added = [p for p in _hits(reply, ADDED_SCALE) if p not in said]
+    if added:
+        findings.append(Finding("added scale", f"{added}"))
 
     questions = question_count(reply)
     interrogatives = len(_INTERROGATIVE.findall(reply))

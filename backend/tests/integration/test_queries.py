@@ -263,7 +263,10 @@ async def test_config_tables_are_readable_and_seeded(users):
         prompts = await config_tables.list_active_prompts(conn)
         frameworks = await config_tables.list_active_frameworks(conn)
 
-    assert {p.name for p in prompts} >= {"mani_base", "framework_index", "response_format"}
+    # The two authored layers. The framework catalogue between them is generated from the
+    # registry at compose time, so it is deliberately not a row here.
+    assert {p.name for p in prompts} >= {"mani_base", "response_format"}
+    assert "framework_index" not in {p.name for p in prompts}
     assert {f.id for f in frameworks} == {
         "abcde", "thought_reframe", "behavioral_activation",
         "structured_problem_solving", "act_choice_point", "dbt_stop",
