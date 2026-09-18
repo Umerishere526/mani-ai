@@ -76,6 +76,9 @@ class TurnOut(BaseModel):
     crisis_blocks_chat: bool = True
     was_duplicate: bool = False
     reasoning: str | None = None
+    # Both of these are null unless AI_DEBUG_MODE is on. clinical_note is written for the
+    # care team, never for the person it is about.
+    clinical_note: str | None = None
     # Set only on the turn a framework completes, and only once the catalog has a
     # matching exercise.
     exercise: "ExerciseOut | None" = None

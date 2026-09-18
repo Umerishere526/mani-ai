@@ -189,6 +189,16 @@ def test_corroboration_within_one_message_is_confident():
     assert is_confident(corroborated)
 
 
+def test_an_imminent_action_is_confident_on_one_mention():
+    """DBT STOP exists because waiting costs something - the message it would pause may
+    already be sent by the time a second mention arrives. Corroboration is right to ask for
+    patience everywhere else, but not here."""
+    urgent = shortlist(["I am about to send a message I may regret"], ACTIVATIONS)
+    assert urgent[0].framework_id == "dbt_stop"
+    assert urgent[0].time_critical
+    assert is_confident(urgent)
+
+
 def test_a_framework_absent_from_the_registry_is_never_returned():
     """Model-supplied ids are already checked in repairs; the router must not invent one."""
     ranked = shortlist(["I am about to send a message I may regret"], {"abcde": ACTIVATIONS["abcde"]})

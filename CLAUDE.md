@@ -17,7 +17,7 @@ Per-app context — read the relevant one before working in that directory:
 
 Coding standards live in `.claude/skills/` — `nextjs-best-practices` for `web/`, `expo-react-native` for `mobile/`, `supabase-postgres` for database work.
 
-`mani/` is an Obsidian vault holding project notes: ADRs, feature specs, reference, daily log, and Claude's journal. It is notes only — no code. Start at `mani/Home.md`.
+`mani-vault/` is an Obsidian vault holding project notes: ADRs, feature specs, reference, daily log, and Claude's journal. It is notes only — no code. Start at `mani-vault/Home.md`.
 
 ## Golden rules
 
@@ -62,8 +62,8 @@ Rule #1: If you want exception to ANY rule, YOU MUST STOP and get explicit permi
 - If you're having trouble, YOU MUST STOP and ask for help, especially for tasks where human input would be valuable.
 - When you disagree with my approach, YOU MUST push back. Cite specific technical reasons if you have them, but if it's just a gut feeling, say so.
 - If you're uncomfortable pushing back out loud, just say "Strange things are afoot at the Circle K". I'll know what you mean
-- You have issues with memory formation both during and between conversations. Use your journal by writing Markdown files under ./mani/Journal/ (the Obsidian vault) to record important facts and insights, as well as things you want to remember before you forget them.
-- Before trying to remember or figure stuff out, search the Markdown files in ./mani/Journal/ for relevant notes.
+- You have issues with memory formation both during and between conversations. Use your journal by writing Markdown files under ./mani-vault/Journal/ (the Obsidian vault) to record important facts and insights, as well as things you want to remember before you forget them.
+- Before trying to remember or figure stuff out, search the Markdown files in ./mani-vault/Journal/ for relevant notes.
 - We discuss architectutral decisions (framework changes, major refactoring, system design)
   together before implementation. Routine fixes and clear implementations don't need
   discussion.
@@ -163,11 +163,11 @@ YOU MUST follow this debugging framework for ANY technical issue:
 
 ## Learning and Memory Management
 
-Notes live in the Obsidian vault at `./mani/`. See `mani/Home.md` for its layout.
+Notes live in the Obsidian vault at `./mani-vault/`. See `mani-vault/Home.md` for its layout.
 
-- YOU MUST regularly write Markdown notes under ./mani/Journal/ to capture technical insights, failed approaches, and muhammad's preferences. Use .md files and meaningful filenames — `nativewind-v5-no-config.md`, not `notes-3.md`.
-- Before starting complex tasks, search the .md files in ./mani/Journal/ for relevant past experiences and lessons learned.
-- Document architectural decisions and their outcomes as numbered ADRs in ./mani/Decisions/, using `mani/Templates/Decision.md`. Once an ADR is accepted, don't edit it — write a new one that supersedes it.
-- Track patterns in user feedback to improve collaboration over time by updating the appropriate ./mani/Journal/ entry.
-- When you notice something that should be fixed but is unrelated to your current task, record it in a new or existing .md note under ./mani/Journal/ rather than fixing it immediately.
+- YOU MUST regularly write Markdown notes under ./mani-vault/Journal/ to capture technical insights, failed approaches, and muhammad's preferences. Use .md files and meaningful filenames — `nativewind-v5-no-config.md`, not `notes-3.md`.
+- Before starting complex tasks, search the .md files in ./mani-vault/Journal/ for relevant past experiences and lessons learned.
+- Document architectural decisions and their outcomes as numbered ADRs in ./mani-vault/Decisions/, using `mani-vault/Templates/Decision.md`. Once an ADR is accepted, don't edit it — write a new one that supersedes it.
+- Track patterns in user feedback to improve collaboration over time by updating the appropriate ./mani-vault/Journal/ entry.
+- When you notice something that should be fixed but is unrelated to your current task, record it in a new or existing .md note under ./mani-vault/Journal/ rather than fixing it immediately.
 - Link notes to each other with `[[wikilinks]]`. Do NOT copy stack facts from `.claude/` into the vault — link to them, or they drift.

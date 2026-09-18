@@ -28,23 +28,24 @@ activation:
     - "The user is close to acting impulsively"
     - "The user cannot participate in reflective questions"
     - "A safety concern requires the approved safety protocol"
+    - "The situation is something that should change rather than be accepted - ongoing abuse, an unsafe workplace, a real medical or financial risk. Accepting a feeling is not the same as accepting a harmful situation, and this framework must never blur that line"
+  # Short fragments, not full example sentences - see abcde.md's activation block for why.
   strong_signals:
-    - "I cannot change what happened"
-    - "I cannot make my family understand"
-    - "I may never receive an apology"
-    - "I cannot control what they decide"
-    - "I cannot make the uncertainty go away"
+    - "cannot change what happened"
+    - "cannot make them understand"
+    - "never receive an apology"
+    - "cannot control what"
+    - "make the uncertainty go away"
   signals:
-    - "I know the thought may keep coming back"
-    - "I cannot stop thinking that I will fail"
-    - "I keep trying to get rid of this feeling"
-    - "I am waiting to feel certain before I act"
-    - "I do not want this fear making my decisions"
-    - "I keep avoiding the conversation even though honesty matters to me"
-    - "I keep defending myself and it is making things worse"
-    - "I am so focused on being approved of that I am not making my own decision"
-    - "I keep saying yes when I want to say no"
-    - "I am withdrawing from people I care about"
+    - "may keep coming back"
+    - "get rid of this feeling"
+    - "waiting to feel certain"
+    - "this fear making my decisions"
+    - "avoiding the conversation"
+    - "keep defending myself"
+    - "being approved of"
+    - "want to say no"
+    - "withdrawing from people"
   redirects:
     - signal: "I think everyone believes I am incompetent, and I want to know if that is accurate."
       instead: thought_reframe
@@ -137,6 +138,7 @@ stages:
       - "must not shame avoidance"
       - "must not tell the user what the thought must be causing"
       - "must not decide that a protective action is an \"away\" response"
+      - "must not move to what matters before acknowledging what the pull is actually getting them - avoidance has a real payoff (less conflict, less exposure, a moment's relief), and skipping straight to its cost reads as moralising, not understanding"
     if_unclear:
       - when: "cannot identify the pull"
         reply: "The effect on your actions is not clear yet. What do you find yourself doing when the thought appears?"
@@ -147,7 +149,11 @@ stages:
   matters:
     purpose: "Clarify how the user wants to act and what they want their response to represent."
     listen_for: "The quality, principle, relationship, responsibility, or way of acting the user values here."
-    ready_when: "What matters in how they respond is named. MANI does not supply a value."
+    ready_when: >-
+      What matters in how they respond is named. MANI does not supply a value. It does not have
+      to arrive as values-language - a concrete goal ("get through the meeting without walking
+      out") is enough to work with here. What it points to underneath can surface later; do not
+      hold the stage open chasing an abstraction the person has not reached for themselves.
     boundaries:
       - "must not select the user's values"
       - "must not impose honesty, forgiveness, loyalty, independence, or compassion"
@@ -166,18 +172,25 @@ stages:
   toward:
     purpose: "Identify a response that moves toward what the user said matters."
     listen_for: "A behaviour that reflects what the user identified as important."
-    ready_when: "A response reflecting what they said matters is named - safe and within their control."
+    ready_when: >-
+      A response reflecting what they said matters is named - safe, within their control, and
+      something they could actually do in the moment the pull is strongest, not only once they
+      feel calmer. A towards move that requires the feeling to be gone first is the pull wearing
+      a different name.
     boundaries:
       - "must not choose the response"
       - "must not present one response as morally superior"
       - "must not require forgiveness or reconciliation"
       - "must not encourage unsafe confrontation"
       - "must not define compliance as acceptance"
+      - "must not accept a response framed purely as a way to make the feeling go away - \"I'll do this so I stop feeling this way\" is acceptance used as a control strategy, not a towards move. Ask what it's for, not just what it removes"
     if_unclear:
       - when: "response depends on another person - \"They need to admit that I am right.\""
         reply: "Their admission depends on them. What response is within your control?"
       - when: "response creates danger - \"I should confront him alone.\""
         reply: "Confronting him alone could place you at risk. What response protects your safety? - if immediate danger, the safety protocol"
+      - when: "framed as removing the feeling - \"I'll do this so the anxiety stops.\""
+        reply: "That would help the anxiety settle. What does it move you toward, apart from that?"
     ask:
       supportive: "You want to explain your decision without forcing agreement. What is one manageable way to begin?"
       reflective: "Explaining without convincing reflects what matters to you. What first action would support that?"

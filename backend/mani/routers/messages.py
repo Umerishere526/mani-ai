@@ -80,5 +80,6 @@ async def send(
         crisis_blocks_chat=turn.crisis_blocks_chat,
         was_duplicate=turn.was_duplicate,
         reasoning=turn.reasoning,
+        clinical_note=turn.clinical_note,
         exercise=exercise,
     )

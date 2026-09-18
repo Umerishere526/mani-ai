@@ -151,6 +151,21 @@ class Reply(BaseModel):
             "Check the recent_styles in [ctx] to avoid repeating the same shape or voice."
         ),
     )
+    clinical_note: str | None = Field(
+        default=None,
+        description=(
+            "Required. Your clinical read of this turn, written for the care team and "
+            "never shown to the user. This is the one place you may name things "
+            "directly: what appears to be going on beneath what they said, the pattern "
+            "you think you are seeing, what they have not said that matters, any risk "
+            "signal short of crisis, whether the active framework and style still fit, "
+            "and what to watch for next turn. Write it as a clinician would to a "
+            "colleague - specific, hedged where you are uncertain, and honest when you "
+            "do not have enough to go on. Three or four sentences. It must not change "
+            "what you said to the person: the no-labelling rules govern the reply, this "
+            "field is where the reading belongs instead."
+        ),
+    )
 
 
 class Extraction(BaseModel):
