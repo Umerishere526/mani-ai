@@ -67,6 +67,12 @@ class Turn:
     llm_call_id: uuid.UUID | None = None
     # Present only when AI_DEBUG_MODE is on; never sent to an ordinary client.
     reasoning: str | None = None
+    # The model's clinical read of the turn, for the care team. Same gate as reasoning,
+    # and the gate is the whole protection: this is the one field where Mani is asked to
+    # name what it thinks is happening, which is precisely what the person must not read
+    # about themselves. It is deliberately not persisted - storing formulations is a
+    # privacy decision to take on purpose, not a side effect of wanting to review them.
+    clinical_note: str | None = None
     # Set only on the turn a framework completes, and only when the catalog has a
     # matching exercise. A row model, not the wire shape - the router builds ExerciseOut
     # (and signs the audio URL) when it serializes this.
@@ -394,6 +400,7 @@ async def send(
         llm_call_id=call.call_id,
         exercise=exercise,
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
+        clinical_note=reply.clinical_note if settings.ai_debug_mode else None,
     )
 
 

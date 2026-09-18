@@ -6,7 +6,7 @@ apps: [mobile]
 tags: [decision, mobile, design-system, nativewind]
 ---
 
-# ADR-002: Mobile design tokens live in CSS `@theme`, mirrored in TS for non-className cases
+# ADR-003: Mobile design tokens live in CSS `@theme`, mirrored in TS for non-className cases
 
 **Status:** accepted
 **Affects:** mobile

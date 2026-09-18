@@ -28,27 +28,29 @@ activation:
     - "The user is already able to respond intentionally"
     - "A medical emergency is present, or the safety protocol is required"
     - "The intended action involves suicide, self-harm, harm to another person, overdose, immediate danger, or inability to remain safe - the safety protocol, not STOP"
+    - "The action itself is protective - leaving, getting away from someone, calling emergency services, or seeking medical help. STOP exists to interrupt a regrettable action, and pausing a protective one is the same failure with the direction reversed: it delays the person from doing the thing that helps"
+  # Short fragments, not full example sentences - see abcde.md's activation block for why.
   strong_signals:
-    - "I am about to send a message I may regret"
-    - "I already wrote the email"
-    - "I want to call her right now"
-    - "I am about to post everything publicly"
-    - "I keep typing and deleting"
-    - "I am about to lose it"
-    - "I need to confront her right now"
-    - "I am quitting today"
-    - "I am ending the relationship right now"
+    - "about to send a message"
+    - "already wrote the email"
+    - "call her right now"
+    - "about to post everything"
+    - "keep typing and deleting"
+    - "about to lose it"
+    - "confront her right now"
+    - "quitting today"
+    - "ending the relationship right now"
   signals:
-    - "I want to tell him exactly what I think"
-    - "I want to say something that will hurt him"
-    - "if she says one more thing I am going to respond"
-    - "I am canceling everything"
-    - "I am about to make this purchase even though I know I should wait"
-    - "I know I will regret it"
-    - "I know it will make things worse"
-    - "I do not want to react this way"
-    - "I need help stopping myself"
-    - "I cannot think before I respond"
+    - "tell him exactly what i think"
+    - "something that will hurt him"
+    - "if she says one more thing"
+    - "canceling everything"
+    - "this purchase even though"
+    - "will regret it"
+    - "will make things worse"
+    - "react this way"
+    - "need help stopping myself"
+    - "cannot think before i respond"
   distinctions:
     somatic_transition: >-
       STOP interrupts an immediate action. The somatic transition follows a completed process
@@ -72,6 +74,7 @@ stages:
     boundaries:
       - "must not command the user to calm down"
       - "must not use STOP instead of the safety protocol"
+      - "must not offer this before the specific action is named - a pause on an unnamed urge cannot be told apart from a pause on someone about to leave, call for help, or get away from danger, and those are the opposite of what STOP is for"
     if_unclear:
       - when: "the user declines"
         reply: "You do not want to use Pause Mode. What would be most helpful right now?"
@@ -120,6 +123,8 @@ stages:
         reply: "You returned to the message. Can you pause the typing and remain here with me?"
       - when: "wants to leave - \"I am going back to the message.\""
         reply: "You want to return to it now. Can you remain paused with me for one more response? - does not pressure if they decline"
+      - when: "the pause needs an anchor - the person is not physically leaving anywhere, so the pause is about where attention goes, not where the body does. One slow breath, naming what is in view, or a hand flat on the desk are usable even mid-conversation"
+        reply: "Before we go further, take one slow breath. What are three things you can see right now?"
     ask:
       supportive: "You have stopped before acting. Can you remain paused here with me?"
       reflective: "You interrupted the immediate reaction. Can you stay with the pause and notice what is happening?"
@@ -136,6 +141,7 @@ stages:
       - "must not begin the full somatic framework here"
       - "must not assume another person's motive"
       - "must not ask several questions at once"
+      - "must not ask why they feel or think something - Observe is describing what is there, not explaining it; \"why\" turns the pause into another lap of the same thinking that produced the urge"
     if_unclear:
       - when: "\"I don't know.\""
         reply: "It is difficult to notice right now. What is the strongest urge?"
@@ -153,8 +159,12 @@ stages:
     ready_when: >-
       The user identifies what happens next. They may choose to continue waiting, leave the
       message unsent, rewrite it later, respond more briefly, ask for information, continue
-      chatting with MANI, speak after more time, or choose not to respond. No immediate action
-      is required.
+      chatting with MANI, speak after more time, choose not to respond, or - genuinely - decide
+      the original action is still what they want once the pause has let the urge settle.
+      Success is the pause itself, not a particular outcome: STOP is not failing if they
+      proceed with what they first intended, as long as it is a considered choice made after
+      observing rather than the immediate reaction it started as. No immediate action is
+      required.
     boundaries:
       - "must not choose the response"
       - "must not solve the underlying problem"

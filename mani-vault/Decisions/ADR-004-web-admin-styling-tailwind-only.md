@@ -6,7 +6,7 @@ apps: [web]
 tags: [decision, web, styling, tailwind]
 ---
 
-# ADR-003: Ported admin UI styles entirely as Tailwind utilities, not hand-written CSS
+# ADR-004: Ported admin UI styles entirely as Tailwind utilities, not hand-written CSS
 
 **Status:** accepted
 **Affects:** web
@@ -88,8 +88,6 @@ for this, the same mechanism its built-in `spin`/`pulse`/`bounce` use).
 ## Links
 
 - [[mani-web-admin-ui-port]]
-- Related: [[ADR-002]] — mobile's equivalent token-architecture decision,
-  referenced by the mobile port journal but not present on this branch
-  (`mani-web-revamp`); it lives on the sibling `mani-mobile-revamp` branch
-  and was never written as a standalone ADR file there either, only
-  referenced from the journal entry
+- Related: [[ADR-003-mobile-design-token-architecture]] — mobile's equivalent
+  token-architecture decision, written on the sibling `mani-mobile-revamp`
+  branch and merged into this vault alongside this one

@@ -41,7 +41,7 @@ objects). Ported the palette into `mobile/src/global.css`'s `@theme` block
 (Tailwind v4 CSS-first tokens NativeWind resolves natively) plus a TS mirror
 at `mobile/src/lib/tokens.ts` for the handful of cases that take a raw color
 value instead of a className (gradients, SVG, animated interpolation). Full
-reasoning in [[ADR-002]].
+reasoning in [[ADR-003-mobile-design-token-architecture]].
 
 Deliberately did not carry over the source's spacing scale — its 4px-based
 scale is numerically identical to Tailwind's built-in default, so redeclaring
@@ -424,7 +424,7 @@ proves nothing about whether it has ever actually run.
 
 ## Links
 
-- [[ADR-002]]
+- [[ADR-003-mobile-design-token-architecture]]
 - Stage 1 (foundation: tokens, fonts, icons, assets, responsive hooks),
   Stage 2 (11 shared primitives), and Stage 3 (chat/crisis/settings
   composite components + AppHeader + DrawerProvider, later moved to be

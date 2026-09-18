@@ -27,20 +27,24 @@ activation:
     - "The user needs to choose how to act while uncertainty remains"
     - "The user cannot engage in reflective questions"
     - "A safety concern requires the approved safety protocol"
+    - "The thought keeps returning as a repeated request to check whether it is true, especially about harm, contamination, or identity - in OCD this checking is the compulsion, and answering it again only feeds the loop it is trying to escape"
+  # Short fragments, not full example sentences - see abcde.md's activation block for why.
   strong_signals:
     - "nobody cares about me"
-    - "she did not answer because she is angry"
-    - "I know I am going to fail"
-    - "they excluded me because they do not like me"
+    - "did not answer because"
+    - "going to fail"
+    - "do not like me"
   signals:
-    - "why else would he ignore me"
-    - "there is only one explanation"
-    - "I already know how this will end"
-    - "what is the point of trying"
-    - "I am a failure"
+    - "why else would he"
+    - "why else would she"
+    - "only one explanation"
+    - "already know how this will end"
+    - "point of trying"
+    - "i am a failure"
     - "she hates me"
+    - "he hates me"
     - "it is hopeless"
-    - "I ruined everything"
+    - "i ruined everything"
   redirects:
     - signal: "I keep thinking I am incompetent, and I want to understand why one criticism affected me so strongly."
       instead: abcde
@@ -83,11 +87,14 @@ stages:
       - "must not combine several thoughts"
       - "must not rewrite the thought in clinical language"
       - "must not call it irrational or distorted"
+      - "must not settle for a global self-judgment with no moment attached - \"I'm worthless\" is a standing belief about who they are, not a thought about what just happened, and light reframing does not move something that size. Find the moment it is attached to right now"
     if_unclear:
       - when: "several thoughts appear"
         reply: "Several thoughts are connected here. Which one do you want to examine?"
       - when: "no clear thought - \"I don't know.\""
         reply: "The thought is difficult to identify. What keeps repeating in your mind?"
+      - when: "identity-level rather than moment-level - \"I'm just a failure.\""
+        reply: "That's about who you are, not just today. What happened that brought it up?"
     ask:
       supportive: "This is the thought that keeps returning. Is this the one you want to look at together?"
       reflective: "You are interpreting her silence as a lack of care. Is that the thought you want to examine?"
@@ -119,6 +126,7 @@ stages:
       - "must not invent contrary evidence"
       - "must not assume another person's intentions"
       - "must not use rhetorical questions to push a conclusion"
+      - "must not open by asking what challenges the thought - ask what supports it first. Leading with counter-evidence reads as debate before the person has finished laying out their own case, and the disconfirming question belongs after, not instead of, that"
     if_unclear:
       - when: "no contrary information - \"Nothing challenges it.\""
         reply: "Nothing comes to mind yet. What remains unknown about why she has not answered?"
@@ -148,16 +156,24 @@ stages:
   reframe:
     purpose: "Develop a brief, balanced thought grounded in the facts the user identified."
     listen_for: "A thought the user considers accurate, balanced, and believable."
-    ready_when: "A thought that includes the known facts, does not replace one unsupported certainty with another, sounds believable, and uses language the user accepts."
+    ready_when: >-
+      A thought that includes the known facts, does not replace one unsupported certainty with
+      another, and uses language the user accepts. The real gate is not whether it sounds
+      balanced to read - it is whether the user actually believes it. Ask, plainly: out of a
+      hundred, how much does this feel true? A reframe they rate low is not a finished one, even
+      if the wording looks right.
     boundaries:
       - "must not write a polished reframe that does not sound like the user"
       - "must not require positive language"
       - "must not claim the new thought is true with certainty"
       - "must not require the user to feel differently"
       - "must not continue revising a thought the user already finds credible"
+      - "if the user rates the reframe as not very believable, must not argue the rating up - weaken or adjust the reframe itself until it is credible to them, the same way the balanced belief was built"
     if_unclear:
       - when: "falsely positive - \"She definitely cares, and everything is fine.\""
         reply: "You do not know that everything is fine. What thought stays closer to what you know?"
+      - when: "rates it low - \"Maybe thirty percent.\""
+        reply: "Thirty isn't there yet. What would need to change in it to make it feel truer?"
     ask:
       supportive: "You know she has not answered, but you do not know why. What thought would be fairer to what you know?"
       reflective: "The original thought treats one explanation as certain. What belief includes the uncertainty?"

@@ -200,6 +200,11 @@ with st.sidebar:
         if not calls:
             st.caption("No calls recorded yet for this thread.")
 
+    if last_turn and last_turn.get("clinical_note"):
+        with st.expander("🩺 Clinical note (team only)", expanded=True):
+            st.write(last_turn["clinical_note"])
+            st.caption("Never sent to the person. Needs AI_DEBUG_MODE=true in backend/.env.")
+
     if last_turn:
         with st.expander("📦 Last turn, raw"):
             st.code(json.dumps(last_turn, indent=2, default=str), language="json")

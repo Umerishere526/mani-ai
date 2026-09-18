@@ -46,6 +46,11 @@ class Signal:
     promoted_by: str | None = None
     spread: int = 0
     """How many distinct recent messages contributed a match - the corroboration count."""
+    time_critical: bool = False
+    """Promoted by a rule with no `over` list - the specification's own case for treating an
+    imminent, regrettable action as urgent rather than something to wait out for a second
+    mention. Corroboration exists to stop a passing phrase being read as clarity; here waiting
+    is the wrong failure mode, so it is what the exemption is for, not a gap in it."""
 
 
 @dataclass(frozen=True)
@@ -182,7 +187,10 @@ def _promote(signals: list[Signal], rule: Rule) -> list[Signal]:
             return ordered
 
     if index is None:
-        promoted = Signal(rule.prefer, PROMOTED_FLOOR, [], promoted_by=rule.name, spread=0)
+        promoted = Signal(
+            rule.prefer, PROMOTED_FLOOR, [],
+            promoted_by=rule.name, spread=0, time_critical=rule.absolute,
+        )
     else:
         existing = ordered.pop(index)
         if index < target:
@@ -193,6 +201,7 @@ def _promote(signals: list[Signal], rule: Rule) -> list[Signal]:
             existing.matched,
             promoted_by=rule.name,
             spread=existing.spread,
+            time_critical=rule.absolute,
         )
 
     ordered.insert(target, promoted)
@@ -252,10 +261,20 @@ def is_confident(signals: list[Signal]) -> bool:
     either the same framework's phrases showed up in more than one recent message, or more than
     one distinct phrase backed it, before the offer guidance goes out. Below that, the shortlist
     still reaches the prompt as a suggestion, but the model is left to ask rather than offer.
+
+    A time-critical signal skips that wait. Corroboration exists to stop a single passing
+    phrase from being read as an established situation - a reasonable thing to want when the
+    cost of waiting is one more clarifying question. DBT STOP's imminent-action rule is the one
+    case where the cost of waiting is the opposite: the action it exists to pause may already
+    be sent by the time a second mention would arrive.
     """
     if not signals or signals[0].score < CONFIDENT_SCORE:
         return False
-    if signals[0].spread < 2 and len(signals[0].matched) < MIN_CORROBORATION:
+    if (
+        not signals[0].time_critical
+        and signals[0].spread < 2
+        and len(signals[0].matched) < MIN_CORROBORATION
+    ):
         return False
     runner_up = signals[1].score if len(signals) > 1 else 0.0
     return signals[0].score - runner_up >= CONFIDENT_MARGIN
