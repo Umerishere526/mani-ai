@@ -13,7 +13,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py .
 COPY mani/ mani/
-COPY prompts/ prompts/
+# Seed input, not runtime code - the service reads prompts and frameworks from the database,
+# never from disk. Both directories ship so `scripts/seed.py` can populate a fresh database
+# from inside the image. `frameworks/` was missing here, which would have failed the seed on
+# first deploy with every framework absent.
+COPY content/ content/
 COPY scripts/ scripts/
 
 # Runs unprivileged. The image holds no secrets; configuration arrives as environment.

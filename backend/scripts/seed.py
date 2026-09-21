@@ -13,38 +13,12 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani.config import get_settings  # noqa: E402
 
-PROMPTS_DIR = pathlib.Path(__file__).resolve().parent.parent / "prompts"
-
-# Phase order is the state machine: a turn may hold or move back, never skip forward.
-# Sourced from the previous implementation's constants/techniqueSteps.ts.
-FRAMEWORKS = [
-    {
-        "id": "thought_reframing",
-        "name": "Thought Reframing",
-        "summary": "Surface a painful thought, separate it from the person, and test it.",
-        "body": "",
-        "activation_conditions": "A specific self-critical or catastrophic thought is stated.",
-        "phases": ["offering", "surface", "externalize", "explore", "land", "ground"],
-        "display_order": 1,
-    },
-    {
-        "id": "abcde",
-        "name": "ABCDE",
-        "summary": "Walk an activating event through belief, consequence, dispute and effect.",
-        "body": "",
-        "activation_conditions": "A situation and a reaction to it are both present.",
-        "phases": [
-            "offering",
-            "activate",
-            "belief",
-            "consequence",
-            "dispute",
-            "effect",
-            "ground",
-        ],
-        "display_order": 2,
-    },
-]
+# Authored content, not code: markdown is the input this script loads, and once loaded the
+# database is what the application reads. Kept outside the `mani` package for that reason -
+# nothing in the running service ever opens these files.
+CONTENT_DIR = pathlib.Path(__file__).resolve().parent.parent / "content"
+PROMPTS_DIR = CONTENT_DIR / "prompts"
+FRAMEWORKS_DIR = CONTENT_DIR / "frameworks"
 
 
 def parse_prompt(path: pathlib.Path) -> dict:
@@ -66,23 +40,63 @@ def parse_prompt(path: pathlib.Path) -> dict:
     }
 
 
+def parse_framework(path: pathlib.Path) -> dict:
+    """Split a framework file into its YAML frontmatter (the router and stage data) and body.
+
+    Reuses the same frontmatter/body split as a prompt file - only the fields differ. The
+    file's own `id` names the framework; the previous version wrote it by hand alongside
+    two hardcoded entries.
+    """
+    raw = path.read_text()
+    if not raw.startswith("---"):
+        raise ValueError(f"{path.name} has no frontmatter")
+    _, frontmatter, body = raw.split("---", 2)
+    meta = yaml.safe_load(frontmatter) or {}
+    for required in ("id", "name", "phases"):
+        if required not in meta:
+            raise ValueError(f"{path.name} frontmatter has no {required}")
+    activation = meta.get("activation") or {}
+    return {
+        "id": meta["id"],
+        "name": meta["name"],
+        "summary": meta.get("summary", ""),
+        "body": body.strip(),
+        # No longer read for routing - admin.frameworks.activation carries that now - but
+        # kept human-readable rather than blank, for anyone looking at the table directly.
+        "activation_conditions": activation.get("central_indication", ""),
+        "phases": meta["phases"],
+        "display_order": meta.get("display_order", 0),
+        "activation": activation,
+        "stages": meta.get("stages") or {},
+    }
+
+
 async def seed() -> None:
     settings = get_settings()
     conn = await asyncpg.connect(settings.database_url)
     try:
         async with conn.transaction():
-            for framework in FRAMEWORKS:
+            framework_files = sorted(FRAMEWORKS_DIR.glob("*.md"))
+            if not framework_files:
+                raise SystemExit(f"no framework files in {FRAMEWORKS_DIR}")
+
+            for path in framework_files:
+                framework = parse_framework(path)
                 await conn.execute(
                     """
                     insert into admin.frameworks
-                        (id, name, summary, body, activation_conditions, phases, display_order)
-                    values ($1, $2, $3, $4, $5, $6, $7)
+                        (id, name, summary, body, activation_conditions, phases,
+                         display_order, activation, stages)
+                    values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)
                     on conflict (id) do update set
                         name = excluded.name,
                         summary = excluded.summary,
+                        body = excluded.body,
                         activation_conditions = excluded.activation_conditions,
                         phases = excluded.phases,
-                        display_order = excluded.display_order
+                        display_order = excluded.display_order,
+                        activation = excluded.activation,
+                        stages = excluded.stages
                     """,
                     framework["id"],
                     framework["name"],
@@ -91,8 +105,11 @@ async def seed() -> None:
                     framework["activation_conditions"],
                     framework["phases"],
                     framework["display_order"],
+                    json.dumps(framework["activation"]),
+                    json.dumps(framework["stages"]),
                 )
-            print(f"frameworks: {len(FRAMEWORKS)}")
+                print(f"  {framework['name']:<28} {len(framework['stages'])} stages")
+            print(f"frameworks: {len(framework_files)}")
 
             files = sorted(PROMPTS_DIR.glob("*.md"))
             if not files:

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -10,14 +11,22 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import context, crisis, repairs
+from mani.chat import context, crisis, repairs, router, safety
 from mani.chat.greeting import greeting
 from mani.config import get_settings
-from mani.db import llm_calls, messages as messages_db, profiles, summaries, threads
+from mani.db import (
+    exercises as exercises_db,
+    llm_calls,
+    messages as messages_db,
+    profiles,
+    summaries,
+    threads,
+)
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
 from mani.llm.schema import Reply, SmartPrompt
 from mani.models.rows import (
+    Exercise,
     Message,
     MessageRole,
     ResponseStyle,
@@ -37,7 +46,9 @@ TITLE_AFTER_MESSAGES = 3
 # How many new messages accumulate before the rolling summary is refreshed.
 SUMMARY_THRESHOLD = 30
 
-GROUND = "ground"
+# The router narrows once there is enough to narrow from. Below this, one or two messages
+# is not a pattern - it is the start of a conversation.
+ROUTER_MIN_EXCHANGES = 2
 
 
 @dataclass(frozen=True)
@@ -56,6 +67,16 @@ class Turn:
     llm_call_id: uuid.UUID | None = None
     # Present only when AI_DEBUG_MODE is on; never sent to an ordinary client.
     reasoning: str | None = None
+    # The model's clinical read of the turn, for the care team. Same gate as reasoning,
+    # and the gate is the whole protection: this is the one field where Mani is asked to
+    # name what it thinks is happening, which is precisely what the person must not read
+    # about themselves. It is deliberately not persisted - storing formulations is a
+    # privacy decision to take on purpose, not a side effect of wanting to review them.
+    clinical_note: str | None = None
+    # Set only on the turn a framework completes, and only when the catalog has a
+    # matching exercise. A row model, not the wire shape - the router builds ExerciseOut
+    # (and signs the audio URL) when it serializes this.
+    exercise: Exercise | None = None
 
 
 def find_tapped_prompt(history: list[Message], content: str) -> SmartPrompt | None:
@@ -157,16 +178,22 @@ async def send(
     updates = threads.ThreadUpdates()
 
     technique = ctx.technique
-    # A technique that reached its closing phase and was accepted is finished; clearing
-    # it is what lets a new one be offered later.
+    # A technique that reached its last phase and was accepted is finished. The row is
+    # retired rather than removed, and the snapshot keeps it with its phase cleared, so
+    # this turn's [ctx] reports the cooldown the completion just started instead of
+    # reporting that nothing has ever run.
+    retiring_framework_id: str | None = None
     if (
         technique is not None
-        and technique.phase == GROUND
         and technique.outcome is TechniqueOutcome.ACCEPTED
+        and config.registry.is_final(technique.framework_id, technique.phase)
     ):
-        updates.clear_technique = True
+        retiring_framework_id = technique.framework_id
+        updates.retire_technique = True
+        ctx = dataclasses.replace(
+            ctx, technique=technique.model_copy(update={"phase": None})
+        )
         technique = None
-        ctx = replace_technique(ctx, None)
 
     tapped = find_tapped_prompt(history, content)
     offer = pending_offer(history)
@@ -191,6 +218,33 @@ async def send(
     # which silently shortened the cooldown on every ambiguous turn.
     deferred = offer is not None and tapped is None and outcome is TechniqueOutcome.OFFERED
 
+    # The deterministic screen runs on every turn, before the model is asked anything. It
+    # costs nothing and cannot be skipped for budget reasons. Crisis short-circuits the model
+    # call entirely; concern only suppresses the router below, so the model still answers.
+    assessment = safety.screen(content)
+    if assessment.level is safety.Level.CRISIS:
+        return await _handle_crisis(
+            conn, ctx, content,
+            reason=f"safety screen: {assessment.category.value if assessment.category else 'unspecified'}",
+            reply_text=safety.protocol_for(assessment.category),
+            tapped=tapped, client_message_id=client_message_id, settings=settings,
+        )
+
+    # The router narrows the field it is not the caller's job to decide; the model still
+    # confirms whatever it offers, and repairs.apply still validates that choice against the
+    # registry. No model call, so a false or missing shortlist costs relevance, never safety.
+    shortlist: list[router.Signal] = []
+    candidate = None
+    if (
+        technique is None
+        and assessment.level is safety.Level.NONE
+        and ctx.thread.message_count // 2 >= ROUTER_MIN_EXCHANGES
+    ):
+        user_texts = [m.content for m in history if m.role is MessageRole.USER] + [content]
+        shortlist = router.shortlist(user_texts, config.registry.activations)
+        if shortlist and router.is_confident(shortlist):
+            candidate = config.registry.get(shortlist[0].framework_id)
+
     wants_title = (
         ctx.thread.message_count >= TITLE_AFTER_MESSAGES and not ctx.thread.title
     )
@@ -203,7 +257,10 @@ async def send(
     )
     model, parameters, routing = composer.model_settings(config)
 
-    prefix = context.build(ctx)
+    active_framework = config.registry.get(technique.framework_id) if technique else None
+    prefix = context.build(
+        ctx, shortlist=shortlist, framework=active_framework, candidate=candidate
+    )
     for_model = (
         f'User selected: "{tapped.label}". They want to continue the conversation.'
         if tapped
@@ -230,7 +287,10 @@ async def send(
     # while rewriting something else.
     if reply.crisis is not None:
         return await _handle_crisis(
-            conn, ctx, content, reply, tapped, client_message_id, settings
+            conn, ctx, content,
+            reason=reply.crisis.reason,
+            reply_text=crisis.CRISIS_REPLY,
+            tapped=tapped, client_message_id=client_message_id, settings=settings,
         )
 
     if deferred:
@@ -251,6 +311,7 @@ async def send(
         current_phase=technique.phase if technique else None,
         selected_label=tapped.label if tapped else None,
         accepted_this_turn=accepted_this_turn,
+        framework_running=outcome is TechniqueOutcome.ACCEPTED,
         wants_title=wants_title,
     )
     if fixed.notes:
@@ -272,7 +333,7 @@ async def send(
     library_offer = next((p for p in fixed.prompts if p.library), None)
 
     if new_offer is not None:
-        updates.clear_technique = False
+        updates.retire_technique = False
         updates.technique = TechniqueState(
             thread_id=ctx.thread.id,
             framework_id=new_offer.technique,
@@ -282,7 +343,7 @@ async def send(
         )
         updates.offer_frameworks.append(new_offer.technique)
     elif fixed.framework_id and outcome is not None:
-        updates.clear_technique = False
+        updates.retire_technique = False
         updates.technique = TechniqueState(
             thread_id=ctx.thread.id,
             framework_id=fixed.framework_id,
@@ -316,6 +377,12 @@ async def send(
 
     await threads.apply(conn, ctx.thread.id, user_id, updates)
 
+    exercise = None
+    if retiring_framework_id is not None:
+        exercise = await _offer_exercise(
+            conn, retiring_framework_id, config, model, routing, user_id, ctx.thread.id
+        )
+
     summarized = ctx.summary.summarized_message_count if ctx.summary else 0
     return Turn(
         message_id=pair.mani_message_id,
@@ -331,43 +398,91 @@ async def send(
         # fired on two different units and drifted further apart with every summary.
         needs_summary=count_after - summarized >= SUMMARY_THRESHOLD,
         llm_call_id=call.call_id,
+        exercise=exercise,
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
+        clinical_note=reply.clinical_note if settings.ai_debug_mode else None,
     )
 
 
-def replace_technique(ctx: threads.TurnContext, technique) -> threads.TurnContext:
-    """A snapshot with the technique replaced, since the snapshot itself is frozen."""
-    return threads.TurnContext(
-        thread=ctx.thread,
-        profile=ctx.profile,
-        technique=technique,
-        techniques_offered=ctx.techniques_offered,
-        recent_styles=ctx.recent_styles,
-        summary=ctx.summary,
+async def _offer_exercise(
+    conn: asyncpg.Connection,
+    framework_id: str,
+    config,
+    model: str,
+    routing: dict | None,
+    user_id: str,
+    thread_id: uuid.UUID,
+) -> Exercise | None:
+    """The exercise that follows a just-completed framework, chosen by a bound tool call.
+
+    A second, small model call - real tool-calling, not the turn's structured reply - and
+    only reached here because a framework just finished. Skipped entirely, at zero cost,
+    when the catalog has nothing for this framework yet - true for every framework today.
+    """
+    candidates = await exercises_db.list_for_framework(conn, framework_id)
+    if not candidates:
+        return None
+
+    framework = config.registry.get(framework_id)
+    chosen_id = await client.choose_exercise(
+        [
+            {"id": str(c.id), "title": c.title, "subtitle": c.subtitle or ""}
+            for c in candidates
+        ],
+        framework.name if framework else framework_id,
+        model=model,
+        purpose=llm_calls.Purpose.EXERCISE_SELECT,
+        routing=routing,
+        user_id=user_id,
+        thread_id=thread_id,
     )
+    return next((c for c in candidates if str(c.id) == chosen_id), candidates[0])
+
+
+# FastAPI's own documented order is response sent -> background tasks run -> yield
+# dependencies' exit code, which is where UserConn's transaction actually commits. So this
+# background task starts running *before* the message it wants to reference is guaranteed
+# visible to another connection - confirmed live: attach_message raised a foreign key
+# violation on every turn. A short, bounded retry is the fix, not a bigger one: the commit
+# in question happens within milliseconds of the background task starting, once at all.
+LINK_RETRY_ATTEMPTS = 5
+LINK_RETRY_DELAY_SECONDS = 0.05
 
 
 async def link_call(call_id: uuid.UUID, message_id: uuid.UUID) -> None:
     """Point a recorded model call at the message it produced.
 
-    Deliberately after the turn's transaction: admin.llm_calls carries a foreign key to
-    public.messages, and the reply does not exist to any other connection until the turn
-    commits. A failure here costs a forensic link, not a delivered reply.
+    admin.llm_calls carries a foreign key to public.messages, and the turn that wrote the
+    message has not necessarily committed yet when this runs - see the note above. A
+    failure after every retry costs a forensic link, not a delivered reply, so it is logged
+    and swallowed rather than raised.
     """
+    import asyncio
+
     from mani.db import pool
 
-    try:
-        async with pool.as_admin() as conn:
-            await llm_calls.attach_message(conn, call_id, message_id)
-    except Exception:
-        logger.exception("failed to link llm call %s to message %s", call_id, message_id)
+    for attempt in range(1, LINK_RETRY_ATTEMPTS + 1):
+        try:
+            async with pool.as_admin() as conn:
+                await llm_calls.attach_message(conn, call_id, message_id)
+            return
+        except asyncpg.PostgresError:
+            if attempt == LINK_RETRY_ATTEMPTS:
+                logger.exception(
+                    "failed to link llm call %s to message %s after %d attempts",
+                    call_id, message_id, LINK_RETRY_ATTEMPTS,
+                )
+                return
+            await asyncio.sleep(LINK_RETRY_DELAY_SECONDS)
 
 
 async def _handle_crisis(
     conn: asyncpg.Connection,
     ctx: threads.TurnContext,
     content: str,
-    reply: Reply,
+    *,
+    reason: str,
+    reply_text: str,
     tapped: SmartPrompt | None,
     client_message_id: uuid.UUID | str | None,
     settings,
@@ -375,7 +490,9 @@ async def _handle_crisis(
     """Store the turn, flag the thread, and answer with something a person can read.
 
     The reference stored only the user's message and returned an empty string, so the
-    screen went blank at the one moment it mattered most.
+    screen went blank at the one moment it mattered most. Called from two places: the
+    deterministic safety screen, before any model call, and the model's own judgment,
+    reported through the reply schema - either way the thread locks the same way.
     """
     logger.warning("crisis signal on thread %s", ctx.thread.id)
 
@@ -383,17 +500,15 @@ async def _handle_crisis(
         conn,
         ctx.thread.id,
         content,
-        crisis.CRISIS_REPLY,
+        reply_text,
         selected_prompt=tapped.label if tapped else None,
         client_message_id=client_message_id,
     )
-    await threads.mark_crisis(
-        conn, ctx.thread.id, reply.crisis.reason, pair.user_message_id
-    )
+    await threads.mark_crisis(conn, ctx.thread.id, reason, pair.user_message_id)
 
     return Turn(
         message_id=pair.mani_message_id,
-        content=crisis.CRISIS_REPLY,
+        content=reply_text,
         created_at=pair.created_at,
         prompts=[],
         title=ctx.thread.title,

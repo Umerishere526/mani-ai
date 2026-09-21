@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.models.rows import Profile, ThreadSummary
 from mani.prompts.cache import Config
@@ -26,6 +27,59 @@ class SystemPrompt:
     @property
     def length(self) -> int:
         return len(self.text)
+
+
+def framework_index(registry: Registry) -> str | None:
+    """The catalogue of frameworks, built from the registry rather than written by hand.
+
+    Every line here already exists as data on `admin.frameworks`, seeded from the framework
+    files - a prose copy beside it is a second source of truth that drifts silently the
+    first time somebody edits one and not the other. Generating it means adding a framework
+    is a content change with no prompt edit, which is what the registry already claims.
+
+    Static across users and turns, so it sits in the cached prefix with the other layers.
+    """
+    frameworks = [registry.get(fid) for fid in registry.ids]
+    present = [f for f in frameworks if f is not None]
+    if not present:
+        return None
+
+    lines = [
+        "# Framework Index",
+        "",
+        "The frameworks available to offer, and what each one is for. The `[ctx]` block "
+        "carries the stage guidance for whichever is running.",
+        "",
+        "| Framework | Id | Use it when |",
+        "|---|---|---|",
+    ]
+    for framework in present:
+        indication = (framework.activation or {}).get("central_indication", "")
+        lines.append(
+            f"| {framework.name} | `{framework.id}` | {' '.join(indication.split())} |"
+        )
+
+    known = set(registry.ids)
+    # Each distinction is written from both sides in the framework files - ABCDE explains
+    # itself against Thought Reframe and Thought Reframe explains itself against ABCDE - and
+    # the ones about not using a framework at all are written five times over. Both are
+    # right in a file a clinician reads and pure waste in a prompt paid for every turn, so
+    # a pair is emitted once and a non-framework comparison only the first time.
+    seen: set[frozenset[str] | str] = set()
+    rendered: list[str] = []
+    for framework in present:
+        for other, text in ((framework.activation or {}).get("distinctions") or {}).items():
+            key = frozenset({framework.id, other}) if other in known else other
+            if key in seen:
+                continue
+            seen.add(key)
+            label = registry.get(other).name if other in known else other.replace("_", " ")
+            rendered.append(f"- **{framework.name} or {label}** — {' '.join(text.split())}")
+
+    if rendered:
+        lines += ["", "## Telling them apart", ""] + rendered
+
+    return "\n".join(lines)
 
 
 def user_context(profile: Profile | None) -> str | None:
@@ -97,8 +151,13 @@ def compose(
     settings = get_settings()
 
     candidates: list[tuple[str, str | None]] = [
+        # Two authored layers with the generated catalogue between them: who Mani is and
+        # how a conversation runs, then what may be offered, then what a reply must
+        # satisfy. All three are identical for every user and every turn, which is what
+        # lets the provider cache the prefix.
         ("mani_base", config.require("mani_base").content),
-        ("techniques", config.require("techniques").content),
+        ("framework_index", framework_index(config.registry)),
+        ("response_format", config.require("response_format").content),
         ("user_context", user_context(profile)),
     ]
 
@@ -108,7 +167,6 @@ def compose(
 
     candidates += [
         ("techniques_used", techniques_used(offered or [])),
-        ("response_format", config.require("response_format").content),
         ("debug", DEBUG_LAYER if settings.ai_debug_mode else None),
         ("summary", summary_layer(summary)),
     ]

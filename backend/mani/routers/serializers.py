@@ -28,6 +28,7 @@ def to_thread(thread: Thread) -> ThreadOut:
         crisis_blocks_chat=get_settings().crisis_blocks_chat,
         created_at=thread.created_at,
         last_message_at=thread.last_message_at,
+        conversation_style=thread.conversation_style,
     )
 
 

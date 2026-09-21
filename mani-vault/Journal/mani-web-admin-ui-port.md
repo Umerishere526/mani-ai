@@ -61,7 +61,7 @@ changed the actual code shape, not just cosmetics:
   caught that this contradicted the `nextjs-best-practices` skill's own
   "Tailwind utility classes only — no custom CSS unless genuinely
   unavoidable" / "Never use inline `style={{}}`" rules. Asked which to
-  follow; the skill won. Wrote [[ADR-003]] since this is a real,
+  follow; the skill won. Wrote [[ADR-004-web-admin-styling-tailwind-only]] since this is a real,
   muhammad-confirmed exception being made explicit, not a routine choice.
 
 ## Stage 1 — tokens, font, globals.css
@@ -220,11 +220,8 @@ branches need to stay alive for a future backend swap-in.
 ## Links
 
 - [[mani-mobile-ui-port]] — the precedent this port followed (placeholder
-  data, dictionary-as-you-go, domain component folders). **Not present on
-  this branch** (`mani-web-revamp`) — it lives on the sibling
-  `mani-mobile-revamp` branch, which diverged from the same `fbffecf` first
-  commit. The two branches' vault journals have not been reconciled; see the
-  note in [[ADR-001]]'s consequences, and flag to muhammad if cross-branch
-  journal visibility becomes a real problem.
-- [[ADR-001]]
-- [[ADR-003]] — the Tailwind-only styling exception for this port
+  data, dictionary-as-you-go, domain component folders). Written on the
+  sibling `mani-mobile-revamp` branch, which diverged from the same
+  `fbffecf` first commit as this one; both journals now live together in
+  the merged vault.
+- [[ADR-004-web-admin-styling-tailwind-only]] — the Tailwind-only styling exception for this port

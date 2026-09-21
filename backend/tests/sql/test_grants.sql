@@ -84,6 +84,19 @@ select pg_temp.want('a user cannot rewrite their own message count',
 select pg_temp.want('a user cannot reassign a thread to someone else',
   has_column_privilege('authenticated', 'public.threads', 'user_id', 'UPDATE'), false);
 
+-- The two columns migration 002 added, and the line between them: how Mani speaks is the
+-- person's to choose, the pacing counter behind the vague-reply pivot is not. A user who
+-- could write it could reset their own counter and never be moved off a vague loop.
+select pg_temp.want('a user can choose their conversation style',
+  has_column_privilege('authenticated', 'public.threads', 'conversation_style', 'UPDATE'),
+  true);
+
+select pg_temp.want('a user cannot reset their own vague streak',
+  has_column_privilege('authenticated', 'public.threads', 'vague_streak', 'UPDATE'), false);
+
+select pg_temp.want('the backend can move the vague streak',
+  has_column_privilege('mani_service', 'public.threads', 'vague_streak', 'UPDATE'), true);
+
 select pg_temp.want('a user can change their own nickname',
   has_column_privilege('authenticated', 'public.profiles', 'nickname', 'UPDATE'), true);
 
@@ -156,7 +169,7 @@ select pg_temp.want('a user cannot record a crisis through the function',
 
 select pg_temp.want('a user cannot write a greeting through the function',
   has_function_privilege('authenticated',
-    'public.create_greeting(uuid, text)', 'EXECUTE'), false);
+    'public.create_greeting(uuid, text, jsonb)', 'EXECUTE'), false);
 
 select pg_temp.want('the backend can write a turn through the function',
   has_function_privilege('mani_service',
@@ -168,7 +181,12 @@ select pg_temp.want('the backend can record a crisis through the function',
 
 select pg_temp.want('the backend can write a greeting through the function',
   has_function_privilege('mani_service',
-    'public.create_greeting(uuid, text)', 'EXECUTE'), true);
+    'public.create_greeting(uuid, text, jsonb)', 'EXECUTE'), true);
+
+-- `create or replace` would leave the old signature in place, still granted. Dropping
+-- it explicitly is what migration 002 does; this is what catches a regression to that.
+select pg_temp.want('the old two-argument greeting function is gone, not just re-pointed',
+  to_regprocedure('public.create_greeting(uuid, text)') is null, true);
 
 -- Clearing a finished technique is a backend decision. Both halves matter: without the
 -- grant the delete raises, without the policy it silently matches nothing.
@@ -219,7 +237,7 @@ select pg_temp.want('an unauthenticated caller cannot record a crisis',
     'public.mark_thread_crisis(uuid, text, uuid)', 'EXECUTE'), false);
 
 select pg_temp.want('an unauthenticated caller cannot write a greeting',
-  has_function_privilege('anon', 'public.create_greeting(uuid, text)', 'EXECUTE'), false);
+  has_function_privilege('anon', 'public.create_greeting(uuid, text, jsonb)', 'EXECUTE'), false);
 
 do $$
 declare

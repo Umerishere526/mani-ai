@@ -135,26 +135,47 @@ async def test_the_composed_read_returns_the_whole_turn(alice):
                           support_style="reflective")
     await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates(
         technique=TechniqueState(
-            thread_id=thread.id, framework_id="thought_reframing",
+            thread_id=thread.id, framework_id="thought_reframe",
             outcome=TechniqueOutcome.OFFERED, phase="offering", at_message_count=2),
-        offer_frameworks=["thought_reframing"],
+        offer_frameworks=["thought_reframe"],
         style=ResponseStyle(shape="mirror and ask", voice="naming"),
     ))
     await summaries.upsert(
         alice, thread.id, ALICE, summary="Talked about work.",
-        techniques_tried=[TechniqueTried(name="thought_reframing", helpful=True)],
+        techniques_tried=[TechniqueTried(name="thought_reframe", helpful=True)],
         summarized_through_message_id=None, summarized_message_count=2)
 
     ctx = await threads.load_turn_context(alice, thread.id, ALICE)
     assert ctx is not None
     assert ctx.profile.nickname == "Al"
     assert ctx.profile.support_style == "reflective"
-    assert ctx.technique.framework_id == "thought_reframing"
+    assert ctx.technique.framework_id == "thought_reframe"
     assert ctx.technique.outcome == TechniqueOutcome.OFFERED
-    assert ctx.techniques_offered == ["thought_reframing"]
+    assert ctx.techniques_offered == ["thought_reframe"]
     assert ctx.recent_styles[0].shape == "mirror and ask"
     assert ctx.summary.summary == "Talked about work."
-    assert ctx.summary.techniques_tried[0].name == "thought_reframing"
+    assert ctx.summary.techniques_tried[0].name == "thought_reframe"
+
+
+async def test_a_conversation_style_survives_the_round_trip(alice):
+    """The only thing that catches a missing column grant. `grant update (...)` in 001 is
+    column-scoped, so a new column inherits nothing and fails at runtime with 42501 -
+    taking the whole turn's transaction with it, message pair included."""
+    from mani.models.rows import SupportStyle
+
+    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    assert thread.conversation_style is None
+
+    await threads.apply(
+        alice, thread.id, ALICE,
+        threads.ThreadUpdates(conversation_style=SupportStyle.DIRECT),
+    )
+
+    reread = await threads.get(alice, thread.id, ALICE)
+    assert reread.conversation_style is SupportStyle.DIRECT
+
+    ctx = await threads.load_turn_context(alice, thread.id, ALICE)
+    assert ctx.thread.conversation_style is SupportStyle.DIRECT
 
 
 async def test_the_composed_read_refuses_another_users_thread(alice, users):
@@ -242,8 +263,14 @@ async def test_config_tables_are_readable_and_seeded(users):
         prompts = await config_tables.list_active_prompts(conn)
         frameworks = await config_tables.list_active_frameworks(conn)
 
-    assert {p.name for p in prompts} >= {"mani_base", "techniques", "response_format"}
-    assert {f.id for f in frameworks} == {"thought_reframing", "abcde"}
+    # The two authored layers. The framework catalogue between them is generated from the
+    # registry at compose time, so it is deliberately not a row here.
+    assert {p.name for p in prompts} >= {"mani_base", "response_format"}
+    assert "framework_index" not in {p.name for p in prompts}
+    assert {f.id for f in frameworks} == {
+        "abcde", "thought_reframe", "behavioral_activation",
+        "structured_problem_solving", "act_choice_point", "dbt_stop",
+    }
     assert frameworks[0].phases[0] == "offering"
 
 

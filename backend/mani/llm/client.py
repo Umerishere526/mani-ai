@@ -7,21 +7,25 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Any
 
 import openai
-from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
 from mani.config import Settings, get_settings
 from mani.db import llm_calls
 from mani.errors import ErrorCategory, ServiceError
+from mani.llm import chain, tools
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_MAX_TOKENS = 2048
+
+# One retry, schema failures only. Without it a malformed reply loses the person's typed
+# message entirely - complete() is called before the turn writes anything, so a raise here
+# leaves nothing in the thread to show for the turn that was attempted.
+MAX_SCHEMA_ATTEMPTS = 2
 
 
 @dataclass(frozen=True)
@@ -33,30 +37,6 @@ class Call[T: BaseModel]:
     usage: llm_calls.Usage
     latency_ms: int
     call_id: uuid.UUID | None
-
-
-@lru_cache
-def _client(api_key: str, base_url: str, timeout: float) -> AsyncOpenAI:
-    return AsyncOpenAI(
-        api_key=api_key,
-        base_url=base_url,
-        timeout=timeout,
-        # The SDK retries three times by default, silently multiplying the bill and the
-        # latency of a turn that is already slow. One attempt; a retry is the caller's
-        # decision to make, with its own budget.
-        max_retries=0,
-    )
-
-
-def _usage(raw: Any) -> llm_calls.Usage:
-    if raw is None:
-        return llm_calls.Usage()
-    details = getattr(raw, "prompt_tokens_details", None)
-    return llm_calls.Usage(
-        input_tokens=getattr(raw, "prompt_tokens", 0) or 0,
-        output_tokens=getattr(raw, "completion_tokens", 0) or 0,
-        cached_input_tokens=getattr(details, "cached_tokens", 0) or 0,
-    )
 
 
 def _as_service_error(exc: Exception) -> tuple[ServiceError, llm_calls.Outcome]:
@@ -172,8 +152,9 @@ async def complete[T: BaseModel](
 ) -> Call[T]:
     """Ask the model for one structured reply.
 
-    OpenRouter is the only provider. The OpenAI SDK is the client because OpenRouter
-    speaks that protocol - there is no second provider and no key to decrypt.
+    OpenRouter is the only provider. LangChain composes the call and parses the reply into
+    the schema; the base_url points at OpenRouter, so it is one protocol and one bill, not a
+    second provider. Exactly one provider call happens here, which is the whole design.
     """
     settings = settings or get_settings()
     if not settings.openrouter_api_key:
@@ -183,10 +164,13 @@ async def complete[T: BaseModel](
             user_message="Mani is not available right now.",
         )
 
-    client = _client(
-        settings.openrouter_api_key,
-        settings.openrouter_base_url,
-        settings.llm_timeout_seconds,
+    runnable = chain.build(
+        schema,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        routing=routing,
+        settings=settings,
     )
 
     messages = _apply_model_quirks(messages, model)
@@ -194,36 +178,37 @@ async def complete[T: BaseModel](
     started = time.perf_counter()
     usage = llm_calls.Usage()
     try:
-        completion = await client.chat.completions.parse(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_completion_tokens=max_tokens,
-            response_format=schema,
-            extra_body={
-                "provider": settings.routing(routing),
-                # Without this OpenRouter omits the cached-token count, which is the
-                # only way to tell whether prompt caching is actually happening.
-                "usage": {"include": True},
-            },
-        )
-        usage = _usage(completion.usage)
-        parsed = completion.choices[0].message.parsed
-        if parsed is None:
-            raise ServiceError(
-                f"model returned no parseable reply: "
-                f"{completion.choices[0].message.refusal or 'empty'}",
-                ErrorCategory.LLM_UNAVAILABLE,
-                retryable=True,
-                user_message="Mani had trouble responding. Please try again.",
+        parsed = None
+        for attempt in range(1, MAX_SCHEMA_ATTEMPTS + 1):
+            result = await runnable.ainvoke(messages)
+            usage = chain.usage_from(result.get("raw"))
+            parsed = result.get("parsed")
+            failure = result.get("parsing_error")
+            if failure is None and parsed is not None:
+                break
+
+            # A schema failure still cost a real provider call, so it gets its own row
+            # rather than being silently absorbed into whichever attempt finally works -
+            # both a retried success and an exhausted retry are fully accounted for.
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            await _record(
+                purpose=purpose, model=model, outcome=llm_calls.Outcome.SCHEMA_INVALID,
+                usage=usage, latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
+                prompt_version_id=prompt_version_id,
+                error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}: {failure or 'empty'}",
             )
-    except ServiceError as exc:
-        latency_ms = int((time.perf_counter() - started) * 1000)
-        await _record(
-            purpose=purpose, model=model, outcome=llm_calls.Outcome.SCHEMA_INVALID,
-            usage=usage, latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-            prompt_version_id=prompt_version_id, error_message=str(exc),
-        )
+            if attempt == MAX_SCHEMA_ATTEMPTS:
+                raise ServiceError(
+                    f"model returned no parseable reply after {MAX_SCHEMA_ATTEMPTS} "
+                    f"attempts: {failure or 'empty'}",
+                    ErrorCategory.LLM_UNAVAILABLE,
+                    retryable=True,
+                    user_message="Mani had trouble responding. Please try again.",
+                )
+    except ServiceError:
+        # Already recorded above, per attempt - re-raising bare avoids a second row for
+        # the same failure and keeps this from falling through to the generic handler
+        # below, which would call _as_service_error() on an error that already is one.
         raise
     except Exception as exc:
         latency_ms = int((time.perf_counter() - started) * 1000)
@@ -244,3 +229,91 @@ async def complete[T: BaseModel](
     return Call(
         value=parsed, model=model, usage=usage, latency_ms=latency_ms, call_id=call_id
     )
+
+
+async def choose_exercise(
+    candidates: list[dict[str, str]],
+    framework_name: str,
+    *,
+    model: str,
+    purpose: llm_calls.Purpose,
+    temperature: float = DEFAULT_TEMPERATURE,
+    max_tokens: int = 200,
+    routing: dict[str, Any] | None = None,
+    user_id: uuid.UUID | str | None = None,
+    thread_id: uuid.UUID | str | None = None,
+    prompt_version_id: uuid.UUID | str | None = None,
+    settings: Settings | None = None,
+) -> str | None:
+    """Ask the model which exercise fits, from a short, real, closed list.
+
+    Real tool-calling, not structured output - a deliberate, scoped exception to one call
+    per turn, only reached when a framework just completed and at least one exercise names
+    it. `candidates` is `[{"id": ..., "title": ..., "subtitle": ...}, ...]` - never the
+    whole catalog, never free text.
+
+    Never raises. A failure here costs the exercise offer, not the turn - the caller falls
+    back to the plain library offer the ordinary reply already makes.
+    """
+    settings = settings or get_settings()
+    if not settings.openrouter_api_key or not candidates:
+        return None
+
+    runnable = chain.build_tool_choice(
+        tools.StartExercise, model=model, temperature=temperature, max_tokens=max_tokens,
+        routing=routing, settings=settings,
+    )
+
+    listing = "\n".join(
+        f"- {c['id']}: {c['title']}" + (f" - {c['subtitle']}" if c.get("subtitle") else "")
+        for c in candidates
+    )
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                f"The person just completed the {framework_name} framework. Call "
+                "start_exercise with the id of the exercise from this list that best "
+                f"fits what they just worked through:\n{listing}"
+            ),
+        }
+    ]
+
+    started = time.perf_counter()
+    usage = llm_calls.Usage()
+    valid_ids = {c["id"] for c in candidates}
+
+    try:
+        message = await runnable.ainvoke(messages)
+    except Exception as exc:
+        logger.warning("exercise selection call failed: %s", exc)
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        _, outcome = _as_service_error(exc)
+        await _record(
+            purpose=purpose, model=model, outcome=outcome, usage=usage,
+            latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
+            prompt_version_id=prompt_version_id, error_message=str(exc),
+        )
+        return None
+
+    usage = chain.usage_from(message)
+    tool_calls = getattr(message, "tool_calls", None) or []
+    exercise_id: str | None = None
+    outcome = llm_calls.Outcome.SCHEMA_INVALID
+    error_message: str | None = "model made no tool call"
+
+    if tool_calls:
+        requested = tool_calls[0].get("args", {}).get("exercise_id")
+        # Untrusted until checked against the same closed list just given to the model -
+        # the same rule already applied to every other model-supplied identifier here.
+        exercise_id = requested if requested in valid_ids else candidates[0]["id"]
+        outcome = llm_calls.Outcome.OK
+        error_message = None
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    await _record(
+        purpose=purpose, model=model, outcome=outcome, usage=usage,
+        latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
+        prompt_version_id=prompt_version_id, error_message=error_message,
+    )
+    return exercise_id

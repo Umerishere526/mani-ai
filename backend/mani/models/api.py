@@ -20,6 +20,9 @@ class ThreadOut(BaseModel):
     crisis_blocks_chat: bool = True
     created_at: dt.datetime
     last_message_at: dt.datetime
+    # How Mani speaks in this conversation. Null means the profile's support_style
+    # stands as the default.
+    conversation_style: SupportStyle | None = None
 
 
 class ThreadListOut(BaseModel):
@@ -29,6 +32,14 @@ class ThreadListOut(BaseModel):
 
 class ThreadCreateIn(BaseModel):
     title: str | None = Field(default=None, max_length=200)
+
+
+class ThreadUpdateIn(BaseModel):
+    """What a client may change about a conversation. Identity is never in here."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    conversation_style: SupportStyle | None = None
 
 
 class MessageOut(BaseModel):
@@ -65,6 +76,12 @@ class TurnOut(BaseModel):
     crisis_blocks_chat: bool = True
     was_duplicate: bool = False
     reasoning: str | None = None
+    # Both of these are null unless AI_DEBUG_MODE is on. clinical_note is written for the
+    # care team, never for the person it is about.
+    clinical_note: str | None = None
+    # Set only on the turn a framework completes, and only once the catalog has a
+    # matching exercise.
+    exercise: "ExerciseOut | None" = None
 
 
 class StartOut(BaseModel):

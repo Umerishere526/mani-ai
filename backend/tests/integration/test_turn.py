@@ -7,7 +7,7 @@ import asyncpg
 import pytest
 
 from mani.auth.jwt import Claims
-from mani.chat import crisis, orchestrator
+from mani.chat import context, crisis, orchestrator
 from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
@@ -32,9 +32,11 @@ class ScriptedModel:
     def __init__(self, *replies: Reply) -> None:
         self._replies = list(replies)
         self.calls = 0
+        self.last_messages: list[dict] | None = None
 
     async def __call__(self, messages, schema, **kwargs):
         self.calls += 1
+        self.last_messages = messages
         reply = self._replies[min(self.calls - 1, len(self._replies) - 1)]
         return client.Call(
             value=reply,
@@ -43,6 +45,25 @@ class ScriptedModel:
             latency_ms=1,
             call_id=None,
         )
+
+
+class ScriptedChooser:
+    """Stands in for the exercise-selection tool call, counting when it was needed.
+
+    A completing framework is the only turn shape that reaches it, and only when the
+    catalog actually has something for that framework - so `calls` is the regression test
+    for the second provider call staying rare rather than becoming routine.
+    """
+
+    def __init__(self, chosen: str | None = None) -> None:
+        self._chosen = chosen
+        self.calls = 0
+        self.kwargs: dict = {}
+
+    async def __call__(self, candidates, framework_name, **kwargs):
+        self.calls += 1
+        self.kwargs = kwargs
+        return self._chosen if self._chosen is not None else candidates[0]["id"]
 
 
 async def reachable() -> bool:
@@ -113,7 +134,7 @@ async def test_a_turn_costs_exactly_one_provider_call(alice, model):
                 SmartPrompt(label="Later"),
                 SmartPrompt(label="Not now"),
             ],
-            state=TechniqueState(technique="abcde", step="dispute"),
+            state=TechniqueState(technique="abcde", step="examine"),
             style=Style(shape="mirror and ask", voice="naming"),
         )
     )
@@ -177,11 +198,12 @@ async def test_tapping_the_offer_records_acceptance(alice, model):
     assert ctx.technique.phase == "activate"
 
 
-async def test_finishing_a_technique_clears_it_without_losing_the_turn(alice, model):
+async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, model):
     """The turn after a technique lands is the normal successful path, not an edge case.
 
-    Clearing the row is a DELETE, and the whole turn shares one transaction: if that
-    statement is refused, the user's message and Mani's reply go down with it.
+    Retiring the row is an UPDATE inside the turn's one transaction: if it is refused,
+    the user's message and Mani's reply go down with it. The row has to survive, because
+    at_message_count is what the next turn's cooldown is measured from.
     """
     model(Reply(text="How has the rest of the week been?"))
     from mani.db import pool
@@ -192,7 +214,7 @@ async def test_finishing_a_technique_clears_it_without_losing_the_turn(alice, mo
     async with pool.as_user(alice) as conn:
         await threads.set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="ground",
+            at_message_count=2, phase="closing",
         )
 
     turn = await send(alice, thread.id, "that helped, thanks")
@@ -202,8 +224,102 @@ async def test_finishing_a_technique_clears_it_without_losing_the_turn(alice, mo
     async with pool.as_user(alice) as conn:
         ctx = await threads.load_turn_context(conn, thread.id, ALICE)
 
-    assert ctx.technique is None
+    # Retired, not deleted: the framework is finished but the thread remembers running it.
+    assert ctx.technique is not None
+    assert ctx.technique.phase is None
+    assert ctx.technique.outcome is TechniqueOutcome.ACCEPTED
+    assert ctx.technique.at_message_count == 2
+    assert "cooldown_passed: no" in context.build(ctx)
     assert [m.role for m in (await _history(alice, thread.id))][-2:] == ["user", "mani"]
+
+
+async def _retire_abcde_on(alice, thread_id) -> None:
+    """Land a thread on ABCDE's final phase, so the next turn is the completing one."""
+    from mani.db import pool
+
+    async with pool.as_user(alice) as conn:
+        await threads.set_technique_outcome(
+            conn, thread_id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
+            at_message_count=2, phase="closing",
+        )
+
+
+@pytest.fixture
+async def abcde_exercise(alice):
+    """One exercise that names abcde, for the turns where the hand-off should fire.
+
+    A fixture rather than seed content: the real catalog is empty, and the mechanism has
+    to be provable before there is anything real in it.
+    """
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        exercise_id = await conn.fetchval(
+            "insert into admin.exercises (title, category, audio_path, framework_id) "
+            "values ('Settling after ABCDE', 'grounding', 'abcde/settle.mp3', 'abcde') "
+            "returning id"
+        )
+    try:
+        yield exercise_id
+    finally:
+        async with pool.as_admin() as conn:
+            await conn.execute("delete from admin.exercises where id = $1", exercise_id)
+
+
+async def test_a_completing_framework_with_no_exercise_still_costs_one_call(
+    alice, model, monkeypatch
+):
+    """The production case today - the catalog is empty, so the hand-off's second call
+    never happens and a completing turn costs exactly what every other turn costs."""
+    scripted = model(Reply(text="How has the rest of the week been?"))
+    chooser = ScriptedChooser()
+    monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
+
+    thread = await start(alice)
+    await _retire_abcde_on(alice, thread.id)
+
+    turn = await send(alice, thread.id, "that helped, thanks")
+
+    assert scripted.calls == 1
+    assert chooser.calls == 0
+    assert turn.exercise is None
+
+
+async def test_a_completing_framework_hands_off_to_its_exercise(
+    alice, model, monkeypatch, abcde_exercise
+):
+    """With something in the catalog for that framework, the turn spends a second call -
+    a bound tool call - and the reply carries the exercise it chose."""
+    scripted = model(Reply(text="How has the rest of the week been?"))
+    chooser = ScriptedChooser()
+    monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
+
+    thread = await start(alice)
+    await _retire_abcde_on(alice, thread.id)
+
+    turn = await send(alice, thread.id, "that helped, thanks")
+
+    assert scripted.calls == 1
+    assert chooser.calls == 1
+    assert chooser.kwargs["purpose"] is llm_calls.Purpose.EXERCISE_SELECT
+    assert turn.exercise is not None
+    assert turn.exercise.id == abcde_exercise
+    assert turn.exercise.framework_id == "abcde"
+
+
+async def test_an_ordinary_turn_never_reaches_the_exercise_hand_off(
+    alice, model, monkeypatch, abcde_exercise
+):
+    """The second call is scoped to a completing framework, not to having a catalog."""
+    model(Reply(text="Tell me more about that."))
+    chooser = ScriptedChooser()
+    monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
+
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "I had a hard day")
+
+    assert chooser.calls == 0
+    assert turn.exercise is None
 
 
 async def test_free_text_during_an_offer_leaves_it_open(alice, model):
@@ -252,6 +368,43 @@ async def test_a_crisis_answers_with_real_words_and_records_the_event(alice, mod
         )
     assert event["reason"] == "expressed suicidal ideation"
     assert event["message_id"] is not None
+
+
+async def test_the_safety_screen_locks_a_thread_with_no_provider_call(alice, model):
+    """An explicit statement is caught before the model is ever asked anything - the
+    scripted model has no reply queued, so a call here would raise, not just cost extra."""
+    from mani.db import pool
+
+    scripted = model()
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "I am going to kill myself tonight.")
+
+    assert scripted.calls == 0
+    assert turn.crisis_detected is True
+    assert turn.content.strip()
+
+    async with pool.as_admin() as conn:
+        event = await conn.fetchrow(
+            "select reason from admin.crisis_events where thread_id = $1", thread.id
+        )
+    assert event["reason"] == "safety screen: suicide"
+
+
+async def test_the_router_shortlist_reaches_the_prompt_without_a_second_call(alice, model):
+    """The router runs in process; it must narrow the field without paying for it."""
+    scripted = model(
+        Reply(text="How is that affecting your days?"),
+        Reply(text="What would it look like to take one step?"),
+        Reply(text="What keeps that feeling from arriving?"),
+    )
+    thread = await start(alice)
+    await send(alice, thread.id, "I have stopped answering people for a week now.")
+    await send(alice, thread.id, "I know what I need to do, I just cannot make myself begin.")
+    await send(alice, thread.id, "I keep waiting to want to do something, but it never comes.")
+
+    assert scripted.calls == 3
+    final_prompt = scripted.last_messages[-1]["content"]
+    assert "framework_shortlist: behavioral_activation" in final_prompt
 
 
 async def test_a_crisis_thread_refuses_another_turn(alice, model):

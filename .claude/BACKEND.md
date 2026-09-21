@@ -11,7 +11,7 @@ cd backend
 source .venv/bin/activate
 supabase start             # local Supabase on 5434x (Docker must be running)
 supabase db reset          # recreate and re-apply migrations
-python scripts/seed.py     # frameworks + the five prompts, from prompts/*.md
+python scripts/seed.py     # loads content/ into admin.frameworks and admin.prompts
 fastapi dev main.py        # dev server with reload on :8000
 fastapi run main.py        # production mode
 pytest                     # unit + integration (integration skips without a database)
@@ -32,7 +32,8 @@ Without activating, call the venv binaries directly — `./.venv/bin/python`, `.
 ## Layout
 
 - `main.py` — `create_app()` plus the module-level `app`. Sentry init and the `ServiceError` handler live here; routes do not.
-- `mani/` — the application package. `config.py`, `errors.py`, `routers/`, and the `chat/`, `prompts/`, `llm/` and `db/` layers.
+- `mani/` — the application package, and the only thing that runs. `config.py`, `errors.py`, `routers/`, and the `chat/`, `prompts/`, `llm/` and `db/` layers. **It never reads the filesystem for content** — prompts and frameworks come from the database.
+- `content/` — authored markdown, seeded into the `admin` schema by `scripts/seed.py` and never read at runtime. `content/prompts/*.md` become `admin.prompts`; `content/frameworks/*.md` become `admin.frameworks`, carrying each framework's per-stage content and its router activation data. Editing one of these changes nothing until it is re-seeded. Kept outside `mani/` because it is input to the database, not code — the same relationship a migration has to the schema.
 - `supabase/migrations/` — the schema. `test_harness.sql` stubs what Supabase adds (`auth.users`, `auth.uid()`, the three roles) so the schema can be tested on plain Postgres.
 - `tests/unit/` — deterministic logic. `tests/integration/` — whole turns against a live database with a scripted model. `tests/sql/` — schema, RLS and privilege assertions run by `scripts/test_db.sh`.
 - `PORT-STATUS.md` — what the service does, what changed from the implementation it replaces, and what is still open. **Update it in the same change as the work.**

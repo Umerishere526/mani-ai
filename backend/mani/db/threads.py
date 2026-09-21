@@ -13,6 +13,7 @@ import asyncpg
 from mani.models.rows import (
     Profile,
     ResponseStyle,
+    SupportStyle,
     TechniqueOutcome,
     TechniqueState,
     Thread,
@@ -21,7 +22,7 @@ from mani.models.rows import (
 
 COLUMNS = (
     "id, user_id, title, message_count, crisis_detected, "
-    "created_at, last_message_at, deleted_at"
+    "created_at, last_message_at, deleted_at, conversation_style"
 )
 
 DEFAULT_PAGE = 20
@@ -220,16 +221,25 @@ class ThreadUpdates:
 
     title: str | None = None
     technique: TechniqueState | None = None
-    clear_technique: bool = False
+    retire_technique: bool = False
     offer_frameworks: list[str] = field(default_factory=list)
     style: ResponseStyle | None = None
     library_offered: bool = False
+    conversation_style: SupportStyle | None = None
 
     def __bool__(self) -> bool:
-        return any([
-            self.title, self.technique, self.clear_technique,
-            self.offer_frameworks, self.style, self.library_offered,
-        ])
+        # Each optional field is tested for presence, not for truth. A field whose
+        # meaningful value is falsy - a zeroed counter, an empty title - would otherwise
+        # make this report "nothing to do" and silently drop every other write with it.
+        return (
+            self.title is not None
+            or self.technique is not None
+            or self.retire_technique
+            or bool(self.offer_frameworks)
+            or self.style is not None
+            or self.library_offered
+            or self.conversation_style is not None
+        )
 
 
 async def apply(
@@ -247,9 +257,23 @@ async def apply(
             updates.title, thread_id, user_id,
         )
 
-    if updates.clear_technique:
+    if updates.conversation_style is not None:
+        # Its own column grant, added by migration 002 - the grant in 001 is
+        # column-scoped and covers title, last_message_at and deleted_at only, so a
+        # missing grant here would fail at runtime with 42501 and roll back the turn.
         await conn.execute(
-            "delete from public.thread_technique_state "
+            "update public.threads set conversation_style = $1 "
+            "where id = $2 and user_id = $3",
+            updates.conversation_style.value, thread_id, user_id,
+        )
+
+    if updates.retire_technique:
+        # Retired, not removed. at_message_count is what the cooldown is measured from,
+        # so deleting the row tells the next turn no technique has ever run and lets a
+        # second framework start immediately. A finished technique is one whose outcome
+        # is accepted and whose phase is null.
+        await conn.execute(
+            "update public.thread_technique_state set phase = null "
             "where thread_id = $1 and user_id = $2",
             thread_id, user_id,
         )

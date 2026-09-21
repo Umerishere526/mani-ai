@@ -7,10 +7,15 @@ tags: [index]
 
 Project vault for the `mani` codebase — three apps in one directory: a Next.js web app, an Expo mobile app, and a FastAPI backend.
 
+**Building Mani itself? Start at `backend/PORT-STATUS.md`**, not here — it carries what the
+service does today, what changed during the TypeScript-to-Python port, and what's still open.
+This page maps the vault.
+
 ## Map
 
 | Folder | Holds |
 |--------|-------|
+| `Programme/` | Pre-port planning history — read `../backend/PORT-STATUS.md` for current status instead |
 | [[Journal]] | Claude's engineering notes — insights, failed approaches, preferences |
 | `Decisions/` | Architecture decision records (ADRs) |
 | `Features/` | Feature specs, written before building |
@@ -23,7 +28,7 @@ Project vault for the `mani` codebase — three apps in one directory: a Next.js
 - [[Web]] — Next.js 16, App Router, Tailwind v4
 - [[Mobile]] — Expo SDK 57, expo-router, NativeWind v5
 - [[Backend]] — FastAPI, Python 3.14
-- [[Supabase]] — database practices (not yet adopted)
+- [[Supabase]] — database practices
 
 ## Source of truth
 

@@ -64,6 +64,9 @@ class Thread(Row):
     created_at: dt.datetime
     last_message_at: dt.datetime
     deleted_at: dt.datetime | None = None
+    # Chosen per conversation. Null means this thread has not chosen, and the profile's
+    # support_style stands as the default - the same closed set, deliberately.
+    conversation_style: SupportStyle | None = None
 
 
 class Message(Row):
@@ -125,6 +128,12 @@ class Framework(Row):
     activation_conditions: str = ""
     phases: list[str]
     display_order: int = 0
+    # The router's input (central indication, weighted phrase lists, distinctions) and the
+    # per-phase clinical content (purpose, listening cues, readiness, boundaries, the styled
+    # `ask`). activation_conditions is left in place and simply stops being read for routing -
+    # a flat string cannot hold either shape.
+    activation: dict[str, Any] = Field(default_factory=dict)
+    stages: dict[str, Any] = Field(default_factory=dict)
 
     def phase_index(self, phase: str | None) -> int:
         """Position in the sequence, or -1 for nothing started / unknown."""
@@ -162,3 +171,6 @@ class Exercise(Row):
     duration_minutes: float | None = None
     display_order: int = 0
     show_on_home_screen: bool = False
+    # Which framework this exercise follows when it finishes. Null for the ordinary
+    # library exercise, which is most of them.
+    framework_id: str | None = None
