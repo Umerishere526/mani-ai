@@ -5,6 +5,24 @@ import { router } from 'expo-router';
 import { ChatDrawer } from '@/components/chat';
 import { CrisisDrawer } from '@/components/crisis';
 import { useDrawer } from '@/providers';
+import type { ThreadListItem } from '@/types/chat';
+
+// TODO: remove once threads come from a real backend — lets the drawer's thread list
+// (date grouping, row styling) be viewed and tested with no API wired up yet.
+const DUMMY_THREADS: ThreadListItem[] = [
+  { id: 'dummy-1', title: 'Feeling overwhelmed at work', lastMessageAt: new Date().toISOString() },
+  { id: 'dummy-2', title: null, preview: 'Can we talk about my sleep schedule?', lastMessageAt: new Date().toISOString() },
+  {
+    id: 'dummy-3',
+    title: 'Setting boundaries with family',
+    lastMessageAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'dummy-4',
+    title: 'Anxiety before a big presentation',
+    lastMessageAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
 
 export function GlobalDrawer() {
   const { isDrawerVisible, isCrisisDrawerVisible, closeDrawer, openCrisisDrawer, closeCrisisDrawer } = useDrawer();
@@ -18,7 +36,7 @@ export function GlobalDrawer() {
     <>
       <ChatDrawer
         visible={isDrawerVisible}
-        threads={[]}
+        threads={DUMMY_THREADS}
         onClose={closeDrawer}
         onOpenCrisisDrawer={openCrisisDrawer}
         onNewChat={handleNewChat}

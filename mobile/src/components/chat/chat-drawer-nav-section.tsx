@@ -1,10 +1,11 @@
 // ABOUTME: The three top-level nav links inside ChatDrawer — Home, Library, Get Help Now.
 
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { Feather, type FeatherIconName } from '@react-native-vector-icons/feather';
 import { colors } from '@/lib/tokens';
 import en from '@/dictionaries/en.json';
 import { Text } from '@/components/shared';
+import { DrawerActionRow } from './drawer-action-row';
 
 export interface ChatDrawerNavSectionProps {
   onNavigateHome: () => void;
@@ -28,16 +29,15 @@ export function ChatDrawerNavSection({ onNavigateHome, onNavigateLibrary, onUrge
   return (
     <View className="px-4">
       {navItems.map((item) => (
-        <Pressable
+        <DrawerActionRow
           key={item.label}
           onPress={item.onPress}
           accessibilityLabel={item.label}
-          accessibilityRole="button"
-          className="mb-1 flex-row items-center rounded-xl px-3 py-4 active:bg-secondary-500/10"
+          className="mb-1 px-4"
         >
           <Feather name={item.icon} size={20} color={colors.secondary[500]} style={{ marginRight: 12 }} />
           <Text className="font-sans-medium text-base">{item.label}</Text>
-        </Pressable>
+        </DrawerActionRow>
       ))}
     </View>
   );

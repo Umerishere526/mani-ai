@@ -5,3 +5,4 @@ export { cn } from "./cn";
 export { pickByScreenSize } from "./responsive";
 export { formatDuration } from "./format-duration";
 export { groupThreadsByDate, getDateGroup, type DateGroup, type GroupedThreadRow } from "./group-threads-by-date";
+export { getConversationStyleOpening } from "./get-conversation-style-opening";

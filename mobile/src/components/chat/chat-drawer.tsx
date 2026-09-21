@@ -14,6 +14,7 @@ import { Text } from '@/components/shared';
 import { ChatDrawerNavSection } from './chat-drawer-nav-section';
 import { ChatDrawerThreadList } from './chat-drawer-thread-list';
 import { ChatDrawerProfileFooter } from './chat-drawer-profile-footer';
+import { DrawerActionRow } from './drawer-action-row';
 
 const PROFILE_CONTENT_HEIGHT = 16 + 40 + 12; // paddingTop + avatar + paddingBottom
 const DRAWER_WIDTH_RATIO = 0.75;
@@ -101,15 +102,14 @@ export function ChatDrawer({
 
         <View className="mx-4 my-4 h-px bg-secondary-500/10" />
 
-        <Pressable
+        <DrawerActionRow
           onPress={() => withCloseDelay(onNewChat)}
-          className="mx-4 mb-3 flex-row items-center rounded-xl px-3 py-3 active:bg-secondary-500/10"
           accessibilityLabel={en.chat.startNewConversationLabel}
-          accessibilityRole="button"
+          className="mx-4 mb-3"
         >
           <Feather name="edit" size={18} color={colors.secondary[500]} style={{ marginRight: 12 }} />
           <Text className="font-sans-medium text-[15px]">{en.chat.startNewConversation}</Text>
-        </Pressable>
+        </DrawerActionRow>
 
         <ChatDrawerThreadList
           threads={threads}

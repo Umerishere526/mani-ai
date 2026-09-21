@@ -3,7 +3,8 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { randomUUID } from 'expo-crypto';
-import type { Message, SmartPrompt } from '@/types/chat';
+import { getConversationStyleOpening } from '@/lib/utils';
+import type { ConversationStyle, Message, SmartPrompt } from '@/types/chat';
 
 const REPLY_DELAY_MS = 900;
 const CRISIS_TRIGGER_WORDS = ['crisis', 'unsafe', 'emergency'];
@@ -37,7 +38,13 @@ export function useChatSimulation(initialThreadId?: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isWaitingForReply, setIsWaitingForReply] = useState(false);
   const [crisisDetected, setCrisisDetected] = useState(false);
+  const [conversationStyle, setConversationStyle] = useState<ConversationStyle | null>(null);
   const replyTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const selectConversationStyle = useCallback((style: ConversationStyle) => {
+    setConversationStyle(style);
+    setMessages((prev) => [...prev, createMessage('mani', getConversationStyleOpening(style))]);
+  }, []);
 
   const sendMessage = useCallback((content: string) => {
     const trimmed = content.trim();
@@ -63,6 +70,7 @@ export function useChatSimulation(initialThreadId?: string) {
     setMessages([]);
     setIsWaitingForReply(false);
     setCrisisDetected(false);
+    setConversationStyle(null);
   }, []);
 
   return {
@@ -70,6 +78,8 @@ export function useChatSimulation(initialThreadId?: string) {
     messages,
     isWaitingForReply,
     crisisDetected,
+    conversationStyle,
+    selectConversationStyle,
     sendMessage,
     startNewThread,
   };
