@@ -3,6 +3,8 @@
 
 export type MessageRole = 'user' | 'mani';
 
+export type ConversationStyle = 'directive' | 'supportive' | 'reflective';
+
 export interface SmartPrompt {
   label: string;
   library?: string;

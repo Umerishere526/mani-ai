@@ -1,39 +1,26 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  FlatList,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  StatusBar,
-  View,
-  type ListRenderItem,
-} from "react-native";
+import { Image, KeyboardAvoidingView, Platform, StatusBar, View } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { AppHeader } from "@/components/shared";
-import {
-  ChatInputBar,
-  type ChatInputBarRef,
-  CrisisBanner,
-  MessageBubble,
-  SmartPromptRow,
-  TypingIndicator,
-} from "@/components/chat";
+import { ChatConversation, ConversationStylePicker, type ChatInputBarRef } from "@/components/chat";
 import { useChatSimulation } from "@/hooks/useChatSimulation";
 import { useDrawer } from "@/providers";
-import en from "@/dictionaries/en.json";
-import type { Message, SmartPrompt } from "@/types/chat";
-
-const renderMessage: ListRenderItem<Message> = ({ item }) => <MessageBubble message={item} />;
-const keyExtractor = (item: Message) => item.id;
+import type { SmartPrompt } from "@/types/chat";
 
 export default function ChatScreen() {
   const params = useLocalSearchParams<{ threadId?: string; requestNewThread?: string }>();
   const { openCrisisDrawer } = useDrawer();
   const chatInputRef = useRef<ChatInputBarRef>(null);
   const [inputValue, setInputValue] = useState("");
-  const { messages, isWaitingForReply, crisisDetected, sendMessage, startNewThread } = useChatSimulation(
-    params.threadId,
-  );
+  const {
+    messages,
+    isWaitingForReply,
+    crisisDetected,
+    conversationStyle,
+    selectConversationStyle,
+    sendMessage,
+    startNewThread,
+  } = useChatSimulation(params.threadId);
 
   useEffect(() => {
     if (params.requestNewThread === "true") {
@@ -42,9 +29,6 @@ export default function ChatScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.requestNewThread]);
-
-  const displayMessages = [...messages].reverse();
-  const latestPrompts: SmartPrompt[] = displayMessages.find((m) => m.role === "mani")?.promptOptions ?? [];
 
   const handleSend = () => {
     if (!inputValue.trim() || isWaitingForReply || crisisDetected) return;
@@ -68,36 +52,21 @@ export default function ChatScreen() {
       <StatusBar barStyle="light-content" />
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <AppHeader onNewChatPress={handleNewChat} />
-        <View className="flex-1">
-          <FlatList
-            data={displayMessages}
-            renderItem={renderMessage}
-            keyExtractor={keyExtractor}
-            inverted
-            contentContainerClassName="grow justify-end py-2"
-            ListHeaderComponent={
-              isWaitingForReply ? (
-                <TypingIndicator />
-              ) : (
-                <SmartPromptRow prompts={latestPrompts} onPromptPress={handlePromptPress} />
-              )
-            }
-            keyboardShouldPersistTaps="handled"
-            accessibilityLabel={en.chat.messagesListLabel}
+        {conversationStyle === null ? (
+          <ConversationStylePicker onSelect={selectConversationStyle} />
+        ) : (
+          <ChatConversation
+            messages={messages}
+            isWaitingForReply={isWaitingForReply}
+            crisisDetected={crisisDetected}
+            inputValue={inputValue}
+            onChangeInput={setInputValue}
+            onSend={handleSend}
+            onPromptPress={handlePromptPress}
+            onCrisisPress={openCrisisDrawer}
+            chatInputRef={chatInputRef}
           />
-
-          {crisisDetected ? (
-            <CrisisBanner onPress={openCrisisDrawer} />
-          ) : (
-            <ChatInputBar
-              ref={chatInputRef}
-              value={inputValue}
-              onChangeText={setInputValue}
-              onSend={handleSend}
-              disabled={isWaitingForReply}
-            />
-          )}
-        </View>
+        )}
       </KeyboardAvoidingView>
       <View className="absolute inset-0 opacity-50" pointerEvents="none">
         <Image source={require("@/assets/images/noise.png")} className="h-full w-full" resizeMode="repeat" />

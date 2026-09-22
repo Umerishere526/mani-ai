@@ -506,3 +506,12 @@ straight at the interaction between the `Svg`'s actual computed `position`
 and its column-flow neighbor. Take a reported symptom's re-framing from
 muhammad seriously and re-derive the mechanism from it, rather than
 defending the first static read of the code.
+
+## Follow-on: conversation style picker built on top of ChatScreen/useChatSimulation
+
+[[conversation-style-picker-implementation]] adds the Directive/Supportive/
+Reflective greeting step to `chat.tsx`/`useChatSimulation`, both introduced
+in Stage 4 above. Same environment limitation applies (no simulator to
+visually verify against), and the same "extract before hitting the line cap"
+instinct triggered another split — this time `chat.tsx` itself, into a new
+`ChatConversation` component.
