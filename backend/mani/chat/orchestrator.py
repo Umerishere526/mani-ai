@@ -67,12 +67,6 @@ class Turn:
     llm_call_id: uuid.UUID | None = None
     # Present only when AI_DEBUG_MODE is on; never sent to an ordinary client.
     reasoning: str | None = None
-    # The model's clinical read of the turn, for the care team. Same gate as reasoning,
-    # and the gate is the whole protection: this is the one field where Mani is asked to
-    # name what it thinks is happening, which is precisely what the person must not read
-    # about themselves. It is deliberately not persisted - storing formulations is a
-    # privacy decision to take on purpose, not a side effect of wanting to review them.
-    clinical_note: str | None = None
     # Set only on the turn a framework completes, and only when the catalog has a
     # matching exercise. A row model, not the wire shape - the router builds ExerciseOut
     # (and signs the audio URL) when it serializes this.
@@ -228,7 +222,12 @@ async def send(
             reason=f"safety screen: {assessment.category.value if assessment.category else 'unspecified'}",
             reply_text=safety.protocol_for(assessment.category),
             tapped=tapped, client_message_id=client_message_id, settings=settings,
+            updates=updates,
         )
+
+    # Read by the router below and by the capsule repair further down, which needs everything
+    # they have said rather than only this turn.
+    user_texts = [m.content for m in history if m.role is MessageRole.USER] + [content]
 
     # The router narrows the field it is not the caller's job to decide; the model still
     # confirms whatever it offers, and repairs.apply still validates that choice against the
@@ -240,7 +239,6 @@ async def send(
         and assessment.level is safety.Level.NONE
         and ctx.thread.message_count // 2 >= ROUTER_MIN_EXCHANGES
     ):
-        user_texts = [m.content for m in history if m.role is MessageRole.USER] + [content]
         shortlist = router.shortlist(user_texts, config.registry.activations)
         if shortlist and router.is_confident(shortlist):
             candidate = config.registry.get(shortlist[0].framework_id)
@@ -259,7 +257,8 @@ async def send(
 
     active_framework = config.registry.get(technique.framework_id) if technique else None
     prefix = context.build(
-        ctx, shortlist=shortlist, framework=active_framework, candidate=candidate
+        ctx, shortlist=shortlist, framework=active_framework, candidate=candidate,
+        history=history,
     )
     for_model = (
         f'User selected: "{tapped.label}". They want to continue the conversation.'
@@ -291,6 +290,7 @@ async def send(
             reason=reply.crisis.reason,
             reply_text=crisis.CRISIS_REPLY,
             tapped=tapped, client_message_id=client_message_id, settings=settings,
+            updates=updates, llm_call_id=call.call_id,
         )
 
     if deferred:
@@ -306,6 +306,9 @@ async def send(
     fixed = repairs.apply(
         reply,
         config.registry,
+        # Everything they have said in this thread, not only this turn: a capsule may mirror
+        # a feeling they named four messages ago, and mani_base.md asks for exactly that.
+        said=" ".join(user_texts),
         already_offered=ctx.techniques_offered,
         current_framework_id=technique.framework_id if technique else None,
         current_phase=technique.phase if technique else None,
@@ -370,8 +373,8 @@ async def send(
 
     if library_offer is not None:
         updates.library_offered = True
-    if reply.style is not None:
-        updates.style = ResponseStyle(shape=reply.style.shape, voice=reply.style.voice)
+    if fixed.style is not None:
+        updates.style = ResponseStyle(shape=fixed.style.shape, voice=fixed.style.voice)
     if fixed.title:
         updates.title = fixed.title
 
@@ -400,7 +403,6 @@ async def send(
         llm_call_id=call.call_id,
         exercise=exercise,
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
-        clinical_note=reply.clinical_note if settings.ai_debug_mode else None,
     )
 
 
@@ -486,6 +488,8 @@ async def _handle_crisis(
     tapped: SmartPrompt | None,
     client_message_id: uuid.UUID | str | None,
     settings,
+    updates: threads.ThreadUpdates,
+    llm_call_id: uuid.UUID | None = None,
 ) -> Turn:
     """Store the turn, flag the thread, and answer with something a person can read.
 
@@ -493,6 +497,9 @@ async def _handle_crisis(
     screen went blank at the one moment it mattered most. Called from two places: the
     deterministic safety screen, before any model call, and the model's own judgment,
     reported through the reply schema - either way the thread locks the same way.
+
+    No exercise is handed over here. The thread is about to lock one way, so an exercise
+    would reach someone who cannot ask a single question about it.
     """
     logger.warning("crisis signal on thread %s", ctx.thread.id)
 
@@ -505,6 +512,11 @@ async def _handle_crisis(
         client_message_id=client_message_id,
     )
     await threads.mark_crisis(conn, ctx.thread.id, reason, pair.user_message_id)
+    # A crisis turn is still a turn: whatever it already decided has to land. Today that is
+    # a framework that completed on this very turn - without this the row keeps its phase
+    # with outcome 'accepted', so the database claims a technique is still mid-flight on a
+    # thread nobody can return to.
+    await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
 
     return Turn(
         message_id=pair.mani_message_id,
@@ -514,6 +526,7 @@ async def _handle_crisis(
         title=ctx.thread.title,
         crisis_detected=True,
         crisis_blocks_chat=settings.crisis_blocks_chat,
+        llm_call_id=llm_call_id,
     )
 
 

@@ -7,16 +7,29 @@ import re
 
 from mani.chat.router import Signal, is_confident
 from mani.db.threads import TurnContext
-from mani.models.rows import Framework, TechniqueOutcome
+from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
 
 # How many messages must pass before a technique may be offered again.
 COOLDOWN_AFTER_DECLINE = 20
 COOLDOWN_AFTER_COMPLETE = 45
 
 # The default when neither the conversation nor the profile has chosen a style yet.
-# `conversation_style` (per-thread) is not wired to any endpoint yet; profile.support_style
-# is the existing onboarding field, so it is the source until the style capsule feature lands.
+# `conversation_style` is set per-thread by PATCH /v1/threads/{id} and wins over
+# profile.support_style, which holds the onboarding answer.
 DEFAULT_STYLE = "supportive"
+
+# How many of a reply's own leading words count as its "opener" for repetition purposes.
+# Matches the threshold the eval harness already uses to call two openers the same one.
+RECENT_OPENERS_WORDS = 2
+# How many of Mani's own past replies to surface. Small on purpose: this is a nudge against
+# an immediate repeat, not a transcript.
+RECENT_OPENERS_WINDOW = 3
+
+
+def _opener(text: str) -> str:
+    """The first couple of words of a reply, lowercased - enough to name a repeated opening
+    without exposing the reply itself in [ctx]."""
+    return " ".join(text.split()[:RECENT_OPENERS_WORDS]).lower()
 
 _CTX_BLOCK = re.compile(r"^\[ctx\].*?\[/ctx\]\s*", re.DOTALL)
 
@@ -58,22 +71,31 @@ def build(
     shortlist: list[Signal] | None = None,
     framework: Framework | None = None,
     candidate: Framework | None = None,
+    history: list[Message] | None = None,
 ) -> str:
     """Format the metadata header for this turn.
 
     Every value is read from the composed turn snapshot, so the block describes what the
     database holds rather than what an in-memory copy was mutated to mid-request. `shortlist`,
-    `framework` and `candidate` are what the router and the framework content add - all
-    optional, so a turn with none of them still formats exactly as before.
+    `framework`, `candidate` and `recent_mani_replies` are what the router, the framework
+    content and the caller's own history add - all optional, so a turn with none of them still
+    formats exactly as before.
 
     `framework` is the one already active; its current and next stage go in full. `candidate`
     is the router's top pick when it is confident enough to be worth more than a bare id and
     score - its offer line goes in, so the offer draws on authored language rather than being
     improvised from the Framework Index's one-liner alone. Never both at once: a framework is
     either running or being considered, not both.
+
+    `history` is the same window the caller already loads for the model's own conversation
+    view - nothing new is fetched for it. Only Mani's own messages in it become recent_openers;
+    the person's messages are read here but never surfaced back to the model as an "opener".
     """
     technique = ctx.technique
-    lines: list[str] = []
+    # Named first because every stage_ask and offer_ask below is resolved from it, and named
+    # `conversation_style` rather than `style` because `recent_styles` three lines down means
+    # the response shape and voice, which is a different thing entirely.
+    lines: list[str] = [f"conversation_style: {resolve_style(ctx)}"]
 
     if technique is None:
         lines.append("cooldown_passed: yes")
@@ -103,6 +125,17 @@ def build(
             f"{s.shape} ({s.voice})" if s.voice else s.shape for s in ctx.recent_styles
         )
         lines.append(f"recent_styles: {styles}")
+
+    # A separate signal from recent_styles: that is the abstract shape/voice, this is the
+    # literal words a reply opened with - two replies can vary in shape while still starting
+    # the same way, which is what "recent_styles" alone cannot catch.
+    mani_replies = [m.content for m in (history or []) if m.role is MessageRole.MANI]
+    openers = [
+        _opener(text) for text in mani_replies[-RECENT_OPENERS_WINDOW:] if text.strip()
+    ]
+    if openers:
+        quoted = ", ".join(f'"{o}"' for o in openers)
+        lines.append(f"recent_openers: {quoted}")
 
     if shortlist:
         ranked = ", ".join(f"{s.framework_id} ({s.score:.2f})" for s in shortlist)

@@ -71,8 +71,14 @@ if [ "$TARGET" = "throwaway" ]; then
   # Recreates what Supabase supplies: auth.users, auth.uid(), and the three roles.
   echo "applying test harness"
   run_sql "$HERE/supabase/test_harness.sql"
-  echo "applying schema"
-  run_sql "$HERE/supabase/migrations/001_initial_schema.sql"
+  # Every migration in order, not just the first. This named 001 alone until now, so from
+  # the moment 002 landed the suites were asserting against a schema the project no longer
+  # had - passing on columns and policies that production did not match. Globbing keeps a
+  # new migration covered without anyone remembering to add it here.
+  for migration in "$HERE"/supabase/migrations/*.sql; do
+    echo "applying $(basename "$migration")"
+    run_sql "$migration"
+  done
 fi
 
 echo

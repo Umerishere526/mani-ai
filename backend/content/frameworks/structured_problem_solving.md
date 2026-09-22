@@ -37,6 +37,9 @@ activation:
     - "need to make a decision"
     - "everything is a mess"
     - "do not know where to begin"
+    # This framework's own appropriate_when already names it; only the signal list omitted it,
+    # so the plainest way of saying it matched nothing at all.
+    - "do not know what to do"
   signals:
     - "too many things happening"
     - "cannot separate any of it"

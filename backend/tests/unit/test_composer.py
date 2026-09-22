@@ -129,14 +129,16 @@ def test_the_generated_index_reaches_the_composed_prompt(config):
 
 
 def test_onboarding_answers_reach_the_prompt(config):
-    """The reference read only the nickname, so topics and support style shaped nothing."""
+    """The reference read only the nickname, so topics shaped nothing. The support style is
+    not here on purpose: it is resolved per turn and named in [ctx], so that a conversation
+    which chose differently is not contradicted by the profile's answer."""
     built = composer.compose(
         config,
         Profile(user_id=USER, nickname="Al", topics=["burnout", "boundaries"],
                 support_style="direct"),
     )
     assert "burnout, boundaries" in built.text
-    assert "direct style of support" in built.text
+    assert "style of support" not in built.text
 
 
 def test_a_missing_required_layer_is_refused_not_dropped(config):

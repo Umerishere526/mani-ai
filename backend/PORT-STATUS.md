@@ -266,6 +266,83 @@ Behaviour that was ported deliberately differently, with the reason.
 
 ## Fixed from review
 
+- **Four tables let a signed-in user write onto someone else's thread.** `public.messages`
+  has always checked both halves - the row carries your `user_id` *and* the thread it names
+  is yours. `thread_technique_state`, `thread_techniques_offered`, `thread_response_styles`
+  and `thread_summaries` checked only the first, while `authenticated` holds INSERT on all
+  four directly and `public` is exposed to PostgREST, so the backend was not the only door.
+  `thread_id` is the PRIMARY KEY on two of them, so one inserted row permanently occupied a
+  victim's slot: their own upsert then failed the conflict, and the turn shares one
+  transaction, so they lost their message and Mani's reply on every turn after. A read leak
+  it was not - every SELECT policy is still `auth.uid() = user_id` - but a persistent denial
+  of service on a stranger's conversation it was. Migration 003 adds the `exists` clause
+  `messages_insert` already used. `tests/sql/test_rls.sql` had a near-miss for this: it set
+  `user_id` to the *victim's*, which `auth.uid() = user_id` catches on its own, so it passed
+  throughout. The real case - attacker's own `user_id`, victim's `thread_id`, run as
+  `authenticated` - is now tested for all four tables, and fails without 003.
+- **`scripts/test_db.sh` only ever applied migration 001.** It named that one file, so from
+  the moment 002 landed both SQL suites asserted against a schema the project no longer had.
+  It now applies every migration in order.
+- **The reply schema asked for a clinical note on every turn and threw it away.**
+  `clinical_note` was marked Required and described as "written for the care team" - three or
+  four sentences of clinical formulation, paid for in output tokens, reaching no column, no
+  log and no screen. Removed rather than stored: persisting a formulation about someone's
+  mental state is a decision that needs a retention rule and an access policy, and there is
+  no care-team surface to justify one yet. Also removes 1,354 characters from the system
+  prompt on every turn. If that surface is ever built, it comes back with the column.
+- **Shape and voice were free text in the database.** The closed sets were enforced in
+  Python only, and the table is append-only so a bad value was never corrected. Live data
+  showed why it mattered: of 435 rows, 35 carried an off-list voice - 24 were a capitalised
+  form of a real value ("Transitional"), and 5 were `Supportive`/`Direct`, which are
+  conversation styles, written into the voice field on turns when `[ctx]` never named the
+  style in force. Migration 003 lowercases the recoverable ones, nulls the rest (voice is
+  nullable by design) and adds the check.
+- **A production process could boot without the two secrets it cannot work without.**
+  `OPENROUTER_API_KEY` and the JWT secret both defaulted to empty, so a misconfigured deploy
+  started, answered `/health` and `/health/ready` with ok, and failed every real request -
+  a chat turn at the provider call, an authenticated request at the JWKS fetch. `Settings`
+  now refuses to construct when `environment == "production"` and either is missing.
+  Development and the test suite are unaffected.
+- **Nothing tested that an admin endpoint is actually admin-only over the wire.** Every turn
+  test calls `orchestrator.send()` directly, which is the right shape for testing a turn but
+  meant the dependency wiring was never exercised: `require_admin` can be correct and simply
+  not attached to a route, and that is invisible to a unit test of the function.
+  `tests/unit/test_endpoint_auth.py` drives the routes out of the OpenAPI spec - so a new
+  endpoint is covered without anyone editing the test - and asserts every versioned path
+  answers 401 without a token and every admin path answers 403 for an ordinary signed-in
+  user, including one holding `user_metadata.admin_role`.
+- **The conversation style never reached the model.** `mani_base.md` tells it the style in
+  force is named in the `[ctx]` block, and the block named it nowhere: `resolve_style()` was
+  used only to pick which of a stage's three `ask` variants to inline, so outside a running
+  framework the style arrived through no channel at all. The one prose mention lived in the
+  composer and read `profile.support_style`, so a thread that had chosen differently was
+  contradicted rather than served. `[ctx]` now carries `conversation_style` as its first
+  line and the composer's copy is gone — one source, and the prompt's existing claim is true
+  rather than aspirational. This is the cause of the failure recorded in
+  `tests/evals/test_negative_set.py`: all three styles opening with "I'm here."
+- **Capsule labels were only checked offline.** The rules that a button may not name a
+  feeling the person did not use, judge them, or run past four words lived in
+  `tests/evals/validators.py` and nothing enforced them at runtime — which is how
+  "I'm overthinking it" reached a real thread as something to tap. They now run in
+  `repairs.apply()` as drops, never rewrites: putting different words in someone's mouth is
+  not a repair. The word lists moved into `mani/chat/repairs.py` and the eval imports them,
+  so the two layers cannot drift. The mirroring exemption is keyed on everything the person
+  has said in the thread, not just the current turn, so a feeling they named four messages
+  ago may still be mirrored back.
+- **A framework completing on a crisis turn stayed mid-flight forever.** `_handle_crisis()`
+  returned before the end-of-turn write, so `thread_technique_state` kept its phase with
+  outcome `accepted` on a thread that then locked one way — nothing would ever correct it.
+  It now calls `threads.apply()`, and carries the `llm_call_id` through so a crisis the
+  model reported links to the call that decided it. No exercise is offered on a crisis turn;
+  see "Open".
+- **A closed enum in the reply schema could cost the person their message.** `Style.shape`,
+  `Style.voice` and `SmartPrompt.library` were typed as enums, so a value outside the set
+  was a `ValidationError` — which lands in `parsing_error`, burns a second provider call and
+  then raises, and `complete()` runs before the message pair is written. The whole turn was
+  lost over a cosmetic self-report about a reply that was otherwise fine. The fields are now
+  permissive in the schema and checked in `repairs.apply()`, which drops the bad half and
+  keeps the reply. Case is normalized first: a model reading a table returns "Mirror and ask"
+  far more often than it returns something genuinely off-list.
 - **A user could forge Mani's side of their own conversation.** Withholding the INSERT
   grant on `public.messages` did nothing while `create_message_pair` — a definer
   function that takes Mani's words from its caller — was granted to `authenticated` and
@@ -361,6 +438,30 @@ streaming in v1" — worth revisiting before launch.
   the safety path fires and what Mani must and must not do, and refer throughout to "the
   approved safety protocol" without containing one. Until it exists, an indirect concern
   changes routing only and Mani answers in its own words.
+- **Mani opens replies the same way, and uses one mirroring pattern almost exclusively.**
+  Measured, not guessed: across 435 stored replies, `mirror and ask` is 388 of them - 89% -
+  and a scripted run of three scenarios in all three styles produced 7 findings, 5 of which
+  were consecutive replies opening identically ("Your manager…", "You have…", "You are…").
+  This is not a plumbing gap. `[ctx]` now carries both `conversation_style` and
+  `recent_openers`, and a direct check confirms the block literally reads
+  `recent_openers: "your manager", "your manager"` on the turn where it repeats anyway. The
+  model is told and does not comply. The five mirroring voices the prompt teaches are not
+  all "You…" openers - *Naming* ("That is…"), *Observing* ("It sounds like…"), *Receiving*
+  ("I hear that…") - so the variety is available and unused. Prompt work, tracked here
+  rather than attempted alongside the correctness fixes.
+- **No exercise hand-off on a crisis turn — a decision, not an omission.** A crisis locks
+  the thread one way, so an exercise offered there reaches someone who cannot ask a single
+  question about it, and costs a second provider call on a turn whose whole job is to say
+  one approved sentence. Left out deliberately. Whether that is right is muhammad's call,
+  alongside `safety.PROTOCOLS` and `crisis.RESOURCES` — do not "fix" it as a missing branch.
+- **Two framework phrase lists matched nothing a person would plainly say.** Closed now,
+  but the shape is worth remembering: the routing suite passed while driving a hand-written
+  fixture that shared almost no phrases with the shipped `content/frameworks/*.md`. It now
+  parses the content itself through the seeder's own parser, so drift fails the test.
+  `"I cannot make myself do anything"` and `"I do not know what to do"` both routed to
+  nothing at all; the first is now the open fragment `"cannot make myself"`, the second was
+  simply missing from a list whose own `appropriate_when` already named it. Worth a pass
+  over the other four frameworks for the same gap.
 - **The exercise catalog is empty.** `admin.exercises` holds zero rows and the bucket has
   no files. The hand-off that offers one when a framework completes is built and tested
   against fixtures, so it starts working the moment there is content — but until then it

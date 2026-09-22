@@ -1,0 +1,21 @@
+# ABOUTME: Scripted conversations for scripts/eval_replies.py, one per named scenario.
+# ABOUTME: Turns are drawn from the framework files' own worked examples where possible.
+
+- name: anxiety_free_chat
+  turns:
+    - "I have a presentation tomorrow and I keep going over it"
+    - "I keep thinking I'll freeze halfway through"
+    - "I don't know, I just want it to be over"
+    - "yeah maybe"
+- name: criticism_abcde
+  turns:
+    - "My manager criticized my presentation in front of everyone"
+    - "She said two of my recommendations did not have enough support"
+    - "I stopped speaking and avoided her afterward"
+    - "I keep thinking I am incompetent"
+- name: withdrawal_behavioral_activation
+  turns:
+    - "I have been in bed all day"
+    - "I have ignored everyone's messages for a week"
+    - "I don't see the point"
+    - "I guess I could answer one"

@@ -20,15 +20,34 @@ class LibrarySection(StrEnum):
     BURNOUT = "Burnout"
 
 
+def _listed(values) -> str:
+    return ", ".join(f'"{v}"' for v in values)
+
+
+# The closed sets below are named in the descriptions rather than typed as enums, and are
+# checked in repairs.py instead. A value outside an enum is a ValidationError, and a
+# ValidationError here does not degrade one cosmetic field - it costs a second provider call
+# and then raises, losing the message the person typed. Nothing the model reports about its
+# own style is worth a lost turn, so the schema asks and the repair decides.
+SHAPES = (
+    "warmth lead", "honor and follow", "mirror and ask", "mirror and hold",
+    "gentle follow", "presence only",
+)
+VOICES = ("naming", "receiving", "quoting", "transitional", "observing")
+
+
 class SmartPrompt(BaseModel):
     """One tappable capsule under a reply."""
 
     model_config = ConfigDict(extra="ignore")
 
     label: str = Field(description="Display text shown to the user.")
-    library: LibrarySection | None = Field(
+    library: str | None = Field(
         default=None,
-        description="Set only when this button navigates to the library. Null otherwise.",
+        description=(
+            "Set only when this button navigates to the library. Null otherwise. "
+            f"One of: {_listed(LibrarySection)}."
+        ),
     )
     technique: str | None = Field(
         default=None,
@@ -76,16 +95,13 @@ class Style(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     shape: str = Field(
-        description=(
-            'The response shape you used: "warmth lead", "honor and follow", '
-            '"mirror and ask", "mirror and hold", "gentle follow", or "presence only".'
-        )
+        description=f"The response shape you used: {_listed(SHAPES)}."
     )
     voice: str | None = Field(
         default=None,
         description=(
-            'The mirroring voice you used, if you mirrored: "naming", "receiving", '
-            '"quoting", "transitional", or "observing". Null if no mirroring.'
+            f"The mirroring voice you used, if you mirrored: {_listed(VOICES)}. "
+            "Null if no mirroring."
         ),
     )
 
@@ -151,21 +167,13 @@ class Reply(BaseModel):
             "Check the recent_styles in [ctx] to avoid repeating the same shape or voice."
         ),
     )
-    clinical_note: str | None = Field(
-        default=None,
-        description=(
-            "Required. Your clinical read of this turn, written for the care team and "
-            "never shown to the user. This is the one place you may name things "
-            "directly: what appears to be going on beneath what they said, the pattern "
-            "you think you are seeing, what they have not said that matters, any risk "
-            "signal short of crisis, whether the active framework and style still fit, "
-            "and what to watch for next turn. Write it as a clinician would to a "
-            "colleague - specific, hedged where you are uncertain, and honest when you "
-            "do not have enough to go on. Three or four sentences. It must not change "
-            "what you said to the person: the no-labelling rules govern the reply, this "
-            "field is where the reading belongs instead."
-        ),
-    )
+    # There is no clinical_note field. The model was asked for three or four sentences of
+    # clinical formulation on every turn, for a care team that has nowhere to read it: it
+    # reached no column, no log, and no screen. Paying output tokens for a formulation about
+    # someone's mental state and then discarding it is the worst of both - the cost of
+    # holding the reading and none of the use. If a care-team surface is ever built, this
+    # comes back together with the column, the retention rule and the access policy that
+    # make storing it defensible.
 
 
 class Extraction(BaseModel):

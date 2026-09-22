@@ -86,7 +86,12 @@ def user_context(profile: Profile | None) -> str | None:
     """What Mani knows about the person, from onboarding.
 
     The previous version read only the nickname out of auth user_metadata and ignored the
-    topics and support style it had collected, so onboarding shaped nothing.
+    topics it had collected, so onboarding shaped nothing.
+
+    The support style is deliberately absent. It is resolved per turn from the conversation
+    first and the profile second, and named in the [ctx] block, which is where mani_base.md
+    tells the model to read it. A second copy here would be the profile's answer contradicting
+    a conversation that had chosen differently.
     """
     if profile is None:
         return None
@@ -96,8 +101,6 @@ def user_context(profile: Profile | None) -> str | None:
         lines.append(f'The user prefers to be called "{profile.nickname}".')
     if profile.topics:
         lines.append(f"Topics they came here for: {', '.join(profile.topics)}.")
-    if profile.support_style:
-        lines.append(f"They asked for a {profile.support_style} style of support.")
 
     return "## User Context\n" + "\n".join(lines) if lines else None
 

@@ -119,6 +119,62 @@ def test_recent_styles_are_listed_so_a_reply_can_avoid_repeating_one():
     assert "recent_styles: mirror and ask (naming) → presence only" in block
 
 
+def test_recent_openers_are_extracted_from_manis_own_replies():
+    history = [
+        mani("Your manager gave you that feedback while the team watched."),
+        user("She said two recommendations weren't supported."),
+        mani("That sounds like a hard moment to sit with."),
+    ]
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None), history=history
+    )
+    assert 'recent_openers: "your manager", "that sounds"' in block
+
+
+def test_recent_openers_list_is_bounded():
+    history = [
+        mani("One thing you said stood out."),
+        mani("Two things came up for you."),
+        mani("Three moments felt different."),
+        mani("Four steps got you here."),
+    ]
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None), history=history
+    )
+    assert '"one thing"' not in block
+    assert '"two things"' in block
+    assert '"three moments"' in block
+    assert '"four steps"' in block
+
+
+def test_recent_openers_carry_no_user_text():
+    """A user message never becomes an opener, even when it is the most recent message and
+    even when it would otherwise be within the window - only role=mani messages qualify."""
+    history = [
+        user("I have a presentation tomorrow and I keep going over it"),
+        mani("Tell me what happened next."),
+        user("I keep thinking I'll freeze halfway through"),
+    ]
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None), history=history
+    )
+    assert '"tell me"' in block
+    assert '"i have"' not in block
+    assert '"i keep"' not in block
+
+
+def test_no_recent_replies_means_no_recent_openers_line():
+    block = context.build(TurnContext(thread=thread(), profile=None, technique=None))
+    assert "recent_openers" not in block
+
+    only_user_messages = [user("I have a presentation tomorrow")]
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        history=only_user_messages,
+    )
+    assert "recent_openers" not in block
+
+
 def test_a_context_block_can_be_stripped_back_out():
     """Messages written by the previous system carry one; nothing written here does."""
     stored = context.build(TurnContext(thread=thread(), profile=None, technique=None))
@@ -262,6 +318,25 @@ def test_the_conversations_own_style_wins_over_the_profile_default():
         framework=framework(),
     )
     assert "stage_ask: State the facts." in block
+    assert "conversation_style: direct" in block
+
+
+def test_the_style_in_force_is_named_even_with_no_framework_running():
+    """mani_base.md tells the model the [ctx] block names the style in force. Until this
+    line existed the block named it nowhere, and outside a framework there was no stage_ask
+    or offer_ask to carry it either - so all three styles answered the same way."""
+    chose_direct = Thread(
+        id=THREAD, user_id=USER, message_count=10, created_at=NOW, last_message_at=NOW,
+        conversation_style="direct",
+    )
+    block = context.build(
+        TurnContext(
+            thread=chose_direct,
+            profile=Profile(user_id=USER, support_style="supportive"),
+            technique=None,
+        ),
+    )
+    assert "conversation_style: direct" in block
 
 
 def test_style_falls_back_to_supportive_with_no_profile_or_choice():

@@ -9,6 +9,7 @@ import pytest
 from mani.auth.jwt import Claims
 from mani.config import get_settings
 from mani.db import config_tables, llm_calls, messages, profiles, summaries, threads
+from mani.llm.schema import SHAPES
 from mani.models.rows import (
     ResponseStyle,
     TechniqueOutcome,
@@ -212,14 +213,17 @@ async def test_a_turn_keeps_its_halves_in_order(alice):
 
 
 async def test_the_style_window_keeps_only_the_recent_ones(alice):
+    """Cycles the real shapes rather than synthetic ones: the column is constrained to the
+    set the schema allows, so `shape-0` is no longer a value this table can hold."""
     thread, _ = await threads.create_or_reuse(alice, ALICE)
-    for n in range(10):
+    written = [SHAPES[n % len(SHAPES)] for n in range(10)]
+    for shape in written:
         await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates(
-            style=ResponseStyle(shape=f"shape-{n}", voice=None)))
+            style=ResponseStyle(shape=shape, voice=None)))
 
     ctx = await threads.load_turn_context(alice, thread.id, ALICE)
     assert len(ctx.recent_styles) == threads.STYLE_WINDOW
-    assert ctx.recent_styles[-1].shape == "shape-9"
+    assert ctx.recent_styles[-1].shape == written[-1]
 
 
 async def test_an_empty_update_touches_nothing(alice):

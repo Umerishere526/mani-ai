@@ -1,56 +1,19 @@
 # ABOUTME: Routing accuracy as a test rather than a bill - the router makes no model call.
-# ABOUTME: Cases are taken from each framework's "What MANI May Hear" section in the specs.
+# ABOUTME: Driven by the shipped framework content, so drift in a phrase list fails here.
 
 import pytest
 
 from mani.chat.router import is_confident, shortlist
+from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
-# Phrase patterns as they will be seeded into admin.frameworks.activation, drawn from the
-# specification's own lists. Short and discriminating: a whole sentence matches only itself.
+# The shipped activation data, parsed by the seeder itself - the same structures that reach
+# admin.frameworks and then Registry.activations at runtime. A hand-written copy used to
+# stand here, and it passed while sharing almost no phrases with the content actually
+# deployed, which is the one thing this suite must never do. No database: the markdown is
+# the input to both, so routing accuracy stays a test that always runs.
 ACTIVATIONS: dict[str, dict] = {
-    "abcde": {
-        "strong_signals": ["so i must be", "it proved i was", "this proves i will never"],
-        "signals": [
-            "criticized me", "i always ruin everything", "everyone must think i am",
-            "so he has no respect for me", "because i do not matter",
-        ],
-    },
-    "thought_reframe": {
-        "strong_signals": ["nobody cares about me", "she hates me", "i am a failure"],
-        "signals": [
-            "it is hopeless", "there is only one explanation",
-            "i already know how this will end", "why else would he ignore me",
-        ],
-    },
-    "behavioral_activation": {
-        "strong_signals": ["cannot make myself", "cannot get myself to begin"],
-        "signals": [
-            "in bed all day", "stopped answering", "keep avoiding the task",
-            "stopped cooking", "keep canceling plans", "start tomorrow",
-            "no structure anymore",
-        ],
-    },
-    "structured_problem_solving": {
-        "strong_signals": ["do not know what to do", "do not know where to begin"],
-        "signals": [
-            "everything is a mess", "which option to choose", "every choice has a downside",
-            "missed a deadline", "going over the same options",
-        ],
-    },
-    "act_choice_point": {
-        "strong_signals": ["cannot change what happened", "cannot control whether"],
-        "signals": [
-            "may never receive an apology", "get rid of this feeling",
-            "waiting to feel certain", "keep saying yes when i want to say no",
-        ],
-    },
-    "dbt_stop": {
-        "strong_signals": ["about to send a message", "about to lose it"],
-        "signals": [
-            "tell him exactly what i think", "know i will regret it",
-            "help stopping myself", "keep typing and deleting",
-        ],
-    },
+    f["id"]: f["activation"]
+    for f in (parse_framework(path) for path in sorted(FRAMEWORKS_DIR.glob("*.md")))
 }
 
 

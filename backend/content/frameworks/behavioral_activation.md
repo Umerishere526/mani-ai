@@ -38,8 +38,9 @@ activation:
     - "in bed all day"
     - "stopped answering"
     - "keep avoiding the task"
-    - "cannot make myself begin"
-    - "cannot make myself start"
+    # The open fragment, so "cannot make myself start", "begin", "get up" and "do anything"
+    # all match. The two specific forms it replaces left the commonest phrasing routing nowhere.
+    - "cannot make myself"
   signals:
     - "stopped cooking"
     - "not been getting dressed"

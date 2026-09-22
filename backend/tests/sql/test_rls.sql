@@ -354,6 +354,102 @@ $$;
 rollback;
 
 -- ---------------------------------------------------------------------------
+-- Squatting a victim's thread: the row carries the attacker's own user_id
+-- ---------------------------------------------------------------------------
+-- The block above sets user_id to Alice's while claiming to be Bob, so it is caught by
+-- `auth.uid() = user_id` alone and passed even while thread ownership went unchecked. The
+-- real attack sets user_id to *Bob's* - the row is honestly his, only the thread is not -
+-- and it ran as `authenticated`, which holds these INSERT grants directly and reaches them
+-- through PostgREST without the backend in the path. thread_id is the primary key on both
+-- of these tables, so a row that lands is permanent: Alice's own upsert then fails on the
+-- conflict, and the turn shares one transaction, so she loses her message and Mani's reply
+-- on every turn after. Fixed in migration 003.
+
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-00000000000b"}';
+
+do $$
+begin
+  begin
+    insert into public.thread_technique_state
+      (thread_id, user_id, framework_id, outcome, phase, at_message_count)
+    values ('11111111-0000-4000-8000-000000000001',
+            'a0000000-0000-4000-8000-00000000000b',
+            'thought_reframing', 'accepted', 'ground', 4);
+    raise exception 'FAIL: Bob squatted the technique-state row on Alice''s thread';
+  exception
+    when insufficient_privilege then
+      raise notice 'PASS: technique state requires owning the thread, not just the row';
+  end;
+
+  begin
+    insert into public.thread_summaries (thread_id, user_id, summary)
+    values ('11111111-0000-4000-8000-000000000001',
+            'a0000000-0000-4000-8000-00000000000b', 'squatted');
+    raise exception 'FAIL: Bob squatted the summary row on Alice''s thread';
+  exception
+    when insufficient_privilege then
+      raise notice 'PASS: summaries require owning the thread';
+  end;
+
+  begin
+    insert into public.thread_techniques_offered (thread_id, framework_id, user_id)
+    values ('11111111-0000-4000-8000-000000000001', 'thought_reframing',
+            'a0000000-0000-4000-8000-00000000000b');
+    raise exception 'FAIL: Bob blocked a framework from ever being offered to Alice';
+  exception
+    when insufficient_privilege then
+      raise notice 'PASS: offered-technique rows require owning the thread';
+  end;
+
+  begin
+    insert into public.thread_response_styles (thread_id, user_id, shape)
+    values ('11111111-0000-4000-8000-000000000001',
+            'a0000000-0000-4000-8000-00000000000b', 'mirror and ask');
+    raise exception 'FAIL: Bob wrote a response style onto Alice''s thread';
+  exception
+    when insufficient_privilege then
+      raise notice 'PASS: response styles require owning the thread';
+  end;
+end
+$$;
+rollback;
+
+-- ---------------------------------------------------------------------------
+-- The closed sets the application validates are also stated in the database
+-- ---------------------------------------------------------------------------
+
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-00000000000a"}';
+
+do $$
+begin
+  begin
+    insert into public.thread_response_styles (thread_id, user_id, shape)
+    values ('11111111-0000-4000-8000-000000000001',
+            'a0000000-0000-4000-8000-00000000000a', 'vibes');
+    raise exception 'FAIL: an off-list response shape was stored';
+  exception
+    when check_violation then
+      raise notice 'PASS: response shape is pinned to the set the code validates';
+  end;
+
+  begin
+    insert into public.thread_response_styles (thread_id, user_id, shape, voice)
+    values ('11111111-0000-4000-8000-000000000001',
+            'a0000000-0000-4000-8000-00000000000a', 'mirror and ask', 'shouting');
+    raise exception 'FAIL: an off-list mirroring voice was stored';
+  exception
+    when check_violation then
+      raise notice 'PASS: mirroring voice is pinned to the set the code validates';
+  end;
+end
+$$;
+rollback;
+
+-- ---------------------------------------------------------------------------
 -- Symmetry, and no JWT means no rows
 -- ---------------------------------------------------------------------------
 

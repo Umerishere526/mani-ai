@@ -13,8 +13,19 @@ REQUIRED = {
 }
 
 
+# What a production process must also carry. Kept separate from REQUIRED because these
+# are required only in production - development and the test suite run without them.
+PRODUCTION = {
+    "openrouter_api_key": "sk-test",
+    "supabase_jwt_secret": "jwt-secret",
+}
+
+
 def build(**overrides) -> Settings:
-    return Settings(_env_file=None, **(REQUIRED | overrides))
+    values = REQUIRED | overrides
+    if values.get("environment") == "production":
+        values = PRODUCTION | values
+    return Settings(_env_file=None, **values)
 
 
 def test_defaults_are_the_safe_choice():
@@ -59,6 +70,37 @@ def test_prompt_cache_ttl_follows_environment():
 def test_unknown_environment_is_rejected():
     with pytest.raises(ValidationError):
         build(environment="staging")
+
+
+@pytest.mark.parametrize(
+    ("blank", "expected"),
+    [
+        ({"openrouter_api_key": ""}, "OPENROUTER_API_KEY"),
+        ({"supabase_jwt_secret": "", "supabase_jwks_url": ""}, "SUPABASE_JWT_SECRET"),
+    ],
+)
+def test_production_refuses_to_start_without_the_secrets_it_needs(blank, expected, monkeypatch):
+    """Both default to empty so local development runs without them. In production that
+    default boots a process where /health says ok and every real request fails - a chat
+    turn at the provider call, an authenticated request at the JWKS fetch."""
+    for name in blank:
+        monkeypatch.delenv(name.upper(), raising=False)
+    with pytest.raises(ValidationError, match=expected):
+        build(environment="production", **blank)
+
+
+def test_production_accepts_jwks_in_place_of_the_shared_secret():
+    """Supabase signs with either. Requiring both would refuse a valid configuration."""
+    settings = build(
+        environment="production", supabase_jwt_secret="", supabase_jwks_url="https://x/keys"
+    )
+    assert settings.jwks_url == "https://x/keys"
+
+
+@pytest.mark.parametrize("environment", ["development", "test"])
+def test_everything_below_production_still_runs_with_neither(environment):
+    settings = build(environment=environment, openrouter_api_key="", supabase_jwt_secret="")
+    assert settings.openrouter_api_key == ""
 
 
 def test_routing_pins_the_upstream_provider_by_default():

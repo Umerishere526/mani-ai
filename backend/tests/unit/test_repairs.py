@@ -29,6 +29,7 @@ def reply(**overrides) -> Reply:
 
 def fix(registry, model_reply, **overrides):
     defaults = {
+        "said": "",
         "already_offered": [],
         "current_framework_id": None,
         "current_phase": None,
@@ -117,6 +118,56 @@ def test_more_than_three_buttons_are_trimmed(registry):
     assert len(fix(registry, many).prompts) == repairs.MAX_PROMPTS
 
 
+def test_reply_text_mirroring_an_established_feeling_is_not_flagged(registry):
+    """The prose check exists to catch invention, not mirroring - the same exemption the
+    capsule check already gets from `said`."""
+    mirrored = reply(text="You sound worried right now. What's on your mind?")
+    fixed = fix(registry, mirrored, said="I feel worried about tomorrow")
+    assert fixed.text == "You sound worried right now. What's on your mind?"
+    assert fixed.notes == []
+
+
+def test_reply_text_introducing_an_unestablished_feeling_is_noted(registry):
+    """Observational only: the note is logged, the text is neither rewritten nor dropped."""
+    invented = reply(text="You're worried about it. What happens next?")
+    fixed = fix(registry, invented, said="I have a presentation tomorrow")
+    assert fixed.text == "You're worried about it. What happens next?"
+    assert any("worried" in note for note in fixed.notes)
+
+
+def test_reply_text_with_no_feeling_words_is_not_flagged(registry):
+    unrelated = reply(text="What happens next in your plan?")
+    fixed = fix(registry, unrelated, said="I have a presentation tomorrow")
+    assert fixed.notes == []
+
+
+def test_a_capsule_cannot_put_a_feeling_in_their_mouth_but_may_mirror_their_own(registry):
+    """A label is the one part of a reply the person may send back as their own words, so
+    a feeling they never named must not appear in one. A feeling they did name is the
+    mirroring the same prompt asks for, and an earlier word list that could not tell the
+    two apart is why this rule is written against what they said rather than a blocklist."""
+    mixed = reply(
+        prompts=[
+            SmartPrompt(label="It's frustrating"),
+            SmartPrompt(label="Still embarrassed"),
+            SmartPrompt(label="I was not enough for her at all"),
+        ]
+    )
+    fixed = fix(registry, mixed, said="I felt embarrassed in front of everyone")
+    assert [p.label for p in fixed.prompts] == ["Still embarrassed"]
+    assert len(fixed.notes) == 2
+
+
+def test_a_capsule_that_judges_them_is_dropped(registry):
+    """Observed live: a reply offered "I'm overthinking it" as a button to press."""
+    judging = reply(
+        prompts=[SmartPrompt(label="Tell me more"), SmartPrompt(label="I'm overthinking it")]
+    )
+    fixed = fix(registry, judging)
+    assert [p.label for p in fixed.prompts] == ["Tell me more"]
+    assert fixed.notes
+
+
 def test_a_skipped_phase_is_corrected_rather_than_regenerated(registry):
     jumped = reply(state=TechniqueState(technique="thought_reframing", step="land"))
     fixed = fix(registry, jumped, current_framework_id="thought_reframing",
@@ -157,3 +208,55 @@ def test_a_clean_reply_is_left_alone(registry):
     fixed = fix(registry, clean)
     assert fixed.notes == []
     assert [p.label for p in fixed.prompts] == ["Tell me more"]
+
+
+def test_a_style_the_model_reports_in_title_case_still_counts(registry):
+    """The shapes are taught in a table, so the model returns them capitalised as often as
+    not. Dropping those would starve the anti-repetition loop rather than protect it."""
+    titled = reply(style=Style(shape="Mirror And Ask", voice="Naming"))
+    fixed = fix(registry, titled)
+    assert fixed.style == Style(shape="mirror and ask", voice="naming")
+    assert fixed.notes == []
+
+
+def test_an_off_list_shape_is_dropped_rather_than_failing_the_turn(registry):
+    """A value outside the set is a ValidationError if the schema types it as an enum, and
+    that costs a second provider call and then the person's message. It is only a self
+    report about a reply that is otherwise fine, so it is dropped and the reply stands."""
+    invented = reply(style=Style(shape="vibes", voice="naming"))
+    fixed = fix(registry, invented)
+    assert fixed.style is None
+    assert fixed.text == "That sounds heavy to carry."
+    assert fixed.notes
+
+
+def test_an_off_list_voice_keeps_the_shape_it_came_with(registry):
+    """voice is already nullable and shape is the anchor the block formats around, so only
+    the half that is wrong is discarded."""
+    half_wrong = reply(style=Style(shape="mirror and ask", voice="shouting"))
+    fixed = fix(registry, half_wrong)
+    assert fixed.style == Style(shape="mirror and ask", voice=None)
+    assert fixed.notes
+
+
+def test_a_button_to_a_library_section_that_does_not_exist_is_dropped(registry):
+    """Same reasoning as the shape: an enum here fails the whole turn, and the button would
+    otherwise navigate the person out of the conversation to nowhere."""
+    nowhere = reply(
+        prompts=[SmartPrompt(label="Read more", library="Relationships"),
+                 SmartPrompt(label="Tell me more")]
+    )
+    fixed = fix(registry, nowhere)
+    assert [p.label for p in fixed.prompts] == ["Tell me more"]
+    assert fixed.notes
+
+
+def test_a_library_section_the_model_cased_differently_is_kept_and_corrected(registry):
+    """A client navigates on this string exactly, so a value that matches loosely still has
+    to leave repaired at the one spelling that string will actually match against."""
+    lowercased = reply(
+        prompts=[SmartPrompt(label="Read more", library="emotionalintelligence")]
+    )
+    fixed = fix(registry, lowercased)
+    assert [p.library for p in fixed.prompts] == ["EmotionalIntelligence"]
+    assert fixed.notes == []

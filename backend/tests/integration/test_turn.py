@@ -43,7 +43,7 @@ class ScriptedModel:
             model="test/model",
             usage=llm_calls.Usage(input_tokens=100, output_tokens=20),
             latency_ms=1,
-            call_id=None,
+            call_id=uuid.uuid4(),
         )
 
 
@@ -405,6 +405,42 @@ async def test_the_router_shortlist_reaches_the_prompt_without_a_second_call(ali
     assert scripted.calls == 3
     final_prompt = scripted.last_messages[-1]["content"]
     assert "framework_shortlist: behavioral_activation" in final_prompt
+
+
+async def test_a_framework_completing_on_a_crisis_turn_is_still_retired(alice, model):
+    """A crisis turn is still a turn. It used to return before the end-of-turn write, so a
+    framework that finished on the same message stayed mid-flight forever - and the thread
+    locks one way, so nothing would ever correct it."""
+    from mani.db import pool
+
+    thread = await start(alice)
+    await _retire_abcde_on(alice, thread.id)
+
+    turn = await send(alice, thread.id, "I am going to kill myself tonight.")
+    assert turn.crisis_detected is True
+
+    # The thread is locked, so the snapshot is read as admin rather than through a turn.
+    async with pool.as_admin() as conn:
+        row = await conn.fetchrow(
+            "select phase, outcome from public.thread_technique_state where thread_id = $1",
+            thread.id,
+        )
+    assert row["phase"] is None
+    assert row["outcome"] == TechniqueOutcome.ACCEPTED
+
+
+async def test_a_crisis_the_model_reported_links_to_the_call_that_decided_it(alice, model):
+    """The safety screen answers before any call, so it has none to link. The model's own
+    report costs a real generation, and admin.crisis_events is where someone reviewing a
+    crisis asks which model produced it."""
+    model(Reply(text="I hear you.", crisis=Crisis(reason="expressed hopelessness")))
+    thread = await start(alice)
+    reported = await send(alice, thread.id, "there is no point in any of it")
+    assert reported.llm_call_id is not None
+
+    screened = await start(alice)
+    caught = await send(alice, screened.id, "I am going to kill myself tonight.")
+    assert caught.llm_call_id is None
 
 
 async def test_a_crisis_thread_refuses_another_turn(alice, model):

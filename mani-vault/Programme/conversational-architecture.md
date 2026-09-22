@@ -19,7 +19,7 @@ split, additive migrations — none of these move.
 **Source documents.** Kept as provenance and superseded by §1 of this document as the
 implementation source of truth:
 
-- *Directive. Supportive. Reflective.* — the three conversational styles and the cadence
+- *Direct. Supportive. Reflective.* — the three conversational styles and the cadence
 - *Six Frameworks for App* — ABCDE, Thought Reframe, Behavioral Activation, Structured
   Problem-Solving, ACT Choice Point, DBT STOP; safety exception; per-stage specification
 - *System Prompt* — the prompts as currently implemented
@@ -38,9 +38,16 @@ framework content cannot be authored and the eval sets cannot be extracted.
 Verified against the tree on 2026-09-16. Three of these are easy to assume are built and are
 not.
 
+> **Re-checked 2026-09-22.** This list is a dated snapshot and several entries have since been
+> built — read it as what was true on 16 September, not as a to-do list. Specifically: the
+> deterministic pre-generation safety screen now exists (`mani/chat/safety.py`, called from
+> `orchestrator.py` before any model call, and it short-circuits the model entirely on a
+> crisis), `admin.frameworks.stages` is seeded and read, and the two state-machine bugs in §6
+> are fixed. `greeting.py` is still style-blind. Check the code before acting on any entry here.
+
 - **`support_style` reaches the model as a single sentence.** `mani/prompts/composer.py:46` —
   `"They asked for a {support_style} style of support."` That is the entire implementation of
-  *"Directive leads. Supportive accompanies. Reflective mirrors and explores."*
+  *"Direct leads. Supportive accompanies. Reflective mirrors and explores."*
 - **`admin.frameworks.body` is empty and unreachable.** `scripts/seed.py:25,34` seed `""`, and
   `seed.py:80-85` omits `body` from the upsert's `do update set` — so **re-seeding can never
   publish framework prose even once it is written**. `activation_conditions` is seeded, stored,
@@ -76,7 +83,7 @@ simultaneously satisfy. Decisions 1–4 were made by muhammad; the rest follow f
 | 2 | **Style inside a framework.** Styles doc + Frameworks doc: maintained. Comms Engine rule 42: "ignore style rules". | **Maintained throughout.** The Frameworks doc specifies three tone variants for every stage — roughly 100, already written. Rule 42 is overruled; strike it from that document. |
 | 3 | **Mirroring.** Pacing §2–3: never repeat verbatim, reflect the situation. Frameworks: mirror their language. Live prompt: exact words, no synonyms. | **Pacing governs.** Reflect the situation rather than replaying the wording — *and* every pre-framework turn ends with a question that narrows toward a framework. The Frameworks doc's mirror examples get rewritten to reflect rather than echo. |
 | 4 | **Turn shape.** | **One model call.** See §2 and [[ADR-002-one-model-call-per-chat-turn]]. |
-| 5 | **Style vocabulary.** Styles doc + Comms Engine: "Directive". Frameworks doc: "Direct solution". DB: `direct`. | **`direct` / `supportive` / `reflective`.** Settled by fact, not preference: `001_initial_schema.sql:158` already constrains `support_style` to those three. Normalise all documents and all new code to `direct`. |
+| 5 | **Style vocabulary.** Styles doc + Comms Engine: "Direct". Frameworks doc: "Direct solution". DB: `direct`. | **`direct` / `supportive` / `reflective`.** Settled by fact, not preference: `001_initial_schema.sql:158` already constrains `support_style` to those three. Normalise all documents and all new code to `direct`. |
 | 6 | **Emotional labels.** Comms Engine rule 9: strip "scared, sad, overwhelmed". Live prompt + Frameworks §17: echo the user's own emotion word. | **Never introduce an emotion word the user did not use; their own words are permitted.** Rule 9 is a misstatement of this — as written it forbids saying "overwhelmed" back to someone who just said it. |
 | 7 | **Every response opens with acknowledgment** (Pacing §2) vs **shape variety** (`mani_base.md`) vs **"no repetitive language patterns"** (Styles doc). | Variety wins. A mandatory opening *is* a repetitive pattern. Rewrite Pacing §2 as "acknowledge before asking", not "begin every response with". |
 | 8 | **Framework entry timing.** Styles doc: 2–4 exchanges. Comms Engine: pivot after 2 vague replies. Live prompt: "genuinely exhausted what presence and curiosity can do". | **2–4 exchanges.** The live prompt's presence-check is deleted from `mani_base.md` — it is the single biggest behavioural change here, and while it stands no framework fires on time. |
@@ -113,7 +120,8 @@ only. Do not take it pre-emptively.
 `mani_base → techniques → user_context → [title_generation] → techniques_used →
 response_format → debug → summary`. Two of those — `title_generation`, which appears on
 exactly one turn, and `techniques_used`, which grows as frameworks are offered — are **volatile
-and sit above `response_format`**, the largest layer at 13,624 characters. Everything behind a changed layer
+and sit above `response_format`**, the largest layer at 10,243 characters (see §3's correction;
+13,624 was a stale measurement). Everything behind a changed layer
 falls out of the provider's cache, so today the biggest static block in the prompt is paid in
 full on turns where a title is requested or a technique has been offered.
 
@@ -192,15 +200,26 @@ does not depend on the answer.
 
 ### The cut that pays either way
 
-`response_format.md` is 13,624 characters, the largest layer, and roughly two thirds of it —
-`# Field Descriptions` through `## Library Navigation` — **restates the Pydantic `Field`
-descriptions in `llm/schema.py`, which are already sent to the model as the JSON schema of the
-structured output.** The same rules, twice, every turn.
+> **Corrected 2026-09-22 by measurement. The numbers below were wrong and the conclusion
+> does not hold. Left in place rather than deleted, because this section was cited as the
+> highest-value change available and anyone who read it needs to see why it is not.**
+>
+> `response_format.md` is **10,243 characters** as stored, not 13,624. The duplication
+> against the Pydantic `Field` descriptions is **~19.5% (~2,040 characters)**, not two
+> thirds. Section by section: the clinical note is the only near-full duplicate; reasoning,
+> capsules, techniques and library are partial; and `# Reading the context block` — the
+> single largest section at 23.6% — has **zero** schema coverage and is what makes two of
+> the schema descriptions parseable at all. Cutting toward the "two thirds" figure would
+> have deleted live instruction.
+>
+> The cost claim was also wrong in kind, not just degree. `mani_base` and `response_format`
+> both sit in the cached static prefix, so after the first turn they are cache-read tokens,
+> not fresh input. The saving is ~500 tokens at cache-read rates. That is housekeeping, not
+> a priority, and it should not be sequenced first.
 
-Cutting that duplication is worth on the order of **1,700 tokens per turn, cached or not**, and
-it is the only large saving in the prompt that does not depend on an unproven cache. Do it in
-the same pass as the §4 removal of the hardcoded framework and shape lists, which live in the
-same block.
+`response_format.md` restates some of the Pydantic `Field` descriptions in `llm/schema.py`,
+which are already sent to the model as the JSON schema of the structured output. Worth
+tidying when that file is next edited for another reason; not worth a pass of its own.
 
 What stays: `## User Message Format`, `# Constraints`, `## Tone`, `## Response Length`,
 `## Security` and `# Self-Check`, along with `mani_base` in full. Those hold the word-for-word
@@ -432,10 +451,20 @@ Two existing defects in the crisis path, in scope because this work touches them
 
 - **`_handle_crisis` returns without calling `threads.apply()`** (`orchestrator.py:366-402`),
   silently discarding every update the turn accumulated.
+  > **Fixed 2026-09-22, and the description was an overstatement.** At both call sites the only
+  > field accumulated by the time of the return was `retire_technique`, so the real loss was a
+  > framework that completed on the crisis turn being left mid-flight — on a thread that then
+  > locks one way, so nothing would ever correct it. A state-shape bug, not a safety one.
+  > `_handle_crisis` now calls `threads.apply()` and carries the `llm_call_id` through.
 - **Crisis is self-reported after the reply is written.** The deterministic keyword screen the
   Frameworks doc asks for — *"place a safety assessment before framework selection"* — does not
   exist. Add it as a pre-generation screen; keep the model's judgement too, for the indirect
   expressions a keyword list cannot catch. Fail closed.
+  > **Stale 2026-09-22.** The screen exists and runs before any model call. The second half was
+  > also never reproducible as written: on the model-reported path `reply.text` is discarded
+  > outright and never written or delivered, so no non-crisis reply ever reached anyone. What
+  > that ordering actually costs is a paid generation thrown away, plus a fail-open gap for
+  > anything the keyword list misses and the model declines to flag.
 
 `admin.crisis_events` gains `category text` and `locked_thread boolean`, which widens
 `mark_thread_crisis`. Same rule as §5: a changed signature is a new function — `drop`, then

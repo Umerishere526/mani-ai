@@ -5,7 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, computed_field, field_validator
+from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEV_PROMPT_CACHE_TTL = 1
@@ -91,6 +91,32 @@ class Settings(BaseSettings):
         if isinstance(value, str) and not value.strip():
             return 0
         return value
+
+    @model_validator(mode="after")
+    def _production_needs_its_secrets(self) -> "Settings":
+        """Refuse to start a production process that cannot do its job.
+
+        Both of these default to empty so local development and the test suite can run
+        without them. In production that default is the dangerous answer: the process
+        boots, /health and /health/ready both report ok because neither touches the
+        provider or verifies a token, and every real request fails - a chat turn at the
+        model call, any authenticated request at the JWKS fetch. Failing at import is the
+        difference between a deploy that never goes live and one that looks healthy while
+        serving nothing.
+        """
+        if self.environment != "production":
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("OPENROUTER_API_KEY", self.openrouter_api_key),
+                ("SUPABASE_JWT_SECRET or SUPABASE_JWKS_URL", self.supabase_jwt_secret or self.supabase_jwks_url),
+            )
+            if not value.strip()
+        ]
+        if missing:
+            raise ValueError(f"production requires: {', '.join(missing)}")
+        return self
 
     @computed_field
     @property
