@@ -13,6 +13,7 @@ from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
 from mani.llm.schema import Crisis, Reply, SmartPrompt, Style, TechniqueState
 from mani.models.rows import TechniqueOutcome
+from tests.integration.cleanup import remove_test_users
 
 ALICE = uuid.UUID("a0000000-0000-4000-8000-0000000000d1")
 
@@ -83,7 +84,7 @@ async def alice():
 
     await pool.open_pool()
     async with pool.as_admin() as conn:
-        await conn.execute("delete from auth.users where id = $1", ALICE)
+        await remove_test_users(conn, ALICE)
         await conn.execute(
             "insert into auth.users (id, email) values ($1, 'd1@t.test')", ALICE
         )
@@ -91,7 +92,7 @@ async def alice():
         yield claims_for(ALICE)
     finally:
         async with pool.as_admin() as conn:
-            await conn.execute("delete from auth.users where id = $1", ALICE)
+            await remove_test_users(conn, ALICE)
         await pool.close_pool()
 
 
@@ -214,7 +215,7 @@ async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, m
     async with pool.as_user(alice) as conn:
         await threads.set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="closing",
+            at_message_count=2, phase="somatic",
         )
 
     turn = await send(alice, thread.id, "that helped, thanks")
@@ -240,7 +241,7 @@ async def _retire_abcde_on(alice, thread_id) -> None:
     async with pool.as_user(alice) as conn:
         await threads.set_technique_outcome(
             conn, thread_id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="closing",
+            at_message_count=2, phase="somatic",
         )
 
 
@@ -575,3 +576,313 @@ async def _history(claims: Claims, thread_id):
 
     async with pool.as_user(claims) as conn:
         return await messages_db.recent_for_context(conn, thread_id, ALICE)
+
+
+async def test_a_concern_pauses_a_running_framework_for_that_turn(alice, model):
+    """The specification: avoid continuing the framework until the safety concern has been
+    addressed. The model is told, gets no stage question to ask, and cannot advance or open
+    a framework on this turn - the framework resumes where it stood once the concern passes."""
+    scripted = model(
+        Reply(
+            text="Thank you for telling me. I'm with you.",
+            prompts=[SmartPrompt(label="Try this", technique="thought_reframe")],
+            state=TechniqueState(technique="abcde", step="consequence"),
+        )
+    )
+    from mani.db import pool
+
+    thread = await start(alice)
+    async with pool.as_user(alice) as conn:
+        await threads.set_technique_outcome(
+            conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
+            at_message_count=2, phase="belief",
+        )
+
+    turn = await send(alice, thread.id, "honestly I don’t want to be here anymore")
+
+    sent = scripted.last_messages[-1]["content"]
+    assert "safety: concern" in sent
+    assert "stage_ask" not in sent and "active_framework" not in sent
+    assert not any(p.technique for p in turn.prompts)
+
+    async with pool.as_user(alice) as conn:
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+    assert ctx.technique.phase == "belief"
+
+
+async def test_a_new_chat_after_a_crisis_carries_the_flag_but_not_the_lock(alice, model):
+    """New chat must not become a way round the crisis path, and must not lock someone out
+    either: the next conversation opens, and the model is told to stay gentle and near
+    support. What was said is never carried across - only that it happened."""
+    scripted = model(Reply(text="I'm glad you came back. What is on your mind?"))
+    from mani.db import pool
+
+    first = await start(alice)
+    await send(alice, first.id, "I am going to kill myself")  # the screen locks this thread
+
+    async with pool.as_user(alice) as conn:
+        second, created = await threads.create_or_reuse(conn, ALICE)
+    assert created and second.id != first.id
+
+    await send(alice, second.id, "hi again")
+    assert "recent_crisis: yes" in scripted.last_messages[-1]["content"]
+
+
+async def test_a_finished_framework_no_longer_counts_as_running(alice, model):
+    """Retired means finished. The row stays so the cooldown can be measured from it, but it
+    must not keep stripping every later technique button as though the framework were live."""
+    model(
+        Reply(
+            text="Would you like to try another way of looking at it?",
+            prompts=[SmartPrompt(label="Yes, let's try", technique="thought_reframe")],
+            state=TechniqueState(technique="thought_reframe", step="offering"),
+        )
+    )
+    from mani.db import pool
+
+    thread = await start(alice)
+    async with pool.as_user(alice) as conn:
+        await threads.set_technique_outcome(
+            # Finished long enough ago that the cooldown has passed: what this checks is that
+            # the finished row no longer blocks offers, not the cooldown itself.
+            conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
+            at_message_count=-context.COOLDOWN_AFTER_COMPLETE, phase=None,
+        )
+
+    turn = await send(alice, thread.id, "something else happened today")
+    assert [p.technique for p in turn.prompts] == ["thought_reframe"]
+
+
+async def test_the_router_runs_again_after_a_declined_offer(alice, model):
+    scripted = model(Reply(text="What has that been like?"))
+    from mani.db import pool
+
+    thread = await start(alice)
+    async with pool.as_user(alice) as conn:
+        await threads.set_technique_outcome(
+            conn, thread.id, ALICE, "abcde", TechniqueOutcome.DECLINED,
+            at_message_count=2, phase=None,
+        )
+    await send(alice, thread.id, "I have stopped answering people for a week now.")
+    await send(alice, thread.id, "I know what I need to do, I just cannot make myself begin.")
+    await send(alice, thread.id, "I keep waiting to want to do something, but it never comes.")
+
+    assert "framework_shortlist: behavioral_activation" in scripted.last_messages[-1]["content"]
+
+
+async def test_tapping_decline_records_it_even_when_the_model_reports_no_state(alice, model):
+    """After a decline there is no technique to report, so state: null is the model doing
+    what the schema asks. The decline is the button's meaning, not the model's to confirm."""
+    model(
+        Reply(
+            text="Want to try something?",
+            prompts=[SmartPrompt(label="Yes, let's try it", technique="abcde"),
+                     SmartPrompt(label="Not right now", decline=True)],
+            state=TechniqueState(technique="abcde", step="offering"),
+        ),
+        Reply(text="That's fine. What would help most right now?"),
+    )
+    from mani.db import pool
+
+    thread = await start(alice)
+    await send(alice, thread.id, "I keep spiralling")
+    await send(alice, thread.id, "Not right now")
+
+    async with pool.as_user(alice) as conn:
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+    assert ctx.technique.outcome is TechniqueOutcome.DECLINED
+    assert "active_framework" not in context.build(ctx)
+
+
+async def test_a_reply_that_repairs_empty_fails_cleanly_and_stores_nothing(alice, model):
+    """A reply that was only leaked script metadata is empty once cleaned. It must fail as a
+    retryable turn, not reach the messages_content_not_empty constraint as a 500."""
+    model(Reply(text="(Include prompts: Yes, No)"))
+    from mani.errors import ServiceError
+
+    thread = await start(alice)
+    with pytest.raises(ServiceError) as raised:
+        await send(alice, thread.id, "hello")
+    assert raised.value.retryable
+    assert [m.role for m in await _history(alice, thread.id)] == ["mani"]  # the greeting only
+
+
+async def test_an_imminent_action_reaches_the_offer_on_the_first_message(alice, model):
+    """The two-exchange wait exists so a framework is not offered on a first hint. STOP is
+    the case where waiting is the failure: the message may be sent before a third turn."""
+    scripted = model(Reply(text="Before you send it, can we pause for a moment?"))
+    thread = await start(alice)
+    await send(alice, thread.id, "I am furious and I am about to send a message I will regret")
+
+    sent = scripted.last_messages[-1]["content"]
+    assert "framework_shortlist: dbt_stop" in sent
+    assert "offer_ask" in sent
+
+
+async def test_a_new_chat_asks_how_the_person_wants_to_be_spoken_to(alice):
+    thread = await start(alice)
+    [first] = await _history(alice, thread.id)
+    assert first.content == "Hi Al. It's MANI. How would you like me to speak with you today?"
+    assert [o["label"] for o in first.prompt_options] == ["Direct", "Supportive", "Reflective"]
+
+
+async def test_choosing_a_style_sets_it_and_opens_in_it_with_no_model_call(alice, model):
+    """The client's cadence: greeting, style selection, then that style's opening question.
+    The opener is fixed wording from the spec, so it costs nothing to say."""
+    scripted = model(Reply(text="What is happening for you?"))
+    from mani.db import pool
+
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "Reflective")
+
+    assert turn.content == "What's on your mind today?"
+    assert turn.prompts == []
+    assert scripted.calls == 0
+    async with pool.as_user(alice) as conn:
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+    assert ctx.thread.conversation_style.value == "reflective"
+
+    await send(alice, thread.id, "I keep going over an argument with my sister")
+    assert "conversation_style: reflective" in scripted.last_messages[-1]["content"]
+
+
+async def test_the_same_message_sent_twice_at_once_is_answered_and_paid_for_once(alice, model):
+    """A mobile client retrying while the first request is still waiting on the model. Both
+    used to pass the duplicate check, both paid for a generation, and the second returned a
+    reply that was never stored."""
+    import asyncio
+
+    scripted = model(Reply(text="What has been the hardest part?"))
+    real = orchestrator.client.complete
+
+    async def slow(*args, **kwargs):
+        await asyncio.sleep(0.3)  # long enough that the second request arrives mid-call
+        return await real(*args, **kwargs)
+
+    orchestrator.client.complete = slow
+    try:
+        thread = await start(alice)
+        client_message_id = uuid.uuid4()
+        first, second = await asyncio.gather(
+            send(alice, thread.id, "work has been hard lately", client_message_id=client_message_id),
+            send(alice, thread.id, "work has been hard lately", client_message_id=client_message_id),
+        )
+    finally:
+        orchestrator.client.complete = real
+
+    assert scripted.calls == 1
+    assert first.message_id == second.message_id
+    assert first.content == second.content
+
+
+async def test_a_message_id_reused_in_another_chat_is_refused_not_answered(alice, model):
+    """The key is per person, so a reuse in a second chat used to return the first chat's
+    reply - a message from another conversation, and nothing written where it was sent."""
+    from mani.errors import ErrorCategory, ServiceError
+
+    model(Reply(text="What has been the hardest part?"))
+    first_chat = await start(alice)
+    client_message_id = uuid.uuid4()
+    await send(alice, first_chat.id, "work has been hard lately", client_message_id=client_message_id)
+
+    from mani.db import pool
+
+    async with pool.as_user(alice) as conn:
+        second_chat, _ = await threads.create_or_reuse(conn, ALICE)
+    with pytest.raises(ServiceError) as refused:
+        await send(alice, second_chat.id, "a different chat", client_message_id=client_message_id)
+    assert refused.value.category is ErrorCategory.CONFLICT
+
+
+async def test_two_summaries_started_together_pay_for_one(alice, monkeypatch):
+    """A summary runs after the reply, in the background. A second message arriving before it
+    has committed schedules another over the same messages - two generations, one kept."""
+    import asyncio
+
+    from mani import summarize
+    from mani.llm.schema import Extraction
+
+    calls = 0
+
+    async def slow_summary(messages, schema, **kwargs):
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.3)
+        return client.Call(value=Extraction(summary="The user talked about work."),
+                           model="test/model", usage=llm_calls.Usage(), latency_ms=1,
+                           call_id=uuid.uuid4())
+
+    monkeypatch.setattr(orchestrator.client, "complete",
+                        ScriptedModel(Reply(text="Go on.")))
+    thread = await start(alice)
+    await send(alice, thread.id, "work was hard")
+    monkeypatch.setattr(summarize.client, "complete", slow_summary)
+
+    await asyncio.gather(
+        summarize.update_quietly(alice, thread.id), summarize.update_quietly(alice, thread.id)
+    )
+    assert calls == 1
+
+
+async def test_tell_me_more_answers_with_the_clients_explanation_and_offers_again(alice, model):
+    """docs/specs/conversational-styles.md gives the explanation word for word per style and
+    says to offer again with two buttons. Fixed wording, so no model call is spent on it."""
+    from mani.chat.greeting import TELL_ME_MORE
+
+    scripted = model(Reply(
+        text="I have a structured approach that can help. Would you like to try it with me?",
+        prompts=[SmartPrompt(label="Yes, let's try it", technique="abcde"),
+                 SmartPrompt(label="Tell me more"),
+                 SmartPrompt(label="I want to keep talking", decline=True)],
+        state=TechniqueState(technique="abcde", step="offering"),
+    ))
+    thread = await start(alice)
+    await send(alice, thread.id, "Supportive")
+    await send(alice, thread.id, "my manager criticized me in front of everyone")
+    calls_before = scripted.calls
+
+    turn = await send(alice, thread.id, "Tell me more")
+
+    assert turn.content == TELL_ME_MORE["supportive"]
+    assert [(p.label, p.technique, p.decline) for p in turn.prompts] == [
+        ("Yes, let's try it", "abcde", None), ("I want to keep talking", None, True),
+    ]
+    assert scripted.calls == calls_before
+
+    accepted = await send(alice, thread.id, "Yes, let's try it")  # the offer is still live
+    from mani.db import pool
+
+    async with pool.as_user(alice) as conn:
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+    assert ctx.technique.outcome is TechniqueOutcome.ACCEPTED and accepted.content
+
+
+async def test_past_the_daily_limit_a_turn_is_refused_before_anything_is_paid(
+    alice, model, monkeypatch
+):
+    from mani.config import get_settings
+    from mani.errors import ErrorCategory, ServiceError
+
+    scripted = model(Reply(text="What has been the hardest part?"))
+    monkeypatch.setattr(get_settings(), "daily_message_limit", 1)
+    thread = await start(alice)
+    await send(alice, thread.id, "work has been hard lately")
+
+    with pytest.raises(ServiceError) as refused:
+        await send(alice, thread.id, "and it's getting worse")
+    assert refused.value.category is ErrorCategory.RATE_LIMITED
+    assert scripted.calls == 1
+
+
+async def test_a_crisis_is_still_answered_past_the_daily_limit(alice, model, monkeypatch):
+    """The limit caps what can be spent, never whether someone in danger gets a reply: the
+    safety screen runs first and answers with no model call at all."""
+    from mani.config import get_settings
+
+    model(Reply(text="What has been the hardest part?"))
+    monkeypatch.setattr(get_settings(), "daily_message_limit", 1)
+    thread = await start(alice)
+    await send(alice, thread.id, "work has been hard lately")
+
+    turn = await send(alice, thread.id, "I am going to kill myself")
+    assert turn.crisis_detected

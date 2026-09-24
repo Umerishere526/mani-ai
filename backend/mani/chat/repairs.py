@@ -63,11 +63,35 @@ SELF_JUDGMENTS = (
     "i'm broken", "i am broken", "not enough", "being needy", "being difficult",
 )
 
-MAX_CAPSULE_WORDS = 4
+# Five, because the client's own offer button "I want to keep talking" is five words
+# (docs/specs/conversational-styles.md). Past that a label is becoming a sentence.
+MAX_CAPSULE_WORDS = 5
 
 # Keyed lowercase so a model's casing does not matter; valued at the canonical casing so
 # whatever reaches the client to navigate on is always exactly what LibrarySection defines.
 _LIBRARY_SECTIONS = {section.value.lower(): section.value for section in LibrarySection}
+
+# The permission question an offer asks, in each style - the client's own wording
+# (docs/specs/conversational-styles.md), shortened only where it named one scenario.
+PERMISSION_QUESTIONS = {
+    "direct": "Would you like to try it with me?",
+    "supportive": "Would it help to work through it together?",
+    "reflective": "Would you like to try it?",
+}
+
+# Words that mark a reply's question as the offer itself rather than some other question.
+_OFFER_WORDS = re.compile(
+    r"\btry\b|structured|work through|would it help|one step at a time|look at it together",
+    re.IGNORECASE,
+)
+
+# A sentence whose whole job is to announce that Mani is present. mani_base keeps that a
+# Supportive move; Direct shows presence by a next step and Reflective by what it reflects.
+_PRESENCE_SENTENCE = re.compile(
+    r"(?:^|(?<=[.!?])[ \t]+|(?<=\n))"
+    r"I(?:'m|\u2019m| am) (?:right )?(?:here|listening|not going anywhere)\b[^.!?\n]*[.!?]?[ \t]*",
+    re.IGNORECASE,
+)
 
 WORD = re.compile(r"[a-z']+")
 
@@ -114,6 +138,10 @@ class Repaired:
     notes: list[str] = field(default_factory=list)
 
 
+def _is_offer_button(prompt: SmartPrompt) -> bool:
+    return bool(prompt.technique or prompt.decline or prompt.label.strip().lower() == "tell me more")
+
+
 def _normalize(name: str) -> str:
     return name.strip().lower().replace(" ", "_")
 
@@ -129,6 +157,8 @@ def apply(
     selected_label: str | None,
     accepted_this_turn: bool,
     framework_running: bool,
+    cooldown_passed: bool,
+    conversation_style: str,
     wants_title: bool,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again.
@@ -142,6 +172,13 @@ def apply(
     text, leaked = strip_script_leakage(reply.text.strip())
     if leaked:
         notes.append(f"stripped script metadata: {', '.join(leaked)}")
+
+    if conversation_style != "supportive":
+        without = _BLANK_RUN.sub("\n\n", _PRESENCE_SENTENCE.sub("", text)).strip()
+        # Only when something is left to send: a reply that was nothing but presence stays.
+        if without and without != text:
+            notes.append(f"removed announced presence outside Supportive ({conversation_style})")
+            text = without
 
     theirs = words(said)
     # Observational only, for now: the capsule check below can safely drop a bad button,
@@ -199,12 +236,14 @@ def apply(
             # out of the conversation and into a section that does not exist. Case is
             # normalized the same way shape and voice are - checked loosely, stored exactly,
             # so a client navigating on this string always gets the canonical spelling.
+            # An unknown value still meant the library - observed: "library", "default", a
+            # topic phrase - so it opens the front page rather than losing the button.
             canonical_library = _LIBRARY_SECTIONS.get(prompt.library.strip().lower())
             if canonical_library is None:
                 notes.append(
-                    f"dropped a button naming an unknown library section: {prompt.library}"
+                    f"sent a button naming an unknown library section to home: {prompt.library}"
                 )
-                continue
+                canonical_library = LibrarySection.HOME.value
             if canonical_library != prompt.library:
                 prompt = prompt.model_copy(update={"library": canonical_library})
         if prompt.technique is not None:
@@ -215,6 +254,18 @@ def apply(
             if framework_running:
                 notes.append(
                     f"dropped a technique offered inside a running framework: {prompt.technique}"
+                )
+                continue
+            # The pending offer is exempt for the same reason it is exempt from the
+            # already-offered check: re-showing it is not a new offer.
+            pending_offer = (
+                not framework_running
+                and current_framework_id is not None
+                and _normalize(prompt.technique) == _normalize(current_framework_id)
+            )
+            if not cooldown_passed and not pending_offer:
+                notes.append(
+                    f"dropped a technique offered before the cooldown passed: {prompt.technique}"
                 )
                 continue
             # A model-supplied identifier is untrusted until it matches the registry.
@@ -232,11 +283,31 @@ def apply(
         notes.append(f"trimmed {len(kept)} buttons to {MAX_PROMPTS}")
         kept = kept[:MAX_PROMPTS]
 
+    # An offer is a question the buttons answer. Buttons alone ask nothing, so the client's
+    # permission question is added - approved wording, not an invented sentence. Buttons under
+    # a different question offer one thing while asking another, so those are dropped: the
+    # offer can come next turn, and a reply is never left asking two things at once.
+    if any(p.technique for p in kept):
+        if "?" not in text:
+            text = f"{text} {PERMISSION_QUESTIONS[conversation_style]}"
+            notes.append("added the permission question to an offer made only by buttons")
+        elif not _OFFER_WORDS.search(text):
+            dropped = [p.label for p in kept if _is_offer_button(p)]
+            kept = [p for p in kept if not _is_offer_button(p)]
+            notes.append(f"dropped offer buttons under a question that is not the offer: {dropped}")
+
     framework_id: str | None = None
     phase: str | None = None
     if reply.state is not None:
         if reply.state.technique not in registry:
             notes.append(f"ignored state for unknown technique: {reply.state.technique}")
+        elif framework_running and reply.state.technique != current_framework_id:
+            # Every framework shares stage ids like somatic and closing, so the transition
+            # check alone would let a reply record a framework the person never accepted.
+            notes.append(
+                f"ignored state for {reply.state.technique}, not the running one "
+                f"({current_framework_id})"
+            )
         else:
             framework_id = reply.state.technique
             # Accepting an offer this turn means the phase being left is the offering one,

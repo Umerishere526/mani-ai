@@ -39,6 +39,23 @@ class Call[T: BaseModel]:
     call_id: uuid.UUID | None
 
 
+_SCHEMA_FAILURES = (
+    openai.LengthFinishReasonError,
+    openai.ContentFilterFinishReasonError,
+    ValidationError,
+)
+
+
+def _usage_of(exc: BaseException) -> llm_calls.Usage:
+    """The tokens a failed attempt was billed for, when the SDK kept the completion."""
+    usage = getattr(getattr(exc, "completion", None), "usage", None)
+    if usage is None:
+        return llm_calls.Usage()
+    return llm_calls.Usage(
+        input_tokens=usage.prompt_tokens or 0, output_tokens=usage.completion_tokens or 0
+    )
+
+
 def _as_service_error(exc: Exception) -> tuple[ServiceError, llm_calls.Outcome]:
     if isinstance(exc, openai.RateLimitError):
         return (
@@ -154,7 +171,8 @@ async def complete[T: BaseModel](
 
     OpenRouter is the only provider. LangChain composes the call and parses the reply into
     the schema; the base_url points at OpenRouter, so it is one protocol and one bill, not a
-    second provider. Exactly one provider call happens here, which is the whole design.
+    second provider. One provider call, plus at most one retry when the reply does not
+    parse - each attempt billed and recorded on its own row.
     """
     settings = settings or get_settings()
     if not settings.openrouter_api_key:
@@ -180,8 +198,20 @@ async def complete[T: BaseModel](
     try:
         parsed = None
         for attempt in range(1, MAX_SCHEMA_ATTEMPTS + 1):
-            result = await runnable.ainvoke(messages)
-            usage = chain.usage_from(result.get("raw"))
+            # Reset per attempt, so an attempt that raises is never recorded with the tokens
+            # of the one before it.
+            usage = llm_calls.Usage()
+            try:
+                result = await runnable.ainvoke(messages)
+            except _SCHEMA_FAILURES as exc:
+                # With a response_format, LangChain calls the SDK's parse(), which validates
+                # inside the model step: a reply cut off at max_tokens, stopped by a content
+                # filter or not matching the schema raises here and never reaches
+                # parsing_error. It is the same failure, so it gets the same one retry.
+                result = {"raw": None, "parsed": None, "parsing_error": exc}
+                usage = _usage_of(exc)
+            else:
+                usage = chain.usage_from(result.get("raw"))
             parsed = result.get("parsed")
             failure = result.get("parsing_error")
             if failure is None and parsed is not None:

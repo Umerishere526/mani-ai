@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 
+from mani.chat.greeting import STYLE_OPTIONS
 from mani.chat.router import Signal, is_confident
 from mani.db.threads import TurnContext
 from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
@@ -31,6 +32,8 @@ def _opener(text: str) -> str:
     without exposing the reply itself in [ctx]."""
     return " ".join(text.split()[:RECENT_OPENERS_WORDS]).lower()
 
+_STYLE_LABELS = {option["label"].lower() for option in STYLE_OPTIONS}
+
 _CTX_BLOCK = re.compile(r"^\[ctx\].*?\[/ctx\]\s*", re.DOTALL)
 
 
@@ -44,11 +47,34 @@ def strip(content: str) -> str:
     return _CTX_BLOCK.sub("", content, count=1)
 
 
+_CTX_MARKER = re.compile(r"\[\s*(/?)\s*ctx\s*\]", re.IGNORECASE)
+
+
+def disarm(text: str) -> str:
+    """Turn any [ctx] or [/ctx] a person typed into inert text.
+
+    The model is told the block is backend metadata, so a person who could type one could
+    set their own style, stage guidance or cooldown - and it would replay from history for
+    the next twenty turns. Only the brackets change; what they wrote is still sent.
+    """
+    return _CTX_MARKER.sub(lambda m: f"({m.group(1)}ctx)", text)
+
+
 def cooldown_for(outcome: TechniqueOutcome) -> int:
     return (
         COOLDOWN_AFTER_COMPLETE
         if outcome is TechniqueOutcome.ACCEPTED
         else COOLDOWN_AFTER_DECLINE
+    )
+
+
+def cooldown_passed(ctx: TurnContext) -> bool:
+    """Whether a framework may be offered yet: [ctx] reports it, repairs.apply enforces it."""
+    technique = ctx.technique
+    if technique is None:
+        return True
+    return ctx.thread.message_count - technique.at_message_count >= cooldown_for(
+        technique.outcome
     )
 
 
@@ -72,6 +98,7 @@ def build(
     framework: Framework | None = None,
     candidate: Framework | None = None,
     history: list[Message] | None = None,
+    safety_concern: bool = False,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -96,13 +123,40 @@ def build(
     # `conversation_style` rather than `style` because `recent_styles` three lines down means
     # the response shape and voice, which is a different thing entirely.
     lines: list[str] = [f"conversation_style: {resolve_style(ctx)}"]
+    if safety_concern:
+        # The deterministic screen heard something that may be a risk. The framework waits:
+        # no stage question to relay, no offer to make, until the person is safe to go on.
+        lines.append("safety: concern")
+    if ctx.recent_crisis:
+        lines.append("recent_crisis: yes")
+
+    running = (
+        framework is not None and technique is not None and technique.phase
+        and not safety_concern
+    )
+    if running:
+        phase = "framework"
+    elif not ctx.techniques_offered and technique is None:
+        # Nothing offered yet: the two to four exchanges the client's cadence spends asking,
+        # checking and confirming before a framework is offered.
+        phase = "understanding"
+    else:
+        phase = "talking"
+    lines.append(f"conversation_phase: {phase}")
+    if phase == "understanding":
+        # Their messages so far, this one included. The greeting's style tap is a choice of
+        # how to be spoken to, not something they said about what is going on.
+        said = [
+            m for m in (history or [])
+            if m.role is MessageRole.USER and m.content.strip().lower() not in _STYLE_LABELS
+        ]
+        lines.append(f"understanding_turns: {len(said) + 1}")
 
     if technique is None:
         lines.append("cooldown_passed: yes")
     else:
         since_last = ctx.thread.message_count - technique.at_message_count
-        passed = since_last >= cooldown_for(technique.outcome)
-        lines.append(f"cooldown_passed: {'yes' if passed else 'no'}")
+        lines.append(f"cooldown_passed: {'yes' if cooldown_passed(ctx) else 'no'}")
         lines.append(f"since_last: {since_last}")
         lines.append(f"this_thread: {technique.framework_id} ({technique.outcome})")
         if (
@@ -114,11 +168,11 @@ def build(
             lines.append(f"current_phase: {technique.phase}")
 
     if ctx.summary and ctx.summary.techniques_tried:
-        history = ", ".join(
+        tried = ", ".join(
             f"{t.name} ({'helpful' if t.helpful else 'not helpful'})"
             for t in ctx.summary.techniques_tried
         )
-        lines.append(f"history: {history}")
+        lines.append(f"history: {tried}")
 
     if ctx.recent_styles:
         styles = " → ".join(
@@ -137,13 +191,13 @@ def build(
         quoted = ", ".join(f'"{o}"' for o in openers)
         lines.append(f"recent_openers: {quoted}")
 
-    if shortlist:
+    if shortlist and not safety_concern:
         ranked = ", ".join(f"{s.framework_id} ({s.score:.2f})" for s in shortlist)
         lines.append(f"framework_shortlist: {ranked}")
         if candidate is not None and is_confident(shortlist):
             lines.extend(_stage_lines("offer", candidate, "offering", resolve_style(ctx)))
 
-    if framework is not None and technique is not None and technique.phase:
+    if running:
         style = resolve_style(ctx)
         lines.append(f"active_framework: {framework.id}")
         lines.append(f"framework_stages: {', '.join(framework.phases)}")

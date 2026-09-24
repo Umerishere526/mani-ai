@@ -19,6 +19,7 @@ class Purpose(StrEnum):
     CHAT = "chat"
     SUMMARIZE = "summarize"
     EXERCISE_SELECT = "exercise_select"
+    MEMORY_FOLD = "memory_fold"
 
 
 @dataclass(frozen=True)

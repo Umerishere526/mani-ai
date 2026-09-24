@@ -10,6 +10,7 @@ from typing import Any
 
 import asyncpg
 
+from mani.llm.schema import Memory
 from mani.models.rows import (
     Profile,
     ResponseStyle,
@@ -159,7 +160,15 @@ class TurnContext:
     techniques_offered: list[str] = field(default_factory=list)
     recent_styles: list[ResponseStyle] = field(default_factory=list)
     summary: ThreadSummary | None = None
+    # Another of this person's conversations was flagged for crisis recently. Only the fact
+    # crosses threads, never what was said in it.
+    recent_crisis: bool = False
+    # Patterns from this person's earlier conversations, folded in as each one finished.
+    memory: Memory | None = None
 
+
+# How long a crisis in one conversation keeps the next ones gentle.
+RECENT_CRISIS_DAYS = 30
 
 _TURN_CONTEXT_SQL = f"""
 select
@@ -178,7 +187,16 @@ select
            order by rs.created_at desc
            limit {STYLE_WINDOW}) style), '[]'::jsonb) as recent_styles,
   (select to_jsonb(sm) from public.thread_summaries sm
-    where sm.thread_id = t.id)                     as summary
+    where sm.thread_id = t.id)                     as summary,
+  -- A flagged thread accepts no further turns, so its last message is when the crisis
+  -- happened. ponytail: that proxy fails if CRISIS_BLOCKS_CHAT is ever turned off; read
+  -- admin.crisis_events.detected_at through a definer function if it is.
+  exists (select 1 from public.threads c
+           where c.user_id = t.user_id and c.id <> t.id and c.crisis_detected
+             and c.last_message_at > now() - interval '{RECENT_CRISIS_DAYS} days')
+                                                   as recent_crisis,
+  (select um.memory from admin.user_memory um
+    where um.user_id = t.user_id)                  as memory
 from (select {COLUMNS} from public.threads
        where id = $1 and user_id = $2 and deleted_at is null) t
 """
@@ -201,6 +219,8 @@ async def load_turn_context(
             ResponseStyle.model_validate(s) for s in row["recent_styles"] or []
         ],
         summary=ThreadSummary.model_validate(row["summary"]) if row["summary"] else None,
+        recent_crisis=row["recent_crisis"],
+        memory=Memory.model_validate(row["memory"]) if row["memory"] else None,
     )
 
 

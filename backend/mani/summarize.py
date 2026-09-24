@@ -76,6 +76,13 @@ async def update(
     at error level, in production.
     """
     settings = get_settings()
+    # One summary per thread at a time. Every turn past the threshold schedules one, so a
+    # message sent before the last has committed would otherwise fold the same messages again
+    # and pay for it. A run already in progress will cover them; this one steps aside.
+    if not await conn.fetchval(
+        "select pg_try_advisory_xact_lock(hashtextextended($1, 0))", f"summary:{thread_id}"
+    ):
+        return None
     thread = await threads.get(conn, thread_id, user_id)
     if thread is None:
         return None
