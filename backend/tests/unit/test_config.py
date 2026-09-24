@@ -115,3 +115,22 @@ def test_a_prompt_can_override_routing_without_losing_the_data_policy():
     routing = build().routing({"order": ["vertex"]})
     assert routing["order"] == ["vertex"]
     assert routing["data_collection"] == "deny"
+
+
+def test_secrets_never_appear_when_the_settings_are_printed():
+    """An AttributeError on Settings prints the whole object - into a log line, a traceback,
+    a Sentry event. The keys that open the database, the model provider and the admin API
+    must not be in that text."""
+    s = Settings(
+        _env_file=None,
+        database_url="postgresql://mani:db-password-123@db.example.com/mani",
+        supabase_url="https://example.supabase.co",
+        supabase_service_role_key="service-role-secret-123",
+        supabase_jwt_secret="jwt-secret-123",
+        openrouter_api_key="sk-or-secret-123",
+        sentry_dsn="https://sentry-secret-123@o0.ingest.sentry.io/0",
+    )
+    printed = repr(s) + str(s)
+    for secret in ("db-password-123", "service-role-secret-123", "jwt-secret-123",
+                   "sk-or-secret-123", "sentry-secret-123"):
+        assert secret not in printed, secret

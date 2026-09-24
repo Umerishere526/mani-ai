@@ -97,6 +97,15 @@ _CONCERN: list[tuple[Category, str]] = [
     (Category.SUICIDE, "do not want to wake up"),
     (Category.SUICIDE, "want to die"),
     (Category.SUICIDE, "i have everything ready"),
+    # Passive ideation: a wish not to exist, with no plan or method. Concern, not crisis - it
+    # pauses any framework and keeps Mani close without locking the conversation. Whole
+    # phrases, so "my keys keep disappearing" or "I did not exist on social media" pass.
+    # Added on muhammad's decision (2026-09-23), pending the client's clinical wording.
+    (Category.SUICIDE, "want to disappear"),
+    (Category.SUICIDE, "to disappear from"),
+    (Category.SUICIDE, "wish i did not exist"),
+    (Category.SUICIDE, "if i did not exist"),
+    (Category.SUICIDE, "never been born"),
     (Category.SELF_HARM, "hurt myself"),
     (Category.SELF_HARM, "harm myself"),
     (Category.ABUSE_OR_VIOLENCE, "going to hurt me"),
@@ -124,6 +133,16 @@ _CONTRACTIONS = {
     "wouldn't": "would not", "haven't": "have not", "hasn't": "has not", "i'll": "i will",
     "he's": "he is", "she's": "she is", "they're": "they are", "you're": "you are",
 }
+# Phones type contractions two more ways: iOS turns the apostrophe into a curly one by
+# default, and plenty of people leave it out. Both forms must match exactly what the straight
+# form matches. "its" and "ill" are left out because they are ordinary words ("its colour",
+# "feeling ill") that expanding would corrupt.
+_CONTRACTIONS |= {
+    key.replace("'", ""): value
+    for key, value in _CONTRACTIONS.items()
+    if key.replace("'", "") not in {"its", "ill"}
+}
+_APOSTROPHES = str.maketrans({"\u2019": "'", "\u2018": "'", "\u02bc": "'"})
 _CONTRACTION_RE = re.compile(
     r"\b(" + "|".join(re.escape(k) for k in _CONTRACTIONS) + r")\b", re.IGNORECASE
 )
@@ -137,7 +156,7 @@ def normalize(text: str) -> str:
     Shared with the framework router so a phrase written one way in the specification matches
     the same sentence typed either way by a person.
     """
-    lowered = text.lower()
+    lowered = text.lower().translate(_APOSTROPHES)
     expanded = _CONTRACTION_RE.sub(lambda m: _CONTRACTIONS[m.group(0).lower()], lowered)
     return _WHITESPACE.sub(" ", _PUNCTUATION.sub(" ", expanded)).strip()
 

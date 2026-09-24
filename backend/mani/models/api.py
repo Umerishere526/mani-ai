@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -94,7 +95,11 @@ class ProfileIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     nickname: str | None = Field(default=None, max_length=40)
-    topics: list[str] | None = None
+    # Interpolated into the system prompt on every turn, so bounded like nickname is.
+    # profiles_topics_bounded holds the database to the same count.
+    topics: list[Annotated[str, Field(min_length=1, max_length=60)]] | None = Field(
+        default=None, max_length=10
+    )
     support_style: SupportStyle | None = None
     age_bracket: str | None = None
 

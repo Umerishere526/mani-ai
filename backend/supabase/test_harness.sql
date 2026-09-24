@@ -14,6 +14,14 @@ begin
   if not exists (select 1 from pg_roles where rolname = 'service_role') then
     create role service_role nologin bypassrls;
   end if;
+  -- What GoTrue itself connects as (confirmed via GOTRUE_DB_DATABASE_URL on a real
+  -- project) to manage auth.users, including cascading a deletion into every table that
+  -- references it. Does NOT bypass RLS - matching that is the point of stubbing it here,
+  -- since a migration granting it access only proves anything if RLS is still in the way
+  -- until the grant exists.
+  if not exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then
+    create role supabase_auth_admin noinherit createrole login password 'postgres';
+  end if;
 end
 $$;
 
@@ -42,5 +50,7 @@ as $$
   )::uuid
 $$;
 
-grant usage on schema auth to anon, authenticated, service_role;
+grant usage on schema auth to anon, authenticated, service_role, supabase_auth_admin;
 grant select on auth.users to authenticated, service_role;
+-- Its actual job: GoTrue creates and deletes rows in auth.users directly.
+grant select, insert, update, delete on auth.users to supabase_auth_admin;
