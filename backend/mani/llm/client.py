@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
@@ -22,9 +23,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_MAX_TOKENS = 2048
 
-# One retry, schema failures only. Without it a malformed reply loses the person's typed
-# message entirely - complete() is called before the turn writes anything, so a raise here
-# leaves nothing in the thread to show for the turn that was attempted.
+# One retry, shared by a malformed reply and a provider that is briefly down. Without it
+# either loses the person's typed message entirely - complete() is called before the turn
+# writes anything, so a raise here leaves nothing in the thread to show for the turn.
 MAX_SCHEMA_ATTEMPTS = 2
 
 
@@ -38,6 +39,11 @@ class Call[T: BaseModel]:
     latency_ms: int
     call_id: uuid.UUID | None
 
+
+# A provider that is briefly down or unreachable. APITimeoutError is a subclass of
+# APIConnectionError and is excluded where this is caught: the full wait has already happened.
+_TRANSIENT = (openai.InternalServerError, openai.APIConnectionError)
+TRANSIENT_RETRY_DELAY_SECONDS = 1.0
 
 _SCHEMA_FAILURES = (
     openai.LengthFinishReasonError,
@@ -203,6 +209,20 @@ async def complete[T: BaseModel](
             usage = llm_calls.Usage()
             try:
                 result = await runnable.ainvoke(messages)
+            except _TRANSIENT as exc:
+                if isinstance(exc, openai.APITimeoutError) or attempt == MAX_SCHEMA_ATTEMPTS:
+                    raise
+                # The provider was briefly unavailable - seen live, 1 call in 265, from the one
+                # upstream the routing pins. It billed nothing, so one retry costs nothing and
+                # keeps a blip from reaching the person as an error. Recorded as its own row.
+                await _record(
+                    purpose=purpose, model=model, outcome=llm_calls.Outcome.PROVIDER_ERROR,
+                    usage=llm_calls.Usage(), latency_ms=int((time.perf_counter() - started) * 1000),
+                    user_id=user_id, thread_id=thread_id, prompt_version_id=prompt_version_id,
+                    error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}, retrying: {exc}",
+                )
+                await asyncio.sleep(TRANSIENT_RETRY_DELAY_SECONDS)
+                continue
             except _SCHEMA_FAILURES as exc:
                 # With a response_format, LangChain calls the SDK's parse(), which validates
                 # inside the model step: a reply cut off at max_tokens, stopped by a content
