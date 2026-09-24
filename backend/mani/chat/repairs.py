@@ -48,6 +48,7 @@ FEELING_WORDS = frozenset(
         "isolated", "lonely", "lost", "miserable", "overwhelmed", "panicked", "rejected",
         "resentful", "sad", "scared", "stressed", "terrified", "trapped", "unloved",
         "unwanted", "upset", "worried", "worthless",
+        "empty", "heartbroken", "heavy", "numb", "painful", "scary",
         # The adjectival forms, which describe the situation rather than the person and are
         # the shape a capsule label usually takes: "It's frustrating", "It's exhausting".
         "depressing", "devastating", "draining", "embarrassing", "exhausting",
@@ -229,6 +230,11 @@ def apply(
         if selected and key == selected:
             # Offering back the button the user just pressed reads as not listening.
             notes.append(f"dropped the button the user just tapped: {label}")
+            continue
+        if key in EXPLAIN_LABELS and any(p.technique for p in reply.prompts or []):
+            # An offer has two buttons, Try it and Keep chatting (muhammad, 2026-09-24): the
+            # offer's own words already say how the questions would help.
+            notes.append(f"dropped an explain button from an offer: {label}")
             continue
         # A label may not name a feeling they did not name, judge them, or run long enough
         # to be a sentence. Dropping the button is the whole correction: rewriting one would

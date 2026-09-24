@@ -121,6 +121,7 @@ def build(
     history: list[Message] | None = None,
     safety_concern: bool = False,
     offer_waiting: bool = False,
+    framework_starting: bool = False,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -165,6 +166,11 @@ def build(
     else:
         phase = "talking"
     lines.append(f"conversation_phase: {phase}")
+    if not running:
+        # What the question is about while no stage decides it (muhammad, 2026-09-24): said
+        # here, next to the message, because the style rule in the long prompt alone did not hold.
+        focus = "next step" if resolve_style(ctx) == "direct" else "feelings"
+        lines.append(f"question_focus: {focus}")
     if offer_waiting:
         # Mani's last reply was an offer, and they typed rather than tapped.
         lines.append("offer_waiting: yes")
@@ -216,9 +222,16 @@ def build(
         lines.append(f"framework_shortlist: {ranked}")
         if candidate is not None and is_confident(shortlist):
             lines.extend(_stage_lines("offer", candidate, "offering", resolve_style(ctx)))
+            if candidate.summary:
+                # The client's description, which the offer fits to what they said.
+                lines.append(f"offer_helps: {' '.join(candidate.summary.split())}")
 
     if running:
         style = resolve_style(ctx)
+        if framework_starting:
+            # They have just said yes. What they told Mani before this counts; a stage they
+            # have already answered is checked back, not asked again.
+            lines.append("framework_starting: yes")
         lines.append(f"active_framework: {framework.id}")
         lines.append(f"framework_stages: {', '.join(framework.phases)}")
         stage = _stage_lines("stage", framework, technique.phase, style)

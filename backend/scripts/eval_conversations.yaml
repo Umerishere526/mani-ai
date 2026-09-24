@@ -90,6 +90,16 @@
     - "I guess I want to stop letting one comment decide how I feel about my work."
     - "Maybe I could ask her for feedback before the next presentation."
 
+# muhammad's own chat, 2026-09-24: on "Try it", Mani asked which problem to work on first, right
+# after being told. The reply after @accept must build on it, not ask again.
+- name: start_keeps_context
+  turns:
+    - "My coworker is a pain."
+    - "They take the credit for my work and present it as their own."
+    - "@accept|It's exhausting. I do all the work and never get the credit for it."
+    - "@accept|I'd like to do something about it."
+    - "@accept|Okay."
+    - "Yes, that's the one."
 - name: journey_behavioral_activation
   expect_framework: true
   turns:
@@ -114,6 +124,15 @@
     - "My partner and I broke up last week."
     - "I keep checking my phone hoping they'll text."
     - "I just feel empty."
+# muhammad's own chat, 2026-09-24: Supportive asked only about the situation and named
+# feelings he never gave ("worried", "afraid", "fear").
+- name: open_losing_someone
+  turns:
+    - "i am hurt"
+    - "i just have a sinking feeling in my heart that i am going to lose something important to me"
+    - "someone close to me"
+    - "they are in poor health and i don't know what i can do to ease their pain"
+    - "it hurts to see them like this"
 - name: open_exam
   turns:
     - "I have an exam on Friday and I can't focus."

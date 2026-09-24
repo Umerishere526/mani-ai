@@ -75,6 +75,10 @@ with st.sidebar:
         if st.form_submit_button("Create account", use_container_width=True):
             start_session(lambda: mani.sign_up(email, password), email, nickname, base_url)
 
+    # Off by default, so what a client sees is only what the app will show them: no framework
+    # ids, stages, or database reads on screen.
+    developer = st.toggle("Show developer details", key="developer")
+
     if "client" in st.session_state:
         st.divider()
         if st.button("🆕 New conversation", use_container_width=True):
@@ -114,11 +118,12 @@ if "thread" not in st.session_state:
 thread = st.session_state.thread
 
 st.title("🧠 Mani chat tester")
-st.caption(f"user: {st.session_state.name}  ·  thread: {thread['id'][:8]}…")
+if developer:
+    st.caption(f"user: {st.session_state.name}  ·  thread: {thread['id'][:8]}…")
 
 # The style is chosen the way a person chooses it in the apps: by tapping one of the
 # greeting's three buttons, which the backend turns into the style and its opener.
-framework_state = run(mani.framework_debug_state(thread["id"]))
+framework_state = run(mani.framework_debug_state(thread["id"])) if developer else None
 caption = [f"style: {STYLES[st.session_state.style]}"] if st.session_state.style else []
 if framework_state and framework_state.get("phase"):
     caption.append(f"framework: {framework_state['framework_id']} · stage: {framework_state['phase']}")
@@ -143,7 +148,7 @@ if last_turn:
         st.error("🚨 **Crisis detected.** " + last_turn["content"])
 
     technique_prompts = [p for p in last_turn.get("prompts") or [] if p.get("technique")]
-    if technique_prompts:
+    if developer and technique_prompts:
         st.info(
             "🧩 **Framework offered:** "
             + ", ".join(p["technique"] for p in technique_prompts)
@@ -203,10 +208,8 @@ else:
 
 with st.sidebar:
     st.divider()
-    with st.expander("🔍 Framework state (direct DB read)"):
-        st.json(framework_state or {"active": False})
-
-    with st.expander("🧠 What Mani remembers (direct DB read)"):
+    # Shown to a client too: that a returning person's patterns were kept is part of the demo.
+    with st.expander("🧠 What Mani remembers"):
         memory = run(mani.remembered(st.session_state.user_id))
         entries = {k: v for k, v in ((memory or {}).get("memory") or {}).items() if v}
         if entries:
@@ -218,17 +221,21 @@ with st.sidebar:
         else:
             st.caption("Nothing yet. It's folded in when this person starts a new chat.")
 
-    with st.expander("💰 Recent calls (direct DB read)"):
-        calls = run(mani.recent_call_costs(thread["id"]))
-        for call in calls:
-            st.text(
-                f"{call['purpose']:<15} {call['outcome']:<10} "
-                f"in={call['input_tokens']:<5} cached={call['cached_input_tokens']:<5} "
-                f"{call['latency_ms']}ms"
-            )
-        if not calls:
-            st.caption("No calls recorded yet for this thread.")
+    if developer:
+        with st.expander("🔍 Framework state (direct DB read)"):
+            st.json(framework_state or {"active": False})
 
-    if last_turn:
-        with st.expander("📦 Last turn, raw"):
-            st.code(json.dumps(last_turn, indent=2, default=str), language="json")
+        with st.expander("💰 Recent calls (direct DB read)"):
+            calls = run(mani.recent_call_costs(thread["id"]))
+            for call in calls:
+                st.text(
+                    f"{call['purpose']:<15} {call['outcome']:<10} "
+                    f"in={call['input_tokens']:<5} cached={call['cached_input_tokens']:<5} "
+                    f"{call['latency_ms']}ms"
+                )
+            if not calls:
+                st.caption("No calls recorded yet for this thread.")
+
+        if last_turn:
+            with st.expander("📦 Last turn, raw"):
+                st.code(json.dumps(last_turn, indent=2, default=str), language="json")

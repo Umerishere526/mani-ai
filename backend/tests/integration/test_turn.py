@@ -176,7 +176,7 @@ async def test_the_turn_is_stored_and_the_thread_state_follows_it(alice, model):
 
 
 async def test_tapping_the_offer_records_acceptance(alice, model):
-    model(
+    scripted = model(
         Reply(
             text="Want to try something?",
             prompts=[SmartPrompt(label="Yes, let's try it", technique="abcde")],
@@ -198,6 +198,8 @@ async def test_tapping_the_offer_records_acceptance(alice, model):
 
     assert ctx.technique.outcome is TechniqueOutcome.ACCEPTED
     assert ctx.technique.phase == "activate"
+    # So the first stage builds on what they already said instead of asking it again.
+    assert "framework_starting: yes" in scripted.last_messages[-1]["content"]
 
 
 async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, model):
@@ -829,42 +831,6 @@ async def test_two_summaries_started_together_pay_for_one(alice, monkeypatch):
         summarize.update_quietly(alice, thread.id), summarize.update_quietly(alice, thread.id)
     )
     assert calls == 1
-
-
-async def test_tell_me_about_this_answers_with_the_clients_explanation_and_offers_again(alice, model):
-    """The client wrote what each one does, word for word, to show on "Tell me about this",
-    followed by the offer again with two buttons. Fixed wording, so no model call is spent."""
-    from mani.prompts import cache
-
-    scripted = model(Reply(
-        text="I have a sequence of questions that could help. Would you like to try it?",
-        prompts=[SmartPrompt(label="Try it", technique="abcde"),
-                 SmartPrompt(label="Tell me about this"),
-                 SmartPrompt(label="Keep chatting", decline=True)],
-        state=TechniqueState(technique="abcde", step="offering"),
-    ))
-    thread = await start(alice)
-    await send(alice, thread.id, "Supportive")
-    await send(alice, thread.id, "my manager criticized me in front of everyone")
-    calls_before = scripted.calls
-
-    turn = await send(alice, thread.id, "Tell me about this")
-
-    abcde = (await cache.load()).registry.get("abcde")
-    assert turn.content == abcde.summary
-    assert "separate what happened from what you told yourself" in turn.content
-    assert "framework" not in turn.content.lower()
-    assert [(p.label, p.technique, p.decline) for p in turn.prompts] == [
-        ("Try it", "abcde", None), ("Keep chatting", None, True),
-    ]
-    assert scripted.calls == calls_before
-
-    accepted = await send(alice, thread.id, "Try it")  # the offer is still live
-    from mani.db import pool
-
-    async with pool.as_user(alice) as conn:
-        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
-    assert ctx.technique.outcome is TechniqueOutcome.ACCEPTED and accepted.content
 
 
 async def test_past_the_daily_limit_a_turn_is_refused_before_anything_is_paid(

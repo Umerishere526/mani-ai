@@ -18,10 +18,6 @@ from mani.chat.greeting import (
     GO_TO_LIBRARY_LABEL,
     OPENERS,
     STYLE_OPTIONS,
-    EXPLAIN_LABELS,
-    KEEP_CHATTING_LABEL,
-    TELL_ME_MORE,
-    TRY_IT_LABEL,
     greeting,
 )
 from mani.config import get_settings
@@ -295,8 +291,6 @@ async def send(
 
     tapped = find_tapped_prompt(history, content)
     offer = pending_offer(history)
-    if tapped and offer and tapped.label.strip().lower() in EXPLAIN_LABELS:
-        return await _explain_offer(conn, ctx, content, offer, config, client_message_id)
     offered_now = list(ctx.techniques_offered)
     outcome = technique.outcome if technique else None
     accepted_this_turn = False
@@ -370,6 +364,7 @@ async def send(
     prefix = context.build(
         ctx, shortlist=shortlist, framework=active_framework, candidate=candidate,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
+        framework_starting=accepted_this_turn,
     )
     for_model = (
         f'User tapped the button: "{tapped.label}".'
@@ -377,8 +372,8 @@ async def send(
         else context.disarm(content)
     )
 
-    # Checked here, right before the only paid step, so the safety screen and every free
-    # reply (style opener, "Tell me about this") come first and are never refused.
+    # Checked here, right before the only paid step, so the safety screen and the free style
+    # opener come first and are never refused.
     if settings.daily_message_limit:
         sent = await messages_db.count_from_user_since(conn, user_id, hours=24)
         if sent >= settings.daily_message_limit:
@@ -672,40 +667,6 @@ async def link_call(call_id: uuid.UUID, message_id: uuid.UUID) -> None:
                 )
                 return
             await asyncio.sleep(LINK_RETRY_DELAY_SECONDS)
-
-
-async def _explain_offer(
-    conn: asyncpg.Connection,
-    ctx: threads.TurnContext,
-    content: str,
-    offer: SmartPrompt,
-    config: cache.Config,
-    client_message_id: uuid.UUID | str | None,
-) -> Turn:
-    """Answer "Tell me about this" with the client's description of it, and offer it again.
-
-    Fixed wording, so no model call. The description is the framework's `summary`, written by
-    the client; the per-style explanation is the fallback for a framework without one. The
-    offer stays open: its row is untouched, and the new buttons carry the same technique, so
-    tapping "Try it" next accepts it as usual.
-    """
-    framework = config.registry.get(offer.technique)
-    reply = (framework.summary if framework and framework.summary
-             else TELL_ME_MORE[context.resolve_style(ctx)])
-    buttons = [
-        SmartPrompt(label=TRY_IT_LABEL, technique=offer.technique),
-        SmartPrompt(label=KEEP_CHATTING_LABEL, decline=True),
-    ]
-    pair = await messages_db.create_pair(
-        conn, ctx.thread.id, content, reply,
-        selected_prompt=content.strip(),
-        prompt_options=[b.model_dump(mode="json", exclude_none=True) for b in buttons],
-        client_message_id=client_message_id,
-    )
-    return Turn(
-        message_id=pair.mani_message_id, content=reply, created_at=pair.created_at,
-        prompts=buttons, title=ctx.thread.title,
-    )
 
 
 async def _open_in_style(

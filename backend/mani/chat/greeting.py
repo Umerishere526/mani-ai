@@ -29,35 +29,11 @@ def greeting(nickname: str | None, returning: bool) -> str:
     return f"{hello} {STYLE_QUESTION}"
 
 
-# The three buttons under an offer, and the two it comes back with after "Tell me about this"
-# (muhammad, 2026-09-24). Mani never calls what it offers a framework: it is a sequence of
-# questions.
-TRY_IT_LABEL = "Try it"
-KEEP_CHATTING_LABEL = "Keep chatting"
+# Buttons asking what an offer involves. An offer carries two, Try it and Keep chatting
+# (muhammad, 2026-09-24), and repairs drops one of these the model still adds, since the offer's
+# own words say how the questions would help.
 TELL_ME_ABOUT_THIS_LABEL = "Tell me about this"
-# The older label, still recognised as the same tap if a reply ever carries it.
 EXPLAIN_LABELS = {TELL_ME_ABOUT_THIS_LABEL.lower(), "tell me more"}
-
-# What Mani says on "Tell me about this" for an offer whose framework has no description of its
-# own - the client's per-style explanations. The description is what is normally shown.
-TELL_ME_MORE = {
-    "direct": (
-        "It gives us a clear way to work through what is happening one step at a time. I'll ask "
-        "you focused questions, help you look at what is driving the reaction, and guide you "
-        "through the process without rushing you. You stay in control of what you want to share."
-    ),
-    "supportive": (
-        "Of course. It gives us a way to slow things down and work through what is happening one "
-        "step at a time. I'll ask you some questions, we'll look at what is coming up for you, and "
-        "we'll work through it together. You can share as much or as little as feels comfortable."
-    ),
-    "reflective": (
-        "Of course. We'll slow things down and look at what is happening one part at a time. I'll "
-        "reflect back what I'm understanding, ask questions to help you look more closely at what "
-        "is coming up, and check with you along the way to make sure I'm understanding you "
-        "correctly. You can always correct me or tell me when something does not fit."
-    ),
-}
 
 # The two choices every framework ends on - the client's cadence: "Framework completes ->
 # Somatic check-in -> Chat More OR Go to Library".

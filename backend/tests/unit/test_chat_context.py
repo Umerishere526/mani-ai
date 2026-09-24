@@ -14,6 +14,7 @@ from mani.models.rows import (
     MessageRole,
     Profile,
     ResponseStyle,
+    SupportStyle,
     TechniqueOutcome,
     TechniqueState,
     TechniqueTried,
@@ -251,6 +252,30 @@ def test_a_confident_candidate_adds_its_offer_line_resolved_to_style():
     assert "offer_ask: Would you like to work through it?" in block
 
 
+def test_the_offer_carries_the_clients_description_of_how_it_helps():
+    """muhammad, 2026-09-24: the offer is the client's description fitted to their situation,
+    so the description comes with the offer rather than only living in the long prompt."""
+    confident = framework().model_copy(update={"summary": "These questions help you see it clearly."})
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        shortlist=[Signal("abcde", 2.6, ["she said"], spread=2)],
+        candidate=confident,
+    )
+    assert "offer_helps: These questions help you see it clearly." in block
+
+
+def test_the_turn_a_framework_starts_says_so():
+    """Observed: on Try it, Mani asked "which problem would help most to address first?" of
+    someone who had just named it - the first stage's question, asked as written."""
+    offered = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
+        phase="offering", at_message_count=8,
+    )
+    ctx = TurnContext(thread=thread(), profile=None, technique=offered)
+    assert "framework_starting: yes" in context.build(ctx, framework=framework(), framework_starting=True)
+    assert "framework_starting" not in context.build(ctx, framework=framework())
+
+
 def test_an_unconfident_shortlist_carries_no_candidate_content():
     """Below the confidence threshold, the shortlist is ids and scores only - central
     indications for those ids already sit in the static Framework Index."""
@@ -396,6 +421,16 @@ def test_the_block_says_which_phase_of_the_conversation_this_is():
     )
     assert "conversation_phase: talking" in context.build(after_offer)
 
+
+
+def test_supportive_and_reflective_ask_about_feelings_and_direct_about_the_next_step():
+    """muhammad, 2026-09-24: Supportive and Reflective focus their questions on how the person
+    feels rather than the situation; Direct moves toward a way through. Said next to the
+    message, where a style rule in the long prompt alone did not hold."""
+    for style, focus in (("supportive", "feelings"), ("reflective", "feelings"), ("direct", "next step")):
+        chosen = thread().model_copy(update={"conversation_style": SupportStyle(style)})
+        ctx = TurnContext(thread=chosen, profile=None, technique=None)
+        assert f"question_focus: {focus}" in context.build(ctx)
 
 
 def _finished_framework_history(*later: str) -> list:

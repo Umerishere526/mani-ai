@@ -24,7 +24,7 @@ def registry() -> Registry:
 
 
 def reply(**overrides) -> Reply:
-    return Reply(**({"text": "That sounds heavy to carry."} | overrides))
+    return Reply(**({"text": "Thank you for telling me."} | overrides))
 
 
 def fix(registry, model_reply, **overrides):
@@ -45,7 +45,9 @@ def fix(registry, model_reply, **overrides):
 
 def test_mirroring_the_users_own_word_is_not_censored(registry):
     """The reference refused "heavy" anywhere, while instructing Mani to mirror."""
-    assert fix(registry, reply()).text == "That sounds heavy to carry."
+    mirrored = fix(registry, reply(text="That sounds heavy to carry."), said="it all feels so heavy")
+    assert mirrored.text == "That sounds heavy to carry."
+    assert mirrored.notes == []
 
 
 def test_leaked_script_metadata_is_stripped(registry):
@@ -160,6 +162,17 @@ def test_a_capsule_cannot_put_a_feeling_in_their_mouth_but_may_mirror_their_own(
     assert len(fixed.notes) == 2
 
 
+def test_the_feeling_capsules_seen_in_a_supportive_chat_are_dropped(registry):
+    """Observed with the feelings-first focus (2026-09-24): "I feel heavy", "It's scary", to
+    someone who had said only that they were hurt and had a sinking feeling."""
+    offered = reply(prompts=[
+        SmartPrompt(label="I feel heavy"), SmartPrompt(label="It's scary"),
+        SmartPrompt(label="Feeling numb"), SmartPrompt(label="Not sure"),
+    ])
+    fixed = fix(registry, offered, said="i am hurt. i have a sinking feeling in my heart")
+    assert [p.label for p in fixed.prompts] == ["Not sure"]
+
+
 def test_a_capsule_that_judges_them_is_dropped(registry):
     """Observed live: a reply offered "I'm overthinking it" as a button to press."""
     judging = reply(
@@ -228,7 +241,7 @@ def test_an_off_list_shape_is_dropped_rather_than_failing_the_turn(registry):
     invented = reply(style=Style(shape="vibes", voice="naming"))
     fixed = fix(registry, invented)
     assert fixed.style is None
-    assert fixed.text == "That sounds heavy to carry."
+    assert fixed.text == "Thank you for telling me."
     assert fixed.notes
 
 
@@ -302,9 +315,9 @@ def test_state_naming_a_different_framework_than_the_running_one_is_ignored(regi
     assert any("not the running one" in n for n in fixed.notes)
 
 
-def test_the_offer_buttons_all_survive(registry):
-    """The three buttons under every offer (muhammad, 2026-09-24): none may be lost to the
-    label-length or offer-coherence repairs."""
+def test_the_offer_buttons_are_try_it_and_keep_chatting(registry):
+    """Two buttons under every offer (muhammad, 2026-09-24): both survive the label-length and
+    offer-coherence repairs, and a "Tell me about this" the model still adds is dropped."""
     offer = reply(
         text="I have a sequence of questions that could help. Would you like to try it?",
         prompts=[
@@ -314,7 +327,7 @@ def test_the_offer_buttons_all_survive(registry):
         ],
     )
     fixed = fix(registry, offer)
-    assert [p.label for p in fixed.prompts] == ["Try it", "Tell me about this", "Keep chatting"]
+    assert [p.label for p in fixed.prompts] == ["Try it", "Keep chatting"]
 
 
 def test_an_offer_refused_by_the_cooldown_takes_its_words_with_it(registry):
@@ -359,7 +372,7 @@ def test_varied_offer_wording_keeps_its_buttons(registry):
                  SmartPrompt(label="Tell me about this"),
                  SmartPrompt(label="Keep chatting", decline=True)],
     )
-    assert [p.label for p in fix(registry, offer).prompts] == ["Try it", "Tell me about this", "Keep chatting"]
+    assert [p.label for p in fix(registry, offer).prompts] == ["Try it", "Keep chatting"]
 
 
 def test_an_offer_made_only_by_buttons_gets_the_clients_permission_question(registry):
@@ -368,14 +381,13 @@ def test_an_offer_made_only_by_buttons_gets_the_clients_permission_question(regi
     silent = reply(
         text="You're replaying the exchange and wondering where you went wrong.",
         prompts=[
-            SmartPrompt(label="Yes, let's try it", technique="abcde"),
-            SmartPrompt(label="Tell me more"),
-            SmartPrompt(label="I want to keep talking", decline=True),
+            SmartPrompt(label="Try it", technique="abcde"),
+            SmartPrompt(label="Keep chatting", decline=True),
         ],
     )
     fixed = fix(registry, silent, conversation_style="direct")
     assert fixed.text.endswith("Would you like to try it with me?")
-    assert len(fixed.prompts) == 3
+    assert len(fixed.prompts) == 2
 
 
 def test_offer_buttons_under_a_different_question_are_dropped(registry):
@@ -397,12 +409,11 @@ def test_offer_buttons_under_a_different_question_are_dropped(registry):
 def test_a_real_offer_is_left_alone(registry):
     offer = reply(
         text="I have a structured approach that can help you work through this. Would you like to try it with me?",
-        prompts=[SmartPrompt(label="Yes, let's try it", technique="abcde"),
-                 SmartPrompt(label="Tell me more"),
-                 SmartPrompt(label="I want to keep talking", decline=True)],
+        prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
     )
     fixed = fix(registry, offer, conversation_style="direct")
-    assert fixed.text == offer.text and len(fixed.prompts) == 3
+    assert fixed.text == offer.text and len(fixed.prompts) == 2
 
 
 @pytest.mark.parametrize(
