@@ -886,3 +886,39 @@ async def test_a_crisis_is_still_answered_past_the_daily_limit(alice, model, mon
 
     turn = await send(alice, thread.id, "I am going to kill myself")
     assert turn.crisis_detected
+
+
+async def test_finishing_a_framework_always_offers_chat_more_and_the_library(alice, model):
+    """The client's cadence ends every framework on the same two choices. Left to the model
+    they came back mislabeled ("Something else"), or not at all, on the reply that ends it."""
+    model(Reply(text="Your shoulders feel looser. Does that feel right? What would you like next?",
+                prompts=[SmartPrompt(label="Something else")]))
+    from mani.db import pool
+
+    thread = await start(alice)
+    async with pool.as_user(alice) as conn:
+        await threads.set_technique_outcome(
+            conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
+            at_message_count=2, phase="somatic",
+        )
+
+    turn = await send(alice, thread.id, "my shoulders feel a bit looser")
+    assert [(p.label, p.library) for p in turn.prompts] == [
+        ("Chat More", None), ("Go to Library", "home"),
+    ]
+
+
+async def test_a_choice_already_made_is_not_offered_again(alice, model):
+    """If they have already said Chat More, the ending reply just carries on talking."""
+    model(Reply(text="We can keep talking. What's on your mind now?"))
+    from mani.db import pool
+
+    thread = await start(alice)
+    async with pool.as_user(alice) as conn:
+        await threads.set_technique_outcome(
+            conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
+            at_message_count=2, phase="somatic",
+        )
+
+    turn = await send(alice, thread.id, "Chat More")
+    assert turn.prompts == []

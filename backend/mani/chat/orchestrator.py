@@ -13,6 +13,8 @@ import asyncpg
 from mani.auth.jwt import Claims
 from mani.chat import context, crisis, repairs, router, safety
 from mani.chat.greeting import (
+    CHAT_MORE_LABEL,
+    GO_TO_LIBRARY_LABEL,
     OPENERS,
     STYLE_OPTIONS,
     TELL_ME_MORE,
@@ -30,7 +32,7 @@ from mani.db import (
 )
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
-from mani.llm.schema import Reply, SmartPrompt
+from mani.llm.schema import LibrarySection, Reply, SmartPrompt
 from mani.models.rows import (
     Exercise,
     Message,
@@ -58,6 +60,8 @@ SUMMARY_THRESHOLD = messages_db.CONTEXT_WINDOW
 # The router narrows once there is enough to narrow from. Below this, one or two messages
 # is not a pattern - it is the start of a conversation.
 ROUTER_MIN_EXCHANGES = 2
+
+_HANDOFF_LABELS = {CHAT_MORE_LABEL.lower(), GO_TO_LIBRARY_LABEL.lower()}
 
 
 @dataclass(frozen=True)
@@ -425,6 +429,14 @@ async def send(
         )
     if fixed.notes:
         logger.info("repaired reply on thread %s: %s", ctx.thread.id, "; ".join(fixed.notes))
+    if retiring_framework_id is not None and content.strip().lower() not in _HANDOFF_LABELS:
+        # The reply that ends a framework offers the client's two choices, always and
+        # exactly. Left to the model they came back mislabeled or missing. Skipped when
+        # they have already chosen one, so the choice is not put back in front of them.
+        fixed = dataclasses.replace(fixed, prompts=[
+            SmartPrompt(label=CHAT_MORE_LABEL),
+            SmartPrompt(label=GO_TO_LIBRARY_LABEL, library=LibrarySection.HOME.value),
+        ])
     if not fixed.text.strip():
         # Nothing left to say once leaked metadata was stripped. Refused here as retryable,
         # rather than by the messages_content_not_empty constraint as an opaque 500.

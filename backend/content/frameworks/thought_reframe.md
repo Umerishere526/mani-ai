@@ -82,7 +82,11 @@ stages:
   thought:
     purpose: "Isolate one specific thought in the user's own language."
     listen_for: "One specific assumption, conclusion, prediction, or belief in the user's language."
-    ready_when: "One specific thought identified. If several appear, ask which one to examine."
+    ready_when: >-
+      One specific thought identified. If several appear, ask which one to examine. Once you have
+      mirrored it back, anything other than a no confirms it: an elaboration, a detail about when
+      it came up, or a yes all mean move on to its significance. Never ask for that confirmation
+      a second time.
     boundaries:
       - "must not select the thought for the user"
       - "must not combine several thoughts"
@@ -160,21 +164,21 @@ stages:
     ready_when: >-
       A thought that includes the known facts, does not replace one unsupported certainty with
       another, and uses language the user accepts. The real gate is not whether it sounds
-      balanced to read - it is whether the user actually believes it. Ask, plainly: out of a
-      hundred, how much does this feel true? A reframe they rate low is not a finished one, even
-      if the wording looks right.
+      balanced to read - it is whether the user actually believes it. Their own words settle
+      that: "yes", "that feels fairer", "that's closer" mean it is done. Check once, plainly,
+      if they have not said; never ask for a number.
     boundaries:
       - "must not write a polished reframe that does not sound like the user"
       - "must not require positive language"
       - "must not claim the new thought is true with certainty"
       - "must not require the user to feel differently"
       - "must not continue revising a thought the user already finds credible"
-      - "if the user rates the reframe as not very believable, must not argue the rating up - weaken or adjust the reframe itself until it is credible to them, the same way the balanced belief was built"
+      - "if the user says the reframe does not feel true, must not argue it - weaken or adjust the reframe itself until it is credible to them, the same way the balanced belief was built"
     if_unclear:
       - when: "falsely positive - \"She definitely cares, and everything is fine.\""
         reply: "You do not know that everything is fine. What thought stays closer to what you know?"
-      - when: "rates it low - \"Maybe thirty percent.\""
-        reply: "Thirty isn't there yet. What would need to change in it to make it feel truer?"
+      - when: "it does not feel true yet - \"I don't really believe that.\""
+        reply: "It isn't there yet. What would need to change in it to make it feel truer?"
     ask:
       supportive: "What thought would be fairer to what you know?"
       reflective: "The original thought treats one explanation as certain. What belief includes the uncertainty?"

@@ -51,3 +51,8 @@ TELL_ME_MORE = {
     ),
 }
 TELL_ME_MORE_LABEL = "Tell me more"
+
+# The two choices every framework ends on - the client's cadence: "Framework completes ->
+# Somatic check-in -> Chat More OR Go to Library".
+CHAT_MORE_LABEL = "Chat More"
+GO_TO_LIBRARY_LABEL = "Go to Library"
