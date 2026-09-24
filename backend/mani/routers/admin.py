@@ -12,6 +12,7 @@ from mani.db import config_tables, exercises as exercises_db
 from mani.db.deps import AdminConn
 from mani.db.exercises import AdminExercise, ExerciseInput
 from mani.errors import ErrorCategory, ServiceError
+from mani.llm.schema import Memory
 from mani.models.api import PromptIn, PromptOut, PromptVersionOut
 from mani.prompts import cache
 from mani.routers.serializers import to_prompt, to_prompt_version
@@ -149,6 +150,35 @@ async def delete_exercise(conn: AdminConn, exercise_id: uuid.UUID) -> None:
             ErrorCategory.NOT_FOUND,
             user_message="That exercise does not exist.",
         )
+
+
+class UserMemoryOut(BaseModel):
+    user_id: uuid.UUID
+    memory: Memory
+    updated_at: dt.datetime
+
+
+@router.get("/users/{user_id}/memory", response_model=UserMemoryOut)
+async def get_user_memory(conn: AdminConn, user_id: uuid.UUID) -> UserMemoryOut:
+    """What Mani has folded together about one person across their conversations.
+
+    Health data, readable here and nowhere else in the API - the person's own token cannot
+    reach it. Every read is an admin one, on a service-role connection.
+    """
+    row = await conn.fetchrow(
+        "select user_id, memory, updated_at from admin.user_memory where user_id = $1",
+        user_id,
+    )
+    if row is None:
+        raise ServiceError(
+            f"no memory for user {user_id}",
+            ErrorCategory.NOT_FOUND,
+            user_message="Nothing has been remembered for this person yet.",
+        )
+    return UserMemoryOut(
+        user_id=row["user_id"], memory=Memory.model_validate(row["memory"]),
+        updated_at=row["updated_at"],
+    )
 
 
 @router.get("/crisis-events", response_model=list[CrisisEventOut])

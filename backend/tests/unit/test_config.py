@@ -13,8 +13,19 @@ REQUIRED = {
 }
 
 
+# What a production process must also carry. Kept separate from REQUIRED because these
+# are required only in production - development and the test suite run without them.
+PRODUCTION = {
+    "openrouter_api_key": "sk-test",
+    "supabase_jwt_secret": "jwt-secret",
+}
+
+
 def build(**overrides) -> Settings:
-    return Settings(_env_file=None, **(REQUIRED | overrides))
+    values = REQUIRED | overrides
+    if values.get("environment") == "production":
+        values = PRODUCTION | values
+    return Settings(_env_file=None, **values)
 
 
 def test_defaults_are_the_safe_choice():
@@ -61,6 +72,37 @@ def test_unknown_environment_is_rejected():
         build(environment="staging")
 
 
+@pytest.mark.parametrize(
+    ("blank", "expected"),
+    [
+        ({"openrouter_api_key": ""}, "OPENROUTER_API_KEY"),
+        ({"supabase_jwt_secret": "", "supabase_jwks_url": ""}, "SUPABASE_JWT_SECRET"),
+    ],
+)
+def test_production_refuses_to_start_without_the_secrets_it_needs(blank, expected, monkeypatch):
+    """Both default to empty so local development runs without them. In production that
+    default boots a process where /health says ok and every real request fails - a chat
+    turn at the provider call, an authenticated request at the JWKS fetch."""
+    for name in blank:
+        monkeypatch.delenv(name.upper(), raising=False)
+    with pytest.raises(ValidationError, match=expected):
+        build(environment="production", **blank)
+
+
+def test_production_accepts_jwks_in_place_of_the_shared_secret():
+    """Supabase signs with either. Requiring both would refuse a valid configuration."""
+    settings = build(
+        environment="production", supabase_jwt_secret="", supabase_jwks_url="https://x/keys"
+    )
+    assert settings.jwks_url == "https://x/keys"
+
+
+@pytest.mark.parametrize("environment", ["development", "test"])
+def test_everything_below_production_still_runs_with_neither(environment):
+    settings = build(environment=environment, openrouter_api_key="", supabase_jwt_secret="")
+    assert settings.openrouter_api_key == ""
+
+
 def test_routing_pins_the_upstream_provider_by_default():
     # Unpinned, OpenRouter may send a conversation to any provider serving the model.
     routing = build().routing()
@@ -73,3 +115,22 @@ def test_a_prompt_can_override_routing_without_losing_the_data_policy():
     routing = build().routing({"order": ["vertex"]})
     assert routing["order"] == ["vertex"]
     assert routing["data_collection"] == "deny"
+
+
+def test_secrets_never_appear_when_the_settings_are_printed():
+    """An AttributeError on Settings prints the whole object - into a log line, a traceback,
+    a Sentry event. The keys that open the database, the model provider and the admin API
+    must not be in that text."""
+    s = Settings(
+        _env_file=None,
+        database_url="postgresql://mani:db-password-123@db.example.com/mani",
+        supabase_url="https://example.supabase.co",
+        supabase_service_role_key="service-role-secret-123",
+        supabase_jwt_secret="jwt-secret-123",
+        openrouter_api_key="sk-or-secret-123",
+        sentry_dsn="https://sentry-secret-123@o0.ingest.sentry.io/0",
+    )
+    printed = repr(s) + str(s)
+    for secret in ("db-password-123", "service-role-secret-123", "jwt-secret-123",
+                   "sk-or-secret-123", "sentry-secret-123"):
+        assert secret not in printed, secret

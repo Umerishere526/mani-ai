@@ -12,12 +12,9 @@ import client as mani
 
 st.set_page_config(page_title="Mani chat tester", page_icon="🧠", layout="centered")
 
-# label, opener - the spec's own three, shown once before the conversation starts.
-STYLES = {
-    "direct": ("🎯 Direct", "How can I help you today?"),
-    "supportive": ("🤝 Supportive", "How can I support you today?"),
-    "reflective": ("🪞 Reflective", "What's on your mind today?"),
-}
+# The greeting's style buttons, by the label the person taps - used only to show which
+# style the conversation is in.
+STYLES = {"direct": "Direct", "supportive": "Supportive", "reflective": "Reflective"}
 
 
 def run(coro):
@@ -95,30 +92,10 @@ thread = st.session_state.thread
 st.title("🧠 Mani chat tester")
 st.caption(f"user: {st.session_state.name}  ·  thread: {thread['id'][:8]}…")
 
-# ---------------------------------------------------------------------------
-# Style picker - shown once, before the conversation proper starts. The backend has no
-# capsule for this on the greeting yet, so this tool asks for it directly and sets it
-# through the same PATCH endpoint a real style-picker screen would call.
-# ---------------------------------------------------------------------------
-
-if not st.session_state.style:
-    st.info("**How would you like Mani to speak with you?** (sets `conversation_style`)")
-    cols = st.columns(3)
-    for col, key in zip(cols, STYLES):
-        label, _ = STYLES[key]
-        if col.button(label, use_container_width=True, key=f"style_{key}"):
-            try:
-                updated = client.set_conversation_style(thread["id"], key)
-            except mani.ApiError as exc:
-                st.error(str(exc))
-                st.stop()
-            st.session_state.thread = updated
-            st.session_state.style = key
-            st.rerun()
-    st.stop()
-
-style_label = STYLES[st.session_state.style][0]
-st.caption(f"style: {style_label}")
+# The style is chosen the way a person chooses it in the apps: by tapping one of the
+# greeting's three buttons, which the backend turns into the style and its opener.
+if st.session_state.style:
+    st.caption(f"style: {STYLES[st.session_state.style]}")
 
 # ---------------------------------------------------------------------------
 # The conversation itself
@@ -165,6 +142,9 @@ def send(content: str) -> None:
         {"role": "mani", "content": turn["content"], "prompts": turn.get("prompts") or []}
     )
     st.session_state.last_turn = turn
+    style = next((key for key, label in STYLES.items() if label == content.strip()), None)
+    if style:
+        st.session_state.style = style
     if turn.get("title"):
         st.session_state.thread["title"] = turn["title"]
     if turn.get("crisis_detected") and turn.get("crisis_blocks_chat"):
@@ -174,6 +154,16 @@ def send(content: str) -> None:
 if st.session_state.locked:
     st.warning("This conversation is paused after a crisis flag. Start a new conversation to continue.")
 else:
+    # Mani's newest message is the only one whose buttons are live, exactly as in the apps.
+    # A tap sends the label as the person's message; the backend matches it to the button.
+    latest = next((m for m in reversed(st.session_state.messages) if m["role"] == "mani"), None)
+    buttons = (latest or {}).get("prompts") or []
+    if buttons:
+        cols = st.columns(len(buttons))
+        for index, (col, button) in enumerate(zip(cols, buttons)):
+            if col.button(button["label"], use_container_width=True, key=f"tap_{index}_{len(st.session_state.messages)}"):
+                send(button["label"])
+                st.rerun()
     if typed := st.chat_input("Say something…"):
         send(typed)
         st.rerun()
@@ -199,11 +189,6 @@ with st.sidebar:
             )
         if not calls:
             st.caption("No calls recorded yet for this thread.")
-
-    if last_turn and last_turn.get("clinical_note"):
-        with st.expander("🩺 Clinical note (team only)", expanded=True):
-            st.write(last_turn["clinical_note"])
-            st.caption("Never sent to the person. Needs AI_DEBUG_MODE=true in backend/.env.")
 
     if last_turn:
         with st.expander("📦 Last turn, raw"):

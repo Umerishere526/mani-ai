@@ -1,0 +1,64 @@
+# ABOUTME: Scripted conversations for scripts/eval_replies.py, one per named scenario.
+# ABOUTME: Turns are drawn from the framework files' own worked examples where possible.
+
+- name: anxiety_free_chat
+  turns:
+    - "I have a presentation tomorrow and I keep going over it"
+    - "I keep thinking I'll freeze halfway through"
+    - "I don't know, I just want it to be over"
+    - "yeah maybe"
+- name: criticism_abcde
+  turns:
+    - "My manager criticized my presentation in front of everyone"
+    - "She said two of my recommendations did not have enough support"
+    - "I stopped speaking and avoided her afterward"
+    - "I keep thinking I am incompetent"
+- name: withdrawal_behavioral_activation
+  turns:
+    - "I have been in bed all day"
+    - "I have ignored everyone's messages for a week"
+    - "I don't see the point"
+    - "I guess I could answer one"
+
+# A question is not what every moment needs. These turns are the ones where asking another
+# would be the failure, so they are the only place the question-free shapes can be observed.
+- name: disclosure_no_question_needed
+  heard: true
+  turns:
+    - "nobody in my family knows about any of this"
+    - "please don't give me a technique right now, I just need to get it out"
+    - "I keep replaying the argument and I still can't see where it went wrong"
+    - "that's all I wanted to say"
+
+# The client's own worked scenarios (docs/specs/conversational-styles.md), user turns verbatim.
+# Their MANI lines are the target: compare side by side with --verbose.
+- name: client_anxiety
+  turns:
+    - "I feel like I might have a panic attack."
+    - "My chest feels tight, my thoughts are racing, and I feel like I'm losing control."
+    - "The feeling that I'm losing control."
+- name: client_overthinking
+  turns:
+    - "I'm upset."
+    - "My best friend sent me a text and now I think she hates me."
+    - "She was really short with me and ended the conversation. Now I keep replaying it and wondering what I did wrong."
+- name: client_scrolling
+  turns:
+    - "I cannot stop scrolling, but I need to."
+    - "I have work due tomorrow and I've been on my phone for three hours."
+    - "Every time I try to start I just pick the phone back up."
+- name: client_stress
+  turns:
+    - "I'm trying to balance work, family, and everything else, and I have a deadline coming up."
+    - "I don't know where to start."
+    - "Mostly the deadline. It's on Friday and I haven't begun."
+
+# Inside a framework: starts with ABCDE accepted, then answers its stages the way a person would.
+- name: framework_abcde_stages
+  start_in: {framework: abcde, phase: activate}
+  turns:
+    - "My manager criticized my presentation in front of the whole team."
+    - "She said two of my recommendations didn't have enough support."
+    - "That I'm bad at my job and everyone saw it."
+    - "I stopped talking for the rest of the meeting and avoided her after."
+    - "Well, she also asked me to lead the next project, so maybe not everyone thinks that."

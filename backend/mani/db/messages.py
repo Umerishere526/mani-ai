@@ -179,9 +179,27 @@ async def create_pair(
 
 
 async def create_greeting(
-    conn: asyncpg.Connection, thread_id: uuid.UUID | str, content: str
+    conn: asyncpg.Connection,
+    thread_id: uuid.UUID | str,
+    content: str,
+    *,
+    prompt_options: list[dict] | None = None,
 ) -> uuid.UUID:
-    """Mani's opening line. Refused once the thread has started."""
+    """Mani's opening line, with its buttons. Refused once the thread has started."""
     return await conn.fetchval(
-        "select public.create_greeting($1, $2)", thread_id, content
+        "select public.create_greeting($1, $2, $3::jsonb)", thread_id, content, prompt_options
+    )
+
+
+async def count_from_user_since(
+    conn: asyncpg.Connection, user_id: uuid.UUID | str, hours: int
+) -> int:
+    """How many messages this person has sent in the last `hours`, across every conversation.
+
+    Served by idx_messages_user (user_id, created_at desc).
+    """
+    return await conn.fetchval(
+        "select count(*) from public.messages "
+        "where user_id = $1 and role = 'user' and created_at > now() - make_interval(hours => $2)",
+        user_id, hours,
     )

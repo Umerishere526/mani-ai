@@ -6,7 +6,9 @@ import uuid
 
 from fastapi import APIRouter, Query
 
+from mani import memory
 from mani.auth.deps import CurrentUser
+from mani.background import fire_and_forget
 from mani.chat import orchestrator
 from mani.db import messages as messages_db, threads
 from mani.db.deps import UserConn
@@ -47,6 +49,11 @@ async def start(user: CurrentUser, conn: UserConn, body: ThreadCreateIn) -> Star
     and appears immediately.
     """
     thread, created = await orchestrator.start_thread(conn, user, body.title)
+    # Starting a new chat is when the previous one counts as finished, so its patterns are
+    # folded into the person's memory now. Every thread except this one: tapping New chat
+    # can hand back an untouched thread while another the person returned to still waits.
+    # It reads only earlier, committed threads, and never delays this response.
+    fire_and_forget(memory.fold_finished(user, keep=thread.id), name="fold_memory")
     return StartOut(
         thread=to_thread(thread),
         messages=await _history(conn, thread.id, user.user_id),

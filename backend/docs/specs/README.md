@@ -7,7 +7,7 @@ reconciles the contradictions between them.
 
 | File | Source | What it carries |
 |---|---|---|
-| `conversational-styles.md` | *Directive. Supportive. Reflective.* | The three styles, the full conversation cadence, the greeting and style-selection flow, the somatic check-in wording, per-style behaviour inside a framework, worked scenarios across all three styles |
+| `conversational-styles.md` | *Direct. Supportive. Reflective.* | The three styles, the full conversation cadence, the greeting and style-selection flow, the somatic check-in wording, per-style behaviour inside a framework, worked scenarios across all three styles |
 | `six-frameworks-overview.md` | *Six Frameworks for App* §§1–7 | The comparison table, the selection table, the pairwise distinctions, the safety exception, and the rules and failure modes shared by all six |
 | `framework-abcde.md` | Framework 1 | |
 | `framework-thought-reframe.md` | Framework 2 | |

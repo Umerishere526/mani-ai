@@ -12,7 +12,13 @@ import asyncpg
 
 from mani.auth.jwt import Claims
 from mani.chat import context, crisis, repairs, router, safety
-from mani.chat.greeting import greeting
+from mani.chat.greeting import (
+    OPENERS,
+    STYLE_OPTIONS,
+    TELL_ME_MORE,
+    TELL_ME_MORE_LABEL,
+    greeting,
+)
 from mani.config import get_settings
 from mani.db import (
     exercises as exercises_db,
@@ -30,6 +36,7 @@ from mani.models.rows import (
     Message,
     MessageRole,
     ResponseStyle,
+    SupportStyle,
     TechniqueOutcome,
     TechniqueState,
     Thread,
@@ -43,8 +50,10 @@ logger = logging.getLogger(__name__)
 # one message rather than two - moved the count past 3 and the thread was never titled.
 TITLE_AFTER_MESSAGES = 3
 
-# How many new messages accumulate before the rolling summary is refreshed.
-SUMMARY_THRESHOLD = 30
+# How many new messages accumulate before the rolling summary is refreshed. Tied to the
+# history window rather than set beside it: any value above the window leaves messages that
+# have scrolled out of the history the model sees and are not yet in the summary either.
+SUMMARY_THRESHOLD = messages_db.CONTEXT_WINDOW
 
 # The router narrows once there is enough to narrow from. Below this, one or two messages
 # is not a pattern - it is the start of a conversation.
@@ -67,12 +76,6 @@ class Turn:
     llm_call_id: uuid.UUID | None = None
     # Present only when AI_DEBUG_MODE is on; never sent to an ordinary client.
     reasoning: str | None = None
-    # The model's clinical read of the turn, for the care team. Same gate as reasoning,
-    # and the gate is the whole protection: this is the one field where Mani is asked to
-    # name what it thinks is happening, which is precisely what the person must not read
-    # about themselves. It is deliberately not persisted - storing formulations is a
-    # privacy decision to take on purpose, not a side effect of wanting to review them.
-    clinical_note: str | None = None
     # Set only on the turn a framework completes, and only when the catalog has a
     # matching exercise. A row model, not the wire shape - the router builds ExerciseOut
     # (and signs the audio URL) when it serializes this.
@@ -98,6 +101,19 @@ def find_tapped_prompt(history: list[Message], content: str) -> SmartPrompt | No
     return None
 
 
+def chosen_style(history: list[Message], content: str) -> SupportStyle | None:
+    """The style this message picks, when it is a tap on one of the greeting's style buttons.
+
+    Read from the stored options rather than through SmartPrompt: `style` is a greeting-only
+    key the model is never asked for, so it is not part of the reply schema at all.
+    """
+    typed = content.strip().lower()
+    for option in _last_offered(history):
+        if option.get("style") and str(option.get("label", "")).strip().lower() == typed:
+            return SupportStyle(option["style"])
+    return None
+
+
 def pending_offer(history: list[Message]) -> SmartPrompt | None:
     """The technique button still awaiting an answer, if there is one."""
     for option in _last_offered(history):
@@ -114,11 +130,29 @@ def _last_offered(history: list[Message]) -> list[dict]:
     return []
 
 
+def _decided_framework(
+    reported: str | None, outcome: TechniqueOutcome | None, live: TechniqueState | None
+) -> str | None:
+    """Which framework this turn's outcome belongs to, when there is one to record.
+
+    Normally the one the model reported. A decline is the exception: once the person says no
+    there is no technique left to report, so state: null is the model following the schema,
+    and the decline belongs to the offer that was live.
+    """
+    if outcome is None:
+        return None
+    if reported:
+        return reported
+    if outcome is TechniqueOutcome.DECLINED and live is not None:
+        return live.framework_id
+    return None
+
+
 def _conversation(history: list[Message]) -> list[dict[str, str]]:
     return [
         {
             "role": "user" if m.role is MessageRole.USER else "assistant",
-            "content": m.content,
+            "content": context.disarm(m.content) if m.role is MessageRole.USER else m.content,
         }
         for m in history
     ]
@@ -136,11 +170,28 @@ async def send(
     user_id = claims.user_id
 
     if client_message_id is not None:
+        # Held until this turn's transaction ends. A retry arriving while the first request
+        # is still waiting on the model blocks here, then finds the stored pair below -
+        # instead of passing the check alongside it, paying for a second generation, and
+        # colliding on the unique key.
+        await conn.execute(
+            "select pg_advisory_xact_lock(hashtextextended($1, 0))",
+            f"{user_id}:{client_message_id}",
+        )
         existing = await messages_db.find_pair_by_client_id(
             conn, user_id, client_message_id
         )
         if existing is not None:
-            _, reply_message = existing
+            user_message, reply_message = existing
+            if str(user_message.thread_id) != str(thread_id):
+                # The key is per person, not per conversation: answering here would hand
+                # back a reply from a different chat and write nothing to this one.
+                raise ServiceError(
+                    f"client_message_id {client_message_id} already used in thread "
+                    f"{user_message.thread_id}",
+                    ErrorCategory.CONFLICT,
+                    user_message="That message was already sent in another conversation.",
+                )
             thread = await threads.get(conn, thread_id, user_id)
             return Turn(
                 message_id=reply_message.id if reply_message else None,
@@ -177,6 +228,10 @@ async def send(
     history = await messages_db.recent_for_context(conn, thread_id, user_id)
     updates = threads.ThreadUpdates()
 
+    style = chosen_style(history, content)
+    if style is not None:
+        return await _open_in_style(conn, ctx, content, style, client_message_id)
+
     technique = ctx.technique
     # A technique that reached its last phase and was accepted is finished. The row is
     # retired rather than removed, and the snapshot keeps it with its phase cleared, so
@@ -195,8 +250,20 @@ async def send(
         )
         technique = None
 
+    # From here on `technique` means the framework that is live on this turn: offered and
+    # awaiting an answer, or accepted and mid-way. A row that is finished (phase cleared) or
+    # declined stays in the snapshot, because [ctx] measures the cooldown from it - but it
+    # is not running, so it must not strip technique buttons or keep the router switched off.
+    if technique is not None and (
+        technique.phase is None
+        or technique.outcome not in (TechniqueOutcome.OFFERED, TechniqueOutcome.ACCEPTED)
+    ):
+        technique = None
+
     tapped = find_tapped_prompt(history, content)
     offer = pending_offer(history)
+    if tapped and offer and tapped.label.strip().lower() == TELL_ME_MORE_LABEL.lower():
+        return await _explain_offer(conn, ctx, content, offer, client_message_id)
     offered_now = list(ctx.techniques_offered)
     outcome = technique.outcome if technique else None
     accepted_this_turn = False
@@ -228,7 +295,12 @@ async def send(
             reason=f"safety screen: {assessment.category.value if assessment.category else 'unspecified'}",
             reply_text=safety.protocol_for(assessment.category),
             tapped=tapped, client_message_id=client_message_id, settings=settings,
+            updates=updates,
         )
+
+    # Read by the router below and by the capsule repair further down, which needs everything
+    # they have said rather than only this turn.
+    user_texts = [m.content for m in history if m.role is MessageRole.USER] + [content]
 
     # The router narrows the field it is not the caller's job to decide; the model still
     # confirms whatever it offers, and repairs.apply still validates that choice against the
@@ -238,9 +310,12 @@ async def send(
     if (
         technique is None
         and assessment.level is safety.Level.NONE
-        and ctx.thread.message_count // 2 >= ROUTER_MIN_EXCHANGES
+        and (
+            ctx.thread.message_count // 2 >= ROUTER_MIN_EXCHANGES
+            # An imminent action is the one case not worth waiting two exchanges on.
+            or router.urgent(user_texts)
+        )
     ):
-        user_texts = [m.content for m in history if m.role is MessageRole.USER] + [content]
         shortlist = router.shortlist(user_texts, config.registry.activations)
         if shortlist and router.is_confident(shortlist):
             candidate = config.registry.get(shortlist[0].framework_id)
@@ -254,18 +329,32 @@ async def send(
         should_generate_title=wants_title,
         offered=offered_now,
         summary=ctx.summary,
+        memory=ctx.memory,
     )
     model, parameters, routing = composer.model_settings(config)
 
     active_framework = config.registry.get(technique.framework_id) if technique else None
     prefix = context.build(
-        ctx, shortlist=shortlist, framework=active_framework, candidate=candidate
+        ctx, shortlist=shortlist, framework=active_framework, candidate=candidate,
+        history=history, safety_concern=assessment.blocks_framework,
     )
     for_model = (
-        f'User selected: "{tapped.label}". They want to continue the conversation.'
+        f'User tapped the button: "{tapped.label}".'
         if tapped
-        else content
+        else context.disarm(content)
     )
+
+    # Checked here, right before the only paid step, so the safety screen and every free
+    # reply (style opener, "Tell me more") come first and are never refused.
+    if settings.daily_message_limit:
+        sent = await messages_db.count_from_user_since(conn, user_id, hours=24)
+        if sent >= settings.daily_message_limit:
+            raise ServiceError(
+                f"user {user_id} reached the daily limit of {settings.daily_message_limit}",
+                ErrorCategory.RATE_LIMITED,
+                retryable=True,
+                user_message="You've reached today's message limit. Please come back tomorrow.",
+            )
 
     call = await client.complete(
         [{"role": "system", "content": system.text}]
@@ -291,6 +380,7 @@ async def send(
             reason=reply.crisis.reason,
             reply_text=crisis.CRISIS_REPLY,
             tapped=tapped, client_message_id=client_message_id, settings=settings,
+            updates=updates, llm_call_id=call.call_id,
         )
 
     if deferred:
@@ -306,16 +396,44 @@ async def send(
     fixed = repairs.apply(
         reply,
         config.registry,
+        # Everything they have said in this thread, not only this turn: a capsule may mirror
+        # a feeling they named four messages ago, and mani_base.md asks for exactly that.
+        said=" ".join(user_texts),
         already_offered=ctx.techniques_offered,
         current_framework_id=technique.framework_id if technique else None,
         current_phase=technique.phase if technique else None,
         selected_label=tapped.label if tapped else None,
         accepted_this_turn=accepted_this_turn,
         framework_running=outcome is TechniqueOutcome.ACCEPTED,
+        cooldown_passed=context.cooldown_passed(ctx),
+        conversation_style=context.resolve_style(ctx),
         wants_title=wants_title,
     )
+    if assessment.blocks_framework:
+        # A concern pauses the framework rather than ending it: nothing this reply reports
+        # about a stage is applied, and it may not open a new one. The stored state is left
+        # exactly as it was, so the framework resumes from there once the concern has passed.
+        paused = [p.technique for p in fixed.prompts if p.technique]
+        fixed = dataclasses.replace(
+            fixed,
+            framework_id=None,
+            phase=None,
+            prompts=[p for p in fixed.prompts if not p.technique],
+            notes=fixed.notes
+            + ([f"dropped a technique offered on a safety-concern turn: {', '.join(paused)}"]
+               if paused else []),
+        )
     if fixed.notes:
         logger.info("repaired reply on thread %s: %s", ctx.thread.id, "; ".join(fixed.notes))
+    if not fixed.text.strip():
+        # Nothing left to say once leaked metadata was stripped. Refused here as retryable,
+        # rather than by the messages_content_not_empty constraint as an opaque 500.
+        raise ServiceError(
+            f"reply on thread {ctx.thread.id} was empty after repair",
+            ErrorCategory.LLM_UNAVAILABLE,
+            retryable=True,
+            user_message="Mani had trouble responding. Please try again.",
+        )
 
     pair = await messages_db.create_pair(
         conn,
@@ -342,11 +460,11 @@ async def send(
             at_message_count=count_after,
         )
         updates.offer_frameworks.append(new_offer.technique)
-    elif fixed.framework_id and outcome is not None:
+    elif (decided := _decided_framework(fixed.framework_id, outcome, technique)) is not None:
         updates.retire_technique = False
         updates.technique = TechniqueState(
             thread_id=ctx.thread.id,
-            framework_id=fixed.framework_id,
+            framework_id=decided,
             outcome=outcome,
             phase=None if outcome is TechniqueOutcome.DECLINED else fixed.phase,
             at_message_count=(
@@ -356,8 +474,8 @@ async def send(
             ),
             library_offered_since=False,
         )
-        if accepted_this_turn and fixed.framework_id:
-            updates.offer_frameworks.append(fixed.framework_id)
+        if accepted_this_turn:
+            updates.offer_frameworks.append(decided)
     elif accepted_this_turn and tapped and tapped.technique:
         updates.technique = TechniqueState(
             thread_id=ctx.thread.id,
@@ -370,8 +488,8 @@ async def send(
 
     if library_offer is not None:
         updates.library_offered = True
-    if reply.style is not None:
-        updates.style = ResponseStyle(shape=reply.style.shape, voice=reply.style.voice)
+    if fixed.style is not None:
+        updates.style = ResponseStyle(shape=fixed.style.shape, voice=fixed.style.voice)
     if fixed.title:
         updates.title = fixed.title
 
@@ -400,7 +518,6 @@ async def send(
         llm_call_id=call.call_id,
         exercise=exercise,
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
-        clinical_note=reply.clinical_note if settings.ai_debug_mode else None,
     )
 
 
@@ -476,6 +593,63 @@ async def link_call(call_id: uuid.UUID, message_id: uuid.UUID) -> None:
             await asyncio.sleep(LINK_RETRY_DELAY_SECONDS)
 
 
+async def _explain_offer(
+    conn: asyncpg.Connection,
+    ctx: threads.TurnContext,
+    content: str,
+    offer: SmartPrompt,
+    client_message_id: uuid.UUID | str | None,
+) -> Turn:
+    """Answer "Tell me more" with the client's own explanation, and offer the same framework again.
+
+    Fixed wording, so no model call. The offer stays open: its row is untouched, and the new
+    buttons carry the same technique, so tapping "Yes, let's try it" next accepts it as usual.
+    """
+    reply = TELL_ME_MORE[context.resolve_style(ctx)]
+    buttons = [
+        SmartPrompt(label="Yes, let's try it", technique=offer.technique),
+        SmartPrompt(label="I want to keep talking", decline=True),
+    ]
+    pair = await messages_db.create_pair(
+        conn, ctx.thread.id, content, reply,
+        selected_prompt=content.strip(),
+        prompt_options=[b.model_dump(mode="json", exclude_none=True) for b in buttons],
+        client_message_id=client_message_id,
+    )
+    return Turn(
+        message_id=pair.mani_message_id, content=reply, created_at=pair.created_at,
+        prompts=buttons, title=ctx.thread.title,
+    )
+
+
+async def _open_in_style(
+    conn: asyncpg.Connection,
+    ctx: threads.TurnContext,
+    content: str,
+    style: SupportStyle,
+    client_message_id: uuid.UUID | str | None,
+) -> Turn:
+    """Record the chosen style and answer with that style's opening question.
+
+    The client spec gives the opener word for word, so there is nothing to generate: no
+    model call, and the style holds for the rest of the conversation from this turn on.
+    """
+    reply = OPENERS[style.value]
+    pair = await messages_db.create_pair(
+        conn, ctx.thread.id, content, reply,
+        selected_prompt=content.strip(), client_message_id=client_message_id,
+    )
+    await threads.apply(
+        conn, ctx.thread.id, ctx.thread.user_id, threads.ThreadUpdates(conversation_style=style)
+    )
+    return Turn(
+        message_id=pair.mani_message_id,
+        content=reply,
+        created_at=pair.created_at,
+        title=ctx.thread.title,
+    )
+
+
 async def _handle_crisis(
     conn: asyncpg.Connection,
     ctx: threads.TurnContext,
@@ -486,6 +660,8 @@ async def _handle_crisis(
     tapped: SmartPrompt | None,
     client_message_id: uuid.UUID | str | None,
     settings,
+    updates: threads.ThreadUpdates,
+    llm_call_id: uuid.UUID | None = None,
 ) -> Turn:
     """Store the turn, flag the thread, and answer with something a person can read.
 
@@ -493,6 +669,9 @@ async def _handle_crisis(
     screen went blank at the one moment it mattered most. Called from two places: the
     deterministic safety screen, before any model call, and the model's own judgment,
     reported through the reply schema - either way the thread locks the same way.
+
+    No exercise is handed over here. The thread is about to lock one way, so an exercise
+    would reach someone who cannot ask a single question about it.
     """
     logger.warning("crisis signal on thread %s", ctx.thread.id)
 
@@ -505,6 +684,11 @@ async def _handle_crisis(
         client_message_id=client_message_id,
     )
     await threads.mark_crisis(conn, ctx.thread.id, reason, pair.user_message_id)
+    # A crisis turn is still a turn: whatever it already decided has to land. Today that is
+    # a framework that completed on this very turn - without this the row keeps its phase
+    # with outcome 'accepted', so the database claims a technique is still mid-flight on a
+    # thread nobody can return to.
+    await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
 
     return Turn(
         message_id=pair.mani_message_id,
@@ -514,6 +698,7 @@ async def _handle_crisis(
         title=ctx.thread.title,
         crisis_detected=True,
         crisis_blocks_chat=settings.crisis_blocks_chat,
+        llm_call_id=llm_call_id,
     )
 
 
@@ -530,7 +715,8 @@ async def start_thread(
         profile = await profiles.get(conn, claims.user_id)
         returning = await _has_earlier_thread(conn, claims.user_id, thread.id)
         await messages_db.create_greeting(
-            conn, thread.id, greeting(profile.nickname if profile else None, returning)
+            conn, thread.id, greeting(profile.nickname if profile else None, returning),
+            prompt_options=STYLE_OPTIONS,
         )
     return thread, created
 

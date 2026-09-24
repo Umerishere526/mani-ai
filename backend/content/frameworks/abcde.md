@@ -3,7 +3,7 @@ id: abcde
 name: ABCDE
 summary: "Walk an activating event through belief, consequence, evidence, and a more balanced belief."
 display_order: 1
-phases: [offering, activate, belief, consequence, examine, balanced, somatic, closing]
+phases: [offering, activate, belief, consequence, examine, balanced, closing, somatic]
 activation:
   central_indication: >-
     A specific event triggered a belief that is now producing an emotional or behavioural
@@ -46,7 +46,6 @@ activation:
     - "i know i will fail again"
     - "nothing will ever improve"
     - "has no respect for me"
-    - "did not answer because"
     - "because nobody likes me"
   redirects:
     - signal: "Nobody cares about me, and I want a quick way to look at that thought."
@@ -79,8 +78,8 @@ stages:
       - when: "the user declines"
         reply: "You do not want to use a framework. What would be most helpful to talk through?"
     ask:
-      supportive: "This one event has come to mean something much larger about you. Would it help to look at it together?"
-      reflective: "You believe this event proves you failed. Would it help to look at what happened, what you believe it means, and how that belief is affecting you?"
+      supportive: "Would it help to look at it together, one step at a time?"
+      reflective: "Would it help to look at what happened, what you took it to mean, and how that has affected you?"
       direct: "You want to determine whether that conclusion fits what happened. Would you like to work through it?"
   activate:
     purpose: "Identify the specific event without adding assumptions, explanations, or motives."
@@ -98,9 +97,9 @@ stages:
       - when: "event too broad - \"Everything went wrong.\""
         reply: "Several things went wrong. Which event do you want to examine?"
     ask:
-      supportive: "You believe your manager wanted you to fail. What did she say or do?"
-      reflective: "You understood her actions as wanting you to fail. What happened before you reached that conclusion?"
-      direct: "You concluded that she wanted you to fail. What are the facts of what happened?"
+      supportive: "Can you tell me what happened? What did they say or do?"
+      reflective: "What happened, before you reached that conclusion?"
+      direct: "What are the facts of what happened?"
   belief:
     purpose: "Identify what the user believes the event means."
     listen_for: "The conclusion, prediction, expectation, or judgment the user attached to the event."
@@ -117,9 +116,9 @@ stages:
       - when: "several beliefs at once"
         reply: "Several thoughts came at once. Which one affected you most?"
     ask:
-      supportive: "You felt embarrassed. What made the event feel embarrassing? - the feeling word should match what the user named, at the same weight, in their word or a fair synonym"
-      reflective: "You felt embarrassed. What were you telling yourself at that point?"
-      direct: "You felt embarrassed. What belief was behind that?"
+      supportive: "When that happened, what did it seem to say about you?"
+      reflective: "What were you telling yourself at that point?"
+      direct: "What belief was behind your reaction?"
   consequence:
     purpose: "Identify how believing that affected what the user felt, did, avoided, or wanted to do."
     listen_for: "What changed in emotions, behaviour, avoidance, or intended response after believing the thought."
@@ -154,7 +153,7 @@ stages:
       - when: "no contrary evidence comes to mind - \"Nothing challenges it.\""
         reply: "Nothing comes to mind yet. Has anything happened that does not fit the belief? - may refer to information already given, e.g. \"You mentioned that she asked you to lead another project. How does that fit with the belief?\" - never invent evidence"
     ask:
-      supportive: "She has also trusted you with important work. How does that affect the original belief?"
+      supportive: "What else do you know that does not fit that belief?"
       reflective: "That evidence does not fully fit the original belief. What does it suggest instead?"
       direct: "That evidence challenges the original belief. What conclusion do the full facts support?"
   balanced:
@@ -177,17 +176,6 @@ stages:
       supportive: "You can recognize the mistake without defining yourself by it. What would feel fairer and still true?"
       reflective: "The full evidence is different from the original conclusion. What belief holds all of it?"
       direct: "The original belief is broader than the facts. What do the facts support?"
-  somatic:
-    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
-    boundaries:
-      - "must not summarize ABCDE before asking the somatic question"
-    if_unclear:
-      - when: "the user declines the somatic check-in"
-        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
-    ask:
-      supportive: "You said this belief is easier to accept. Would you like to notice what is happening in your body? - use \"easier to accept\" only if the user said it"
-      reflective: "You are seeing the event differently now. What do you notice in your body? - use \"differently\" only if the user identified a change"
-      direct: "You have reached a belief that fits the facts. What do you notice in your body now?"
   closing:
     purpose: "Confirm completion in the user's own terms, without declaring that the framework worked."
     ready_when: >-
@@ -201,9 +189,20 @@ stages:
       - "must not summarize the completed framework"
       - "must not tell the user the framework worked"
     ask:
-      supportive: "This belief feels fairer to what happened. How is it sitting with you? - use \"feels fairer\" only when the user used similar language"
-      reflective: "The new belief includes the full evidence. What changes when you see it this way?"
-      direct: "This belief is supported by the facts you identified. Does it feel accurate?"
+      supportive: "How is that belief sitting with you now?"
+      reflective: "What changes, if anything, when you see it this way?"
+      direct: "Does that belief fit what happened?"
+  somatic:
+    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
+    boundaries:
+      - "must not summarize ABCDE before asking the somatic question"
+    if_unclear:
+      - when: "the user declines the somatic check-in"
+        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
+    ask:
+      supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
+      reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"
+      direct: "Before we move on, let's check in. What are you noticing in your body right now compared with when we started?"
 ---
 
 # ABCDE

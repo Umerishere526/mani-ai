@@ -3,7 +3,7 @@ id: dbt_stop
 name: DBT STOP
 summary: "Pause an impulsive action before it happens, observe, and choose an intentional response - with MANI throughout."
 display_order: 6
-phases: [offering, stop, pause, observe, proceed, somatic, closing]
+phases: [offering, stop, pause, observe, proceed, closing, somatic]
 activation:
   central_indication: >-
     The user is about to act - send, post, call, confront, decide - and needs help pausing
@@ -27,6 +27,7 @@ activation:
     - "The user needs to choose a values-aligned direction"
     - "The user is already able to respond intentionally"
     - "A medical emergency is present, or the safety protocol is required"
+  contraindications:
     - "The intended action involves suicide, self-harm, harm to another person, overdose, immediate danger, or inability to remain safe - the safety protocol, not STOP"
     - "The action itself is protective - leaving, getting away from someone, calling emergency services, or seeking medical help. STOP exists to interrupt a regrettable action, and pausing a protective one is the same failure with the direction reversed: it delays the person from doing the thing that helps"
   # Short fragments, not full example sentences - see abcde.md's activation block for why.
@@ -184,17 +185,6 @@ stages:
       supportive: "You still want to respond, but you do not want to send this version. What response would work better for you?"
       reflective: "The urge remains, but you can choose what happens next. What response fits what you want to accomplish?"
       direct: "You are choosing not to send this version. What will you do next?"
-  somatic:
-    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
-    boundaries:
-      - "must not summarize STOP before asking the somatic question"
-    if_unclear:
-      - when: "the user declines the somatic check-in"
-        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
-    ask:
-      supportive: "You are choosing to remain paused. Would you like to notice what is happening in your body?"
-      reflective: "The urge is present, but you are no longer acting on it immediately. What do you notice in your body?"
-      direct: "The message will remain unsent for now. What do you notice in your body?"
   closing:
     purpose: "Confirm completion in the user's own terms, without claiming the user has calmed down or made the correct decision."
     ready_when: >-
@@ -207,9 +197,20 @@ stages:
       - "must not tell the user they have calmed down or made the correct decision"
       - "must not summarize the completed framework"
     ask:
-      supportive: "You chose to leave the message unsent for now. How is that choice sitting with you?"
-      reflective: "The urge remains, but you are choosing how to respond. What changes when the action is no longer immediate?"
-      direct: "You will leave the message unsent and review it tomorrow. Is that your next step?"
+      supportive: "How is that choice sitting with you?"
+      reflective: "What changes when the action is no longer immediate?"
+      direct: "Is that your next step?"
+  somatic:
+    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
+    boundaries:
+      - "must not summarize STOP before asking the somatic question"
+    if_unclear:
+      - when: "the user declines the somatic check-in"
+        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
+    ask:
+      supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
+      reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"
+      direct: "Before we move on, let's check in. What are you noticing in your body right now compared with when we started?"
 ---
 
 # DBT STOP

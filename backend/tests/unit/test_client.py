@@ -4,8 +4,12 @@
 from __future__ import annotations
 
 import uuid
+from types import SimpleNamespace
 
+import openai
 import pytest
+from openai.types import CompletionUsage
+from openai.types.chat import ChatCompletion
 
 from mani.config import Settings
 from mani.db import llm_calls
@@ -32,7 +36,10 @@ class FakeRunnable:
 
     async def ainvoke(self, messages: list[dict]) -> dict:
         self.calls += 1
-        return self._results[min(self.calls - 1, len(self._results) - 1)]
+        result = self._results[min(self.calls - 1, len(self._results) - 1)]
+        if isinstance(result, BaseException):
+            raise result
+        return result
 
 
 def valid(text: str = "hi") -> dict:
@@ -233,3 +240,57 @@ async def test_a_provider_error_is_not_retried_by_the_schema_loop(monkeypatch, r
 
     assert runnable.calls == 1
     assert [c["outcome"] for c in recorded] == [llm_calls.Outcome.PROVIDER_ERROR]
+
+
+def cut_off(output_tokens: int = 2048) -> openai.LengthFinishReasonError:
+    """What the SDK raises from inside the model step when the reply hits max_tokens.
+
+    Raised, not returned: with a response_format LangChain calls the SDK's parse(), which
+    validates before LangChain's own parser ever sees the reply, so parsing_error stays
+    empty and the failure arrives as an exception.
+    """
+    return openai.LengthFinishReasonError(
+        completion=ChatCompletion(
+            id="x", choices=[], created=0, model="m", object="chat.completion",
+            usage=CompletionUsage(
+                prompt_tokens=100, completion_tokens=output_tokens,
+                total_tokens=100 + output_tokens,
+            ),
+        )
+    )
+
+
+async def test_a_reply_cut_off_by_the_token_limit_is_retried(monkeypatch, recorded):
+    runnable = FakeRunnable(cut_off(), valid("second try"))
+    install(monkeypatch, runnable)
+
+    call = await client.complete(
+        [{"role": "user", "content": "hi"}], Reply, model="m",
+        purpose=llm_calls.Purpose.CHAT, settings=settings(),
+    )
+
+    assert call.value.text == "second try"
+    assert runnable.calls == 2
+    failed = recorded[0]
+    assert failed["outcome"] is llm_calls.Outcome.SCHEMA_INVALID
+    # The cut-off attempt was generated and billed in full; recording 0 would hide it.
+    assert failed["usage"].output_tokens == 2048
+
+
+async def test_a_failed_second_attempt_does_not_repeat_the_first_attempts_tokens(
+    monkeypatch, recorded
+):
+    billed = SimpleNamespace(usage_metadata={"input_tokens": 100, "output_tokens": 20})
+    install(monkeypatch, FakeRunnable(
+        {"raw": billed, "parsed": None, "parsing_error": "bad json"},
+        RuntimeError("connection reset"),
+    ))
+
+    with pytest.raises(ServiceError):
+        await client.complete(
+            [{"role": "user", "content": "hi"}], Reply, model="m",
+            purpose=llm_calls.Purpose.CHAT, settings=settings(),
+        )
+
+    assert recorded[-1]["outcome"] is llm_calls.Outcome.PROVIDER_ERROR
+    assert recorded[-1]["usage"] == llm_calls.Usage()

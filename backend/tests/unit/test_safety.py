@@ -30,6 +30,12 @@ def test_an_explicit_statement_is_a_crisis(text, category):
         "I have everything ready",
         "I do not think I will be here tomorrow",
         "He is outside, and I think he is going to hurt me",
+        # Passive ideation - no plan, no method, but a wish not to be. Added on muhammad's
+        # decision (2026-09-23) at concern level, pending the client's clinical wording.
+        "it breaks me inside and i just want to disappear.",
+        "to disappear from their lives it i didn't exists.",  # a real message, typos and all
+        "I wish I didn\u2019t exist",
+        "I wish I had never been born",
     ],
 )
 def test_an_indirect_statement_asks_rather_than_locks(text):
@@ -52,6 +58,8 @@ def test_an_indirect_statement_asks_rather_than_locks(text):
         "I cannot do this anymore",
         "Work is killing me",
         "My chest feels tight and my thoughts are racing",
+        "My keys keep disappearing and it drives me mad",
+        "I did not exist on social media until last year",
     ],
 )
 def test_ordinary_distress_does_not_fire_at_all(text):
@@ -65,6 +73,23 @@ def test_ordinary_distress_does_not_fire_at_all(text):
 def test_a_contraction_is_matched_the_same_as_its_expansion():
     assert screen("I can't keep myself safe").level is Level.CRISIS
     assert screen("I cannot keep myself safe").level is Level.CRISIS
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I can\u2019t keep myself safe",  # iOS smart punctuation, the default on a phone
+        "I can\u2018t keep myself safe",
+        "I cant keep myself safe",  # typed with no apostrophe at all
+    ],
+)
+def test_a_contraction_typed_on_a_phone_is_matched_the_same(text):
+    assert screen(text).level is Level.CRISIS
+
+
+def test_an_indirect_statement_typed_on_a_phone_still_asks():
+    assert screen("I don\u2019t want to be here anymore").level is Level.CONCERN
+    assert screen("I dont want to be here anymore").level is Level.CONCERN
 
 
 def test_punctuation_does_not_hide_a_match():

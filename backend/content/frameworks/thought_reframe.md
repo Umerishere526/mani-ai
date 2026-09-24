@@ -3,7 +3,7 @@ id: thought_reframe
 name: Thought Reframe
 summary: "Surface one painful thought, examine it against the facts, and create a believable reframe."
 display_order: 2
-phases: [offering, thought, significance, facts, alternative, reframe, somatic, closing]
+phases: [offering, thought, significance, facts, alternative, reframe, closing, somatic]
 activation:
   central_indication: >-
     One specific painful thought or interpretation is intensifying distress, and the user wants
@@ -27,6 +27,7 @@ activation:
     - "The user needs to choose how to act while uncertainty remains"
     - "The user cannot engage in reflective questions"
     - "A safety concern requires the approved safety protocol"
+  contraindications:
     - "The thought keeps returning as a repeated request to check whether it is true, especially about harm, contamination, or identity - in OCD this checking is the compulsion, and answering it again only feeds the loop it is trying to escape"
   # Short fragments, not full example sentences - see abcde.md's activation block for why.
   strong_signals:
@@ -76,7 +77,7 @@ stages:
         reply: "You do not want to use a framework. What would be most helpful to talk through? - and does not offer another framework immediately"
     ask:
       supportive: "This thought keeps returning. Would it help to look at it together?"
-      reflective: "You are treating her silence as proof that she does not care. Would it help to examine what supports that and what else may be true?"
+      reflective: "Would it help to look at what supports that thought and what else may be true?"
       direct: "You want to know whether this conclusion is accurate. Would you like to test it against the facts?"
   thought:
     purpose: "Isolate one specific thought in the user's own language."
@@ -97,8 +98,8 @@ stages:
         reply: "That's about who you are, not just today. What happened that brought it up?"
     ask:
       supportive: "This is the thought that keeps returning. Is this the one you want to look at together?"
-      reflective: "You are interpreting her silence as a lack of care. Is that the thought you want to examine?"
-      direct: "The conclusion is that she does not care. Is that the thought you want to test?"
+      reflective: "Is that the thought you want to look at?"
+      direct: "Is that the thought you want to test?"
   significance:
     purpose: "Understand what makes the thought matter, without labelling their experience."
     listen_for: "Why the thought matters and what the user believes it says about themselves, another person, or the future."
@@ -112,9 +113,9 @@ stages:
       - when: "a feeling word instead - \"Rejected.\""
         reply: "You used the word 'rejected.' What thought is connected to it? - uses the user's word, adds no other label"
     ask:
-      supportive: "It has come to mean that you do not matter to her. What makes that thought difficult for you?"
-      reflective: "Her silence has become evidence that you do not matter. What gives it that meaning?"
-      direct: "The conclusion is that you do not matter to her. What is that conclusion based on?"
+      supportive: "What makes that thought difficult for you?"
+      reflective: "What gives it that meaning for you?"
+      direct: "What is that conclusion based on?"
   facts:
     purpose: "Separate what the user knows from what they assume or predict."
     listen_for: "What supports the thought, what does not, what is assumed, what remains unknown."
@@ -133,9 +134,9 @@ stages:
       - when: "the thought is supported by an established fact - \"She told me she does not want the friendship.\""
         reply: "She directly ended the friendship. What thought about yourself or your future do you want help examining? - does not dispute the established fact"
     ask:
-      supportive: "She usually responds sooner. What else do you know about the situation?"
-      reflective: "Her late response supports part of your concern. What does not support the full conclusion?"
-      direct: "Her response is late. What facts show that she does not care?"
+      supportive: "What else do you know about the situation?"
+      reflective: "What does not support the full conclusion?"
+      direct: "What facts support that conclusion?"
   alternative:
     purpose: "Help the user recognize the original interpretation may not be the only possibility."
     listen_for: "At least one credible possibility that does not deny known facts."
@@ -175,20 +176,9 @@ stages:
       - when: "rates it low - \"Maybe thirty percent.\""
         reply: "Thirty isn't there yet. What would need to change in it to make it feel truer?"
     ask:
-      supportive: "You know she has not answered, but you do not know why. What thought would be fairer to what you know?"
+      supportive: "What thought would be fairer to what you know?"
       reflective: "The original thought treats one explanation as certain. What belief includes the uncertainty?"
       direct: "The reason remains unknown. What conclusion do the facts support?"
-  somatic:
-    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
-    boundaries:
-      - "must not summarize Thought Reframe before asking the somatic question"
-    if_unclear:
-      - when: "the user declines the somatic check-in"
-        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
-    ask:
-      supportive: "This thought is easier for you to hold. Would you like to notice what is happening in your body? - use \"easier\" only if the user said it is easier"
-      reflective: "The original thought is no longer the only interpretation. What do you notice in your body?"
-      direct: "You have a thought that better fits the facts. What do you notice in your body now?"
   closing:
     purpose: "Confirm completion in the user's own terms, without declaring that the framework worked."
     ready_when: >-
@@ -202,9 +192,20 @@ stages:
       - "must not summarize the completed framework"
       - "must not tell the user the framework worked"
     ask:
-      supportive: "You can leave the reason unknown without deciding that she does not care. How is that thought sitting with you?"
-      reflective: "The new thought includes what you know and what remains unknown. What changes when you see it this way?"
-      direct: "The new thought fits the available facts. Does it feel accurate?"
+      supportive: "How is that thought sitting with you now?"
+      reflective: "What changes, if anything, when you see it this way?"
+      direct: "Does that thought fit what you know?"
+  somatic:
+    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
+    boundaries:
+      - "must not summarize Thought Reframe before asking the somatic question"
+    if_unclear:
+      - when: "the user declines the somatic check-in"
+        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
+    ask:
+      supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
+      reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"
+      direct: "Before we move on, let's check in. What are you noticing in your body right now compared with when we started?"
 ---
 
 # Thought Reframe

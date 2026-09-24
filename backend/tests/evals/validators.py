@@ -6,23 +6,14 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-# The feeling words the specifications are strict about: a reply may use one only if the
-# person used it first. "MANI never introduces a feeling word the user did not use."
-FEELING_WORDS = frozenset(
-    {
-        "abandoned", "afraid", "angry", "anxious", "ashamed", "betrayed", "broken",
-        "crushed", "defeated", "dejected", "depressed", "desperate", "devastated",
-        "disappointed", "distressed", "embarrassed", "exhausted", "fearful", "frustrated",
-        "furious", "guilty", "helpless", "hopeless", "humiliated", "hurt", "insecure",
-        "isolated", "lonely", "lost", "miserable", "overwhelmed", "panicked", "rejected",
-        "resentful", "sad", "scared", "stressed", "terrified", "trapped", "unloved",
-        "unwanted", "upset", "worried", "worthless",
-        # The adjectival forms, which describe the situation rather than the person and are
-        # the shape a capsule label usually takes: "It's frustrating", "It's exhausting".
-        "depressing", "devastating", "draining", "embarrassing", "exhausting",
-        "frustrating", "humiliating", "isolating", "overwhelming", "terrifying",
-        "upsetting", "worrying",
-    }
+# The capsule vocabulary lives beside the code that enforces it, so the eval and the runtime
+# cannot drift into disagreeing about which words are which.
+from mani.chat.repairs import (
+    FEELING_WORDS,
+    MAX_CAPSULE_WORDS,
+    SELF_JUDGMENTS,
+    WORD,
+    words,
 )
 
 # Clinical vocabulary. The specifications forbid naming the user's thinking, in every
@@ -55,11 +46,20 @@ ASSUMED_MOTIVE = (
 ADDED_SCALE = (
     "a lot", "so much", "weighing on you", "that is tough", "that's tough",
     "that is hard", "that's hard", "so exhausting", "must be so", "such a big",
-    "really significant", "so heavy", "overwhelming",
+    "really significant", "so heavy", "overwhelming", "burden",
 )
 
-_WORD = re.compile(r"[a-z']+")
-_INTERROGATIVE = re.compile(r"\b(what|how|why|when|where|which|who)\b", re.IGNORECASE)
+# A question start, not any occurrence of the word: the specification's own bad example
+# ("What happened, what did you think, how did you feel, and what evidence challenges it?")
+# is a comma-separated stack of clauses each beginning with one of these words. Matching
+# every occurrence anywhere in the sentence also caught "who" as a relative pronoun inside
+# a clause ("the people who messaged you") and "when" opening a single lead-in clause before
+# one real question - neither is a second question. Requiring the word to sit at the very
+# start of the reply, or right after a clause-separating comma, is the same shape the
+# specification's own example has and excludes both false positives.
+_INTERROGATIVE = re.compile(
+    r"(?:^|,\s*(?:and\s+)?)\s*(what|how|why|when|where|which|who)\b", re.IGNORECASE
+)
 
 # "2-4 short sentences typical", from response_format.md's own length constraint. Past
 # this a reply is teaching rather than responding, which every framework forbids.
@@ -82,10 +82,6 @@ class Finding:
         return f"{self.rule}: {self.detail}"
 
 
-def _words(text: str) -> set[str]:
-    return set(_WORD.findall(text.lower()))
-
-
 def _hits(text: str, phrases: tuple[str, ...]) -> list[str]:
     lowered = text.lower()
     return [phrase for phrase in phrases if phrase in lowered]
@@ -97,8 +93,8 @@ def introduced_feelings(reply: str, user_message: str) -> list[str]:
     Present in the reply and absent from the message - which is the shape that matters.
     Checking the reply alone would flag the mirroring the same prompt asks for.
     """
-    said = _words(user_message)
-    return sorted(w for w in _words(reply) & FEELING_WORDS if w not in said)
+    said = words(user_message)
+    return sorted(w for w in words(reply) & FEELING_WORDS if w not in said)
 
 
 def question_count(reply: str) -> int:
@@ -117,7 +113,7 @@ def _shared_prefix(first: str, second: str) -> list[str]:
     fixed length: "I'm here." and "I'm here with you." share an opening, and comparing the
     first three words of each would call them different.
     """
-    a, b = _WORD.findall(first.lower()), _WORD.findall(second.lower())
+    a, b = WORD.findall(first.lower()), WORD.findall(second.lower())
     shared: list[str] = []
     for x, y in zip(a, b, strict=False):
         if x != y:
@@ -144,16 +140,7 @@ def repeated_openers(replies: list[str]) -> list[Finding]:
     return findings
 
 
-# Judgments a person may hold about themselves but must never be handed as a button to press.
-# Observed live: a reply offered "I'm overthinking it" as a capsule.
-SELF_JUDGMENTS = (
-    "overthinking", "over thinking", "being dramatic", "too sensitive", "overreacting",
-    "over reacting", "being silly", "being stupid", "my fault", "i'm weak", "i am weak",
-    "i'm broken", "i am broken", "not enough", "being needy", "being difficult",
-)
-
 MAX_CAPSULES = 3
-MAX_CAPSULE_WORDS = 4
 
 
 def check_capsules(labels: list[str], user_message: str) -> list[Finding]:
@@ -164,10 +151,10 @@ def check_capsules(labels: list[str], user_message: str) -> list[Finding]:
     situation, or judge them. Checking only the reply text misses it entirely.
     """
     findings: list[Finding] = []
-    said = _words(user_message)
+    said = words(user_message)
 
     for label in labels:
-        introduced = sorted(w for w in _words(label) & FEELING_WORDS if w not in said)
+        introduced = sorted(w for w in words(label) & FEELING_WORDS if w not in said)
         if introduced:
             findings.append(
                 Finding("capsule puts feelings in their mouth", f"{label!r}: {introduced}")
@@ -235,8 +222,54 @@ def check(reply: str, user_message: str, *, in_framework: bool = False) -> list[
     if in_framework and questions == 0:
         findings.append(Finding("standalone mirror", "no question, inside a framework"))
 
-    words = len(reply.split())
-    if words > MAX_WORDS:
-        findings.append(Finding("long explanation", f"{words} words, teaching not responding"))
+    word_count = len(reply.split())
+    if word_count > MAX_WORDS:
+        findings.append(
+            Finding("long explanation", f"{word_count} words, teaching not responding")
+        )
 
+    return findings
+
+
+_ANNOUNCED_PRESENCE = ("i'm here", "i am here", "i'm listening", "i am listening",
+                       "i'm not going anywhere")
+
+
+def style_findings(reply: str, style: str) -> list[Finding]:
+    """The rules in mani_base's "The three styles" that a reply can be checked against.
+
+    Saying presence out loud is a Supportive move only. Reflective shows it listened by what it
+    reflects, never by "I hear you". Direct may open on "I" - the client's own Direct lines are
+    "I'm sorry you're feeling this way" and "I have a structured approach" - just not on
+    announcing that it is there, which the presence rule already catches.
+    """
+    findings: list[Finding] = []
+    lowered = reply.lower().replace("\u2019", "'")
+    if style != "supportive":
+        announced = [p for p in _ANNOUNCED_PRESENCE if p in lowered]
+        if announced:
+            findings.append(Finding("off-style", f"presence announced outside Supportive: {announced}"))
+    if style == "reflective" and "i hear you" in lowered:
+        findings.append(Finding("off-style", "a Reflective reply used \"I hear you\""))
+    return findings
+
+
+_INVITES = re.compile(r"\b(tell me|say more|walk me through)\b", re.IGNORECASE)
+
+
+def unasked_before_offer(replies: list[tuple[str, bool]]) -> list[Finding]:
+    """Replies that ask nothing while Mani is still understanding the issue.
+
+    The client's cadence spends the first two to four exchanges asking, checking and
+    confirming. `replies` pairs each reply with whether it offered a framework; every reply up
+    to and including the first offer must carry a question - the offer's own being its
+    permission question.
+    """
+    findings: list[Finding] = []
+    for text, offered in replies:
+        # An invitation asks too: the client's own "Tell me what is happening right now."
+        if "?" not in text and not _INVITES.search(text):
+            findings.append(Finding("stalled", f"no question before an offer: {text[:60]!r}"))
+        if offered:
+            break
     return findings

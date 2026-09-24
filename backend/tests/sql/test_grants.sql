@@ -193,6 +193,41 @@ select pg_temp.want('the old two-argument greeting function is gone, not just re
 select pg_temp.want('the backend can clear technique state',
   has_table_privilege('mani_service', 'public.thread_technique_state', 'DELETE'), true);
 
+-- Both feed the model: the summary goes into the system prompt, technique state into [ctx].
+select pg_temp.want('a user cannot write their own summary',
+  has_table_privilege('authenticated', 'public.thread_summaries', 'INSERT')
+  or has_table_privilege('authenticated', 'public.thread_summaries', 'UPDATE')
+  or has_any_column_privilege('authenticated', 'public.thread_summaries', 'UPDATE'), false);
+
+select pg_temp.want('a user cannot write their own technique state',
+  has_table_privilege('authenticated', 'public.thread_technique_state', 'INSERT')
+  or has_table_privilege('authenticated', 'public.thread_technique_state', 'UPDATE')
+  or has_any_column_privilege('authenticated', 'public.thread_technique_state', 'UPDATE'), false);
+
+select pg_temp.want('the backend can write summaries and technique state',
+  has_table_privilege('mani_service', 'public.thread_summaries', 'INSERT')
+  and has_table_privilege('mani_service', 'public.thread_summaries', 'UPDATE')
+  and has_table_privilege('mani_service', 'public.thread_technique_state', 'INSERT')
+  and has_table_privilege('mani_service', 'public.thread_technique_state', 'UPDATE'), true);
+
+-- Topics are written by the person and pasted into every system prompt.
+select pg_temp.want('profile topics are bounded in the database, not only in the API',
+  exists (select 1 from pg_constraint where conname = 'profiles_topics_bounded'), true);
+
+-- Health data about the person, backend-only. Not even its owner reads it through the API.
+select pg_temp.want('a user holds nothing on the memory kept about them',
+  has_table_privilege('authenticated', 'admin.user_memory', 'SELECT')
+  or has_table_privilege('authenticated', 'admin.user_memory', 'INSERT')
+  or has_table_privilege('authenticated', 'admin.user_memory', 'UPDATE')
+  or has_table_privilege('anon', 'admin.user_memory', 'SELECT'), false);
+
+select pg_temp.want('the backend can read and write the memory',
+  has_table_privilege('mani_service', 'admin.user_memory', 'SELECT')
+  and has_table_privilege('mani_service', 'admin.user_memory', 'UPDATE'), true);
+
+select pg_temp.want('the memory is row-scoped even for the backend',
+  (select relrowsecurity from pg_class where oid = 'admin.user_memory'::regclass), true);
+
 select pg_temp.want('a user cannot delete technique state directly',
   has_table_privilege('authenticated', 'public.thread_technique_state', 'DELETE'), false);
 
@@ -249,7 +284,8 @@ begin
       join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
        and p.proname in ('create_message_pair', 'mark_thread_crisis', 'create_greeting',
-                         'touch_updated_at', 'sync_thread_message_count')
+                         'touch_updated_at', 'sync_thread_message_count',
+                         'create_profile_for_new_user')
   loop
     -- An unpinned search_path on a definer function lets a caller shadow a table name
     -- and run their own code with the owner's privileges.
@@ -307,5 +343,21 @@ begin
     raise exception 'FAIL: foreign keys with no index: %', missing;
   end if;
   raise notice 'PASS: every foreign key is indexed';
+end
+$$;
+
+-- purpose used to be free text holding the same three values mani/db/llm_calls.py's
+-- Purpose enum has always been limited to - migration 006 made the database's contract
+-- match the code's. Enum violations raise invalid_text_representation, not
+-- check_violation, since this is a real Postgres type now, not a CHECK constraint.
+do $$
+begin
+  begin
+    insert into admin.llm_calls (purpose, model, outcome) values ('nonsense', 'x', 'ok');
+    raise exception 'FAIL: an off-list llm_calls.purpose was stored';
+  exception
+    when invalid_text_representation then
+      raise notice 'PASS: llm_calls.purpose is pinned to the set the code validates';
+  end;
 end
 $$;

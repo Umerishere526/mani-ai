@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import pathlib
+import re
 
 import pytest
 
+from mani.chat import repairs
 from tests.evals import validators
 
 CONTENT_DIR = pathlib.Path(__file__).resolve().parents[2] / "content"
@@ -133,6 +135,27 @@ def test_a_standalone_mirror_is_caught_only_inside_a_framework():
     assert validators.check(mirror, "I avoided her.", in_framework=False) == []
 
 
+def test_a_lead_in_clause_is_not_counted_as_a_second_question():
+    """Observed live in the eval harness: 'who' inside a relative clause and the lead-in
+    'When' were both counted as separate questions, flagging a single real question."""
+    reply = (
+        "When you think about the people who messaged you, what is the most prominent "
+        "thought that comes to mind?"
+    )
+    assert validators.check(reply, "", in_framework=True) == []
+
+
+def test_a_comma_separated_stack_of_questions_is_still_caught():
+    """The specification's own forbidden example - kept as an explicit regression alongside
+    the parametrized FORBIDDEN case, since this is exactly the shape the fix must not lose."""
+    reply = (
+        "What happened, what did you think, how did you feel, and what evidence "
+        "challenges it?"
+    )
+    findings = validators.check(reply, "My manager criticized my presentation.", in_framework=True)
+    assert "multiple questions" in {f.rule for f in findings}
+
+
 def test_a_long_explanation_is_caught():
     lecture = " ".join(
         ["People sometimes take criticism as evidence that they are not competent."] * 12
@@ -160,24 +183,32 @@ def test_replies_that_start_differently_are_left_alone():
 
 
 def test_presence_in_words_belongs_to_one_style():
-    """Directive leads and Reflective mirrors; neither expresses care by announcing it. The
-    prompt now says so - this pins the intent so a future edit cannot quietly undo it."""
+    """Direct leads and Reflective mirrors; neither expresses care by announcing it. The
+    prompt now says so - this pins the intent so a future edit cannot quietly undo it.
+
+    Observed live: all three styles opened with "I'm here." The second assertion is the
+    rule that forbids it, and it is pinned here because that failure is what the style
+    plumbing fix exists to end.
+    """
     voice = (PROMPTS_DIR / "mani_base.md").read_text()
-    assert "is a\n**Supportive** move" in voice or "**Supportive** move" in voice
-    assert "off-style, not extra warmth" in voice
+    assert "**Supportive** move only" in voice
+    assert "Never open two replies the same way." in voice
 
 
-def test_every_mirroring_voice_the_schema_allows_is_taught():
-    """The schema asks the model to declare which voice it used. Any value it can return
-    and was never taught is one it will either avoid entirely or use without meaning."""
-    from mani.llm.schema import Style
+def test_every_style_value_the_schema_allows_is_taught():
+    """The schema asks the model to declare the shape and voice it used. Any value it can
+    return and was never taught is one it will either avoid entirely or use without meaning.
 
-    voice_field = Style.model_fields["voice"].description or ""
-    allowed = {w.strip('",.') for w in voice_field.split() if w.startswith('"')}
+    Shapes are taught in a table and voices in bold, so each is pinned to the place that
+    actually defines it rather than to a passing mention elsewhere in the prompt."""
+    from mani.llm.schema import SHAPES, VOICES
+
     voice = (PROMPTS_DIR / "mani_base.md").read_text().lower()
 
-    for name in allowed:
+    for name in VOICES:
         assert f"**{name}**" in voice, f"schema allows voice {name!r}, prompt never teaches it"
+    for name in SHAPES:
+        assert f"| {name} |" in voice, f"schema allows shape {name!r}, prompt never teaches it"
 
 
 def test_a_capsule_that_judges_the_person_is_caught():
@@ -215,3 +246,32 @@ def test_every_framework_still_carries_its_negative_set():
     for path in sorted(FRAMEWORKS_DIR.glob("*.md")):
         body = path.read_text()
         assert "Responses MANI must avoid" in body, f"{path.name} has no negative set"
+
+
+# The words a stage's ask may not carry. Every ask is sent into every conversation that
+# reaches its stage, so a person or detail from a framework's worked example ("her silence",
+# "your manager") is handed to people it has nothing to do with, and an author's note to
+# the writer ("- use X only if ...") can be read back to them.
+_EXAMPLE_PEOPLE = re.compile(
+    r"\b(she|her|he|him|his|manager|boss|sister|brother|mother|father|partner|friend)\b",
+    re.IGNORECASE,
+)
+_AUTHOR_NOTE = re.compile(r" - use | only if | only when ", re.IGNORECASE)
+
+
+def _asks():
+    from scripts.seed import parse_framework
+
+    for path in sorted(FRAMEWORKS_DIR.glob("*.md")):
+        framework = parse_framework(path)
+        for stage, body in framework["stages"].items():
+            for style, text in body["ask"].items():
+                yield f"{path.stem}.{stage}.{style}", text
+
+
+@pytest.mark.parametrize("where,text", list(_asks()))
+def test_a_stage_ask_carries_nothing_from_a_worked_example(where, text):
+    assert not _EXAMPLE_PEOPLE.search(text), f"{where} names someone: {text}"
+    assert not _AUTHOR_NOTE.search(text), f"{where} carries an author note: {text}"
+    feelings = sorted(repairs.words(text) & repairs.FEELING_WORDS)
+    assert not feelings, f"{where} hands them a feeling they may not have named: {feelings}"

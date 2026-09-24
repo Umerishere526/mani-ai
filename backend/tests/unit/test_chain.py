@@ -85,3 +85,14 @@ def test_a_missing_response_costs_nothing_rather_than_raising():
     """A failed call still writes its admin.llm_calls row; it must not fail on the way."""
     empty = chain.usage_from(None)
     assert (empty.input_tokens, empty.output_tokens, empty.cached_input_tokens) == (0, 0, 0)
+
+
+def test_reply_asks_for_its_reasoning_and_style_before_its_text():
+    """Structured output is generated in schema order, so a field after text cannot shape it.
+
+    The opener and repeated-shape checks live in reasoning and style; declared after text,
+    they were written about a reply that already existed.
+    """
+    fields = list(Reply.model_json_schema()["properties"])
+    assert fields.index("reasoning") < fields.index("text")
+    assert fields.index("style") < fields.index("text")
