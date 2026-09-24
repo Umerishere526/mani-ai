@@ -36,6 +36,7 @@ def reset_thread_state(thread: dict, messages: list[dict]) -> None:
 with st.sidebar:
     st.header("Test session")
     name = st.text_input("Test user name", value=st.session_state.get("name", "tester-1"))
+    nickname = st.text_input("Nickname (greeting)", value=st.session_state.get("nickname", ""))
     base_url = st.text_input("API base URL", value=mani.API_BASE_URL)
 
     if st.button("Start / switch user", use_container_width=True):
@@ -48,8 +49,12 @@ with st.sidebar:
             st.stop()
         st.session_state.clear()
         st.session_state.name = name
+        st.session_state.nickname = nickname
         st.session_state.user_id = user_id
         st.session_state.client = mani.ManiClient(token=token, base_url=base_url)
+        if nickname.strip():
+            # Before any chat starts, so the very first greeting already uses it.
+            st.session_state.client.set_profile(nickname.strip())
         st.rerun()
 
     if "client" in st.session_state:
@@ -94,8 +99,12 @@ st.caption(f"user: {st.session_state.name}  ·  thread: {thread['id'][:8]}…")
 
 # The style is chosen the way a person chooses it in the apps: by tapping one of the
 # greeting's three buttons, which the backend turns into the style and its opener.
-if st.session_state.style:
-    st.caption(f"style: {STYLES[st.session_state.style]}")
+framework_state = run(mani.framework_debug_state(thread["id"]))
+caption = [f"style: {STYLES[st.session_state.style]}"] if st.session_state.style else []
+if framework_state and framework_state.get("phase"):
+    caption.append(f"framework: {framework_state['framework_id']} · stage: {framework_state['phase']}")
+if caption:
+    st.caption("  ·  ".join(caption))
 
 # ---------------------------------------------------------------------------
 # The conversation itself
@@ -176,8 +185,19 @@ else:
 with st.sidebar:
     st.divider()
     with st.expander("🔍 Framework state (direct DB read)"):
-        state = run(mani.framework_debug_state(thread["id"]))
-        st.json(state or {"active": False})
+        st.json(framework_state or {"active": False})
+
+    with st.expander("🧠 What Mani remembers (direct DB read)"):
+        memory = run(mani.remembered(st.session_state.user_id))
+        entries = {k: v for k, v in ((memory or {}).get("memory") or {}).items() if v}
+        if entries:
+            for key, values in entries.items():
+                st.markdown(f"**{key.replace('_', ' ').capitalize()}**")
+                for value in values:
+                    st.markdown(f"- {value}")
+            st.caption(f"updated {memory['updated_at']:%H:%M:%S} - folded in when a new chat starts")
+        else:
+            st.caption("Nothing yet. It's folded in when this person starts a new chat.")
 
     with st.expander("💰 Recent calls (direct DB read)"):
         calls = run(mani.recent_call_costs(thread["id"]))

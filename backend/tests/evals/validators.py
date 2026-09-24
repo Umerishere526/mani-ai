@@ -97,8 +97,18 @@ def introduced_feelings(reply: str, user_message: str) -> list[str]:
     return sorted(w for w in words(reply) & FEELING_WORDS if w not in said)
 
 
+# Places the client's own wording asks two questions in one reply, so a second "?" there is
+# the specification, not Mani stacking questions: the Supportive body check-in, and the check
+# plus "what next" that ends every framework (docs/specs/conversational-styles.md).
+_CLIENT_DOUBLE_QUESTIONS = (
+    re.compile(r"can we check in for a moment\?", re.IGNORECASE),
+    re.compile(r"\?[^?]*what would you like to do next\?", re.IGNORECASE),
+)
+
+
 def question_count(reply: str) -> int:
-    return reply.count("?")
+    allowed = sum(1 for pattern in _CLIENT_DOUBLE_QUESTIONS if pattern.search(reply))
+    return max(reply.count("?") - allowed, min(reply.count("?"), 1))
 
 
 # Two shared leading words is an opening, not a coincidence: "I'm here", "You said", "I hear".
@@ -272,4 +282,70 @@ def unasked_before_offer(replies: list[tuple[str, bool]]) -> list[Finding]:
             findings.append(Finding("stalled", f"no question before an offer: {text[:60]!r}"))
         if offered:
             break
+    return findings
+
+
+HANDOFF_BUTTONS = ("chat more", "go to library")
+
+
+def missing_handoff(turns: list[tuple[str | None, list[str]]], messages: list[str] | None = None) -> list[Finding]:
+    """The reply that closes a framework must offer Chat More and Go to Library.
+
+    `turns` pairs the framework phase after each reply with that reply's button labels. The
+    closing reply is the one after the body check-in: the phase goes from `somatic` to cleared.
+    `messages` are what the person sent; if they had already chosen one of the two, the
+    closing reply rightly carries neither.
+    """
+    findings: list[Finding] = []
+    sent = messages or [""] * len(turns)
+    for index, ((before, _), (after, buttons)) in enumerate(zip(turns, turns[1:], strict=False), 1):
+        if sent[index].strip().lower() in HANDOFF_BUTTONS:
+            continue
+        if before == "somatic" and after is None:
+            have = {b.strip().lower() for b in buttons}
+            missing = [b for b in HANDOFF_BUTTONS if b not in have]
+            if missing:
+                findings.append(Finding("no hand-off", f"framework ended without {missing}"))
+    return findings
+
+
+_EARLIER_CHAT = re.compile(
+    r"\b(last time|you mentioned before|earlier you said|you told me before|"
+    r"previous conversation|last conversation|remember when you)\b",
+    re.IGNORECASE,
+)
+
+
+def references_other_chat(reply: str, markers: list[str], said_here: str) -> list[Finding]:
+    """A new chat may be shaped by memory but must never cite the old one.
+
+    `markers` are words only the earlier chat used; one appearing here when the person has
+    not said it in this chat means Mani brought it across.
+    """
+    findings: list[Finding] = []
+    if _EARLIER_CHAT.search(reply):
+        findings.append(Finding("cites another chat", _EARLIER_CHAT.search(reply).group(0)))
+    lowered, said = reply.lower(), said_here.lower()
+    carried = [m for m in markers if m.lower() in lowered and m.lower() not in said]
+    if carried:
+        findings.append(Finding("cites another chat", f"brought across {carried}"))
+    return findings
+
+
+_QUESTION = re.compile(r"[^.!?\n]*\?")
+
+
+def _last_question_words(reply: str) -> set[str]:
+    questions = _QUESTION.findall(reply)
+    return set(re.findall(r"[a-z']+", questions[-1].lower())) if questions else set()
+
+
+def repeated_question(replies: list[str], overlap: float = 0.8) -> list[Finding]:
+    """The same question asked in consecutive replies - how a stalled stage looks to the
+    person. Compared by word overlap, so a light rewording still counts as the same question."""
+    findings: list[Finding] = []
+    for before, after in zip(replies, replies[1:], strict=False):
+        a, b = _last_question_words(before), _last_question_words(after)
+        if a and b and len(a & b) / len(a | b) >= overlap:
+            findings.append(Finding("repeated question", " ".join(sorted(a & b))[:80]))
     return findings

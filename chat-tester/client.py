@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import time
 import uuid
@@ -114,6 +115,10 @@ class ManiClient:
     def list_messages(self, thread_id: str) -> dict[str, Any]:
         return self._call("GET", f"/v1/threads/{thread_id}/messages")
 
+    def set_profile(self, nickname: str) -> dict[str, Any]:
+        """PUT /v1/profile - what onboarding calls, so the greeting can use their name."""
+        return self._call("PUT", "/v1/profile", json={"nickname": nickname})
+
     def set_conversation_style(self, thread_id: str, style: str) -> dict[str, Any]:
         """PATCH /v1/threads/{id} - the same endpoint a style-picker screen would call."""
         return self._call("PATCH", f"/v1/threads/{thread_id}", json={"conversation_style": style})
@@ -154,5 +159,30 @@ async def recent_call_costs(thread_id: str, limit: int = 5) -> list[dict[str, An
             uuid.UUID(thread_id), limit,
         )
         return [dict(r) for r in rows]
+    finally:
+        await conn.close()
+
+
+async def remembered(user_id: str) -> dict[str, Any] | None:
+    """What Mani has folded together about this person across chats - admin.user_memory.
+
+    Same caveat as the reads above: a dev-only window onto state no client response carries,
+    here so a demo can show that a returning person's patterns were kept.
+    """
+    if not DATABASE_URL:
+        return None
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        row = await conn.fetchrow(
+            "select memory, updated_at from admin.user_memory where user_id = $1",
+            uuid.UUID(user_id),
+        )
+        if row is None:
+            return None
+        # A bare asyncpg connection returns jsonb as text; the backend's pool decodes it with a
+        # codec this tool does not register.
+        memory = row["memory"]
+        return {"memory": json.loads(memory) if isinstance(memory, str) else memory,
+                "updated_at": row["updated_at"]}
     finally:
         await conn.close()

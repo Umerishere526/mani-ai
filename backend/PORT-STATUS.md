@@ -528,6 +528,20 @@ Behaviour that was ported deliberately differently, with the reason.
   free fixed replies are never refused. It is **off (0) by default** on muhammad's
   instruction while testing; his number is 300, and it must be set before real traffic.
 
+- **The eval ran scenarios as one shared user,** so scenarios started together landed in the
+  same conversation, and every prompt carried that user's folded memory. Each scenario and
+  style now gets a fresh user.
+- **Frameworks often ended without the client's two choices.** The buttons came mislabeled
+  ("Something else") or not at all. The reply that ends a framework now always carries
+  **Chat More** / **Go to Library**, unless the person has already chosen one.
+- **Thought Reframe could not finish.**
+  - Its first stage waited for a literal "yes" while the person elaborated.
+  - Its reframe stage required a 0-100 rating, which is not in the client's spec.
+
+  Readiness now accepts the person's own words; the rating is removed (muhammad, 2026-09-24).
+- **One transient provider failure (Google AI Studio 503, 1 in 265 calls)** is retried once;
+  a timeout is not.
+
 ## Measured
 
 Real turns against local Supabase and live OpenRouter, `google/gemini-3-flash-preview`.
@@ -602,6 +616,12 @@ a framework walkthrough, about 100 replies: **0 findings**, 9,563 input tokens p
 field is the only thinking paid for. Tried and reverted: sending only purpose, boundaries and ask
 for the next stage. It saved about 130 tokens a framework turn (1%), and in the A/B the stages
 advanced a turn late, which is not a trade worth making on the core flow.
+
+Demo rehearsal, isolated users, 21 scenarios × 3 styles (307 calls, 0 failed):
+- Journeys reach the body check-in and hand off in 7 of 9 runs; the other two ran out of scripted
+  answers, not stalled.
+- No missing hand-offs, and 1 repeated question.
+- 9,425 input tokens a turn, 69% cached, 3.1 s.
 
 The exercise hand-off's tool call, on the turn a framework completes:
 
