@@ -9,9 +9,12 @@ class ErrorCategory(StrEnum):
     LLM_UNAVAILABLE = "llm_unavailable"
     LLM_TIMEOUT = "llm_timeout"
     STORAGE_ERROR = "storage_error"
+    AUTH_PROVIDER_ERROR = "auth_provider_error"
     CONFIG_ERROR = "config_error"
     NOT_FOUND = "not_found"
     INVALID_REQUEST = "invalid_request"
+    # The request contradicts one already made, e.g. a message id reused for a new message.
+    CONFLICT = "conflict"
     # No usable token. Distinct from FORBIDDEN because a client refreshes its session
     # on 401 and gives up on 403 - collapsing the two makes an expired token look like
     # a permission failure and logs the person out instead of renewing them.
@@ -25,9 +28,11 @@ STATUS_BY_CATEGORY = {
     ErrorCategory.LLM_UNAVAILABLE: 502,
     ErrorCategory.LLM_TIMEOUT: 504,
     ErrorCategory.STORAGE_ERROR: 500,
+    ErrorCategory.AUTH_PROVIDER_ERROR: 502,
     ErrorCategory.CONFIG_ERROR: 500,
     ErrorCategory.NOT_FOUND: 404,
     ErrorCategory.INVALID_REQUEST: 422,
+    ErrorCategory.CONFLICT: 409,
     ErrorCategory.UNAUTHENTICATED: 401,
     ErrorCategory.FORBIDDEN: 403,
     ErrorCategory.UNKNOWN: 500,
