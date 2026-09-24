@@ -572,6 +572,12 @@ Behaviour that was ported deliberately differently, with the reason.
     described their body and the check-in reply goes straight to what next. The reply after
     the choice was offered does not offer it again.
 
+- **Buttons appear only at a framework's offer and its end** (the client, 2026-09-24: in ordinary
+  chat they read as a menu). `repairs.apply` drops any other button: in free chat and in the
+  middle of a framework. The body check-in and the practice after it keep theirs, and the
+  greeting's style buttons and Chat More / Go to Library are written by the orchestrator after
+  the repairs, so they are untouched.
+
 ## Measured
 
 Real turns against local Supabase and live OpenRouter, `google/gemini-3-flash-preview`.

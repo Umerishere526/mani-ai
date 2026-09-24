@@ -144,8 +144,9 @@ async def test_a_turn_costs_exactly_one_provider_call(alice, model):
 
     assert scripted.calls == 1
     assert "**Mani:**" not in turn.content
-    # "Tell me more" goes with the unknown technique it would have explained.
-    assert [p.label for p in turn.prompts] == ["Later", "Not now"]
+    # "Tell me more" goes with the unknown technique it would have explained, and the rest go
+    # because ordinary chat carries no buttons.
+    assert turn.prompts == []
 
 
 async def test_the_turn_is_stored_and_the_thread_state_follows_it(alice, model):

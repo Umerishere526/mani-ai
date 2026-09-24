@@ -27,6 +27,10 @@ def reply(**overrides) -> Reply:
     return Reply(**({"text": "Thank you for telling me."} | overrides))
 
 
+# Where buttons are allowed besides an offer, for the tests about what a button may say.
+AT_THE_END = {"framework_running": True, "current_phase": "somatic", "current_framework_id": "abcde"}
+
+
 def fix(registry, model_reply, **overrides):
     defaults = {
         "said": "",
@@ -69,7 +73,9 @@ def test_an_already_offered_technique_is_dropped(registry):
         ]
     )
     fixed = fix(registry, offered_again, already_offered=["abcde"])
-    assert [p.label for p in fixed.prompts] == ["Not right now"]
+    # The button left behind answers an offer that is gone, and ordinary chat carries none.
+    assert fixed.prompts == []
+    assert any("already-offered" in n for n in fixed.notes)
 
 
 def test_the_technique_being_offered_is_not_a_duplicate_of_itself(registry):
@@ -100,7 +106,9 @@ def test_no_framework_is_offered_from_inside_a_running_one(registry):
         current_phase="belief",
         framework_running=True,
     )
-    assert [p.label for p in fixed.prompts] == ["Keep talking"]
+    # A stage in the middle of a framework carries no buttons at all.
+    assert fixed.prompts == []
+    assert sum("inside a running framework" in n for n in fixed.notes) == 2
 
 
 def test_an_invented_technique_id_is_refused(registry):
@@ -113,13 +121,13 @@ def test_the_button_the_user_just_tapped_is_not_offered_back(registry):
     echoed = reply(
         prompts=[SmartPrompt(label="Yes, let's try it"), SmartPrompt(label="Tell me more")]
     )
-    fixed = fix(registry, echoed, selected_label="  yes, let's try it ")
+    fixed = fix(registry, echoed, selected_label="  yes, let's try it ", **AT_THE_END)
     assert [p.label for p in fixed.prompts] == ["Tell me more"]
 
 
 def test_more_than_three_buttons_are_trimmed(registry):
     many = reply(prompts=[SmartPrompt(label=f"Option {n}") for n in range(6)])
-    assert len(fix(registry, many).prompts) == repairs.MAX_PROMPTS
+    assert len(fix(registry, many, **AT_THE_END).prompts) == repairs.MAX_PROMPTS
 
 
 def test_reply_text_mirroring_an_established_feeling_is_not_flagged(registry):
@@ -157,7 +165,7 @@ def test_a_capsule_cannot_put_a_feeling_in_their_mouth_but_may_mirror_their_own(
             SmartPrompt(label="I was not enough for her at all"),
         ]
     )
-    fixed = fix(registry, mixed, said="I felt embarrassed in front of everyone")
+    fixed = fix(registry, mixed, said="I felt embarrassed in front of everyone", **AT_THE_END)
     assert [p.label for p in fixed.prompts] == ["Still embarrassed"]
     assert len(fixed.notes) == 2
 
@@ -169,7 +177,7 @@ def test_the_feeling_capsules_seen_in_a_supportive_chat_are_dropped(registry):
         SmartPrompt(label="I feel heavy"), SmartPrompt(label="It's scary"),
         SmartPrompt(label="Feeling numb"), SmartPrompt(label="Not sure"),
     ])
-    fixed = fix(registry, offered, said="i am hurt. i have a sinking feeling in my heart")
+    fixed = fix(registry, offered, said="i am hurt. i have a sinking feeling in my heart", **AT_THE_END)
     assert [p.label for p in fixed.prompts] == ["Not sure"]
 
 
@@ -178,7 +186,7 @@ def test_a_capsule_that_judges_them_is_dropped(registry):
     judging = reply(
         prompts=[SmartPrompt(label="Tell me more"), SmartPrompt(label="I'm overthinking it")]
     )
-    fixed = fix(registry, judging)
+    fixed = fix(registry, judging, **AT_THE_END)
     assert [p.label for p in fixed.prompts] == ["Tell me more"]
     assert fixed.notes
 
@@ -220,7 +228,7 @@ def test_a_clean_reply_is_left_alone(registry):
         prompts=[SmartPrompt(label="Tell me more")],
         style=Style(shape="mirror and ask", voice="naming"),
     )
-    fixed = fix(registry, clean)
+    fixed = fix(registry, clean, **AT_THE_END)
     assert fixed.notes == []
     assert [p.label for p in fixed.prompts] == ["Tell me more"]
 
@@ -262,7 +270,7 @@ def test_a_button_to_a_library_section_that_does_not_exist_lands_on_the_library_
         prompts=[SmartPrompt(label="Go to Library", library="library"),
                  SmartPrompt(label="Tell me more")]
     )
-    fixed = fix(registry, nowhere)
+    fixed = fix(registry, nowhere, **AT_THE_END)
     assert [(p.label, p.library) for p in fixed.prompts] == [
         ("Go to Library", "home"), ("Tell me more", None),
     ]
@@ -275,7 +283,7 @@ def test_a_library_section_the_model_cased_differently_is_kept_and_corrected(reg
     lowercased = reply(
         prompts=[SmartPrompt(label="Read more", library="emotionalintelligence")]
     )
-    fixed = fix(registry, lowercased)
+    fixed = fix(registry, lowercased, **AT_THE_END)
     assert [p.library for p in fixed.prompts] == ["EmotionalIntelligence"]
     assert fixed.notes == []
 
@@ -287,7 +295,8 @@ def test_a_technique_offered_before_the_cooldown_has_passed_is_dropped(registry)
         prompts=[SmartPrompt(label="Try it", technique="abcde"), SmartPrompt(label="Not now")]
     )
     fixed = fix(registry, early, cooldown_passed=False)
-    assert [p.label for p in fixed.prompts] == ["Not now"]
+    # The button left behind answers an offer that is gone, and ordinary chat carries none.
+    assert fixed.prompts == []
     assert any("cooldown" in n for n in fixed.notes)
 
 
@@ -441,3 +450,40 @@ def test_presence_is_announced_only_in_supportive(registry, style, text, expecte
     when someone asks just to be heard, so the sentence is removed rather than argued with."""
     fixed = fix(registry, reply(text=text), conversation_style=style)
     assert fixed.text == expected
+
+
+def test_ordinary_chat_carries_no_buttons(registry):
+    """The client: buttons in ordinary chat read as a menu, not a conversation (2026-09-24)."""
+    chatty = reply(text="What happened next?", prompts=[
+        SmartPrompt(label="Tell me more"), SmartPrompt(label="Not sure"),
+    ])
+    fixed = fix(registry, chatty)
+    assert fixed.prompts == []
+    assert any("outside an offer or a framework's end" in n for n in fixed.notes)
+
+
+def test_an_offer_keeps_its_two_buttons(registry):
+    offer = reply(
+        text="There are some questions that could help with this. Would you like to try them?",
+        prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
+    )
+    assert [p.label for p in fix(registry, offer).prompts] == ["Try it", "Keep chatting"]
+
+
+def test_the_end_of_a_framework_keeps_its_buttons(registry):
+    practice = reply(
+        text="Hand on your chest. In for four, out for six, three times.",
+        prompts=[SmartPrompt(label="I tried it"), SmartPrompt(label="Still tense"),
+                 SmartPrompt(label="Feeling better")],
+    )
+    fixed = fix(registry, practice, framework_running=True, current_phase="grounding",
+                current_framework_id="abcde")
+    assert [p.label for p in fixed.prompts] == ["I tried it", "Still tense", "Feeling better"]
+
+
+def test_a_stage_in_the_middle_of_a_framework_carries_no_buttons(registry):
+    mid = reply(text="What did she say?", prompts=[SmartPrompt(label="Not sure")])
+    fixed = fix(registry, mid, framework_running=True, current_phase="belief",
+                current_framework_id="abcde")
+    assert fixed.prompts == []

@@ -68,6 +68,12 @@ SELF_JUDGMENTS = (
 # Five: room for a choice in the person's own voice. Past that a label is becoming a sentence.
 MAX_CAPSULE_WORDS = 5
 
+# Where a reply may carry buttons besides an offer: the body check-in and the practice that ends
+# a framework. Everywhere else a button reads as a menu instead of a conversation (client,
+# 2026-09-24). The greeting's style buttons and Chat More / Go to Library are written by the
+# orchestrator after this runs, so they are not affected.
+ENDING_STAGES = frozenset({"somatic", "grounding"})
+
 # Keyed lowercase so a model's casing does not matter; valued at the canonical casing so
 # whatever reaches the client to navigate on is always exactly what LibrarySection defines.
 _LIBRARY_SECTIONS = {section.value.lower(): section.value for section in LibrarySection}
@@ -355,6 +361,11 @@ def apply(
                 )
             if phase is None:
                 framework_id = None
+
+    at_the_end = framework_running and (phase or current_phase) in ENDING_STAGES
+    if kept and not at_the_end and not any(p.technique for p in kept):
+        notes.append(f"dropped buttons outside an offer or a framework's end: {[p.label for p in kept]}")
+        kept = []
 
     title = clean_title(reply.title) if wants_title else None
 
