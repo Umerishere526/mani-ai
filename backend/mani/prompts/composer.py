@@ -80,6 +80,18 @@ def framework_index(registry: Registry) -> str | None:
     if rendered:
         lines += ["", "## Telling them apart", ""] + rendered
 
+    # The client's own description of each, which is what an offer says instead of a name.
+    helps = [f"- **{f.name}**: {' '.join(f.summary.split())}" for f in present if f.summary]
+    if helps:
+        lines += [
+            "", "## How each one helps",
+            "",
+            "When you offer one, say you have some questions that could help, and in a sentence "
+            "how, built from its line here and what they told you, worded fresh each time. Never "
+            "say its name, its id, or the word \"framework\".",
+            "",
+        ] + helps
+
     # Only the contraindications, not every not_when line: most of those name a different
     # framework to use instead, which "Telling them apart" already says. These name a
     # situation where offering any of it would harm the person.
@@ -159,10 +171,11 @@ def techniques_used(offered: list[str]) -> str | None:
     listed = "\n".join(f"- {name}" for name in offered)
     return (
         "## Techniques Already Offered\n"
-        "These have already been offered in this conversation, whether or not the user "
-        "took them up. Do NOT offer them again:\n"
+        "These have already been offered in this conversation:\n"
         f"{listed}\n\n"
-        "Instead, try different approaches or go deeper on what has already been discussed."
+        "One they said no to may be offered again once `cooldown_passed: yes`, if it still "
+        "fits best - or a different one, if what they have said since has changed what fits. "
+        "One they have just finished may not be offered again."
     )
 
 

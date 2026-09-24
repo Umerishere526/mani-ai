@@ -1,7 +1,7 @@
 ---
 id: thought_reframe
 name: Thought Reframe
-summary: "Surface one painful thought, examine it against the facts, and create a believable reframe."
+summary: "These questions help you examine a troubling thought and consider a more balanced perspective. By the end, you will be able to see the situation differently."
 display_order: 2
 phases: [offering, thought, significance, facts, alternative, reframe, closing, somatic]
 activation:
@@ -74,7 +74,7 @@ stages:
       - "must not combine the three tones or shift tone without a reason grounded in the conversation"
     if_unclear:
       - when: "the user declines"
-        reply: "You do not want to use a framework. What would be most helpful to talk through? - and does not offer another framework immediately"
+        reply: "You'd rather not try this now. What would be most helpful to talk through?"
     ask:
       supportive: "This thought keeps returning. Would it help to look at it together?"
       reflective: "Would it help to look at what supports that thought and what else may be true?"
@@ -115,7 +115,7 @@ stages:
       - "must not expand the brief framework into a deeper investigation"
     if_unclear:
       - when: "a feeling word instead - \"Rejected.\""
-        reply: "You used the word 'rejected.' What thought is connected to it? - uses the user's word, adds no other label"
+        reply: "You used the word 'rejected.' What thought is connected to it?"
     ask:
       supportive: "What makes that thought difficult for you?"
       reflective: "What gives it that meaning for you?"
@@ -136,7 +136,7 @@ stages:
       - when: "no contrary information - \"Nothing challenges it.\""
         reply: "Nothing comes to mind yet. What remains unknown about why she has not answered?"
       - when: "the thought is supported by an established fact - \"She told me she does not want the friendship.\""
-        reply: "She directly ended the friendship. What thought about yourself or your future do you want help examining? - does not dispute the established fact"
+        reply: "She directly ended the friendship. What thought about yourself or your future do you want help examining?"
     ask:
       supportive: "What else do you know about the situation?"
       reflective: "What does not support the full conclusion?"
@@ -153,7 +153,7 @@ stages:
       - "must not choose the alternative for the user"
     if_unclear:
       - when: "no alternative offered - \"There is no other explanation.\""
-        reply: "This explanation feels certain to you. What part do you know for a fact? - use \"feels certain\" only when consistent with the user's language; direct alternative: \"You believe there is no other explanation. What part do you know for a fact?\""
+        reply: "This explanation feels certain to you. What part do you know for a fact?"
     ask:
       supportive: "You do not know the reason yet. What else might be possible?"
       reflective: "The silence allows more than one interpretation. What is another possibility?"
@@ -205,7 +205,7 @@ stages:
       - "must not summarize Thought Reframe before asking the somatic question"
     if_unclear:
       - when: "the user declines the somatic check-in"
-        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
+        reply: "You'd rather not check in with your body right now. Would you like to keep chatting or go to the Library?"
     ask:
       supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
       reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"

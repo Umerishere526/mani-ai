@@ -302,18 +302,64 @@ def test_state_naming_a_different_framework_than_the_running_one_is_ignored(regi
     assert any("not the running one" in n for n in fixed.notes)
 
 
-def test_the_clients_own_offer_buttons_all_survive(registry):
-    """docs/specs/conversational-styles.md specifies these three, word for word. The longest
-    is five words; a four-word cap was deleting the client's own "keep talking" choice."""
-    offer = reply(prompts=[
-        SmartPrompt(label="Yes, let's try it", technique="abcde"),
-        SmartPrompt(label="Tell me more"),
-        SmartPrompt(label="I want to keep talking", decline=True),
-    ])
+def test_the_offer_buttons_all_survive(registry):
+    """The three buttons under every offer (muhammad, 2026-09-24): none may be lost to the
+    label-length or offer-coherence repairs."""
+    offer = reply(
+        text="I have a sequence of questions that could help. Would you like to try it?",
+        prompts=[
+            SmartPrompt(label="Try it", technique="abcde"),
+            SmartPrompt(label="Tell me about this"),
+            SmartPrompt(label="Keep chatting", decline=True),
+        ],
+    )
     fixed = fix(registry, offer)
-    assert [p.label for p in fixed.prompts] == [
-        "Yes, let's try it", "Tell me more", "I want to keep talking",
-    ]
+    assert [p.label for p in fixed.prompts] == ["Try it", "Tell me about this", "Keep chatting"]
+
+
+def test_an_offer_refused_by_the_cooldown_takes_its_words_with_it(registry):
+    """Dropping only the buttons left "Would you like to try it?" asking for a yes that
+    nothing could take. The mirror before it stays."""
+    early = reply(
+        text="You open the report and then move away from it. I have a sequence of questions "
+             "that could help you start. Would you like to try it?",
+        prompts=[
+            SmartPrompt(label="Try it", technique="abcde"),
+            SmartPrompt(label="Tell me about this"),
+            SmartPrompt(label="Keep chatting", decline=True),
+        ],
+    )
+    fixed = fix(registry, early, cooldown_passed=False)
+    assert fixed.prompts == []
+    assert fixed.text == "You open the report and then move away from it."
+
+
+@pytest.mark.parametrize("offer", [
+    "There's a set of questions that could help you with this. Would you like to try it?",
+    "We could go through a few questions together. Would you like to try that?",
+    "There are some questions that might help set your mind at ease. Shall we go through them?",
+    "Would it help to look at it together, one step at a time?",
+])
+def test_an_offer_in_any_wording_goes_with_its_button(registry, offer):
+    """Offers are worded fresh each time (muhammad, 2026-09-24), so recognising one cannot
+    depend on a single fixed sentence."""
+    early = reply(
+        text=f"You open the report and then move away from it. {offer}",
+        prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
+    )
+    fixed = fix(registry, early, cooldown_passed=False)
+    assert fixed.text == "You open the report and then move away from it."
+
+
+def test_varied_offer_wording_keeps_its_buttons(registry):
+    offer = reply(
+        text="There are some questions that might help set your mind at ease. Shall we go through them?",
+        prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                 SmartPrompt(label="Tell me about this"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
+    )
+    assert [p.label for p in fix(registry, offer).prompts] == ["Try it", "Tell me about this", "Keep chatting"]
 
 
 def test_an_offer_made_only_by_buttons_gets_the_clients_permission_question(registry):

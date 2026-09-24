@@ -1,7 +1,7 @@
 ---
 id: behavioral_activation
 name: Behavioral Activation
-summary: "Identify what has stopped, why it matters, and one manageable action to begin it again."
+summary: "These questions help you identify what you have stopped doing and choose one realistic activity you can begin. By the end, you will have a specific, manageable action that helps you start moving forward again."
 display_order: 3
 phases: [offering, stopped, matters, choose, manageable, begin, barrier, closing, somatic]
 activation:
@@ -162,7 +162,7 @@ stages:
       - when: "still too large - \"I will answer every message tonight.\""
         reply: "Answering every message is a large first action. What smaller part are you confident you can complete?"
       - when: "cannot identify an action - \"I don't know.\""
-        reply: "The first action is not clear yet. Would replying to one person be manageable? - may offer one limited possibility, not a long list"
+        reply: "The first action is not clear yet. Would replying to one person be manageable?"
     ask:
       supportive: "A full conversation feels like too much. What smaller response could you send?"
       reflective: "The full task is stopping you from beginning. What smaller version would still matter?"
@@ -199,7 +199,7 @@ stages:
       - when: "the action depends on someone else - \"I need my partner to apologize.\""
         reply: "The apology depends on your partner. What action is within your control?"
       - when: "the action is unsafe"
-        reply: "That action could place you at risk. What is a safer action you can take? - if immediate danger, the safety protocol"
+        reply: "That action could place you at risk. What is a safer action you can take?"
     ask:
       supportive: "You may begin rewriting and stop yourself from sending it. What would help you keep it simple?"
       reflective: "Rewriting is the pattern most likely to interrupt the action. What could you do differently when it begins?"
@@ -226,7 +226,7 @@ stages:
       - "must not summarize Behavioral Activation before asking the somatic question"
     if_unclear:
       - when: "the user declines the somatic check-in"
-        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
+        reply: "You'd rather not check in with your body right now. Would you like to keep chatting or go to the Library?"
     ask:
       supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
       reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"

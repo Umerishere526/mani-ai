@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from mani.chat.greeting import EXPLAIN_LABELS
 from mani.chat.techniques import Registry
 from mani.llm.schema import SHAPES, VOICES, LibrarySection, Reply, SmartPrompt, Style
 
@@ -63,8 +64,7 @@ SELF_JUDGMENTS = (
     "i'm broken", "i am broken", "not enough", "being needy", "being difficult",
 )
 
-# Five, because the client's own offer button "I want to keep talking" is five words
-# (docs/specs/conversational-styles.md). Past that a label is becoming a sentence.
+# Five: room for a choice in the person's own voice. Past that a label is becoming a sentence.
 MAX_CAPSULE_WORDS = 5
 
 # Keyed lowercase so a model's casing does not matter; valued at the canonical casing so
@@ -81,12 +81,24 @@ PERMISSION_QUESTIONS = {
 
 # Words that mark a reply's question as the offer itself rather than some other question.
 _OFFER_WORDS = re.compile(
-    r"\btry\b|structured|work through|would it help|one step at a time|look at it together",
+    r"\btry\b|structured|work through|would it help|one step at a time|look at it together"
+    r"|questions\b|go through|shall we",
     re.IGNORECASE,
 )
 
 # A sentence whose whole job is to announce that Mani is present. mani_base keeps that a
 # Supportive move; Direct shows presence by a next step and Reflective by what it reflects.
+# A sentence that makes an offer: the questions it offers ("a set of questions", "a few
+# questions"), or the permission question after them. Offers are worded fresh each time.
+_OFFER_SENTENCE = re.compile(
+    r"(?:^|(?<=[.!?])|(?<=\n))[ \t]*[^.!?\n]*"
+    r"(?:(?:sequence|set|series) of questions|\b(?:a few|some) questions\b"
+    r"|would (?:you like|it help) to (?:try|work through|look at|go through)"
+    r"|shall we (?:try|go through|look at))"
+    r"[^.!?\n]*[.!?]?",
+    re.IGNORECASE,
+)
+
 _PRESENCE_SENTENCE = re.compile(
     r"(?:^|(?<=[.!?])[ \t]+|(?<=\n))"
     r"I(?:'m|\u2019m| am) (?:right )?(?:here|listening|not going anywhere)\b[^.!?\n]*[.!?]?[ \t]*",
@@ -139,7 +151,7 @@ class Repaired:
 
 
 def _is_offer_button(prompt: SmartPrompt) -> bool:
-    return bool(prompt.technique or prompt.decline or prompt.label.strip().lower() == "tell me more")
+    return bool(prompt.technique or prompt.decline or prompt.label.strip().lower() in EXPLAIN_LABELS)
 
 
 def _normalize(name: str) -> str:
@@ -278,6 +290,19 @@ def apply(
 
         seen_labels.add(key)
         kept.append(prompt)
+
+    # Tell me about this and Keep chatting answer an offer, and so does the question asking it.
+    # Once the offer's own button is gone they answer nothing, so they go with it - the words
+    # only when something is left to send.
+    if any(p.technique for p in reply.prompts or []) and not any(p.technique for p in kept):
+        orphaned = [p.label for p in kept if _is_offer_button(p)]
+        if orphaned:
+            kept = [p for p in kept if not _is_offer_button(p)]
+            notes.append(f"dropped offer buttons left without their offer: {orphaned}")
+        without = _BLANK_RUN.sub("\n\n", _OFFER_SENTENCE.sub("", text)).strip()
+        if without and without != text:
+            notes.append("removed the words of an offer whose button was dropped")
+            text = without
 
     if len(kept) > MAX_PROMPTS:
         notes.append(f"trimmed {len(kept)} buttons to {MAX_PROMPTS}")

@@ -397,15 +397,50 @@ def test_the_block_says_which_phase_of_the_conversation_this_is():
     assert "conversation_phase: talking" in context.build(after_offer)
 
 
-def test_the_understanding_phase_counts_what_they_have_said_but_not_the_style_tap():
-    """Every client example offers on the reply to the person's third message. The count
-    is what lets the model hold the offer until then; tapping a style is not a message."""
-    history = [
-        mani("Hi Sam. It's MANI. How would you like me to speak with you today?"),
-        user("Direct"),
-        mani("How can I help you today?"),
-        user("I feel like I might have a panic attack."),
-        mani("I'm sorry you're feeling this way. Tell me what is happening right now."),
+
+def _finished_framework_history(*later: str) -> list:
+    """A framework that ended on the client's two choices, then whatever Mani said since."""
+    return [
+        mani("Your shoulders feel looser. Does that feel right? What would you like to do next?",
+             options=[{"label": "Chat More"}, {"label": "Go to Library", "library": "home"}]),
+        user("Chat More"),
+        *[mani(text) for text in later],
     ]
-    block = context.build(TurnContext(thread=thread(), profile=None, technique=None), history=history)
-    assert "understanding_turns: 2" in block
+
+
+def test_after_a_framework_the_next_of_the_clients_three_questions_is_offered():
+    ctx = TurnContext(thread=thread(), profile=None, technique=None, techniques_offered=["abcde"])
+    block = context.build(ctx, history=_finished_framework_history())
+    assert "after_framework_question: What feels most important about this now?" in block
+
+    block = context.build(ctx, history=_finished_framework_history(
+        "You're still thinking about it. What feels most important about this now?"))
+    assert "after_framework_question: What do you think you need to do differently from here?" in block
+
+
+def test_a_question_asked_on_the_reply_carrying_chat_more_counts_as_asked():
+    """Observed: the reply that ended the framework also asked the first question, and the
+    next reply asked it again."""
+    ctx = TurnContext(thread=thread(), profile=None, technique=None, techniques_offered=["abcde"])
+    history = [
+        mani("The meeting is still on your mind. What feels most important about this now?",
+             options=[{"label": "Chat More"}, {"label": "Go to Library", "library": "home"}]),
+        user("I want to stop letting one comment decide how I feel."),
+    ]
+    block = context.build(ctx, history=history)
+    assert "after_framework_question: What do you think you need to do differently from here?" in block
+
+
+def test_once_all_three_are_asked_there_is_no_after_framework_question():
+    ctx = TurnContext(thread=thread(), profile=None, technique=None, techniques_offered=["abcde"])
+    block = context.build(ctx, history=_finished_framework_history(
+        "What feels most important about this now?",
+        "What do you think you need to do differently from here?",
+        "How could you take one small step toward that?"))
+    assert "after_framework_question" not in block
+
+
+def test_a_declined_offer_may_come_back_after_three_replies():
+    """muhammad, 2026-09-24: after "I want to keep talking", check again after a few more
+    messages - the same framework or a different one, whichever fits now."""
+    assert context.COOLDOWN_AFTER_DECLINE == 6

@@ -79,9 +79,11 @@ class TechniqueState(BaseModel):
         default=None,
         description=(
             "Set to true when the user accepts a technique offer in free text "
-            '(e.g., "yeah let\'s do it", "sure", "ok"). Set to false when they decline it '
-            "in free text. Only relevant during the offering phase. "
-            "Set to null when the user did neither, so the offer stays open."
+            '(e.g., "yeah let\'s do it", "sure", "ok"), or asks for one they declined '
+            "earlier in this conversation. Set to false when they decline an offer in free "
+            "text, or carry on talking without answering it: that is Keep chatting. Set to "
+            "null when they asked about the offer itself, so it stays open, and on every "
+            "other turn."
         ),
     )
 
@@ -138,8 +140,8 @@ class Reply(BaseModel):
             "2-3 clear choices. Each prompt has a \"label\" field (required). "
             "ONLY include \"technique\" field when INITIALLY ASKING if user wants to try "
             "a technique. Include \"library\" ONLY on a button that opens the library. "
-            "Labels should be in USER voice (\"Yes, let's try it\", "
-            "\"Not right now\"). Set to null if no buttons are appropriate "
+            "Labels should be in USER voice (\"Try it\", "
+            "\"Keep chatting\"). Set to null if no buttons are appropriate "
             "(e.g., open-ended questions). Two or three, never more."
         ),
     )

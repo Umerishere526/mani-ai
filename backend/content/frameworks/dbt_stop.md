@@ -1,7 +1,7 @@
 ---
 id: dbt_stop
 name: DBT STOP
-summary: "Pause an impulsive action before it happens, observe, and choose an intentional response - with MANI throughout."
+summary: "These questions help you interrupt an automatic reaction so you can pause, understand what is happening, and choose how you want to respond rather than simply reacting."
 display_order: 6
 phases: [offering, stop, pause, observe, proceed, closing, somatic]
 activation:
@@ -99,9 +99,9 @@ stages:
       - "must not use STOP when the safety protocol is required"
     if_unclear:
       - when: "\"I cannot stop myself.\""
-        reply: "Stopping feels out of reach right now. Can you pause the action for sixty seconds? - if the action involves harm or immediate danger, the safety protocol"
+        reply: "Stopping feels out of reach right now. Can you pause the action for sixty seconds?"
       - when: "already acted - \"I already sent it.\""
-        reply: "The message has already been sent. Is there another action you are about to take? - if none imminent, STOP may no longer fit"
+        reply: "The message has already been sent. Is there another action you are about to take?"
     ask:
       supportive: "You want to send it right now. Can you pause before you act?"
       reflective: "The urge is pushing you to send it immediately. Can you stop before following it?"
@@ -123,7 +123,7 @@ stages:
       - when: "returns to the action - \"I started typing again.\""
         reply: "You returned to the message. Can you pause the typing and remain here with me?"
       - when: "wants to leave - \"I am going back to the message.\""
-        reply: "You want to return to it now. Can you remain paused with me for one more response? - does not pressure if they decline"
+        reply: "You want to return to it now. Can you remain paused with me for one more response?"
       - when: "the pause needs an anchor - the person is not physically leaving anywhere, so the pause is about where attention goes, not where the body does. One slow breath, naming what is in view, or a hand flat on the desk are usable even mid-conversation"
         reply: "Before we go further, take one slow breath. What are three things you can see right now?"
     ask:
@@ -206,7 +206,7 @@ stages:
       - "must not summarize STOP before asking the somatic question"
     if_unclear:
       - when: "the user declines the somatic check-in"
-        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
+        reply: "You'd rather not check in with your body right now. Would you like to keep chatting or go to the Library?"
     ask:
       supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
       reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"

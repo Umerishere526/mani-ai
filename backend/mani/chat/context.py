@@ -5,13 +5,15 @@ from __future__ import annotations
 
 import re
 
-from mani.chat.greeting import STYLE_OPTIONS
+from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CHAT_MORE_LABEL
 from mani.chat.router import Signal, is_confident
 from mani.db.threads import TurnContext
 from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
 
 # How many messages must pass before a technique may be offered again.
-COOLDOWN_AFTER_DECLINE = 20
+# After "Keep chatting", three of Mani's replies before it may check again - the same
+# framework or a different one, whichever fits now (muhammad, 2026-09-24).
+COOLDOWN_AFTER_DECLINE = 6
 COOLDOWN_AFTER_COMPLETE = 45
 
 # The default when neither the conversation nor the profile has chosen a style yet.
@@ -31,8 +33,6 @@ def _opener(text: str) -> str:
     """The first couple of words of a reply, lowercased - enough to name a repeated opening
     without exposing the reply itself in [ctx]."""
     return " ".join(text.split()[:RECENT_OPENERS_WORDS]).lower()
-
-_STYLE_LABELS = {option["label"].lower() for option in STYLE_OPTIONS}
 
 _CTX_BLOCK = re.compile(r"^\[ctx\].*?\[/ctx\]\s*", re.DOTALL)
 
@@ -58,6 +58,27 @@ def disarm(text: str) -> str:
     the next twenty turns. Only the brackets change; what they wrote is still sent.
     """
     return _CTX_MARKER.sub(lambda m: f"({m.group(1)}ctx)", text)
+
+
+def _after_framework_question(history: list[Message]) -> str | None:
+    """The next of the client's three questions, once a framework has ended.
+
+    A framework ends on the reply that offers Chat More. The questions asked since, that reply
+    included, are read from Mani's own replies, so they come in order and none twice. Once that
+    reply has scrolled out of the history window the conversation has moved on, and none are
+    offered.
+    """
+    mani = [m for m in history if m.role is MessageRole.MANI]
+    ended = next(
+        (i for i in range(len(mani) - 1, -1, -1)
+         if any(str(o.get("label", "")).lower() == CHAT_MORE_LABEL.lower()
+                for o in (mani[i].prompt_options or []))),
+        None,
+    )
+    if ended is None:
+        return None
+    since = " ".join(m.content.lower() for m in mani[ended:])
+    return next((q for q in AFTER_FRAMEWORK_QUESTIONS if q.lower().rstrip("?") not in since), None)
 
 
 def cooldown_for(outcome: TechniqueOutcome) -> int:
@@ -99,6 +120,7 @@ def build(
     candidate: Framework | None = None,
     history: list[Message] | None = None,
     safety_concern: bool = False,
+    offer_waiting: bool = False,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -137,20 +159,18 @@ def build(
     if running:
         phase = "framework"
     elif not ctx.techniques_offered and technique is None:
-        # Nothing offered yet: the two to four exchanges the client's cadence spends asking,
+        # Nothing offered yet: the exchanges the client's cadence spends asking,
         # checking and confirming before a framework is offered.
         phase = "understanding"
     else:
         phase = "talking"
     lines.append(f"conversation_phase: {phase}")
-    if phase == "understanding":
-        # Their messages so far, this one included. The greeting's style tap is a choice of
-        # how to be spoken to, not something they said about what is going on.
-        said = [
-            m for m in (history or [])
-            if m.role is MessageRole.USER and m.content.strip().lower() not in _STYLE_LABELS
-        ]
-        lines.append(f"understanding_turns: {len(said) + 1}")
+    if offer_waiting:
+        # Mani's last reply was an offer, and they typed rather than tapped.
+        lines.append("offer_waiting: yes")
+    question = None if safety_concern else _after_framework_question(history or [])
+    if question:
+        lines.append(f"after_framework_question: {question}")
 
     if technique is None:
         lines.append("cooldown_passed: yes")
@@ -201,7 +221,11 @@ def build(
         style = resolve_style(ctx)
         lines.append(f"active_framework: {framework.id}")
         lines.append(f"framework_stages: {', '.join(framework.phases)}")
-        lines.extend(_stage_lines("stage", framework, technique.phase, style))
+        stage = _stage_lines("stage", framework, technique.phase, style)
+        if offer_waiting:
+            # The offering stage's question is the offer they have just typed past.
+            stage = [line for line in stage if not line.startswith("stage_ask:")]
+        lines.extend(stage)
         index = framework.phase_index(technique.phase)
         if 0 <= index < len(framework.phases) - 1:
             lines.extend(

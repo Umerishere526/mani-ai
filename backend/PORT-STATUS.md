@@ -542,6 +542,36 @@ Behaviour that was ported deliberately differently, with the reason.
 - **One transient provider failure (Google AI Studio 503, 1 in 265 calls)** is retried once;
   a timeout is not.
 
+- **Offers follow the client's newer direction (2026-09-24):**
+  - Mani never says a framework's name or the word "framework". It offers "a sequence of
+    questions" and says how it would help with what the person said, using each framework's
+    description from the client (now its `summary`, shown word for word on "Tell me about
+    this").
+  - The buttons are **Try it** / **Tell me about this** / **Keep chatting**.
+  - There is no fixed message count before an offer.
+  - After "Keep chatting" Mani may offer again after three replies: the same framework or a
+    different one. Only a framework just finished is never re-offered.
+  - After a framework ends and the person carries on with the same issue, the client's three
+    forward-moving questions are asked one per reply, tracked in `[ctx]` as
+    `after_framework_question`.
+  - Twelve writer's notes left inside reply text Mani could say were removed from the
+    framework files.
+  - Carrying on talking without answering an offer counts as **Keep chatting**. The model
+    reports it as `accepted: false`, and only a question about the offer keeps it open. The
+    reply that takes a no never carries an offer, and Tell me about this / Keep chatting go
+    with any offer button that is dropped.
+  - Offers are worded fresh each time: "some questions" (a sequence, a set, a few) and how
+    they would help this person. Each framework's `offer_ask` is a model for that sentence,
+    not a line to repeat. The repairs recognise an offer in any of these wordings.
+  - The styles are three personas of one Mani, all warm and friendly. **Direct** aims at a way
+    through what they feel and offers as soon as the fit is clear, often at the first or second
+    reply. **Supportive** leads with feelings before the situation. **Reflective** explores
+    with warm curiosity. Both offer after about two to four exchanges.
+  - **Chat More** / **Go to Library** go on the reply that asks "What would you like to do
+    next?", once. The body check-in question carries neither, unless the person had already
+    described their body and the check-in reply goes straight to what next. The reply after
+    the choice was offered does not offer it again.
+
 ## Measured
 
 Real turns against local Supabase and live OpenRouter, `google/gemini-3-flash-preview`.
