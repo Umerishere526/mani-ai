@@ -84,3 +84,36 @@ def test_the_clients_own_two_question_lines_are_not_counted_as_stacking():
     assert question_count("Your chest feels lighter. Does that feel right? What would you like to do next?") == 1
     assert question_count("Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?") == 1
     assert question_count("What happened? And how did she react?") == 2
+
+
+def test_saying_what_a_framework_is_called_or_the_word_itself_is_caught():
+    from tests.evals.validators import says_framework
+
+    names = ["Example Method"]
+    assert says_framework("I have an approach called the Example Method.", names)
+    assert says_framework("This framework could help.", names)
+    assert not says_framework("I have a sequence of questions that could help.", names)
+
+
+def test_the_three_questions_after_a_framework_are_checked():
+    from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS
+    from tests.evals.validators import after_framework_questions_asked
+
+    assert after_framework_questions_asked(list(AFTER_FRAMEWORK_QUESTIONS), AFTER_FRAMEWORK_QUESTIONS) == []
+    assert after_framework_questions_asked(["What else?"], AFTER_FRAMEWORK_QUESTIONS)
+
+
+def test_the_reply_to_chat_more_counts_toward_the_three_questions():
+    """The first of the three is asked in the very reply to Chat More; the eval skipped it."""
+    from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS
+    from mani.models.rows import SupportStyle
+    from scripts.eval_replies import Exchange, _score
+
+    first, second, third = AFTER_FRAMEWORK_QUESTIONS
+    exchanges = [
+        Exchange(message="Chat More", reply=f"You'd like to keep talking. {first}"),
+        Exchange(message="I still think about it.", reply=f"It's still with you. {second}"),
+        Exchange(message="Ask her first, maybe.", reply=f"Asking her first. {third}"),
+    ]
+    findings = _score(exchanges, SupportStyle.DIRECT, {"expect_after_questions": True})
+    assert not [f for f in findings if f.rule == "after framework"]

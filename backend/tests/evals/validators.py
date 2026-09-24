@@ -349,3 +349,20 @@ def repeated_question(replies: list[str], overlap: float = 0.8) -> list[Finding]
         if a and b and len(a & b) / len(a | b) >= overlap:
             findings.append(Finding("repeated question", " ".join(sorted(a & b))[:80]))
     return findings
+
+
+def says_framework(reply: str, names: list[str]) -> list[Finding]:
+    """The person never hears what a framework is called, or the word itself: to them it is a
+    sequence of questions. `names` are the display names, read from the content, not listed here."""
+    hits = [name for name in names if re.search(rf"\b{re.escape(name)}\b", reply, re.IGNORECASE)]
+    if re.search(r"\bframeworks?\b", reply, re.IGNORECASE):
+        hits.append("framework")
+    return [Finding("said a framework", f"{hits}")] if hits else []
+
+
+def after_framework_questions_asked(replies: list[str], questions: tuple[str, ...]) -> list[Finding]:
+    """Once a framework has ended and they carried on, each of the client's three questions
+    should come up in the replies that follow. `questions` come from the code, not listed here."""
+    said = " ".join(r.lower() for r in replies)
+    missing = [q for q in questions if q.lower().rstrip("?") not in said]
+    return [Finding("after framework", f"not asked: {missing}")] if missing else []

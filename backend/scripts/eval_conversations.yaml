@@ -71,6 +71,7 @@
 
 - name: journey_abcde
   expect_framework: true
+  expect_after_questions: true
   turns:
     - "My manager criticized my presentation in front of the whole team."
     - "She said two of my recommendations didn't have enough support, and now I keep thinking I'm bad at my job."
@@ -85,7 +86,9 @@
     - "Yes, that feels fairer."
     - "My shoulders feel a bit looser than when we started."
     - "@tap:Chat More"
-    - "Thanks, that helped."
+    - "I still keep thinking about that meeting though."
+    - "I guess I want to stop letting one comment decide how I feel about my work."
+    - "Maybe I could ask her for feedback before the next presentation."
 
 - name: journey_behavioral_activation
   expect_framework: true
@@ -175,3 +178,14 @@
     - "My stomach feels less tight than before."
     - "@tap:Chat More"
     - "Thanks."
+
+# Saying "Keep chatting" to an offer, carrying on, and being offered something again once it fits.
+- name: decline_then_reoffer
+  turns:
+    - "My manager criticized my presentation in front of the whole team."
+    - "She said two of my recommendations didn't have enough support, and now I keep thinking I'm bad at my job."
+    - "@tap:Keep chatting"
+    - "I just keep replaying her words."
+    - "It's been going round in my head all day."
+    - "I really can't shake the feeling I'm not good enough at this job."
+    - "Honestly I think I'd like some help looking at it."
