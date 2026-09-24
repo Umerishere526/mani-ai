@@ -33,29 +33,47 @@ def reset_thread_state(thread: dict, messages: list[dict]) -> None:
 # Sidebar - the test user and the session controls
 # ---------------------------------------------------------------------------
 
-with st.sidebar:
-    st.header("Test session")
-    name = st.text_input("Test user name", value=st.session_state.get("name", "tester-1"))
-    nickname = st.text_input("Nickname (greeting)", value=st.session_state.get("nickname", ""))
-    base_url = st.text_input("API base URL", value=mani.API_BASE_URL)
-
-    if st.button("Start / switch user", use_container_width=True):
-        user_id = mani.user_id_for(name)
-        try:
-            run(mani.ensure_test_user(user_id, name))
-            token = mani.mint_token(user_id)
-        except RuntimeError as exc:
-            st.error(str(exc))
-            st.stop()
-        st.session_state.clear()
-        st.session_state.name = name
-        st.session_state.nickname = nickname
-        st.session_state.user_id = user_id
-        st.session_state.client = mani.ManiClient(token=token, base_url=base_url)
+def start_session(sign_in, label: str, nickname: str, base_url: str) -> None:
+    """Sign in one way or another, then start from a clean slate as that person."""
+    try:
+        session = sign_in()
+        client = mani.ManiClient(session=session, base_url=base_url)
         if nickname.strip():
             # Before any chat starts, so the very first greeting already uses it.
-            st.session_state.client.set_profile(nickname.strip())
-        st.rerun()
+            client.set_profile(nickname.strip())
+    except (RuntimeError, mani.ApiError) as exc:
+        st.error(str(exc))
+        return
+    st.session_state.clear()
+    st.session_state.name = label
+    st.session_state.user_id = session.user_id
+    st.session_state.client = client
+    st.rerun()
+
+
+with st.sidebar:
+    st.header("Test session")
+    base_url = st.text_input("API base URL", value=mani.API_BASE_URL)
+    quick, returning, new = st.tabs(["Quick user", "Sign in", "Sign up"])
+
+    with quick:
+        name = st.text_input("Test user name", value="tester-1", key="quick_name")
+        nickname = st.text_input("Nickname (greeting)", key="quick_nickname")
+        if st.button("Start / switch user", use_container_width=True):
+            start_session(lambda: mani.sign_in(name), name, nickname, base_url)
+
+    with returning, st.form("sign_in"):
+        email = st.text_input("Email", key="sign_in_email")
+        password = st.text_input("Password", type="password", key="sign_in_password")
+        if st.form_submit_button("Sign in", use_container_width=True):
+            start_session(lambda: mani.sign_in_with_password(email, password), email, "", base_url)
+
+    with new, st.form("sign_up"):
+        email = st.text_input("Email", key="sign_up_email")
+        password = st.text_input("Password", type="password", key="sign_up_password")
+        nickname = st.text_input("Nickname (greeting)", key="sign_up_nickname")
+        if st.form_submit_button("Create account", use_container_width=True):
+            start_session(lambda: mani.sign_up(email, password), email, nickname, base_url)
 
     if "client" in st.session_state:
         st.divider()
@@ -73,12 +91,13 @@ if "client" not in st.session_state:
     st.write(
         "A dev interface for trying real conversations against the running backend - "
         "how a framework gets offered, when the somatic hand-off appears, when an "
-        "exercise follows it. Enter a name in the sidebar and press **Start / switch user**."
+        "exercise follows it. In the sidebar, sign up, sign in, or start a quick test user by "
+        "name."
     )
     st.caption(
         "Needs the backend running (`fastapi dev main.py`) and `chat-tester/.env` filled "
-        "in from `.env.example` - the same DATABASE_URL and SUPABASE_JWT_SECRET as "
-        "`backend/.env`."
+        "in from `.env.example` - the DATABASE_URL and Supabase keys `supabase status -o env` "
+        "prints."
     )
     st.stop()
 
