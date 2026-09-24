@@ -3,7 +3,7 @@ id: behavioral_activation
 name: Behavioral Activation
 summary: "Identify what has stopped, why it matters, and one manageable action to begin it again."
 display_order: 3
-phases: [offering, stopped, matters, choose, manageable, begin, barrier, somatic, closing]
+phases: [offering, stopped, matters, choose, manageable, begin, barrier, closing, somatic]
 activation:
   central_indication: >-
     The user knows what they could do but cannot get themselves to begin - low mood,
@@ -26,8 +26,9 @@ activation:
     - "The user needs to compare options or make a decision"
     - "The user needs help responding to something outside their control"
     - "The user is close to acting impulsively"
-    - "The proposed activity could place the user at risk"
     - "A safety concern requires the approved safety protocol"
+  contraindications:
+    - "The proposed activity could place the user at risk"
     - "Serious injury, severe or sudden physical symptoms, an acute medical condition, medication side effects, intoxication, severe sleep deprivation, or physical limitations make the activity unsafe"
     - "The user describes their symptoms crashing 12-48 hours after exertion, or names ME/CFS or long covid - this is post-exertional malaise, not avoidance, and a graded increase in activity is the specific thing current clinical guidance says not to do here (NICE NG206 withdrew graded exercise therapy for this reason)"
     - "Fatigue with no identifiable avoidance pattern behind it - nothing they used to do and stopped, no trigger they are avoiding - which points to an undiagnosed medical cause (thyroid, anaemia, sleep, medication) rather than a Behavioral Activation case"
@@ -127,9 +128,9 @@ stages:
       - when: "it does not matter - \"I only think I should do it.\""
         reply: "This action does not matter to you right now. What would matter more?"
     ask:
-      supportive: "You miss responding to your sister. What would reconnecting give you?"
-      reflective: "Responding to your sister is the activity you selected. What makes it important?"
-      direct: "You selected responding to your sister. What would that address?"
+      supportive: "What would getting back to it give you?"
+      reflective: "What makes it important to you?"
+      direct: "What would doing it address?"
   choose:
     purpose: "Select one activity rather than attempting everything."
     listen_for: "The single activity the user wants to address first."
@@ -203,17 +204,6 @@ stages:
       supportive: "You may begin rewriting and stop yourself from sending it. What would help you keep it simple?"
       reflective: "Rewriting is the pattern most likely to interrupt the action. What could you do differently when it begins?"
       direct: "Rewriting may stop the action. What is your response if that happens?"
-  somatic:
-    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
-    boundaries:
-      - "must not summarize Behavioral Activation before asking the somatic question"
-    if_unclear:
-      - when: "the user declines the somatic check-in"
-        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
-    ask:
-      supportive: "This one action feels manageable to you. Would you like to notice what is happening in your body?"
-      reflective: "You are approaching the task one action at a time. What do you notice in your body?"
-      direct: "You have identified the first action. What do you notice in your body now?"
   closing:
     purpose: "Confirm completion in the user's own terms, without promising the plan will work or that the user will feel better."
     ready_when: >-
@@ -227,9 +217,20 @@ stages:
       - "must not summarize the completed framework"
       - "must not require the user to feel motivated to be done"
     ask:
-      supportive: "You chose one action that feels manageable today. How is that sitting with you? - use \"feels manageable\" only if the user used similar language"
-      reflective: "You chose one action without waiting for motivation. What changes when you approach it this way?"
-      direct: "You have one action, a starting point, and a response to the barrier. Is the plan realistic?"
+      supportive: "How is that plan sitting with you?"
+      reflective: "What changes, if anything, when you approach it this way?"
+      direct: "Is the plan realistic?"
+  somatic:
+    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
+    boundaries:
+      - "must not summarize Behavioral Activation before asking the somatic question"
+    if_unclear:
+      - when: "the user declines the somatic check-in"
+        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
+    ask:
+      supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
+      reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"
+      direct: "Before we move on, let's check in. What are you noticing in your body right now compared with when we started?"
 ---
 
 # Behavioral Activation

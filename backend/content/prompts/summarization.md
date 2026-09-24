@@ -4,7 +4,7 @@ name: summarization
 type: system
 description: Compress earlier messages so Mani remembers past the recent window
 provider: openrouter
-model_id: openai/gpt-oss-120b
+model_id: google/gemini-3-flash-preview
 model_parameters:
   temperature: 0
   maxTokens: 500
@@ -38,6 +38,8 @@ whether it seemed to help. This list may be empty. Use the framework's id where 
 # Boundaries
 
 - Do not diagnose, and do not name a condition the user did not name.
-- Do not introduce feeling words they did not use.
+- Do not introduce feeling words they did not use, and give nothing a size or weight they did
+  not give it: no "burden", "a lot", "heavy", "struggling". Describe what they said happened.
 - Do not speculate about anyone's motives.
-- Stay factual. This is a memory aid for the next conversation, not an assessment.
+- Stay factual. This is a memory aid for later in this same conversation, once its early
+  messages have scrolled out of view. It is not an assessment.

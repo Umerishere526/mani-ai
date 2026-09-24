@@ -3,7 +3,7 @@ id: structured_problem_solving
 name: Structured Problem-Solving
 summary: "Turn an overwhelming practical problem into one clear decision and one realistic first action."
 display_order: 4
-phases: [offering, problem, facts, control, outcome, options, compare, select, first_action, somatic, closing]
+phases: [offering, problem, facts, control, outcome, options, compare, select, first_action, closing, somatic]
 activation:
   central_indication: >-
     A specific, practical problem exists and the user does not know what to do next - the
@@ -27,8 +27,9 @@ activation:
     - "The user wants deeper examination of an event and belief"
     - "The situation cannot be changed or influenced"
     - "The user is close to acting impulsively"
-    - "The decision requires professional expertise MANI cannot provide"
     - "A safety concern requires the approved safety protocol"
+  contraindications:
+    - "The decision requires professional expertise MANI cannot provide"
   # Short fragments, not full example sentences - see abcde.md's activation block for why.
   strong_signals:
     - "do not know which option"
@@ -123,9 +124,9 @@ stages:
       - when: "not enough information"
         reply: "Her view is unknown. What information do you have?"
     ask:
-      supportive: "You are expecting a difficult response from your manager. What do you know for certain?"
-      reflective: "The missed deadline is a fact, while removal from the project is a prediction. What else is established?"
-      direct: "The deadline was missed, but the consequence is unknown. What facts are confirmed?"
+      supportive: "What do you know for certain so far?"
+      reflective: "Which parts are established, and which are still predictions?"
+      direct: "What facts are confirmed?"
   control:
     purpose: "Determine which part the user can influence."
     listen_for: "The decision, communication, boundary, preparation, or action available to the user."
@@ -139,8 +140,8 @@ stages:
       - when: "focuses on another person - \"I need my manager to understand.\""
         reply: "Her understanding depends on her response. What can you control in how you communicate?"
     ask:
-      supportive: "You cannot control her response. What can you control?"
-      reflective: "Her response is outside your control. Which part of your response belongs to you?"
+      supportive: "What part of this can you control?"
+      reflective: "Which part of the response belongs to you?"
       direct: "You control your communication and next action. Which one should you address?"
   outcome:
     purpose: "Identify what the user wants the response to accomplish."
@@ -229,17 +230,6 @@ stages:
       supportive: "You selected the response that fits you best. What is one manageable first action?"
       reflective: "You have made the decision. What begins that response?"
       direct: "The decision is made. What is the first action?"
-  somatic:
-    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
-    boundaries:
-      - "must not summarize Structured Problem-Solving before asking the somatic question"
-    if_unclear:
-      - when: "the user declines the somatic check-in"
-        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
-    ask:
-      supportive: "This decision feels manageable to you. Would you like to notice what is happening in your body?"
-      reflective: "The problem has a clearer first action now. What do you notice in your body?"
-      direct: "You have identified what you will do first. What do you notice in your body now?"
   closing:
     purpose: "Confirm completion in the user's own terms, without promising the decision will produce the desired outcome."
     ready_when: >-
@@ -254,9 +244,20 @@ stages:
       - "must not summarize the completed framework"
       - "must not require the user to feel certain to be done"
     ask:
-      supportive: "You chose a response that feels manageable to you. How is that decision sitting with you? - use \"feels manageable\" only if the user used similar language"
-      reflective: "You chose the response that best supports your intended outcome. What changes now that the decision is clearer?"
-      direct: "You selected the response and the first action. Is the plan realistic?"
+      supportive: "How is that decision sitting with you?"
+      reflective: "What changes, if anything, now that the decision is clearer?"
+      direct: "Is the plan realistic?"
+  somatic:
+    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
+    boundaries:
+      - "must not summarize Structured Problem-Solving before asking the somatic question"
+    if_unclear:
+      - when: "the user declines the somatic check-in"
+        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
+    ask:
+      supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
+      reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"
+      direct: "Before we move on, let's check in. What are you noticing in your body right now compared with when we started?"
 ---
 
 # Structured Problem-Solving

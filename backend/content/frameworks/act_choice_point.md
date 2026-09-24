@@ -3,7 +3,7 @@ id: act_choice_point
 name: ACT Choice Point
 summary: "Choose how to respond while a thought, feeling, or situation that cannot be resolved is still present."
 display_order: 5
-phases: [offering, situation, present, pull, matters, toward, action, somatic, closing]
+phases: [offering, situation, present, pull, matters, toward, action, closing, somatic]
 activation:
   central_indication: >-
     The user may not be able to change or resolve the situation, but does not want it deciding
@@ -28,6 +28,7 @@ activation:
     - "The user is close to acting impulsively"
     - "The user cannot participate in reflective questions"
     - "A safety concern requires the approved safety protocol"
+  contraindications:
     - "The situation is something that should change rather than be accepted - ongoing abuse, an unsafe workplace, a real medical or financial risk. Accepting a feeling is not the same as accepting a harmful situation, and this framework must never blur that line"
   # Short fragments, not full example sentences - see abcde.md's activation block for why.
   strong_signals:
@@ -123,9 +124,9 @@ stages:
       - when: "several experiences at once"
         reply: "Several things are present. Which one has the strongest pull on what you do?"
     ask:
-      supportive: "The thought that they may reject you keeps returning. What is it asking you to do?"
-      reflective: "The possibility of rejection is present for you. What does it pull you toward?"
-      direct: "The thought is that they will reject you. What action does that thought push you toward?"
+      supportive: "When that thought comes back, what is it asking you to do?"
+      reflective: "What does that pull you toward?"
+      direct: "What action does that thought push you toward?"
   pull:
     purpose: "Recognize what the internal experience is pulling the user toward doing or avoiding."
     listen_for: "The action, reaction, avoidance, or pattern the experience is encouraging."
@@ -210,20 +211,9 @@ stages:
       - when: "wants the thought removed before acting - \"I cannot act until I stop thinking they will reject me.\""
         reply: "You want the thought gone before you act. What could you do while the thought is still present?"
     ask:
-      supportive: "Writing down what you want to say feels possible. When would you like to begin? - use \"feels possible\" only if the user used similar language"
-      reflective: "Preparing your words supports the response you chose. When will you do that?"
-      direct: "The action is writing your main points. When will you begin?"
-  somatic:
-    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
-    boundaries:
-      - "must not summarize ACT Choice Point before asking the somatic question"
-    if_unclear:
-      - when: "the user declines the somatic check-in"
-        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
-    ask:
-      supportive: "This choice feels right to you even with the uncertainty present. Would you like to notice what is happening in your body? - use \"feels right\" only if the user said it"
-      reflective: "You can act on what matters while the thought remains present. What do you notice in your body?"
-      direct: "You have chosen the response within your control. What do you notice in your body now?"
+      supportive: "When would you like to begin?"
+      reflective: "When will you do that?"
+      direct: "When will you begin?"
   closing:
     purpose: "Confirm completion in the user's own terms, without claiming the thought or feeling has changed."
     ready_when: >-
@@ -237,9 +227,20 @@ stages:
       - "must not summarize the completed framework"
       - "must not require the outcome to be resolved to be done"
     ask:
-      supportive: "You chose an action that reflects what matters to you. How is that choice sitting with you?"
-      reflective: "The thought may remain, but it no longer has to make the decision. What changes when you see that choice?"
-      direct: "You identified what matters and the action that supports it. Is that action realistic?"
+      supportive: "How is that choice sitting with you?"
+      reflective: "What changes, if anything, when you look at that choice?"
+      direct: "Is that action realistic for you?"
+  somatic:
+    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
+    boundaries:
+      - "must not summarize ACT Choice Point before asking the somatic question"
+    if_unclear:
+      - when: "the user declines the somatic check-in"
+        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
+    ask:
+      supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
+      reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"
+      direct: "Before we move on, let's check in. What are you noticing in your body right now compared with when we started?"
 ---
 
 # ACT Choice Point

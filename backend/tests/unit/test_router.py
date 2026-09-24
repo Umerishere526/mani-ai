@@ -3,7 +3,7 @@
 
 import pytest
 
-from mani.chat.router import is_confident, shortlist
+from mani.chat.router import Signal, is_confident, shortlist
 from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
 # The shipped activation data, parsed by the seeder itself - the same structures that reach
@@ -166,3 +166,73 @@ def test_a_framework_absent_from_the_registry_is_never_returned():
     """Model-supplied ids are already checked in repairs; the router must not invent one."""
     ranked = shortlist(["I am about to send a message I may regret"], {"abcde": ACTIVATIONS["abcde"]})
     assert all(s.framework_id == "abcde" for s in ranked)
+
+
+# ---------------------------------------------------------------------------
+# Matching is on whole words
+# ---------------------------------------------------------------------------
+
+
+def test_a_phrase_inside_a_longer_word_does_not_match():
+    """"she hates me" is not in "she hates meetings", and the idiom "I cannot begin to tell
+    you" is not someone unable to start anything."""
+    assert top(["she hates meetings on mondays"]) != "thought_reframe"
+    assert top(["I cannot begin to tell you how good the trip was"]) != "behavioral_activation"
+
+
+def test_an_idiom_does_not_read_as_an_imminent_action():
+    assert top(["that is what I was about to say"]) != "dbt_stop"
+
+
+# ---------------------------------------------------------------------------
+# Corroboration counts a phrase said again
+# ---------------------------------------------------------------------------
+
+
+def test_the_same_phrase_in_two_messages_is_corroboration():
+    """The corroboration rule's own comment: "either it recurs across more than one of their
+    recent messages". The same words twice is exactly that."""
+    ranked = shortlist(
+        ["I cannot make myself start anything", "honestly I cannot make myself start anything"],
+        ACTIVATIONS,
+    )
+    assert ranked[0].framework_id == "behavioral_activation"
+    assert ranked[0].spread == 2
+    assert is_confident(ranked)
+
+
+# ---------------------------------------------------------------------------
+# A rule-based pick can still be confident
+# ---------------------------------------------------------------------------
+
+
+def test_an_imminent_action_is_confident_even_when_its_own_phrases_did_not_match():
+    """The rule's phrase is the evidence. STOP promoted with no match of its own used to sit
+    at the promotion floor, below the confident score, so the urgent offer never went out."""
+    urgent = shortlist(["I am about to quit my job over this"], ACTIVATIONS)
+    assert urgent[0].framework_id == "dbt_stop"
+    assert is_confident(urgent)
+
+
+def test_a_promoted_framework_is_not_refused_for_the_margin_its_promotion_created():
+    """A distinction rule decides between the leaders; measuring the margin afterwards
+    against the framework it just outranked made every such pick unconfident. Its own
+    evidence still has to clear the score and corroboration bars."""
+    promoted = Signal("act_choice_point", 2.4, ["cannot control", "keeps directing"],
+                      promoted_by="the outcome cannot be controlled", spread=2)
+    outranked = Signal("thought_reframe", 3.0, ["nobody cares about me"], spread=1)
+    assert is_confident([promoted, outranked])
+
+    thin = Signal("act_choice_point", 1.2, ["cannot control"],
+                  promoted_by="the outcome cannot be controlled", spread=1)
+    assert not is_confident([thin, outranked])
+
+
+# ---------------------------------------------------------------------------
+# Mentioning a person is not an activating event
+# ---------------------------------------------------------------------------
+
+
+def test_mentioning_a_person_does_not_promote_abcde_over_a_thought():
+    ranked = shortlist(["my boss keeps ignoring me, nobody cares about me"], ACTIVATIONS)
+    assert ranked[0].framework_id == "thought_reframe"

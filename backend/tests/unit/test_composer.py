@@ -8,6 +8,7 @@ import pytest
 
 from mani.chat.techniques import Registry
 from mani.errors import ServiceError
+from mani.llm.schema import Memory
 from mani.models.rows import Framework, Profile, TechniqueTried, ThreadSummary
 from mani.prompts import composer
 from mani.prompts.cache import Config
@@ -151,3 +152,41 @@ def test_a_missing_required_layer_is_refused_not_dropped(config):
     )
     with pytest.raises(ServiceError):
         composer.compose(without_format, None)
+
+
+def test_the_framework_index_carries_each_frameworks_contraindications():
+    """The lines that protect the person - abuse, a medical cause, a protective action -
+    were authored in every framework file and reached nothing. They are the one part of a
+    framework the model must know before it offers, not after."""
+    stop = Framework(
+        id="dbt_stop", name="DBT STOP", summary="s", body="b", phases=["offering"],
+        activation={
+            "central_indication": "about to act",
+            "contraindications": ["The action itself is protective - leaving, calling for help"],
+        },
+    )
+    index = composer.framework_index(Registry([stop]))
+    assert "Never offer one when" in index
+    assert "**DBT STOP**: The action itself is protective - leaving, calling for help" in index
+
+
+def test_what_is_remembered_across_chats_reaches_the_prompt_after_the_static_layers(config):
+    """After the per-user context, never before the static layers: the cached prefix has to
+    stay byte-identical for everyone."""
+    remembered = Memory(
+        low_times=["feels low on Sunday evenings, because of work"],
+        what_helps=["walking the dog"],
+    )
+    profile = Profile(user_id=uuid.uuid4(), nickname="Sam")
+    built = composer.compose(config, profile, memory=remembered)
+
+    names = [name for name, _ in built.layers]
+    assert names.index("user_memory") == names.index("user_context") + 1
+    assert "feels low on Sunday evenings, because of work" in built.text
+    assert "walking the dog" in built.text
+    assert "never say you remember" in built.text.lower()
+
+
+def test_an_empty_memory_adds_nothing(config):
+    built = composer.compose(config, None, memory=Memory())
+    assert "user_memory" not in [name for name, _ in built.layers]

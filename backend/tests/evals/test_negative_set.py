@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import pathlib
+import re
 
 import pytest
 
+from mani.chat import repairs
 from tests.evals import validators
 
 CONTENT_DIR = pathlib.Path(__file__).resolve().parents[2] / "content"
@@ -244,3 +246,32 @@ def test_every_framework_still_carries_its_negative_set():
     for path in sorted(FRAMEWORKS_DIR.glob("*.md")):
         body = path.read_text()
         assert "Responses MANI must avoid" in body, f"{path.name} has no negative set"
+
+
+# The words a stage's ask may not carry. Every ask is sent into every conversation that
+# reaches its stage, so a person or detail from a framework's worked example ("her silence",
+# "your manager") is handed to people it has nothing to do with, and an author's note to
+# the writer ("- use X only if ...") can be read back to them.
+_EXAMPLE_PEOPLE = re.compile(
+    r"\b(she|her|he|him|his|manager|boss|sister|brother|mother|father|partner|friend)\b",
+    re.IGNORECASE,
+)
+_AUTHOR_NOTE = re.compile(r" - use | only if | only when ", re.IGNORECASE)
+
+
+def _asks():
+    from scripts.seed import parse_framework
+
+    for path in sorted(FRAMEWORKS_DIR.glob("*.md")):
+        framework = parse_framework(path)
+        for stage, body in framework["stages"].items():
+            for style, text in body["ask"].items():
+                yield f"{path.stem}.{stage}.{style}", text
+
+
+@pytest.mark.parametrize("where,text", list(_asks()))
+def test_a_stage_ask_carries_nothing_from_a_worked_example(where, text):
+    assert not _EXAMPLE_PEOPLE.search(text), f"{where} names someone: {text}"
+    assert not _AUTHOR_NOTE.search(text), f"{where} carries an author note: {text}"
+    feelings = sorted(repairs.words(text) & repairs.FEELING_WORDS)
+    assert not feelings, f"{where} hands them a feeling they may not have named: {feelings}"

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from mani.chat.techniques import Registry
 from mani.config import get_settings
+from mani.llm.schema import Memory
 from mani.models.rows import Profile, ThreadSummary
 from mani.prompts.cache import Config
 
@@ -79,6 +80,17 @@ def framework_index(registry: Registry) -> str | None:
     if rendered:
         lines += ["", "## Telling them apart", ""] + rendered
 
+    # Only the contraindications, not every not_when line: most of those name a different
+    # framework to use instead, which "Telling them apart" already says. These name a
+    # situation where offering any of it would harm the person.
+    never = [
+        f"- **{framework.name}**: {' '.join(text.split())}"
+        for framework in present
+        for text in (framework.activation or {}).get("contraindications") or []
+    ]
+    if never:
+        lines += ["", "## Never offer one when", ""] + never
+
     return "\n".join(lines)
 
 
@@ -105,15 +117,50 @@ def user_context(profile: Profile | None) -> str | None:
     return "## User Context\n" + "\n".join(lines) if lines else None
 
 
+# Headings for each part of the memory, in the order a reply would use them.
+_MEMORY_HEADINGS = (
+    ("themes", "Keeps coming back to"),
+    ("low_times", "Feels low when"),
+    ("better_times", "Feels better when"),
+    ("what_helps", "What has helped"),
+    ("what_doesnt", "What has not helped"),
+    ("how_they_talk", "How they like the conversation to go"),
+)
+
+
+def user_memory(memory: Memory | None) -> str | None:
+    """What this person has said about themselves across earlier chats, as patterns.
+
+    Never the earlier conversations themselves: a new chat starts with none of their
+    messages. This is what lets Mani choose how to respond without making them repeat it.
+    """
+    if memory is None:
+        return None
+    parts = [
+        f"- **{heading}:** " + "; ".join(getattr(memory, field))
+        for field, heading in _MEMORY_HEADINGS
+        if getattr(memory, field)
+    ]
+    if not parts:
+        return None
+    return (
+        "## What you know about them from earlier conversations\n"
+        "Patterns they have described, in their words. Use them to choose how you respond: "
+        "what to ask about, what to offer, what to avoid. Never quote them, never say you "
+        "remember, and never mention an earlier conversation. If they bring something up, "
+        "respond to what they say now.\n\n" + "\n".join(parts)
+    )
+
+
 def techniques_used(offered: list[str]) -> str | None:
     """Frequency limiting: what has already been offered in this conversation."""
     if not offered:
         return None
     listed = "\n".join(f"- {name}" for name in offered)
     return (
-        "## Techniques Already Used\n"
-        "The user has already tried these techniques in this conversation. Do NOT offer "
-        "them again unless the user explicitly asks to revisit one:\n"
+        "## Techniques Already Offered\n"
+        "These have already been offered in this conversation, whether or not the user "
+        "took them up. Do NOT offer them again:\n"
         f"{listed}\n\n"
         "Instead, try different approaches or go deeper on what has already been discussed."
     )
@@ -144,6 +191,7 @@ def compose(
     should_generate_title: bool = False,
     offered: list[str] | None = None,
     summary: ThreadSummary | None = None,
+    memory: Memory | None = None,
 ) -> SystemPrompt:
     """Build the system prompt for one turn.
 
@@ -162,6 +210,7 @@ def compose(
         ("framework_index", framework_index(config.registry)),
         ("response_format", config.require("response_format").content),
         ("user_context", user_context(profile)),
+        ("user_memory", user_memory(memory)),
     ]
 
     if should_generate_title:

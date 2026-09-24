@@ -36,6 +36,13 @@ PROMOTED_FLOOR = 1.5
 DEFAULT_LIMIT = 3
 
 
+def _says(phrase: str, normalized: str) -> bool:
+    """Whether the phrase occurs as whole words. normalize() leaves single spaces between
+    words and no punctuation, so padding both sides is a word boundary: "she hates me" is not
+    found in "she hates meetings"."""
+    return bool(phrase) and f" {phrase} " in f" {normalized} "
+
+
 @dataclass(frozen=True)
 class Signal:
     """One framework's case for being offered."""
@@ -80,7 +87,7 @@ DISCRIMINATORS: tuple[Rule, ...] = (
     Rule(
         name="an action is imminent",
         phrases=(
-            "about to send", "about to post", "about to call", "about to say",
+            "about to send", "about to post", "about to call", "about to say something",
             "about to quit", "about to make this purchase", "about to lose it",
             "want to send it", "before i send", "have not sent it", "already wrote the email",
             "i am quitting today", "ending the relationship right now",
@@ -123,7 +130,8 @@ DISCRIMINATORS: tuple[Rule, ...] = (
     Rule(
         name="a specific event triggered the belief",
         phrases=(
-            "she said", "he said", "they said", "my manager", "my boss",
+            # Not "she said" or "my manager": mentioning a person is not an activating
+            # event, and those lifted ABCDE in nearly any conversation that had one in it.
             "criticized", "criticised", "in front of the team", "what happened was",
             "after that i", "so i must be", "which proves", "it proved",
         ),
@@ -151,16 +159,16 @@ def _score_one(activation: dict, messages: list[str]) -> tuple[float, list[str],
             break
         recency = RECENCY_WEIGHTS[distance]
         normalized = normalize(text)
-        for phrase, weight in ((p, STRONG_WEIGHT) for p in strong):
-            if phrase and phrase in normalized and phrase not in matched:
+        for phrase, weight in [(p, STRONG_WEIGHT) for p in strong] + [
+            (p, SIGNAL_WEIGHT) for p in signals
+        ]:
+            if not _says(phrase, normalized):
+                continue
+            # Said again in an older message: no second score, but it is corroboration.
+            contributing_distances.add(distance)
+            if phrase not in matched:
                 total += weight * recency
                 matched.append(phrase)
-                contributing_distances.add(distance)
-        for phrase, weight in ((p, SIGNAL_WEIGHT) for p in signals):
-            if phrase and phrase in normalized and phrase not in matched:
-                total += weight * recency
-                matched.append(phrase)
-                contributing_distances.add(distance)
 
     return total, matched, len(contributing_distances)
 
@@ -168,7 +176,12 @@ def _score_one(activation: dict, messages: list[str]) -> tuple[float, list[str],
 def _fired(rule: Rule, messages: list[str]) -> bool:
     """Whether a discriminator's phrases appear in the two most recent user messages."""
     recent = [normalize(t) for t in messages[-2:]]
-    return any(phrase in text for text in recent for phrase in rule.phrases)
+    return any(_says(normalize(phrase), text) for text in recent for phrase in rule.phrases)
+
+
+def urgent(messages: list[str]) -> bool:
+    """Whether the absolute rule fires - an imminent action, which is not worth waiting on."""
+    return any(rule.absolute and _fired(rule, messages) for rule in DISCRIMINATORS)
 
 
 def _promote(signals: list[Signal], rule: Rule) -> list[Signal]:
@@ -262,19 +275,26 @@ def is_confident(signals: list[Signal]) -> bool:
     one distinct phrase backed it, before the offer guidance goes out. Below that, the shortlist
     still reaches the prompt as a suggestion, but the model is left to ask rather than offer.
 
-    A time-critical signal skips that wait. Corroboration exists to stop a single passing
+    A time-critical signal skips all of it - the rule's own phrase is the evidence. Corroboration exists to stop a single passing
     phrase from being read as an established situation - a reasonable thing to want when the
     cost of waiting is one more clarifying question. DBT STOP's imminent-action rule is the one
     case where the cost of waiting is the opposite: the action it exists to pause may already
     be sent by the time a second mention would arrive.
     """
-    if not signals or signals[0].score < CONFIDENT_SCORE:
+    if not signals:
         return False
-    if (
-        not signals[0].time_critical
-        and signals[0].spread < 2
-        and len(signals[0].matched) < MIN_CORROBORATION
-    ):
+    top = signals[0]
+    # The imminent-action rule's own phrase is the evidence. Holding it to the score bar left
+    # STOP, promoted with no phrase of its own, below it for good.
+    if top.time_critical:
+        return True
+    if top.score < CONFIDENT_SCORE:
         return False
-    runner_up = signals[1].score if len(signals) > 1 else 0.0
-    return signals[0].score - runner_up >= CONFIDENT_MARGIN
+    if top.spread < 2 and len(top.matched) < MIN_CORROBORATION:
+        return False
+    # A distinction rule already chose between the leaders. Measuring the margin against
+    # the framework it outranked would refuse every pick it made.
+    if top.promoted_by:
+        return True
+    runner_up = max((s.score for s in signals[1:]), default=0.0)
+    return top.score - runner_up >= CONFIDENT_MARGIN
