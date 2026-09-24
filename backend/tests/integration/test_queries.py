@@ -16,6 +16,7 @@ from mani.models.rows import (
     TechniqueState,
     TechniqueTried,
 )
+from tests.integration.cleanup import remove_test_users
 
 ALICE = uuid.UUID("a0000000-0000-4000-8000-0000000000c1")
 BOB = uuid.UUID("a0000000-0000-4000-8000-0000000000c2")
@@ -42,7 +43,7 @@ async def users():
 
     await pool.open_pool()
     async with pool.as_admin() as conn:
-        await conn.execute("delete from auth.users where id = any($1::uuid[])", [ALICE, BOB])
+        await remove_test_users(conn, ALICE, BOB)
         await conn.execute(
             "insert into auth.users (id, email) values ($1,'c1@t.test'),($2,'c2@t.test')",
             ALICE, BOB)
@@ -50,8 +51,7 @@ async def users():
         yield
     finally:
         async with pool.as_admin() as conn:
-            await conn.execute("delete from auth.users where id = any($1::uuid[])",
-                               [ALICE, BOB])
+            await remove_test_users(conn, ALICE, BOB)
         await pool.close_pool()
 
 

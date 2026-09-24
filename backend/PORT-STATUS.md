@@ -266,6 +266,29 @@ Behaviour that was ported deliberately differently, with the reason.
 
 ## Fixed from review
 
+- **`admin.llm_calls.purpose` was free text holding a closed set.** `mani/db/llm_calls.py`'s
+  `Purpose` enum has always been limited to `chat`/`summarize`/`exercise_select`; the column
+  let the database accept anything. Migration 006 makes it a real Postgres enum,
+  `admin.llm_call_purpose`, matching the sibling `outcome` column's existing discipline.
+  Verified against live data first (only `chat`/`summarize` present, both valid) and no
+  Python change was needed - `record()` already wrote `purpose.value` the same way it
+  already wrote `outcome.value` into the pre-existing enum column. A generated
+  `backend/docs/database-schema-reference.md` documents the full schema, roles, RLS
+  policies and grants as queried live from `pg_catalog`/`information_schema` - not
+  reconstructed from the migration files - and is the reference for future schema work.
+- **Verified, not assumed: the six migrations reproduce the live local database, and
+  `scripts/seed.py` works against a completely clean one.** Snapshotted every table,
+  column, constraint, RLS policy, and grant on both the live local Supabase and a
+  from-scratch throwaway built only from `test_harness.sql` + the six migrations, then
+  diffed them. Tables, columns, constraints, RLS-enabled flags, enum types, and policies
+  matched **exactly**. The only difference was 24 grants (`REFERENCES`/`TRIGGER`/`TRUNCATE`
+  for `service_role` on every `public` table) that the live database has and the throwaway
+  doesn't - traced to `pg_default_acl`, confirmed as Supabase's own platform-level default
+  privilege for `service_role` (set by `supabase_admin`, applied automatically to any new
+  table on any Supabase project), not something any migration granted or should. Separately,
+  ran `scripts/seed.py` against that same clean throwaway with `DATABASE_URL` pointed at it
+  - all 6 frameworks and all 4 prompts loaded with identical row counts and content lengths
+  to the live database. A fresh environment genuinely reproduces this one.
 - **Four tables let a signed-in user write onto someone else's thread.** `public.messages`
   has always checked both halves - the row carries your `user_id` *and* the thread it names
   is yours. `thread_technique_state`, `thread_techniques_offered`, `thread_response_styles`
@@ -393,6 +416,117 @@ Behaviour that was ported deliberately differently, with the reason.
 - **`llm_calls.message_id` was written from the wrong connection.** The link was made on
   an admin connection while the turn's transaction was still open, so the foreign key
   could not see the message. It is now made after the turn commits.
+- **Every turn of a summarized thread raised `AttributeError`.** In `context.build()` a
+  local holding the rendered framework history reused the name of the `history` parameter,
+  so once a summary named a technique, the message list the opener signal reads had been
+  replaced by a string. It needed a thread long enough to summarize *and* a framework
+  recorded against it, which no test combined and the evals are too short to reach.
+
+- **The crisis screen missed phone typing.** iOS curly apostrophes ("don’t") and no
+  apostrophe at all ("dont") both scored NONE on phrases the straight form flagged, and the
+  router shares the same `normalize()`. Both forms now expand like the straight one.
+- **A person could write their own summary and framework state.** `authenticated` held
+  INSERT/UPDATE on `thread_summaries` (free text placed in the system prompt) and
+  `thread_technique_state` (accept a framework, reset the cooldown). Moved to `mani_service`
+  in migration 007.
+- **A typed `[ctx]` block reached the model as metadata** and replayed from history.
+  `context.disarm()` neutralises the markers in anything the person wrote.
+- **A safety concern changed nothing but the router.** Mid-framework, the next stage's
+  question still went out. `[ctx]` now carries `safety: concern`, the framework is paused
+  (not ended), and technique buttons are dropped for that turn.
+- **New chat bypassed a crisis entirely.** A new thread now carries `recent_crisis: yes` for
+  30 days, the fact only - no lock and no content.
+- **`profile.topics` was unbounded** and pasted into every system prompt. Capped (migration 008).
+- **Summaries had never once succeeded.** Every call 404'd: the model was not served by the
+  pinned provider. Now on the pinned Gemini model, and the threshold equals the history
+  window so no message falls between the window and the summary.
+- **A finished or declined framework counted as running forever**, stripping every later
+  technique button and switching the router off for the rest of the thread. One liveness
+  rule in `orchestrator.send`; the cooldown - which the stripped buttons had been enforcing
+  by accident - is now a real check in `repairs.apply`.
+- **A tapped decline was lost** whenever the model returned `state: null`, leaving the offer
+  open. **The model could switch the running framework** through `state.technique`.
+- **A reply cut off at `max_tokens` was never retried and was logged as 0 tokens.** The SDK
+  raises it inside the model step, before LangChain's `parsing_error`. Now one retry, billed
+  at its real usage. An empty reply after repairs is a retryable error, not a 500.
+- **Stage questions carried worked-example details into every conversation** - "your
+  manager", "your sister", "her silence" - plus author notes and asserted conclusions ("This
+  belief is supported by the facts"). 37 asks rewritten; a test now refuses people, author
+  notes and unlicensed feeling words in any ask.
+- **The ending ran in the opposite order to the prompt.** Now closing, then somatic, in all
+  six frameworks, with one body check-in script instead of two.
+- **Contraindications never reached the model** - abuse, a medical cause, a protective
+  action, OCD reassurance-seeking. Now in the Framework Index as "Never offer one when".
+- **Router:** substring matching ("she hates meetings"), a repeated phrase not counting as
+  corroboration, a rule-promoted pick never confident, STOP held behind the two-exchange
+  gate, and "my manager" / "she said" lifting ABCDE in any conversation with a person in it.
+
+- **The opening flow the client specified was never built.** Every chat opened "How can I
+  support you today?" - the Supportive opener - and never asked for a style. It now greets per
+  the spec, asks "How would you like me to speak with you today?" with three style buttons,
+  and a tap sets the style and answers with that style's opener, with no model call.
+- **The prompt had drifted from the client's own examples.** It forbade "I'm sorry you're
+  feeling this way" (in two client examples), required naming the framework (no client example
+  does), paraphrased the "Tell me more" explanations and consent lines, and never gave the
+  model the client's three offer labels. `repairs.py` then deleted the client's own
+  five-word "I want to keep talking" button. All aligned to `docs/specs/conversational-styles.md`.
+- **Offers were made too early and sometimes shared a reply with another question.**
+  `[ctx]` now carries `conversation_phase` and `understanding_turns`; an offer made only by
+  buttons gets the client's permission question, and offer buttons under an unrelated question
+  are dropped.
+
+- **The prompt contradicted itself in about twenty places the model reads on every turn.**
+  Among them:
+  - "let moments breathe without a question" sat two lines above "every reply ends with a
+    question";
+  - "by the name shown there" contradicted "you do not need to name it";
+  - a Vocabulary block approved "I'm listening" (presence outside Supportive) and "so busy"
+    (added scale);
+  - "named or clearly implied" let the model voice feelings no one named;
+  - "never mirror twice in a row" fought the client's own Reflective examples.
+
+  All resolved, with muhammad deciding the three that were product calls (2026-09-23):
+  - same-weight feeling synonyms stay;
+  - mirroring may repeat as long as the voice varies;
+  - passive-ideation phrases are added at concern level.
+
+  The "Before you answer" checklist is folded into the reasoning steps, because it ran after
+  the reply was already written.
+- **Announced presence outside Supportive** survived every prompt wording when someone asked
+  only to be heard. `repairs.py` now removes a sentence that only announces presence ("I'm
+  here", "I'm listening") in Direct and Reflective, never leaving the reply empty.
+- **The chat-tester bypassed the client's flow.** It set the style through PATCH, so the
+  greeting's question hung unanswered in history, and it never rendered buttons. It now
+  starts from the greeting's buttons and renders every button as a tap.
+
+- **Integration tests left fabricated cost rows in the local database.** Deleting a test
+  user sets `llm_calls.user_id` to null instead of removing the row, and one test writes a
+  fake call under the real model name. That left 108 rows and 568K fake input tokens counted
+  as real spend and real cache misses. Every integration fixture now removes its user through
+  `tests/integration/cleanup.py`, which deletes the user's cost rows first, and a full run
+  leaves nothing behind.
+
+- **A retry sent while the first request was still waiting on the model was paid for twice**,
+  and could crash on the unique key. The duplicate check read before the model call and held
+  nothing while it ran. A transaction-scoped advisory lock on the message id now makes the
+  retry wait and return the stored reply.
+- **A message id reused in another conversation returned the first conversation's reply** and
+  wrote nothing where it was sent. It is now refused with 409 `conflict`.
+- **Two summaries started together both paid for a generation.** A non-blocking lock per thread
+  lets the second step aside.
+- **"Tell me more" cost a model call to paraphrase text the client had written word for word.**
+  It is now a fixed reply with the client's explanation and the two re-offer buttons, and the
+  explanations are no longer in the prompt.
+
+- **Printing the settings printed every secret.** An AttributeError on `Settings` includes the
+  whole object in its message, so a log line, a traceback or a Sentry event carried the
+  OpenRouter key, the service-role key, the JWT secret and the database password. It showed
+  up live in a test failure. All five fields are now `repr=False`, and a test asserts none of
+  them appear.
+- **Nothing limited paid calls per person.** `DAILY_MESSAGE_LIMIT` caps one person's messages
+  per 24 hours. It is checked immediately before the model call, so the safety screen and the
+  free fixed replies are never refused. It is **off (0) by default** on muhammad's
+  instruction while testing; his number is 300, and it must be set before real traffic.
 
 ## Measured
 
@@ -412,6 +546,62 @@ at 3,568 on a byte-identical prompt rather than the full 8,194 — the provider 
 prefix, not everything — and a fresh process starts at 0% again. **Whether it survives
 the gap between two real turns, while somebody reads and types, is still unmeasured**,
 and that is what decides whether the remaining prompt reordering is worth doing.
+
+Response shapes across a full eval run, 48 turns over four scenarios and three styles:
+
+```
+mirror and ask 37 · honor and follow 4 · mirror and hold 3 · gentle follow 2 · warmth lead 2
+```
+
+An earlier run showed `mirror and ask` at 94% with three shapes never chosen at all. That
+reading was mostly an artifact: every scripted turn had the person actively offering new
+material, which is exactly the moment a question belongs, so the eval had no turn a
+question-free shape could win. `disclosure_no_question_needed` supplies those turns, and
+run on its own the distribution inverts — `honor and follow` 5, `mirror and ask` 4,
+`mirror and hold` 2, `presence only` 1, no findings. It was rewritten once to avoid the
+wording used in `mani_base`'s worked examples, so what it measures is shape selection
+rather than recall of the examples.
+
+`Reply` declares `reasoning` and `style` before `text`. Structured output is generated in
+schema order (checked against the raw JSON from the provider), so while they sat after
+`text` the opener check in `reasoning` and the shape choice in `style` were written about a
+reply that already existed. Moving them first, `criticism_abcde` run repeatedly:
+
+```
+reasoning after text    6 repeated openers in  9 conversations
+reasoning before text   1 repeated opener  in 15 conversations
+```
+
+A full run afterwards: 1 finding across 48 turns, `mirror and ask` 32 · `honor and follow`
+7 · `mirror and hold` 5 · `gentle follow` 4. The cost is latency: chat calls averaged
+2,829 ms and 178 output tokens before, 3,314 ms and 209 after, because the reasoning is
+now substantive rather than a formality.
+
+Library buttons: the model filled `library` with values that are not sections -
+`"library"`, `"default"`, `"self_care"`, a topic phrase - every time meaning the library in
+general, even with `home` named in both field descriptions. `repairs.py` now sends an
+unknown value to `home` instead of dropping the button, so the end-of-conversation library
+link survives. An enum would fail the whole turn instead.
+
+Memory fold, three live calls: 346-426 output tokens, 2.8-3.7 s each. Against what the
+person actually typed, entries were in their own words except one ("burden"). Before the
+boundary on ideation, it recorded "an urge to disappear or to have never existed"; after it,
+nothing of the kind.
+
+The static system prompt is now about 35.6K characters (was 32.4K): the contraindications
+added 2.3K and the complete `[ctx]` guide 1K. All of it is in the cached prefix.
+
+Full eval after the contradiction pass: 8 scenarios × 3 styles, 84 replies. **1 finding** (an
+introduced feeling word), 0 failed calls, 66% of input tokens cached (53% before), 3.5 s
+average. Static prompt about 39.8K characters.
+
+Token pass: the static prompt is about 38.1K characters (was 39.8K) after moving "Tell me
+more" into code and removing rules stated two or three times. Full eval, 9 scenarios including
+a framework walkthrough, about 100 replies: **0 findings**, 9,563 input tokens per turn (was
+9,855), 67% cached, 219 output, 3.4 s. Gemini reports 0 hidden reasoning tokens, so the reasoning
+field is the only thinking paid for. Tried and reverted: sending only purpose, boundaries and ask
+for the next stage. It saved about 130 tokens a framework turn (1%), and in the A/B the stages
+advanced a turn late, which is not a trade worth making on the core flow.
 
 The exercise hand-off's tool call, on the turn a framework completes:
 
@@ -438,17 +628,29 @@ streaming in v1" — worth revisiting before launch.
   the safety path fires and what Mani must and must not do, and refer throughout to "the
   approved safety protocol" without containing one. Until it exists, an indirect concern
   changes routing only and Mani answers in its own words.
-- **Mani opens replies the same way, and uses one mirroring pattern almost exclusively.**
-  Measured, not guessed: across 435 stored replies, `mirror and ask` is 388 of them - 89% -
-  and a scripted run of three scenarios in all three styles produced 7 findings, 5 of which
-  were consecutive replies opening identically ("Your manager…", "You have…", "You are…").
-  This is not a plumbing gap. `[ctx]` now carries both `conversation_style` and
-  `recent_openers`, and a direct check confirms the block literally reads
-  `recent_openers: "your manager", "your manager"` on the turn where it repeats anyway. The
-  model is told and does not comply. The five mirroring voices the prompt teaches are not
-  all "You…" openers - *Naming* ("That is…"), *Observing* ("It sounds like…"), *Receiving*
-  ("I hear that…") - so the variety is available and unused. Prompt work, tracked here
-  rather than attempted alongside the correctness fixes.
+- **The three styles barely differ in practice.** Measured over 48 replies each run: Direct,
+  Supportive and Reflective land within about 20 characters of one another and ask a question
+  in 75-94% of replies. Supportive is the only one that reliably varies its shape. Defining
+  each style structurally (Direct: one or two sentences, ending on something to act on) made
+  Direct the shortest in two of three runs, but `validators.style_findings` went from 0 to 2-3
+  per run (Direct opening on "I", "I'm here" outside Supportive), and a style check added to the
+  reasoning steps did not help and raised latency, so it was reverted. Openers, which had the
+  same shape of problem, were fixed by schema field order, not prose - that is the lever to try
+  next, not more rules.
+- **Which framework serves a panic attack is ambiguous in the client's own documents.** The
+  overview's selection table sends "panicked" to DBT STOP; the STOP specification itself is
+  written entirely around an action about to be taken, and our `dbt_stop.md` follows it. For
+  panic with no action in sight, STOP's stage questions may not fit. The client's call.
+- **Words the person never used still slip in** - "worried", "concerned", "a lot" - in about 1
+  reply in 10 of the client scenarios. Logged by repairs, not rewritten.
+- **The safety screen misses passive ideation.** "I just want to disappear", "I wish I didn't
+  exist" and "I wish I had never been born" all screen NONE, and in the live data the model's
+  own crisis field did not catch the first either. The phrase lists are clinical content kept
+  deliberately narrow; adding to them is muhammad's call. Memory is told never to record it.
+- **The person cannot see or erase their memory**, short of deleting the account. Check
+  against data-access rights before launch - see ADR-005.
+- **The idle memory fold needs a scheduler.** `scripts/fold_idle_threads.py` is safe to run
+  concurrently and hourly is plenty; without it only "new chat" folds happen.
 - **No exercise hand-off on a crisis turn — a decision, not an omission.** A crisis locks
   the thread one way, so an exercise offered there reaches someone who cannot ask a single
   question about it, and costs a second provider call on a turn whose whole job is to say

@@ -17,7 +17,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from mani.auth.jwt import Claims  # noqa: E402
 from mani.chat import orchestrator  # noqa: E402
 from mani.db import pool, threads  # noqa: E402
-from mani.models.rows import SupportStyle  # noqa: E402
+from mani.models.rows import SupportStyle, TechniqueOutcome  # noqa: E402
 from tests.evals import validators  # noqa: E402
 
 SCENARIOS = pathlib.Path(__file__).with_name("eval_conversations.yaml")
@@ -40,6 +40,7 @@ class Exchange:
     message: str
     reply: str
     repair_notes: list[str] = field(default_factory=list)
+    offered: bool = False
 
 
 class _RepairNoteCapture(logging.Handler):
@@ -56,7 +57,9 @@ class _RepairNoteCapture(logging.Handler):
             self.notes.append(record.getMessage())
 
 
-async def _run_one(user_id: str, style: SupportStyle, turns: list[str]) -> list[Exchange]:
+async def _run_one(
+    user_id: str, style: SupportStyle, turns: list[str], start_in: dict | None = None
+) -> list[Exchange]:
     """One conversation in one style."""
     claims = _claims_for(user_id)
     exchanges: list[Exchange] = []
@@ -67,12 +70,23 @@ async def _run_one(user_id: str, style: SupportStyle, turns: list[str]) -> list[
     previous_level = orch_logger.level
     orch_logger.setLevel(logging.INFO)
 
+    # The client's own opening: the greeting asks how to speak, the person taps a style, and
+    # Mani answers with that style's opener - so every scenario starts the way a real one does.
     async with pool.as_user(claims) as conn:
         async with conn.transaction():
             thread, _ = await orchestrator.start_thread(conn, claims)
-            await threads.apply(
-                conn, thread.id, user_id, threads.ThreadUpdates(conversation_style=style)
-            )
+    async with pool.as_user(claims) as conn:
+        async with conn.transaction():
+            await orchestrator.send(conn, claims, thread.id, style.value.capitalize())
+    if start_in:
+        # A scenario that tests the stages themselves starts with the framework already
+        # accepted, rather than depending on the model offering it on a particular turn.
+        async with pool.as_user(claims) as conn:
+            async with conn.transaction():
+                await threads.set_technique_outcome(
+                    conn, thread.id, user_id, start_in["framework"], TechniqueOutcome.ACCEPTED,
+                    at_message_count=0, phase=start_in["phase"],
+                )
 
     try:
         for message in turns:
@@ -81,7 +95,10 @@ async def _run_one(user_id: str, style: SupportStyle, turns: list[str]) -> list[
                 async with conn.transaction():
                     turn = await orchestrator.send(conn, claims, thread.id, message)
             exchanges.append(
-                Exchange(message=message, reply=turn.content, repair_notes=list(capture.notes))
+                Exchange(
+                    message=message, reply=turn.content, repair_notes=list(capture.notes),
+                    offered=any(p.technique for p in turn.prompts),
+                )
             )
     finally:
         orch_logger.removeHandler(capture)
@@ -90,37 +107,57 @@ async def _run_one(user_id: str, style: SupportStyle, turns: list[str]) -> list[
     return exchanges
 
 
-def _score(exchanges: list[Exchange]) -> list[validators.Finding]:
-    findings = [
-        finding
-        for exchange in exchanges
-        for finding in validators.check(exchange.reply, exchange.message)
-    ]
-    return findings + validators.repeated_openers([e.reply for e in exchanges])
+def _score(
+    exchanges: list[Exchange], style: SupportStyle, *, heard: bool = False
+) -> list[validators.Finding]:
+    """`heard`: the scenario is someone asking only to be heard, where a reply with no
+    question is the right answer, so the stalled-reply check does not apply."""
+    findings: list[validators.Finding] = []
+    for index, exchange in enumerate(exchanges):
+        # Everything they have said so far, as the live repairs judge it: a feeling named
+        # two messages ago is theirs to have mirrored now.
+        said = " ".join(e.message for e in exchanges[: index + 1])
+        findings += validators.check(exchange.reply, said)
+        findings += validators.style_findings(exchange.reply, style.value)
+    findings += validators.repeated_openers([e.reply for e in exchanges])
+    if not heard:
+        findings += validators.unasked_before_offer([(e.reply, e.offered) for e in exchanges])
+    return findings
 
 
 async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--user", required=True, help="an existing auth user id to run as")
     parser.add_argument("--verbose", action="store_true", help="print every reply")
+    parser.add_argument("--scenario", help="run only the scenario with this name")
     args = parser.parse_args()
 
     scenarios = yaml.safe_load(SCENARIOS.read_text())
+    if args.scenario:
+        scenarios = [s for s in scenarios if s["name"] == args.scenario]
     failures = 0
+    # Every reply per style, for the separation table at the end: the styles are meant to
+    # behave differently, and nothing else in the run would show that they do not.
+    by_style: dict[str, list[str]] = {}
 
     # pool.as_user() needs the pool open; nothing here runs under FastAPI's lifespan.
     await pool.open_pool()
 
     for style in SupportStyle:
         for scenario in scenarios:
-            exchanges = await _run_one(args.user, style, scenario["turns"])
-            findings = _score(exchanges)
+            exchanges = await _run_one(
+                args.user, style, scenario["turns"], scenario.get("start_in")
+            )
+            findings = _score(exchanges, style, heard=scenario.get("heard", False))
+            by_style.setdefault(style.value, []).extend(e.reply for e in exchanges)
             failures += len(findings)
 
             print(f"\n=== {scenario['name']} / {style.value} ===")
             if args.verbose:
                 for exchange in exchanges:
                     print(f"  > {exchange.message}\n  < {exchange.reply}")
+                    if exchange.offered:
+                        print("    [offered a framework]")
                     if exchange.repair_notes:
                         print(f"    [repair] {'; '.join(exchange.repair_notes)}")
                     print()
@@ -130,6 +167,13 @@ async def main() -> int:
                 print("  clean")
 
     await pool.close_pool()
+    print("\nstyle         replies  avg chars  asks a question  opens with I")
+    for name, replies in by_style.items():
+        n = len(replies) or 1
+        chars = sum(len(r) for r in replies) / n
+        asks = 100 * sum("?" in r for r in replies) / n
+        own = 100 * sum(r.lstrip().lower().startswith(("i ", "i'", "i\u2019")) for r in replies) / n
+        print(f"{name:<13} {len(replies):>7}  {chars:>9.0f}  {asks:>14.0f}%  {own:>11.0f}%")
     print(f"\ntotal findings: {failures}")
     return 1 if failures else 0
 

@@ -9,6 +9,7 @@ import pytest
 from mani.auth.jwt import Claims
 from mani.config import get_settings
 from mani.db import pool
+from tests.integration.cleanup import remove_test_users
 
 ALICE = "a0000000-0000-4000-8000-0000000000a1"
 BOB = "a0000000-0000-4000-8000-0000000000b1"
@@ -36,7 +37,7 @@ async def db():
     async with pool.as_admin() as conn:
         await conn.execute("delete from public.threads where user_id = any($1::uuid[])",
                            [ALICE, BOB])
-        await conn.execute("delete from auth.users where id = any($1::uuid[])", [ALICE, BOB])
+        await remove_test_users(conn, ALICE, BOB)
         await conn.execute(
             "insert into auth.users (id, email) values ($1,'alice@t.test'),($2,'bob@t.test')",
             ALICE, BOB)
@@ -49,8 +50,7 @@ async def db():
         async with pool.as_admin() as conn:
             await conn.execute("delete from public.threads where user_id = any($1::uuid[])",
                                [ALICE, BOB])
-            await conn.execute("delete from auth.users where id = any($1::uuid[])",
-                               [ALICE, BOB])
+            await remove_test_users(conn, ALICE, BOB)
         await pool.close_pool()
 
 

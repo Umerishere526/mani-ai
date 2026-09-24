@@ -46,7 +46,7 @@ ASSUMED_MOTIVE = (
 ADDED_SCALE = (
     "a lot", "so much", "weighing on you", "that is tough", "that's tough",
     "that is hard", "that's hard", "so exhausting", "must be so", "such a big",
-    "really significant", "so heavy", "overwhelming",
+    "really significant", "so heavy", "overwhelming", "burden",
 )
 
 # A question start, not any occurrence of the word: the specification's own bad example
@@ -228,4 +228,48 @@ def check(reply: str, user_message: str, *, in_framework: bool = False) -> list[
             Finding("long explanation", f"{word_count} words, teaching not responding")
         )
 
+    return findings
+
+
+_ANNOUNCED_PRESENCE = ("i'm here", "i am here", "i'm listening", "i am listening",
+                       "i'm not going anywhere")
+
+
+def style_findings(reply: str, style: str) -> list[Finding]:
+    """The rules in mani_base's "The three styles" that a reply can be checked against.
+
+    Saying presence out loud is a Supportive move only. Reflective shows it listened by what it
+    reflects, never by "I hear you". Direct may open on "I" - the client's own Direct lines are
+    "I'm sorry you're feeling this way" and "I have a structured approach" - just not on
+    announcing that it is there, which the presence rule already catches.
+    """
+    findings: list[Finding] = []
+    lowered = reply.lower().replace("\u2019", "'")
+    if style != "supportive":
+        announced = [p for p in _ANNOUNCED_PRESENCE if p in lowered]
+        if announced:
+            findings.append(Finding("off-style", f"presence announced outside Supportive: {announced}"))
+    if style == "reflective" and "i hear you" in lowered:
+        findings.append(Finding("off-style", "a Reflective reply used \"I hear you\""))
+    return findings
+
+
+_INVITES = re.compile(r"\b(tell me|say more|walk me through)\b", re.IGNORECASE)
+
+
+def unasked_before_offer(replies: list[tuple[str, bool]]) -> list[Finding]:
+    """Replies that ask nothing while Mani is still understanding the issue.
+
+    The client's cadence spends the first two to four exchanges asking, checking and
+    confirming. `replies` pairs each reply with whether it offered a framework; every reply up
+    to and including the first offer must carry a question - the offer's own being its
+    permission question.
+    """
+    findings: list[Finding] = []
+    for text, offered in replies:
+        # An invitation asks too: the client's own "Tell me what is happening right now."
+        if "?" not in text and not _INVITES.search(text):
+            findings.append(Finding("stalled", f"no question before an offer: {text[:60]!r}"))
+        if offered:
+            break
     return findings
