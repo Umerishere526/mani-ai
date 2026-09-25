@@ -14,11 +14,11 @@ endpoint, the real LangChain call, the real router and safety screen - this is n
 - **Real:** every chat turn, every capsule tap, style selection (tapping one of the greeting's
   three style buttons), the nickname in the greeting (`PUT /v1/profile`), framework offers, the somatic hand-off, the exercise hand-off, crisis locking. All of it
   goes over HTTP to the actual FastAPI app - nothing here calls `orchestrator.py` directly.
-- **Real, too:** signing up and signing in, through local Supabase Auth. The backend verifies
-  these tokens exactly as it will a phone's, and they are refreshed when they expire.
-- **Shortened, on purpose:** email confirmation. Local Supabase asks every new account to
-  confirm its email; this tool confirms it through the Admin API right after signup, the one
-  step a real person does from their inbox.
+- **Real, too:** the sign-in that happens automatically on load, through Supabase Auth. The
+  backend verifies the token exactly as it will a phone's, and it is refreshed when it expires.
+- **Fixed, on purpose:** there is no sign-up or sign-in screen. The app always signs in as
+  `CHAT_TESTER_FIXED_USER` (one name, one account, created via the Admin API the first time
+  it's needed) - a public link to this tool can never create or reach any other account.
 
 ## Setup
 
@@ -51,13 +51,10 @@ Then, in another terminal:
 cd chat-tester && source .venv/bin/activate && streamlit run app.py
 ```
 
-The sidebar has three ways in:
-
-- **Quick user** - any name. The same name always signs back in to the same test user and
-  their conversations (`<name>@tester.mani.local`, one shared local password).
-- **Sign in** - an email and password made under Sign up.
-- **Sign up** - a new account with its own email and password, and a nickname for the
-  greeting.
+There is no sign-in screen. On load, the app signs in as `CHAT_TESTER_FIXED_USER`
+(`.env.example` default: `streamlit-tester`, i.e. `streamlit-tester@tester.mani.local`) -
+creating that one account the first time it's needed - and resumes its conversation.
+The sidebar's **New conversation** button starts a fresh thread for that same user.
 
 ## What to look at
 

@@ -36,81 +36,41 @@ def reset_thread_state(thread: dict, messages: list[dict]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Sidebar - the test user and the session controls
+# Session - one fixed test user, signed in automatically. No sign-up or sign-in
+# screen: a public link to this tool must not be able to create or reach any
+# account but this one against the real backend.
 # ---------------------------------------------------------------------------
 
-def start_session(sign_in, label: str, nickname: str, base_url: str) -> None:
-    """Sign in one way or another, then start from a clean slate as that person."""
-    try:
-        session = sign_in()
-        client = mani.ManiClient(session=session, base_url=base_url)
-        if nickname.strip():
-            # Before any chat starts, so the very first greeting already uses it.
-            client.set_profile(nickname.strip())
-    except (RuntimeError, mani.ApiError) as exc:
-        st.error(str(exc))
-        return
-    st.session_state.clear()
-    st.session_state.name = label
-    st.session_state.user_id = session.user_id
-    st.session_state.client = client
-    st.rerun()
+FIXED_TEST_USER = os.environ.get("CHAT_TESTER_FIXED_USER", "streamlit-tester")
 
+if "client" not in st.session_state:
+    try:
+        session = mani.sign_in(FIXED_TEST_USER)
+    except (RuntimeError, mani.ApiError) as exc:
+        st.error(f"Could not sign in the test user: {exc}")
+        st.stop()
+    st.session_state.client = mani.ManiClient(session=session)
+    st.session_state.user_id = session.user_id
 
 with st.sidebar:
-    st.header("Test session")
-    base_url = st.text_input("API base URL", value=mani.API_BASE_URL)
-    quick, returning, new = st.tabs(["Quick user", "Sign in", "Sign up"])
-
-    with quick:
-        name = st.text_input("Test user name", value="tester-1", key="quick_name")
-        nickname = st.text_input("Nickname (greeting)", key="quick_nickname")
-        if st.button("Start / switch user", use_container_width=True):
-            start_session(lambda: mani.sign_in(name), name, nickname, base_url)
-
-    with returning, st.form("sign_in"):
-        email = st.text_input("Email", key="sign_in_email")
-        password = st.text_input("Password", type="password", key="sign_in_password")
-        if st.form_submit_button("Sign in", use_container_width=True):
-            start_session(lambda: mani.sign_in_with_password(email, password), email, "", base_url)
-
-    with new, st.form("sign_up"):
-        email = st.text_input("Email", key="sign_up_email")
-        password = st.text_input("Password", type="password", key="sign_up_password")
-        nickname = st.text_input("Nickname (greeting)", key="sign_up_nickname")
-        if st.form_submit_button("Create account", use_container_width=True):
-            start_session(lambda: mani.sign_up(email, password), email, nickname, base_url)
+    st.header("Session")
+    st.caption(f"backend: {mani.API_BASE_URL}")
+    st.caption(f"test user: {FIXED_TEST_USER}")
 
     # The control itself is gone, not just off, wherever CHAT_TESTER_DEV_MODE is unset - a
     # deployed, client-facing instance - so there is nothing on screen a client could click
     # into and see a framework id, a stage name, or a database read.
     developer = DEV_MODE and st.toggle("Show developer details", key="developer")
 
-    if "client" in st.session_state:
-        st.divider()
-        if st.button("🆕 New conversation", use_container_width=True):
-            try:
-                started = st.session_state.client.start_new_thread()
-            except mani.ApiError as exc:
-                st.error(str(exc))
-                st.stop()
-            reset_thread_state(started["thread"], started["messages"])
-            st.rerun()
-
-if "client" not in st.session_state:
-    st.title("🧠 Mani chat tester")
-    st.write(
-        "A dev interface for trying real conversations against the running backend - "
-        "how a framework gets offered, when the somatic hand-off appears, when an "
-        "exercise follows it. In the sidebar, sign up, sign in, or start a quick test user by "
-        "name."
-    )
-    st.caption(
-        "Needs the backend running (`fastapi dev main.py`) and `chat-tester/.env` filled "
-        "in from `.env.example` - the DATABASE_URL and Supabase keys `supabase status -o env` "
-        "prints."
-    )
-    st.stop()
+    st.divider()
+    if st.button("🆕 New conversation", use_container_width=True):
+        try:
+            started = st.session_state.client.start_new_thread()
+        except mani.ApiError as exc:
+            st.error(str(exc))
+            st.stop()
+        reset_thread_state(started["thread"], started["messages"])
+        st.rerun()
 
 client: mani.ManiClient = st.session_state.client
 
@@ -126,7 +86,7 @@ thread = st.session_state.thread
 
 st.title("🧠 Mani chat tester")
 if developer:
-    st.caption(f"user: {st.session_state.name}  ·  thread: {thread['id'][:8]}…")
+    st.caption(f"user: {FIXED_TEST_USER}  ·  thread: {thread['id'][:8]}…")
 
 # The style is chosen the way a person chooses it in the apps: by tapping one of the
 # greeting's three buttons, which the backend turns into the style and its opener.
