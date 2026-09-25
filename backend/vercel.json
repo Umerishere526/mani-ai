@@ -4,11 +4,5 @@
     "main.py": {
       "maxDuration": 60
     }
-  },
-  "crons": [
-    {
-      "path": "/internal/cron/fold-summaries",
-      "schedule": "0 3 * * *"
-    }
-  ]
+  }
 }
