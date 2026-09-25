@@ -103,6 +103,25 @@ def test_everything_below_production_still_runs_with_neither(environment):
     assert settings.openrouter_api_key == ""
 
 
+def test_cors_origins_reads_as_comma_separated_from_the_environment(monkeypatch):
+    """The field's own comment promises comma-separated values, but pydantic-settings'
+    default env parsing for a list field is JSON only - a bare comma-separated string
+    from a host's env var UI crashes Settings() at import, taking the whole app down."""
+    for key, value in REQUIRED.items():
+        monkeypatch.setenv(key.upper(), value)
+    monkeypatch.setenv("CORS_ORIGINS", "https://a.example.com,https://b.example.com")
+    settings = Settings(_env_file=None)
+    assert settings.cors_origins == ["https://a.example.com", "https://b.example.com"]
+
+
+def test_cors_origins_still_accepts_a_json_array_from_the_environment(monkeypatch):
+    for key, value in REQUIRED.items():
+        monkeypatch.setenv(key.upper(), value)
+    monkeypatch.setenv("CORS_ORIGINS", '["https://a.example.com"]')
+    settings = Settings(_env_file=None)
+    assert settings.cors_origins == ["https://a.example.com"]
+
+
 def test_routing_pins_the_upstream_provider_by_default():
     # Unpinned, OpenRouter may send a conversation to any provider serving the model.
     routing = build().routing()
