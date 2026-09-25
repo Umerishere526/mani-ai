@@ -62,3 +62,149 @@
     - "That I'm bad at my job and everyone saw it."
     - "I stopped talking for the rest of the meeting and avoided her after."
     - "Well, she also asked me to lead the next project, so maybe not everyone thinks that."
+
+# ---------------------------------------------------------------------------
+# Demo rehearsal: whole journeys, improvised openings, and a returning person.
+# `@accept|<line>` taps the offer when there is one, otherwise says <line>.
+# `@tap:<label>` taps a named button. `@newchat` folds memory and opens a second chat.
+# ---------------------------------------------------------------------------
+
+- name: journey_abcde
+  expect_framework: true
+  expect_after_questions: true
+  turns:
+    - "My manager criticized my presentation in front of the whole team."
+    - "She said two of my recommendations didn't have enough support, and now I keep thinking I'm bad at my job."
+    - "@accept|It keeps going round in my head and I'd like to work through it."
+    - "@accept|Yes, I want to look at it properly."
+    - "@accept|Okay."
+    - "She said it in the meeting, right after my slides, in front of everyone."
+    - "That I'm bad at my job and everyone saw it."
+    - "I stopped talking for the rest of the meeting and avoided her afterwards."
+    - "She also asked me to lead the next project, so maybe not everyone thinks that."
+    - "Maybe one presentation had gaps, but it doesn't mean I'm bad at my job."
+    - "Yes, that feels fairer."
+    - "My shoulders feel a bit looser than when we started."
+    - "@tap:Chat More"
+    - "I still keep thinking about that meeting though."
+    - "I guess I want to stop letting one comment decide how I feel about my work."
+    - "Maybe I could ask her for feedback before the next presentation."
+
+# muhammad's own chat, 2026-09-24: on "Try it", Mani asked which problem to work on first, right
+# after being told. The reply after @accept must build on it, not ask again.
+- name: start_keeps_context
+  turns:
+    - "My coworker is a pain."
+    - "They take the credit for my work and present it as their own."
+    - "@accept|It's exhausting. I do all the work and never get the credit for it."
+    - "@accept|I'd like to do something about it."
+    - "@accept|Okay."
+    - "Yes, that's the one."
+- name: journey_behavioral_activation
+  expect_framework: true
+  turns:
+    - "I've been in bed most of the week and I've stopped answering my friends."
+    - "I know I should get up and text them back but I can't make myself start."
+    - "@accept|It's been like this for days and I want to change it."
+    - "@accept|Yes, I'd like help with it."
+    - "@accept|Okay."
+    - "Replying to my friends, going for walks, cooking properly."
+    - "My friends matter to me, I don't want to lose them."
+    - "Replying to my friend Jo would be the one."
+    - "Just sending her one short message."
+    - "Tonight after dinner."
+    - "I might feel embarrassed that I took so long, so I'll just say sorry I've been quiet."
+    - "Yes, that feels doable."
+    - "A bit lighter in my chest."
+    - "@tap:Chat More"
+    - "Thank you."
+
+- name: open_breakup
+  turns:
+    - "My partner and I broke up last week."
+    - "I keep checking my phone hoping they'll text."
+    - "I just feel empty."
+# muhammad's own chat, 2026-09-24: Supportive asked only about the situation and named
+# feelings he never gave ("worried", "afraid", "fear").
+- name: open_losing_someone
+  turns:
+    - "i am hurt"
+    - "i just have a sinking feeling in my heart that i am going to lose something important to me"
+    - "someone close to me"
+    - "they are in poor health and i don't know what i can do to ease their pain"
+    - "it hurts to see them like this"
+- name: open_exam
+  turns:
+    - "I have an exam on Friday and I can't focus."
+    - "Every time I sit down I start thinking I'm going to fail."
+    - "I studied but it never feels like enough."
+- name: open_lonely_move
+  turns:
+    - "I moved to a new city a month ago and I don't really know anyone."
+    - "Evenings are the worst."
+    - "I'm not sure how people make friends as an adult."
+- name: open_family_argument
+  turns:
+    - "I had a big argument with my mum."
+    - "She said I never make time for the family."
+    - "I'm annoyed but I also feel bad."
+- name: open_sleep
+  turns:
+    - "I can't sleep."
+    - "My mind won't switch off when I lie down."
+    - "It's been like this for about two weeks."
+- name: open_procrastination
+  turns:
+    - "I keep putting off a report that's due Monday."
+    - "I open it and then I just go do something else."
+    - "I don't even know why."
+- name: open_unclear
+  turns:
+    - "I don't know what's wrong with me lately."
+    - "I'm just not myself."
+    - "Nothing specific happened."
+- name: open_hi
+  turns:
+    - "hi"
+    - "not much, just wanted to talk"
+    - "work was long today."
+
+- name: returning_person
+  markers: ["sunday", "walk"]
+  turns:
+    - "I always feel low on Sunday nights before the work week starts."
+    - "It's the dread of Monday, all the meetings."
+    - "Going for a walk in the afternoon sometimes helps."
+    - "@newchat"
+    - "Hey, I'm back."
+    - "Work has been stressful again this week."
+    - "I don't really know what to do about it."
+
+- name: journey_thought_reframe
+  expect_framework: true
+  turns:
+    - "My friend hasn't replied to my message for two days."
+    - "I keep thinking she doesn't care about me anymore."
+    - "@accept|That thought won't leave me alone, I'd like to look at it."
+    - "@accept|Yes, I want to work through it."
+    - "@accept|Okay."
+    - "That she doesn't care about me."
+    - "It makes me feel like I don't matter to her."
+    - "Well, she did start a new job this week."
+    - "Maybe she's just swamped, not ignoring me."
+    - "She's busy and hasn't replied yet, but that doesn't mean she doesn't care."
+    - "Yes, that feels fairer."
+    - "My stomach feels less tight than before."
+    - "@tap:Chat More"
+    - "Thanks."
+
+# Saying "Keep chatting" to an offer, carrying on, and being offered something again once it fits.
+- name: decline_then_reoffer
+  turns:
+    - "My manager criticized my presentation in front of the whole team."
+    - "She said two of my recommendations didn't have enough support, and now I keep thinking I'm bad at my job."
+    - "@tap:Keep chatting"
+    - "I just keep replaying her words."
+    - "It's been going round in my head all day."
+    - "I really can't shake the feeling I'm not good enough at this job."
+    - "Honestly I think I'd like some help looking at it."

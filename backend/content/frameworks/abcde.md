@@ -1,7 +1,7 @@
 ---
 id: abcde
 name: ABCDE
-summary: "Walk an activating event through belief, consequence, evidence, and a more balanced belief."
+summary: "These questions help you separate what happened from what you told yourself about it, question what may not be serving you, and come away with a clearer and more useful way of seeing the situation."
 display_order: 1
 phases: [offering, activate, belief, consequence, examine, balanced, closing, somatic]
 activation:
@@ -76,7 +76,7 @@ stages:
       - "must not combine the three tones in one offer"
     if_unclear:
       - when: "the user declines"
-        reply: "You do not want to use a framework. What would be most helpful to talk through?"
+        reply: "You'd rather not try this now. What would be most helpful to talk through?"
     ask:
       supportive: "Would it help to look at it together, one step at a time?"
       reflective: "Would it help to look at what happened, what you took it to mean, and how that has affected you?"
@@ -112,7 +112,7 @@ stages:
       - "must not investigate several beliefs at once"
     if_unclear:
       - when: "a feeling instead of a belief - \"I felt embarrassed.\""
-        reply: "You felt embarrassed. What were you telling yourself at that point? - stay at the user's own weight, in their word or a same-weight synonym; adds no other feeling"
+        reply: "You felt embarrassed. What were you telling yourself at that point?"
       - when: "several beliefs at once"
         reply: "Several thoughts came at once. Which one affected you most?"
     ask:
@@ -151,7 +151,7 @@ stages:
       - when: "part of the belief is accurate - \"I was not prepared enough.\""
         reply: "You were not prepared enough for those questions. Does that prove you are incompetent?"
       - when: "no contrary evidence comes to mind - \"Nothing challenges it.\""
-        reply: "Nothing comes to mind yet. Has anything happened that does not fit the belief? - may refer to information already given, e.g. \"You mentioned that she asked you to lead another project. How does that fit with the belief?\" - never invent evidence"
+        reply: "Nothing comes to mind yet. Has anything happened that does not fit the belief?"
     ask:
       supportive: "What else do you know that does not fit that belief?"
       reflective: "That evidence does not fully fit the original belief. What does it suggest instead?"
@@ -198,7 +198,7 @@ stages:
       - "must not summarize ABCDE before asking the somatic question"
     if_unclear:
       - when: "the user declines the somatic check-in"
-        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
+        reply: "You'd rather not check in with your body right now. Would you like to keep chatting or go to the Library?"
     ask:
       supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
       reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"

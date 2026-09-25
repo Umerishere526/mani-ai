@@ -80,6 +80,13 @@ def framework_index(registry: Registry) -> str | None:
     if rendered:
         lines += ["", "## Telling them apart", ""] + rendered
 
+    # The client's description of each is added to the offer by the backend, so it is not
+    # listed here: a model given the text copied it, and offers showed it twice.
+    lines += [
+        "", "When you offer one, its description is added to your reply for you. You never "
+        "describe the questions or name them: never its name, its id, or the word \"framework\".",
+    ]
+
     # Only the contraindications, not every not_when line: most of those name a different
     # framework to use instead, which "Telling them apart" already says. These name a
     # situation where offering any of it would harm the person.
@@ -159,10 +166,11 @@ def techniques_used(offered: list[str]) -> str | None:
     listed = "\n".join(f"- {name}" for name in offered)
     return (
         "## Techniques Already Offered\n"
-        "These have already been offered in this conversation, whether or not the user "
-        "took them up. Do NOT offer them again:\n"
+        "These have already been offered in this conversation:\n"
         f"{listed}\n\n"
-        "Instead, try different approaches or go deeper on what has already been discussed."
+        "One they said no to may be offered again once `cooldown_passed: yes`, if it still "
+        "fits best - or a different one, if what they have said since has changed what fits. "
+        "One they have just finished may not be offered again."
     )
 
 
@@ -172,6 +180,8 @@ def summary_layer(summary: ThreadSummary | None) -> str | None:
         return None
 
     lines = []
+    if summary.current_issue:
+        lines.append(f"**Current issue:** {summary.current_issue}")
     if summary.summary:
         lines.append(summary.summary)
     if summary.techniques_tried:

@@ -11,18 +11,14 @@ endpoint, the real LangChain call, the real router and safety screen - this is n
 
 ## What it simulates versus what is real
 
-- **Real:** every chat turn, every capsule tap, style selection (`PATCH /v1/threads/{id}`),
-  framework offers, the somatic hand-off, the exercise hand-off, crisis locking. All of it
+- **Real:** every chat turn, every capsule tap, style selection (tapping one of the greeting's
+  three style buttons), the nickname in the greeting (`PUT /v1/profile`), framework offers, the somatic hand-off, the exercise hand-off, crisis locking. All of it
   goes over HTTP to the actual FastAPI app - nothing here calls `orchestrator.py` directly.
-- **Simulated, on purpose:** signing in. The backend has no password login of its own to
-  test against locally, so this tool mints a JWT with the same secret the backend verifies
-  against (`SUPABASE_JWT_SECRET`) and writes a matching row into `auth.users` directly -
-  the one thing a real sign-in does that nothing here can otherwise stand in for. It is a
-  substitute for that one step, not for anything downstream of it.
-- **Simulated, because the backend does not have this yet:** the three-style picker at the
-  start of a conversation. The spec calls for it as capsules on the greeting itself; the
-  backend does not emit those yet, so this tool asks for the style with its own buttons and
-  sets it through the same `PATCH` endpoint a real picker screen would call once built.
+- **Real, too:** signing up and signing in, through local Supabase Auth. The backend verifies
+  these tokens exactly as it will a phone's, and they are refreshed when they expire.
+- **Shortened, on purpose:** email confirmation. Local Supabase asks every new account to
+  confirm its email; this tool confirms it through the Admin API right after signup, the one
+  step a real person does from their inbox.
 
 ## Setup
 
@@ -34,9 +30,12 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Fill in `.env` from `backend/.env` - same `DATABASE_URL`, same `SUPABASE_JWT_SECRET`. If the
-backend was set up with a published key set instead of a shared secret, this tool cannot
-mint a token; add one locally for testing or ask muhammad how the project signs tokens.
+Fill in `.env` from `supabase status -o env`: `API_URL`, `ANON_KEY`, `SERVICE_ROLE_KEY` and
+`DB_URL`. None of them is a secret for local Supabase.
+
+A 401 "Your session has expired" on the very first call means the backend cannot verify real
+Supabase tokens. Local Supabase signs them with a published key set, so `backend/.env` needs
+`SUPABASE_URL` pointing at it (`http://127.0.0.1:54341`) and `SUPABASE_JWT_SECRET` left blank.
 
 ## Running
 
@@ -52,16 +51,22 @@ Then, in another terminal:
 cd chat-tester && source .venv/bin/activate && streamlit run app.py
 ```
 
-Enter any name in the sidebar and press **Start / switch user**. The same name always
-resumes the same test user and their conversations - it is hashed into a stable id, not
-a random one each time.
+The sidebar has three ways in:
+
+- **Quick user** - any name. The same name always signs back in to the same test user and
+  their conversations (`<name>@tester.mani.local`, one shared local password).
+- **Sign in** - an email and password made under Sign up.
+- **Sign up** - a new account with its own email and password, and a nickname for the
+  greeting.
 
 ## What to look at
 
 - **The sidebar's "Framework state" panel** - a direct read of `thread_technique_state`,
   refreshed on every interaction. Watch `phase` move through a framework's stages as the
   conversation continues, and `outcome` flip from `offered` to `accepted` when you tap
-  "Yes, let's try it" or say so in free text.
+  "Try it" or say so in free text. The current framework and stage also show under the title.
+- **"What Mani remembers"** - a direct read of `admin.user_memory`: the patterns folded in
+  from this person's earlier chats. It fills in a few seconds after **New conversation**.
 - **The "Recent calls" panel** - one row per model call, in order, with token counts and
   the cached fraction. A completing framework with a matching exercise shows as two calls
   instead of one; check `admin.exercises.framework_id` if there is content to match.

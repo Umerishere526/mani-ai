@@ -113,6 +113,7 @@ class ThreadSummary(Row):
     thread_id: uuid.UUID
     user_id: uuid.UUID
     summary: str | None = None
+    current_issue: str | None = None
     techniques_tried: list[TechniqueTried] = Field(default_factory=list)
     summarized_through_message_id: uuid.UUID | None = None
     summarized_message_count: int = 0

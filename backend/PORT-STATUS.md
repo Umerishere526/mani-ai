@@ -528,6 +528,56 @@ Behaviour that was ported deliberately differently, with the reason.
   free fixed replies are never refused. It is **off (0) by default** on muhammad's
   instruction while testing; his number is 300, and it must be set before real traffic.
 
+- **The eval ran scenarios as one shared user,** so scenarios started together landed in the
+  same conversation, and every prompt carried that user's folded memory. Each scenario and
+  style now gets a fresh user.
+- **Frameworks often ended without the client's two choices.** The buttons came mislabeled
+  ("Something else") or not at all. The reply that ends a framework now always carries
+  **Chat More** / **Go to Library**, unless the person has already chosen one.
+- **Thought Reframe could not finish.**
+  - Its first stage waited for a literal "yes" while the person elaborated.
+  - Its reframe stage required a 0-100 rating, which is not in the client's spec.
+
+  Readiness now accepts the person's own words; the rating is removed (muhammad, 2026-09-24).
+- **One transient provider failure (Google AI Studio 503, 1 in 265 calls)** is retried once;
+  a timeout is not.
+
+- **Offers follow the client's newer direction (2026-09-24):**
+  - Mani never says a framework's name or the word "framework". It offers "a sequence of
+    questions" and says how it would help with what the person said, using each framework's
+    description from the client (now its `summary`, shown word for word on "Tell me about
+    this").
+  - The buttons are **Try it** / **Tell me about this** / **Keep chatting**.
+  - There is no fixed message count before an offer.
+  - After "Keep chatting" Mani may offer again after three replies: the same framework or a
+    different one. Only a framework just finished is never re-offered.
+  - After a framework ends and the person carries on with the same issue, the client's three
+    forward-moving questions are asked one per reply, tracked in `[ctx]` as
+    `after_framework_question`.
+  - Twelve writer's notes left inside reply text Mani could say were removed from the
+    framework files.
+  - Carrying on talking without answering an offer counts as **Keep chatting**. The model
+    reports it as `accepted: false`, and only a question about the offer keeps it open. The
+    reply that takes a no never carries an offer, and Tell me about this / Keep chatting go
+    with any offer button that is dropped.
+  - Offers are worded fresh each time: "some questions" (a sequence, a set, a few) and how
+    they would help this person. Each framework's `offer_ask` is a model for that sentence,
+    not a line to repeat. The repairs recognise an offer in any of these wordings.
+  - The styles are three personas of one Mani, all warm and friendly. **Direct** aims at a way
+    through what they feel and offers as soon as the fit is clear, often at the first or second
+    reply. **Supportive** leads with feelings before the situation. **Reflective** explores
+    with warm curiosity. Both offer after about two to four exchanges.
+  - **Chat More** / **Go to Library** go on the reply that asks "What would you like to do
+    next?", once. The body check-in question carries neither, unless the person had already
+    described their body and the check-in reply goes straight to what next. The reply after
+    the choice was offered does not offer it again.
+
+- **Buttons appear only at a framework's offer and its end** (the client, 2026-09-24: in ordinary
+  chat they read as a menu). `repairs.apply` drops any other button: in free chat and in the
+  middle of a framework. The body check-in and the practice after it keep theirs, and the
+  greeting's style buttons and Chat More / Go to Library are written by the orchestrator after
+  the repairs, so they are untouched.
+
 ## Measured
 
 Real turns against local Supabase and live OpenRouter, `google/gemini-3-flash-preview`.
@@ -602,6 +652,12 @@ a framework walkthrough, about 100 replies: **0 findings**, 9,563 input tokens p
 field is the only thinking paid for. Tried and reverted: sending only purpose, boundaries and ask
 for the next stage. It saved about 130 tokens a framework turn (1%), and in the A/B the stages
 advanced a turn late, which is not a trade worth making on the core flow.
+
+Demo rehearsal, isolated users, 21 scenarios × 3 styles (307 calls, 0 failed):
+- Journeys reach the body check-in and hand off in 7 of 9 runs; the other two ran out of scripted
+  answers, not stalled.
+- No missing hand-offs, and 1 repeated question.
+- 9,425 input tokens a turn, 69% cached, 3.1 s.
 
 The exercise hand-off's tool call, on the turn a framework completes:
 

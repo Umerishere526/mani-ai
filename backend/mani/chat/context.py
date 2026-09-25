@@ -5,13 +5,21 @@ from __future__ import annotations
 
 import re
 
-from mani.chat.greeting import STYLE_OPTIONS
+from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
 from mani.chat.router import Signal, is_confident
 from mani.db.threads import TurnContext
 from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
 
 # How many messages must pass before a technique may be offered again.
-COOLDOWN_AFTER_DECLINE = 20
+# After "Keep chatting", three of Mani's replies before it may check again - the same
+# framework or a different one, whichever fits now (muhammad, 2026-09-24).
+COOLDOWN_AFTER_DECLINE = 6
+
+# The client: about four rounds of conversation before anything is offered, and Direct sooner
+# (muhammad, 2026-09-24). Counted in the person's own messages since their style's opener.
+FIRST_OFFER_AFTER = {"direct": 2, "supportive": 4, "reflective": 4}
+# The greeting, the style they tapped, and that style's opener.
+OPENING_MESSAGES = 3
 COOLDOWN_AFTER_COMPLETE = 45
 
 # The default when neither the conversation nor the profile has chosen a style yet.
@@ -31,8 +39,6 @@ def _opener(text: str) -> str:
     """The first couple of words of a reply, lowercased - enough to name a repeated opening
     without exposing the reply itself in [ctx]."""
     return " ".join(text.split()[:RECENT_OPENERS_WORDS]).lower()
-
-_STYLE_LABELS = {option["label"].lower() for option in STYLE_OPTIONS}
 
 _CTX_BLOCK = re.compile(r"^\[ctx\].*?\[/ctx\]\s*", re.DOTALL)
 
@@ -60,6 +66,27 @@ def disarm(text: str) -> str:
     return _CTX_MARKER.sub(lambda m: f"({m.group(1)}ctx)", text)
 
 
+def _after_framework_question(history: list[Message]) -> str | None:
+    """The next of the client's three questions, once a framework has ended.
+
+    A framework ends on the reply that offers Chat More. The questions asked since, that reply
+    included, are read from Mani's own replies, so they come in order and none twice. Once that
+    reply has scrolled out of the history window the conversation has moved on, and none are
+    offered.
+    """
+    mani = [m for m in history if m.role is MessageRole.MANI]
+    ended = next(
+        (i for i in range(len(mani) - 1, -1, -1)
+         if any(str(o.get("label", "")).lower() == CHAT_MORE_LABEL.lower()
+                for o in (mani[i].prompt_options or []))),
+        None,
+    )
+    if ended is None:
+        return None
+    since = " ".join(m.content.lower() for m in mani[ended:])
+    return next((q for q in AFTER_FRAMEWORK_QUESTIONS if q.lower().rstrip("?") not in since), None)
+
+
 def cooldown_for(outcome: TechniqueOutcome) -> int:
     return (
         COOLDOWN_AFTER_COMPLETE
@@ -68,11 +95,27 @@ def cooldown_for(outcome: TechniqueOutcome) -> int:
     )
 
 
-def cooldown_passed(ctx: TurnContext) -> bool:
+def clarification_used(history: list[Message] | None) -> bool:
+    """Whether Mani has already asked the client's one-time clarifying question in this
+    conversation. Read from history rather than a stored flag, so it holds even if a process
+    restart drops anything else about how the turn was built."""
+    return any(
+        m.role is MessageRole.MANI
+        and any(q in m.content.lower() for q in CLARIFICATION_QUESTIONS)
+        for m in (history or [])
+    )
+
+
+def cooldown_passed(ctx: TurnContext, *, urgent: bool = False) -> bool:
     """Whether a framework may be offered yet: [ctx] reports it, repairs.apply enforces it."""
     technique = ctx.technique
     if technique is None:
-        return True
+        if urgent:
+            # An action about to be taken is the one case not worth waiting the rounds out.
+            return True
+        # The reply to their Nth message is written at 3 + 2(N - 1) messages.
+        said = (ctx.thread.message_count - OPENING_MESSAGES) // 2 + 1
+        return said >= FIRST_OFFER_AFTER.get(resolve_style(ctx), max(FIRST_OFFER_AFTER.values()))
     return ctx.thread.message_count - technique.at_message_count >= cooldown_for(
         technique.outcome
     )
@@ -99,6 +142,9 @@ def build(
     candidate: Framework | None = None,
     history: list[Message] | None = None,
     safety_concern: bool = False,
+    offer_waiting: bool = False,
+    framework_starting: bool = False,
+    urgent: bool = False,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -121,7 +167,7 @@ def build(
     technique = ctx.technique
     # Named first because every stage_ask and offer_ask below is resolved from it, and named
     # `conversation_style` rather than `style` because `recent_styles` three lines down means
-    # the response shape and voice, which is a different thing entirely.
+    # the response shape, which is a different thing entirely.
     lines: list[str] = [f"conversation_style: {resolve_style(ctx)}"]
     if safety_concern:
         # The deterministic screen heard something that may be a risk. The framework waits:
@@ -137,26 +183,31 @@ def build(
     if running:
         phase = "framework"
     elif not ctx.techniques_offered and technique is None:
-        # Nothing offered yet: the two to four exchanges the client's cadence spends asking,
+        # Nothing offered yet: the exchanges the client's cadence spends asking,
         # checking and confirming before a framework is offered.
         phase = "understanding"
     else:
         phase = "talking"
     lines.append(f"conversation_phase: {phase}")
-    if phase == "understanding":
-        # Their messages so far, this one included. The greeting's style tap is a choice of
-        # how to be spoken to, not something they said about what is going on.
-        said = [
-            m for m in (history or [])
-            if m.role is MessageRole.USER and m.content.strip().lower() not in _STYLE_LABELS
-        ]
-        lines.append(f"understanding_turns: {len(said) + 1}")
+    if not running and not clarification_used(history):
+        lines.append("clarification_available: yes")
+    if not running:
+        # What the question is about while no stage decides it (muhammad, 2026-09-24): said
+        # here, next to the message, because the style rule in the long prompt alone did not hold.
+        focus = "next step" if resolve_style(ctx) == "direct" else "feelings"
+        lines.append(f"question_focus: {focus}")
+    if offer_waiting:
+        # Mani's last reply was an offer, and they typed rather than tapped.
+        lines.append("offer_waiting: yes")
+    question = None if safety_concern else _after_framework_question(history or [])
+    if question:
+        lines.append(f"after_framework_question: {question}")
 
     if technique is None:
         lines.append("cooldown_passed: yes")
     else:
         since_last = ctx.thread.message_count - technique.at_message_count
-        lines.append(f"cooldown_passed: {'yes' if cooldown_passed(ctx) else 'no'}")
+        lines.append(f"cooldown_passed: {'yes' if cooldown_passed(ctx, urgent=urgent) else 'no'}")
         lines.append(f"since_last: {since_last}")
         lines.append(f"this_thread: {technique.framework_id} ({technique.outcome})")
         if (
@@ -175,12 +226,10 @@ def build(
         lines.append(f"history: {tried}")
 
     if ctx.recent_styles:
-        styles = " → ".join(
-            f"{s.shape} ({s.voice})" if s.voice else s.shape for s in ctx.recent_styles
-        )
+        styles = " → ".join(s.shape for s in ctx.recent_styles)
         lines.append(f"recent_styles: {styles}")
 
-    # A separate signal from recent_styles: that is the abstract shape/voice, this is the
+    # A separate signal from recent_styles: that is the abstract shape, this is the
     # literal words a reply opened with - two replies can vary in shape while still starting
     # the same way, which is what "recent_styles" alone cannot catch.
     mani_replies = [m.content for m in (history or []) if m.role is MessageRole.MANI]
@@ -194,14 +243,24 @@ def build(
     if shortlist and not safety_concern:
         ranked = ", ".join(f"{s.framework_id} ({s.score:.2f})" for s in shortlist)
         lines.append(f"framework_shortlist: {ranked}")
-        if candidate is not None and is_confident(shortlist):
+        if candidate is not None and is_confident(shortlist) and cooldown_passed(ctx, urgent=urgent):
+            # The client's description is not here: the backend adds it to the offer, and a
+            # model given the text copied it, so offers showed it twice.
             lines.extend(_stage_lines("offer", candidate, "offering", resolve_style(ctx)))
 
     if running:
         style = resolve_style(ctx)
+        if framework_starting:
+            # They have just said yes. What they told Mani before this counts; a stage they
+            # have already answered is checked back, not asked again.
+            lines.append("framework_starting: yes")
         lines.append(f"active_framework: {framework.id}")
         lines.append(f"framework_stages: {', '.join(framework.phases)}")
-        lines.extend(_stage_lines("stage", framework, technique.phase, style))
+        stage = _stage_lines("stage", framework, technique.phase, style)
+        if offer_waiting:
+            # The offering stage's question is the offer they have just typed past.
+            stage = [line for line in stage if not line.startswith("stage_ask:")]
+        lines.extend(stage)
         index = framework.phase_index(technique.phase)
         if 0 <= index < len(framework.phases) - 1:
             lines.extend(

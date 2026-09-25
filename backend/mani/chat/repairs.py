@@ -6,8 +6,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from mani.chat.greeting import CLARIFICATION_QUESTIONS, EXPLAIN_LABELS
 from mani.chat.techniques import Registry
-from mani.llm.schema import SHAPES, VOICES, LibrarySection, Reply, SmartPrompt, Style
+from mani.llm.schema import SHAPES, LibrarySection, Reply, SmartPrompt, Style
 
 MAX_PROMPTS = 3
 MAX_TITLE_LENGTH = 100
@@ -47,6 +48,7 @@ FEELING_WORDS = frozenset(
         "isolated", "lonely", "lost", "miserable", "overwhelmed", "panicked", "rejected",
         "resentful", "sad", "scared", "stressed", "terrified", "trapped", "unloved",
         "unwanted", "upset", "worried", "worthless",
+        "empty", "heartbroken", "heavy", "numb", "painful", "scary",
         # The adjectival forms, which describe the situation rather than the person and are
         # the shape a capsule label usually takes: "It's frustrating", "It's exhausting".
         "depressing", "devastating", "draining", "embarrassing", "exhausting",
@@ -63,9 +65,14 @@ SELF_JUDGMENTS = (
     "i'm broken", "i am broken", "not enough", "being needy", "being difficult",
 )
 
-# Five, because the client's own offer button "I want to keep talking" is five words
-# (docs/specs/conversational-styles.md). Past that a label is becoming a sentence.
+# Five: room for a choice in the person's own voice. Past that a label is becoming a sentence.
 MAX_CAPSULE_WORDS = 5
+
+# Where a reply may carry buttons besides an offer: the body check-in and the practice that ends
+# a framework. Everywhere else a button reads as a menu instead of a conversation (client,
+# 2026-09-24). The greeting's style buttons and Chat More / Go to Library are written by the
+# orchestrator after this runs, so they are not affected.
+ENDING_STAGES = frozenset({"somatic", "grounding"})
 
 # Keyed lowercase so a model's casing does not matter; valued at the canonical casing so
 # whatever reaches the client to navigate on is always exactly what LibrarySection defines.
@@ -81,17 +88,24 @@ PERMISSION_QUESTIONS = {
 
 # Words that mark a reply's question as the offer itself rather than some other question.
 _OFFER_WORDS = re.compile(
-    r"\btry\b|structured|work through|would it help|one step at a time|look at it together",
+    r"\btry\b|structured|work through|would it help|one step at a time|look at it together"
+    r"|questions\b|go through|shall we",
     re.IGNORECASE,
 )
 
-# A sentence whose whole job is to announce that Mani is present. mani_base keeps that a
-# Supportive move; Direct shows presence by a next step and Reflective by what it reflects.
-_PRESENCE_SENTENCE = re.compile(
-    r"(?:^|(?<=[.!?])[ \t]+|(?<=\n))"
-    r"I(?:'m|\u2019m| am) (?:right )?(?:here|listening|not going anywhere)\b[^.!?\n]*[.!?]?[ \t]*",
+# A sentence that makes an offer: the questions it offers ("a set of questions", "a few
+# questions"), or the permission question after them. Offers are worded fresh each time.
+_OFFER_SENTENCE = re.compile(
+    r"(?:^|(?<=[.!?])|(?<=\n))[ \t]*[^.!?\n]*"
+    r"(?:(?:sequence|set|series) of questions|\b(?:a few|some) questions\b"
+    r"|would (?:you like|it help) to (?:try|work through|look at|go through)"
+    r"|shall we (?:try|go through|look at))"
+    r"[^.!?\n]*[.!?]?",
     re.IGNORECASE,
 )
+
+# The question a reply ends on, if it ends on one.
+_LAST_QUESTION = re.compile(r"(?:^|(?<=[.!?])[ \t]+|(?<=\n))([^.!?\n]*\?)\s*$")
 
 WORD = re.compile(r"[a-z']+")
 
@@ -139,7 +153,62 @@ class Repaired:
 
 
 def _is_offer_button(prompt: SmartPrompt) -> bool:
-    return bool(prompt.technique or prompt.decline or prompt.label.strip().lower() == "tell me more")
+    return bool(prompt.technique or prompt.decline or prompt.label.strip().lower() in EXPLAIN_LABELS)
+
+
+def _without_clarification(text: str) -> str:
+    """The reply without a repeated ask of the client's fixed clarifying question."""
+    match = _LAST_QUESTION.search(text)
+    if match and match.group(1).strip().lower().rstrip("?") + "?" in CLARIFICATION_QUESTIONS:
+        return text[: match.start(1)].rstrip()
+    return text
+
+
+def _without_their_name(text: str, name: str, *, keep_one: bool) -> str:
+    """The reply with their name said to them removed: always as the first word, and every
+    time when it has been used already. With `keep_one`, the first later use stays."""
+    first = re.compile(rf"^{re.escape(name)},\s*(\w)")
+    text = first.sub(lambda m: m.group(1).upper(), text)
+    vocative = re.compile(rf",\s*{re.escape(name)}(?=\s*[.!?,])")
+    matches = list(vocative.finditer(text))
+    for match in reversed(matches[1:] if keep_one else matches):
+        text = text[: match.start()] + text[match.end():]
+    return text
+
+
+def with_the_check_in(text: str, script: str) -> str:
+    """The body check-in, sent word for word. The client's flow (2026-09-24) treats it as
+    fixed content: Mani's reflection stays, its own version of the question does not."""
+    if script in text:
+        return text
+    match = _LAST_QUESTION.search(text)
+    reflection = text[: match.start(1)].rstrip() if match else text.rstrip()
+    return f"{reflection}\n\n{script}" if reflection else script
+
+
+def _without_permission_question(text: str) -> str:
+    """The reply without a closing question that asks whether they want to try."""
+    match = _LAST_QUESTION.search(text)
+    if match and _OFFER_WORDS.search(match.group(1)):
+        return text[: match.start(1)].rstrip()
+    return text
+
+
+def _compose_offer(
+    part: str, registry: Registry, framework_id: str, style: str, last_mani_text: str | None
+) -> str:
+    """Mani's part, the client's description, the client's question: one paragraph each.
+
+    The description is left out when the last reply already showed it, which is the offer
+    made again after they asked what it involves, or when the model wrote it itself.
+    """
+    framework = registry.get(framework_id)
+    description = " ".join(framework.summary.split()) if framework and framework.summary else ""
+    # Exactly once: not again when the last reply showed it, nor when the model wrote it anyway.
+    already = " ".join(f"{last_mani_text or ''} {part}".split())
+    if description and description in already:
+        description = ""
+    return "\n\n".join(p for p in (part, description, PERMISSION_QUESTIONS[style]) if p)
 
 
 def _normalize(name: str) -> str:
@@ -160,6 +229,10 @@ def apply(
     cooldown_passed: bool,
     conversation_style: str,
     wants_title: bool,
+    last_mani_text: str | None = None,
+    nickname: str | None = None,
+    name_said_before: bool = False,
+    clarification_already_used: bool = False,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again.
 
@@ -173,12 +246,22 @@ def apply(
     if leaked:
         notes.append(f"stripped script metadata: {', '.join(leaked)}")
 
-    if conversation_style != "supportive":
-        without = _BLANK_RUN.sub("\n\n", _PRESENCE_SENTENCE.sub("", text)).strip()
-        # Only when something is left to send: a reply that was nothing but presence stays.
-        if without and without != text:
-            notes.append(f"removed announced presence outside Supportive ({conversation_style})")
-            text = without
+    if clarification_already_used:
+        # The client's one-time check, backstopped in code: [ctx] already told the model not
+        # to ask again, this is what makes "never twice" true regardless.
+        stripped = _without_clarification(text)
+        if stripped != text:
+            notes.append("removed a repeated one-time clarification")
+            text = stripped
+
+    if nickname:
+        # Their name at most once in a conversation, never as the first word: observed in two
+        # replies out of three. Only the name said to them is removed, never the sentence.
+        named = _without_their_name(text, nickname, keep_one=not name_said_before)
+        if named != text:
+            notes.append("removed their name, already used or said first")
+            text = named
+
 
     theirs = words(said)
     # Observational only, for now: the capsule check below can safely drop a bad button,
@@ -218,6 +301,11 @@ def apply(
             # Offering back the button the user just pressed reads as not listening.
             notes.append(f"dropped the button the user just tapped: {label}")
             continue
+        if key in EXPLAIN_LABELS and any(p.technique for p in reply.prompts or []):
+            # An offer has two buttons, Try it and Keep chatting (muhammad, 2026-09-24): the
+            # offer's own words already say how the questions would help.
+            notes.append(f"dropped an explain button from an offer: {label}")
+            continue
         # A label may not name a feeling they did not name, judge them, or run long enough
         # to be a sentence. Dropping the button is the whole correction: rewriting one would
         # put different words in their mouth rather than none.
@@ -234,7 +322,7 @@ def apply(
         if prompt.library is not None:
             # A button pointing nowhere is worse than no button: it navigates the person
             # out of the conversation and into a section that does not exist. Case is
-            # normalized the same way shape and voice are - checked loosely, stored exactly,
+            # normalized the same way the shape is - checked loosely, stored exactly,
             # so a client navigating on this string always gets the canonical spelling.
             # An unknown value still meant the library - observed: "library", "default", a
             # topic phrase - so it opens the front page rather than losing the button.
@@ -279,22 +367,43 @@ def apply(
         seen_labels.add(key)
         kept.append(prompt)
 
+    # Tell me about this and Keep chatting answer an offer, and so does the question asking it.
+    # Once the offer's own button is gone they answer nothing, so they go with it - the words
+    # only when something is left to send.
+    if any(p.technique for p in reply.prompts or []) and not any(p.technique for p in kept):
+        orphaned = [p.label for p in kept if _is_offer_button(p)]
+        if orphaned:
+            kept = [p for p in kept if not _is_offer_button(p)]
+            notes.append(f"dropped offer buttons left without their offer: {orphaned}")
+        without = _BLANK_RUN.sub("\n\n", _OFFER_SENTENCE.sub("", text)).strip()
+        if without and without != text:
+            notes.append("removed the words of an offer whose button was dropped")
+            text = without
+
     if len(kept) > MAX_PROMPTS:
         notes.append(f"trimmed {len(kept)} buttons to {MAX_PROMPTS}")
         kept = kept[:MAX_PROMPTS]
 
-    # An offer is a question the buttons answer. Buttons alone ask nothing, so the client's
-    # permission question is added - approved wording, not an invented sentence. Buttons under
-    # a different question offer one thing while asking another, so those are dropped: the
+    # An offer is built here, not by the model (muhammad, 2026-09-24): Mani's own part, then
+    # the client's description of the questions word for word, so the person sees what they
+    # would come away with, then the client's permission question for the style. A question
+    # of the model's own asking that permission gives way to the client's. Any other question
+    # means the offer shares a reply with something else, so its buttons are dropped: the
     # offer can come next turn, and a reply is never left asking two things at once.
-    if any(p.technique for p in kept):
-        if "?" not in text:
-            text = f"{text} {PERMISSION_QUESTIONS[conversation_style]}"
-            notes.append("added the permission question to an offer made only by buttons")
-        elif not _OFFER_WORDS.search(text):
+    offered_id = next((p.technique for p in kept if p.technique), None)
+    if offered_id is not None:
+        part = _without_permission_question(text)
+        if part != text:
+            notes.append("replaced the model's permission question with the client's")
+        if "?" in part:
             dropped = [p.label for p in kept if _is_offer_button(p)]
             kept = [p for p in kept if not _is_offer_button(p)]
             notes.append(f"dropped offer buttons under a question that is not the offer: {dropped}")
+            # Its words go too, or the person reads an offer with nothing to answer it.
+            without = _BLANK_RUN.sub("\n\n", _OFFER_SENTENCE.sub("", part)).strip()
+            text = without or part
+        else:
+            text = _compose_offer(part, registry, offered_id, conversation_style, last_mani_text)
 
     framework_id: str | None = None
     phase: str | None = None
@@ -325,6 +434,11 @@ def apply(
             if phase is None:
                 framework_id = None
 
+    at_the_end = framework_running and (phase or current_phase) in ENDING_STAGES
+    if kept and not at_the_end and not any(p.technique for p in kept):
+        notes.append(f"dropped buttons outside an offer or a framework's end: {[p.label for p in kept]}")
+        kept = []
+
     title = clean_title(reply.title) if wants_title else None
 
     # Case and spacing are normalized before the check because a model reading a table of
@@ -333,15 +447,11 @@ def apply(
     style = reply.style
     if style is not None:
         shape = style.shape.strip().lower()
-        voice = style.voice.strip().lower() if style.voice else None
         if shape not in SHAPES:
             notes.append(f"dropped an off-list response shape: {style.shape}")
             style = None
         else:
-            if voice is not None and voice not in VOICES:
-                notes.append(f"dropped an off-list mirroring voice: {style.voice}")
-                voice = None
-            style = Style(shape=shape, voice=voice)
+            style = Style(shape=shape)
 
     return Repaired(
         text=text,

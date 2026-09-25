@@ -4,6 +4,8 @@
 import datetime as dt
 import uuid
 
+import pytest
+
 from mani.chat import context
 from mani.chat.orchestrator import find_tapped_prompt, pending_offer
 from mani.chat.router import Signal
@@ -14,6 +16,7 @@ from mani.models.rows import (
     MessageRole,
     Profile,
     ResponseStyle,
+    SupportStyle,
     TechniqueOutcome,
     TechniqueState,
     TechniqueTried,
@@ -108,7 +111,9 @@ def test_a_finished_framework_waits_longer_than_a_declined_one():
     )
 
 
-def test_recent_styles_are_listed_so_a_reply_can_avoid_repeating_one():
+def test_recent_styles_are_listed_by_shape_so_a_reply_can_avoid_repeating_one():
+    """Rows stored before the voice field went still carry one; the model is shown shapes only,
+    since it is no longer asked to rotate voices (muhammad, 2026-09-24)."""
     block = context.build(
         TurnContext(
             thread=thread(), profile=None, technique=None,
@@ -118,7 +123,7 @@ def test_recent_styles_are_listed_so_a_reply_can_avoid_repeating_one():
             ],
         )
     )
-    assert "recent_styles: mirror and ask (naming) → presence only" in block
+    assert "recent_styles: mirror and ask → presence only" in block
 
 
 def test_recent_openers_are_extracted_from_manis_own_replies():
@@ -249,6 +254,31 @@ def test_a_confident_candidate_adds_its_offer_line_resolved_to_style():
     )
     assert "offer_purpose: Offer the framework once the event and belief are understood." in block
     assert "offer_ask: Would you like to work through it?" in block
+
+
+def test_the_model_is_never_handed_the_description_it_must_not_write():
+    """The backend adds the client's description to every offer (muhammad, 2026-09-24). Given
+    the text as well, the model copied it, and offers showed it twice."""
+    confident = framework().model_copy(update={"summary": "These questions help you see it clearly."})
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        shortlist=[Signal("abcde", 2.6, ["she said"], spread=2)],
+        candidate=confident,
+    )
+    assert "offer_" in block, "the offer stage itself still reaches the model"
+    assert "These questions help you see it clearly." not in block
+
+
+def test_the_turn_a_framework_starts_says_so():
+    """Observed: on Try it, Mani asked "which problem would help most to address first?" of
+    someone who had just named it - the first stage's question, asked as written."""
+    offered = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
+        phase="offering", at_message_count=8,
+    )
+    ctx = TurnContext(thread=thread(), profile=None, technique=offered)
+    assert "framework_starting: yes" in context.build(ctx, framework=framework(), framework_starting=True)
+    assert "framework_starting" not in context.build(ctx, framework=framework())
 
 
 def test_an_unconfident_shortlist_carries_no_candidate_content():
@@ -397,15 +427,93 @@ def test_the_block_says_which_phase_of_the_conversation_this_is():
     assert "conversation_phase: talking" in context.build(after_offer)
 
 
-def test_the_understanding_phase_counts_what_they_have_said_but_not_the_style_tap():
-    """Every client example offers on the reply to the person's third message. The count
-    is what lets the model hold the offer until then; tapping a style is not a message."""
-    history = [
-        mani("Hi Sam. It's MANI. How would you like me to speak with you today?"),
-        user("Direct"),
-        mani("How can I help you today?"),
-        user("I feel like I might have a panic attack."),
-        mani("I'm sorry you're feeling this way. Tell me what is happening right now."),
+
+def test_supportive_and_reflective_ask_about_feelings_and_direct_about_the_next_step():
+    """muhammad, 2026-09-24: Supportive and Reflective focus their questions on how the person
+    feels rather than the situation; Direct moves toward a way through. Said next to the
+    message, where a style rule in the long prompt alone did not hold."""
+    for style, focus in (("supportive", "feelings"), ("reflective", "feelings"), ("direct", "next step")):
+        chosen = thread().model_copy(update={"conversation_style": SupportStyle(style)})
+        ctx = TurnContext(thread=chosen, profile=None, technique=None)
+        assert f"question_focus: {focus}" in context.build(ctx)
+
+
+def _finished_framework_history(*later: str) -> list:
+    """A framework that ended on the client's two choices, then whatever Mani said since."""
+    return [
+        mani("Your shoulders feel looser. Does that feel right? What would you like to do next?",
+             options=[{"label": "Chat More"}, {"label": "Go to Library", "library": "home"}]),
+        user("Chat More"),
+        *[mani(text) for text in later],
     ]
-    block = context.build(TurnContext(thread=thread(), profile=None, technique=None), history=history)
-    assert "understanding_turns: 2" in block
+
+
+def test_after_a_framework_the_next_of_the_clients_three_questions_is_offered():
+    ctx = TurnContext(thread=thread(), profile=None, technique=None, techniques_offered=["abcde"])
+    block = context.build(ctx, history=_finished_framework_history())
+    assert "after_framework_question: What feels most important about this now?" in block
+
+    block = context.build(ctx, history=_finished_framework_history(
+        "You're still thinking about it. What feels most important about this now?"))
+    assert "after_framework_question: What do you think you need to do differently from here?" in block
+
+
+def test_a_question_asked_on_the_reply_carrying_chat_more_counts_as_asked():
+    """Observed: the reply that ended the framework also asked the first question, and the
+    next reply asked it again."""
+    ctx = TurnContext(thread=thread(), profile=None, technique=None, techniques_offered=["abcde"])
+    history = [
+        mani("The meeting is still on your mind. What feels most important about this now?",
+             options=[{"label": "Chat More"}, {"label": "Go to Library", "library": "home"}]),
+        user("I want to stop letting one comment decide how I feel."),
+    ]
+    block = context.build(ctx, history=history)
+    assert "after_framework_question: What do you think you need to do differently from here?" in block
+
+
+def test_once_all_three_are_asked_there_is_no_after_framework_question():
+    ctx = TurnContext(thread=thread(), profile=None, technique=None, techniques_offered=["abcde"])
+    block = context.build(ctx, history=_finished_framework_history(
+        "What feels most important about this now?",
+        "What do you think you need to do differently from here?",
+        "How could you take one small step toward that?"))
+    assert "after_framework_question" not in block
+
+
+def test_a_declined_offer_may_come_back_after_three_replies():
+    """muhammad, 2026-09-24: after "I want to keep talking", check again after a few more
+    messages - the same framework or a different one, whichever fits now."""
+    assert context.COOLDOWN_AFTER_DECLINE == 6
+
+
+@pytest.mark.parametrize(
+    ("style", "first_allowed"), [("direct", 2), ("supportive", 4), ("reflective", 4)]
+)
+def test_nothing_is_offered_before_the_conversation_has_had_its_rounds(style, first_allowed):
+    """The client: about four rounds of conversation before anything is offered; Direct sooner
+    (muhammad, 2026-09-24). Supportive offered on the first message about a panic attack."""
+    def may_offer_on(person_message: int) -> bool:
+        # The greeting, the style they tapped, its opener, then one pair per message.
+        count = 3 + 2 * (person_message - 1)
+        chosen = thread(count).model_copy(update={"conversation_style": SupportStyle(style)})
+        return context.cooldown_passed(TurnContext(thread=chosen, profile=None, technique=None))
+
+    assert not may_offer_on(first_allowed - 1)
+    assert may_offer_on(first_allowed)
+
+
+def test_the_one_time_clarification_is_offered_only_before_it_has_been_used():
+    """The client: check once, 'Do I have this right?' or 'What would you like us to focus on
+    today?'. Never twice. Detected from Mani's own history, not a stored flag, so it holds
+    even across a process restart."""
+    not_yet = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        history=[mani("What happened after that?")],
+    )
+    assert "clarification_available: yes" in not_yet
+
+    already_asked = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        history=[mani("Do I have this right?"), user("Yes."), mani("What happened then?")],
+    )
+    assert "clarification_available" not in already_asked

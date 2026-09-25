@@ -24,7 +24,11 @@ def registry() -> Registry:
 
 
 def reply(**overrides) -> Reply:
-    return Reply(**({"text": "That sounds heavy to carry."} | overrides))
+    return Reply(**({"text": "Thank you for telling me."} | overrides))
+
+
+# Where buttons are allowed besides an offer, for the tests about what a button may say.
+AT_THE_END = {"framework_running": True, "current_phase": "somatic", "current_framework_id": "abcde"}
 
 
 def fix(registry, model_reply, **overrides):
@@ -45,7 +49,9 @@ def fix(registry, model_reply, **overrides):
 
 def test_mirroring_the_users_own_word_is_not_censored(registry):
     """The reference refused "heavy" anywhere, while instructing Mani to mirror."""
-    assert fix(registry, reply()).text == "That sounds heavy to carry."
+    mirrored = fix(registry, reply(text="That sounds heavy to carry."), said="it all feels so heavy")
+    assert mirrored.text == "That sounds heavy to carry."
+    assert mirrored.notes == []
 
 
 def test_leaked_script_metadata_is_stripped(registry):
@@ -67,7 +73,9 @@ def test_an_already_offered_technique_is_dropped(registry):
         ]
     )
     fixed = fix(registry, offered_again, already_offered=["abcde"])
-    assert [p.label for p in fixed.prompts] == ["Not right now"]
+    # The button left behind answers an offer that is gone, and ordinary chat carries none.
+    assert fixed.prompts == []
+    assert any("already-offered" in n for n in fixed.notes)
 
 
 def test_the_technique_being_offered_is_not_a_duplicate_of_itself(registry):
@@ -98,7 +106,9 @@ def test_no_framework_is_offered_from_inside_a_running_one(registry):
         current_phase="belief",
         framework_running=True,
     )
-    assert [p.label for p in fixed.prompts] == ["Keep talking"]
+    # A stage in the middle of a framework carries no buttons at all.
+    assert fixed.prompts == []
+    assert sum("inside a running framework" in n for n in fixed.notes) == 2
 
 
 def test_an_invented_technique_id_is_refused(registry):
@@ -111,13 +121,13 @@ def test_the_button_the_user_just_tapped_is_not_offered_back(registry):
     echoed = reply(
         prompts=[SmartPrompt(label="Yes, let's try it"), SmartPrompt(label="Tell me more")]
     )
-    fixed = fix(registry, echoed, selected_label="  yes, let's try it ")
+    fixed = fix(registry, echoed, selected_label="  yes, let's try it ", **AT_THE_END)
     assert [p.label for p in fixed.prompts] == ["Tell me more"]
 
 
 def test_more_than_three_buttons_are_trimmed(registry):
     many = reply(prompts=[SmartPrompt(label=f"Option {n}") for n in range(6)])
-    assert len(fix(registry, many).prompts) == repairs.MAX_PROMPTS
+    assert len(fix(registry, many, **AT_THE_END).prompts) == repairs.MAX_PROMPTS
 
 
 def test_reply_text_mirroring_an_established_feeling_is_not_flagged(registry):
@@ -155,9 +165,20 @@ def test_a_capsule_cannot_put_a_feeling_in_their_mouth_but_may_mirror_their_own(
             SmartPrompt(label="I was not enough for her at all"),
         ]
     )
-    fixed = fix(registry, mixed, said="I felt embarrassed in front of everyone")
+    fixed = fix(registry, mixed, said="I felt embarrassed in front of everyone", **AT_THE_END)
     assert [p.label for p in fixed.prompts] == ["Still embarrassed"]
     assert len(fixed.notes) == 2
+
+
+def test_the_feeling_capsules_seen_in_a_supportive_chat_are_dropped(registry):
+    """Observed with the feelings-first focus (2026-09-24): "I feel heavy", "It's scary", to
+    someone who had said only that they were hurt and had a sinking feeling."""
+    offered = reply(prompts=[
+        SmartPrompt(label="I feel heavy"), SmartPrompt(label="It's scary"),
+        SmartPrompt(label="Feeling numb"), SmartPrompt(label="Not sure"),
+    ])
+    fixed = fix(registry, offered, said="i am hurt. i have a sinking feeling in my heart", **AT_THE_END)
+    assert [p.label for p in fixed.prompts] == ["Not sure"]
 
 
 def test_a_capsule_that_judges_them_is_dropped(registry):
@@ -165,7 +186,7 @@ def test_a_capsule_that_judges_them_is_dropped(registry):
     judging = reply(
         prompts=[SmartPrompt(label="Tell me more"), SmartPrompt(label="I'm overthinking it")]
     )
-    fixed = fix(registry, judging)
+    fixed = fix(registry, judging, **AT_THE_END)
     assert [p.label for p in fixed.prompts] == ["Tell me more"]
     assert fixed.notes
 
@@ -205,9 +226,9 @@ def test_a_title_is_ignored_when_none_was_asked_for(registry):
 def test_a_clean_reply_is_left_alone(registry):
     clean = reply(
         prompts=[SmartPrompt(label="Tell me more")],
-        style=Style(shape="mirror and ask", voice="naming"),
+        style=Style(shape="mirror and ask"),
     )
-    fixed = fix(registry, clean)
+    fixed = fix(registry, clean, **AT_THE_END)
     assert fixed.notes == []
     assert [p.label for p in fixed.prompts] == ["Tell me more"]
 
@@ -215,9 +236,9 @@ def test_a_clean_reply_is_left_alone(registry):
 def test_a_style_the_model_reports_in_title_case_still_counts(registry):
     """The shapes are taught in a table, so the model returns them capitalised as often as
     not. Dropping those would starve the anti-repetition loop rather than protect it."""
-    titled = reply(style=Style(shape="Mirror And Ask", voice="Naming"))
+    titled = reply(style=Style(shape="Mirror And Ask"))
     fixed = fix(registry, titled)
-    assert fixed.style == Style(shape="mirror and ask", voice="naming")
+    assert fixed.style == Style(shape="mirror and ask")
     assert fixed.notes == []
 
 
@@ -225,20 +246,19 @@ def test_an_off_list_shape_is_dropped_rather_than_failing_the_turn(registry):
     """A value outside the set is a ValidationError if the schema types it as an enum, and
     that costs a second provider call and then the person's message. It is only a self
     report about a reply that is otherwise fine, so it is dropped and the reply stands."""
-    invented = reply(style=Style(shape="vibes", voice="naming"))
+    invented = reply(style=Style(shape="vibes"))
     fixed = fix(registry, invented)
     assert fixed.style is None
-    assert fixed.text == "That sounds heavy to carry."
+    assert fixed.text == "Thank you for telling me."
     assert fixed.notes
 
 
-def test_an_off_list_voice_keeps_the_shape_it_came_with(registry):
-    """voice is already nullable and shape is the anchor the block formats around, so only
-    the half that is wrong is discarded."""
-    half_wrong = reply(style=Style(shape="mirror and ask", voice="shouting"))
-    fixed = fix(registry, half_wrong)
-    assert fixed.style == Style(shape="mirror and ask", voice=None)
-    assert fixed.notes
+def test_the_model_is_never_asked_for_a_mirroring_voice():
+    """muhammad, 2026-09-24: mirroring is there but never forced. Asking for a voice every
+    turn, never the same twice, forced the rotation the prompt no longer asks for."""
+    style = Reply.model_json_schema()["$defs"]["Style"]
+    assert set(style["properties"]) == {"shape"}
+    assert "voice" not in Reply.model_fields["style"].description
 
 
 def test_a_button_to_a_library_section_that_does_not_exist_lands_on_the_library_home(registry):
@@ -249,7 +269,7 @@ def test_a_button_to_a_library_section_that_does_not_exist_lands_on_the_library_
         prompts=[SmartPrompt(label="Go to Library", library="library"),
                  SmartPrompt(label="Tell me more")]
     )
-    fixed = fix(registry, nowhere)
+    fixed = fix(registry, nowhere, **AT_THE_END)
     assert [(p.label, p.library) for p in fixed.prompts] == [
         ("Go to Library", "home"), ("Tell me more", None),
     ]
@@ -262,7 +282,7 @@ def test_a_library_section_the_model_cased_differently_is_kept_and_corrected(reg
     lowercased = reply(
         prompts=[SmartPrompt(label="Read more", library="emotionalintelligence")]
     )
-    fixed = fix(registry, lowercased)
+    fixed = fix(registry, lowercased, **AT_THE_END)
     assert [p.library for p in fixed.prompts] == ["EmotionalIntelligence"]
     assert fixed.notes == []
 
@@ -274,7 +294,8 @@ def test_a_technique_offered_before_the_cooldown_has_passed_is_dropped(registry)
         prompts=[SmartPrompt(label="Try it", technique="abcde"), SmartPrompt(label="Not now")]
     )
     fixed = fix(registry, early, cooldown_passed=False)
-    assert [p.label for p in fixed.prompts] == ["Not now"]
+    # The button left behind answers an offer that is gone, and ordinary chat carries none.
+    assert fixed.prompts == []
     assert any("cooldown" in n for n in fixed.notes)
 
 
@@ -302,18 +323,64 @@ def test_state_naming_a_different_framework_than_the_running_one_is_ignored(regi
     assert any("not the running one" in n for n in fixed.notes)
 
 
-def test_the_clients_own_offer_buttons_all_survive(registry):
-    """docs/specs/conversational-styles.md specifies these three, word for word. The longest
-    is five words; a four-word cap was deleting the client's own "keep talking" choice."""
-    offer = reply(prompts=[
-        SmartPrompt(label="Yes, let's try it", technique="abcde"),
-        SmartPrompt(label="Tell me more"),
-        SmartPrompt(label="I want to keep talking", decline=True),
-    ])
+def test_the_offer_buttons_are_try_it_and_keep_chatting(registry):
+    """Two buttons under every offer (muhammad, 2026-09-24): both survive the label-length and
+    offer-coherence repairs, and a "Tell me about this" the model still adds is dropped."""
+    offer = reply(
+        text="I have a sequence of questions that could help. Would you like to try it?",
+        prompts=[
+            SmartPrompt(label="Try it", technique="abcde"),
+            SmartPrompt(label="Tell me about this"),
+            SmartPrompt(label="Keep chatting", decline=True),
+        ],
+    )
     fixed = fix(registry, offer)
-    assert [p.label for p in fixed.prompts] == [
-        "Yes, let's try it", "Tell me more", "I want to keep talking",
-    ]
+    assert [p.label for p in fixed.prompts] == ["Try it", "Keep chatting"]
+
+
+def test_an_offer_refused_by_the_cooldown_takes_its_words_with_it(registry):
+    """Dropping only the buttons left "Would you like to try it?" asking for a yes that
+    nothing could take. The mirror before it stays."""
+    early = reply(
+        text="You open the report and then move away from it. I have a sequence of questions "
+             "that could help you start. Would you like to try it?",
+        prompts=[
+            SmartPrompt(label="Try it", technique="abcde"),
+            SmartPrompt(label="Tell me about this"),
+            SmartPrompt(label="Keep chatting", decline=True),
+        ],
+    )
+    fixed = fix(registry, early, cooldown_passed=False)
+    assert fixed.prompts == []
+    assert fixed.text == "You open the report and then move away from it."
+
+
+@pytest.mark.parametrize("offer", [
+    "There's a set of questions that could help you with this. Would you like to try it?",
+    "We could go through a few questions together. Would you like to try that?",
+    "There are some questions that might help set your mind at ease. Shall we go through them?",
+    "Would it help to look at it together, one step at a time?",
+])
+def test_an_offer_in_any_wording_goes_with_its_button(registry, offer):
+    """Offers are worded fresh each time (muhammad, 2026-09-24), so recognising one cannot
+    depend on a single fixed sentence."""
+    early = reply(
+        text=f"You open the report and then move away from it. {offer}",
+        prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
+    )
+    fixed = fix(registry, early, cooldown_passed=False)
+    assert fixed.text == "You open the report and then move away from it."
+
+
+def test_varied_offer_wording_keeps_its_buttons(registry):
+    offer = reply(
+        text="There are some questions that might help set your mind at ease. Shall we go through them?",
+        prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                 SmartPrompt(label="Tell me about this"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
+    )
+    assert [p.label for p in fix(registry, offer).prompts] == ["Try it", "Keep chatting"]
 
 
 def test_an_offer_made_only_by_buttons_gets_the_clients_permission_question(registry):
@@ -322,14 +389,13 @@ def test_an_offer_made_only_by_buttons_gets_the_clients_permission_question(regi
     silent = reply(
         text="You're replaying the exchange and wondering where you went wrong.",
         prompts=[
-            SmartPrompt(label="Yes, let's try it", technique="abcde"),
-            SmartPrompt(label="Tell me more"),
-            SmartPrompt(label="I want to keep talking", decline=True),
+            SmartPrompt(label="Try it", technique="abcde"),
+            SmartPrompt(label="Keep chatting", decline=True),
         ],
     )
     fixed = fix(registry, silent, conversation_style="direct")
     assert fixed.text.endswith("Would you like to try it with me?")
-    assert len(fixed.prompts) == 3
+    assert len(fixed.prompts) == 2
 
 
 def test_offer_buttons_under_a_different_question_are_dropped(registry):
@@ -348,39 +414,177 @@ def test_offer_buttons_under_a_different_question_are_dropped(registry):
     assert fixed.text.endswith("What feels strongest right now?")
 
 
-def test_a_real_offer_is_left_alone(registry):
+def test_a_real_offer_keeps_its_buttons(registry):
+    """A question asking whether they want to try is the offer itself, not a second question,
+    so the buttons stay; its wording gives way to the client's."""
     offer = reply(
         text="I have a structured approach that can help you work through this. Would you like to try it with me?",
-        prompts=[SmartPrompt(label="Yes, let's try it", technique="abcde"),
-                 SmartPrompt(label="Tell me more"),
-                 SmartPrompt(label="I want to keep talking", decline=True)],
+        prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
     )
     fixed = fix(registry, offer, conversation_style="direct")
-    assert fixed.text == offer.text and len(fixed.prompts) == 3
+    assert len(fixed.prompts) == 2
+    assert fixed.text.startswith("I have a structured approach that can help you work through this.")
+    assert fixed.text.endswith("Would you like to try it with me?")
+
+
+@pytest.mark.parametrize("style", ["direct", "supportive", "reflective"])
+def test_presence_reaches_the_person_in_any_style(registry, style):
+    """muhammad, 2026-09-24: presence may be said in any style when the moment calls for it,
+    so a reply that says it reaches the person as written."""
+    text = "I'm here. What happened after she left?"
+    fixed = fix(registry, reply(text=text), conversation_style=style)
+    assert fixed.text == text
+    assert fixed.notes == []
+
+
+def test_ordinary_chat_carries_no_buttons(registry):
+    """The client: buttons in ordinary chat read as a menu, not a conversation (2026-09-24)."""
+    chatty = reply(text="What happened next?", prompts=[
+        SmartPrompt(label="Tell me more"), SmartPrompt(label="Not sure"),
+    ])
+    fixed = fix(registry, chatty)
+    assert fixed.prompts == []
+    assert any("outside an offer or a framework's end" in n for n in fixed.notes)
+
+
+def test_an_offer_keeps_its_two_buttons(registry):
+    offer = reply(
+        text="There are some questions that could help with this. Would you like to try them?",
+        prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
+    )  # its question gives way to the client's, see the composed-offer tests
+    assert [p.label for p in fix(registry, offer).prompts] == ["Try it", "Keep chatting"]
+
+
+def test_the_end_of_a_framework_keeps_its_buttons(registry):
+    practice = reply(
+        text="Hand on your chest. In for four, out for six, three times.",
+        prompts=[SmartPrompt(label="I tried it"), SmartPrompt(label="Still tense"),
+                 SmartPrompt(label="Feeling better")],
+    )
+    fixed = fix(registry, practice, framework_running=True, current_phase="grounding",
+                current_framework_id="abcde")
+    assert [p.label for p in fixed.prompts] == ["I tried it", "Still tense", "Feeling better"]
+
+
+def test_a_stage_in_the_middle_of_a_framework_carries_no_buttons(registry):
+    mid = reply(text="What did she say?", prompts=[SmartPrompt(label="Not sure")])
+    fixed = fix(registry, mid, framework_running=True, current_phase="belief",
+                current_framework_id="abcde")
+    assert fixed.prompts == []
+
+
+DESCRIBED = Framework(
+    id="abcde", name="ABCDE", body="b", phases=["offering", "activate", "ground"],
+    summary="These questions help you separate what happened from what you told yourself about it.",
+)
+OFFER_BUTTONS = [
+    SmartPrompt(label="Try it", technique="abcde"),
+    SmartPrompt(label="Keep chatting", decline=True),
+]
+
+
+def test_an_offer_shows_the_clients_description_word_for_word_then_asks():
+    """muhammad, 2026-09-24: every offer shows the client's description of the questions word
+    for word, so the person sees what they would come away with. The backend adds it, so it
+    can never be paraphrased or dropped, then the client's permission question for the style."""
+    part = ("Her silence keeps coming back to you. "
+            "There are some questions we could go through together for this.")
+    fixed = fix(Registry([DESCRIBED]), reply(text=part, prompts=OFFER_BUTTONS),
+                conversation_style="supportive")
+    assert fixed.text == (
+        f"{part}\n\n{DESCRIBED.summary}\n\nWould it help to work through it together?"
+    )
+    assert [p.label for p in fixed.prompts] == ["Try it", "Keep chatting"]
+
+
+def test_the_models_own_permission_question_gives_way_to_the_clients():
+    """Told not to ask, the model sometimes asks anyway. Two permission questions in one reply
+    read as a form, so the client's wording is the one that stays."""
+    part = "You keep going over what he said. There are some questions we could go through."
+    fixed = fix(Registry([DESCRIBED]),
+                reply(text=f"{part} Would you like to try them?", prompts=OFFER_BUTTONS),
+                conversation_style="direct")
+    assert fixed.text == f"{part}\n\n{DESCRIBED.summary}\n\nWould you like to try it with me?"
+    assert fixed.text.count("?") == 1
+
+
+def test_the_description_is_not_repeated_when_the_last_reply_showed_it():
+    """They asked what it involves, and Mani explained in its own words and offered again.
+    The description is already on their screen, so only the question is added."""
+    explained = "We would look at what happened, and at what you told yourself about it."
+    last = f"There are some questions for this.\n\n{DESCRIBED.summary}\n\nWould you like to try it?"
+    fixed = fix(Registry([DESCRIBED]), reply(text=explained, prompts=OFFER_BUTTONS),
+                conversation_style="reflective", last_mani_text=last)
+    assert fixed.text == f"{explained}\n\nWould you like to try it?"
+
+
+def test_a_description_the_model_already_wrote_is_not_added_twice():
+    """Offers showed the description twice when the model copied it as well. Word for word,
+    exactly once."""
+    part = f"There are some questions we could go through together for this. {DESCRIBED.summary}"
+    fixed = fix(Registry([DESCRIBED]), reply(text=part, prompts=OFFER_BUTTONS),
+                conversation_style="direct")
+    assert fixed.text.count(DESCRIBED.summary) == 1
+    assert fixed.text.endswith("Would you like to try it with me?")
 
 
 @pytest.mark.parametrize(
-    ("style", "text", "expected"),
+    ("text", "said_before", "expected"),
     [
-        # Live replies, Direct and Reflective, after someone asked only to be heard.
-        ("reflective", "Then we'll just talk. I'm listening whenever you're ready to share more.",
-         "Then we'll just talk."),
-        ("reflective", "I'm listening. Tell me what is happening for you right now.",
-         "Tell me what is happening for you right now."),
-        ("direct", "I appreciate you sharing that with me. I'm here if you have more to get out.",
-         "I appreciate you sharing that with me."),
-        # Supportive may say it - the client's own Supportive example does.
-        ("supportive", "I'm here with you. What was it about the text?", "I'm here with you. What was it about the text?"),
-        # Never left with nothing to send.
-        ("reflective", "I'm here.", "I'm here."),
-        # The client's own Direct lines open on "I" and announce nothing.
-        ("direct", "I'm sorry you're feeling this way. Tell me what is happening right now.",
-         "I'm sorry you're feeling this way. Tell me what is happening right now."),
+        # Observed: "Sam" in two of three replies, and as a reply's first word.
+        ("I'm right here with you, Sam. What happened?", True, "I'm right here with you. What happened?"),
+        ("Sam, what happened after that?", False, "What happened after that?"),
+        # Once in a conversation is fine.
+        ("Thank you for telling me, Sam. What happened?", False, "Thank you for telling me, Sam. What happened?"),
     ],
 )
-def test_presence_is_announced_only_in_supportive(registry, style, text, expected):
-    """mani_base: saying presence out loud is a Supportive move only; Direct shows it by a
-    clear next step and Reflective by what it reflects. The model's habit wins over the prompt
-    when someone asks just to be heard, so the sentence is removed rather than argued with."""
-    fixed = fix(registry, reply(text=text), conversation_style=style)
+def test_their_name_is_used_once_at_most_and_never_first(registry, text, said_before, expected):
+    fixed = fix(registry, reply(text=text), nickname="Sam", name_said_before=said_before)
     assert fixed.text == expected
+
+
+def test_an_offer_sharing_a_reply_with_another_question_leaves_no_half_offer(registry):
+    """Its buttons go, so the offer can come next turn; its words go with them, or the person
+    reads an offer with nothing to answer it."""
+    stacked = reply(
+        text="What does that feel like for you? There are some questions we could go through together for this.",
+        prompts=OFFER_BUTTONS,
+    )
+    fixed = fix(registry, stacked)
+    assert fixed.prompts == []
+    assert fixed.text == "What does that feel like for you?"
+
+
+CHECK_IN = ("Before we move on, let's check in. What are you noticing in your body right now "
+            "compared with when we started?")
+
+
+def test_the_body_check_in_is_sent_word_for_word():
+    """The client: the somatic flow follows the supplied script exactly, never reworded. Mani's
+    reflection stays; its own version of the question gives way to the script's."""
+    reworded = "You can wait without deciding what it means. How does your body feel now?"
+    assert repairs.with_the_check_in(reworded, CHECK_IN) == (
+        f"You can wait without deciding what it means.\n\n{CHECK_IN}"
+    )
+
+
+def test_a_check_in_already_word_for_word_is_left_alone():
+    exact = f"You can wait without deciding what it means. {CHECK_IN}"
+    assert repairs.with_the_check_in(exact, CHECK_IN) == exact
+
+
+def test_a_repeated_clarification_never_reaches_the_person(registry):
+    """Code enforces the 'never twice' half of the client's one-time check, regardless of
+    what the model does: the [ctx] line already told it not to, this is the backstop."""
+    twice = reply(text="Right, that makes sense. What would you like us to focus on today?")
+    fixed = fix(registry, twice, clarification_already_used=True)
+    assert fixed.text == "Right, that makes sense."
+    assert any("clarification" in n for n in fixed.notes)
+
+
+def test_the_first_clarification_is_left_alone(registry):
+    first = reply(text="A few things came up there. Do I have this right?")
+    fixed = fix(registry, first, clarification_already_used=False)
+    assert fixed.text == first.text

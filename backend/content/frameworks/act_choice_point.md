@@ -1,7 +1,7 @@
 ---
 id: act_choice_point
 name: ACT Choice Point
-summary: "Choose how to respond while a thought, feeling, or situation that cannot be resolved is still present."
+summary: "These questions help you notice the difficult thought or feeling, reconnect with what matters to you, and choose an action that reflects the person you want to be. By the end, you will have a direction you can take even when the situation or your feelings have not changed."
 display_order: 5
 phases: [offering, situation, present, pull, matters, toward, action, closing, somatic]
 activation:
@@ -104,7 +104,7 @@ stages:
       - when: "focuses on controlling another - \"I need them to approve.\""
         reply: "Their approval depends on them. What remains within your control?"
       - when: "the situation is actually controllable - \"I need to decide which bill to pay first.\""
-        reply: "You can compare the bills and make a decision. Would practical problem-solving fit better than this framework? - does not automatically begin another framework; the user decides"
+        reply: "You can compare the bills and make a decision. Would it help more to work through the practical options instead?"
     ask:
       supportive: "Their response is not something you can control. What part still belongs to you?"
       reflective: "Their approval remains outside your control. What choice remains available to you?"
@@ -189,7 +189,7 @@ stages:
       - when: "response depends on another person - \"They need to admit that I am right.\""
         reply: "Their admission depends on them. What response is within your control?"
       - when: "response creates danger - \"I should confront him alone.\""
-        reply: "Confronting him alone could place you at risk. What response protects your safety? - if immediate danger, the safety protocol"
+        reply: "Confronting him alone could place you at risk. What response protects your safety?"
       - when: "framed as removing the feeling - \"I'll do this so the anxiety stops.\""
         reply: "That would help the anxiety settle. What does it move you toward, apart from that?"
     ask:
@@ -236,7 +236,7 @@ stages:
       - "must not summarize ACT Choice Point before asking the somatic question"
     if_unclear:
       - when: "the user declines the somatic check-in"
-        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
+        reply: "You'd rather not check in with your body right now. Would you like to keep chatting or go to the Library?"
     ask:
       supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
       reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"

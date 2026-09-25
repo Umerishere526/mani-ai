@@ -29,25 +29,25 @@ def greeting(nickname: str | None, returning: bool) -> str:
     return f"{hello} {STYLE_QUESTION}"
 
 
-# What Mani says when the person taps "Tell me more" on an offer, word for word from the same
-# spec ("Tell me more" explanations, by style). It is followed by the offer again, with two
-# buttons: try it, or keep talking.
-TELL_ME_MORE = {
-    "direct": (
-        "It gives us a clear way to work through what is happening one step at a time. I'll ask "
-        "you focused questions, help you look at what is driving the reaction, and guide you "
-        "through the process without rushing you. You stay in control of what you want to share."
-    ),
-    "supportive": (
-        "Of course. It gives us a way to slow things down and work through what is happening one "
-        "step at a time. I'll ask you some questions, we'll look at what is coming up for you, and "
-        "we'll work through it together. You can share as much or as little as feels comfortable."
-    ),
-    "reflective": (
-        "Of course. We'll slow things down and look at what is happening one part at a time. I'll "
-        "reflect back what I'm understanding, ask questions to help you look more closely at what "
-        "is coming up, and check with you along the way to make sure I'm understanding you "
-        "correctly. You can always correct me or tell me when something does not fit."
-    ),
-}
-TELL_ME_MORE_LABEL = "Tell me more"
+# Buttons asking what an offer involves. An offer carries two, Try it and Keep chatting
+# (muhammad, 2026-09-24), and repairs drops one of these the model still adds, since the offer's
+# own words say how the questions would help.
+TELL_ME_ABOUT_THIS_LABEL = "Tell me about this"
+EXPLAIN_LABELS = {TELL_ME_ABOUT_THIS_LABEL.lower(), "tell me more"}
+
+# The two choices every framework ends on - the client's cadence: "Framework completes ->
+# Somatic check-in -> Chat More OR Go to Library".
+CHAT_MORE_LABEL = "Chat More"
+GO_TO_LIBRARY_LABEL = "Go to Library"
+
+# Asked in this order, one per reply, once a framework has finished and the person carries on
+# with the same issue - the client's "three forward-moving reflective questions".
+AFTER_FRAMEWORK_QUESTIONS = (
+    "What feels most important about this now?",
+    "What do you think you need to do differently from here?",
+    "How could you take one small step toward that?",
+)
+
+# The client's own check, asked at most once per conversation when several things have come
+# up and it is unclear which matters most (muhammad, 2026-09-24: "never a new loop").
+CLARIFICATION_QUESTIONS = ("do i have this right?", "what would you like us to focus on today?")

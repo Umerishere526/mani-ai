@@ -1,7 +1,7 @@
 ---
 id: structured_problem_solving
 name: Structured Problem-Solving
-summary: "Turn an overwhelming practical problem into one clear decision and one realistic first action."
+summary: "We'll go through a few focused questions. By the end, you will have turned a problem that feels unclear or overwhelming into a practical next step."
 display_order: 4
 phases: [offering, problem, facts, control, outcome, options, compare, select, first_action, closing, somatic]
 activation:
@@ -104,7 +104,7 @@ stages:
       - when: "several combined"
         reply: "The deadline, your coworker, and your manager are separate concerns. Which one do you want to resolve first?"
       - when: "framed as unsolvable rather than named - \"There's no way to fix this, I could never figure it out.\""
-        reply: "It feels unsolvable right now. What is the actual problem underneath that? - the doubt is worth noting, not arguing with, and the framework still needs one specific problem to work with"
+        reply: "It feels unsolvable right now. What is the actual problem underneath that?"
     ask:
       supportive: "Several parts of this are difficult at once. Which problem would help most to address first?"
       reflective: "Several issues are connected here. Which one is the central problem?"
@@ -174,7 +174,7 @@ stages:
       - when: "only one option - \"The only thing I can do is quit.\""
         reply: "Quitting is the only option you see right now. What other response could address the immediate problem?"
       - when: "asks MANI to decide - \"Tell me what to do.\""
-        reply: "You want a direct answer. What options are you currently considering? - may help generate options but does not choose"
+        reply: "You want a direct answer. What options are you currently considering?"
     ask:
       supportive: "You want a response that is manageable and clear. What options come to mind?"
       reflective: "Several responses may support the outcome. What possibilities do you see?"
@@ -253,7 +253,7 @@ stages:
       - "must not summarize Structured Problem-Solving before asking the somatic question"
     if_unclear:
       - when: "the user declines the somatic check-in"
-        reply: "You do not want to do the somatic framework. Would you like to continue chatting or go to the Library?"
+        reply: "You'd rather not check in with your body right now. Would you like to keep chatting or go to the Library?"
     ask:
       supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
       reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"

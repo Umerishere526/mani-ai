@@ -8,7 +8,7 @@ import asyncpg
 from mani.models.rows import TechniqueTried, ThreadSummary
 
 COLUMNS = (
-    "thread_id, user_id, summary, techniques_tried, "
+    "thread_id, user_id, summary, current_issue, techniques_tried, "
     "summarized_through_message_id, summarized_message_count"
 )
 
@@ -31,6 +31,7 @@ async def upsert(
     techniques_tried: list[TechniqueTried],
     summarized_through_message_id: uuid.UUID | str | None,
     summarized_message_count: int,
+    current_issue: str | None = None,
 ) -> ThreadSummary:
     """Replace the summary for a thread.
 
@@ -42,17 +43,18 @@ async def upsert(
     row = await conn.fetchrow(
         f"""
         insert into public.thread_summaries
-            (thread_id, user_id, summary, techniques_tried,
+            (thread_id, user_id, summary, current_issue, techniques_tried,
              summarized_through_message_id, summarized_message_count)
-        values ($1, $2, $3, $4::jsonb, $5, $6)
+        values ($1, $2, $3, $4, $5::jsonb, $6, $7)
         on conflict (thread_id) do update set
             summary                       = excluded.summary,
+            current_issue                 = excluded.current_issue,
             techniques_tried              = excluded.techniques_tried,
             summarized_through_message_id = excluded.summarized_through_message_id,
             summarized_message_count      = excluded.summarized_message_count
         returning {COLUMNS}
         """,
-        thread_id, user_id, summary,
+        thread_id, user_id, summary, current_issue,
         [t.model_dump() for t in techniques_tried],
         summarized_through_message_id, summarized_message_count,
     )

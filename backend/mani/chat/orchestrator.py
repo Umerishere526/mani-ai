@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import re
 import uuid
 from dataclasses import dataclass, field
 
@@ -13,10 +14,10 @@ import asyncpg
 from mani.auth.jwt import Claims
 from mani.chat import context, crisis, repairs, router, safety
 from mani.chat.greeting import (
+    CHAT_MORE_LABEL,
+    GO_TO_LIBRARY_LABEL,
     OPENERS,
     STYLE_OPTIONS,
-    TELL_ME_MORE,
-    TELL_ME_MORE_LABEL,
     greeting,
 )
 from mani.config import get_settings
@@ -30,7 +31,7 @@ from mani.db import (
 )
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
-from mani.llm.schema import Reply, SmartPrompt
+from mani.llm.schema import LibrarySection, Reply, SmartPrompt
 from mani.models.rows import (
     Exercise,
     Message,
@@ -58,6 +59,29 @@ SUMMARY_THRESHOLD = messages_db.CONTEXT_WINDOW
 # The router narrows once there is enough to narrow from. Below this, one or two messages
 # is not a pattern - it is the start of a conversation.
 ROUTER_MIN_EXCHANGES = 2
+
+_HANDOFF_LABELS = {CHAT_MORE_LABEL.lower(), GO_TO_LIBRARY_LABEL.lower()}
+
+# The client's two questions that end a framework: what next once the check-in is answered,
+# and the same choice when they decline it.
+_ASKS_WHAT_NEXT = re.compile(
+    r"what would you like to do (next|now)|keep chatting or go to the library", re.IGNORECASE
+)
+
+
+def _handoff() -> list[SmartPrompt]:
+    return [
+        SmartPrompt(label=CHAT_MORE_LABEL),
+        SmartPrompt(label=GO_TO_LIBRARY_LABEL, library=LibrarySection.HOME.value),
+    ]
+
+
+def _offered_handoff(history: list[Message]) -> bool:
+    """Whether Mani's last reply already put the two choices in front of them."""
+    last = next((m for m in reversed(history) if m.role is MessageRole.MANI), None)
+    return bool(last and any(
+        str(o.get("label", "")).lower() in _HANDOFF_LABELS for o in (last.prompt_options or [])
+    ))
 
 
 @dataclass(frozen=True)
@@ -146,6 +170,11 @@ def _decided_framework(
     if outcome is TechniqueOutcome.DECLINED and live is not None:
         return live.framework_id
     return None
+
+
+def _finished(technique: TechniqueState | None) -> bool:
+    """A framework they completed: accepted, with its phase cleared on retirement."""
+    return bool(technique and technique.outcome is TechniqueOutcome.ACCEPTED and not technique.phase)
 
 
 def _conversation(history: list[Message]) -> list[dict[str, str]]:
@@ -262,8 +291,6 @@ async def send(
 
     tapped = find_tapped_prompt(history, content)
     offer = pending_offer(history)
-    if tapped and offer and tapped.label.strip().lower() == TELL_ME_MORE_LABEL.lower():
-        return await _explain_offer(conn, ctx, content, offer, client_message_id)
     offered_now = list(ctx.techniques_offered)
     outcome = technique.outcome if technique else None
     accepted_this_turn = False
@@ -307,13 +334,14 @@ async def send(
     # registry. No model call, so a false or missing shortlist costs relevance, never safety.
     shortlist: list[router.Signal] = []
     candidate = None
+    urgent = router.urgent(user_texts)
     if (
         technique is None
         and assessment.level is safety.Level.NONE
         and (
             ctx.thread.message_count // 2 >= ROUTER_MIN_EXCHANGES
             # An imminent action is the one case not worth waiting two exchanges on.
-            or router.urgent(user_texts)
+            or urgent
         )
     ):
         shortlist = router.shortlist(user_texts, config.registry.activations)
@@ -336,7 +364,8 @@ async def send(
     active_framework = config.registry.get(technique.framework_id) if technique else None
     prefix = context.build(
         ctx, shortlist=shortlist, framework=active_framework, candidate=candidate,
-        history=history, safety_concern=assessment.blocks_framework,
+        history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
+        framework_starting=accepted_this_turn, urgent=urgent,
     )
     for_model = (
         f'User tapped the button: "{tapped.label}".'
@@ -344,8 +373,8 @@ async def send(
         else context.disarm(content)
     )
 
-    # Checked here, right before the only paid step, so the safety screen and every free
-    # reply (style opener, "Tell me more") come first and are never refused.
+    # Checked here, right before the only paid step, so the safety screen and the free style
+    # opener come first and are never refused.
     if settings.daily_message_limit:
         sent = await messages_db.count_from_user_since(conn, user_id, hours=24)
         if sent >= settings.daily_message_limit:
@@ -389,9 +418,27 @@ async def send(
             accepted_this_turn = True
             if offer.technique and offer.technique in config.registry:
                 offered_now.append(offer.technique)
-        elif reply.state is not None and reply.state.accepted is False:
-            outcome = TechniqueOutcome.DECLINED
-        # accepted is null: the person answered neither way, so the offer stays open.
+        else:
+            # Carrying on past the offer is Keep chatting (muhammad, 2026-09-24), held here
+            # rather than left to the model, which kept asking again. The one exception is a
+            # question the reply answers by making the offer again: they asked about it.
+            asked_about_it = "?" in content and any(p.technique for p in reply.prompts or [])
+            if not asked_about_it or (reply.state is not None and reply.state.accepted is False):
+                outcome = TechniqueOutcome.DECLINED
+    elif (
+        technique is None
+        and ctx.technique is not None
+        and ctx.technique.outcome is TechniqueOutcome.DECLINED
+        and reply.state is not None
+        and reply.state.accepted is True
+        and reply.state.technique == ctx.technique.framework_id
+    ):
+        # They came back and asked for the one they turned down: that is a yes, cooldown or
+        # not, since the cooldown only keeps Mani from asking again.
+        technique = ctx.technique
+        outcome = TechniqueOutcome.ACCEPTED
+        accepted_this_turn = True
+        offered_now.append(technique.framework_id)
 
     fixed = repairs.apply(
         reply,
@@ -399,15 +446,37 @@ async def send(
         # Everything they have said in this thread, not only this turn: a capsule may mirror
         # a feeling they named four messages ago, and mani_base.md asks for exactly that.
         said=" ".join(user_texts),
-        already_offered=ctx.techniques_offered,
-        current_framework_id=technique.framework_id if technique else None,
+        # Only the framework they have just finished is off the table. One they said no to
+        # may come back once the cooldown has passed (muhammad, 2026-09-24).
+        already_offered=[ctx.technique.framework_id] if _finished(ctx.technique) else [],
+        # A declined offer is no longer pending, so re-showing it is a new offer, and a new
+        # offer waits out the cooldown like any other.
+        current_framework_id=(
+            technique.framework_id
+            if technique and outcome is not TechniqueOutcome.DECLINED
+            else None
+        ),
         current_phase=technique.phase if technique else None,
         selected_label=tapped.label if tapped else None,
         accepted_this_turn=accepted_this_turn,
         framework_running=outcome is TechniqueOutcome.ACCEPTED,
-        cooldown_passed=context.cooldown_passed(ctx),
+        # The reply that takes a no never carries the next offer, however long the last one
+        # stood open.
+        cooldown_passed=(
+            context.cooldown_passed(ctx, urgent=urgent) and outcome is not TechniqueOutcome.DECLINED
+        ),
         conversation_style=context.resolve_style(ctx),
         wants_title=wants_title,
+        # An offer made again after they asked what it involves doesn't repeat the description.
+        last_mani_text=next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None),
+        nickname=ctx.profile.nickname if ctx.profile else None,
+        # The greeting says their name by design; the model's own replies count from there.
+        name_said_before=bool(
+            ctx.profile and ctx.profile.nickname
+            and any(ctx.profile.nickname in m.content
+                    for m in [m for m in history if m.role is MessageRole.MANI][1:])
+        ),
+        clarification_already_used=context.clarification_used(history),
     )
     if assessment.blocks_framework:
         # A concern pauses the framework rather than ending it: nothing this reply reports
@@ -423,8 +492,36 @@ async def send(
             + ([f"dropped a technique offered on a safety-concern turn: {', '.join(paused)}"]
                if paused else []),
         )
+    if fixed.phase == "somatic" and fixed.framework_id is not None and not _ASKS_WHAT_NEXT.search(fixed.text):
+        # The client's flow (2026-09-24): the body check-in is fixed content, sent word for
+        # word, never reworded. Skipped when they already described their body and this
+        # reply moves straight to the two choices instead of asking again.
+        stage = config.registry.get(fixed.framework_id).stages.get("somatic") or {}
+        script = (stage.get("ask") or {}).get(context.resolve_style(ctx))
+        if script:
+            fixed = dataclasses.replace(fixed, text=repairs.with_the_check_in(fixed.text, script))
     if fixed.notes:
         logger.info("repaired reply on thread %s: %s", ctx.thread.id, "; ".join(fixed.notes))
+    if technique is not None and config.registry.is_final(technique.framework_id, fixed.phase):
+        # The check-in reply asks about their body, and they answer before choosing - unless
+        # they had already described it, and this reply mirrors that and asks what next.
+        without_handoff = [
+            p for p in fixed.prompts
+            if p.library is None and p.label.strip().lower() not in _HANDOFF_LABELS
+        ]
+        fixed = dataclasses.replace(
+            fixed,
+            prompts=_handoff() if _ASKS_WHAT_NEXT.search(fixed.text) else without_handoff,
+        )
+    if (
+        retiring_framework_id is not None
+        and content.strip().lower() not in _HANDOFF_LABELS
+        and not _offered_handoff(history)
+    ):
+        # The reply that ends a framework offers the client's two choices, always and
+        # exactly. Left to the model they came back mislabeled or missing. Skipped when
+        # they have already chosen one, or were just offered both.
+        fixed = dataclasses.replace(fixed, prompts=_handoff())
     if not fixed.text.strip():
         # Nothing left to say once leaked metadata was stripped. Refused here as retryable,
         # rather than by the messages_content_not_empty constraint as an opaque 500.
@@ -489,7 +586,7 @@ async def send(
     if library_offer is not None:
         updates.library_offered = True
     if fixed.style is not None:
-        updates.style = ResponseStyle(shape=fixed.style.shape, voice=fixed.style.voice)
+        updates.style = ResponseStyle(shape=fixed.style.shape)
     if fixed.title:
         updates.title = fixed.title
 
@@ -591,35 +688,6 @@ async def link_call(call_id: uuid.UUID, message_id: uuid.UUID) -> None:
                 )
                 return
             await asyncio.sleep(LINK_RETRY_DELAY_SECONDS)
-
-
-async def _explain_offer(
-    conn: asyncpg.Connection,
-    ctx: threads.TurnContext,
-    content: str,
-    offer: SmartPrompt,
-    client_message_id: uuid.UUID | str | None,
-) -> Turn:
-    """Answer "Tell me more" with the client's own explanation, and offer the same framework again.
-
-    Fixed wording, so no model call. The offer stays open: its row is untouched, and the new
-    buttons carry the same technique, so tapping "Yes, let's try it" next accepts it as usual.
-    """
-    reply = TELL_ME_MORE[context.resolve_style(ctx)]
-    buttons = [
-        SmartPrompt(label="Yes, let's try it", technique=offer.technique),
-        SmartPrompt(label="I want to keep talking", decline=True),
-    ]
-    pair = await messages_db.create_pair(
-        conn, ctx.thread.id, content, reply,
-        selected_prompt=content.strip(),
-        prompt_options=[b.model_dump(mode="json", exclude_none=True) for b in buttons],
-        client_message_id=client_message_id,
-    )
-    return Turn(
-        message_id=pair.mani_message_id, content=reply, created_at=pair.created_at,
-        prompts=buttons, title=ctx.thread.title,
-    )
 
 
 async def _open_in_style(

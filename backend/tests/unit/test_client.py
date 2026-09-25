@@ -294,3 +294,59 @@ async def test_a_failed_second_attempt_does_not_repeat_the_first_attempts_tokens
 
     assert recorded[-1]["outcome"] is llm_calls.Outcome.PROVIDER_ERROR
     assert recorded[-1]["usage"] == llm_calls.Usage()
+
+
+def provider_down(status: int = 503) -> openai.InternalServerError:
+    """What the SDK raises when the upstream provider answers 5xx - seen live from Google AI
+    Studio ("The service is currently unavailable") once in 265 calls."""
+    import httpx
+
+    request = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
+    return openai.InternalServerError(
+        "Provider returned error", response=httpx.Response(status, request=request), body=None
+    )
+
+
+async def test_a_provider_blip_is_retried_once(monkeypatch, recorded):
+    runnable = FakeRunnable(provider_down(), valid("answered on the retry"))
+    install(monkeypatch, runnable)
+    monkeypatch.setattr(client, "TRANSIENT_RETRY_DELAY_SECONDS", 0)
+
+    call = await client.complete(
+        [{"role": "user", "content": "hi"}], Reply, model="m",
+        purpose=llm_calls.Purpose.CHAT, settings=settings(),
+    )
+
+    assert call.value.text == "answered on the retry"
+    assert runnable.calls == 2
+    assert recorded[0]["outcome"] is llm_calls.Outcome.PROVIDER_ERROR
+
+
+async def test_a_provider_down_twice_fails_the_turn(monkeypatch, recorded):
+    install(monkeypatch, FakeRunnable(provider_down(), provider_down()))
+    monkeypatch.setattr(client, "TRANSIENT_RETRY_DELAY_SECONDS", 0)
+
+    with pytest.raises(ServiceError) as failed:
+        await client.complete(
+            [{"role": "user", "content": "hi"}], Reply, model="m",
+            purpose=llm_calls.Purpose.CHAT, settings=settings(),
+        )
+    assert failed.value.retryable
+
+
+async def test_a_timeout_is_not_retried(monkeypatch, recorded):
+    """A timeout already cost the full wait; a retry would make the person wait twice as long."""
+    import httpx
+
+    runnable = FakeRunnable(
+        openai.APITimeoutError(request=httpx.Request("POST", "https://openrouter.ai")),
+        valid("too late"),
+    )
+    install(monkeypatch, runnable)
+
+    with pytest.raises(ServiceError):
+        await client.complete(
+            [{"role": "user", "content": "hi"}], Reply, model="m",
+            purpose=llm_calls.Purpose.CHAT, settings=settings(),
+        )
+    assert runnable.calls == 1
