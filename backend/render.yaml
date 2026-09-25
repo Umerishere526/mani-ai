@@ -1,0 +1,36 @@
+# ABOUTME: Render Blueprint for the API process. Free tier, built from the existing Dockerfile.
+# ABOUTME: Secrets are never here - set them once in the Render dashboard after the first deploy.
+
+services:
+  - type: web
+    name: mani-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    healthCheckPath: /health/ready
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: OPENROUTER_BASE_URL
+        value: https://openrouter.ai/api/v1
+      - key: OPENROUTER_DATA_COLLECTION
+        value: deny
+      - key: LLM_TIMEOUT_SECONDS
+        value: "60"
+      # Everything below has no default and must be set by hand in the Render dashboard,
+      # under this service's Environment tab, after the hosted Supabase project exists
+      # (MYM-152). Render never sees these values from this file.
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_JWKS_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
