@@ -69,3 +69,26 @@ def merge_techniques(
     for technique in incoming:
         merged[technique.name.lower()] = technique
     return list(merged.values())
+
+
+async def due_for_summary(
+    conn: asyncpg.Connection, *, threshold: int, limit: int
+) -> list[dict]:
+    """Threads whose message count has outrun their last summary by the threshold.
+
+    Cross-user, so admin-only - the same reconciliation a per-turn trigger does for one
+    thread, run here as a batch for whichever ones the per-turn trigger missed (the
+    process restarted, or never ran at all, before its next turn came in).
+    """
+    rows = await conn.fetch(
+        """
+        select t.id as thread_id, t.user_id
+          from public.threads t
+          left join public.thread_summaries s on s.thread_id = t.id
+         where t.message_count - coalesce(s.summarized_message_count, 0) >= $1
+         order by t.last_message_at
+         limit $2
+        """,
+        threshold, limit,
+    )
+    return [dict(r) for r in rows]

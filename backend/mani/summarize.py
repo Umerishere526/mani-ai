@@ -162,3 +162,29 @@ async def update_quietly(claims, thread_id: uuid.UUID | str) -> None:
             await update(conn, thread_id, claims.user_id)
     except Exception:
         logger.exception("summarization failed for thread %s", thread_id)
+
+
+async def reconcile_due(*, threshold: int = 20, limit: int = 200) -> int:
+    """Catch up every thread whose summary has fallen behind, across every user.
+
+    The per-turn trigger (`update_quietly`) is the fast path and covers almost every
+    thread almost immediately; this is the guaranteed path for whatever it missed - the
+    process restarted before its background task finished, or never got a next turn to
+    trigger it. Safe to run concurrently with itself or with a per-turn trigger: `update`
+    takes a transaction-scoped advisory lock per thread, so two attempts on the same
+    thread just have one step aside.
+    """
+    from mani.auth.jwt import Claims
+    from mani.db import pool, summaries
+
+    async with pool.as_admin() as conn:
+        due = await summaries.due_for_summary(conn, threshold=threshold, limit=limit)
+
+    done = 0
+    for row in due:
+        claims = Claims(
+            sub=str(row["user_id"]), raw={"sub": str(row["user_id"]), "role": "authenticated"}
+        )
+        await update_quietly(claims, row["thread_id"])
+        done += 1
+    return done

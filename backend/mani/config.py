@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     # Includes the model's technique reasoning in responses, for conversation testing.
     ai_debug_mode: bool = False
 
+    # Compared against the Authorization header Vercel Cron sends automatically when this
+    # is set as the CRON_SECRET env var on the project. Empty means the endpoint refuses
+    # every request - there is no host where an unset secret should mean "open".
+    cron_secret: str = Field(default="", repr=False)
+
     # When false the crisis panel still appears but the user can keep chatting.
     crisis_blocks_chat: bool = True
 

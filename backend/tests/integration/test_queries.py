@@ -290,3 +290,31 @@ async def test_a_model_call_is_recorded_with_its_cost(users):
 
     assert spend["input_tokens"] == 8230
     assert spend["calls"] == 1
+
+
+async def test_threads_needing_summary_lists_across_users(users):
+    """The cron reconciliation pass is cross-user, so this is an admin-only read: threads
+    whose message count has outrun their last summary by the same threshold the per-turn
+    trigger uses. Everything runs on one admin connection - a user-scoped fixture holds its
+    own open transaction, invisible to a second connection until the test tears down."""
+    from mani.db import pool, summaries
+
+    async with pool.as_admin() as conn:
+        thread_a, _ = await threads.create_or_reuse(conn, ALICE)
+        thread_b, _ = await threads.create_or_reuse(conn, BOB)
+        await conn.execute(
+            "update public.threads set message_count = 25 where id = any($1)",
+            [thread_a.id, thread_b.id],
+        )
+        await summaries.upsert(
+            conn, thread_b.id, BOB, summary="already caught up",
+            techniques_tried=[], summarized_through_message_id=None,
+            summarized_message_count=24,
+        )
+        # A large limit: this local database carries threads from other test runs already
+        # past the threshold, and the point here is inclusion/exclusion, not the limit.
+        due = await summaries.due_for_summary(conn, threshold=20, limit=10_000)
+
+    ids = {(row["thread_id"], row["user_id"]) for row in due}
+    assert (thread_a.id, ALICE) in ids
+    assert (thread_b.id, BOB) not in ids

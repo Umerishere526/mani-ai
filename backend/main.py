@@ -16,7 +16,7 @@ from mani import auth_admin, storage
 from mani.config import get_settings
 from mani.db import pool
 from mani.errors import ErrorCategory, ServiceError
-from mani.routers import account, admin, crisis, exercises, health, messages, profile, threads
+from mani.routers import account, admin, cron, crisis, exercises, health, messages, profile, threads
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +131,7 @@ def create_app() -> FastAPI:
         exercises.router,
         crisis.router,
         admin.router,
+        cron.router,
     ):
         app.include_router(router)
     return app
