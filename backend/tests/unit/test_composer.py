@@ -46,6 +46,7 @@ def test_the_layers_come_in_a_fixed_order(config):
         offered=["abcde"],
         summary=ThreadSummary(
             thread_id=THREAD, user_id=USER, summary="Talked about work.",
+            current_issue="Whether to raise a pattern of missed credit with their manager.",
             techniques_tried=[TechniqueTried(name="abcde", helpful=True)],
         ),
     )
@@ -53,6 +54,8 @@ def test_the_layers_come_in_a_fixed_order(config):
         "mani_base", "response_format", "user_context", "title_generation",
         "techniques_used", "summary",
     ]
+    summary_text = dict(built.layers) and built.text
+    assert summary_text.index("Whether to raise a pattern") < summary_text.index("Talked about work.")
 
 
 def test_optional_layers_are_simply_absent(config):
@@ -192,14 +195,25 @@ def test_an_empty_memory_adds_nothing(config):
     assert "user_memory" not in [name for name, _ in built.layers]
 
 
-def test_the_index_carries_how_each_framework_helps_so_offers_never_need_its_name():
-    """The client: never tell the person the framework's name - say how it would help them.
-    The index gives the model the client's own description to tailor from."""
+def test_the_index_never_names_it_to_the_person_nor_hands_over_its_description():
+    """The client: never tell the person the framework's name. Its description is added to the
+    offer by the backend, so the index keeps it from the model, which copied it otherwise."""
     helps = Framework(
         id="abcde", name="ABCDE", body="b", phases=["offering"],
         summary="This framework helps you separate what happened from what you told yourself about it.",
         activation={"central_indication": "a specific event"},
     )
     index = composer.framework_index(Registry([helps]))
-    assert "separate what happened from what you told yourself about it" in index
-    assert "never say" in index.lower()
+    assert "separate what happened from what you told yourself about it" not in index
+    assert 'never its name, its id, or the word "framework"' in index
+    assert "its description is added to your reply for you" in index
+
+
+def test_the_current_issue_stays_visible_even_without_a_prose_summary_yet():
+    """A thread just long enough for its first fold may have the issue but not much prose
+    yet - the issue is what must never go missing."""
+    layer = composer.summary_layer(
+        ThreadSummary(thread_id=THREAD, user_id=USER, current_issue="Freezing before a talk.")
+    )
+    assert layer is not None
+    assert "Freezing before a talk." in layer

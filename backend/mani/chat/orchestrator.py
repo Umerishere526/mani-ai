@@ -334,13 +334,14 @@ async def send(
     # registry. No model call, so a false or missing shortlist costs relevance, never safety.
     shortlist: list[router.Signal] = []
     candidate = None
+    urgent = router.urgent(user_texts)
     if (
         technique is None
         and assessment.level is safety.Level.NONE
         and (
             ctx.thread.message_count // 2 >= ROUTER_MIN_EXCHANGES
             # An imminent action is the one case not worth waiting two exchanges on.
-            or router.urgent(user_texts)
+            or urgent
         )
     ):
         shortlist = router.shortlist(user_texts, config.registry.activations)
@@ -364,7 +365,7 @@ async def send(
     prefix = context.build(
         ctx, shortlist=shortlist, framework=active_framework, candidate=candidate,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
-        framework_starting=accepted_this_turn,
+        framework_starting=accepted_this_turn, urgent=urgent,
     )
     for_model = (
         f'User tapped the button: "{tapped.label}".'
@@ -461,9 +462,21 @@ async def send(
         framework_running=outcome is TechniqueOutcome.ACCEPTED,
         # The reply that takes a no never carries the next offer, however long the last one
         # stood open.
-        cooldown_passed=context.cooldown_passed(ctx) and outcome is not TechniqueOutcome.DECLINED,
+        cooldown_passed=(
+            context.cooldown_passed(ctx, urgent=urgent) and outcome is not TechniqueOutcome.DECLINED
+        ),
         conversation_style=context.resolve_style(ctx),
         wants_title=wants_title,
+        # An offer made again after they asked what it involves doesn't repeat the description.
+        last_mani_text=next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None),
+        nickname=ctx.profile.nickname if ctx.profile else None,
+        # The greeting says their name by design; the model's own replies count from there.
+        name_said_before=bool(
+            ctx.profile and ctx.profile.nickname
+            and any(ctx.profile.nickname in m.content
+                    for m in [m for m in history if m.role is MessageRole.MANI][1:])
+        ),
+        clarification_already_used=context.clarification_used(history),
     )
     if assessment.blocks_framework:
         # A concern pauses the framework rather than ending it: nothing this reply reports
@@ -479,6 +492,14 @@ async def send(
             + ([f"dropped a technique offered on a safety-concern turn: {', '.join(paused)}"]
                if paused else []),
         )
+    if fixed.phase == "somatic" and fixed.framework_id is not None and not _ASKS_WHAT_NEXT.search(fixed.text):
+        # The client's flow (2026-09-24): the body check-in is fixed content, sent word for
+        # word, never reworded. Skipped when they already described their body and this
+        # reply moves straight to the two choices instead of asking again.
+        stage = config.registry.get(fixed.framework_id).stages.get("somatic") or {}
+        script = (stage.get("ask") or {}).get(context.resolve_style(ctx))
+        if script:
+            fixed = dataclasses.replace(fixed, text=repairs.with_the_check_in(fixed.text, script))
     if fixed.notes:
         logger.info("repaired reply on thread %s: %s", ctx.thread.id, "; ".join(fixed.notes))
     if technique is not None and config.registry.is_final(technique.framework_id, fixed.phase):
@@ -565,7 +586,7 @@ async def send(
     if library_offer is not None:
         updates.library_offered = True
     if fixed.style is not None:
-        updates.style = ResponseStyle(shape=fixed.style.shape, voice=fixed.style.voice)
+        updates.style = ResponseStyle(shape=fixed.style.shape)
     if fixed.title:
         updates.title = fixed.title
 

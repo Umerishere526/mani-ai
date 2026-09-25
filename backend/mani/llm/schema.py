@@ -33,7 +33,6 @@ SHAPES = (
     "warmth lead", "honor and follow", "mirror and ask", "mirror and hold",
     "gentle follow", "presence only",
 )
-VOICES = ("naming", "receiving", "quoting", "transitional", "observing")
 
 
 class SmartPrompt(BaseModel):
@@ -100,13 +99,6 @@ class Style(BaseModel):
     shape: str = Field(
         description=f"The response shape you used: {_listed(SHAPES)}."
     )
-    voice: str | None = Field(
-        default=None,
-        description=(
-            f"The mirroring voice you used, if you mirrored: {_listed(VOICES)}. "
-            "Null if no mirroring."
-        ),
-    )
 
 
 class Reply(BaseModel):
@@ -127,9 +119,8 @@ class Reply(BaseModel):
     style: Style | None = Field(
         default=None,
         description=(
-            "Choose before writing text: the response shape and mirroring voice this reply "
-            "will use. The shape may repeat; the voice must differ from the last entry in "
-            "recent_styles in [ctx]."
+            "Choose before writing text: the response shape this reply will use. It may "
+            "repeat; the opening words may not."
         ),
     )
     text: str = Field(description="Your conversational response to the user. Required.")
@@ -185,6 +176,14 @@ class Extraction(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    current_issue: str = Field(
+        description=(
+            "One line, in plain terms: what the person is actually working through right "
+            "now. Replaced each run to match the newest messages, even where the fuller "
+            "summary still carries older history. Never a technique name, never a feeling "
+            "alone - the situation or question they came with."
+        )
+    )
     summary: str = Field(
         description=(
             "A 2-4 sentence prose summary of what was discussed: the main concern, key "

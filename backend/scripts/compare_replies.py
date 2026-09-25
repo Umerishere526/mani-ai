@@ -15,7 +15,9 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani.db import llm_calls, pool  # noqa: E402
 from mani.llm import client  # noqa: E402
-from mani.llm.schema import Reply  # noqa: E402
+from pydantic import Field  # noqa: E402
+
+from mani.llm.schema import Reply, Style  # noqa: E402
 from mani.models.rows import SupportStyle  # noqa: E402
 from scripts.eval_replies import (  # noqa: E402
     EVAL_NICKNAME,
@@ -34,6 +36,34 @@ OUT_DIR = BACKEND / ".eval"
 MVP_MODEL = "google/gemini-3-flash-preview"
 MVP_TEMPERATURE = 1.0
 STYLE_WINDOW = 7
+
+
+class MvpStyle(Style):
+    """The style the MVP's prompt asks for: a shape and one of its five mirroring voices.
+
+    Kept here, fixed, so the bar does not move when our schema does: without a place for the
+    voice its prompt demands, the MVP's first turn ran to the length limit.
+    """
+
+    voice: str | None = Field(
+        default=None,
+        description=(
+            "The mirroring voice you used, if you mirrored: naming, receiving, quoting, "
+            "transitional, observing. Null if no mirroring."
+        ),
+    )
+
+
+class MvpReply(Reply):
+    # The wording the baseline runs were made with.
+    style: MvpStyle | None = Field(
+        default=None,
+        description=(
+            "Choose before writing text: the response shape and mirroring voice this reply "
+            "will use. The shape may repeat; the voice must differ from the last entry in "
+            "recent_styles in [ctx]."
+        ),
+    )
 
 # Conversation before a framework runs: the only part the MVP's two techniques can be compared
 # on, and where interrogating and offering too soon show up.
@@ -78,7 +108,7 @@ async def run_mvp(turns: list[str], nickname: str) -> list[str]:
         call = await client.complete(
             [{"role": "system", "content": system}, *history,
              {"role": "user", "content": mvp_ctx(styles) + message}],
-            Reply, model=MVP_MODEL, purpose=llm_calls.Purpose.CHAT, temperature=MVP_TEMPERATURE,
+            MvpReply, model=MVP_MODEL, purpose=llm_calls.Purpose.CHAT, temperature=MVP_TEMPERATURE,
         )
         reply = call.value
         history += [{"role": "user", "content": message}, {"role": "assistant", "content": reply.text}]

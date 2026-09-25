@@ -44,3 +44,13 @@ def test_every_style_answers_under_each_line_the_person_said():
     assert page.index("**Person:** hi") < page.index("M1") < page.index("S1") < page.index("D1")
     assert page.index("**Person:** more") < page.index("M2") < page.index("S2")
     assert "`[Try it]`" in page
+
+
+def test_the_mvp_side_keeps_the_mirroring_voice_its_prompt_asks_for():
+    """The MVP is a fixed bar. Its prompt teaches five mirroring voices and asks for the one
+    used; when our schema dropped the field the MVP's first turn ran to the length limit in
+    3 of 4 probes (0 of 4 with it). Its side keeps the schema it was baselined with."""
+    from scripts.compare_replies import MvpReply
+
+    style = MvpReply.model_json_schema()["$defs"]["MvpStyle"]
+    assert set(style["properties"]) == {"shape", "voice"}

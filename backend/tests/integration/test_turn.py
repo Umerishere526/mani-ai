@@ -11,6 +11,7 @@ from mani.chat import context, crisis, orchestrator
 from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
+from mani.chat.repairs import PERMISSION_QUESTIONS
 from mani.llm.schema import Crisis, Reply, SmartPrompt, Style, TechniqueState
 from mani.models.rows import TechniqueOutcome
 from tests.integration.cleanup import remove_test_users
@@ -115,6 +116,18 @@ async def start(claims: Claims):
     return thread
 
 
+async def past_the_opening(thread):
+    """The rounds of conversation the client wants before anything is offered, already had.
+    For tests about what happens to an offer, not about when one may come."""
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set message_count = message_count + 8 where id = $1", thread.id
+        )
+    return thread
+
+
 async def send(claims: Claims, thread_id, content, **kwargs):
     from mani.db import pool
 
@@ -136,7 +149,7 @@ async def test_a_turn_costs_exactly_one_provider_call(alice, model):
                 SmartPrompt(label="Not now"),
             ],
             state=TechniqueState(technique="abcde", step="examine"),
-            style=Style(shape="mirror and ask", voice="naming"),
+            style=Style(shape="mirror and ask"),
         )
     )
     thread = await start(alice)
@@ -163,7 +176,7 @@ async def test_the_turn_is_stored_and_the_thread_state_follows_it(alice, model):
     )
     from mani.db import pool
 
-    thread = await start(alice)
+    thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "everything feels like too much")
 
     async with pool.as_user(alice) as conn:
@@ -190,7 +203,7 @@ async def test_tapping_the_offer_records_acceptance(alice, model):
     )
     from mani.db import pool
 
-    thread = await start(alice)
+    thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "I keep spiralling")
     await send(alice, thread.id, "Yes, let's try it")
 
@@ -345,7 +358,7 @@ async def test_asking_about_an_offer_leaves_it_open(alice, model):
     )
     from mani.db import pool
 
-    thread = await start(alice)
+    thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "I keep spiralling")
     await send(alice, thread.id, "what would that involve?")
 
@@ -538,7 +551,7 @@ async def test_buttons_are_returned_only_on_manis_newest_message(alice, model):
     from mani.db import pool
     from mani.routers.serializers import to_messages
 
-    thread = await start(alice)
+    thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "I keep spiralling")
     await send(alice, thread.id, "Yes, let's try it")
 
@@ -547,7 +560,8 @@ async def test_buttons_are_returned_only_on_manis_newest_message(alice, model):
         live = await messages_db.latest_mani_id(conn, thread.id, ALICE)
 
     rendered = to_messages(history, live)
-    offer = next(m for m in rendered if m.content == "Want to try something?")
+    # The offer's words are composed by the backend, ending on the client's permission question.
+    offer = next(m for m in rendered if any(q in m.content for q in PERMISSION_QUESTIONS.values()))
     newest = rendered[-1]
 
     assert newest.id == live and newest.content == "Good. What happened first?"
@@ -694,7 +708,7 @@ async def test_tapping_decline_records_it_even_when_the_model_reports_no_state(a
     )
     from mani.db import pool
 
-    thread = await start(alice)
+    thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "I keep spiralling")
     await send(alice, thread.id, "Not right now")
 
@@ -967,7 +981,7 @@ async def test_carrying_on_past_an_offer_is_keep_chatting(alice, model):
     model(offer, offered_again)
     from mani.db import pool
 
-    thread = await start(alice)
+    thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "my manager criticized me in front of everyone")
     turn = await send(alice, thread.id, "every time I try to start I pick the phone back up")
 
@@ -991,7 +1005,7 @@ async def test_an_offer_they_typed_past_is_flagged_then_closed(alice, model):
     scripted = model(offer, Reply(text="You pick the phone back up. What happens right before?"))
     from mani.db import pool
 
-    thread = await start(alice)
+    thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "my manager criticized me in front of everyone")
     await send(alice, thread.id, "every time I try to start I pick the phone back up")
 
@@ -1023,7 +1037,7 @@ async def test_asking_for_a_declined_framework_themselves_starts_it(alice, model
     )
     from mani.db import pool
 
-    thread = await start(alice)
+    thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "my manager criticized me in front of everyone")
     await send(alice, thread.id, "I keep replaying it")
     await send(alice, thread.id, "actually I'd like some help looking at it")
@@ -1055,3 +1069,27 @@ async def test_a_declined_framework_can_be_offered_again_after_a_few_replies(ali
 
     again = await send(alice, thread.id, "maybe I do want to look at it")
     assert [p.technique for p in again.prompts if p.technique] == ["abcde"]
+
+
+async def test_the_body_check_in_is_sent_from_the_script_not_reworded(alice, model):
+    """The client: the somatic flow follows the supplied script exactly (2026-09-24)."""
+    model(
+        Reply(
+            text="How does your body feel after all that?",
+            state=TechniqueState(technique="abcde", step="somatic"),
+        ),
+    )
+    from mani.db import pool
+
+    thread = await start(alice)
+    async with pool.as_user(alice) as conn:
+        await threads.set_technique_outcome(
+            conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
+            at_message_count=2, phase="closing",
+        )
+
+    turn = await send(alice, thread.id, "yes, that fits what happened")
+    assert turn.content.endswith(
+        "Before we move on, can we check in for a moment? What are you noticing in your body "
+        "right now compared with when we started?"
+    )

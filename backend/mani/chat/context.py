@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import re
 
-from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CHAT_MORE_LABEL
+from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
 from mani.chat.router import Signal, is_confident
 from mani.db.threads import TurnContext
 from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
@@ -14,6 +14,12 @@ from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
 # After "Keep chatting", three of Mani's replies before it may check again - the same
 # framework or a different one, whichever fits now (muhammad, 2026-09-24).
 COOLDOWN_AFTER_DECLINE = 6
+
+# The client: about four rounds of conversation before anything is offered, and Direct sooner
+# (muhammad, 2026-09-24). Counted in the person's own messages since their style's opener.
+FIRST_OFFER_AFTER = {"direct": 2, "supportive": 4, "reflective": 4}
+# The greeting, the style they tapped, and that style's opener.
+OPENING_MESSAGES = 3
 COOLDOWN_AFTER_COMPLETE = 45
 
 # The default when neither the conversation nor the profile has chosen a style yet.
@@ -89,11 +95,27 @@ def cooldown_for(outcome: TechniqueOutcome) -> int:
     )
 
 
-def cooldown_passed(ctx: TurnContext) -> bool:
+def clarification_used(history: list[Message] | None) -> bool:
+    """Whether Mani has already asked the client's one-time clarifying question in this
+    conversation. Read from history rather than a stored flag, so it holds even if a process
+    restart drops anything else about how the turn was built."""
+    return any(
+        m.role is MessageRole.MANI
+        and any(q in m.content.lower() for q in CLARIFICATION_QUESTIONS)
+        for m in (history or [])
+    )
+
+
+def cooldown_passed(ctx: TurnContext, *, urgent: bool = False) -> bool:
     """Whether a framework may be offered yet: [ctx] reports it, repairs.apply enforces it."""
     technique = ctx.technique
     if technique is None:
-        return True
+        if urgent:
+            # An action about to be taken is the one case not worth waiting the rounds out.
+            return True
+        # The reply to their Nth message is written at 3 + 2(N - 1) messages.
+        said = (ctx.thread.message_count - OPENING_MESSAGES) // 2 + 1
+        return said >= FIRST_OFFER_AFTER.get(resolve_style(ctx), max(FIRST_OFFER_AFTER.values()))
     return ctx.thread.message_count - technique.at_message_count >= cooldown_for(
         technique.outcome
     )
@@ -122,6 +144,7 @@ def build(
     safety_concern: bool = False,
     offer_waiting: bool = False,
     framework_starting: bool = False,
+    urgent: bool = False,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -144,7 +167,7 @@ def build(
     technique = ctx.technique
     # Named first because every stage_ask and offer_ask below is resolved from it, and named
     # `conversation_style` rather than `style` because `recent_styles` three lines down means
-    # the response shape and voice, which is a different thing entirely.
+    # the response shape, which is a different thing entirely.
     lines: list[str] = [f"conversation_style: {resolve_style(ctx)}"]
     if safety_concern:
         # The deterministic screen heard something that may be a risk. The framework waits:
@@ -166,6 +189,8 @@ def build(
     else:
         phase = "talking"
     lines.append(f"conversation_phase: {phase}")
+    if not running and not clarification_used(history):
+        lines.append("clarification_available: yes")
     if not running:
         # What the question is about while no stage decides it (muhammad, 2026-09-24): said
         # here, next to the message, because the style rule in the long prompt alone did not hold.
@@ -182,7 +207,7 @@ def build(
         lines.append("cooldown_passed: yes")
     else:
         since_last = ctx.thread.message_count - technique.at_message_count
-        lines.append(f"cooldown_passed: {'yes' if cooldown_passed(ctx) else 'no'}")
+        lines.append(f"cooldown_passed: {'yes' if cooldown_passed(ctx, urgent=urgent) else 'no'}")
         lines.append(f"since_last: {since_last}")
         lines.append(f"this_thread: {technique.framework_id} ({technique.outcome})")
         if (
@@ -201,12 +226,10 @@ def build(
         lines.append(f"history: {tried}")
 
     if ctx.recent_styles:
-        styles = " → ".join(
-            f"{s.shape} ({s.voice})" if s.voice else s.shape for s in ctx.recent_styles
-        )
+        styles = " → ".join(s.shape for s in ctx.recent_styles)
         lines.append(f"recent_styles: {styles}")
 
-    # A separate signal from recent_styles: that is the abstract shape/voice, this is the
+    # A separate signal from recent_styles: that is the abstract shape, this is the
     # literal words a reply opened with - two replies can vary in shape while still starting
     # the same way, which is what "recent_styles" alone cannot catch.
     mani_replies = [m.content for m in (history or []) if m.role is MessageRole.MANI]
@@ -220,11 +243,10 @@ def build(
     if shortlist and not safety_concern:
         ranked = ", ".join(f"{s.framework_id} ({s.score:.2f})" for s in shortlist)
         lines.append(f"framework_shortlist: {ranked}")
-        if candidate is not None and is_confident(shortlist):
+        if candidate is not None and is_confident(shortlist) and cooldown_passed(ctx, urgent=urgent):
+            # The client's description is not here: the backend adds it to the offer, and a
+            # model given the text copied it, so offers showed it twice.
             lines.extend(_stage_lines("offer", candidate, "offering", resolve_style(ctx)))
-            if candidate.summary:
-                # The client's description, which the offer fits to what they said.
-                lines.append(f"offer_helps: {' '.join(candidate.summary.split())}")
 
     if running:
         style = resolve_style(ctx)

@@ -182,33 +182,26 @@ def test_replies_that_start_differently_are_left_alone():
     ]) == []
 
 
-def test_presence_in_words_belongs_to_one_style():
-    """Direct leads and Reflective mirrors; neither expresses care by announcing it. The
-    prompt now says so - this pins the intent so a future edit cannot quietly undo it.
-
-    Observed live: all three styles opened with "I'm here." The second assertion is the
-    rule that forbids it, and it is pinned here because that failure is what the style
-    plumbing fix exists to end.
-    """
-    voice = (PROMPTS_DIR / "mani_base.md").read_text()
-    assert "**Supportive** move only" in voice
-    assert "Never open two replies the same way." in voice
+def test_presence_may_be_said_in_any_style_while_openers_still_vary():
+    """muhammad, 2026-09-24: presence may be said in any style when the moment calls for it.
+    What stays forbidden is opening the same way twice, the failure that once had all three
+    styles opening with "I'm here." """
+    base = (PROMPTS_DIR / "mani_base.md").read_text()
+    response_format = (PROMPTS_DIR / "response_format.md").read_text()
+    assert "say it simply, in any style" in base
+    assert "Do not open your new reply the same way." in " ".join(response_format.split())
 
 
 def test_every_style_value_the_schema_allows_is_taught():
-    """The schema asks the model to declare the shape and voice it used. Any value it can
-    return and was never taught is one it will either avoid entirely or use without meaning.
+    """The schema asks the model to declare the shape it used. Any value it can return and was
+    never taught is one it will either avoid entirely or use without meaning. Shapes are
+    taught in a table, so each is pinned to the row that defines it."""
+    from mani.llm.schema import SHAPES
 
-    Shapes are taught in a table and voices in bold, so each is pinned to the place that
-    actually defines it rather than to a passing mention elsewhere in the prompt."""
-    from mani.llm.schema import SHAPES, VOICES
+    base = (PROMPTS_DIR / "mani_base.md").read_text().lower()
 
-    voice = (PROMPTS_DIR / "mani_base.md").read_text().lower()
-
-    for name in VOICES:
-        assert f"**{name}**" in voice, f"schema allows voice {name!r}, prompt never teaches it"
     for name in SHAPES:
-        assert f"| {name} |" in voice, f"schema allows shape {name!r}, prompt never teaches it"
+        assert f"| {name} |" in base, f"schema allows shape {name!r}, prompt never teaches it"
 
 
 def test_a_capsule_that_judges_the_person_is_caught():
@@ -275,3 +268,11 @@ def test_a_stage_ask_carries_nothing_from_a_worked_example(where, text):
     assert not _AUTHOR_NOTE.search(text), f"{where} carries an author note: {text}"
     feelings = sorted(repairs.words(text) & repairs.FEELING_WORDS)
     assert not feelings, f"{where} hands them a feeling they may not have named: {feelings}"
+
+
+def test_staying_on_a_stage_is_not_told_to_repeat_the_same_wording():
+    """Observed live (2026-09-24): ABCDE's activate stage asked for 'the literal words your
+    manager used' three times in a row, near-verbatim, while the person kept answering with
+    something else. The prompt now says explicitly not to do that."""
+    base = (PROMPTS_DIR / "mani_base.md").read_text()
+    assert "never ask twice for the same thing the same way" in base

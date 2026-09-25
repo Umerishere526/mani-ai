@@ -80,17 +80,12 @@ def framework_index(registry: Registry) -> str | None:
     if rendered:
         lines += ["", "## Telling them apart", ""] + rendered
 
-    # The client's own description of each, which is what an offer says instead of a name.
-    helps = [f"- **{f.name}**: {' '.join(f.summary.split())}" for f in present if f.summary]
-    if helps:
-        lines += [
-            "", "## How each one helps",
-            "",
-            "When you offer one, say you have some questions that could help, and in a sentence "
-            "how, built from its line here and what they told you, worded fresh each time. Never "
-            "say its name, its id, or the word \"framework\".",
-            "",
-        ] + helps
+    # The client's description of each is added to the offer by the backend, so it is not
+    # listed here: a model given the text copied it, and offers showed it twice.
+    lines += [
+        "", "When you offer one, its description is added to your reply for you. You never "
+        "describe the questions or name them: never its name, its id, or the word \"framework\".",
+    ]
 
     # Only the contraindications, not every not_when line: most of those name a different
     # framework to use instead, which "Telling them apart" already says. These name a
@@ -185,6 +180,8 @@ def summary_layer(summary: ThreadSummary | None) -> str | None:
         return None
 
     lines = []
+    if summary.current_issue:
+        lines.append(f"**Current issue:** {summary.current_issue}")
     if summary.summary:
         lines.append(summary.summary)
     if summary.techniques_tried:

@@ -47,3 +47,7 @@ AFTER_FRAMEWORK_QUESTIONS = (
     "What do you think you need to do differently from here?",
     "How could you take one small step toward that?",
 )
+
+# The client's own check, asked at most once per conversation when several things have come
+# up and it is unclear which matters most (muhammad, 2026-09-24: "never a new loop").
+CLARIFICATION_QUESTIONS = ("do i have this right?", "what would you like us to focus on today?")

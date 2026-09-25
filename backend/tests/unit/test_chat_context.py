@@ -4,6 +4,8 @@
 import datetime as dt
 import uuid
 
+import pytest
+
 from mani.chat import context
 from mani.chat.orchestrator import find_tapped_prompt, pending_offer
 from mani.chat.router import Signal
@@ -109,7 +111,9 @@ def test_a_finished_framework_waits_longer_than_a_declined_one():
     )
 
 
-def test_recent_styles_are_listed_so_a_reply_can_avoid_repeating_one():
+def test_recent_styles_are_listed_by_shape_so_a_reply_can_avoid_repeating_one():
+    """Rows stored before the voice field went still carry one; the model is shown shapes only,
+    since it is no longer asked to rotate voices (muhammad, 2026-09-24)."""
     block = context.build(
         TurnContext(
             thread=thread(), profile=None, technique=None,
@@ -119,7 +123,7 @@ def test_recent_styles_are_listed_so_a_reply_can_avoid_repeating_one():
             ],
         )
     )
-    assert "recent_styles: mirror and ask (naming) → presence only" in block
+    assert "recent_styles: mirror and ask → presence only" in block
 
 
 def test_recent_openers_are_extracted_from_manis_own_replies():
@@ -252,16 +256,17 @@ def test_a_confident_candidate_adds_its_offer_line_resolved_to_style():
     assert "offer_ask: Would you like to work through it?" in block
 
 
-def test_the_offer_carries_the_clients_description_of_how_it_helps():
-    """muhammad, 2026-09-24: the offer is the client's description fitted to their situation,
-    so the description comes with the offer rather than only living in the long prompt."""
+def test_the_model_is_never_handed_the_description_it_must_not_write():
+    """The backend adds the client's description to every offer (muhammad, 2026-09-24). Given
+    the text as well, the model copied it, and offers showed it twice."""
     confident = framework().model_copy(update={"summary": "These questions help you see it clearly."})
     block = context.build(
         TurnContext(thread=thread(), profile=None, technique=None),
         shortlist=[Signal("abcde", 2.6, ["she said"], spread=2)],
         candidate=confident,
     )
-    assert "offer_helps: These questions help you see it clearly." in block
+    assert "offer_" in block, "the offer stage itself still reaches the model"
+    assert "These questions help you see it clearly." not in block
 
 
 def test_the_turn_a_framework_starts_says_so():
@@ -479,3 +484,36 @@ def test_a_declined_offer_may_come_back_after_three_replies():
     """muhammad, 2026-09-24: after "I want to keep talking", check again after a few more
     messages - the same framework or a different one, whichever fits now."""
     assert context.COOLDOWN_AFTER_DECLINE == 6
+
+
+@pytest.mark.parametrize(
+    ("style", "first_allowed"), [("direct", 2), ("supportive", 4), ("reflective", 4)]
+)
+def test_nothing_is_offered_before_the_conversation_has_had_its_rounds(style, first_allowed):
+    """The client: about four rounds of conversation before anything is offered; Direct sooner
+    (muhammad, 2026-09-24). Supportive offered on the first message about a panic attack."""
+    def may_offer_on(person_message: int) -> bool:
+        # The greeting, the style they tapped, its opener, then one pair per message.
+        count = 3 + 2 * (person_message - 1)
+        chosen = thread(count).model_copy(update={"conversation_style": SupportStyle(style)})
+        return context.cooldown_passed(TurnContext(thread=chosen, profile=None, technique=None))
+
+    assert not may_offer_on(first_allowed - 1)
+    assert may_offer_on(first_allowed)
+
+
+def test_the_one_time_clarification_is_offered_only_before_it_has_been_used():
+    """The client: check once, 'Do I have this right?' or 'What would you like us to focus on
+    today?'. Never twice. Detected from Mani's own history, not a stored flag, so it holds
+    even across a process restart."""
+    not_yet = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        history=[mani("What happened after that?")],
+    )
+    assert "clarification_available: yes" in not_yet
+
+    already_asked = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        history=[mani("Do I have this right?"), user("Yes."), mani("What happened then?")],
+    )
+    assert "clarification_available" not in already_asked

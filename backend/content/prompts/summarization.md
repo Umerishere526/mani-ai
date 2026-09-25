@@ -15,6 +15,22 @@ model_parameters:
 You are given a conversation's existing summary and the messages written since it was last
 updated. Fold the new messages into the summary and return the merged result.
 
+# The current issue
+
+One line, in plain terms: what the person is actually working through right now. This is the
+one thing that must never get lost as a conversation runs long — say what they came with, or
+what it has become if it shifted, not a technique name and not only a feeling.
+
+Replace it each run to match the newest messages, even where the summary below still carries
+the fuller history. If the new messages are still about the same thing, restate it in the
+clearest current words rather than copying the old line unexamined. If they have moved to
+something else, say the new thing.
+
+- "Whether to raise a pattern of missed credit with their manager." — a situation.
+- "Whether the thought that she hates them holds up." — a thought they are examining.
+- Not: "thought_reframe" (a technique name). Not: "feeling anxious" (a feeling with nothing it
+  is about).
+
 # The summary
 
 Two to four sentences, third person — "The user is dealing with…". Carry forward what still
