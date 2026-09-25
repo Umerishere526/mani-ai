@@ -35,7 +35,12 @@ class ApiError(Exception):
         self.status = status
         self.body = body
         error = body.get("error", {})
-        super().__init__(f"{status} {error.get('category', 'unknown')}: {error.get('message')}")
+        if error:
+            super().__init__(f"{status} {error.get('category', 'unknown')}: {error.get('message')}")
+        else:
+            # Not the backend's own error shape - a platform-level response (a host's
+            # generic 404/500 page, a proxy timeout) that never reached our app at all.
+            super().__init__(f"{status}: {body.get('raw', 'no body')}")
 
 
 @dataclass
@@ -158,7 +163,12 @@ class ManiClient:
             self.session = refresh(self.session)
             response = self._request(method, path, **kwargs)
         if not response.ok:
-            raise ApiError(response.status_code, response.json())
+            try:
+                body = response.json()
+            except requests.exceptions.JSONDecodeError:
+                # A platform-level page (host 404, proxy timeout) never shaped like ours.
+                body = {"raw": response.text[:300]}
+            raise ApiError(response.status_code, body)
         return response.json() if response.content else {}
 
     def start_or_resume_thread(self) -> dict[str, Any]:
