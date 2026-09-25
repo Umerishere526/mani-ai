@@ -91,26 +91,26 @@ def sign_in_with_password(email: str, password: str) -> Session:
 
 
 def sign_up(email: str, password: str) -> Session:
-    """A real Supabase signup, then signed straight in.
+    """A new test account, created confirmed, then signed straight in.
 
-    Local Supabase asks new accounts to confirm their email. The Admin API confirms it here,
-    the step a real person does from their inbox, which a demo cannot wait on.
+    Created through the Admin API rather than the public signup endpoint. Signup sends a
+    real confirmation email even when nothing ever reads it, and the project's default mail
+    service allows only two an hour - a limit meant for a handful of early logins, not a demo
+    tool creating test accounts. Admin-created users need no confirming and send no mail, so
+    the same two calls every deploy target uses (Admin API, then a password sign-in) never
+    touch that limit.
     """
     _require_keys()
     email = email.strip()
-    created = _auth("signup", {"email": email, "password": password}, SUPABASE_ANON_KEY)
+    created = requests.post(
+        f"{SUPABASE_URL}/auth/v1/admin/users",
+        json={"email": email, "password": password, "email_confirm": True},
+        headers={"apikey": SUPABASE_SERVICE_ROLE_KEY,
+                 "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"},
+        timeout=10,
+    )
     if not created.ok:
         raise RuntimeError(f"Could not sign up: {_reason(created)}")
-    body = created.json()
-    if "access_token" not in body:
-        confirmed = requests.put(
-            f"{SUPABASE_URL}/auth/v1/admin/users/{body['id']}", json={"email_confirm": True},
-            headers={"apikey": SUPABASE_SERVICE_ROLE_KEY,
-                     "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"},
-            timeout=10,
-        )
-        if not confirmed.ok:
-            raise RuntimeError(f"Could not confirm the account: {_reason(confirmed)}")
     return sign_in_with_password(email, password)
 
 
