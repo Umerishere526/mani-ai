@@ -5,10 +5,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 
 import streamlit as st
 
 import client as mani
+
+# Off wherever this flag is unset - a deployed, client-facing instance - so there is no
+# control on screen that could show a framework id, a stage name, or a database read.
+# Muhammad's own local .env sets it; nothing else needs to.
+DEV_MODE = os.environ.get("CHAT_TESTER_DEV_MODE", "") == "1"
 
 st.set_page_config(page_title="Mani chat tester", page_icon="🧠", layout="centered")
 
@@ -75,9 +81,10 @@ with st.sidebar:
         if st.form_submit_button("Create account", use_container_width=True):
             start_session(lambda: mani.sign_up(email, password), email, nickname, base_url)
 
-    # Off by default, so what a client sees is only what the app will show them: no framework
-    # ids, stages, or database reads on screen.
-    developer = st.toggle("Show developer details", key="developer")
+    # The control itself is gone, not just off, wherever CHAT_TESTER_DEV_MODE is unset - a
+    # deployed, client-facing instance - so there is nothing on screen a client could click
+    # into and see a framework id, a stage name, or a database read.
+    developer = DEV_MODE and st.toggle("Show developer details", key="developer")
 
     if "client" in st.session_state:
         st.divider()
