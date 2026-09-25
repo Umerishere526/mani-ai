@@ -5,8 +5,13 @@ services:
   - type: web
     name: mani-backend
     runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    # This file lives at backend/render.yaml (set as the Blueprint Path during setup,
+    # since Render only auto-detects one at the repo root). dockerfilePath and
+    # dockerContext are always resolved from the repo root regardless, so both name
+    # the backend/ subdirectory explicitly rather than assuming this file's own location.
+    rootDir: backend
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
     plan: free
     region: oregon
     healthCheckPath: /health/ready
