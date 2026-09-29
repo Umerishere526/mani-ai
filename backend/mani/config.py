@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 60.0
 
     # Used when a prompt row names no model of its own.
-    default_chat_model: str = "openai/gpt-4o-mini"
+    default_chat_model: str = "google/gemini-3.1-flash-lite"
     default_summary_model: str = "openai/gpt-oss-120b"
 
     # Sent as OpenRouter routing preferences on every call. Conversations are
@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     # provider applies. Defaults carried from the previous system's provider row; a
     # prompt row's `routing` column overrides them when it needs to.
     openrouter_provider_order: list[str] = Field(
-        default_factory=lambda: ["openai"]
+        default_factory=lambda: ["google-ai-studio"]
     )
     openrouter_allow_fallbacks: bool = False
 
