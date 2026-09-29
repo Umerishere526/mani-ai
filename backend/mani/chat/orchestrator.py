@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import context, crisis, repairs, router, safety
+from mani.chat import context, repairs, router, safety
 from mani.chat.greeting import (
     CHAT_MORE_LABEL,
     GO_TO_LIBRARY_LABEL,
@@ -401,15 +401,16 @@ async def send(
     )
     reply = call.value
 
-    # Crisis is read straight off the first reply, before any repair can drop the field
-    # while rewriting something else.
-    if reply.crisis is not None:
-        return await _handle_crisis(
-            conn, ctx, content,
-            reason=reply.crisis.reason,
-            reply_text=crisis.CRISIS_REPLY,
-            tapped=tapped, client_message_id=client_message_id, settings=settings,
-            updates=updates, llm_call_id=call.call_id,
+    # The model's own crisis judgment no longer locks the thread: a small model over-fires it
+    # on ordinary distress, pain or injury. Only the deterministic screen (safety.screen, above)
+    # locks. A model-reported crisis is kept as a non-locking concern - logged, and the framework
+    # held off this turn - so a genuine novel phrasing still gets careful handling without
+    # cutting off the conversation the person came for.
+    model_concern = reply.crisis is not None
+    if model_concern:
+        logger.info(
+            "model reported a safety concern on thread %s: %s",
+            ctx.thread.id, reply.crisis.reason,
         )
 
     if deferred:
@@ -478,7 +479,7 @@ async def send(
         ),
         clarification_already_used=context.clarification_used(history),
     )
-    if assessment.blocks_framework:
+    if assessment.blocks_framework or model_concern:
         # A concern pauses the framework rather than ending it: nothing this reply reports
         # about a stage is applied, and it may not open a new one. The stored state is left
         # exactly as it was, so the framework resumes from there once the concern has passed.
