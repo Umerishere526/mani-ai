@@ -127,7 +127,7 @@ def test_cors_origins_still_accepts_a_json_array_from_the_environment(monkeypatc
 def test_routing_pins_the_upstream_provider_by_default():
     # Unpinned, OpenRouter may send a conversation to any provider serving the model.
     routing = build().routing()
-    assert routing["order"] == ["openai"]
+    assert routing["order"] == ["google-ai-studio"]
     assert routing["allow_fallbacks"] is False
     assert routing["data_collection"] == "deny"
 
