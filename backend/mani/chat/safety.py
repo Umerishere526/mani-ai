@@ -65,6 +65,7 @@ _CRISIS: list[tuple[Category, str]] = [
     (Category.SUICIDE, "take my own life"),
     (Category.SUICIDE, "taking my own life"),
     (Category.SUICIDE, "commit suicide"),
+    (Category.SUICIDE, "want to die"),
     (Category.OVERDOSE, "taken the pills"),
     (Category.OVERDOSE, "took the pills"),
     (Category.OVERDOSE, "taken an overdose"),
@@ -95,7 +96,6 @@ _CONCERN: list[tuple[Category, str]] = [
     (Category.SUICIDE, "no point in living"),
     (Category.SUICIDE, "do not want to be here"),
     (Category.SUICIDE, "do not want to wake up"),
-    (Category.SUICIDE, "want to die"),
     (Category.SUICIDE, "i have everything ready"),
     # Passive ideation: a wish not to exist, with no plan or method. Concern, not crisis - it
     # pauses any framework and keeps Mani close without locking the conversation. Whole

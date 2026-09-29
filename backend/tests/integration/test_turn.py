@@ -368,30 +368,34 @@ async def test_asking_about_an_offer_leaves_it_open(alice, model):
     assert ctx.technique.outcome is TechniqueOutcome.OFFERED
 
 
-async def test_a_crisis_answers_with_real_words_and_records_the_event(alice, model):
-    """The reference returned an empty string here and stored no reason."""
+async def test_a_model_reported_crisis_does_not_lock_the_thread(alice, model):
+    """The model's own crisis judgment no longer locks: a small model over-fires it on
+    ordinary distress, pain, or injury. Only the deterministic screen locks. A model report
+    is a non-locking concern - the reply stays in the model's words, no event is recorded,
+    and the conversation the person came for is not cut off."""
     model(
-        Reply(
-            text="I hear you.",
-            crisis=Crisis(reason="expressed suicidal ideation"),
-        )
+        Reply(text="I hear you, and I'm right here with you.", crisis=Crisis(reason="hopelessness")),
+        Reply(text="What has today been like?"),
     )
     from mani.db import pool
 
     thread = await start(alice)
     turn = await send(alice, thread.id, "there is no point in me being here")
 
-    assert turn.crisis_detected is True
-    assert turn.content == crisis.CRISIS_REPLY
+    assert turn.crisis_detected is False
+    assert turn.content != crisis.CRISIS_REPLY
     assert turn.content.strip()
 
     async with pool.as_admin() as conn:
         event = await conn.fetchrow(
-            "select reason, message_id from admin.crisis_events where thread_id = $1",
-            thread.id,
+            "select reason from admin.crisis_events where thread_id = $1", thread.id
         )
-    assert event["reason"] == "expressed suicidal ideation"
-    assert event["message_id"] is not None
+    assert event is None
+
+    # The thread is not locked, so a following turn is answered normally.
+    again = await send(alice, thread.id, "I guess I am still here")
+    assert again.crisis_detected is False
+    assert again.content.strip()
 
 
 async def test_the_safety_screen_locks_a_thread_with_no_provider_call(alice, model):
@@ -453,24 +457,32 @@ async def test_a_framework_completing_on_a_crisis_turn_is_still_retired(alice, m
     assert row["outcome"] == TechniqueOutcome.ACCEPTED
 
 
-async def test_a_crisis_the_model_reported_links_to_the_call_that_decided_it(alice, model):
-    """The safety screen answers before any call, so it has none to link. The model's own
-    report costs a real generation, and admin.crisis_events is where someone reviewing a
-    crisis asks which model produced it."""
-    model(Reply(text="I hear you.", crisis=Crisis(reason="expressed hopelessness")))
-    thread = await start(alice)
-    reported = await send(alice, thread.id, "there is no point in any of it")
-    assert reported.llm_call_id is not None
+async def test_a_clear_wish_to_die_locks_before_any_call(alice, model):
+    """"I want to die" is a clear wish to die, so the deterministic screen locks it before the
+    model is ever asked - the sole locking authority, not the model. The scripted model has no
+    reply queued, so a call here would raise rather than just cost extra."""
+    from mani.db import pool
 
-    screened = await start(alice)
-    caught = await send(alice, screened.id, "I am going to kill myself tonight.")
-    assert caught.llm_call_id is None
+    scripted = model()
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "I want to die")
+
+    assert scripted.calls == 0
+    assert turn.crisis_detected is True
+    assert turn.llm_call_id is None
+
+    async with pool.as_admin() as conn:
+        event = await conn.fetchrow(
+            "select reason from admin.crisis_events where thread_id = $1", thread.id
+        )
+    assert event["reason"] == "safety screen: suicide"
 
 
 async def test_a_crisis_thread_refuses_another_turn(alice, model):
-    model(Reply(text="I hear you.", crisis=Crisis(reason="hopelessness")))
+    # A deterministic crisis locks the thread; the model is never called for the first turn.
+    model()
     thread = await start(alice)
-    await send(alice, thread.id, "there is no point")
+    await send(alice, thread.id, "I want to die")
 
     from mani.errors import ServiceError
 

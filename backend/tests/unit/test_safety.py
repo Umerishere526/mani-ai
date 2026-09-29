@@ -11,6 +11,9 @@ from mani.chat.safety import Assessment, Category, Level, protocol_for, screen
     ("text", "category"),
     [
         ("I am going to kill myself tonight", Category.SUICIDE),
+        # A clear wish to die locks, on muhammad's decision (2026-09-29): the deterministic
+        # screen is the sole locking authority, so this cannot depend on the model catching it.
+        ("I want to die", Category.SUICIDE),
         ("i have already taken the pills", Category.OVERDOSE),
         ("I am afraid I am going to hurt him", Category.HARM_TO_OTHER),
         ("I'm going to hurt myself", Category.SELF_HARM),

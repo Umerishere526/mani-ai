@@ -147,10 +147,16 @@ class Reply(BaseModel):
     crisis: Crisis | None = Field(
         default=None,
         description=(
-            "Set ONLY when user expresses suicidal ideation, self-harm intent, or deep "
-            'hopelessness. Examples: "I want to end it", "no point in living", '
-            '"better off without me". Do NOT set for normal sadness or frustration. '
-            "Set to null if no crisis detected."
+            "Set when the person shows a genuine safety concern - suicidal thoughts, an intent "
+            "to self-harm, or a wish to die. This does NOT cut off the conversation; it flags "
+            "the moment so the framework pauses and the reply stays with them. Do NOT set it "
+            "for ordinary sadness or frustration, hopelessness or exhaustion (\"I can not do "
+            "this anymore\"), physical pain or injury (\"I broke my arm\", \"I fell and hurt "
+            "myself\"), or an ambiguous \"I need help\". For a physical injury, ask whether they "
+            "have been able to get it seen to and how it is affecting them, then support the "
+            "emotional side. For anything else ambiguous, ask one gentle question to learn "
+            "whether they are in danger or hurting emotionally first. Set to null when there is "
+            "no safety concern."
         ),
     )
     state: TechniqueState | None = Field(
