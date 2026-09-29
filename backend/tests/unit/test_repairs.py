@@ -28,7 +28,7 @@ def reply(**overrides) -> Reply:
 
 
 # Where buttons are allowed besides an offer, for the tests about what a button may say.
-AT_THE_END = {"framework_running": True, "current_phase": "somatic", "current_framework_id": "abcde"}
+AT_THE_END = {"framework_running": True, "current_phase": "somatic_practice", "current_framework_id": "abcde"}
 
 
 def fix(registry, model_reply, **overrides):

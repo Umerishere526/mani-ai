@@ -492,19 +492,24 @@ async def send(
             + ([f"dropped a technique offered on a safety-concern turn: {', '.join(paused)}"]
                if paused else []),
         )
-    if fixed.phase == "somatic" and fixed.framework_id is not None and not _ASKS_WHAT_NEXT.search(fixed.text):
+    if fixed.phase == "somatic_checkin" and fixed.framework_id is not None and not _ASKS_WHAT_NEXT.search(fixed.text):
         # The client's flow (2026-09-24): the body check-in is fixed content, sent word for
         # word, never reworded. Skipped when they already described their body and this
         # reply moves straight to the two choices instead of asking again.
-        stage = config.registry.get(fixed.framework_id).stages.get("somatic") or {}
+        stage = config.registry.get(fixed.framework_id).stages.get("somatic_checkin") or {}
         script = (stage.get("ask") or {}).get(context.resolve_style(ctx))
         if script:
             fixed = dataclasses.replace(fixed, text=repairs.with_the_check_in(fixed.text, script))
     if fixed.notes:
         logger.info("repaired reply on thread %s: %s", ctx.thread.id, "; ".join(fixed.notes))
-    if technique is not None and config.registry.is_final(technique.framework_id, fixed.phase):
-        # The check-in reply asks about their body, and they answer before choosing - unless
-        # they had already described it, and this reply mirrors that and asks what next.
+    if technique is not None and (
+        config.registry.is_final(technique.framework_id, fixed.phase)
+        or fixed.phase == "somatic_checkin"
+    ):
+        # The two somatic stages carry buttons by one rule: a reply that has moved to the two
+        # choices - the practice done, or the check-in skipped or declined - shows Chat More /
+        # Go to Library; the check-in question and the practice itself keep their own prompts and
+        # never a leaked hand-off.
         without_handoff = [
             p for p in fixed.prompts
             if p.library is None and p.label.strip().lower() not in _HANDOFF_LABELS

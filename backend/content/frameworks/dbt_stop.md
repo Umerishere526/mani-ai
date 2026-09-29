@@ -3,7 +3,7 @@ id: dbt_stop
 name: DBT STOP
 summary: "These questions help you interrupt an automatic reaction so you can pause, understand what is happening, and choose how you want to respond rather than simply reacting."
 display_order: 6
-phases: [offering, stop, pause, observe, proceed, closing, somatic]
+phases: [offering, stop, pause, observe, proceed, closing]
 activation:
   central_indication: >-
     The user is about to act - send, post, call, confront, decide - and needs help pausing
@@ -200,17 +200,6 @@ stages:
       supportive: "How is that choice sitting with you?"
       reflective: "What changes when the action is no longer immediate?"
       direct: "Is that your next step?"
-  somatic:
-    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
-    boundaries:
-      - "must not summarize STOP before asking the somatic question"
-    if_unclear:
-      - when: "the user declines the somatic check-in"
-        reply: "You'd rather not check in with your body right now. Would you like to keep chatting or go to the Library?"
-    ask:
-      supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
-      reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"
-      direct: "Before we move on, let's check in. What are you noticing in your body right now compared with when we started?"
 ---
 
 # DBT STOP

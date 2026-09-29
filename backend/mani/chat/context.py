@@ -194,7 +194,7 @@ def build(
     if not running:
         # What the question is about while no stage decides it (muhammad, 2026-09-24): said
         # here, next to the message, because the style rule in the long prompt alone did not hold.
-        focus = "next step" if resolve_style(ctx) == "direct" else "feelings"
+        focus = "feeling, then the way through" if resolve_style(ctx) == "direct" else "feelings"
         lines.append(f"question_focus: {focus}")
     if offer_waiting:
         # Mani's last reply was an offer, and they typed rather than tapped.
