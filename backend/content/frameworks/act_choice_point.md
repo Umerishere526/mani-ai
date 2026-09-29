@@ -3,7 +3,7 @@ id: act_choice_point
 name: ACT Choice Point
 summary: "These questions help you notice the difficult thought or feeling, reconnect with what matters to you, and choose an action that reflects the person you want to be. By the end, you will have a direction you can take even when the situation or your feelings have not changed."
 display_order: 5
-phases: [offering, situation, present, pull, matters, toward, action, closing, somatic]
+phases: [offering, situation, present, pull, matters, toward, action, closing]
 activation:
   central_indication: >-
     The user may not be able to change or resolve the situation, but does not want it deciding
@@ -230,17 +230,6 @@ stages:
       supportive: "How is that choice sitting with you?"
       reflective: "What changes, if anything, when you look at that choice?"
       direct: "Is that action realistic for you?"
-  somatic:
-    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
-    boundaries:
-      - "must not summarize ACT Choice Point before asking the somatic question"
-    if_unclear:
-      - when: "the user declines the somatic check-in"
-        reply: "You'd rather not check in with your body right now. Would you like to keep chatting or go to the Library?"
-    ask:
-      supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
-      reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"
-      direct: "Before we move on, let's check in. What are you noticing in your body right now compared with when we started?"
 ---
 
 # ACT Choice Point

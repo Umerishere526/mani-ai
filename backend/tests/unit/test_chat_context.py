@@ -428,11 +428,15 @@ def test_the_block_says_which_phase_of_the_conversation_this_is():
 
 
 
-def test_supportive_and_reflective_ask_about_feelings_and_direct_about_the_next_step():
-    """muhammad, 2026-09-24: Supportive and Reflective focus their questions on how the person
-    feels rather than the situation; Direct moves toward a way through. Said next to the
-    message, where a style rule in the long prompt alone did not hold."""
-    for style, focus in (("supportive", "feelings"), ("reflective", "feelings"), ("direct", "next step")):
+def test_every_style_focuses_the_question_on_how_the_person_feels():
+    """All three styles anchor the question to how the person feels rather than the situation;
+    Direct then turns toward a way through. Said next to the message, where a style rule in the
+    long prompt alone did not hold."""
+    for style, focus in (
+        ("supportive", "feelings"),
+        ("reflective", "feelings"),
+        ("direct", "feeling, then the way through"),
+    ):
         chosen = thread().model_copy(update={"conversation_style": SupportStyle(style)})
         ctx = TurnContext(thread=chosen, profile=None, technique=None)
         assert f"question_focus: {focus}" in context.build(ctx)

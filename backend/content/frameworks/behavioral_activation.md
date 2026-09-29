@@ -3,7 +3,7 @@ id: behavioral_activation
 name: Behavioral Activation
 summary: "These questions help you identify what you have stopped doing and choose one realistic activity you can begin. By the end, you will have a specific, manageable action that helps you start moving forward again."
 display_order: 3
-phases: [offering, stopped, matters, choose, manageable, begin, barrier, closing, somatic]
+phases: [offering, stopped, matters, choose, manageable, begin, barrier, closing]
 activation:
   central_indication: >-
     The user knows what they could do but cannot get themselves to begin - low mood,
@@ -220,17 +220,6 @@ stages:
       supportive: "How is that plan sitting with you?"
       reflective: "What changes, if anything, when you approach it this way?"
       direct: "Is the plan realistic?"
-  somatic:
-    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
-    boundaries:
-      - "must not summarize Behavioral Activation before asking the somatic question"
-    if_unclear:
-      - when: "the user declines the somatic check-in"
-        reply: "You'd rather not check in with your body right now. Would you like to keep chatting or go to the Library?"
-    ask:
-      supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
-      reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"
-      direct: "Before we move on, let's check in. What are you noticing in your body right now compared with when we started?"
 ---
 
 # Behavioral Activation

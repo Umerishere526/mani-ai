@@ -3,7 +3,7 @@ id: thought_reframe
 name: Thought Reframe
 summary: "These questions help you examine a troubling thought and consider a more balanced perspective. By the end, you will be able to see the situation differently."
 display_order: 2
-phases: [offering, thought, significance, facts, alternative, reframe, closing, somatic]
+phases: [offering, thought, externalize, significance, facts, alternative, reframe, closing]
 activation:
   central_indication: >-
     One specific painful thought or interpretation is intensifying distress, and the user wants
@@ -104,6 +104,22 @@ stages:
       supportive: "This is the thought that keeps returning. Is this the one you want to look at together?"
       reflective: "Is that the thought you want to look at?"
       direct: "Is that the thought you want to test?"
+  externalize:
+    purpose: "Help the user see the thought as something their mind is producing, not a fact, creating a little distance before it is examined."
+    listen_for: "Whether the user can hold the thought as a thought their mind is offering, rather than stating it as the plain truth of the situation."
+    ready_when: "The user refers to it as something their mind is telling them, or can hold it at a slight distance. If they still speak it as fact, stay here."
+    boundaries:
+      - "must not argue the thought is false - this step only creates distance"
+      - "must not call the thought irrational, a distortion, or a bias"
+      - "must not move to evidence yet"
+      - "must not add a feeling the user did not name"
+    if_unclear:
+      - when: "the user restates the thought as plain fact"
+        reply: "That's landing as simple truth right now. If you said it as something your mind is telling you, how would it sound?"
+    ask:
+      supportive: "That thought has really moved in. Can we hold it as a thought for a moment: what is your mind telling you here?"
+      reflective: "That's a thought your mind is offering, not the whole truth of it. How does it sound to say 'my mind is telling me...'?"
+      direct: "That's a thought your mind is handing you, not a fact yet. Say it back starting with 'my mind keeps telling me' - how does that land?"
   significance:
     purpose: "Understand what makes the thought matter, without labelling their experience."
     listen_for: "Why the thought matters and what the user believes it says about themselves, another person, or the future."
@@ -199,17 +215,6 @@ stages:
       supportive: "How is that thought sitting with you now?"
       reflective: "What changes, if anything, when you see it this way?"
       direct: "Does that thought fit what you know?"
-  somatic:
-    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
-    boundaries:
-      - "must not summarize Thought Reframe before asking the somatic question"
-    if_unclear:
-      - when: "the user declines the somatic check-in"
-        reply: "You'd rather not check in with your body right now. Would you like to keep chatting or go to the Library?"
-    ask:
-      supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
-      reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"
-      direct: "Before we move on, let's check in. What are you noticing in your body right now compared with when we started?"
 ---
 
 # Thought Reframe
@@ -233,9 +238,9 @@ examined instead: "Because the relationship ended, I will always be alone."
 
 ## Stage progression
 
-Identify the thought -> Identify its significance -> Examine the facts -> Consider another
-interpretation -> Create a believable reframe -> Complete. MANI does not skip directly from the
-original thought to a replacement thought.
+Identify the thought -> Hold it as a thought, not a fact -> Identify its significance ->
+Examine the facts -> Consider another interpretation -> Create a believable reframe -> Complete.
+MANI does not skip directly from the original thought to a replacement thought.
 
 ## Worked example - reflection tone
 

@@ -3,7 +3,7 @@ id: abcde
 name: ABCDE
 summary: "These questions help you separate what happened from what you told yourself about it, question what may not be serving you, and come away with a clearer and more useful way of seeing the situation."
 display_order: 1
-phases: [offering, activate, belief, consequence, examine, balanced, closing, somatic]
+phases: [offering, activate, belief, consequence, examine, balanced, closing]
 activation:
   central_indication: >-
     A specific event triggered a belief that is now producing an emotional or behavioural
@@ -192,17 +192,6 @@ stages:
       supportive: "How is that belief sitting with you now?"
       reflective: "What changes, if anything, when you see it this way?"
       direct: "Does that belief fit what happened?"
-  somatic:
-    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
-    boundaries:
-      - "must not summarize ABCDE before asking the somatic question"
-    if_unclear:
-      - when: "the user declines the somatic check-in"
-        reply: "You'd rather not check in with your body right now. Would you like to keep chatting or go to the Library?"
-    ask:
-      supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
-      reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"
-      direct: "Before we move on, let's check in. What are you noticing in your body right now compared with when we started?"
 ---
 
 # ABCDE

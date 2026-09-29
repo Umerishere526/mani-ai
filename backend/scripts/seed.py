@@ -4,6 +4,7 @@
 import asyncio
 import json
 import pathlib
+import re
 import sys
 
 import asyncpg
@@ -19,6 +20,24 @@ from mani.config import get_settings  # noqa: E402
 CONTENT_DIR = pathlib.Path(__file__).resolve().parent.parent / "content"
 PROMPTS_DIR = CONTENT_DIR / "prompts"
 FRAMEWORKS_DIR = CONTENT_DIR / "frameworks"
+
+# The somatic route is authored once and appended to every framework, rather than repeated in
+# each framework file. It is not a prompt row and not a composer layer - its two stages are
+# merged into each framework's phases and stages here, so the phase machine and [ctx] handle
+# them like any other stage. Skipped in the prompts loop below for the same reason.
+SOMATIC_FILE = PROMPTS_DIR / "somatic.md"
+_FENCED_YAML = re.compile(r"```yaml\n(.*?)\n```", re.DOTALL)
+
+
+def load_somatic_stages() -> dict:
+    """The shared somatic route's stage defs, from the fenced yaml block in somatic.md."""
+    match = _FENCED_YAML.search(SOMATIC_FILE.read_text())
+    if not match:
+        raise ValueError(f"{SOMATIC_FILE.name} has no fenced yaml stages block")
+    stages = (yaml.safe_load(match.group(1)) or {}).get("stages")
+    if not stages:
+        raise ValueError(f"{SOMATIC_FILE.name} yaml block has no stages")
+    return stages
 
 
 def parse_prompt(path: pathlib.Path) -> dict:
@@ -80,8 +99,16 @@ async def seed() -> None:
             if not framework_files:
                 raise SystemExit(f"no framework files in {FRAMEWORKS_DIR}")
 
+            somatic_stages = load_somatic_stages()
+            somatic_phases = list(somatic_stages)
+
             for path in framework_files:
                 framework = parse_framework(path)
+                # Append the shared somatic route after each framework's own phases. The files
+                # end at `closing`, and this is rebuilt from the file every run, so appending is
+                # idempotent - there is nothing to dedupe.
+                framework["phases"] = framework["phases"] + somatic_phases
+                framework["stages"] = {**framework["stages"], **somatic_stages}
                 await conn.execute(
                     """
                     insert into admin.frameworks
@@ -111,7 +138,8 @@ async def seed() -> None:
                 print(f"  {framework['name']:<28} {len(framework['stages'])} stages")
             print(f"frameworks: {len(framework_files)}")
 
-            files = sorted(PROMPTS_DIR.glob("*.md"))
+            # somatic.md is the merge source above, not a prompt row.
+            files = [p for p in sorted(PROMPTS_DIR.glob("*.md")) if p != SOMATIC_FILE]
             if not files:
                 raise SystemExit(f"no prompt files in {PROMPTS_DIR}")
 

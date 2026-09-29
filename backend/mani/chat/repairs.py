@@ -72,7 +72,7 @@ MAX_CAPSULE_WORDS = 5
 # a framework. Everywhere else a button reads as a menu instead of a conversation (client,
 # 2026-09-24). The greeting's style buttons and Chat More / Go to Library are written by the
 # orchestrator after this runs, so they are not affected.
-ENDING_STAGES = frozenset({"somatic", "grounding"})
+ENDING_STAGES = frozenset({"somatic_checkin", "somatic_practice", "grounding"})
 
 # Keyed lowercase so a model's casing does not matter; valued at the canonical casing so
 # whatever reaches the client to navigate on is always exactly what LibrarySection defines.

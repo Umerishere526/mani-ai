@@ -232,7 +232,7 @@ async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, m
     async with pool.as_user(alice) as conn:
         await threads.set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="somatic",
+            at_message_count=2, phase="somatic_practice",
         )
 
     turn = await send(alice, thread.id, "that helped, thanks")
@@ -258,7 +258,7 @@ async def _retire_abcde_on(alice, thread_id) -> None:
     async with pool.as_user(alice) as conn:
         await threads.set_technique_outcome(
             conn, thread_id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="somatic",
+            at_message_count=2, phase="somatic_practice",
         )
 
 
@@ -890,7 +890,7 @@ async def test_finishing_a_framework_always_offers_chat_more_and_the_library(ali
     async with pool.as_user(alice) as conn:
         await threads.set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="somatic",
+            at_message_count=2, phase="somatic_practice",
         )
 
     turn = await send(alice, thread.id, "my shoulders feel a bit looser")
@@ -906,7 +906,7 @@ async def test_the_body_check_in_waits_for_their_answer_before_the_two_choices(a
     model(Reply(text="What are you noticing in your body now, compared with when we started?",
                 prompts=[SmartPrompt(label="Chat More"),
                          SmartPrompt(label="Go to Library", library="home")],
-                state=TechniqueState(technique="abcde", step="somatic")))
+                state=TechniqueState(technique="abcde", step="somatic_checkin")))
     from mani.db import pool
 
     thread = await start(alice)
@@ -926,7 +926,7 @@ async def test_a_body_they_already_described_ends_on_the_two_choices_once(alice,
     choices, which then do not come back on the reply after."""
     model(
         Reply(text="Your chest feels lighter. Does that feel right? What would you like to do next?",
-              state=TechniqueState(technique="abcde", step="somatic")),
+              state=TechniqueState(technique="abcde", step="somatic_checkin")),
         Reply(text="It's still on your mind. What feels most important about this now?"),
     )
     from mani.db import pool
@@ -955,7 +955,7 @@ async def test_a_choice_already_made_is_not_offered_again(alice, model):
     async with pool.as_user(alice) as conn:
         await threads.set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="somatic",
+            at_message_count=2, phase="somatic_practice",
         )
 
     turn = await send(alice, thread.id, "Chat More")
@@ -1076,7 +1076,7 @@ async def test_the_body_check_in_is_sent_from_the_script_not_reworded(alice, mod
     model(
         Reply(
             text="How does your body feel after all that?",
-            state=TechniqueState(technique="abcde", step="somatic"),
+            state=TechniqueState(technique="abcde", step="somatic_checkin"),
         ),
     )
     from mani.db import pool

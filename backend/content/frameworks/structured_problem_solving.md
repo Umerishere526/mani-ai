@@ -3,7 +3,7 @@ id: structured_problem_solving
 name: Structured Problem-Solving
 summary: "We'll go through a few focused questions. By the end, you will have turned a problem that feels unclear or overwhelming into a practical next step."
 display_order: 4
-phases: [offering, problem, facts, control, outcome, options, compare, select, first_action, closing, somatic]
+phases: [offering, problem, facts, control, outcome, options, compare, select, first_action, closing]
 activation:
   central_indication: >-
     A specific, practical problem exists and the user does not know what to do next - the
@@ -247,17 +247,6 @@ stages:
       supportive: "How is that decision sitting with you?"
       reflective: "What changes, if anything, now that the decision is clearer?"
       direct: "Is the plan realistic?"
-  somatic:
-    purpose: "Transition to the somatic check-in without summarizing the completed framework first."
-    boundaries:
-      - "must not summarize Structured Problem-Solving before asking the somatic question"
-    if_unclear:
-      - when: "the user declines the somatic check-in"
-        reply: "You'd rather not check in with your body right now. Would you like to keep chatting or go to the Library?"
-    ask:
-      supportive: "Before we move on, can we check in for a moment? What are you noticing in your body right now compared with when we started?"
-      reflective: "Before we move on, let's check in with what you're noticing now. What feels different in your body compared with when we started?"
-      direct: "Before we move on, let's check in. What are you noticing in your body right now compared with when we started?"
 ---
 
 # Structured Problem-Solving
