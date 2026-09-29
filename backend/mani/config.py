@@ -12,6 +12,10 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 DEV_PROMPT_CACHE_TTL = 1
 PROD_PROMPT_CACHE_TTL = 300
 
+# Named so the production boot check can compare against it directly rather than drifting
+# from whatever the field's own default happens to say.
+_DEFAULT_CORS_ORIGINS = ["http://localhost:3000"]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -27,6 +31,16 @@ class Settings(BaseSettings):
     # and that text lands in logs, tracebacks and Sentry events - confirmed live, where it
     # printed the OpenRouter key. The URL carries the database password.
     database_url: str = Field(repr=False)
+
+    # asyncpg pool bounds. Total Postgres backend connections consumed is
+    # (concurrently-warm Vercel instances) x db_pool_max_size, uncapped by anything in this
+    # repo - the Supabase session pooler (required because asyncpg uses prepared statements,
+    # which the transaction pooler doesn't support) allocates one fixed backend connection
+    # per pooled client connection. These are a hedge, not a measured guarantee: raising them
+    # needs checking the actual project's pooler connection ceiling first (Supabase dashboard
+    # -> Settings -> Database -> connection pooling), which this code cannot see.
+    db_pool_min_size: int = Field(default=2, ge=1)
+    db_pool_max_size: int = Field(default=5, ge=1)
 
     # Supabase hosts Auth and Storage; the database is addressed via database_url.
     supabase_url: str
@@ -50,7 +64,7 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 60.0
 
     # Used when a prompt row names no model of its own.
-    default_chat_model: str = "google/gemini-3-flash-preview"
+    default_chat_model: str = "openai/gpt-4o-mini"
     default_summary_model: str = "openai/gpt-oss-120b"
 
     # Sent as OpenRouter routing preferences on every call. Conversations are
@@ -63,7 +77,7 @@ class Settings(BaseSettings):
     # provider applies. Defaults carried from the previous system's provider row; a
     # prompt row's `routing` column overrides them when it needs to.
     openrouter_provider_order: list[str] = Field(
-        default_factory=lambda: ["google-ai-studio"]
+        default_factory=lambda: ["openai"]
     )
     openrouter_allow_fallbacks: bool = False
 
@@ -83,7 +97,7 @@ class Settings(BaseSettings):
     # and a plain comma-separated string - what a host's env var UI actually holds - crashes
     # Settings() at import instead of reaching the validator below.
     cors_origins: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["http://localhost:3000"]
+        default_factory=lambda: list(_DEFAULT_CORS_ORIGINS)
     )
 
     @field_validator("cors_origins", mode="before")
@@ -131,13 +145,14 @@ class Settings(BaseSettings):
     def _production_needs_its_secrets(self) -> "Settings":
         """Refuse to start a production process that cannot do its job.
 
-        Both of these default to empty so local development and the test suite can run
-        without them. In production that default is the dangerous answer: the process
-        boots, /health and /health/ready both report ok because neither touches the
-        provider or verifies a token, and every real request fails - a chat turn at the
-        model call, any authenticated request at the JWKS fetch. Failing at import is the
-        difference between a deploy that never goes live and one that looks healthy while
-        serving nothing.
+        These all default to something that lets local development and the test suite run
+        without configuring them. In production those defaults are the dangerous answer: the
+        process boots, /health and /health/ready both report ok because neither touches the
+        provider, verifies a token, or calls a browser, and every real request fails - a chat
+        turn at the model call, an authenticated request at the JWKS fetch, a browser request
+        at CORS silently only ever allowing localhost. Failing at import is the difference
+        between a deploy that never goes live and one that looks healthy while serving
+        nothing.
         """
         if self.environment != "production":
             return self
@@ -149,6 +164,8 @@ class Settings(BaseSettings):
             )
             if not value.strip()
         ]
+        if self.cors_origins == _DEFAULT_CORS_ORIGINS:
+            missing.append("CORS_ORIGINS")
         if missing:
             raise ValueError(f"production requires: {', '.join(missing)}")
         return self

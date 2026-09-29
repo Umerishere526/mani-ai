@@ -18,6 +18,7 @@ REQUIRED = {
 PRODUCTION = {
     "openrouter_api_key": "sk-test",
     "supabase_jwt_secret": "jwt-secret",
+    "cors_origins": ["https://example.com"],
 }
 
 
@@ -77,6 +78,7 @@ def test_unknown_environment_is_rejected():
     [
         ({"openrouter_api_key": ""}, "OPENROUTER_API_KEY"),
         ({"supabase_jwt_secret": "", "supabase_jwks_url": ""}, "SUPABASE_JWT_SECRET"),
+        ({"cors_origins": ["http://localhost:3000"]}, "CORS_ORIGINS"),
     ],
 )
 def test_production_refuses_to_start_without_the_secrets_it_needs(blank, expected, monkeypatch):
@@ -125,7 +127,7 @@ def test_cors_origins_still_accepts_a_json_array_from_the_environment(monkeypatc
 def test_routing_pins_the_upstream_provider_by_default():
     # Unpinned, OpenRouter may send a conversation to any provider serving the model.
     routing = build().routing()
-    assert routing["order"] == ["google-ai-studio"]
+    assert routing["order"] == ["openai"]
     assert routing["allow_fallbacks"] is False
     assert routing["data_collection"] == "deny"
 
