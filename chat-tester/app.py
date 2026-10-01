@@ -9,6 +9,7 @@ import os
 
 import streamlit as st
 import streamlit.components.v1 as components
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 import client as mani
 
@@ -291,15 +292,26 @@ else:
                 label_visibility="collapsed",
             )
 
+            # A widget holding a stale reference (its underlying file evicted from the
+            # server's in-memory manager - after a reconnect, or the app's container
+            # recycling) returns a DeletedFile placeholder, not None: a NamedTuple with
+            # only a file_id, no getvalue()/name. The isinstance check below is the real
+            # guard for that - treated the same as a transcription failure, not silently
+            # ignored, so the panel still closes and the person sees why nothing happened.
             if recording is not None:
-                with st.spinner("Transcribing…"):
-                    try:
-                        transcript = client.transcribe_audio(
-                            recording.getvalue(), recording.name or "recording.wav"
-                        )
-                    except mani.ApiError as exc:
-                        st.error(str(exc))
-                        transcript = None
+                transcript = None
+                if not isinstance(recording, UploadedFile):
+                    st.error("That recording could not be used. Please try again.")
+                else:
+                    with st.spinner("Transcribing…"):
+                        try:
+                            transcript = client.transcribe_audio(
+                                recording.getvalue(), recording.name or "recording.wav"
+                            )
+                        except mani.ApiError as exc:
+                            st.error(str(exc))
+                        except Exception:
+                            st.error("That recording could not be used. Please try again.")
                 # Reset the recorder and close the panel regardless of outcome, so a
                 # failed or already-used clip never re-submits itself on the next
                 # rerun, and the panel vanishes the moment a recording is handled -
