@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     default_chat_model: str = "google/gemini-3.1-flash-lite"
     default_summary_model: str = "openai/gpt-oss-120b"
 
+    # Speech-to-text goes through OpenRouter too, via its separate /audio/transcriptions
+    # endpoint - same key, same base_url, same bill as chat. Not a second provider.
+    whisper_model: str = "openai/whisper-large-v3"
+
     # Sent as OpenRouter routing preferences on every call. Conversations are
     # special-category health data, so upstream training use is refused here
     # rather than relying on a provider's default terms.

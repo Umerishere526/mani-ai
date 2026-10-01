@@ -12,11 +12,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
-from mani import auth_admin, storage
+from mani import auth_admin, storage, stt
 from mani.config import get_settings
 from mani.db import pool
 from mani.errors import ErrorCategory, ServiceError
-from mani.routers import account, admin, cron, crisis, exercises, health, messages, profile, threads
+from mani.routers import (
+    account,
+    admin,
+    cron,
+    crisis,
+    exercises,
+    health,
+    messages,
+    profile,
+    threads,
+    transcribe,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +54,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await storage.close()
+        await stt.close()
         await auth_admin.close()
         await pool.close_pool()
 
@@ -128,6 +140,7 @@ def create_app() -> FastAPI:
         account.router,
         threads.router,
         messages.router,
+        transcribe.router,
         exercises.router,
         crisis.router,
         admin.router,
