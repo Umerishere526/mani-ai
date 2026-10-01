@@ -197,6 +197,33 @@ class ManiClient:
         """PATCH /v1/threads/{id} - the same endpoint a style-picker screen would call."""
         return self._call("PATCH", f"/v1/threads/{thread_id}", json={"conversation_style": style})
 
+    def transcribe_audio(self, audio_bytes: bytes, filename: str = "recording.wav") -> str:
+        """POST /v1/audio/transcriptions - voice in, text out. Not JSON: a multipart
+        upload, so _call's json-only _request is skipped in favour of files=."""
+        headers = {"Authorization": f"Bearer {self.session.access_token}"}
+        response = requests.post(
+            f"{self.base_url}/v1/audio/transcriptions",
+            headers=headers,
+            files={"file": (filename, audio_bytes, "audio/wav")},
+            timeout=60,
+        )
+        if response.status_code == 401:
+            self.session = refresh(self.session)
+            headers = {"Authorization": f"Bearer {self.session.access_token}"}
+            response = requests.post(
+                f"{self.base_url}/v1/audio/transcriptions",
+                headers=headers,
+                files={"file": (filename, audio_bytes, "audio/wav")},
+                timeout=60,
+            )
+        if not response.ok:
+            try:
+                body = response.json()
+            except requests.exceptions.JSONDecodeError:
+                body = {"raw": response.text[:300]}
+            raise ApiError(response.status_code, body)
+        return response.json()["text"]
+
 
 async def framework_debug_state(thread_id: str) -> dict[str, Any] | None:
     """Direct read of thread_technique_state - not something a real client ever does.

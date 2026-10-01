@@ -8,6 +8,7 @@ import json
 import os
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 import client as mani
 
@@ -151,11 +152,115 @@ def send(content: str) -> None:
         st.session_state.locked = True
 
 
+# Composer state. `draft` seeds the text field's initial value; the field's own widget
+# key is `draft_{composer_cycle}`, deliberately a different name. Streamlit refuses to
+# touch a widget's own key once it has rendered this run (confirmed by testing - it
+# raises StreamlitWidgetAlreadyInstantiatedError), so both "fill it with a transcript"
+# and "clear it after Send" work by bumping composer_cycle and reseeding `draft`, which
+# mints a fresh widget next render instead of mutating the live one.
+# `mic_cycle` mints a fresh key for the recorder after each use so the consumed clip
+# disappears rather than sitting there re-triggering transcription on every rerun.
+if "draft" not in st.session_state:
+    st.session_state.draft = ""
+if "composer_cycle" not in st.session_state:
+    st.session_state.composer_cycle = 0
+if "mic_cycle" not in st.session_state:
+    st.session_state.mic_cycle = 0
+# Whether the voice recorder panel is open. WhatsApp-style: tapping the mic icon pops
+# it open above the composer row; it closes itself the moment a recording is stopped
+# and handled, leaving just the (now-filled) text field - never left sitting open.
+if "show_recorder" not in st.session_state:
+    st.session_state.show_recorder = False
+
+# Floats the composer above the bottom of the viewport as one rounded card, rather
+# than a bar flush with the screen edge. `st-key-composer_bar` is the CSS class
+# Streamlit derives from the container's key, so this only ever targets that one
+# container - and everything inside it (including the recorder pop-up, when open)
+# inherits the same rounded shape via overflow: hidden, rather than needing its own
+# matching radius set separately.
+st.markdown(
+    """
+    <style>
+    .st-key-composer_bar {
+        position: fixed;
+        bottom: 1.25rem;
+        /* left/width are a fallback for the instant before the JS sync below runs
+           once; they are then overridden by the real content column's own
+           position, since a fixed max-width guess here drifts out of alignment
+           whenever the sidebar is collapsed/expanded or the window is resized -
+           confirmed by measuring both live: with the sidebar open, the content
+           column sat 150px right of a viewport-centered guess. */
+        left: 0;
+        right: 0;
+        z-index: 999;
+        margin-inline: auto;
+        width: calc(100% - 2.5rem);
+        max-width: 46rem;
+        padding: 0.75rem 1rem;
+        border-radius: 1.5rem;
+        overflow: hidden;
+        /* Hardcoded, not var(--...) - Streamlit's theme colors aren't exposed as
+           stable named CSS variables in this version (checked: only emotion's
+           auto-hashed ones are), so this must match .streamlit/config.toml's
+           secondaryBackgroundColor by hand if that value ever changes. */
+        background: #122A1E;
+        border: 1px solid rgba(47, 158, 92, 0.35);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(47, 158, 92, 0.12);
+    }
+    .st-key-composer_bar div[data-testid="stForm"] {
+        border: none;
+        padding: 0;
+    }
+    /* Room at the bottom of the message feed so the last bubble never sits under
+       the floating composer. */
+    .block-container {
+        padding-bottom: 10rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Keeps the floating composer's left edge and width locked to the real chat content
+# column, not a guessed viewport-centered width. Needed because the content column is
+# centered in the space *after* the sidebar, while a plain CSS fixed-position guess
+# centers against the full viewport - measured live, that mismatch was 150px with the
+# sidebar open. Runs in an iframe with documented same-origin access to the app (per
+# components.v1.html's own docs), so window.parent.document reaches the real page.
+components.html(
+    """
+    <script>
+    function syncComposerBar() {
+        const doc = window.parent.document;
+        const bar = doc.querySelector(".st-key-composer_bar");
+        const content = doc.querySelector(".block-container");
+        if (!bar || !content) return;
+        const rect = content.getBoundingClientRect();
+        bar.style.left = rect.left + "px";
+        bar.style.width = rect.width + "px";
+        bar.style.right = "auto";
+        bar.style.maxWidth = "none";
+        bar.style.marginInline = "0";
+    }
+    syncComposerBar();
+    window.parent.addEventListener("resize", syncComposerBar);
+    const target = window.parent.document.querySelector(".block-container") || window.parent.document.body;
+    new ResizeObserver(syncComposerBar).observe(target);
+    // Also catches the sidebar's own collapse/expand animation, which resizes the
+    // content column without firing a window resize event.
+    setInterval(syncComposerBar, 250);
+    </script>
+    """,
+    height=0,
+)
+
 if st.session_state.locked:
     st.warning("This conversation is paused after a crisis flag. Start a new conversation to continue.")
 else:
     # Mani's newest message is the only one whose buttons are live, exactly as in the apps.
     # A tap sends the label as the person's message; the backend matches it to the button.
+    # type="secondary" (the default) on purpose: a suggested reply is a shortcut, not the
+    # composer's Send action, and the two must not look like the same control.
     latest = next((m for m in reversed(st.session_state.messages) if m["role"] == "mani"), None)
     buttons = (latest or {}).get("prompts") or []
     if buttons:
@@ -164,9 +269,85 @@ else:
             if col.button(button["label"], use_container_width=True, key=f"tap_{index}_{len(st.session_state.messages)}"):
                 send(button["label"])
                 st.rerun()
-    if typed := st.chat_input("Say something…"):
-        send(typed)
-        st.rerun()
+
+    # -----------------------------------------------------------------------
+    # Composer: pinned to the bottom of the screen, flat rather than boxed. The mic
+    # is a toggle button beside the field, WhatsApp-style - tapping it pops the
+    # recorder open above the row; stopping a recording closes it again immediately,
+    # so it's never left open once used.
+    #
+    # Voice never reaches the backend on its own. Recording stops -> Streamlit's own
+    # player lets the person listen back -> this sends the clip to the transcription
+    # endpoint only -> the result lands as editable draft text, same as if they'd typed
+    # it. Only the Send button (or Enter in the field) calls send() - one trigger, same
+    # as a typed message, no parallel path.
+    # -----------------------------------------------------------------------
+    with st.container(key="composer_bar"):
+        if st.session_state.show_recorder:
+            st.caption("🎤 Recording - tap again to cancel")
+            recording = st.audio_input(
+                "Voice message",
+                key=f"mic_{st.session_state.mic_cycle}",
+                label_visibility="collapsed",
+            )
+
+            if recording is not None:
+                with st.spinner("Transcribing…"):
+                    try:
+                        transcript = client.transcribe_audio(
+                            recording.getvalue(), recording.name or "recording.wav"
+                        )
+                    except mani.ApiError as exc:
+                        st.error(str(exc))
+                        transcript = None
+                # Reset the recorder and close the panel regardless of outcome, so a
+                # failed or already-used clip never re-submits itself on the next
+                # rerun, and the panel vanishes the moment a recording is handled -
+                # it never sits open after stopping.
+                st.session_state.mic_cycle += 1
+                st.session_state.show_recorder = False
+                if transcript:
+                    # Only ever fills the draft - nothing here calls send(). A fresh
+                    # field key next render means this is a clean reseed, not a live
+                    # mutation of an already-rendered widget.
+                    st.session_state.draft = transcript
+                    st.session_state.composer_cycle += 1
+                st.rerun()
+
+        mic_col, composer_col = st.columns([1, 9])
+        with mic_col:
+            mic_icon = "✕" if st.session_state.show_recorder else "🎤"
+            if st.button(mic_icon, key="mic_toggle", use_container_width=True):
+                st.session_state.show_recorder = not st.session_state.show_recorder
+                st.rerun()
+
+        field_key = f"draft_{st.session_state.composer_cycle}"
+        with composer_col:
+            with st.form("composer", border=False):
+                field_col, button_col = st.columns([5, 1])
+                with field_col:
+                    st.text_area(
+                        "Message",
+                        value=st.session_state.draft,
+                        key=field_key,
+                        placeholder="Type, or tap 🎤 and edit before sending…",
+                        label_visibility="collapsed",
+                        height=68,
+                    )
+                with button_col:
+                    submitted = st.form_submit_button(
+                        "Send ➤", use_container_width=True, type="primary"
+                    )
+
+        if submitted:
+            content = st.session_state[field_key].strip()
+            if content:
+                send(content)
+            # A new cycle means a new field key next render, seeded empty - the clean
+            # way to clear it without touching the widget that just rendered.
+            st.session_state.draft = ""
+            st.session_state.composer_cycle += 1
+            st.rerun()
 
 # ---------------------------------------------------------------------------
 # Dev inspector - direct reads, not API calls. This is the point of the tool: seeing the

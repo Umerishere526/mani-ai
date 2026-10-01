@@ -1,0 +1,10 @@
+# Dark forest-green theme for the Mani chat tester. Local tooling only - not shipped
+# anywhere a client sees, so this can be as opinionated as the person running it likes.
+[theme]
+base = "dark"
+primaryColor = "#2F9E5C"
+backgroundColor = "#08150F"
+secondaryBackgroundColor = "#122A1E"
+textColor = "#E7F5EC"
+font = "sans serif"
+borderColor = "#1F4A33"

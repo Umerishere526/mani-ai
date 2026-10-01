@@ -156,6 +156,10 @@ class PromptIn(BaseModel):
     change_summary: str | None = Field(default=None, max_length=500)
 
 
+class TranscriptionOut(BaseModel):
+    text: str
+
+
 class PromptVersionOut(BaseModel):
     id: uuid.UUID
     prompt_id: uuid.UUID
