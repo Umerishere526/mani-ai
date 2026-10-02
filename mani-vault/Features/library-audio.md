@@ -27,8 +27,9 @@ any of them.
 ## Scope
 
 In scope:
-- The 18 audio exercises from mani-app's `library_audio/` (3 home, plus 3 each for Anxiety,
-  Boundaries, BuildingHabits, Burnout and EmotionalIntelligence), compressed and committed.
+- 17 audio exercises from mani-app's `library_audio/`. Deep Release (Burnout) is left out on
+  muhammad's decision (2026-10-02). That leaves 3 home, 3 each for Anxiety, Boundaries,
+  BuildingHabits and EmotionalIntelligence, and 2 for Burnout, compressed and committed.
 - A seed script that creates the private `exercises` bucket, uploads the audio and upserts the
   catalog rows.
 - `GET /v1/exercises` returns the full catalog, and `audio_path` no longer appears in responses.
@@ -116,7 +117,7 @@ Measured sizes: 131 MB across 18 files, the largest 21 MB. Supabase Free allows 
   - `GET /v1/exercises` now includes home items;
   - `ExerciseOut` loses `audio_path`.
   - No frontend uses these yet; the chat-tester is the first consumer.
-- Each retiring turn makes one extra `exercise_select` call with a larger prompt (18 candidates
+- Each retiring turn makes one extra `exercise_select` call with a larger prompt (17 candidates
   plus 3 messages, an estimated few hundred tokens). This is the same exception
   [[ADR-002-one-model-call-per-chat-turn]] already allows.
 
@@ -128,14 +129,14 @@ Measured sizes: 131 MB across 18 files, the largest 21 MB. Supabase Free allows 
 
 ## Done means
 
-- [ ] `backend/content/exercises/` holds `exercises.json` and 18 compressed MP3s, each well under
+- [ ] `backend/content/exercises/` holds `exercises.json` and 17 compressed MP3s, each well under
   50 MB. muhammad approved the listen test.
-- [ ] After `python scripts/seed_exercises.py`, Studio (http://127.0.0.1:54343) shows 18 objects in
-  the `exercises` bucket and 18 rows in `admin.exercises`. Re-running changes nothing.
-- [ ] `GET /v1/exercises` returns all 18 with a working `audio_url` and no `audio_path`.
+- [ ] After `python scripts/seed_exercises.py`, Studio (http://127.0.0.1:54343) shows 17 objects in
+  the `exercises` bucket and 17 rows in `admin.exercises`. Re-running changes nothing.
+- [ ] `GET /v1/exercises` returns all 17 with a working `audio_url` and no `audio_path`.
 - [ ] A finished framework in the chat-tester ends with an exercise card that plays and fits the
   conversation, plus one `exercise_select` row in `admin.llm_calls`.
-- [ ] Go to Library and the sidebar Library button both open the flat page. All 18 play, and Back
+- [ ] Go to Library and the sidebar Library button both open the flat page. All 17 play, and Back
   returns to the same thread.
 - [ ] `pytest`: new tests pass, the output is pristine, and the integration tests ran rather than
   skipped. Tests use fakes built from the real interfaces:

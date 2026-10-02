@@ -193,18 +193,6 @@
       "durationMinutes": 4.43
     },
     {
-      "id": "4bec69d9-1c2e-4bc0-be84-a7564af36dd7",
-      "filename": "burnout-deep-release.mp3",
-      "title": "Deep Release",
-      "subtitle": null,
-      "description": "The Deep Release meditation helps you let go of the pressure built up from stress and burnout. Once that tension drops, you can finally move forward with more confidence.",
-      "type": "Meditation",
-      "category": "Burnout",
-      "displayOrder": 1,
-      "showOnHomeScreen": false,
-      "durationMinutes": 13.82
-    },
-    {
       "id": "156c835f-5d4d-485a-8b56-d3d7621f896e",
       "filename": "burnout-sorting-table.mp3",
       "title": "The Sorting Table",

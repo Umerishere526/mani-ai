@@ -53,7 +53,7 @@ async def signed_audio_url(path: str | None) -> str | None:
         )
         response.raise_for_status()
         signed = response.json().get("signedURL")
-    except (httpx.HTTPError, ValueError):
+    except (httpx.HTTPError, httpx.InvalidURL, ValueError):
         logger.exception("failed to sign storage path %s", path)
         return None
 

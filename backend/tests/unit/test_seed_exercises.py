@@ -11,8 +11,8 @@ from scripts.seed_exercises import EXERCISES_DIR, ManifestEntry, load_manifest
 def test_every_manifest_entry_names_a_real_file_and_a_known_section():
     entries = load_manifest()
 
-    assert len(entries) == 18
-    assert len({e.id for e in entries}) == len({e.filename for e in entries}) == 18
+    assert len(entries) == 17
+    assert len({e.id for e in entries}) == len({e.filename for e in entries}) == 17
     for entry in entries:
         assert (EXERCISES_DIR / entry.filename).is_file(), entry.filename
         assert entry.category in set(LibrarySection)

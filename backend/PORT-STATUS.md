@@ -10,10 +10,10 @@ History (how the port went, what was fixed from review, old measurements) is in
 ## Status, 2026-10-01
 
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
-- Tests: `pytest` runs 789 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
+- Tests: `pytest` runs 798 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
   JWKS-configured project).
 - Database: 10 migrations, 15 tables (8 `public`, 7 `admin`), 6 frameworks and 5 prompts seeded.
-  `admin.exercises` holds the 18 library exercises from `content/exercises/`, with their audio in the
+  `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
   private `exercises` bucket (`scripts/seed_exercises.py`). A hosted project does not exist yet.
 - Models: `google/gemini-3.1-flash-lite` for chat and `openai/gpt-oss-120b` for summaries (`mani/config.py`).
 - Web and mobile do not call this API yet; they run on placeholder data.
@@ -154,7 +154,7 @@ Ordered by what breaks first.
   practice now carries no buttons, as in the new document. In the scripted eval, Direct can stall in a
   framework's own closing stage (`panic_somatic_once`), which is the model not advancing, not the body route.
 - **Generated TypeScript types** for `web/` and `mobile/` from the OpenAPI schema, with a CI gate. No CI exists.
-- **Admin audio upload.** The 18 seeded exercises come from `content/exercises/` through
+- **Admin audio upload.** The 17 seeded exercises come from `content/exercises/` through
   `scripts/seed_exercises.py`; there is no upload route, and the admin exercise CRUD takes an existing
   `audio_path`. The exercise card is also not kept on the message, so it is gone once a thread reloads.
 - **A worker process** for summaries and the memory fold, for when there is more than one instance.

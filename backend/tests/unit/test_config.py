@@ -155,3 +155,16 @@ def test_secrets_never_appear_when_the_settings_are_printed():
     for secret in ("db-password-123", "service-role-secret-123", "jwt-secret-123",
                    "sk-or-secret-123", "sentry-secret-123"):
         assert secret not in printed, secret
+
+
+def test_a_value_pasted_with_a_trailing_newline_is_trimmed(monkeypatch):
+    """Piping a value into a hosting dashboard (`echo url | vercel env add`) stores its
+    newline too. Production then built every Storage URL with it and crashed signing."""
+    monkeypatch.setenv("SUPABASE_URL", "https://heqenombgkihfeggrxqc.supabase.co\n")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", " sb_secret_example\n")
+    monkeypatch.setenv("DATABASE_URL", REQUIRED["database_url"])
+
+    s = Settings(_env_file=None)
+
+    assert s.supabase_url == "https://heqenombgkihfeggrxqc.supabase.co"
+    assert s.supabase_service_role_key == "sb_secret_example"

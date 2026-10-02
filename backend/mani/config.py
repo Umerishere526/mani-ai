@@ -18,8 +18,11 @@ _DEFAULT_CORS_ORIGINS = ["http://localhost:3000"]
 
 
 class Settings(BaseSettings):
+    # str_strip_whitespace: a value piped into a hosting dashboard keeps its trailing newline,
+    # and a URL carrying one cannot be requested at all.
     model_config = SettingsConfigDict(
-        env_file=Path(__file__).parent.parent / ".env", extra="ignore"
+        env_file=Path(__file__).parent.parent / ".env", extra="ignore",
+        str_strip_whitespace=True,
     )
 
     environment: Literal["development", "test", "production"] = "development"
