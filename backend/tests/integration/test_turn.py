@@ -282,6 +282,38 @@ async def test_the_closest_fit_is_owed_by_the_fourth_message_and_says_so(alice, 
     assert [p.technique for p in turn.prompts if p.technique] == ["act_choice_point"]
 
 
+async def test_a_motive_they_believe_in_reaches_the_closest_fit_with_the_deeper_framework_offer(
+    alice, model
+):
+    """covers: AC-1, AC-2, AC-3 - the first message's phrases are still counted on the fourth
+    message, and the closest fit then carries ABCDE's offer wording although the router is not
+    confident of it."""
+    from mani.db import pool
+    from mani.models.rows import SupportStyle
+
+    scripted = model(*[Reply(text="What was happening just then?")] * 4)
+    thread = await start(alice)
+    async with pool.as_admin() as conn:
+        # The style tap and its opener, which the real greeting flow adds before their first message.
+        await conn.execute(
+            "update public.threads set conversation_style = $2, message_count = message_count + 2 "
+            "where id = $1",
+            thread.id, SupportStyle.SUPPORTIVE.value,
+        )
+    for message in (
+        "I'm very upset. My manager embarrassed me today because he wants me to fail.",
+        "EVERYTHING WENT WRONG",
+        "I felt really embarrassed.",
+        "He does it all the time in front of everyone",
+    ):
+        await send(alice, thread.id, message)
+
+    final_prompt = scripted.last_messages[-1]["content"]
+    assert "framework_shortlist: abcde" in final_prompt
+    assert "closest_fit: due" in final_prompt
+    assert "offer_ask:" in final_prompt
+
+
 async def test_offering_again_after_they_typed_past_an_offer_is_redrafted_into_a_question(alice, model):
     """Typing past an offer is Keep chatting; a second offer in that same reply used to be dropped,
     and the reply was left without a question."""

@@ -3,7 +3,7 @@
 
 import pytest
 
-from mani.chat.router import Signal, is_confident, shortlist
+from mani.chat.router import RECENCY_WEIGHTS, Signal, is_confident, shortlist
 from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
 # The shipped activation data, parsed by the seeder itself - the same structures that reach
@@ -362,3 +362,64 @@ def test_a_framework_lists_what_said_anywhere_rules_it_out():
     assert vetoes(activation, ["I have been in bed all day"]) == []
     # whole words: a phrase is not found inside a longer word
     assert vetoes({"never_offer_when_said": ["grief"]}, ["a grievance at work"]) == []
+
+
+# ---------------------------------------------------------------------------
+# An event and the motive the person believes lay behind it
+# ---------------------------------------------------------------------------
+
+MANAGER_CHAT = [
+    "I'm very upset. My manager embarrassed me today because he wants me to fail.",
+    "EVERYTHING WENT WRONG",
+    "I felt really embarrassed.",
+]
+
+
+@pytest.mark.parametrize("count", [1, 2, 3])
+def test_an_assumed_motive_after_an_event_is_taken_by_the_deeper_framework(count):
+    # covers: AC-1
+    assert top(MANAGER_CHAT[:count]) == "abcde"
+
+
+def test_the_opening_message_still_counts_when_the_closest_fit_falls_due():
+    # covers: AC-2, AC-6
+    from mani.chat.context import CLOSEST_FIT_AFTER
+
+    assert top([*MANAGER_CHAT, "he does it all the time"]) == "abcde"
+    assert len(RECENCY_WEIGHTS) >= CLOSEST_FIT_AFTER
+
+
+def test_a_neighbours_own_phrase_can_outrank_it_at_the_closest_fit():
+    # covers: AC-2
+    ranked = shortlist(
+        [*MANAGER_CHAT, "I do not know what to do"], ACTIVATIONS
+    )
+    assert ranked[0].framework_id == "structured_problem_solving"
+
+
+def test_a_phrase_from_the_opening_message_repeated_four_messages_on_corroborates():
+    # covers: AC-7
+    ranked = shortlist(
+        ["he wants me to fail", "x", "y", "he wants me to fail"], ACTIVATIONS
+    )
+    assert ranked[0].framework_id == "abcde"
+    assert ranked[0].spread == 2
+
+
+def test_a_runner_up_remembered_from_the_opening_message_can_lower_the_leaders_margin():
+    """The fourth weight reaches the opening message for every framework, not only the leader:
+    a runner up that also matched there gains 0.15 per phrase, which can take a confident
+    leader below the margin. Accepted - the shortlist then stays a suggestion, as it does
+    whenever two frameworks are close."""
+    activations = {
+        "leader": {"strong_signals": ["alpha one"], "signals": ["alpha two"]},
+        "rival": {"signals": ["rival one", "rival two", "rival three"]},
+    }
+    closing = "alpha one alpha two rival one rival two"
+
+    last_three = shortlist(["x", "x", "x", closing], activations)
+    assert is_confident(last_three)
+
+    with_opening = shortlist(["rival three", "x", "x", closing], activations)
+    assert [s.framework_id for s in with_opening] == ["leader", "rival"]
+    assert not is_confident(with_opening)

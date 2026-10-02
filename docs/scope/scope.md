@@ -15,6 +15,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 2 | Where in the body, with buttons, then the exercise | Slice 1 | done |
 | 3 | Per style wording from the client | Slice 2 | done |
 | 4 | Returns in waves, then the library offer | Slice 2 | done |
+| 5 | ABCDE is offered when an event and a belief about it are named | Slice 3 | in-progress |
 
 ## Slice 1: The flow works
 
@@ -39,6 +40,20 @@ Chest, head, stomach and somewhere else exercises in the client's exact words fo
 After "calmer, then it comes back", Mani says it is common and comes in waves, that the same exercise helps, and offers the library. Buttons are "take me to the library" and "want to keep chatting" (shorter label "Library Tools" if too long). Choosing the library gets the client's handoff line.
 **Done when:** that exact path works in all three styles, and the buttons appear only here and after the exercise, never earlier.
 - [ ] Build it: `/develop somatic waves and library offer`
+
+## Slice 3: Right framework offered
+
+### 5. ABCDE is offered when an event and a belief about it are named · in-progress
+In a replay of the manager chat (Supportive style: "my manager embarrassed me today because he wants me to fail", "EVERYTHING WENT WRONG", "I felt really embarrassed"), Mani offered structured problem solving. The client's document says this fits ABCDE: a specific event, a belief about it (his motive), and an emotional effect, with the person wanting to understand it rather than make a plan. This feature covers when each of ABCDE, Thought Reframe, Structured Problem Solving and ACT Choice Point gets offered, and how the offer reads in each style. It also covers the client's rule that an assumed motive and a broad "everything went wrong" are handled inside ABCDE, not used to pick a different framework.
+**Done when:** the manager chat above ends with the ABCDE offer in the Supportive wording ("Would it help to look at it together?"), the client's example lines for the other three frameworks still pick theirs, and an eval covers each pairing.
+Spec: [0001](../specs/0001-abcde-framework-offer.md) · code in backend/mani/chat/, backend/content/frameworks/abcde.md
+- [x] Design it (spec): `/architect abcde framework offer`
+- [x] Build it: `/develop abcde framework offer`
+  - [x] ABCDE motive signals in abcde.md and the four message router window (AC-1, AC-2, AC-6, AC-7)
+  - [x] Closest fit carries the top framework's offer wording (AC-3)
+  - [x] Tests, full pytest, PORT-STATUS.md update (AC-4, AC-5)
+- [x] Verify it: `/check verify abcde framework offer`
+- [x] Test it: `/test abcde framework offer`
 
 ## Open questions for the client
 - The client's example ends "How do you feel now?" and then goes straight to the "comes back" reply. What should happen when the person answers "better" or "still tense"? The current buttons "I tried it / Still tense / Feeling better" are not in the new flow.

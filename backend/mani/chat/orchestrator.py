@@ -407,7 +407,9 @@ async def send(
         )
     ):
         shortlist = router.shortlist(user_texts, config.registry.activations)
-        if shortlist and router.is_confident(shortlist):
+        # The closest fit is owed now, so the top of the shortlist is offered in the client's own
+        # words even when the router is not confident of it.
+        if shortlist and (router.is_confident(shortlist) or context.closest_fit_due(ctx)):
             candidate = config.registry.get(shortlist[0].framework_id)
 
     wants_title = (
