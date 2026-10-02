@@ -133,9 +133,11 @@ class FakeToolRunnable:
     def __init__(self, message: FakeToolMessage) -> None:
         self._message = message
         self.calls = 0
+        self.sent: list[dict] = []
 
     async def ainvoke(self, messages: list[dict]) -> FakeToolMessage:
         self.calls += 1
+        self.sent = messages
         return self._message
 
 
@@ -156,6 +158,31 @@ async def test_the_chosen_exercise_is_the_one_the_tool_call_named(monkeypatch, r
 
     assert chosen == CANDIDATES[1]["id"]
     assert [c["outcome"] for c in recorded] == [llm_calls.Outcome.OK]
+
+
+async def test_the_pick_sees_the_whole_entry_and_what_the_person_said(monkeypatch, recorded):
+    """The choice is made from the whole catalog, so each entry has to say what kind of
+    exercise it is and which topic it belongs to, and the model has to see the conversation
+    it is choosing for."""
+    runnable = FakeToolRunnable(FakeToolMessage(exercise_id=CANDIDATES[0]["id"]))
+    monkeypatch.setattr(client.chain, "build_tool_choice", lambda *a, **kw: runnable)
+    candidates = [
+        {**CANDIDATES[0], "type": "Breathing", "category": "Burnout"},
+        {**CANDIDATES[1], "type": "Visualization", "category": "Boundaries"},
+    ]
+
+    await client.choose_exercise(
+        candidates, "ABCDE", model="m", purpose=llm_calls.Purpose.EXERCISE_SELECT,
+        said=["work has drained me for months", "that helped, thanks"],
+        current_issue="exhaustion from an unrelenting job",
+        settings=settings(),
+    )
+
+    sent = "\n".join(m["content"] for m in runnable.sent)
+    assert "Breathing" in sent and "Burnout" in sent
+    assert "Visualization" in sent and "Boundaries" in sent
+    assert "work has drained me for months" in sent
+    assert "exhaustion from an unrelenting job" in sent
 
 
 async def test_an_invented_exercise_id_is_corrected_not_trusted(monkeypatch, recorded):

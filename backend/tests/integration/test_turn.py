@@ -61,11 +61,21 @@ class ScriptedChooser:
         self._chosen = chosen
         self.calls = 0
         self.kwargs: dict = {}
+        self.candidates: list[dict] = []
 
     async def __call__(self, candidates, framework_name, **kwargs):
         self.calls += 1
         self.kwargs = kwargs
+        self.candidates = candidates
         return self._chosen if self._chosen is not None else candidates[0]["id"]
+
+
+@pytest.fixture(autouse=True)
+def no_real_exercise_call(monkeypatch):
+    """Every completing framework reaches the exercise pick once the catalog is seeded, and
+    no test here may spend a real provider call on it. A test that wants to watch the pick
+    installs its own chooser, which replaces this one."""
+    monkeypatch.setattr(orchestrator.client, "choose_exercise", ScriptedChooser())
 
 
 async def reachable() -> bool:
@@ -456,11 +466,47 @@ async def abcde_exercise(alice):
             await conn.execute("delete from admin.exercises where id = $1", exercise_id)
 
 
-async def test_a_completing_framework_with_no_exercise_still_costs_one_call(
-    alice, model, monkeypatch
+@pytest.fixture
+async def library_exercise(alice):
+    """An ordinary library exercise, linked to no framework."""
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        exercise_id = await conn.fetchval(
+            "insert into admin.exercises (title, type, category, audio_path) "
+            "values ('Unwinding', 'Breathing', 'Burnout', 'test-unwinding.mp3') returning id"
+        )
+    try:
+        yield exercise_id
+    finally:
+        async with pool.as_admin() as conn:
+            await conn.execute("delete from admin.exercises where id = $1", exercise_id)
+
+
+@pytest.fixture
+async def empty_catalog(alice):
+    """Hide the seeded catalog for one test, and put back exactly what was hidden."""
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        hidden = await conn.fetch(
+            "update admin.exercises set is_active = false where is_active returning id"
+        )
+    try:
+        yield
+    finally:
+        async with pool.as_admin() as conn:
+            await conn.execute(
+                "update admin.exercises set is_active = true where id = any($1::uuid[])",
+                [r["id"] for r in hidden],
+            )
+
+
+async def test_a_completing_framework_with_an_empty_catalog_still_costs_one_call(
+    alice, model, monkeypatch, empty_catalog
 ):
-    """The production case today - the catalog is empty, so the hand-off's second call
-    never happens and a completing turn costs exactly what every other turn costs."""
+    """With nothing in the catalog the hand-off's second call never happens, and a
+    completing turn costs exactly what every other turn costs."""
     scripted = model(Reply(text="How has the rest of the week been?"))
     chooser = ScriptedChooser()
     monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
@@ -495,6 +541,31 @@ async def test_a_completing_framework_hands_off_to_its_exercise(
     assert turn.exercise is not None
     assert turn.exercise.id == abcde_exercise
     assert turn.exercise.framework_id == "abcde"
+
+
+async def test_the_hand_off_chooses_from_the_whole_catalog_for_this_conversation(
+    alice, model, monkeypatch, abcde_exercise, library_exercise
+):
+    """Every active exercise is a candidate, the framework's own listed first, and the
+    chooser sees what the person just said - so a library exercise can win on fit."""
+    model(Reply(text="How has the rest of the week been?"))
+    chooser = ScriptedChooser(chosen=str(library_exercise))
+    monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
+
+    thread = await start(alice)
+    await _retire_abcde_on(alice, thread.id)
+
+    turn = await send(alice, thread.id, "that helped, thanks")
+
+    ids = [c["id"] for c in chooser.candidates]
+    assert ids[0] == str(abcde_exercise)
+    assert str(library_exercise) in ids
+    assert {"type": "Breathing", "category": "Burnout"}.items() <= next(
+        c for c in chooser.candidates if c["id"] == str(library_exercise)
+    ).items()
+    assert chooser.kwargs["said"][-1] == "that helped, thanks"
+    assert turn.exercise is not None
+    assert turn.exercise.id == library_exercise
 
 
 async def test_an_ordinary_turn_never_reaches_the_exercise_hand_off(

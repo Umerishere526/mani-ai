@@ -750,8 +750,10 @@ async def send(
 
     exercise = None
     if retiring_framework_id is not None:
+        said = [m.content for m in history if m.role is MessageRole.USER][-2:] + [content]
         exercise = await _offer_exercise(
-            conn, retiring_framework_id, config, model, routing, user_id, ctx.thread.id
+            conn, retiring_framework_id, config, model, routing, user_id, ctx.thread.id,
+            said=said, current_issue=ctx.summary.current_issue if ctx.summary else None,
         )
 
     summarized = ctx.summary.summarized_message_count if ctx.summary else 0
@@ -782,26 +784,39 @@ async def _offer_exercise(
     routing: dict | None,
     user_id: str,
     thread_id: uuid.UUID,
+    *,
+    said: list[str],
+    current_issue: str | None,
 ) -> Exercise | None:
     """The exercise that follows a just-completed framework, chosen by a bound tool call.
 
     A second, small model call - real tool-calling, not the turn's structured reply - and
-    only reached here because a framework just finished. Skipped entirely, at zero cost,
-    when the catalog has nothing for this framework yet - true for every framework today.
+    only reached here because a framework just finished. Every active exercise is a
+    candidate, the framework's own first, and the pick sees what the person said. Skipped
+    entirely, at zero cost, when the catalog is empty.
     """
-    candidates = await exercises_db.list_for_framework(conn, framework_id)
+    linked = await exercises_db.list_for_framework(conn, framework_id)
+    linked_ids = {c.id for c in linked}
+    candidates = linked + [
+        c for c in await exercises_db.list_active(conn) if c.id not in linked_ids
+    ]
     if not candidates:
         return None
 
     framework = config.registry.get(framework_id)
     chosen_id = await client.choose_exercise(
         [
-            {"id": str(c.id), "title": c.title, "subtitle": c.subtitle or ""}
+            {
+                "id": str(c.id), "title": c.title, "subtitle": c.subtitle or "",
+                "type": c.type or "", "category": c.category,
+            }
             for c in candidates
         ],
         framework.name if framework else framework_id,
         model=model,
         purpose=llm_calls.Purpose.EXERCISE_SELECT,
+        said=said,
+        current_issue=current_issue,
         routing=routing,
         user_id=user_id,
         thread_id=thread_id,

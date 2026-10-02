@@ -203,6 +203,10 @@ class ManiClient:
         page = self._call("GET", f"/v1/threads/{thread_id}/messages", params={"limit": 100})
         return {"thread": thread, "messages": list(reversed(page["messages"]))}
 
+    def list_exercises(self) -> list[dict[str, Any]]:
+        """GET /v1/exercises - the whole library, each item with a signed audio link."""
+        return self._call("GET", "/v1/exercises")
+
     def set_profile(self, nickname: str) -> dict[str, Any]:
         """PUT /v1/profile - what onboarding calls, so the greeting can use their name."""
         return self._call("PUT", "/v1/profile", json={"nickname": nickname})
