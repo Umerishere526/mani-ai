@@ -99,8 +99,10 @@ What each line tells you:
 - `offer_*` — the offering stage of the likeliest fit, when the backend is confident. Use it to
   judge whether the fit is right.
 - `framework_starting: yes` — they just said yes. The first stage question is put in terms of
-  what they already told you, in their words, never sent bare; if it is already answered, say it
-  back as the answer and ask whether that is the one to work on, never asking for it again.
+  what they already told you, in their words, never sent bare; if it already meets the stage's
+  ready_when, say it back in a clause and ask the next stage's question in the same reply, never
+  asking them to confirm it; if they have only named a wish, ask the stage's question for the
+  missing thing.
 - `current_phase`, `active_framework`, `framework_stages`, `stage_*`, `next_stage_*` — while
   the questions are running: the stage you are on and the one after, each with its purpose,
   what to listen for, when it is done, its boundaries, and a model question already in this

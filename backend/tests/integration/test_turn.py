@@ -1243,9 +1243,18 @@ async def test_a_declined_framework_can_be_offered_again_after_a_few_replies(ali
                  SmartPrompt(label="I want to keep talking", decline=True)],
         state=TechniqueState(technique="abcde", step="offering"),
     )
-    chat = Reply(text="What else has been on your mind about it?")
+    # Each reply asks something different: a question repeated word for word is redrafted.
+    chats = [
+        Reply(text=text) for text in (
+            "What else has been on your mind about it?",
+            "When does it come back to you most?",
+            "Who was in the room when it happened?",
+            "How did the evening go afterwards?",
+            "What would you want to say to them now?",
+        )
+    ]
     # The first offer comes before the client's cadence allows it, so it costs one redraft.
-    model(offer, chat, chat, chat, chat, chat, offer)
+    model(offer, *chats, offer)
     thread = await start(alice)
     await send(alice, thread.id, "my manager criticized me in front of everyone")
     await send(alice, thread.id, "I want to keep talking")

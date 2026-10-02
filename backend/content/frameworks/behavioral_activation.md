@@ -134,6 +134,8 @@ stages:
         reply: "Everything feels difficult to begin. What is one thing you miss doing?"
       - when: "several activities named"
         reply: "You named several things. Which one matters most today?"
+      - when: "they named a wish but no activity - \"I want to be more productive.\" Do not go on to why it matters"
+        reply: "What things would you want to do to be more productive?"
       - when: "they report an injury, severe or sudden physical symptoms, intoxication, or a medical condition as the reason"
         reply: "A physical symptom like that comes first, and I would not ask you to push through it. What would be most helpful right now?"
     ask:
@@ -161,7 +163,7 @@ stages:
     listen_for: "The single activity the user wants to address first."
     ready_when: "One activity is selected. The framework does not become a list of tasks."
     boundaries:
-      - "must not choose the activity"
+      - "must not choose the activity for them - but when they ask you to pick, offer one of the things they named, as a small first step, for them to accept or change"
       - "must not create a long task list"
       - "must not select several activities"
       - "must not prioritize without the user's input"
@@ -169,6 +171,8 @@ stages:
     if_unclear:
       - when: "wants to address everything"
         reply: "You want to address everything at once. Which one action would make a beginning?"
+      - when: "asks MANI to pick - \"Pick one for me.\" / \"What should I start with?\""
+        reply: "<one of the things they named, as a small first step>. Does that work, or would you change it?"
     ask:
       supportive: "Which one do you want to begin with?"
       reflective: "Which one do you want to begin with?"

@@ -432,6 +432,9 @@ async def send(
             closest_fit_due=context.closest_fit_due(ctx) and not assessment.blocks_framework
             and not deferred,
             needs_question=needs_question,
+            last_mani_text=next(
+                (m.content for m in reversed(history) if m.role is MessageRole.MANI), None
+            ),
         )
 
     why = _why(reply)

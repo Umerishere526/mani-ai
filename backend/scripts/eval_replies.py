@@ -232,6 +232,7 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
                 and not str(state[2]).startswith("somatic"):
             said = " ".join(e.message for e in exchanges[: index + 1] if e.chat == exchange.chat)
             findings += validators.names_their_situation(exchange.reply, said)
+            findings += validators.asks_to_confirm(exchange.reply)
     phases = [(e.framework[2] if e.framework and e.framework[1] == "accepted" else None, e.buttons)
               for e in exchanges]
     findings += validators.missing_handoff(phases, [e.message for e in exchanges])
@@ -246,7 +247,7 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
         reached = [e.framework[2] for e in exchanges if e.framework and e.framework[1] == "accepted"]
         if not reached:
             findings.append(validators.Finding("journey", "never entered a framework"))
-        elif "somatic" not in reached:
+        elif not any(str(phase).startswith("somatic") for phase in reached):
             findings.append(validators.Finding("journey", f"stopped at {reached[-1]}, never reached somatic"))
     return findings
 

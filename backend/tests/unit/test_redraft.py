@@ -89,3 +89,31 @@ def test_an_offer_carries_its_own_permission_question():
 def test_an_offer_that_depends_on_what_it_meant_waits_and_says_why():
     why = redraft.reasons(offer("act_choice_point"), ["i felt embarrassed"], registry(), offer_not_allowed=False, earliest_wait=True)
     assert len(why) == 1 and "what they took it to mean" in why[0] and "ACT Choice Point" in why[0]
+
+
+FIRST = (
+    "It can be hard to choose when everything feels like a big step. Would picking one of these small "
+    "actions, opening your laptop to look at one travel destination, browsing a site for one new "
+    "learning opportunity, or simply sitting near a window for a few minutes, feel most manageable "
+    "to you today?"
+)
+SAME_AGAIN = (
+    "It is okay that you are not sure. Between opening your laptop to look at one travel destination, "
+    "browsing for one learning opportunity, or sitting by a window for a few minutes, which one "
+    "feels like the most manageable one to start with today?"
+)
+
+
+def test_the_same_choices_asked_again_are_redrafted():
+    """Observed: someone who asked Mani to pick got the same three options back, reworded, twice."""
+    why = redraft.reasons(
+        Reply(text=SAME_AGAIN), [], registry(), offer_not_allowed=False, last_mani_text=FIRST
+    )
+    assert any("asks the question you asked last turn" in w for w in why)
+
+
+def test_a_different_question_after_an_answer_is_not_a_repeat():
+    moved_on = Reply(text="Opening your laptop to look at one place sounds like a start. When will you do it?")
+    assert redraft.reasons(
+        moved_on, [], registry(), offer_not_allowed=False, last_mani_text=FIRST
+    ) == []

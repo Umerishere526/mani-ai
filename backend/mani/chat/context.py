@@ -346,21 +346,35 @@ def build(
     if running:
         style = resolve_style(ctx)
         if framework_starting:
-            # They have just said yes. What they told Mani before this counts; a stage they
-            # have already answered is checked back, not asked again.
+            # They have just said yes. What they told Mani before this counts toward the first
+            # stage; the note below says how to use it.
             lines.append("framework_starting: yes")
         lines.append(f"active_framework: {framework.id}")
         lines.append(f"framework_stages: {', '.join(framework.phases)}")
         stage = _stage_lines("stage", framework, technique.phase, style)
+        # The turn they say yes, a first stage their words already answer (by its ready_when) is
+        # said back and the second stage's question is asked; otherwise the first is asked.
+        index = framework.phase_index(technique.phase)
         if offer_waiting:
             # The offering stage's question is the offer they have just typed past.
             stage = [line for line in stage if not line.startswith("stage_ask:")]
+        if framework_starting and technique.phase == "offering" and index + 1 < len(framework.phases):
+            index += 1
+            stage = _stage_lines("stage", framework, framework.phases[index], style)
         lines.extend(stage)
-        lines.append(
-            "stage_note: put the stage question in terms of what they have told you, in their "
-            "words; never send it bare"
-        )
-        index = framework.phase_index(technique.phase)
+        if framework_starting:
+            lines.append(
+                "stage_note: first judge whether what they have told you meets stage_ready_when. "
+                "If it does, say it back in a clause, in their words, and ask the next stage's "
+                "question (next_stage_ask) in the same reply, never asking them to confirm it. "
+                "If it does not, ask stage_ask built from what they said, in their words, so "
+                "that it asks for the missing thing"
+            )
+        else:
+            lines.append(
+                "stage_note: put the stage question in terms of what they have told you, in "
+                "their words; never send it bare"
+            )
         if 0 <= index < len(framework.phases) - 1:
             lines.extend(
                 _stage_lines("next_stage", framework, framework.phases[index + 1], style)

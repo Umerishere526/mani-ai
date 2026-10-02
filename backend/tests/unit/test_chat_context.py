@@ -281,6 +281,31 @@ def test_the_turn_a_framework_starts_says_so():
     assert "framework_starting" not in context.build(ctx, framework=framework())
 
 
+TONES = ("direct", "supportive", "reflective")
+
+
+def test_the_turn_a_framework_starts_shows_the_first_stage_and_the_second():
+    """Observed: on Try it, Mani asked "what is the exact problem you want to resolve?" of someone
+    who had described it, and "why does being productive matter?" of someone who had named no
+    activity. Both stages' questions are shown, with the test for which one to ask."""
+    running = Framework(
+        id="abcde", name="ABCDE", summary="s", body="b", phases=["offering", "problem", "facts"],
+        stages={"problem": {"purpose": "p", "ready_when": "named", "ask": dict.fromkeys(TONES, "Which problem?")},
+                "facts": {"purpose": "f", "ask": dict.fromkeys(TONES, "What is known?")}},
+    )
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
+        phase="offering", at_message_count=8,
+    )
+    ctx = TurnContext(thread=thread(), profile=None, technique=state)
+    starting = context.build(ctx, framework=running, framework_starting=True).splitlines()
+    assert "stage: problem" in starting
+    assert "stage_ask: Which problem?" in starting
+    assert "stage_ready_when: named" in starting
+    assert "next_stage_ask: What is known?" in starting
+    assert any(line.startswith("stage_note: first judge whether") for line in starting)
+
+
 def test_an_unconfident_shortlist_carries_no_candidate_content():
     """Below the confidence threshold, the shortlist is ids and scores only - central
     indications for those ids already sit in the static Framework Index."""

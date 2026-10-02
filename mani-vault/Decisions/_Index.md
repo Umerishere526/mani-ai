@@ -19,6 +19,8 @@ other knowledge lives: [[ADR-009-where-knowledge-lives]].
 | 007 | [[ADR-007-offers-follow-confidence-and-the-closest-fit-is-owed]] | accepted | replaces the 2026-09-24 offer cadence; amends 006 | `backend/mani/chat/context.py`, `Reply.offer_fit` |
 | 008 | [[ADR-008-every-reply-before-an-offer-asks-a-question]] | accepted | amends 006 | `redraft.py` (`needs_question`), `context.classify_reply` |
 | 009 | [[ADR-009-where-knowledge-lives]] | accepted | supersedes 001 | `CLAUDE.md`, this vault |
+| 010 | [[ADR-010-a-person-in-panic-is-guided-not-quizzed]] | accepted | adds to 007 and 008; amended by 011 | `context.build`, `repairs.apply`, `structured_problem_solving.md` |
+| 011 | [[ADR-011-first-stage-by-its-own-test-and-one-draft-when-asked-to-pick]] | accepted | amends 010 and 006 | `context.build`, `redraft.repeats`, `behavioral_activation.md` |
 
 ## In force, recorded elsewhere, no ADR yet
 

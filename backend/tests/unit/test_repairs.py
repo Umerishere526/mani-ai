@@ -214,6 +214,19 @@ def test_a_capsule_that_judges_them_is_dropped(registry):
     assert fixed.notes
 
 
+def test_the_reply_that_starts_a_framework_may_ask_the_second_stage(registry):
+    """What they said before accepting answers the first stage, so the reply asks the second."""
+    second = reply(state=TechniqueState(technique="abcde", step="belief"))
+    fixed = fix(registry, second, accepted_this_turn=True, framework_running=True,
+                current_framework_id="abcde", current_phase="offering")
+    assert fixed.phase == "belief"
+
+    third = reply(state=TechniqueState(technique="abcde", step="consequence"))
+    fixed = fix(registry, third, accepted_this_turn=True, framework_running=True,
+                current_framework_id="abcde", current_phase="offering")
+    assert fixed.phase == "belief"
+
+
 def test_a_skipped_phase_is_corrected_rather_than_regenerated(registry):
     jumped = reply(state=TechniqueState(technique="thought_reframing", step="land"))
     fixed = fix(registry, jumped, current_framework_id="thought_reframing",

@@ -58,7 +58,11 @@ cd chat-tester && source venv/bin/activate && streamlit run app.py
 There is no sign-in screen. On load, the app signs in as `CHAT_TESTER_FIXED_USER`
 (`.env.example` default: `streamlit-tester`, i.e. `streamlit-tester@tester.mani.local`) -
 creating that one account the first time it's needed - and resumes its conversation.
-The sidebar's **New conversation** button starts a fresh thread for that same user.
+The sidebar's **New conversation** button starts a fresh thread for that same user. Under it,
+**Conversations** lists that user's threads, most recently active first (the latest 20, titled once a
+thread has had an exchange, "Untitled" before that). Tap one to open it and continue; the open one is
+marked ▶. Hover a title to see its message count and last activity. An opened thread shows its latest 100
+messages, with Mani's buttons live only on its newest message, as in the apps.
 
 ## What to look at
 

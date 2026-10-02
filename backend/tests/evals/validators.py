@@ -310,6 +310,22 @@ def names_their_situation(reply: str, said: str) -> list[Finding]:
     return [Finding("generic", f"framework question shares nothing they said: {reply[:70]!r}")]
 
 
+_CONFIRMS = re.compile(
+    r"\b(is that|is this)\b[^?]*\b(problem|issue|thing|one)\b[^?]*\b(want|need)\b[^?]*\bresolve\b"
+    r"|to make sure i have (it|this) right"
+    r"|do i have (it|this) right",
+    re.IGNORECASE,
+)
+
+
+def asks_to_confirm(reply: str) -> list[Finding]:
+    """Inside a framework, asking the person to confirm what they have just told Mani. Someone
+    panicking over a lost wallet was asked "is that the problem you want to resolve?"; of course it is."""
+    if _CONFIRMS.search(reply):
+        return [Finding("confirms", f"asked them to confirm what they said: {reply[:80]!r}")]
+    return []
+
+
 HANDOFF_BUTTONS = ("chat more", "go to library")
 
 

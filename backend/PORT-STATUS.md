@@ -34,8 +34,8 @@ History (how the port went, what was fixed from review, old measurements) is in
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,
      `heading_toward`, `offer_fit`, then `text`. The order is deliberate.
   5. `redraft.py` may ask once more (twice for a missing question): a feeling the person never named, an
-     offer before it is allowed or one their words rule out, an offer that is due and missing, or no
-     question. ADR-006, ADR-007, ADR-008.
+     offer before it is allowed or one their words rule out, an offer that is due and missing, no
+     question, or the last reply's question asked again. ADR-006, ADR-007, ADR-008, ADR-011.
   6. `repairs.py` corrects what remains, in code: script leakage, buttons, an early offer, an unnamed feeling.
   7. Crisis, the reply, the framework state and the summary are written together.
 - **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): six, each reviewed against the
@@ -123,6 +123,12 @@ Ordered by what breaks first.
 - Crisis resources, `PROTOCOLS` and `CLARIFICATION` wording (point 3 above).
 - Tell the client about ADR-007, which replaced their offer cadence, and have them read about five real
   Supportive and Reflective transcripts.
+- Tell the client about ADR-011: when a person asks Mani to pick, it offers one small draft step to accept
+  or change, which the Behavioral Activation specification's "must not choose the activity" does not allow
+  as written.
+- Tell the client about ADR-010: after Try it Mani no longer asks the first stage's question when the person
+  has already said it, and a person who cannot say what to do is offered up to three options at the first
+  "I don't know". Both depart from the literal Structured Problem Solving example.
 - Panic with no action in sight: the overview sends it to DBT STOP, the STOP specification is written around an
   action about to be taken. The client's call.
 - Whether a crisis turn should hand off to an exercise. Left out on purpose; do not add it as a missing branch.
@@ -154,6 +160,12 @@ change to prompts, framework content or the offer rules, and compare with these.
 - Reached an offer: 36 of 36 conversations (grief had been 1 of 9). First offers at message 2 to 4.
 - Redrafts: 7% of replies across scenarios, 17 to 19% on the hardest chat (a colleague, an embarrassing
   meeting). ADR-006 sets about 10% as the line to watch on real traffic.
+- Lost wallet chat (panic), three runs: the confirmation question after Try it went from 9 of 9 to 0 of 6
+  (ADR-010); the bank step comes in the first or second reply. Three options at the first "I don't know" is
+  still the minority.
+- Behavioral Activation chat (comparing with others online), three runs: the first question after Try it asked
+  for what they had stopped doing, a request to pick got one draft step in 4 of 6, and two of three runs
+  reached the body check (ADR-011). One wallet start in five still asked for the problem again.
 - Replies with no question before an offer: 1 of 39 on that chat (from 8 of 47).
 - Wrong framework offered early: Direct chose ACT or a plan for a colleague chat that wants ABCDE, until offers
   for ABCDE, Thought Reframe and ACT were made to wait for the third message (Direct then chose ABCDE 3 of 3).

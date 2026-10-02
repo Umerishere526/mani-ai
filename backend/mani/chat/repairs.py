@@ -510,8 +510,14 @@ def apply(
         else:
             framework_id = reply.state.technique
             # Accepting an offer this turn means the phase being left is the offering one,
-            # whatever the stored row still says.
-            previous = "offering" if accepted_this_turn else current_phase
+            # whatever the stored row still says. What they told Mani before accepting
+            # answers the first stage, so the reply may already be asking the second.
+            previous = current_phase
+            if accepted_this_turn:
+                known = registry.get(framework_id)
+                phases = known.phases if known else []
+                first = phases.index("offering") + 1 if "offering" in phases else -1
+                previous = phases[first] if 0 < first < len(phases) else "offering"
             transition = registry.validate_transition(
                 framework_id, previous, reply.state.step
             )

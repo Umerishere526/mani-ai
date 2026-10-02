@@ -130,6 +130,8 @@ stages:
         reply: "What is happening sounds serious, and staying safe comes first. What would be most helpful to talk through?"
       - when: "the problem is a medical, legal, or financial decision that needs a qualified professional"
         reply: "That decision needs someone qualified to advise. Would it help to think through who could help you with it?"
+      - when: "they have already described the problem before the stage began - do not ask them to confirm it"
+        reply: "<their problem, in a clause, in their words>. What do you know for certain about it?"
     ask:
       supportive: "What is the exact problem you want to resolve?"
       reflective: "What is the exact problem you want to resolve?"
@@ -148,6 +150,8 @@ stages:
         reply: "You expect your manager to fire you. What has she said or done?"
       - when: "not enough information"
         reply: "Her view is unknown. What information do you have?"
+      - when: "a time critical risk is still open - cards or accounts that can still be used, a deadline about to pass, something that gets worse by the hour"
+        reply: "<the risk, in a clause>. Contacting <whoever can stop it, such as the bank or the police> is usually the first step. Have you been able to reach them?"
     ask:
       supportive: "What do you know for certain?"
       reflective: "What do you know for certain?"
@@ -164,6 +168,8 @@ stages:
     if_unclear:
       - when: "focuses on another person - \"I need my manager to understand.\""
         reply: "Her understanding depends on her response. What can you control in how you communicate?"
+      - when: "they cannot say what is theirs to do - \"I don't know.\""
+        reply: "<two or three things that are plausibly theirs to do, in plain words>. Which of those have you already done?"
     ask:
       supportive: "Which part is within your control?"
       reflective: "Which part is within your control?"
@@ -180,6 +186,8 @@ stages:
     if_unclear:
       - when: "outcome too broad - \"I want everything fixed.\""
         reply: "You want the entire problem resolved. What would a realistic result from your next response be?"
+      - when: "they cannot say what they want - \"I don't know.\""
+        reply: "I'd say the result you want is <a plain draft of the obvious result for their situation>. Is that right, or is it something else?"
     ask:
       supportive: "What do you want your response to accomplish?"
       reflective: "What do you want your response to accomplish?"
@@ -192,14 +200,14 @@ stages:
       - "must not produce a long list of advice"
       - "must not present unsafe or unethical options"
       - "must not overwhelm the user"
-      - "must not exclude the user from generating options"
+      - "must not exclude the user from generating options - but when they cannot name any, offer up to three realistic ones, most urgent first, and ask which feels most doable; never a longer list, never choose for them"
       - "must not disguise a recommendation as the user's decision"
       - "must not accept several options that are really one approach worded differently - real breadth is at least two genuinely different approaches, not variations on the same one"
     if_unclear:
       - when: "only one option - \"The only thing I can do is quit.\""
         reply: "Quitting is the only option you see right now. What other response could address the immediate problem?"
-      - when: "asks MANI to decide - \"Tell me what to do.\""
-        reply: "You want a direct answer. What options are you currently considering?"
+      - when: "asks MANI to decide, or cannot name any option - \"Tell me what to do.\" / \"I don't know.\" Do not ask for their options again"
+        reply: "You want a direct answer. <Two or three realistic ways to start, in plain words, the most urgent first>. Which one feels most doable?"
     ask:
       supportive: "What are your possible responses?"
       reflective: "What are your possible responses?"
@@ -251,6 +259,8 @@ stages:
     if_unclear:
       - when: "action too large"
         reply: "Fixing the entire report is a large first action. What is the first manageable part?"
+      - when: "they cannot name a first action - \"I don't know.\""
+        reply: "A small first step could be <one concrete step that follows from what they chose>. Does that feel doable?"
     ask:
       supportive: "What is the first action?"
       reflective: "What is the first action?"
