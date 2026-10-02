@@ -9,6 +9,27 @@ activation:
     The user knows what they could do but cannot get themselves to begin - low mood,
     discouragement, or withdrawal has interrupted something that matters, and they need help
     selecting and beginning one manageable action, not a thought examined or a decision made.
+  to_find_out:
+    - "what they have stopped doing or are avoiding"
+    - "whether they know what they could do but cannot begin"
+    - "what gets in the way of beginning"
+    - "whether anything physical or medical explains it, or whether this is early grief (then not this)"
+  # Said anywhere in the conversation, an offer of this framework is redrafted and then dropped:
+  # early grief is not the avoidance it treats. Whole phrases, matched as the signals are.
+  never_offer_when_said:
+    - "died"
+    - "passed away"
+    - "passed on"
+    - "funeral"
+    - "put to sleep"
+    - "no longer with us"
+    - "bereaved"
+    - "bereavement"
+    - "grieving"
+    - "grief"
+  # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
+  # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
+  # router reads strong_signals and signals.
   appropriate_when:
     - "The user knows something they want or need to do"
     - "The user is having difficulty beginning"
@@ -32,10 +53,12 @@ activation:
     - "Serious injury, severe or sudden physical symptoms, an acute medical condition, medication side effects, intoxication, severe sleep deprivation, or physical limitations make the activity unsafe"
     - "The user describes their symptoms crashing 12-48 hours after exertion, or names ME/CFS or long covid - this is post-exertional malaise, not avoidance, and a graded increase in activity is the specific thing current clinical guidance says not to do here (NICE NG206 withdrew graded exercise therapy for this reason)"
     - "Fatigue with no identifiable avoidance pattern behind it - nothing they used to do and stopped, no trigger they are avoiding - which points to an undiagnosed medical cause (thyroid, anaemia, sleep, medication) rather than a Behavioral Activation case"
+    - "The person cannot complete basic care, or their inactivity looks like an impairment that needs professional evaluation - activity planning is not the response, and they must never be told to push through a limitation"
     - "Acute grief in the period right after a loss - the withdrawal Behavioral Activation treats is avoidance of reminders and of life going on, not the ordinary work of mourning itself"
   # Short fragments, not full example sentences - see abcde.md's activation block for why.
   strong_signals:
     - "but i cannot start"
+    - "but i cannot begin"
     - "in bed all day"
     - "stopped answering"
     - "keep avoiding the task"
@@ -93,8 +116,8 @@ stages:
       - when: "the user declines"
         reply: "You do not want to choose an action right now. What would be most helpful to talk through?"
     ask:
-      supportive: "Getting started feels difficult right now. Would it help to find one manageable action?"
-      reflective: "You have stepped away from something that matters to you. Would it help to choose one part to return to?"
+      supportive: "Even one step feels difficult right now. Would it help to find something manageable together?"
+      reflective: "You have stopped doing something that matters to you. Would it help to look at one part you may want to return to?"
       direct: "You know what needs attention, but beginning is the barrier. Would you like to choose one realistic first action?"
   stopped:
     purpose: "Identify the activity, routine, connection, responsibility, or act of care the user has stopped or is avoiding."
@@ -111,10 +134,12 @@ stages:
         reply: "Everything feels difficult to begin. What is one thing you miss doing?"
       - when: "several activities named"
         reply: "You named several things. Which one matters most today?"
+      - when: "they report an injury, severe or sudden physical symptoms, intoxication, or a medical condition as the reason"
+        reply: "A physical symptom like that comes first, and I would not ask you to push through it. What would be most helpful right now?"
     ask:
-      supportive: "Several things have become difficult to do. Which one matters most today?"
-      reflective: "You have stepped away from several parts of your routine. Which one has affected you most?"
-      direct: "Several things have stopped. Which one comes first?"
+      supportive: "What have you stopped doing?"
+      reflective: "What have you stopped doing?"
+      direct: "What have you stopped doing?"
   matters:
     purpose: "Establish why returning to this activity matters to the user."
     listen_for: "The user's reason for wanting to return to the activity."
@@ -128,9 +153,9 @@ stages:
       - when: "it does not matter - \"I only think I should do it.\""
         reply: "This action does not matter to you right now. What would matter more?"
     ask:
-      supportive: "What would getting back to it give you?"
-      reflective: "What makes it important to you?"
-      direct: "What would doing it address?"
+      supportive: "Why does this matter to you?"
+      reflective: "Why does this matter to you?"
+      direct: "Why does this matter to you?"
   choose:
     purpose: "Select one activity rather than attempting everything."
     listen_for: "The single activity the user wants to address first."
@@ -145,9 +170,9 @@ stages:
       - when: "wants to address everything"
         reply: "You want to address everything at once. Which one action would make a beginning?"
     ask:
-      supportive: "You want to reconnect without taking on every message. What is one response you could manage?"
-      reflective: "The full list is preventing you from beginning. Which single response would matter most?"
-      direct: "Answering everyone is too much for one action. Who will you answer first?"
+      supportive: "Which one do you want to begin with?"
+      reflective: "Which one do you want to begin with?"
+      direct: "Which one do you want to begin with?"
   manageable:
     purpose: "Reduce the activity until it fits the user's present capacity."
     listen_for: "A limited action the user believes is possible within current capacity."
@@ -158,15 +183,16 @@ stages:
       - "must not compare the user's capacity with someone else's"
       - "must not assume the action is safe"
       - "must not prescribe exercise or physical activity without considering limitations"
+      - "may suggest up to three very small options, and only when the user cannot name one - never a longer list, and the user chooses"
     if_unclear:
       - when: "still too large - \"I will answer every message tonight.\""
         reply: "Answering every message is a large first action. What smaller part are you confident you can complete?"
       - when: "cannot identify an action - \"I don't know.\""
-        reply: "The first action is not clear yet. Would replying to one person be manageable?"
+        reply: "The first action is not clear yet. Would <one to three very small options that fit what they stopped, such as getting dressed, opening the curtains, or texting someone> feel most manageable?"
     ask:
-      supportive: "A full conversation feels like too much. What smaller response could you send?"
-      reflective: "The full task is stopping you from beginning. What smaller version would still matter?"
-      direct: "The full task is too large today. What is the first manageable part?"
+      supportive: "What is the smallest version you could do?"
+      reflective: "What is the smallest version you could do?"
+      direct: "What is the smallest version you could do?"
   begin:
     purpose: "Turn the activity into a specific action rather than a general intention."
     listen_for: "A specific time, cue, place, or starting condition."
@@ -181,9 +207,9 @@ stages:
       - when: "cannot choose a time"
         reply: "A set time does not work for you. What could remind you to begin?"
     ask:
-      supportive: "You chose one brief message. When would be manageable?"
-      reflective: "You have made the action smaller. What point in your day would support beginning?"
-      direct: "The action is one message. When will you send it?"
+      supportive: "When will you do it?"
+      reflective: "When will you do it?"
+      direct: "When will you do it?"
   barrier:
     purpose: "Identify what may prevent action and what the user can do if it appears."
     listen_for: "A likely obstacle and a response the user considers realistic."
@@ -201,9 +227,9 @@ stages:
       - when: "the action is unsafe"
         reply: "That action could place you at risk. What is a safer action you can take?"
     ask:
-      supportive: "You may begin rewriting and stop yourself from sending it. What would help you keep it simple?"
-      reflective: "Rewriting is the pattern most likely to interrupt the action. What could you do differently when it begins?"
-      direct: "Rewriting may stop the action. What is your response if that happens?"
+      supportive: "What could prevent you from beginning?"
+      reflective: "What could prevent you from beginning?"
+      direct: "What could prevent you from beginning?"
   closing:
     purpose: "Confirm completion in the user's own terms, without promising the plan will work or that the user will feel better."
     ready_when: >-
@@ -216,10 +242,11 @@ stages:
       - "must not promise the plan will work or that the user will feel better"
       - "must not summarize the completed framework"
       - "must not require the user to feel motivated to be done"
+      - "must not say the action feels manageable unless the user used similar language"
     ask:
-      supportive: "How is that plan sitting with you?"
-      reflective: "What changes, if anything, when you approach it this way?"
-      direct: "Is the plan realistic?"
+      supportive: "You chose one action that feels manageable today. How is that sitting with you?"
+      reflective: "You chose one action without waiting for motivation. What changes when you approach it this way?"
+      direct: "You have one action, a starting point, and a response to the barrier. Is the plan realistic?"
 ---
 
 # Behavioral Activation

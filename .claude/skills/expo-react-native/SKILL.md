@@ -151,13 +151,13 @@ Use `className` with Tailwind utilities. Do not write `StyleSheet.create` for ne
 - Styling is wired through `metro.config.js` (`withNativewind`) and `src/global.css`, which `src/app/_layout.tsx` imports. That import is load-bearing — keep it.
 - `nativewind-env.d.ts` is generated. Never edit it by hand.
 - Not every web utility maps to native. Layout, spacing, color, and typography work; anything web-specific (grid, float, most pseudo-selectors) does not. Check before assuming.
-- Use `dark:` variants for dark mode — `app.json` sets `userInterfaceStyle: "automatic"`, so the system theme drives it.
+- Use `dark:` variants for dark mode. `app.json` sets `userInterfaceStyle: "dark"`, so the app is dark whatever the system theme is.
 - Use `cn()` from `@/lib/utils` for conditional classes, exactly as web does:
   ```tsx
   <Pressable className={cn("rounded-lg p-4", isActive && "bg-amber-600", className)} />
   ```
 - Mobile-first is the default here — write base classes, then add `sm:`/`md:` only if the app targets tablets or web.
-- Support dark mode with `dark:` variants; `app.json` sets `userInterfaceStyle: "automatic"`.
+- Support dark mode with `dark:` variants; `app.json` currently sets `userInterfaceStyle: "dark"`.
 - Drop to `style={{}}` only for genuinely dynamic values (an animated height, a measured offset) or Reanimated's `useAnimatedStyle`. Mixing both on one element is fine when the dynamic part can't be a class.
 
 ## Component standards
@@ -237,7 +237,7 @@ The mobile counterpart to web's SEO rules — different mechanism, same obligati
 
 ## Prefer installed modules
 
-Before adding a dependency, check whether an installed Expo module already covers it: `expo-image`, `expo-font`, `expo-symbols`, `expo-glass-effect`, `expo-web-browser`, `expo-linking`, `expo-constants`, `expo-device`, `expo-splash-screen`, `expo-status-bar`, `expo-system-ui`, `expo-file-system`, `expo-asset`, `expo-keep-awake`.
+Before adding a dependency, check whether an installed Expo module already covers it: `expo-image`, `expo-font`, `expo-symbols`, `expo-glass-effect`, `expo-web-browser`, `expo-linking`, `expo-constants`, `expo-device`, `expo-splash-screen`, `expo-status-bar`, `expo-system-ui`. Not installed yet, so add them when needed: `expo-file-system`, `expo-asset`, `expo-keep-awake`, `expo-audio`, `expo-video`.
 
 Adding a native dependency is an architectural decision — discuss it with muhammad first, per the root CLAUDE.md. Many require a config plugin entry in `app.json` and a rebuild, not just an install.
 

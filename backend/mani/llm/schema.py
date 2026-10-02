@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class LibrarySection(StrEnum):
@@ -60,6 +61,16 @@ class SmartPrompt(BaseModel):
         default=None,
         description="True when tapping this button declines the technique being offered.",
     )
+
+    @field_validator("decline", mode="before")
+    @classmethod
+    def _decline_written_as_a_word(cls, value: object) -> object:
+        """The model sometimes writes the word ("decline", "Keep chatting") where a boolean
+        belongs, and one such reply failed the whole turn. A word there means the button
+        declines; only an explicit no means it does not."""
+        if isinstance(value, str):
+            return value.strip().lower() not in {"", "false", "no", "0", "null", "none"}
+        return value
 
 
 class TechniqueState(BaseModel):
@@ -121,6 +132,23 @@ class Reply(BaseModel):
         description=(
             "Choose before writing text: the response shape this reply will use. It may "
             "repeat; the opening words may not."
+        ),
+    )
+    heading_toward: str | None = Field(
+        default=None,
+        description=(
+            "Choose before writing text: the id from the Framework Index that this "
+            "conversation is most likely heading toward, or null when nothing has pointed "
+            "anywhere yet. It decides which missing thing your question reaches for. Not "
+            "shown to the user."
+        ),
+    )
+    offer_fit: Literal["clear", "closest"] | None = Field(
+        default=None,
+        description=(
+            "Only when this reply offers a set of questions: \"clear\" when you are confident "
+            "it fits what they have told you, \"closest\" when nothing fits well and it is the "
+            "nearest. Null when you are not offering. Choose before writing text."
         ),
     )
     text: str = Field(description="Your conversational response to the user. Required.")

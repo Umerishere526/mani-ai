@@ -7,6 +7,7 @@ import re
 
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
 from mani.chat.router import Signal, is_confident
+from mani.chat.safety import normalize
 from mani.db.threads import TurnContext
 from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
 
@@ -15,9 +16,15 @@ from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
 # framework or a different one, whichever fits now (muhammad, 2026-09-24).
 COOLDOWN_AFTER_DECLINE = 6
 
-# The client: about four rounds of conversation before anything is offered, and Direct sooner
-# (muhammad, 2026-09-24). Counted in the person's own messages since their style's opener.
-FIRST_OFFER_AFTER = {"direct": 2, "supportive": 4, "reflective": 4}
+# A confident offer may come from the person's second message, in any style: it was four rounds
+# for Supportive and Reflective until Mani's own confidence was made the signal (muhammad,
+# 2026-10-01). When it has not offered by their fourth message the closest fit is due: it offers
+# that, with Keep chatting beside it. Counted in the person's own messages.
+CLEAR_OFFER_AFTER = 2
+CLOSEST_FIT_AFTER = 4
+# After "Keep chatting" a confident offer may come back after two more exchanges; the closest
+# fit waits the full COOLDOWN_AFTER_DECLINE.
+CLEAR_COOLDOWN_AFTER_DECLINE = 4
 # The greeting, the style they tapped, and that style's opener.
 OPENING_MESSAGES = 3
 COOLDOWN_AFTER_COMPLETE = 45
@@ -95,6 +102,19 @@ def cooldown_for(outcome: TechniqueOutcome) -> int:
     )
 
 
+def clear_cooldown_for(outcome: TechniqueOutcome) -> int:
+    return (
+        COOLDOWN_AFTER_COMPLETE
+        if outcome is TechniqueOutcome.ACCEPTED
+        else CLEAR_COOLDOWN_AFTER_DECLINE
+    )
+
+
+def _their_messages(ctx: TurnContext) -> int:
+    """How many messages the person has sent. The reply to their Nth is written at 3 + 2(N - 1)."""
+    return (ctx.thread.message_count - OPENING_MESSAGES) // 2 + 1
+
+
 def clarification_used(history: list[Message] | None) -> bool:
     """Whether Mani has already asked the client's one-time clarifying question in this
     conversation. Read from history rather than a stored flag, so it holds even if a process
@@ -107,18 +127,81 @@ def clarification_used(history: list[Message] | None) -> bool:
 
 
 def cooldown_passed(ctx: TurnContext, *, urgent: bool = False) -> bool:
-    """Whether a framework may be offered yet: [ctx] reports it, repairs.apply enforces it."""
+    """Whether a confident offer may be made yet: [ctx] reports it, repairs.apply enforces it."""
     technique = ctx.technique
     if technique is None:
-        if urgent:
-            # An action about to be taken is the one case not worth waiting the rounds out.
-            return True
-        # The reply to their Nth message is written at 3 + 2(N - 1) messages.
-        said = (ctx.thread.message_count - OPENING_MESSAGES) // 2 + 1
-        return said >= FIRST_OFFER_AFTER.get(resolve_style(ctx), max(FIRST_OFFER_AFTER.values()))
+        # An action about to be taken is the one case not worth waiting the rounds out.
+        return urgent or _their_messages(ctx) >= CLEAR_OFFER_AFTER
+    return ctx.thread.message_count - technique.at_message_count >= clear_cooldown_for(
+        technique.outcome
+    )
+
+
+def earliest_offer_ok(ctx: TurnContext, activation: dict | None, *, urgent: bool = False) -> bool:
+    """A framework file may set `earliest_offer_message` where its fit needs more than the first
+    two messages (ABCDE, Thought Reframe and ACT depend on what the person took it to mean).
+    Only the first offer waits; after Keep chatting they have said more."""
+    if ctx.technique is not None or urgent:
+        return True
+    return _their_messages(ctx) >= (activation or {}).get("earliest_offer_message", 0)
+
+
+def closest_fit_ok(ctx: TurnContext, *, urgent: bool = False) -> bool:
+    """Whether the closest fit may be offered when nothing fits well."""
+    technique = ctx.technique
+    if technique is None:
+        return urgent or _their_messages(ctx) >= CLOSEST_FIT_AFTER
     return ctx.thread.message_count - technique.at_message_count >= cooldown_for(
         technique.outcome
     )
+
+
+def closest_fit_due(ctx: TurnContext) -> bool:
+    """The first offer has not come by their fourth message: the closest fit is owed now."""
+    return ctx.technique is None and _their_messages(ctx) >= CLOSEST_FIT_AFTER
+
+
+# What a person says when they have given almost nothing, and when they are telling Mani it
+# missed something they already said. Whole messages / phrases, after normalising, so a vague
+# word inside a real sentence ("yeah, my manager shouted") is not mistaken for either.
+_VAGUE_REPLIES = frozenset({
+    "yeah", "yea", "yup", "yep", "ok", "okay", "maybe", "hmm", "hm", "sure", "i guess",
+    "idk", "dunno", "i do not know", "do not know", "i am not sure", "not sure", "no idea",
+    "kind of", "sort of", "kinda", "i suppose",
+})
+_HEARD_PHRASES = (
+    "just need to get it out", "just want to get it out", "just need to vent", "just want to vent",
+    "just want to talk", "just need to talk", "just listen", "dont want advice", "do not want advice",
+    "not looking for advice", "dont ask me", "do not ask me", "no questions",
+    "dont give me a technique", "do not give me a technique", "dont want a technique",
+    "do not want a technique", "dont want to do an exercise", "do not want to do an exercise",
+)
+_CORRECTION_PHRASES = (
+    "just told you", "i told you", "already told you", "i already told", "i just said",
+    "already said", "i said that", "like i said", "as i said", "you asked that",
+    "you already asked", "i just answered", "i answered",
+)
+
+
+def with_rewrite_notes(prefix: str, reasons: list[str]) -> str:
+    """The same [ctx] block with a line per reason the draft cannot stand, so the model writes it
+    again. Said in the block the model already reads."""
+    lines = "\n".join(f"rewrite: {reason}" for reason in reasons)
+    return prefix.replace("\n[/ctx]", f"\n{lines}\n[/ctx]", 1)
+
+
+def classify_reply(text: str) -> str | None:
+    """`vague` for a reply that says almost nothing, `correction` for one that says Mani missed
+    what they had already said, `heard` for one that asks only to be listened to, otherwise None. A deterministic read, so the model is told rather
+    than left to notice."""
+    normalized = normalize(text)
+    if any(phrase in normalized for phrase in _HEARD_PHRASES):
+        return "heard"
+    if any(phrase in normalized for phrase in _CORRECTION_PHRASES):
+        return "correction"
+    if normalized in _VAGUE_REPLIES:
+        return "vague"
+    return None
 
 
 def resolve_style(ctx: TurnContext) -> str:
@@ -145,6 +228,7 @@ def build(
     offer_waiting: bool = False,
     framework_starting: bool = False,
     urgent: bool = False,
+    their_last: str | None = None,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -196,6 +280,12 @@ def build(
         # here, next to the message, because the style rule in the long prompt alone did not hold.
         focus = "feeling, then the way through" if resolve_style(ctx) == "direct" else "feelings"
         lines.append(f"question_focus: {focus}")
+    if their_last and not offer_waiting and not safety_concern and (
+        not running or their_last == "correction"
+    ):
+        # A vague reply is not flagged while the questions run: each stage already says what to
+        # do with one. A correction is, because no stage says to take what they already told you.
+        lines.append(f"their_last: {their_last}")
     if offer_waiting:
         # Mani's last reply was an offer, and they typed rather than tapped.
         lines.append("offer_waiting: yes")
@@ -203,11 +293,16 @@ def build(
     if question:
         lines.append(f"after_framework_question: {question}")
 
-    if technique is None:
-        lines.append("cooldown_passed: yes")
-    else:
+    # Told to the model as it is enforced: a first offer used to read "yes" here whatever the
+    # count, and the code then dropped what the model had been told it could do.
+    lines.append(f"cooldown_passed: {'yes' if cooldown_passed(ctx, urgent=urgent) else 'no'}")
+    if not safety_concern and not running:
+        if closest_fit_due(ctx):
+            lines.append("closest_fit: due")
+        elif closest_fit_ok(ctx, urgent=urgent):
+            lines.append("closest_fit: ok")
+    if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
-        lines.append(f"cooldown_passed: {'yes' if cooldown_passed(ctx, urgent=urgent) else 'no'}")
         lines.append(f"since_last: {since_last}")
         lines.append(f"this_thread: {technique.framework_id} ({technique.outcome})")
         if (
@@ -261,6 +356,10 @@ def build(
             # The offering stage's question is the offer they have just typed past.
             stage = [line for line in stage if not line.startswith("stage_ask:")]
         lines.extend(stage)
+        lines.append(
+            "stage_note: put the stage question in terms of what they have told you, in their "
+            "words; never send it bare"
+        )
         index = framework.phase_index(technique.phase)
         if 0 <= index < len(framework.phases) - 1:
             lines.extend(

@@ -1,3 +1,12 @@
+---
+type: programme
+status: historical
+tags: [programme, historical]
+---
+
+> **HISTORICAL: evidence, not instructions.** Written before the port. It describes a tRPC contract, a Next.js backend, an `ai-service` and an `apps/` and `packages/` layout, none of which exists; the service is FastAPI and owns all persistence. Current sources: `CLAUDE.md`, `.claude/`,
+> `backend/PORT-STATUS.md` and [[_Index|the decisions index]]. Where this disagrees with them, they win.
+
 # START HERE
 
 The entry point for Mani. Read this first; it tells you what the project is, what is wrong

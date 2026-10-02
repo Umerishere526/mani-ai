@@ -1,12 +1,13 @@
 # mani
 
-Three independent apps in one directory. Each has its own dependencies and its own dev server — there is no workspace root, so **always `cd` into the app before running anything**.
+Three apps and a test tool in one directory. Each has its own dependencies and its own dev server — there is no workspace root, so **always `cd` into the app before running anything**.
 
 | Path | Stack | Dev command |
 |------|-------|-------------|
 | `web/` | Next.js 16 (App Router), React 19, Tailwind v4 | `cd web && npm run dev` |
 | `mobile/` | Expo SDK 57, expo-router, RN 0.86, NativeWind v5 | `cd mobile && npx expo start` |
 | `backend/` | FastAPI on Python 3.14, venv at `backend/.venv` | `cd backend && source .venv/bin/activate && fastapi dev main.py` |
+| `chat-tester/` | Streamlit page for real conversations against the running backend; not part of the other three, see its README | `cd chat-tester && source venv/bin/activate && streamlit run app.py` |
 
 Per-app context — read the relevant one before working in that directory:
 
@@ -17,7 +18,18 @@ Per-app context — read the relevant one before working in that directory:
 
 Coding standards live in `.claude/skills/` — `nextjs-best-practices` for `web/`, `expo-react-native` for `mobile/`, `supabase-postgres` for database work.
 
-`mani-vault/` is an Obsidian vault holding project notes: ADRs, feature specs, reference, daily log, and Claude's journal. It is notes only — no code. Start at `mani-vault/Home.md`.
+`mani-vault/` is an Obsidian vault holding project thinking: ADRs (with an index), Claude's journal, reference pointers and the archived planning history. It is notes only — no code. Start at `mani-vault/Home.md`.
+
+**Where each kind of fact lives** — one home each, everything else links:
+
+| Kind of fact | Home |
+|---|---|
+| Stack facts, commands, layout, rules | this file and `.claude/*.md` (the only copy) |
+| What the backend does today, what is open | `backend/PORT-STATUS.md` |
+| Why we decided something | `mani-vault/Decisions/` (index: `_Index.md`) |
+| Lessons and failed approaches | `mani-vault/Journal/` |
+| The client's specifications | `backend/docs/specs/` |
+| History, kept as evidence not instructions | `mani-vault/Programme/` |
 
 ## Golden rules
 
@@ -33,7 +45,7 @@ Never call external APIs directly from a frontend — always route through the F
 
 ## Repo-wide gotchas
 
-- The repo root is a single git repository covering all three apps. Run `git` from the root; `.gitignore` files in `web/` and `mobile/` apply alongside the root one.
+- The repo root is a single git repository covering every folder above. Run `git` from the root; `.gitignore` files in `web/` and `mobile/` apply alongside the root one.
 - All Claude Code settings live in the root `.claude/`. Settings are read from the session's working directory only — a `.claude/` inside `web/`, `mobile/`, or `backend/` is silently ignored, so `*/.claude/` is gitignored. Per-app steering belongs in `.claude/WEB.md`, `.claude/MOBILE.md`, `.claude/BACKEND.md` and the skills.
 - Before asserting how Claude Code itself behaves — settings precedence, hooks, skills, plugins, MCP — verify with the `claude-code-guide` agent rather than from memory. This has been wrong before.
 - `web/` puts the App Router at `app/`, `mobile/` puts routes at `src/app/`. This asymmetry is intentional — don't "fix" one to match the other.

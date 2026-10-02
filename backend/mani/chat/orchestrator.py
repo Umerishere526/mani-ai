@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import context, repairs, router, safety
+from mani.chat import context, redraft, repairs, router, safety
 from mani.chat.greeting import (
     CHAT_MORE_LABEL,
     GO_TO_LIBRARY_LABEL,
@@ -366,6 +366,7 @@ async def send(
         ctx, shortlist=shortlist, framework=active_framework, candidate=candidate,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
         framework_starting=accepted_this_turn, urgent=urgent,
+        their_last=context.classify_reply(content),
     )
     for_model = (
         f'User tapped the button: "{tapped.label}".'
@@ -400,6 +401,67 @@ async def send(
         prompt_version_id=None,
     )
     reply = call.value
+    clear_ok = context.cooldown_passed(ctx, urgent=urgent)
+    closest_ok = context.closest_fit_ok(ctx, urgent=urgent)
+    framework_going = ctx.technique is not None and ctx.technique.outcome is TechniqueOutcome.ACCEPTED
+    # Every reply before an offer asks one question, so the conversation keeps moving. Not while
+    # the questions run (each stage asks its own), not on a safety concern, and not when they
+    # have asked only to be heard.
+    needs_question = (
+        not framework_going
+        and not assessment.blocks_framework
+        and context.classify_reply(content) != "heard"
+    )
+
+    def _earliest_ok(draft: Reply) -> bool:
+        named = redraft.offered(draft, config.registry)
+        return context.earliest_offer_ok(
+            ctx, config.registry.activations.get(named) if named else None, urgent=urgent
+        )
+
+    def _why(draft: Reply) -> list[str]:
+        return redraft.reasons(
+            draft, user_texts, config.registry,
+            earliest_wait=(draft.offer_fit != "closest" and clear_ok and not _earliest_ok(draft)),
+            # A fit that is not clear waits for the closest fit's own window. A typed reply to an
+            # offer already open is Keep chatting unless it asks about the offer, so offering
+            # again there needs the same window; the repeat used to be dropped and leave no
+            # question.
+            offer_not_allowed=(not deferred or "?" not in content)
+            and not (closest_ok if draft.offer_fit == "closest" else clear_ok),
+            closest_fit_due=context.closest_fit_due(ctx) and not assessment.blocks_framework
+            and not deferred,
+            needs_question=needs_question,
+        )
+
+    why = _why(reply)
+    attempts = 0
+    # A draft that names a feeling they never did, offers before it may, offers what they said
+    # rules out, or asks nothing gets one more try, told why; a missing question gets a second.
+    # What still fails is corrected by repairs.apply. See ADR-006 and ADR-008.
+    while why and attempts < 2 and (attempts == 0 or any("asks no question" in w for w in why)):
+        logger.info("thread %s redrafting: %s", ctx.thread.id, "; ".join(why))
+        again = await client.complete(
+            [{"role": "system", "content": system.text}]
+            + _conversation(history)
+            + [{"role": "user", "content": context.with_rewrite_notes(prefix, why) + for_model}],
+            Reply,
+            model=model,
+            purpose=llm_calls.Purpose.CHAT,
+            temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
+            max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
+            routing=routing,
+            user_id=user_id,
+            thread_id=ctx.thread.id,
+            prompt_version_id=None,
+        )
+        reply = again.value
+        attempts += 1
+        why = _why(reply)
+    if reply.heading_toward:
+        # Read by the steering evals and by anyone asking why a question went where it did:
+        # the id only, never a word of what the person said.
+        logger.info("thread %s heading toward %s", ctx.thread.id, reply.heading_toward)
 
     # The model's own crisis judgment no longer locks the thread: a small model over-fires it
     # on ordinary distress, pain or injury. Only the deterministic screen (safety.screen, above)
@@ -463,8 +525,13 @@ async def send(
         framework_running=outcome is TechniqueOutcome.ACCEPTED,
         # The reply that takes a no never carries the next offer, however long the last one
         # stood open.
+        # An offer a second draft still makes after what they said ruled it out is dropped the
+        # way an early one is.
+        closest_fit=reply.offer_fit == "closest",
         cooldown_passed=(
-            context.cooldown_passed(ctx, urgent=urgent) and outcome is not TechniqueOutcome.DECLINED
+            (closest_ok if reply.offer_fit == "closest" else clear_ok and _earliest_ok(reply))
+            and outcome is not TechniqueOutcome.DECLINED
+            and not redraft.ruled_out(reply, user_texts, config.registry)
         ),
         conversation_style=context.resolve_style(ctx),
         wants_title=wants_title,

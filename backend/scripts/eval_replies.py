@@ -96,6 +96,16 @@ async def _fresh_user(scenario: str, style: SupportStyle) -> str:
     return user_id
 
 
+async def _remove_users(user_ids: list[str]) -> None:
+    """Take out what this run created. The cost rows go first: deleting a user only blanks
+    `user_id` on them, which leaves synthetic rows that skew every cost and cache average."""
+    if not user_ids:
+        return
+    async with pool.as_admin() as conn:
+        await conn.execute("delete from admin.llm_calls where user_id = any($1::uuid[])", user_ids)
+        await conn.execute("delete from auth.users where id = any($1::uuid[])", user_ids)
+
+
 async def _open_chat(claims: Claims, style: SupportStyle):
     """Greeting, then the style tap - the way every real conversation starts."""
     async with pool.as_user(claims) as conn:
@@ -216,6 +226,12 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
         findings += validators.repeated_question([e.reply for e in in_chat])
         if not scenario.get("heard"):
             findings += validators.unasked_before_offer([(e.reply, e.offered) for e in in_chat])
+    for index, exchange in enumerate(exchanges):
+        state = exchange.framework
+        if state and state[1] == "accepted" and state[2] not in (None, "offering", "closing") \
+                and not str(state[2]).startswith("somatic"):
+            said = " ".join(e.message for e in exchanges[: index + 1] if e.chat == exchange.chat)
+            findings += validators.names_their_situation(exchange.reply, said)
     phases = [(e.framework[2] if e.framework and e.framework[1] == "accepted" else None, e.buttons)
               for e in exchanges]
     findings += validators.missing_handoff(phases, [e.message for e in exchanges])
@@ -235,9 +251,17 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
     return findings
 
 
-def _first_offer(exchanges: list[Exchange]) -> int | None:
-    """Which of their messages the first offer answered, counting the style tap out."""
-    return next((i for i, e in enumerate(exchanges, 1) if e.offered and e.chat == 1), None)
+def _first_offer(exchanges: list[Exchange]) -> str | None:
+    """Which of their messages the first offer answered, counting the style tap out, and
+    which framework it offered."""
+    found = next(
+        ((i, e) for i, e in enumerate(exchanges, 1) if e.offered and e.chat == 1), None
+    )
+    if found is None:
+        return None
+    index, exchange = found
+    closest = "*" if "Try the closest fit" in exchange.buttons else ""
+    return f"{index}:{exchange.framework[0] if exchange.framework else '?'}{closest}"
 
 
 async def main() -> int:
@@ -254,14 +278,17 @@ async def main() -> int:
     # Every reply per style, for the separation table at the end: the styles are meant to
     # behave differently, and nothing else in the run would show that they do not.
     by_style: dict[str, list[str]] = {}
-    offers: dict[str, list[int | None]] = {}
+    offers: dict[str, list[str | None]] = {}
 
     # pool.as_user() needs the pool open; nothing here runs under FastAPI's lifespan.
     await pool.open_pool()
 
+    created: list[str] = []
     for style in SupportStyle:
         for scenario in scenarios:
             user_id = args.user or await _fresh_user(scenario["name"], style)
+            if not args.user:
+                created.append(user_id)
             exchanges = await _run_one(user_id, style, scenario["turns"], scenario.get("start_in"))
             findings = _score(exchanges, style, scenario)
             by_style.setdefault(style.value, []).extend(e.reply for e in exchanges)
@@ -287,6 +314,7 @@ async def main() -> int:
             if not findings:
                 print("  clean")
 
+    await _remove_users(created)
     await pool.close_pool()
     print("\nstyle         replies  avg chars  asks a question  opens with I  first offer at message")
     for name, replies in by_style.items():

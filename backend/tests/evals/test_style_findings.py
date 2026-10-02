@@ -117,3 +117,11 @@ def test_the_reply_to_chat_more_counts_toward_the_three_questions():
     ]
     findings = _score(exchanges, SupportStyle.DIRECT, {"expect_after_questions": True})
     assert not [f for f in findings if f.rule == "after framework"]
+
+
+def test_a_framework_question_that_shares_nothing_with_what_they_said_is_generic():
+    from tests.evals.validators import names_their_situation
+
+    said = "i've an exam in 24 hours and i have not studied at all"
+    assert names_their_situation("What is the exact problem you want to resolve?", said)
+    assert not names_their_situation("With the exam tomorrow, what do you know for certain?", said)

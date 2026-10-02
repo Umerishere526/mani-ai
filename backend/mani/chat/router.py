@@ -66,13 +66,18 @@ class Rule:
 
     `over` empty means the rule is absolute - the specification treats an imminent regrettable
     action as time-critical, so DBT STOP goes first whatever else scored. Otherwise the rule
-    only reorders the pair it names, which is what the document actually claims.
+    only reorders the pair it names, which is what the document actually claims; when neither
+    side scored it still offers its preferred framework as a candidate.
     """
 
     name: str
     phrases: tuple[str, ...]
     prefer: str
     over: tuple[str, ...] = ()
+    standalone: bool = False
+    """Whether the rule's own phrase is specific enough to put its framework on the shortlist
+    when nothing else scored. Most are not: "cannot begin" is also "cannot begin to tell you",
+    so those only reorder frameworks that already scored."""
 
     @property
     def absolute(self) -> bool:
@@ -106,6 +111,7 @@ DISCRIMINATORS: tuple[Rule, ...] = (
         ),
         prefer="act_choice_point",
         over=("thought_reframe", "abcde", "structured_problem_solving"),
+        standalone=True,
     ),
     Rule(
         name="knows what to do but cannot begin",
@@ -137,6 +143,19 @@ DISCRIMINATORS: tuple[Rule, ...] = (
         ),
         prefer="abcde",
         over=("thought_reframe",),
+    ),
+    Rule(
+        # Both specifications claim the same events (an unanswered message, a mistake); what
+        # separates the deeper framework is the person asking to understand, so the ask
+        # alone is enough to offer it.
+        name="asks to understand why it affected them",
+        phrases=(
+            "want to understand why", "affected me so strongly", "affected me so much",
+            "why it hit me so hard",
+        ),
+        prefer="abcde",
+        over=("thought_reframe",),
+        standalone=True,
     ),
 )
 
@@ -173,6 +192,17 @@ def _score_one(activation: dict, messages: list[str]) -> tuple[float, list[str],
     return total, matched, len(contributing_distances)
 
 
+def vetoes(activation: dict, messages: list[str]) -> list[str]:
+    """Phrases from a framework's `never_offer_when_said` that the person has used anywhere in the
+    conversation. Whole words, as the signals are, so "funeral" is not found in "funeralhome"."""
+    texts = [normalize(t) for t in messages]
+    return [
+        phrase
+        for phrase in activation.get("never_offer_when_said") or []
+        if any(_says(normalize(phrase), text) for text in texts)
+    ]
+
+
 def _fired(rule: Rule, messages: list[str]) -> bool:
     """Whether a discriminator's phrases appear in the two most recent user messages."""
     recent = [normalize(t) for t in messages[-2:]]
@@ -193,6 +223,18 @@ def _promote(signals: list[Signal], rule: Rule) -> list[Signal]:
         target = 0
     else:
         beaten = [i for i, s in enumerate(ordered) if s.framework_id in rule.over]
+        if not beaten and index is None and rule.standalone:
+            # Nothing it outranks and nothing scored for it, but the rule's own phrase is
+            # evidence enough to put it on the shortlist, as a suggestion: the floor sits
+            # below the confidence bar, so this never carries the full offer guidance.
+            candidate = Signal(
+                rule.prefer, PROMOTED_FLOOR, [], promoted_by=rule.name, spread=0,
+            )
+            position = next(
+                (i for i, s in enumerate(ordered) if s.score < PROMOTED_FLOOR), len(ordered)
+            )
+            ordered.insert(position, candidate)
+            return ordered
         if not beaten:
             return ordered
         target = min(beaten)

@@ -1,3 +1,12 @@
+---
+type: programme
+status: historical
+tags: [programme, historical]
+---
+
+> **HISTORICAL: evidence, not instructions.** The contract for an `ai-service` that was never built. The real route is `POST /v1/threads/{id}/messages` on the FastAPI backend. Current sources: `CLAUDE.md`, `.claude/`,
+> `backend/PORT-STATUS.md` and [[_Index|the decisions index]]. Where this disagrees with them, they win.
+
 # AI Service Contract (v1 draft)
 
 Contract between **backend** (Node/Next.js) and **ai-service** (FastAPI).

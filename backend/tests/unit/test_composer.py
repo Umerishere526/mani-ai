@@ -173,6 +173,40 @@ def test_the_framework_index_carries_each_frameworks_contraindications():
     assert "**DBT STOP**: The action itself is protective - leaving, calling for help" in index
 
 
+def test_the_framework_index_says_what_each_one_needs_to_find_out():
+    """Questions can follow the person's feeling and still head somewhere only if the model
+    can see what each set of questions needs to learn before it is the right offer."""
+    act = Framework(
+        id="act_choice_point", name="ACT Choice Point", summary="s", body="b", phases=["offering"],
+        activation={
+            "central_indication": "cannot change it",
+            "to_find_out": ["what they cannot control", "what it pulls them toward"],
+        },
+    )
+    index = composer.framework_index(Registry([act]))
+    assert "## Finding the fit" in index
+    assert "- **ACT Choice Point**: what they cannot control; what it pulls them toward" in index
+
+
+def test_every_shipped_framework_says_what_it_needs_to_find_out():
+    from scripts.seed import FRAMEWORKS_DIR, parse_framework
+
+    for path in sorted(FRAMEWORKS_DIR.glob("*.md")):
+        found = parse_framework(path)["activation"].get("to_find_out") or []
+        assert len(found) >= 3, f"{path.name} needs at least three things to find out"
+
+
+def test_the_reply_commits_to_a_lean_before_it_writes_the_text():
+    """Structured output is generated in schema order, so a lean declared after the text could
+    only describe a reply already written."""
+    from mani.llm.schema import Reply
+
+    fields = list(Reply.model_fields)
+    assert fields.index("heading_toward") < fields.index("text")
+    assert fields.index("style") < fields.index("heading_toward")
+    assert fields.index("heading_toward") < fields.index("offer_fit") < fields.index("text")
+
+
 def test_what_is_remembered_across_chats_reaches_the_prompt_after_the_static_layers(config):
     """After the per-user context, never before the static layers: the cached prefix has to
     stay byte-identical for everyone."""
@@ -217,3 +251,20 @@ def test_the_current_issue_stays_visible_even_without_a_prose_summary_yet():
     )
     assert layer is not None
     assert "Freezing before a talk." in layer
+
+
+def test_the_index_marks_the_frameworks_whose_offer_waits_for_their_third_message():
+    waits = Framework(
+        id="abcde", name="ABCDE", summary="s", body="b", phases=["offering"],
+        activation={"central_indication": "x", "to_find_out": ["the event", "what it meant"],
+                    "earliest_offer_message": 3},
+    )
+    immediate = Framework(
+        id="structured_problem_solving", name="Structured Problem-Solving", summary="s", body="b",
+        phases=["offering"],
+        activation={"central_indication": "y", "to_find_out": ["the problem", "whether it can change"]},
+    )
+    index = composer.framework_index(Registry([waits, immediate]))
+    assert "- **ABCDE**: the event; what it meant (offer it only from their message 3" in index
+    assert "- **Structured Problem-Solving**: the problem; whether it can change" in index
+    assert "whether it can change (offer it only" not in index

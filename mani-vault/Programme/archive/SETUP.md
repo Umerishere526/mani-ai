@@ -1,3 +1,12 @@
+---
+type: programme
+status: historical
+tags: [programme, historical]
+---
+
+> **HISTORICAL: evidence, not instructions.** Written before the port. Its commands, ports and folders (`pnpm`, `apps/backend`, `:3001`, Supabase on `5433x`) belong to a layout that was never built. Current sources: `CLAUDE.md`, `.claude/`,
+> `backend/PORT-STATUS.md` and [[_Index|the decisions index]]. Where this disagrees with them, they win.
+
 # SETUP — standing up Mani locally
 
 Merged from the original Expo Go walkthrough and the clean-clone verification report, with

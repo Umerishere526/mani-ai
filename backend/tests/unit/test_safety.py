@@ -39,6 +39,7 @@ def test_an_explicit_statement_is_a_crisis(text, category):
         "to disappear from their lives it i didn't exists.",  # a real message, typos and all
         "I wish I didn\u2019t exist",
         "I wish I had never been born",
+        "I have the pills in my hand",
     ],
 )
 def test_an_indirect_statement_asks_rather_than_locks(text):

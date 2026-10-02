@@ -3,9 +3,15 @@
 Complete, verified map of every schema, table, column, role, and grant in this project's
 database — queried live from `information_schema`/`pg_catalog`, not reconstructed from the
 migration files. Regenerate rather than hand-edit if the schema changes (§ at the bottom
-has the exact queries) — every table below reflects the state after migrations 001–005.
+has the exact queries) — every table below reflects the state after migrations 001–010.
 
-Generated 2026-09-23 against local Supabase (`supabase_db_mani`). Nothing here was typed
+Generated 2026-09-23 against local Supabase (`supabase_db_mani`), then hand updated on 2026-10-01 for
+migrations 006 to 010 (the call purpose enum, backend writes of prompt state, bounded profile topics, the
+memory table, the summary's current issue); the counts, `thread_summaries`, the privilege list and the RLS
+note below were checked against the live database that day. Regenerate from the queries at the bottom after
+the next schema change.
+
+The rest of this paragraph describes the original generation: Nothing here was typed
 from memory — every table, column, constraint, policy, and grant was queried directly from
 `pg_catalog`/`information_schema` and is reproducible with the queries noted per section.
 
@@ -13,7 +19,7 @@ from memory — every table, column, constraint, policy, and grant was queried d
 
 **Nothing in this project alters a Supabase-default table, role attribute, or system
 role.** Every table, every grant beyond the platform's own, and every RLS policy below was
-added by this project's five migrations (`001` through `005`). The only things touched
+added by this project's ten migrations (`001` through `010`). The only things touched
 outside plain `CREATE`/`GRANT`/`CREATE POLICY` are the documented, intended configuration
 surface Supabase itself exposes for exactly this purpose: `supabase/config.toml` (email
 confirmation, password policy, exposed schemas — see `.claude/SUPABASE.md`).
@@ -31,8 +37,8 @@ boundary, not a choice this project made, and migration 005 works within it (see
 **This project's own additions, in full:**
 - Schema: `admin` (config/analytics data, invisible to PostgREST by design)
 - Role: `mani_service` (the backend's own DB identity — see §4)
-- 14 tables (8 in `public`, 6 in `admin` — §3)
-- Every RLS policy and every grant on those 14 tables (§4, §5)
+- 15 tables (8 in `public`, 7 in `admin` — §3)
+- Every RLS policy and every grant on those 15 tables (§4, §5)
 
 ## 2. Tables, by schema
 
@@ -141,7 +147,7 @@ Append-only log of the model's self-reported style per reply.
 | 2 | `thread_id` | uuid | FK→`threads` cascade | |
 | 3 | `user_id` | uuid | FK→`auth.users` cascade | |
 | 4 | `shape` | text | required 🔒 | One of 6 values (CHECK `response_styles_shape_known`, added migration 003). Matches `SHAPES` in `mani/llm/schema.py`. |
-| 5 | `voice` | text | optional 🔒 | One of 5 values or null (CHECK `response_styles_voice_known`). Matches `VOICES` in `mani/llm/schema.py`. |
+| 5 | `voice` | text | optional 🔒 | One of 5 values or null (CHECK `response_styles_voice_known`). No longer set: `VOICES` was removed from `mani/llm/schema.py` and the model's `Style` carries only `shape`. The column and its CHECK remain in the database. |
 | 6 | `created_at` | timestamptz | default `clock_timestamp()` | |
 
 ### `public.thread_summaries`
@@ -155,6 +161,7 @@ Append-only log of the model's self-reported style per reply.
 | 6 | `summarized_message_count` | integer | default `0`, `>= 0` (CHECK) | |
 | 7 | `created_at` | timestamptz | default `now()` | |
 | 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
+| 9 | `current_issue` | text | optional | One line, replaced each run: what the person is working on right now. The composer puts it ahead of the prose summary on every turn a summary exists (migration 010). |
 
 ### `public.exercise_completions`
 | # | Column | Type | Required | Purpose |
@@ -282,7 +289,7 @@ Query: `select rolname, rolsuper, rolinherit, rolcreaterole, rolcanlogin, rolbyp
 | `service_role` | no (assumed via `authenticator`) | **yes** | Anything presenting the service-role key | Full, RLS-bypassing access. Never reaches a client — `backend/mani/config.py`'s `supabase_service_role_key` is the only place this key lives, and it's used only for Storage signing (`mani/storage.py`) and, since this session, the Auth Admin API (`mani/auth_admin.py`). |
 | `authenticator` | **yes** | no | PostgREST's own connection | The role PostgREST logs in as. Not used to do anything itself — it's a member of `anon`, `authenticated`, **and** `service_role`, and `SET ROLE`s to whichever one a request's JWT specifies. This is stock Supabase/PostgREST architecture, not a project decision — confirmed live (`pg_auth_members`). |
 | `supabase_auth_admin` | **yes** | no | GoTrue (Supabase Auth), confirmed via `GOTRUE_DB_DATABASE_URL` | Owns `auth.users` and everything under `auth.*`. Since migration 005, also holds the narrow, table-specific grants and RLS policies needed to complete the cascades this project's own `on delete cascade`/`set null` foreign keys promise when it deletes a user (§3, §5). **Cannot be granted `BYPASSRLS`** — confirmed live, Postgres refuses even from `postgres` here, because it's a reserved role. |
-| `mani_service` | no (assumed by the backend via `SET LOCAL ROLE`) | no | This backend, for every ordinary request | A member of `authenticated`, so it inherits everything that role can do, **plus** a handful of privileges an ordinary user must not have: EXECUTE on the three `security definer` functions (`create_message_pair`, `mark_thread_crisis`, `create_greeting`) DELETE on `thread_technique_state`, INSERT/UPDATE on `thread_summaries` and `thread_technique_state` (moved off `authenticated` in migration 007, since both feed the model), SELECT/INSERT/UPDATE on `admin.user_memory`, and UPDATE on `threads.memory_folded_at` (migration 009). RLS still applies — the extra privileges are never a wider view of rows, only a wider set of actions (`.claude/SUPABASE.md`). **Never grant this to `authenticator`** — that would let PostgREST assume it directly and undo the separation (asserted by `tests/sql/test_grants.sql`, confirmed still true here — `mani_service` is absent from `authenticator`'s memberships). |
+| `mani_service` | no (assumed by the backend via `SET LOCAL ROLE`) | no | This backend, for every ordinary request | A member of `authenticated`, so it inherits everything that role can do, **plus** a handful of privileges an ordinary user must not have: EXECUTE on the three `security definer` functions (`create_message_pair`, `mark_thread_crisis`, `create_greeting`) DELETE on `thread_technique_state`, INSERT/UPDATE on `thread_summaries` and `thread_technique_state` (moved off `authenticated` in migration 007, since both feed the model), SELECT/INSERT/UPDATE on `admin.user_memory`, and UPDATE on `threads.memory_folded_at` (migration 009) and `threads.vague_streak` (migration 002). RLS still applies — the extra privileges are never a wider view of rows, only a wider set of actions (`.claude/SUPABASE.md`). **Never grant this to `authenticator`** — that would let PostgREST assume it directly and undo the separation (asserted by `tests/sql/test_grants.sql`, confirmed still true here — `mani_service` is absent from `authenticator`'s memberships). |
 | `postgres` | yes | yes | Migrations, and anyone connecting directly (e.g. `supabase status`'s credentials) | **Not a true superuser on this platform** (`rolsuper = false`, confirmed live) — Supabase deliberately keeps its own internal roles (like `supabase_auth_admin`) out of reach even from this role, which is why migration 005 could not simply `ALTER ROLE ... BYPASSRLS`. |
 
 ## 5. RLS policies — one row per operation, per table, per role
@@ -306,7 +313,7 @@ with check (
 
 **Since migration 005**, every table above also carries one additional policy, `auth_admin_cascade_delete` (`for delete to supabase_auth_admin using (true)`), and `threads` carries `auth_admin_cascade_message_count` (`for update ... using (true) with check (true)`) for the one side-effect trigger (`sync_thread_message_count`) that fires during that cascade. These are scoped to exactly one role and one operation each — they do not weaken what `authenticated` can do, since permissive RLS policies are OR'd together, never AND'd.
 
-`admin.*` has **no RLS at all** — by design, since it's unreachable via PostgREST regardless (§2). Access there is controlled entirely by grants (§4/§6), not policies.
+`admin.*` has **no RLS, with one exception**: `admin.user_memory` (migration 009) carries policies scoping `mani_service` to the caller's own row. Every other `admin` table is unreachable via PostgREST regardless (§2), and access there is controlled entirely by grants (§4/§6), not policies.
 
 ## 6. Hardcoded values — deliberate vs. not
 
@@ -320,7 +327,7 @@ These are real business rules, not values that should be dynamic. Each is enforc
 |---|---|---|---|
 | Conversation style | `profiles_support_style_known`, `threads_conversation_style_known` | `mani.models.rows.SupportStyle` | `supportive`, `reflective`, `direct` |
 | Response shape | `response_styles_shape_known` | `SHAPES` in `mani/llm/schema.py` | 6 values (warmth lead, honor and follow, mirror and ask, mirror and hold, gentle follow, presence only) |
-| Mirroring voice | `response_styles_voice_known` | `VOICES` in `mani/llm/schema.py` | naming, receiving, quoting, transitional, observing |
+| Mirroring voice | `response_styles_voice_known` | none (`VOICES` was removed; the column is no longer written) | naming, receiving, quoting, transitional, observing |
 
 If either side of one of these pairs is ever changed, the other must change with it, or the database will reject values the app tries to write, or the app will silently drop values it should have accepted. There is no single source of truth to point at automatically — this is worth a comment at each site cross-referencing the other, if it doesn't already have one.
 

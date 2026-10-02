@@ -16,7 +16,7 @@ npm run lint     # eslint
 ## Layout
 
 - App Router lives at `app/` — **not** `src/app/`. Mobile uses `src/`; the two apps differ deliberately, don't "fix" one to match the other.
-- Entry points: `app/layout.tsx` (root layout), `app/page.tsx`.
+- Entry points: `app/layout.tsx` (root layout) and the route folders `app/admin/` and `app/auth/`. There is no `app/page.tsx`: `/` redirects to `/auth/login` from `next.config.ts`.
 - Global styles: `app/globals.css`. Static assets: `public/`.
 - Path alias: `@/*` → `./*` (repo root of `web/`, not a `src` dir).
 
@@ -46,7 +46,7 @@ Tailwind here is **CSS-first**. There is no `tailwind.config.js` and you should 
 
 - ESLint uses flat config (`eslint.config.mjs`) composing `eslint-config-next/core-web-vitals` and `/typescript`. `npm run lint` takes no path argument by default.
 - Server Components are the default in the App Router. Add `"use client"` only when a component actually needs state, effects, or browser APIs.
-- `next.config.ts` is currently empty scaffold — real config goes in the `nextConfig` object.
+- `next.config.ts` holds the one redirect from `/` to `/auth/login`; further config goes in the `nextConfig` object.
 
 ## Backend calls
 

@@ -140,7 +140,7 @@ async def test_a_turn_costs_exactly_one_provider_call(alice, model):
         Reply(
             # Everything the six checks look at is wrong at once: leaked script text, a
             # phase jumped to out of order, a duplicated label, and four buttons.
-            text="Here you go.\n\n**Mani:** breathe\n\n(Include prompts: yes/no)",
+            text="Here you go. What happened?\n\n**Mani:** breathe\n\n(Include prompts: yes/no)",
             prompts=[
                 SmartPrompt(label="Tell me more"),
                 SmartPrompt(label="tell me more"),
@@ -160,6 +160,178 @@ async def test_a_turn_costs_exactly_one_provider_call(alice, model):
     # "Tell me more" goes with the unknown technique it would have explained, and the rest go
     # because ordinary chat carries no buttons.
     assert turn.prompts == []
+
+
+async def test_a_draft_naming_a_feeling_they_never_used_is_redrafted_once(alice, model):
+    """The exception to one provider call a turn: "An exam sounds incredibly stressful" was said
+    to someone who never said stressed. The second draft is the one they read."""
+    scripted = model(
+        Reply(text="An exam in 24 hours sounds incredibly stressful. What do you need first?"),
+        Reply(text="An exam in 24 hours and nothing studied. What do you need first?"),
+    )
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "i've an exam in 24 hours and i have not studied at all")
+
+    assert scripted.calls == 2
+    assert "stressful" not in turn.content
+    assert turn.content == "An exam in 24 hours and nothing studied. What do you need first?"
+
+
+async def test_a_second_draft_that_still_names_one_is_trimmed_not_sent_again(alice, model):
+    scripted = model(
+        Reply(text="That sounds stressful. What do you need first?"),
+        Reply(text="That sounds so stressful. What do you need first?"),
+    )
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "i've an exam in 24 hours and i have not studied at all")
+
+    assert scripted.calls == 2
+    assert turn.content == "What do you need first?"
+
+
+async def test_an_offer_before_the_clients_cadence_allows_it_is_redrafted_into_a_question(alice, model):
+    """Dropped in code it left a reply that asked nothing; the model is asked once instead."""
+    early = Reply(
+        text="There are some questions we could go through together. Would you like to try it?",
+        prompts=[SmartPrompt(label="Try it", technique="structured_problem_solving"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
+        state=TechniqueState(technique="structured_problem_solving", step="offering"),
+    )
+    scripted = model(early, Reply(text="With the exam so close, what have you got to work with?"))
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "i have an exam tomorrow and i don't know where to start")
+
+    assert scripted.calls == 2
+    assert turn.content == "With the exam so close, what have you got to work with?"
+    assert turn.prompts == []
+
+
+async def test_behavioral_activation_is_not_offered_to_someone_whose_dog_died(alice, model):
+    wrong = Reply(
+        text="There are some questions we could go through together. Would you like to try it?",
+        prompts=[SmartPrompt(label="Try it", technique="behavioral_activation"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
+        state=TechniqueState(technique="behavioral_activation", step="offering"),
+    )
+    scripted = model(wrong, Reply(text="When the flat feels empty, what do you find yourself wanting to do?"))
+    thread = await start(alice)
+    await past_the_opening(thread)
+    turn = await send(alice, thread.id, "my dog died and i can't stop thinking about him")
+
+    assert scripted.calls == 2
+    assert not [p for p in turn.prompts if p.technique]
+    assert turn.content.endswith("wanting to do?")
+
+
+def _offer(technique: str, fit: str | None) -> Reply:
+    return Reply(
+        text="There are some questions we could go through together. Would you like to try it?",
+        prompts=[SmartPrompt(label="Try it", technique=technique),
+                 SmartPrompt(label="Keep chatting", decline=True)],
+        state=TechniqueState(technique=technique, step="offering"),
+        offer_fit=fit,
+    )
+
+
+async def test_a_confident_offer_is_made_on_the_second_message_in_any_style(alice, model):
+    """muhammad, 2026-10-01: if Mani is confident it should offer, not wait out the old four."""
+    from mani.db import pool
+    from mani.models.rows import SupportStyle
+
+    scripted = model(
+        Reply(text="What is the hardest part of it?", heading_toward="structured_problem_solving"),
+        _offer("structured_problem_solving", "clear"),
+    )
+    thread = await start(alice)
+    async with pool.as_admin() as conn:
+        # The style tap and its opener, which the real greeting flow adds before their first message.
+        await conn.execute(
+            "update public.threads set conversation_style = $2, message_count = message_count + 2 "
+            "where id = $1",
+            thread.id, SupportStyle.SUPPORTIVE.value,
+        )
+    await send(alice, thread.id, "i have an exam tomorrow and i don't know where to start")
+    turn = await send(alice, thread.id, "i'm confused between studying everything or picking topics")
+
+    assert scripted.calls == 2
+    assert [p.technique for p in turn.prompts if p.technique] == ["structured_problem_solving"]
+    assert [p.label for p in turn.prompts] == ["Try it", "Keep chatting"]
+
+
+async def test_the_closest_fit_is_owed_by_the_fourth_message_and_says_so(alice, model):
+    scripted = model(
+        Reply(text="What is the hardest part of the evenings?", heading_toward="act_choice_point"),
+        _offer("act_choice_point", "closest"),
+    )
+    thread = await start(alice)
+    await past_the_opening(thread)
+    turn = await send(alice, thread.id, "i miss him and the flat is quiet")
+
+    assert scripted.calls == 2
+    assert [p.label for p in turn.prompts] == ["Try the closest fit", "Keep chatting"]
+    assert [p.technique for p in turn.prompts if p.technique] == ["act_choice_point"]
+
+
+async def test_offering_again_after_they_typed_past_an_offer_is_redrafted_into_a_question(alice, model):
+    """Typing past an offer is Keep chatting; a second offer in that same reply used to be dropped,
+    and the reply was left without a question."""
+    scripted = model(
+        _offer("structured_problem_solving", "clear"),
+        _offer("structured_problem_solving", "clear"),
+        Reply(text="Which of those two would cost you less if it went wrong?"),
+    )
+    thread = await start(alice)
+    await past_the_opening(thread)
+    await send(alice, thread.id, "i have an exam tomorrow and i do not know where to start")
+    turn = await send(alice, thread.id, "i could study everything or pick topics")
+
+    assert scripted.calls == 3
+    assert turn.content == "Which of those two would cost you less if it went wrong?"
+    assert turn.prompts == []
+
+
+async def test_a_comforting_reply_with_no_question_is_redrafted_until_it_asks_one(alice, model):
+    """The person had to push the conversation on themselves. Two tries for a missing question."""
+    scripted = model(
+        Reply(text="It is okay to feel that way. I am here with you."),
+        Reply(text="That is understandable and you are not alone in it."),
+        Reply(text="When she raised it in front of the team, what did that say to you about yourself?"),
+    )
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "i felt small when she questioned me in front of everyone")
+
+    assert scripted.calls == 3
+    assert turn.content.endswith("about yourself?")
+
+
+async def test_someone_who_asks_only_to_be_heard_is_not_forced_to_answer_a_question(alice, model):
+    scripted = model(Reply(text="That sounds like it has been sitting with you for a long time."))
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "please don't ask me anything, i just need to get it out")
+
+    assert scripted.calls == 1
+    assert "?" not in turn.content
+
+
+async def test_abcde_is_not_offered_before_they_have_said_what_it_meant(alice, model):
+    """Direct offered ACT or a plan at message 2 about a colleague, then ABCDE was the fit."""
+    from mani.db import pool
+
+    scripted = model(
+        Reply(text="What was that like for you?"),
+        _offer("abcde", "clear"),
+        Reply(text="When she did that, what did it say to you about yourself?"),
+    )
+    thread = await start(alice)
+    async with pool.as_admin() as conn:
+        # The style tap and its opener, before their first message.
+        await conn.execute("update public.threads set message_count = message_count + 2 where id = $1", thread.id)
+    await send(alice, thread.id, "my colleague questioned two of my recommendations in front of the team")
+    turn = await send(alice, thread.id, "i felt embarrassed and did not know how to handle it")
+
+    assert scripted.calls == 3
+    assert turn.content.endswith("about yourself?")
+    assert not [p for p in turn.prompts if p.technique]
 
 
 async def test_the_turn_is_stored_and_the_thread_state_follows_it(alice, model):
@@ -491,7 +663,7 @@ async def test_a_crisis_thread_refuses_another_turn(alice, model):
 
 
 async def test_a_retried_send_returns_the_first_reply_without_paying_again(alice, model):
-    scripted = model(Reply(text="I'm here."), Reply(text="A different answer."))
+    scripted = model(Reply(text="I'm here. What happened?"), Reply(text="A different answer."))
     thread = await start(alice)
     client_id = uuid.uuid4()
 
@@ -1072,7 +1244,8 @@ async def test_a_declined_framework_can_be_offered_again_after_a_few_replies(ali
         state=TechniqueState(technique="abcde", step="offering"),
     )
     chat = Reply(text="What else has been on your mind about it?")
-    model(offer, chat, chat, chat, chat, offer)
+    # The first offer comes before the client's cadence allows it, so it costs one redraft.
+    model(offer, chat, chat, chat, chat, chat, offer)
     thread = await start(alice)
     await send(alice, thread.id, "my manager criticized me in front of everyone")
     await send(alice, thread.id, "I want to keep talking")
@@ -1101,7 +1274,4 @@ async def test_the_body_check_in_is_sent_from_the_script_not_reworded(alice, mod
         )
 
     turn = await send(alice, thread.id, "yes, that fits what happened")
-    assert turn.content.endswith(
-        "Before we move on, can we check in for a moment? What are you noticing in your body "
-        "right now compared with when we started?"
-    )
+    assert turn.content.endswith("Would you like to notice what is happening in your body?")

@@ -97,6 +97,9 @@ _CONCERN: list[tuple[Category, str]] = [
     (Category.SUICIDE, "do not want to be here"),
     (Category.SUICIDE, "do not want to wake up"),
     (Category.SUICIDE, "i have everything ready"),
+    # The specification lists this as needing the safety protocol rather than STOP. Concern
+    # level: pills in a hand can be ordinary, and a false crisis locks someone out.
+    (Category.OVERDOSE, "pills in my hand"),
     # Passive ideation: a wish not to exist, with no plan or method. Concern, not crisis - it
     # pauses any framework and keeps Mani close without locking the conversation. Whole
     # phrases, so "my keys keep disappearing" or "I did not exist on social media" pass.

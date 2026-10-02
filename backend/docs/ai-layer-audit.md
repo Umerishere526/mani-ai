@@ -1,5 +1,22 @@
 # Mani AI layer — Phase 0 audit
 
+> **HISTORICAL SNAPSHOT, written before the fixes it describes.** Its file sizes, line numbers and the
+> "uncommitted" and "pending" language belong to the code of about 2026-09-23. Current sources:
+> `backend/PORT-STATUS.md` (what the service does) and `mani-vault/Decisions/_Index.md` (why). What has
+> changed since, verified on 2026-10-01:
+>
+> | Finding or claim here | Now |
+> |---|---|
+> | F4: summary threshold above the context window | fixed: `SUMMARY_THRESHOLD = CONTEXT_WINDOW` in `orchestrator.py` |
+> | N1: `clinical_note` documented as required | the field is gone; `reasoning` no longer says required |
+> | A5: `validators.py` never runs on a model reply | closed by `scripts/eval_replies.py` and `tests/evals/` |
+> | Five hard coded discriminators | six rules in `router.py`, plus `router.vetoes` and the `never_offer_when_said` field |
+> | "Dead forever" framework fields | the prompt now reads `central_indication`, `to_find_out`, `distinctions` and `contraindications`; only `appropriate_when` and `not_when` are still unread |
+> | Eight prompt layers | up to nine (`user_memory` was added) |
+> | A pending feelings repair; one model call per turn | feelings are enforced by redraft then trim, and a turn can be redrafted (ADR-006, ADR-008); offers follow `Reply.offer_fit` (ADR-007) |
+> | Model `gemini-3-flash-preview` | `google/gemini-3.1-flash-lite` for chat (`mani/config.py`) |
+> | Greeting strings quoted in N3 | reworded; still hard coded in `mani/chat/greeting.py` |
+
 Read-only verification of the prior audit against the committed baseline (`mani-backend-fastapi`
 as of the commit this worktree branched from), plus everything Section L of the brief left
 unread. Nothing in `mani/`, `content/`, or `supabase/` was modified to produce this report.

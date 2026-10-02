@@ -490,20 +490,46 @@ def test_a_declined_offer_may_come_back_after_three_replies():
     assert context.COOLDOWN_AFTER_DECLINE == 6
 
 
-@pytest.mark.parametrize(
-    ("style", "first_allowed"), [("direct", 2), ("supportive", 4), ("reflective", 4)]
-)
-def test_nothing_is_offered_before_the_conversation_has_had_its_rounds(style, first_allowed):
-    """The client: about four rounds of conversation before anything is offered; Direct sooner
-    (muhammad, 2026-09-24). Supportive offered on the first message about a panic attack."""
-    def may_offer_on(person_message: int) -> bool:
-        # The greeting, the style they tapped, its opener, then one pair per message.
-        count = 3 + 2 * (person_message - 1)
-        chosen = thread(count).model_copy(update={"conversation_style": SupportStyle(style)})
-        return context.cooldown_passed(TurnContext(thread=chosen, profile=None, technique=None))
+def _on_message(person_message: int, technique=None):
+    # The greeting, the style they tapped, its opener, then one pair per message.
+    return TurnContext(thread=thread(3 + 2 * (person_message - 1)), profile=None, technique=technique)
 
-    assert not may_offer_on(first_allowed - 1)
-    assert may_offer_on(first_allowed)
+
+@pytest.mark.parametrize("style", ["direct", "supportive", "reflective"])
+def test_a_confident_offer_may_come_from_the_second_message_in_any_style(style):
+    """Mani's own confidence is the signal (muhammad, 2026-10-01); it was four rounds for
+    Supportive and Reflective. Supportive offered on the first message about a panic attack, so
+    the floor stays at two."""
+    chosen = thread(3).model_copy(update={"conversation_style": SupportStyle(style)})
+    assert not context.cooldown_passed(TurnContext(thread=chosen, profile=None, technique=None))
+    chosen = thread(5).model_copy(update={"conversation_style": SupportStyle(style)})
+    assert context.cooldown_passed(TurnContext(thread=chosen, profile=None, technique=None))
+
+
+def test_the_closest_fit_is_due_by_the_fourth_message_and_not_before():
+    assert not context.closest_fit_ok(_on_message(3))
+    assert context.closest_fit_ok(_on_message(4))
+    assert context.closest_fit_due(_on_message(4))
+    assert not context.closest_fit_due(_on_message(3))
+
+
+def test_the_context_tells_the_model_the_truth_about_the_first_offer():
+    """It said `cooldown_passed: yes` on every first message, then the code dropped the offer."""
+    assert "cooldown_passed: no" in context.build(_on_message(1))
+    second = context.build(_on_message(2))
+    assert "cooldown_passed: yes" in second and "closest_fit" not in second
+    assert "closest_fit: due" in context.build(_on_message(4))
+
+
+def test_after_keep_chatting_a_confident_offer_returns_sooner_than_the_closest_fit():
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED,
+        at_message_count=10,
+    )
+    after_two = TurnContext(thread=thread(14), profile=None, technique=state)
+    after_three = TurnContext(thread=thread(16), profile=None, technique=state)
+    assert context.cooldown_passed(after_two) and not context.closest_fit_ok(after_two)
+    assert context.closest_fit_ok(after_three)
 
 
 def test_the_one_time_clarification_is_offered_only_before_it_has_been_used():
@@ -521,3 +547,77 @@ def test_the_one_time_clarification_is_offered_only_before_it_has_been_used():
         history=[mani("Do I have this right?"), user("Yes."), mani("What happened then?")],
     )
     assert "clarification_available" not in already_asked
+
+
+@pytest.mark.parametrize("text", ["yeah", "Yup.", "idk", "I don't know", "ok", "not sure", "I guess"])
+def test_a_reply_that_says_almost_nothing_is_vague(text):
+    assert context.classify_reply(text) == "vague"
+
+
+@pytest.mark.parametrize("text", ["just told you the pain", "I already said that", "Like I said, work"])
+def test_a_reply_saying_mani_missed_what_was_said_is_a_correction(text):
+    assert context.classify_reply(text) == "correction"
+
+
+@pytest.mark.parametrize("text", [
+    "I just need to get it out", "please don't give me a technique right now", "I just want to vent",
+])
+def test_asking_only_to_be_listened_to_is_flagged_so_no_question_is_forced(text):
+    assert context.classify_reply(text) == "heard"
+
+
+@pytest.mark.parametrize("text", ["yeah my manager shouted at me", "I said no to him", "I don't know why he left"])
+def test_a_vague_word_inside_a_real_sentence_is_neither(text):
+    assert context.classify_reply(text) is None
+
+
+def test_the_last_reply_kind_reaches_the_context_only_when_no_questions_are_running():
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None), their_last="correction"
+    )
+    assert "their_last: correction" in block
+
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+        phase="activate", at_message_count=2,
+    )
+    running = Framework(
+        id="abcde", name="ABCDE", summary="s", body="b", phases=["offering", "activate"],
+        stages={"activate": {"purpose": "p"}},
+    )
+    inside = context.build(
+        TurnContext(thread=thread(), profile=None, technique=state),
+        framework=running, their_last="vague",
+    )
+    assert "their_last" not in inside
+    assert "stage_note: put the stage question in terms of what they have told you" in inside
+
+    told_you = context.build(
+        TurnContext(thread=thread(), profile=None, technique=state),
+        framework=running, their_last="correction",
+    )
+    assert "their_last: correction" in told_you
+
+
+def test_the_redraft_notes_stay_inside_the_context_block_one_line_each():
+    block = context.with_rewrite_notes(
+        "[ctx]\nconversation_style: direct\n[/ctx]\n\n", ["used stressful", "offered too early"]
+    )
+    assert block.index("rewrite: used stressful") < block.index("rewrite: offered too early")
+    assert block.index("rewrite: offered too early") < block.index("[/ctx]")
+    assert block.endswith("[/ctx]\n\n")
+
+
+def test_the_first_offer_of_a_framework_that_needs_the_meaning_waits_for_their_third_message():
+    abcde = {"earliest_offer_message": 3}
+    assert not context.earliest_offer_ok(_on_message(2), abcde)
+    assert context.earliest_offer_ok(_on_message(3), abcde)
+    assert context.earliest_offer_ok(_on_message(2), {})
+    assert context.earliest_offer_ok(_on_message(2), abcde, urgent=True)
+
+
+def test_after_keep_chatting_the_wait_for_the_meaning_no_longer_applies():
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED, at_message_count=5,
+    )
+    assert context.earliest_offer_ok(_on_message(2, technique=state), {"earliest_offer_message": 3})
