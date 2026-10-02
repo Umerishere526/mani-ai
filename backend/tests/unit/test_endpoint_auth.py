@@ -77,6 +77,14 @@ def test_the_spec_actually_lists_the_routes_we_think_it_does(client):
     assert f"/v1/threads/{PLACEHOLDER}/messages" in paths, "the turn endpoint is missing"
 
 
+def test_an_exercise_reaches_a_client_as_a_signed_link_never_a_storage_path(client):
+    """The bucket's object paths stay in the backend; the published contract carries
+    only the signed URL."""
+    fields = client.app.openapi()["components"]["schemas"]["ExerciseOut"]["properties"]
+    assert "audio_url" in fields
+    assert "audio_path" not in fields
+
+
 def test_no_versioned_endpoint_answers_without_a_token(client):
     """401 and not 403: a client refreshes its session on the first and signs the person
     out on the second."""

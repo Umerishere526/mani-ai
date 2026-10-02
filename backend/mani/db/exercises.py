@@ -56,16 +56,19 @@ async def list_active(
     conn: asyncpg.Connection,
     category: str | None = None,
     *,
-    home_screen: bool = False,
+    home_screen: bool | None = None,
 ) -> list[Exercise]:
-    """The catalog a signed-in user may browse, ordered as the portal arranged it."""
+    """The catalog a signed-in user may browse, ordered as the portal arranged it.
+
+    `home_screen` None is the whole catalog; True or False narrows it to one side.
+    """
     rows = await conn.fetch(
         f"""
         select {COLUMNS} from admin.exercises
          where is_active
-           and show_on_home_screen = $1
+           and ($1::boolean is null or show_on_home_screen = $1)
            and ($2::text is null or category = $2)
-         order by display_order, title
+         order by category, display_order, title
         """,
         home_screen, category,
     )

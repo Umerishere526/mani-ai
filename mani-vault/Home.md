@@ -17,10 +17,11 @@ decisions index]] for why. This page maps the vault.
 | Folder | Holds |
 |--------|-------|
 | `Decisions/` | Architecture decision records, with [[Decisions/_Index|an index]] of status and what implements each |
+| `Features/` | Feature designs, written from `Templates/Feature.md` before building |
 | [[Journal]] | Claude's engineering notes: insights, failed approaches, preferences, and history moved out of other documents |
 | `Programme/` | Planning history from before the port. **Historical: evidence, not instructions.** `Programme/archive/` is older still |
 | `Reference/` | Pointer notes to `.claude/` and `backend/`; no facts are copied here |
-| `Templates/` | Decision, Journal, Feature and Daily note templates (the last two are unused) |
+| `Templates/` | Decision, Journal, Feature and Daily note templates (Daily is unused) |
 
 ## Source of truth
 

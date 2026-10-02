@@ -10,7 +10,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field
 
 from mani.llm.schema import SmartPrompt
-from mani.models.rows import Exercise, MessageRole, SupportStyle
+from mani.models.rows import MessageRole, SupportStyle
 
 
 class ThreadOut(BaseModel):
@@ -111,9 +111,19 @@ class ProfileOut(BaseModel):
     age_bracket: str | None = None
 
 
-class ExerciseOut(Exercise):
+class ExerciseOut(BaseModel):
     """The catalog entry as a client sees it: a signed link, not a storage path."""
 
+    id: uuid.UUID
+    title: str
+    subtitle: str | None = None
+    description: str = ""
+    type: str | None = None
+    category: str
+    duration_minutes: float | None = None
+    display_order: int = 0
+    show_on_home_screen: bool = False
+    framework_id: str | None = None
     audio_url: str | None = None
 
 

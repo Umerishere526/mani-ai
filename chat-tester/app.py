@@ -11,6 +11,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 import client as mani
+from library import render_library
 
 # Off wherever this flag is unset - a deployed, client-facing instance - so there is no
 # control on screen that could show a framework id, a stage name, or a database read.
@@ -76,9 +77,19 @@ with st.sidebar:
             st.error(str(exc))
             st.stop()
         reset_thread_state(started["thread"], started["messages"])
+        st.session_state.view = "chat"
+        st.rerun()
+    if st.button("📚 Library", use_container_width=True):
+        st.session_state.view = "library"
         st.rerun()
 
 client: mani.ManiClient = st.session_state.client
+
+# Which screen is showing. The library replaces the chat rather than sitting beside it,
+# as it does in the apps; the conversation is untouched and comes back as it was.
+if st.session_state.get("view") == "library":
+    render_library(client)
+    st.stop()
 
 if "thread" not in st.session_state:
     try:
@@ -264,6 +275,8 @@ if st.session_state.locked:
 else:
     # Mani's newest message is the only one whose buttons are live, exactly as in the apps.
     # A tap sends the label as the person's message; the backend matches it to the button.
+    # A button carrying a library section opens the library instead, as the apps navigate
+    # there rather than sending anything.
     # type="secondary" (the default) on purpose: a suggested reply is a shortcut, not the
     # composer's Send action, and the two must not look like the same control.
     latest = next((m for m in reversed(st.session_state.messages) if m["role"] == "mani"), None)
@@ -272,7 +285,10 @@ else:
         cols = st.columns(len(buttons))
         for index, (col, button) in enumerate(zip(cols, buttons)):
             if col.button(button["label"], use_container_width=True, key=f"tap_{index}_{len(st.session_state.messages)}"):
-                send(button["label"])
+                if button.get("library"):
+                    st.session_state.view = "library"
+                else:
+                    send(button["label"])
                 st.rerun()
 
     # -----------------------------------------------------------------------

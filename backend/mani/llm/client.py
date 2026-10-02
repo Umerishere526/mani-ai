@@ -7,6 +7,7 @@ import asyncio
 import logging
 import time
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -287,6 +288,8 @@ async def choose_exercise(
     *,
     model: str,
     purpose: llm_calls.Purpose,
+    said: Sequence[str] = (),
+    current_issue: str | None = None,
     temperature: float = DEFAULT_TEMPERATURE,
     max_tokens: int = 200,
     routing: dict[str, Any] | None = None,
@@ -295,12 +298,13 @@ async def choose_exercise(
     prompt_version_id: uuid.UUID | str | None = None,
     settings: Settings | None = None,
 ) -> str | None:
-    """Ask the model which exercise fits, from a short, real, closed list.
+    """Ask the model which exercise fits, from the closed list of the active catalog.
 
     Real tool-calling, not structured output - a deliberate, scoped exception to one call
-    per turn, only reached when a framework just completed and at least one exercise names
-    it. `candidates` is `[{"id": ..., "title": ..., "subtitle": ...}, ...]` - never the
-    whole catalog, never free text.
+    per turn, only reached when a framework just completed and the catalog is not empty.
+    `candidates` is `[{"id", "title", "subtitle", "type", "category"}, ...]`, never free
+    text. `said` is the person's most recent messages and `current_issue` the thread
+    summary's, so the pick fits what they talked about rather than only the framework.
 
     Never raises. A failure here costs the exercise offer, not the turn - the caller falls
     back to the plain library offer the ordinary reply already makes.
@@ -315,7 +319,9 @@ async def choose_exercise(
     )
 
     listing = "\n".join(
-        f"- {c['id']}: {c['title']}" + (f" - {c['subtitle']}" if c.get("subtitle") else "")
+        f"- {c['id']}: {c['title']}"
+        + (f" - {c['subtitle']}" if c.get("subtitle") else "")
+        + "".join(f" [{c[k]}]" for k in ("type", "category") if c.get(k))
         for c in candidates
     )
     messages = [
@@ -328,6 +334,12 @@ async def choose_exercise(
             ),
         }
     ]
+    # The person's own words go in a user message, never the system one: data, not orders.
+    context = ([f"What this conversation is about: {current_issue}"] if current_issue else []) + [
+        f"They said: {line}" for line in said
+    ]
+    if context:
+        messages.append({"role": "user", "content": "\n".join(context)})
 
     started = time.perf_counter()
     usage = llm_calls.Usage()

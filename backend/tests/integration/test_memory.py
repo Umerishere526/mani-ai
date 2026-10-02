@@ -202,7 +202,10 @@ async def test_the_idle_job_finds_a_quiet_conversation_and_not_a_live_one(bea, s
             quiet.id,
         )
         idle_before = dt.datetime.now(dt.UTC) - memory.IDLE_AFTER
-        assert BEA in await memory_db.users_with_idle_threads(conn, idle_before, 100)
+        # The local database also holds eval and chat-tester users, so a fixed batch size could
+        # leave BEA outside an unordered page. Ask for everyone.
+        everyone = await conn.fetchval("select count(*) from auth.users")
+        assert BEA in await memory_db.users_with_idle_threads(conn, idle_before, everyone)
 
     assert await memory.fold_finished(bea, idle_before=idle_before) == 1
     assert await _folded_at(quiet.id) is not None

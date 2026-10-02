@@ -278,6 +278,31 @@ async def test_config_tables_are_readable_and_seeded(users):
     assert frameworks[0].phases[0] == "offering"
 
 
+async def test_the_library_listing_is_the_whole_catalog_home_items_included(alice):
+    """The library page shows everything; only `GET /home` narrows to the home items."""
+    from mani.db import exercises, pool
+
+    async with pool.as_admin() as conn:
+        home, shelf = [
+            await conn.fetchval(
+                "insert into admin.exercises (title, category, audio_path, show_on_home_screen)"
+                " values ($1, $2, $3, $4) returning id",
+                title, category, f"test-{title}.mp3", on_home,
+            )
+            for title, category, on_home in (("Home", "home", True), ("Shelf", "Burnout", False))
+        ]
+    try:
+        everything = {e.id for e in await exercises.list_active(alice)}
+        on_home = {e.id for e in await exercises.list_active(alice, home_screen=True)}
+        assert {home, shelf} <= everything
+        assert home in on_home and shelf not in on_home
+    finally:
+        async with pool.as_admin() as conn:
+            await conn.execute(
+                "delete from admin.exercises where id = any($1::uuid[])", [home, shelf]
+            )
+
+
 async def test_a_model_call_is_recorded_with_its_cost(users):
     from mani.db import pool
 

@@ -80,7 +80,7 @@ def to_profile(profile: Profile | None) -> ProfileOut:
 
 
 def to_exercise(exercise: Exercise, audio_url: str | None) -> ExerciseOut:
-    return ExerciseOut(**exercise.model_dump(), audio_url=audio_url)
+    return ExerciseOut(**exercise.model_dump(exclude={"audio_path"}), audio_url=audio_url)
 
 
 def to_completion(completion: Completion) -> CompletionOut:

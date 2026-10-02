@@ -10,11 +10,11 @@ History (how the port went, what was fixed from review, old measurements) is in
 ## Status, 2026-10-01
 
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
-- Tests: `pytest` runs 777 passed, 4 skipped, 1 failed. The failure is
-  `test_account_lifecycle::test_signup_through_deletion_is_one_working_system`: the auth container's
-  signup response has no `id`. It is not caused by recent work, but it has not been run on a clean checkout.
+- Tests: `pytest` runs 789 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
+  JWKS-configured project).
 - Database: 10 migrations, 15 tables (8 `public`, 7 `admin`), 6 frameworks and 5 prompts seeded.
-  `admin.exercises` is empty. A hosted project does not exist yet.
+  `admin.exercises` holds the 18 library exercises from `content/exercises/`, with their audio in the
+  private `exercises` bucket (`scripts/seed_exercises.py`). A hosted project does not exist yet.
 - Models: `google/gemini-3.1-flash-lite` for chat and `openai/gpt-oss-120b` for summaries (`mani/config.py`).
 - Web and mobile do not call this API yet; they run on placeholder data.
 
@@ -50,8 +50,10 @@ History (how the port went, what was fixed from review, old measurements) is in
   style.
 - **Memory** (ADR-005): per person, folded from earlier chats by `mani/memory.py`; idle threads fold through
   `scripts/fold_idle_threads.py` or `GET /internal/cron/fold-summaries` behind `CRON_SECRET`.
-- **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). A completing framework may pick the
-  exercise that names it with one bound tool call (`mani/llm/tools.py`).
+- **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). A completing framework picks one
+  exercise from the whole active catalog with one bound tool call (`mani/llm/tools.py`): the framework's own
+  exercises are listed first, and the pick sees the person's last three messages and the thread's current
+  issue. `GET /v1/exercises` is the whole catalog, and responses never carry the storage path.
 - **Admin**: prompt CRUD with versioning, exercise CRUD, crisis event review, a user's memory.
 - **Account deletion**: `DELETE /v1/account` removes the user and everything they own.
 - **Eval harness**: `scripts/eval_replies.py` runs scripted conversations through the real stack and removes
@@ -152,8 +154,9 @@ Ordered by what breaks first.
   practice now carries no buttons, as in the new document. In the scripted eval, Direct can stall in a
   framework's own closing stage (`panic_somatic_once`), which is the model not advancing, not the body route.
 - **Generated TypeScript types** for `web/` and `mobile/` from the OpenAPI schema, with a CI gate. No CI exists.
-- **Audio upload** from `library_audio/` into the `exercises` bucket, and the bucket. `mani/storage.py` signs
-  for reading only. The exercise catalog is empty, so the exercise hand-off is built and inert.
+- **Admin audio upload.** The 18 seeded exercises come from `content/exercises/` through
+  `scripts/seed_exercises.py`; there is no upload route, and the admin exercise CRUD takes an existing
+  `audio_path`. The exercise card is also not kept on the message, so it is gone once a thread reloads.
 - **A worker process** for summaries and the memory fold, for when there is more than one instance.
 - **Admin conversation browser**: do not rebuild it as a general reader. Scope it to threads with an unresolved
   crisis event, log each read, and return metadata by default.
