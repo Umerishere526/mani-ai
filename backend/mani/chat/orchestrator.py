@@ -76,6 +76,67 @@ def _handoff() -> list[SmartPrompt]:
     ]
 
 
+def _awaiting_place(history: list[Message]) -> bool:
+    """Whether Mani's last reply asked where in the body they feel it, and it is unanswered."""
+    last = next((m for m in reversed(history) if m.role is MessageRole.MANI), None)
+    return bool(last and any(
+        str(o.get("label", "")) == repairs.PLACE_LABELS[0] for o in (last.prompt_options or [])
+    ))
+
+
+def _body_route_step(
+    fixed: repairs.Repaired,
+    framework_id: str,
+    stages: dict,
+    style: str,
+    content: str,
+    previous_phase: str | None,
+    awaiting_place: bool,
+) -> repairs.Repaired:
+    """The turn after a body question the person has answered: where they feel it, and then
+    the practice for that place. The body is asked about once; the choice of Chat More / Go to
+    Library waits for a practice, unless they decline or already know what they will do.
+
+    Covers a person who answers the check-in, one who says they do not know where, and one who
+    described their body before the check-in was asked.
+    """
+    answering = previous_phase == "somatic_checkin" or (
+        previous_phase == "somatic_practice" and awaiting_place
+    )
+    described_early = (
+        previous_phase not in ("somatic_checkin", "somatic_practice")
+        and fixed.phase == "somatic_checkin"
+        and _ASKS_WHAT_NEXT.search(fixed.text) is not None
+    )
+    if not (answering or described_early) or repairs.declines_or_acts(content):
+        return fixed
+    stage = stages.get("somatic_practice") or {}
+    safety_reply = next(
+        (repairs.reply_for(b, style) for b in stage.get("if_unclear") or [] if "pain" in b.get("when", "")),
+        None,
+    )
+    if safety_reply and safety_reply in fixed.text:
+        return fixed
+    place = repairs.named_place(content)
+    text, labels = fixed.text, []
+    practice = repairs.practice_for(stage, place, style) if place else None
+    if practice is not None:
+        text, labels = practice
+    elif not repairs.practice_in(stage, text, style):
+        script = (stage.get("ask") or {}).get(style)
+        if not script:
+            return fixed
+        text = repairs.with_the_check_in(repairs.first_sentence(text), script)
+        labels = list(repairs.PLACE_LABELS)
+    return dataclasses.replace(
+        fixed,
+        text=text,
+        framework_id=framework_id,
+        phase="somatic_practice",
+        prompts=[SmartPrompt(label=label) for label in labels],
+    )
+
+
 def _offered_handoff(history: list[Message]) -> bool:
     """Whether Mani's last reply already put the two choices in front of them."""
     last = next((m for m in reversed(history) if m.role is MessageRole.MANI), None)
@@ -271,6 +332,7 @@ async def send(
         technique is not None
         and technique.outcome is TechniqueOutcome.ACCEPTED
         and config.registry.is_final(technique.framework_id, technique.phase)
+        and not _awaiting_place(history)
     ):
         retiring_framework_id = technique.framework_id
         updates.retire_technique = True
@@ -563,6 +625,16 @@ async def send(
             + ([f"dropped a technique offered on a safety-concern turn: {', '.join(paused)}"]
                if paused else []),
         )
+    if technique is not None and not (assessment.blocks_framework or model_concern):
+        fixed = _body_route_step(
+            fixed,
+            technique.framework_id,
+            config.registry.get(technique.framework_id).stages,
+            context.resolve_style(ctx),
+            content,
+            technique.phase,
+            _awaiting_place(history),
+        )
     if fixed.phase == "somatic_checkin" and fixed.framework_id is not None and not _ASKS_WHAT_NEXT.search(fixed.text):
         # The client's flow (2026-09-24): the body check-in is fixed content, sent word for
         # word, never reworded. Skipped when they already described their body and this
@@ -589,6 +661,14 @@ async def send(
             fixed,
             prompts=_handoff() if _ASKS_WHAT_NEXT.search(fixed.text) else without_handoff,
         )
+    if retiring_framework_id is not None and repairs.comes_back(content):
+        # The client's words for a feeling that returns after the practice, sent as written.
+        returning = repairs.returning_reply(
+            config.registry.get(retiring_framework_id).stages.get("somatic_practice") or {},
+            context.resolve_style(ctx),
+        )
+        if returning:
+            fixed = dataclasses.replace(fixed, text=returning)
     if (
         retiring_framework_id is not None
         and content.strip().lower() not in _HANDOFF_LABELS
