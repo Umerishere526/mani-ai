@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+from difflib import SequenceMatcher
 from dataclasses import dataclass, field
 
 from mani.chat.greeting import CLARIFICATION_QUESTIONS, EXPLAIN_LABELS
@@ -54,6 +55,18 @@ FEELING_WORDS = frozenset(
         "depressing", "devastating", "draining", "embarrassing", "exhausting",
         "frustrating", "humiliating", "isolating", "overwhelming", "terrifying",
         "upsetting", "worrying",
+        # Forms and neighbours that slipped through when the list was a fixed few dozen:
+        # "That sounds incredibly stressful" named a feeling the person never did.
+        "anxiety", "nervous", "nervousness", "tense", "tension", "worry", "worries",
+        "stress", "stressful", "stressing", "dread", "dreading", "dreaded", "fear", "fears",
+        "frightened", "frightening", "panic", "panicking", "overwhelm", "sadness", "unhappy",
+        "anger", "annoyed", "annoying", "irritated", "irritating", "bitter", "jealous",
+        "envious", "guilt", "shame", "shameful", "embarrassment", "humiliation", "loneliness",
+        "isolation", "hopelessness", "despair", "despairing", "depression", "misery",
+        "devastation", "grief", "grieving", "sorrow", "discouraged", "disheartened",
+        "drained", "burnout", "burnt", "hollow", "confused", "confusing", "distress",
+        "relieved", "relief", "calm", "happy", "happiness", "joy", "joyful", "excited",
+        "proud", "grateful", "ecstatic", "thrilled", "terrible", "awful", "dreadful",
     }
 )
 
@@ -64,6 +77,9 @@ SELF_JUDGMENTS = (
     "over reacting", "being silly", "being stupid", "my fault", "i'm weak", "i am weak",
     "i'm broken", "i am broken", "not enough", "being needy", "being difficult",
 )
+
+# The label on an offer of the nearest set of questions when none fits well.
+CLOSEST_FIT_LABEL = "Try the closest fit"
 
 # Five: room for a choice in the person's own voice. Past that a label is becoming a sentence.
 MAX_CAPSULE_WORDS = 5
@@ -112,6 +128,71 @@ WORD = re.compile(r"[a-z']+")
 
 def words(text: str) -> set[str]:
     return set(WORD.findall(text.lower()))
+
+
+_SUFFIXES = ("iness", "ness", "ment", "ied", "ful", "ing", "ed", "ion", "ly", "y")
+
+
+def _stem(word: str) -> str:
+    """A rough root, so a feeling word and its plain forms count as one: lonely and loneliness,
+    stressed and stress, overwhelmed and overwhelming. Never merges two different feelings."""
+    for _ in range(2):
+        for suffix in _SUFFIXES:
+            if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+                word = word[: -len(suffix)] + ("y" if suffix in ("iness", "ied") else "")
+                break
+    return word
+
+
+def introduced_feelings(text: str, said: str) -> list[str]:
+    """Feeling words in `text` that the person has not used. "MANI never introduces a feeling
+    word the user did not use": their own word, or a plain form of it, may come back; a
+    different feeling may not."""
+    theirs = {_stem(w) for w in words(said)}
+    return sorted(
+        w for w in words(text) & FEELING_WORDS
+        if _stem(w) not in theirs and not _misspelt_by_them(w, theirs)
+    )
+
+
+def _skeleton(stem: str) -> str:
+    """The consonants of a root with repeats collapsed: "emberess" and "embarrass" are both "mbrs"."""
+    return re.sub(r"(.)\1+", r"\1", re.sub(r"[aeiou]", "", stem))
+
+
+def _misspelt_by_them(word: str, theirs: set[str]) -> bool:
+    """Whether they wrote this feeling word badly ("emberessed" for "embarrassed"): a reply that
+    spells it right has not introduced it. Long words only, and close, so one feeling is never
+    taken for another (sad and mad, lonely and lovely stay different; across the word list only
+    burnout and burnt share a skeleton, and they are one feeling)."""
+    stem = _stem(word)
+    if len(stem) < 5:
+        return False
+    skeleton = _skeleton(stem)
+    return any(
+        len(other) >= 5
+        and (
+            SequenceMatcher(None, stem, other).ratio() >= 0.8
+            or (len(skeleton) >= 4 and other[0] == stem[0] and _skeleton(other) == skeleton)
+        )
+        for other in theirs
+    )
+
+
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
+
+
+def without_feeling_sentences(text: str, unwanted: list[str]) -> str | None:
+    """`text` with every sentence that names an unwanted feeling dropped, or None when that
+    would leave nothing to answer with: the question has to survive, so a reply whose only
+    question is in the offending sentence is left alone for the caller to handle."""
+    sentences = _SENTENCE_BREAK.split(text.strip())
+    kept = [s for s in sentences if not (words(s) & set(unwanted))]
+    if not kept or len(kept) == len(sentences):
+        return None
+    if "?" in text and not any("?" in s for s in kept):
+        return None
+    return " ".join(kept)
 
 
 def strip_script_leakage(text: str) -> tuple[str, list[str]]:
@@ -233,6 +314,7 @@ def apply(
     nickname: str | None = None,
     name_said_before: bool = False,
     clarification_already_used: bool = False,
+    closest_fit: bool = False,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again.
 
@@ -264,17 +346,19 @@ def apply(
 
 
     theirs = words(said)
-    # Observational only, for now: the capsule check below can safely drop a bad button,
-    # but dropping a sentence out of the reply itself is a different, riskier correction -
-    # it can leave the reply answering nothing. This logs what the prompt's own "feeling
-    # audit" self-check is missing, so a fix can be sized against real frequency instead
-    # of guessed at.
-    introduced_in_text = sorted(words(text) & FEELING_WORDS - theirs)
+    # The orchestrator asks the model once more when a draft names a feeling the person did
+    # not. What reaches here after that is trimmed: the offending sentence goes when the
+    # question survives, so the person never reads "that sounds stressful" they did not say.
+    introduced_in_text = introduced_feelings(text, said)
     if introduced_in_text:
         notes.append(
             f"reply text introduced a feeling word the user did not establish: "
             f"{', '.join(introduced_in_text)}"
         )
+        trimmed = without_feeling_sentences(text, introduced_in_text)
+        if trimmed is not None:
+            notes.append("dropped a sentence that named a feeling they had not")
+            text = trimmed
 
     offered = {_normalize(name) for name in already_offered}
     # While a framework is only being *offered*, the capsule naming it is the offer itself,
@@ -364,6 +448,12 @@ def apply(
                 notes.append(f"dropped an already-offered technique: {prompt.technique}")
                 continue
 
+        if prompt.technique is not None and closest_fit:
+            # An offer of the nearest fit says so on the button, so the person chooses it knowing
+            # it is not a perfect match; Keep chatting beside it is the other way out.
+            prompt = prompt.model_copy(update={"label": CLOSEST_FIT_LABEL})
+            key = CLOSEST_FIT_LABEL.lower()
+
         seen_labels.add(key)
         kept.append(prompt)
 
@@ -420,8 +510,14 @@ def apply(
         else:
             framework_id = reply.state.technique
             # Accepting an offer this turn means the phase being left is the offering one,
-            # whatever the stored row still says.
-            previous = "offering" if accepted_this_turn else current_phase
+            # whatever the stored row still says. What they told Mani before accepting
+            # answers the first stage, so the reply may already be asking the second.
+            previous = current_phase
+            if accepted_this_turn:
+                known = registry.get(framework_id)
+                phases = known.phases if known else []
+                first = phases.index("offering") + 1 if "offering" in phases else -1
+                previous = phases[first] if 0 < first < len(phases) else "offering"
             transition = registry.validate_transition(
                 framework_id, previous, reply.state.step
             )

@@ -1,3 +1,12 @@
+---
+type: programme
+status: historical
+tags: [programme, historical]
+---
+
+> **HISTORICAL: evidence, not instructions.** A plan written before the port. Where it disagrees with the code, the code and the ADRs are right (for instance, markdown in `content/` is seeded into the database and never read at runtime). Current sources: `CLAUDE.md`, `.claude/`,
+> `backend/PORT-STATUS.md` and [[_Index|the decisions index]]. Where this disagrees with them, they win.
+
 # FastAPI infra from scratch
 
 Status: scope and protocol decided 2026-09-10, **further decisions 2026-09-14**, nothing

@@ -1,3 +1,12 @@
+---
+type: programme
+status: historical
+tags: [programme, historical]
+---
+
+> **HISTORICAL: evidence, not instructions.** A review that fed the port. Its findings are mostly fixed; read `backend/PORT-STATUS.md` for what is open. Current sources: `CLAUDE.md`, `.claude/`,
+> `backend/PORT-STATUS.md` and [[_Index|the decisions index]]. Where this disagrees with them, they win.
+
 # Fundamental review — what the earlier audits did not look for
 
 Date: 2026-09-13

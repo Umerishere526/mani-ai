@@ -7,7 +7,7 @@ tags: [journal, mobile, chat, chat-cadence]
 
 # Building the Directive/Supportive/Reflective style picker
 
-See [[conversation-style-selection]] for the feature spec (scope, done-means). This note is the narrative: what was asked, what was decided, and why.
+See conversation style selection for the feature spec (scope, done-means). This note is the narrative: what was asked, what was decided, and why.
 
 ## What was asked
 
@@ -68,6 +68,6 @@ Any future work continuing the conversation cadence (the 2-4 exchange phase, fra
 
 ## Links
 
-- [[conversation-style-selection]] — feature spec
+- conversation style selection — feature spec
 - [[mani-mobile-ui-port]] — the broader mobile UI port this chat screen originally came from; same environment limitations (no simulator) and same decomposition instincts (extract before hitting the line cap) apply here
 - [[nativewind-v5-active-state-on-nested-view]] — a real bug found while extending the same `CardGradient`-on-Pressable pattern to `ChatDrawerNavSection`'s active-state highlight; `active:` on a nested child breaks the parent Pressable's `onPress` entirely, fixed with `group`/`group-active`

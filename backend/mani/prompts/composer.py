@@ -98,6 +98,28 @@ def framework_index(registry: Registry) -> str | None:
     if never:
         lines += ["", "## Never offer one when", ""] + never
 
+    # What each one needs to know before it is the right offer. It is how a question can follow
+    # the person's feeling and still be heading somewhere: static, so it sits in the cached
+    # prefix with the rest of the index.
+    to_find_out = [
+        f"- **{framework.name}**: {'; '.join(items)}"
+        + (
+            f" (offer it only from their message {earliest}: it depends on what they took it to mean)"
+            if (earliest := (framework.activation or {}).get("earliest_offer_message"))
+            else ""
+        )
+        for framework in present
+        for items in [(framework.activation or {}).get("to_find_out") or []]
+        if items
+    ]
+    if to_find_out:
+        lines += [
+            "", "## Finding the fit", "",
+            "From their first message, work out which of these they are heading toward, and let "
+            "your questions reach for what is still missing for it - in their words, about their "
+            "feeling, never as a checklist:", "",
+        ] + to_find_out
+
     return "\n".join(lines)
 
 

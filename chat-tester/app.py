@@ -53,6 +53,11 @@ if "client" not in st.session_state:
     st.session_state.client = mani.ManiClient(session=session)
     st.session_state.user_id = session.user_id
 
+# A browser tab keeps its session across edits to client.py, so it can hold an instance of the
+# class as it was before the edit, without the methods added since. Same sign-in, current class.
+if not isinstance(st.session_state.client, mani.ManiClient):
+    st.session_state.client = mani.ManiClient(session=st.session_state.client.session)
+
 with st.sidebar:
     st.header("Session")
     st.caption(f"backend: {mani.API_BASE_URL}")
@@ -355,6 +360,35 @@ else:
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
+    st.divider()
+    # The person's conversations, newest activity first. Tapping one opens it to continue; the
+    # open one is marked and cannot be tapped. "New conversation" above starts another.
+    st.subheader("Conversations")
+    try:
+        conversations = client.list_threads()
+    except mani.ApiError as exc:
+        conversations = []
+        st.caption(f"Could not list conversations: {exc}")
+    for item in conversations:
+        is_open = item["id"] == thread["id"]
+        when = item["last_message_at"][:16].replace("T", " ")
+        if st.button(
+            ("▶ " if is_open else "") + (item.get("title") or "Untitled"),
+            key=f"thread_{item['id']}",
+            disabled=is_open,
+            use_container_width=True,
+            help=f"{item['message_count']} messages  ·  last active {when} UTC",
+        ):
+            try:
+                opened = client.open_thread(item["id"])
+            except mani.ApiError as exc:
+                st.error(str(exc))
+                st.stop()
+            reset_thread_state(opened["thread"], opened["messages"])
+            st.rerun()
+    if not conversations:
+        st.caption("No conversations yet.")
+
     st.divider()
     # Shown to a client too: that a returning person's patterns were kept is part of the demo.
     with st.expander("🧠 What Mani remembers"):

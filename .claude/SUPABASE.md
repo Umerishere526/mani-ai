@@ -1,8 +1,6 @@
 # Supabase & Postgres practices
 
-**Status: not installed.** Nothing in this repo depends on Supabase today — the backend is FastAPI talking to no database yet. These rules apply from the moment a Supabase or Postgres dependency lands, and exist so the first integration is done correctly rather than retrofitted.
-
-Discuss with muhammad before introducing Supabase — adding a database is an architectural decision, not a routine one.
+**Status: in use.** The backend reaches a local Supabase Postgres directly with `asyncpg`; the schema lives in `backend/supabase/migrations/`. These rules apply to every schema, policy, and query change.
 
 ## Row Level Security
 
@@ -46,7 +44,7 @@ it; revoking the DML grant and granting the function to the same role changes no
 
 So `backend/mani/db/pool.py` does `set local role mani_service`. The role is a member of
 `authenticated`, so it inherits the ordinary grants, and holds the few the user must not
-have: EXECUTE on the three definer functions, and DELETE on `thread_technique_state`.
+have, checked against the live database: EXECUTE on the three definer functions (`create_message_pair`, `mark_thread_crisis`, `create_greeting`); INSERT, UPDATE and DELETE on `thread_technique_state`; INSERT and UPDATE on `thread_summaries`; SELECT, INSERT and UPDATE on `admin.user_memory`; and column UPDATE on `threads.vague_streak` and `threads.memory_folded_at`.
 
 RLS still applies to it — the policies carry no `TO` clause, so they target `PUBLIC`, and
 `mani_service` owns no tables and has no `BYPASSRLS`. It is a wider set of privileges,

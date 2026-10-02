@@ -3,11 +3,23 @@ id: thought_reframe
 name: Thought Reframe
 summary: "These questions help you examine a troubling thought and consider a more balanced perspective. By the end, you will be able to see the situation differently."
 display_order: 2
-phases: [offering, thought, externalize, significance, facts, alternative, reframe, closing]
+phases: [offering, thought, significance, facts, alternative, reframe, closing]
 activation:
   central_indication: >-
     One specific painful thought or interpretation is intensifying distress, and the user wants
     a brief shift in perspective rather than a deep event-by-event examination.
+  # A confident offer waits for their third message: the fit depends on what they took the event or
+  # the thought to mean, which the first two messages rarely say.
+  earliest_offer_message: 3
+  to_find_out:
+    - "the exact thought going round, in their words"
+    - "the situation it is attached to"
+    - "why that thought hurts"
+    - "whether they want a brief look rather than a deep one"
+    - "whether it could be tested against facts (a loss or a settled fact is not a thought to test)"
+  # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
+  # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
+  # router reads strong_signals and signals.
   appropriate_when:
     - "One specific thought is intensifying the user's difficulty"
     - "The thought contains an assumption, prediction, or broad conclusion"
@@ -29,6 +41,8 @@ activation:
     - "A safety concern requires the approved safety protocol"
   contraindications:
     - "The thought keeps returning as a repeated request to check whether it is true, especially about harm, contamination, or identity - in OCD this checking is the compulsion, and answering it again only feeds the loop it is trying to escape"
+    - "The person describes abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger - examining the thought must never turn into questioning whether it was real or as serious as it felt, and Mani must not reinterpret the behaviour as harmless"
+    - "The painful statement is itself an established fact - a relationship ended, a person said they want to end the friendship - the fact is not reframed, only a related thought about themselves or their future"
   # Short fragments, not full example sentences - see abcde.md's activation block for why.
   strong_signals:
     - "nobody cares about me"
@@ -46,6 +60,13 @@ activation:
     - "he hates me"
     - "it is hopeless"
     - "i ruined everything"
+    - "this proves i"
+    - "proves i will never"
+    - "everyone must think i am"
+    - "i know i do not matter"
+    - "know if that is accurate"
+    - "certain i will fail"
+    - "will think i am"
   redirects:
     - signal: "I keep thinking I am incompetent, and I want to understand why one criticism affected me so strongly."
       instead: abcde
@@ -74,11 +95,11 @@ stages:
       - "must not combine the three tones or shift tone without a reason grounded in the conversation"
     if_unclear:
       - when: "the user declines"
-        reply: "You'd rather not try this now. What would be most helpful to talk through?"
+        reply: "You do not want to use a framework. What would be most helpful to talk through?"
     ask:
-      supportive: "This thought keeps returning. Would it help to look at it together?"
-      reflective: "Would it help to look at what supports that thought and what else may be true?"
-      direct: "You want to know whether this conclusion is accurate. Would you like to test it against the facts?"
+      supportive: "This thought keeps returning for you. Would it help to look at it together?"
+      reflective: "Would it help to examine what supports that thought and what else may be true?"
+      direct: "Would you like to test that thought against the facts?"
   thought:
     purpose: "Isolate one specific thought in the user's own language."
     listen_for: "One specific assumption, conclusion, prediction, or belief in the user's language."
@@ -100,26 +121,12 @@ stages:
         reply: "The thought is difficult to identify. What keeps repeating in your mind?"
       - when: "identity-level rather than moment-level - \"I'm just a failure.\""
         reply: "That's about who you are, not just today. What happened that brought it up?"
+      - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
+        reply: "What happened sounds serious, and I am not going to ask you to see it differently. What would be most helpful to talk through?"
     ask:
       supportive: "This is the thought that keeps returning. Is this the one you want to look at together?"
-      reflective: "Is that the thought you want to look at?"
+      reflective: "Is that the thought you want to examine?"
       direct: "Is that the thought you want to test?"
-  externalize:
-    purpose: "Help the user see the thought as something their mind is producing, not a fact, creating a little distance before it is examined."
-    listen_for: "Whether the user can hold the thought as a thought their mind is offering, rather than stating it as the plain truth of the situation."
-    ready_when: "The user refers to it as something their mind is telling them, or can hold it at a slight distance. If they still speak it as fact, stay here."
-    boundaries:
-      - "must not argue the thought is false - this step only creates distance"
-      - "must not call the thought irrational, a distortion, or a bias"
-      - "must not move to evidence yet"
-      - "must not add a feeling the user did not name"
-    if_unclear:
-      - when: "the user restates the thought as plain fact"
-        reply: "That's landing as simple truth right now. If you said it as something your mind is telling you, how would it sound?"
-    ask:
-      supportive: "That thought has really moved in. Can we hold it as a thought for a moment: what is your mind telling you here?"
-      reflective: "That's a thought your mind is offering, not the whole truth of it. How does it sound to say 'my mind is telling me...'?"
-      direct: "That's a thought your mind is handing you, not a fact yet. Say it back starting with 'my mind keeps telling me' - how does that land?"
   significance:
     purpose: "Understand what makes the thought matter, without labelling their experience."
     listen_for: "Why the thought matters and what the user believes it says about themselves, another person, or the future."
@@ -134,12 +141,12 @@ stages:
         reply: "You used the word 'rejected.' What thought is connected to it?"
     ask:
       supportive: "What makes that thought difficult for you?"
-      reflective: "What gives it that meaning for you?"
+      reflective: "What gives it that meaning?"
       direct: "What is that conclusion based on?"
   facts:
     purpose: "Separate what the user knows from what they assume or predict."
     listen_for: "What supports the thought, what does not, what is assumed, what remains unknown."
-    ready_when: "What supports the thought, what does not, and what remains unknown are named. The user does not have to disprove the thought."
+    ready_when: "In this order: first what supports the thought, then what does not, then what remains unknown. The user does not have to disprove the thought. Stay on the current step until the user has answered it."
     boundaries:
       - "must not argue"
       - "must not decide the thought is false"
@@ -153,10 +160,12 @@ stages:
         reply: "Nothing comes to mind yet. What remains unknown about why she has not answered?"
       - when: "the thought is supported by an established fact - \"She told me she does not want the friendship.\""
         reply: "She directly ended the friendship. What thought about yourself or your future do you want help examining?"
+      - when: "what supports the thought has been said, and what does not support it has not yet been asked (use the line for the selected tone)"
+        reply: "supportive: She usually responds sooner. What else do you know about the situation? | reflective: Her late response supports part of your concern. What does not support the full conclusion? | direct: Her response is late. What facts do not fit that conclusion?"
     ask:
-      supportive: "What else do you know about the situation?"
-      reflective: "What does not support the full conclusion?"
-      direct: "What facts support that conclusion?"
+      supportive: "What supports that thought?"
+      reflective: "What supports that thought?"
+      direct: "What supports that thought?"
   alternative:
     purpose: "Help the user recognize the original interpretation may not be the only possibility."
     listen_for: "At least one credible possibility that does not deny known facts."
@@ -212,9 +221,9 @@ stages:
       - "must not summarize the completed framework"
       - "must not tell the user the framework worked"
     ask:
-      supportive: "How is that thought sitting with you now?"
-      reflective: "What changes, if anything, when you see it this way?"
-      direct: "Does that thought fit what you know?"
+      supportive: "How is that thought sitting with you?"
+      reflective: "The new thought includes what you know and what remains unknown. What changes when you see it this way?"
+      direct: "The new thought fits the available facts. Does it feel accurate?"
 ---
 
 # Thought Reframe
@@ -238,7 +247,7 @@ examined instead: "Because the relationship ended, I will always be alone."
 
 ## Stage progression
 
-Identify the thought -> Hold it as a thought, not a fact -> Identify its significance ->
+Identify the thought -> Identify its significance ->
 Examine the facts -> Consider another interpretation -> Create a believable reframe -> Complete.
 MANI does not skip directly from the original thought to a replacement thought.
 

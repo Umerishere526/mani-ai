@@ -8,7 +8,7 @@ lost.
 orderings, and recommendations that have since been superseded. Where any of them disagrees
 with a document one level up, the level above wins — always.
 
-Current instructions live in `../START-HERE.md`.
+Current instructions: `CLAUDE.md`, `.claude/`, `backend/PORT-STATUS.md` and `Decisions/_Index.md` (repo root and vault). Several notes here were moved in on 2026-10-01 because they described a system that was never built; each carries its own banner.
 
 ---
 

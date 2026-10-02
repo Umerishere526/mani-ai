@@ -1,6 +1,6 @@
 ---
 type: decision
-status: accepted
+status: superseded
 date: 2026-09-11
 apps: [web, mobile, backend]
 tags: [decision, tooling]
@@ -8,7 +8,7 @@ tags: [decision, tooling]
 
 # ADR-001: Project knowledge lives in `.claude/`, project thinking lives in the vault
 
-**Status:** accepted
+**Status:** superseded by [[ADR-009-where-knowledge-lives]] on 2026-10-01. Kept as written; its paths (`mani/Journal/`) and its claim that the root is not a git repository are no longer true.
 **Affects:** all
 
 ## Context

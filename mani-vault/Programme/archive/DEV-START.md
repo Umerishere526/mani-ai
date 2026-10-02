@@ -1,3 +1,12 @@
+---
+type: programme
+status: historical
+tags: [programme, historical]
+---
+
+> **HISTORICAL: evidence, not instructions.** A phased roadmap for the TypeScript system. The port it planned is complete, and most of its phases no longer apply. Current sources: `CLAUDE.md`, `.claude/`,
+> `backend/PORT-STATUS.md` and [[_Index|the decisions index]]. Where this disagrees with them, they win.
+
 # DEV START — road to production, live users, and the store releases
 
 > **New here? Read [[START-HERE]] first.** It carries the current route, the phase order, and

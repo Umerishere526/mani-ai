@@ -5,9 +5,7 @@ description: Supabase and Postgres best practices for this repo — RLS policies
 
 # Supabase & Postgres
 
-**Nothing in this repo uses Supabase or Postgres yet.** The backend is FastAPI with no database. Adding one is an architectural decision — discuss it with muhammad before starting, per the root CLAUDE.md.
-
-These rules apply the moment a database lands. See also [SUPABASE.md](../../SUPABASE.md).
+**This repo uses Supabase Postgres.** The backend reaches it directly with `asyncpg`, and the schema lives in `backend/supabase/migrations/`. These rules apply to every schema, policy and query change. See also [SUPABASE.md](../../SUPABASE.md), which holds the project's own decisions (the `mani_service` role, the two schemas, the Data API settings).
 
 ## Row Level Security — the non-negotiable part
 

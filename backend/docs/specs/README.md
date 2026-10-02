@@ -2,8 +2,12 @@
 
 The product specifications for Mani's conversational layer, transcribed from the source PDFs so
 they live in version control rather than as chat attachments. **These are provenance.** The
-implementation source of truth is `mani/Programme/conversational-architecture.md`, which
-reconciles the contradictions between them.
+implementation source of truth is the code and the ADRs in `mani-vault/Decisions/` (index: `_Index.md`);
+`mani-vault/Programme/conversational-architecture.md` is the historical design that reconciled the
+contradictions between these documents. The content files in `backend/content/frameworks/` are checked
+against these specs, but where a spec's tone lines carry scenario text ("her silence", "send it") the
+content uses each stage's primary question instead: `tests/evals/test_negative_set.py` rejects an ask that
+names someone or hands over a feeling word.
 
 | File | Source | What it carries |
 |---|---|---|
@@ -35,7 +39,7 @@ must avoid**.
   call.
 - **Worked examples (§23)** and the styles doc's scenarios → the routing and
   style-differentiation eval sets.
-- **Rules repeated across all six** → the shared `post_framework` prompt layer, written once.
+- **Rules repeated across all six** → `content/prompts/mani_base.md` (conversation rules and tone) and, for the body check-in and practice after a framework, `content/prompts/somatic.md`, which `scripts/seed.py` appends to every framework's stages.
 
 ## Not in these documents
 

@@ -1,6 +1,6 @@
 > **ARCHIVED — evidence, not instructions.** Point-in-time record. Parts of this are
-> superseded; see `README.md` in this folder for exactly which. Current instructions live
-> in `../START-HERE.md`, and where the two disagree, that one wins.
+> superseded; see `README.md` in this folder for exactly which. Current instructions: `CLAUDE.md`,
+> `.claude/`, `backend/PORT-STATUS.md` and `Decisions/_Index.md`; where they disagree, those win.
 
 # Mani — end-to-end setup report
 

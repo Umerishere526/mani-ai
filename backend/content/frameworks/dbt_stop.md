@@ -9,6 +9,14 @@ activation:
     The user is about to act - send, post, call, confront, decide - and needs help pausing
     before the action, not analysis of the underlying problem. Time-critical: this overrides
     whatever else the conversation was scoring toward.
+  to_find_out:
+    - "what they are about to do"
+    - "whether it has already happened"
+    - "whether it can safely wait a moment"
+    - "whether anyone is at risk (then safety, not this)"
+  # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
+  # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
+  # router reads strong_signals and signals.
   appropriate_when:
     - "The user is close to acting impulsively"
     - "The action has not yet occurred"
@@ -30,6 +38,7 @@ activation:
   contraindications:
     - "The intended action involves suicide, self-harm, harm to another person, overdose, immediate danger, or inability to remain safe - the safety protocol, not STOP"
     - "The action itself is protective - leaving, getting away from someone, calling emergency services, or seeking medical help. STOP exists to interrupt a regrettable action, and pausing a protective one is the same failure with the direction reversed: it delays the person from doing the thing that helps"
+    - "The person would be kept near an abusive person, kept from contacting emergency help, or kept in the conversation when outside emergency support is needed - Pause Mode never takes priority over leaving danger or getting help"
   # Short fragments, not full example sentences - see abcde.md's activation block for why.
   strong_signals:
     - "about to send a message"
@@ -103,9 +112,9 @@ stages:
       - when: "already acted - \"I already sent it.\""
         reply: "The message has already been sent. Is there another action you are about to take?"
     ask:
-      supportive: "You want to send it right now. Can you pause before you act?"
-      reflective: "The urge is pushing you to send it immediately. Can you stop before following it?"
-      direct: "The message is ready to send. Can you leave it unsent?"
+      supportive: "Can you stop the action before it happens?"
+      reflective: "Can you stop the action before it happens?"
+      direct: "Can you stop the action before it happens?"
   pause:
     purpose: "Enter Pause Mode and remain with MANI without returning to the action."
     listen_for: "Whether the action remains paused and the user remains engaged with MANI."
@@ -125,7 +134,7 @@ stages:
       - when: "wants to leave - \"I am going back to the message.\""
         reply: "You want to return to it now. Can you remain paused with me for one more response?"
       - when: "the pause needs an anchor - the person is not physically leaving anywhere, so the pause is about where attention goes, not where the body does. One slow breath, naming what is in view, or a hand flat on the desk are usable even mid-conversation"
-        reply: "Before we go further, take one slow breath. What are three things you can see right now?"
+        reply: "Would one slow breath help you stay with the pause?"
     ask:
       supportive: "You have stopped before acting. Can you remain paused here with me?"
       reflective: "You interrupted the immediate reaction. Can you stay with the pause and notice what is happening?"
@@ -182,9 +191,9 @@ stages:
       - when: "chooses retaliation"
         reply: "You want him to experience what you experienced. What response would avoid intensifying the situation?"
     ask:
-      supportive: "You still want to respond, but you do not want to send this version. What response would work better for you?"
-      reflective: "The urge remains, but you can choose what happens next. What response fits what you want to accomplish?"
-      direct: "You are choosing not to send this version. What will you do next?"
+      supportive: "What response would help rather than intensify this?"
+      reflective: "What response would help rather than intensify this?"
+      direct: "What response would help rather than intensify this?"
   closing:
     purpose: "Confirm completion in the user's own terms, without claiming the user has calmed down or made the correct decision."
     ready_when: >-
@@ -197,8 +206,8 @@ stages:
       - "must not tell the user they have calmed down or made the correct decision"
       - "must not summarize the completed framework"
     ask:
-      supportive: "How is that choice sitting with you?"
-      reflective: "What changes when the action is no longer immediate?"
+      supportive: "You chose to leave the message unsent for now. How is that choice sitting with you?"
+      reflective: "The urge remains, but you are choosing how to respond. What changes when the action is no longer immediate?"
       direct: "Is that your next step?"
 ---
 

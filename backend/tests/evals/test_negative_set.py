@@ -270,6 +270,13 @@ def test_a_stage_ask_carries_nothing_from_a_worked_example(where, text):
     assert not feelings, f"{where} hands them a feeling they may not have named: {feelings}"
 
 
+@pytest.mark.parametrize("where,text", list(_asks()))
+def test_a_stage_ask_poses_one_question(where, text):
+    """One question at a time: "pulling you toward doing or avoiding" is two, and the person
+    answered "yes" to it."""
+    assert text.count("?") == 1, f"{where} asks {text.count('?')} questions: {text}"
+
+
 def test_staying_on_a_stage_is_not_told_to_repeat_the_same_wording():
     """Observed live (2026-09-24): ABCDE's activate stage asked for 'the literal words your
     manager used' three times in a row, near-verbatim, while the person kept answering with

@@ -285,6 +285,47 @@ def unasked_before_offer(replies: list[tuple[str, bool]]) -> list[Finding]:
     return findings
 
 
+# Words too common to show a reply is about the person's own situation.
+_COMMON_WORDS = frozenset((
+    "that this with from have been were what when your about they them then than into just "
+    "like some also very much more most only over such even need want know feel felt think "
+    "said told tell here there would could should these those which while where being does "
+    "doing done make made take took each other their whose really something thing things "
+    "right still back going come comes goes first next step steps help helps sure okay "
+    "exact certain problem resolve focus ready begin start started"
+).split())
+
+
+def _content_words(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z]{4,}", text.lower()) if w not in _COMMON_WORDS}
+
+
+def names_their_situation(reply: str, said: str) -> list[Finding]:
+    """A question asked inside a framework must be about what the person told Mani, so it
+    shares at least one of their own content words. "What is the exact problem you want to
+    resolve?" sent to someone who has just described an exam shares none: it could be sent to
+    anyone, and tells them Mani has not kept the conversation."""
+    if _content_words(reply) & _content_words(said):
+        return []
+    return [Finding("generic", f"framework question shares nothing they said: {reply[:70]!r}")]
+
+
+_CONFIRMS = re.compile(
+    r"\b(is that|is this)\b[^?]*\b(problem|issue|thing|one)\b[^?]*\b(want|need)\b[^?]*\bresolve\b"
+    r"|to make sure i have (it|this) right"
+    r"|do i have (it|this) right",
+    re.IGNORECASE,
+)
+
+
+def asks_to_confirm(reply: str) -> list[Finding]:
+    """Inside a framework, asking the person to confirm what they have just told Mani. Someone
+    panicking over a lost wallet was asked "is that the problem you want to resolve?"; of course it is."""
+    if _CONFIRMS.search(reply):
+        return [Finding("confirms", f"asked them to confirm what they said: {reply[:80]!r}")]
+    return []
+
+
 HANDOFF_BUTTONS = ("chat more", "go to library")
 
 

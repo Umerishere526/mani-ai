@@ -1,39 +1,12 @@
 ---
 type: reference
 app: backend
+status: pointer
 tags: [reference, backend]
 ---
 
 # Backend
 
-FastAPI 0.141.1, Python 3.14, virtualenv at `backend/.venv`.
+Pointer note. Stack facts, commands and layout live in `.claude/BACKEND.md`; what the service does today and what is open is `backend/PORT-STATUS.md`; the endpoints are the OpenAPI schema at `/openapi.json` and the table in PORT-STATUS. Nothing is copied here. See also [[Supabase]].
 
-**Source of truth:** `.claude/BACKEND.md`.
-
-```bash
-cd backend && source .venv/bin/activate && fastapi dev main.py   # :8000
-```
-
-## Shape
-
-- `main.py` holds the whole app today — one `GET /` route
-- `requirements.txt` is `pip freeze` output; regenerate after adding a dependency
-- No database yet — see [[Supabase]] if one is added
-
-## Endpoints
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/` | health/hello |
-
-Keep this table current as routes are added.
-
-## Decisions
-
-```dataview
-LIST FROM #decision WHERE contains(apps, "backend")
-```
-
-## Notes
-
--
+Decisions that touch this app: [[_Index]].

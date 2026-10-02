@@ -20,6 +20,101 @@
     - "I don't see the point"
     - "I guess I could answer one"
 
+# Steering: from the first message the questions should be heading toward a set of questions,
+# so that an offer can come as soon as the client's cadence allows. Turns from real chats.
+- name: grief_dog_steering
+  turns:
+    - "I'm sad that my dog died and i am feeling too lonely"
+    - "it feels empty like i don't have anyone with me now. i live alone in a flat"
+    - "his presences in my day to day life"
+    - "i loved him man, he was cheerful and helped me through rough times"
+    - "with good memories i guess"
+- name: deadlines_steering
+  turns:
+    - "I am behind on everything and do not know where to begin"
+    - "work, my landlord, and a family thing"
+    - "the report at work is due Friday and my manager already asked twice"
+    - "I guess I could ask for more time or just work all weekend"
+    - "I do not know which is better"
+
+# Vague openings and one-word replies: the questions should clarify, not stall, and a person
+# who says they already said something must be met with that, not asked again.
+- name: pain_vague_clarification
+  turns:
+    - "i'm in pain"
+    - "i can't focus on work and everything seem to be taking a toll on me"
+    - "just told you the pain"
+    - "yeah"
+    - "i don't know"
+
+# muhammad's chat, 2026-10-01: an exam in 24 hours. The problem is clear by the second message,
+# so the offer should not wait for a vague reply, and once the questions start every one of
+# them must be about the exam, including after "I've already told you".
+- name: exam_start_keeps_context
+  turns:
+    - "i've an exam in next 24 hours and i don't know where to start i have not studied at all."
+    - "i'm not sure, i'm confused between hittin the books from the start or just target specific topic."
+    - "@accept|yes please"
+    - "@accept|yes"
+    - "i've already told you my situation."
+    - "my prep for exams"
+    - "i have a textbook and my class notes"
+
+# muhammad's chat, 2026-10-01, typos kept: a colleague questioned two recommendations. Replies went
+# out with no question, and the offer came at message 7. Every reply before an offer must ask one
+# question, and the fit (ABCDE or Thought Reframe) is clear by the third or fourth message.
+- name: colleague_questioned
+  turns:
+    - "my colleague questioned two of my recommendations in front of the team."
+    - "i felt emberessed and i didn't know how to handle my emotions."
+    - "i feel like she didn't have to point me out in the meeting she could have told me offline"
+    - "i felt embarrased and just wanted to disappear"
+    - "i feels like i'm not enough. and my work is not appreactatied"
+    - "that i can do more but i am doing the best i can"
+
+# muhammad's chat, 2026-10-01: a lost wallet, panicking. Mani asked "is that the problem you want to
+# resolve?", asked for the person's own options four times running, and only suggested anything at the
+# end. Once a framework starts: no confirmation of what they just said, and an "I don't know" about
+# what to do is met with a few concrete options, the urgent protective step first.
+- name: lost_wallet_panic
+  turns:
+    - "i lost my wallet and i am panicking and anxious. my wallet had my ID card, credit cards and ATM cards and 2000 dollars in it"
+    - "i don't remember, i visited many places today and called the restaurants i went to but none of them have it"
+    - "@accept|yes please"
+    - "@accept|yes"
+    - "they are all active"
+    - "i don't know"
+    - "i don't know"
+    - "please guide me, what should i do"
+
+# Observed 2026-10-01 (muhammad's chat, comparing themselves with others online): after Try it Mani asked
+# "why does getting back to doing things that feel productive matter?" before anything specific had
+# been named, then answered "pick one for me" and "yes, but what should I start with?" with the same
+# three options twice. The first stage is skipped only when it is answered, a request to pick gets one
+# draft step to accept or change, and the framework still runs to its end.
+- name: productive_cannot_choose
+  expect_framework: true
+  turns:
+    - "today i don't feel it to win anything and just want to lay in my bed"
+    - "I feel it in much behind everyone. like when i view the social media i see some people travel, some people flexing their money, their wealth and their easy life. it makes me feel small inside. i want to work for it, i procastinate and loss motivation. and sometimes i don't even want to try as i feel like i'm so behind why even bother with it."
+    - "it like they have everything i.e money, fame, love, respect. everything basically."
+    - "i want to do alot like make my day as productive as i can. but i just waste doom scrolling on social media or just lazying around."
+    - "@accept|yes"
+    - "@accept|yes"
+    - "i feel like i should be learning new thing, exploring new opportunities, travel etc."
+    - "i'm not sure. when ever i decide on a thing it feels like i just can't do it and quit before i even start."
+    - "yes, they do what should i start with?"
+    - "not sure can you please pick one for me."
+    - "yes, but what should i start with?"
+    - "yes that works"
+    - "tomorrow morning after breakfast"
+    - "i might pick up my phone and scroll instead"
+    - "i'll put the phone in another room"
+    - "yes it feels doable"
+    - "yes, that is a realistic plan for me"
+    - "my shoulders feel a bit looser"
+    - "it was a good place to stop"
+
 # A question is not what every moment needs. These turns are the ones where asking another
 # would be the failure, so they are the only place the question-free shapes can be observed.
 - name: disclosure_no_question_needed

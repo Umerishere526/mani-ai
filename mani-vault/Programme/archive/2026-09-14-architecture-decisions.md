@@ -1,3 +1,12 @@
+---
+type: programme
+status: historical
+tags: [programme, historical]
+---
+
+> **HISTORICAL: evidence, not instructions.** Decisions taken before the port, including a stateless ai-service. Several were reversed: the backend keeps all persistence, and one model call per turn is ADR-002. Current sources: `CLAUDE.md`, `.claude/`,
+> `backend/PORT-STATUS.md` and [[_Index|the decisions index]]. Where this disagrees with them, they win.
+
 # Architecture decisions — AI service, schema, and prompt ownership
 
 Date: 2026-09-14

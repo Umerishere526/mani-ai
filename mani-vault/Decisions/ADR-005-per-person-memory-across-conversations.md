@@ -1,14 +1,14 @@
 ---
 type: decision
-status: proposed
+status: accepted
 date: 2026-09-23
-apps: backend
+apps: [backend]
 tags: [decision, memory, health-data, privacy]
 ---
 
 # ADR-005: Per-person memory across conversations
 
-**Status:** proposed
+**Status:** accepted on 2026-10-01, after the feature shipped: migration `009_user_memory.sql`, `mani/memory.py` and `scripts/fold_idle_threads.py`.
 **Affects:** backend
 
 ## Context

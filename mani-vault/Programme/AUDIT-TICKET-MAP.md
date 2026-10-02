@@ -1,3 +1,12 @@
+---
+type: programme
+status: historical
+tags: [programme, historical]
+---
+
+> **HISTORICAL: evidence, not instructions.** A map from audit findings to tickets, dated 2026-09-24 and already marked stale by its own text; Linear is the record. Current sources: `CLAUDE.md`, `.claude/`,
+> `backend/PORT-STATUS.md` and [[_Index|the decisions index]]. Where this disagrees with them, they win.
+
 # Audit-to-ticket cross-reference
 
 Generated from live Linear state on 2026-09-24, after checking every commit since 2026-09-18

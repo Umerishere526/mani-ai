@@ -139,12 +139,35 @@ def test_reply_text_mirroring_an_established_feeling_is_not_flagged(registry):
     assert fixed.notes == []
 
 
-def test_reply_text_introducing_an_unestablished_feeling_is_noted(registry):
-    """Observational only: the note is logged, the text is neither rewritten nor dropped."""
+def test_a_sentence_naming_a_feeling_they_never_used_is_dropped_when_the_question_survives(registry):
+    """"MANI never introduces a feeling word the user did not use." The orchestrator redrafts
+    once; what still arrives here loses the offending sentence, never the question."""
     invented = reply(text="You're worried about it. What happens next?")
     fixed = fix(registry, invented, said="I have a presentation tomorrow")
-    assert fixed.text == "You're worried about it. What happens next?"
+    assert fixed.text == "What happens next?"
     assert any("worried" in note for note in fixed.notes)
+
+
+def test_a_reply_whose_only_question_names_the_feeling_is_left_whole(registry):
+    """Dropping it would leave the person with nothing to answer."""
+    invented = reply(text="Are you worried about it?")
+    fixed = fix(registry, invented, said="I have a presentation tomorrow")
+    assert fixed.text == "Are you worried about it?"
+
+
+def test_their_own_feeling_word_comes_back_untouched(registry):
+    echoed = reply(text="You said you are worried. What happens next?")
+    fixed = fix(registry, echoed, said="I am worried about my presentation")
+    assert fixed.text == "You said you are worried. What happens next?"
+
+
+def test_stressful_is_a_feeling_word_nobody_may_introduce():
+    from mani.chat import repairs
+
+    drafted = "An exam in 24 hours sounds incredibly stressful. What do you need to focus on first?"
+    said = "i've an exam in 24 hours and i don't know where to start"
+    assert repairs.introduced_feelings(drafted, said) == ["stressful"]
+    assert repairs.introduced_feelings(drafted, said + " it is stressful") == []
 
 
 def test_reply_text_with_no_feeling_words_is_not_flagged(registry):
@@ -189,6 +212,19 @@ def test_a_capsule_that_judges_them_is_dropped(registry):
     fixed = fix(registry, judging, **AT_THE_END)
     assert [p.label for p in fixed.prompts] == ["Tell me more"]
     assert fixed.notes
+
+
+def test_the_reply_that_starts_a_framework_may_ask_the_second_stage(registry):
+    """What they said before accepting answers the first stage, so the reply asks the second."""
+    second = reply(state=TechniqueState(technique="abcde", step="belief"))
+    fixed = fix(registry, second, accepted_this_turn=True, framework_running=True,
+                current_framework_id="abcde", current_phase="offering")
+    assert fixed.phase == "belief"
+
+    third = reply(state=TechniqueState(technique="abcde", step="consequence"))
+    fixed = fix(registry, third, accepted_this_turn=True, framework_running=True,
+                current_framework_id="abcde", current_phase="offering")
+    assert fixed.phase == "belief"
 
 
 def test_a_skipped_phase_is_corrected_rather_than_regenerated(registry):
@@ -460,12 +496,12 @@ def test_an_offer_keeps_its_two_buttons(registry):
 def test_the_end_of_a_framework_keeps_its_buttons(registry):
     practice = reply(
         text="Hand on your chest. In for four, out for six, three times.",
-        prompts=[SmartPrompt(label="I tried it"), SmartPrompt(label="Still tense"),
+        prompts=[SmartPrompt(label="I tried it"), SmartPrompt(label="Not yet"),
                  SmartPrompt(label="Feeling better")],
     )
     fixed = fix(registry, practice, framework_running=True, current_phase="grounding",
                 current_framework_id="abcde")
-    assert [p.label for p in fixed.prompts] == ["I tried it", "Still tense", "Feeling better"]
+    assert [p.label for p in fixed.prompts] == ["I tried it", "Not yet", "Feeling better"]
 
 
 def test_a_stage_in_the_middle_of_a_framework_carries_no_buttons(registry):
@@ -588,3 +624,50 @@ def test_the_first_clarification_is_left_alone(registry):
     first = reply(text="A few things came up there. Do I have this right?")
     fixed = fix(registry, first, clarification_already_used=False)
     assert fixed.text == first.text
+
+
+def test_a_plain_form_of_their_own_feeling_word_is_theirs_but_another_feeling_is_not():
+    from mani.chat import repairs
+
+    said = "i'm sad and lonely and stressed about it"
+    assert repairs.introduced_feelings("The loneliness and the sadness and the stress.", said) == []
+    assert repairs.introduced_feelings("That sounds overwhelming and stressful.", said) == ["overwhelming"]
+
+
+def test_an_offer_of_the_nearest_fit_says_so_on_its_button_and_keeps_keep_chatting(registry):
+    nearest = reply(
+        text="Nothing is a perfect match. Would you like to try it?",
+        prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
+    )
+    fixed = fix(registry, nearest, closest_fit=True)
+    assert [p.label for p in fixed.prompts] == ["Try the closest fit", "Keep chatting"]
+    assert fixed.prompts[0].technique == "abcde" and fixed.prompts[1].decline is True
+
+
+def test_a_confident_offer_keeps_its_own_label(registry):
+    confident = reply(
+        text="Would you like to try it?",
+        prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
+    )
+    assert [p.label for p in fix(registry, confident).prompts] == ["Try it", "Keep chatting"]
+
+
+def test_a_misspelling_of_their_feeling_word_is_their_word():
+    """"emberessed" and "embarrased" were typed; Mani spelling it right did not introduce it."""
+    from mani.chat import repairs
+
+    said = "i felt emberessed and just wanted to disappear. i felt embarrased"
+    assert repairs.introduced_feelings("It is understandable to feel embarrassed. That embarrassment is real.", said) == []
+    assert repairs.introduced_feelings("That must feel stressful.", "i am mad about it") == ["stressful"]
+    assert repairs.introduced_feelings("You sound sad.", "i am mad about it") == ["sad"]
+
+
+def test_the_first_typo_alone_is_enough_to_make_the_right_spelling_theirs():
+    """Only "emberessed" had been typed when Mani first said "embarrassed"."""
+    from mani.chat import repairs
+
+    said = "i felt emberessed and i didn't know how to handle my emotions"
+    assert repairs.introduced_feelings("That sounds embarrassing, and you felt embarrassed.", said) == []
+    assert repairs.introduced_feelings("You felt helpless.", "i feel hopeless") == ["helpless"]

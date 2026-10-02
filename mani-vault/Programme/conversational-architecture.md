@@ -1,10 +1,13 @@
 ---
 type: programme
-status: accepted
 date: 2026-09-16
 apps: [backend]
 tags: [conversation, prompts, frameworks, ai]
+status: historical
 ---
+
+> **HISTORICAL: evidence, not instructions.** Section 3 (route then speak) is superseded by [[ADR-002-one-model-call-per-chat-turn]]; the redraft is [[ADR-006-a-turn-may-be-redrafted-once]], offers [[ADR-007-offers-follow-confidence-and-the-closest-fit-is-owed]] and the question rule [[ADR-008-every-reply-before-an-offer-asks-a-question]]. The framework and tone design here is still the background to read. Current sources: `CLAUDE.md`, `.claude/`,
+> `backend/PORT-STATUS.md` and [[_Index|the decisions index]]. Where this disagrees with them, they win.
 
 # Conversational architecture
 
