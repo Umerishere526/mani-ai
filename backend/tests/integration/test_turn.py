@@ -1104,30 +1104,91 @@ async def test_the_body_check_in_waits_for_their_answer_before_the_two_choices(a
     assert turn.prompts == []
 
 
-async def test_a_body_they_already_described_ends_on_the_two_choices_once(alice, model):
-    """Someone who answers the closing question with their body ("a bit lighter in my chest")
-    has done the check-in, so that reply mirrors it and asks what next - and carries the two
-    choices, which then do not come back on the reply after."""
-    model(
-        Reply(text="Your chest feels lighter. Does that feel right? What would you like to do next?",
-              state=TechniqueState(technique="abcde", step="somatic_checkin")),
-        Reply(text="It's still on your mind. What feels most important about this now?"),
-    )
+async def _land_on(alice, thread_id, phase) -> None:
     from mani.db import pool
 
-    thread = await start(alice)
     async with pool.as_user(alice) as conn:
         await threads.set_technique_outcome(
-            conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="closing",
+            conn, thread_id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
+            at_message_count=2, phase=phase,
         )
 
-    checked_in = await send(alice, thread.id, "a bit lighter in my chest")
-    assert [(p.label, p.library) for p in checked_in.prompts] == [
+
+PLACES = ["Chest", "Head", "Stomach", "Somewhere else"]
+
+
+async def test_a_body_they_already_described_is_asked_where_not_handed_off(alice, model):
+    """muhammad, 2026-10-02: "a bit lighter in my chest" reached Chat More / Go to Library with no
+    practice at all, and tapping Chat More asked about the body again. A body described before
+    the check-in is answered with where they feel it."""
+    model(
+        Reply(text="You feel a bit lighter. What would you like to do next?",
+              state=TechniqueState(technique="abcde", step="somatic_checkin")),
+        Reply(text="Your chest feels lighter. What would you like to do next?",
+              state=TechniqueState(technique="abcde", step="somatic_checkin")),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "closing")
+
+    turn = await send(alice, thread.id, "a bit lighter")
+    assert turn.content.startswith("You feel a bit lighter.")
+    assert turn.content.endswith("Where are you feeling that most right now?")
+    assert [p.label for p in turn.prompts] == PLACES
+
+    named = await send(alice, thread.id, "in my chest")
+    assert "Place one hand on your chest." in named.content
+
+
+async def test_the_body_is_asked_about_once_then_where_then_the_practice(alice, model):
+    """muhammad, 2026-10-02: "yes" to the body check-in got the same question back, and "idk"
+    ended the chat on Chat More. Yes leads to where; idk leads to where again, with its buttons;
+    a place leads to its practice; and the two choices come only after the practice."""
+    model(
+        Reply(text="You were able to stay with the pause. How has it been?",
+              state=TechniqueState(technique="abcde", step="somatic_checkin")),
+        Reply(text="It feels a little better. Would you like to notice what is happening in your body?",
+              state=TechniqueState(technique="abcde", step="somatic_checkin")),
+        Reply(text="It is not always easy to say where. Is it your chest or your shoulders?",
+              state=TechniqueState(technique="abcde", step="somatic_practice")),
+        Reply(text="Chest, I see.", state=TechniqueState(technique="abcde", step="somatic_practice")),
+        Reply(text="Panic comes in waves. Would you like the library?"),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "closing")
+
+    checked_in = await send(alice, thread.id, "not a 100% but a little better")
+    assert checked_in.content.endswith("Would you like to notice what is happening in your body?")
+
+    said_yes = await send(alice, thread.id, "yes")
+    assert said_yes.content.count("notice what is happening in your body") == 0
+    assert said_yes.content.endswith("Where are you feeling that most right now?")
+    assert [p.label for p in said_yes.prompts] == PLACES
+
+    unsure = await send(alice, thread.id, "idk")
+    assert unsure.content.endswith("Where are you feeling that most right now?")
+    assert [p.label for p in unsure.prompts] == PLACES
+
+    named = await send(alice, thread.id, "Chest")
+    assert "Place one hand on your chest." in named.content
+    assert named.prompts == []
+
+    after = await send(alice, thread.id, "I feel calmer for a second, then it comes back")
+    assert [(p.label, p.library) for p in after.prompts] == [
         ("Chat More", None), ("Go to Library", "home"),
     ]
-    after = await send(alice, thread.id, "I still keep thinking about that meeting")
-    assert after.prompts == []
+
+
+async def test_declining_the_body_check_goes_to_the_two_choices(alice, model):
+    model(Reply(text="You would rather not check in. Would you like to keep chatting or go to the Library?",
+                state=TechniqueState(technique="abcde", step="somatic_checkin")))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "closing")
+
+    turn = await send(alice, thread.id, "not now")
+
+    assert [(p.label, p.library) for p in turn.prompts] == [
+        ("Chat More", None), ("Go to Library", "home"),
+    ]
 
 
 async def test_a_choice_already_made_is_not_offered_again(alice, model):

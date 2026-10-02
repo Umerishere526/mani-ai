@@ -671,3 +671,47 @@ def test_the_first_typo_alone_is_enough_to_make_the_right_spelling_theirs():
     said = "i felt emberessed and i didn't know how to handle my emotions"
     assert repairs.introduced_feelings("That sounds embarrassing, and you felt embarrassed.", said) == []
     assert repairs.introduced_feelings("You felt helpless.", "i feel hopeless") == ["helpless"]
+
+
+def test_the_place_a_person_names_is_read_from_their_own_words():
+    assert repairs.named_place("Chest") == "Chest"
+    assert repairs.named_place("my stomach is in knots") == "Stomach"
+    assert repairs.named_place("ahoulder") is None
+    assert repairs.named_place("my shoulders") == "Somewhere else"
+    assert repairs.named_place("idk") is None
+
+
+def test_declining_or_knowing_what_to_do_is_told_apart_from_not_knowing_where():
+    assert repairs.declines_or_acts("not now")
+    assert repairs.declines_or_acts("No")
+    assert repairs.declines_or_acts("I'm going to call her")
+    assert not repairs.declines_or_acts("idk")
+    assert not repairs.declines_or_acts("no idea where")
+
+
+def test_a_practice_is_the_clients_words_for_the_place_in_the_style_being_spoken():
+    stage = {"if_unclear": [
+        {"when": "they feel it in the chest",
+         "reply": {"supportive": "Supportive chest.", "direct": "Direct chest.", "reflective": "Reflective\nchest."}},
+        {"when": "they feel it somewhere else", "reply": "Bring gentle attention."},
+        {"when": "they have not said where they feel it", "reply": "Where?", "prompts": ["Chest"]},
+    ]}
+    assert repairs.practice_for(stage, "Chest", "direct") == ("Direct chest.", [])
+    assert repairs.practice_for(stage, "Chest", "reflective")[0] == "Reflective\nchest."
+    assert repairs.practice_for(stage, "Somewhere else", "supportive")[0] == "Bring gentle attention."
+    assert repairs.practice_for(stage, "Head", "direct") is None
+    assert repairs.practice_in(stage, "Hmm. Direct chest. Fine.", "direct")
+    assert not repairs.practice_in(stage, "Hmm. Direct chest. Fine.", "supportive")
+    assert not repairs.practice_in(stage, "Where?", "direct")
+
+
+def test_a_feeling_that_comes_back_is_told_from_one_that_only_eased():
+    assert repairs.comes_back("I feel calmer for a second, then it comes back")
+    assert repairs.comes_back("it came back again")
+    assert not repairs.comes_back("I feel calmer now")
+
+
+def test_the_acknowledgement_before_a_question_is_the_replys_first_sentence():
+    text = "It is okay not to know where. Try bringing gentle attention there. Where is it?"
+    assert repairs.first_sentence(text) == "It is okay not to know where."
+    assert repairs.first_sentence("No full stop here") == "No full stop here"

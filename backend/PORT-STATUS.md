@@ -42,6 +42,12 @@ History (how the port went, what was fixed from review, old measurements) is in
   client's specification. A confident offer may come from the person's second message (third for ABCDE,
   Thought Reframe and ACT); the nearest fit is due by the fourth, with "Try the closest fit" beside
   "Keep chatting". The shared body check-in and practice come from `content/prompts/somatic.md`.
+  The body route is held in code (`orchestrator._body_route_step`): the check-in is asked once; whatever
+  the person answers, the next reply asks where, with Chest / Head / Stomach / Somewhere else; "idk" asks
+  again; a place gets the client's practice for that place and style, word for word, ending "How do you feel
+  now?". The framework is not retired, and Chat More / Go to Library do not appear, until a practice has been
+  given (or they decline, or say what they will do). "It comes back" gets the client's waves reply for the
+  style.
 - **Memory** (ADR-005): per person, folded from earlier chats by `mani/memory.py`; idle threads fold through
   `scripts/fold_idle_threads.py` or `GET /internal/cron/fold-summaries` behind `CRON_SECRET`.
 - **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). A completing framework may pick the
@@ -139,6 +145,12 @@ Ordered by what breaks first.
 
 ## Open engineering
 
+- **Body route, from the client's 2026-10-02 flow.** Still the client's to confirm: Chat More / Go to Library
+  keep their labels, where the new document says "take me to the library" / "want to keep chatting"; the
+  Reflective chest line was a fragment and is sent with its grammar fixed; the "somewhere else" practice has
+  no client wording and the three style versions are ours, written from their Ground specification. The
+  practice now carries no buttons, as in the new document. In the scripted eval, Direct can stall in a
+  framework's own closing stage (`panic_somatic_once`), which is the model not advancing, not the body route.
 - **Generated TypeScript types** for `web/` and `mobile/` from the OpenAPI schema, with a CI gate. No CI exists.
 - **Audio upload** from `library_audio/` into the `exercises` bucket, and the bucket. `mani/storage.py` signs
   for reading only. The exercise catalog is empty, so the exercise hand-off is built and inert.

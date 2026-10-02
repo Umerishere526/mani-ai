@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 
+from mani.chat import repairs
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
 from mani.chat.router import Signal, is_confident
 from mani.chat.safety import normalize
@@ -401,7 +402,7 @@ def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> l
     if stage.get("boundaries"):
         lines.append(f"{prefix}_boundaries: " + "; ".join(stage["boundaries"]))
     if stage.get("if_unclear"):
-        rendered = " | ".join(f"if {e['when']}: {e['reply']}" for e in stage["if_unclear"])
+        rendered = " | ".join(f"if {e['when']}: {repairs.reply_for(e, style)}" for e in stage["if_unclear"])
         lines.append(f"{prefix}_if_unclear: {rendered}")
     ask = (stage.get("ask") or {}).get(style)
     if ask:

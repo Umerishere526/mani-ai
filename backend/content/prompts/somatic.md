@@ -52,21 +52,32 @@ stages:
         reply: "Where do you feel that most right now?"
         prompts: ["Chest", "Head", "Stomach", "Somewhere else"]
       - when: "they feel it in the chest"
-        reply: "Rest a hand on your chest. Breathe in through your nose for a count of four, and out through your mouth for a count of six. Do that three times, slowly."
-        prompts: ["I tried it", "Still tense", "Feeling better"]
+        reply:
+          supportive: "This makes sense given what you're dealing with. The chest is often where anxiety shows up when your body thinks something is at risk. Let's do something brief together. Place one hand on your chest. Breathe in through your nose for four. Breathe out slowly through your mouth for six. Do that three times. You do not need to change anything else. Just notice. How do you feel now?"
+          direct: "The chest is often where anxiety shows up first. Let's do something brief together. Place one hand on your chest. Breathe in through your nose for four. Breathe out slowly through your mouth for six. Do that three times. Just notice the sensation. How do you feel now?"
+          reflective: "When it shows up in your chest, that's often where the body reacts to perceived risk.\nLet's observe it for a moment.\nPlace one hand on your chest.\nBreathe in through your nose for four.\nBreathe out slowly through your mouth for six.\nDo that three times.\nJust notice.\nHow do you feel now?"
       - when: "they feel it in the head"
-        reply: "Press both feet into the floor. Name three things you can see, then two things you can hear. Let your out-breath be slow."
-        prompts: ["I tried it", "Still tense", "Feeling better"]
+        reply:
+          supportive: "When anxiety sits in the head, it usually shows up as racing or looping thoughts. Let's quiet that for a moment. Press your feet into the floor. Name three things you can see. Name two things you can hear. Take one slow breath out. You are not trying to stop your thoughts. You are giving your mind something real to focus on. How do you feel now?"
+          direct: "When anxiety sits in the head, it usually shows up as looping thoughts. Let's quiet that for a moment. Press your feet into the floor. Name three things you can see. Name two things you can hear. Take one slow breath out. Give your mind something real to focus on. How do you feel now?"
+          reflective: "When it shows up in your head, it often comes as racing or looping thoughts.\nPress your feet into the floor.\nName three things you can see.\nName two things you can hear.\nTake one slow breath out.\nNotice where your attention goes.\nHow do you feel now?"
       - when: "they feel it in the stomach"
-        reply: "Rest a hand on your belly. Breathe in slowly through your nose so your belly rises, then let the out-breath be longer than the in-breath. Three times."
-        prompts: ["I tried it", "Still tense", "Feeling better"]
+        reply:
+          supportive: "Anxiety in the stomach often shows up as knots, tightness, or a sinking feeling. Let's loosen that a bit. Place one hand on your stomach. Breathe in slowly through your nose. Let your belly rise. Breathe out longer than you breathed in. Do that three times. You are not forcing calm. You are giving your body a signal that it does not need to stay tense. How do you feel now?"
+          direct: "Anxiety in the stomach often feels like knots or a sinking feeling. Let's loosen that. Place one hand on your stomach. Breathe in slowly through your nose and let your belly rise. Breathe out longer than you breathed in. Do that three times. This gives your body a signal that it doesn't need to stay tense. How do you feel now?"
+          reflective: "When it shows up in your stomach, it often comes as knots, tightness, or a sinking feeling.\nPlace one hand on your stomach.\nBreathe in slowly through your nose.\nLet your belly rise.\nBreathe out longer than you breathed in.\nDo that three times.\nNotice what changes.\nHow do you feel now?"
       - when: "they feel it somewhere else"
-        reply: "Bring gentle attention to that spot. Take one slow breath, and notice whether anything shifts."
-        prompts: ["I tried it", "Still tense", "Feeling better"]
+        reply:
+          supportive: "Wherever you feel it is fine. Let's bring gentle attention to that spot. Take one slow breath. You do not need to change anything. Just notice whether anything shifts. How do you feel now?"
+          direct: "Bring gentle attention to that spot. Take one slow breath out. Notice whether anything shifts. How do you feel now?"
+          reflective: "Wherever it sits is fine.\nBring gentle attention to that spot.\nTake one slow breath.\nNotice what shifts.\nHow do you feel now?"
       - when: "they mention pain, trouble breathing, or feeling faint"
         reply: "Let's not do a breathing practice then. I'm here with you. What would help right now?"
       - when: "the feeling returns after the practice"
-        reply: "If it comes back, it comes in waves. The same practice helps."
+        reply:
+          supportive: "That is very common. Panic often comes in waves. Feeling it come back does not mean you are in danger or that this is failing. What matters is that you now know you can bring it down, even briefly. The next time it rises, do the same thing again. Short and simple. You are not alone in this. Just so you know, I have a whole library of tools that help with panic attacks, anytime and anywhere."
+          direct: "That is very common. Panic often comes in waves. Feeling it return does not mean you are in danger. It just means you should do the same exercise again. You are not alone in this. I have a whole library of tools that help with panic anytime you need them."
+          reflective: "I hear you noticing it calm for a moment and then come back. That's a common pattern with panic. You don't have to manage it on your own. I have a whole library of tools that help with panic attacks, anytime and anywhere."
     ask:
       supportive: "Where are you feeling that most right now?"
       reflective: "Where does that sit in your body right now?"
