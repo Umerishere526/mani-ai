@@ -8,8 +8,9 @@ from dataclasses import dataclass, field
 from mani.chat.safety import normalize
 
 # How far back a signal still counts. A person's most recent message is the strongest evidence
-# of what they need now; three messages ago is context, not a request.
-RECENCY_WEIGHTS = (1.0, 0.6, 0.3)
+# of what they need now; four messages ago is context, not a request. Four reaches back to
+# their first message at the moment the closest fit falls due (CLOSEST_FIT_AFTER in context.py).
+RECENCY_WEIGHTS = (1.0, 0.6, 0.3, 0.15)
 
 # A phrase from the framework's own "central indication" is worth more than a phrase from its
 # broader "what MANI may hear" list, because the specification wrote it to be discriminating.

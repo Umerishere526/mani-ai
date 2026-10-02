@@ -339,7 +339,11 @@ def build(
     if shortlist and not safety_concern:
         ranked = ", ".join(f"{s.framework_id} ({s.score:.2f})" for s in shortlist)
         lines.append(f"framework_shortlist: {ranked}")
-        if candidate is not None and is_confident(shortlist) and cooldown_passed(ctx, urgent=urgent):
+        if (
+            candidate is not None
+            and (is_confident(shortlist) or closest_fit_due(ctx))
+            and cooldown_passed(ctx, urgent=urgent)
+        ):
             # The client's description is not here: the backend adds it to the offer, and a
             # model given the text copied it, so offers showed it twice.
             lines.extend(_stage_lines("offer", candidate, "offering", resolve_style(ctx)))
