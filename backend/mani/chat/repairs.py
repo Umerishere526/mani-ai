@@ -70,6 +70,15 @@ FEELING_WORDS = frozenset(
     }
 )
 
+# Scale and weight a reply may use only if the person put it there first: "if they did not
+# describe the scale, neither do you".
+SIZE_PHRASES = (
+    "a lot", "so much", "weighing on you", "that is tough", "that's tough",
+    "that is hard", "that's hard", "so exhausting", "must be so", "such a big",
+    "really significant", "so heavy", "overwhelming", "burden", "carrying",
+    "the weight of",
+)
+
 # Judgments a person may hold about themselves but must never be handed as a button to press.
 # Observed live: a reply offered "I'm overthinking it" as a capsule.
 SELF_JUDGMENTS = (
@@ -155,6 +164,12 @@ def introduced_feelings(text: str, said: str) -> list[str]:
     )
 
 
+def introduced_size(text: str, said: str) -> list[str]:
+    """Size and weight phrases in `text` that the person has not used."""
+    lowered, theirs = text.lower(), said.lower()
+    return [p for p in SIZE_PHRASES if re.search(rf"\b{re.escape(p)}\b", lowered) and p not in theirs]
+
+
 def _skeleton(stem: str) -> str:
     """The consonants of a root with repeats collapsed: "emberess" and "embarrass" are both "mbrs"."""
     return re.sub(r"(.)\1+", r"\1", re.sub(r"[aeiou]", "", stem))
@@ -177,22 +192,6 @@ def _misspelt_by_them(word: str, theirs: set[str]) -> bool:
         )
         for other in theirs
     )
-
-
-_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
-
-
-def without_feeling_sentences(text: str, unwanted: list[str]) -> str | None:
-    """`text` with every sentence that names an unwanted feeling dropped, or None when that
-    would leave nothing to answer with: the question has to survive, so a reply whose only
-    question is in the offending sentence is left alone for the caller to handle."""
-    sentences = _SENTENCE_BREAK.split(text.strip())
-    kept = [s for s in sentences if not (words(s) & set(unwanted))]
-    if not kept or len(kept) == len(sentences):
-        return None
-    if "?" in text and not any("?" in s for s in kept):
-        return None
-    return " ".join(kept)
 
 
 def strip_script_leakage(text: str) -> tuple[str, list[str]]:
@@ -420,19 +419,12 @@ def apply(
 
 
     theirs = words(said)
-    # The orchestrator asks the model once more when a draft names a feeling the person did
-    # not. What reaches here after that is trimmed: the offending sentence goes when the
-    # question survives, so the person never reads "that sounds stressful" they did not say.
     introduced_in_text = introduced_feelings(text, said)
     if introduced_in_text:
         notes.append(
             f"reply text introduced a feeling word the user did not establish: "
             f"{', '.join(introduced_in_text)}"
         )
-        trimmed = without_feeling_sentences(text, introduced_in_text)
-        if trimmed is not None:
-            notes.append("dropped a sentence that named a feeling they had not")
-            text = trimmed
 
     offered = {_normalize(name) for name in already_offered}
     # While a framework is only being *offered*, the capsule naming it is the offer itself,

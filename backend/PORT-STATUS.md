@@ -10,7 +10,7 @@ History (how the port went, what was fixed from review, old measurements) is in
 ## Status, 2026-10-01
 
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
-- Tests: `pytest` runs 798 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
+- Tests: `pytest` runs 840 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
   JWKS-configured project).
 - Database: 10 migrations, 15 tables (8 `public`, 7 `admin`), 6 frameworks and 5 prompts seeded.
   `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
@@ -30,13 +30,15 @@ History (how the port went, what was fixed from review, old measurements) is in
      is a concern: it suspends frameworks and offers without locking.
   2. The router (`router.py`) shortlists frameworks from phrases over their last four messages. It is a hint, never a requirement. When the nearest fit falls due, the top of the shortlist carries its offer wording even if the router is not confident of it.
   3. `context.py` builds the `[ctx]` block: style, offer timing, the stage in progress, and `their_last`
-     (a vague reply, a correction, or a request only to be heard).
+     (a short reply of three words or fewer, with `answering`, the question Mani last asked; a correction; or a
+     request only to be heard).
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,
      `heading_toward`, `offer_fit`, then `text`. The order is deliberate.
-  5. `redraft.py` may ask once more (twice for a missing question): a feeling the person never named, an
-     offer before it is allowed or one their words rule out, an offer that is due and missing, no
-     question, or the last reply's question asked again. ADR-006, ADR-007, ADR-008, ADR-011.
-  6. `repairs.py` corrects what remains, in code: script leakage, buttons, an early offer, an unnamed feeling.
+  5. `redraft.py` may ask once more: a feeling word or size phrase the person never used, an offer before it is
+     allowed or one their words rule out, or an offer that is due and missing. The notes never ask for a question.
+     A repeated question and a reply with no question go through as drafted. ADR-006, ADR-007, ADR-012.
+  6. `repairs.py` corrects what remains, in code: script leakage, buttons, an early offer. A second draft that still
+     uses a feeling word they never used is logged and left as drafted, never trimmed.
   7. Crisis, the reply, the framework state and the summary are written together.
 - **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): six, each reviewed against the
   client's specification. A confident offer may come from the person's second message (third for ABCDE,
@@ -58,6 +60,15 @@ History (how the port went, what was fixed from review, old measurements) is in
 - **Account deletion**: `DELETE /v1/account` removes the user and everything they own.
 - **Eval harness**: `scripts/eval_replies.py` runs scripted conversations through the real stack and removes
   the users it created. `tests/evals/` holds the deterministic checks every suite runs.
+  `scripts/eval_client_style.py` runs the client's four style conversations (panic, a friend's text, compulsive
+  scrolling, stress before a deadline) in all three styles, three runs by default. It does not pass or fail: it
+  saves every transcript (`transcripts.md` and `transcripts.json`, with taps marked) and prints questions in
+  Mani's own words, stock phrases per phrase, repeated openers, feelings and size phrases never used, dashes, replies over three
+  sentences and the message at which the offer comes, per conversation and per style, with a figures block
+  against specification 0002's criteria. `style_read.md` holds the panic replies to the first two messages, shuffled with the style hidden, for marking.
+  `short_replies.md` lists every reply that follows a message of three
+  words or fewer. The client's lines are in `client_style_conversations.yaml`;
+  after the first, each line taps the offer when the last reply made one.
 
 ## The API
 
@@ -86,10 +97,11 @@ History (how the port went, what was fixed from review, old measurements) is in
 
 The record is `mani-vault/Decisions/_Index.md`. In short:
 
-- **A turn is one model call, or more when a draft is redrafted** (ADR-002, 006, 008). The one scoped extra
+- **A turn is one model call, or one more when an offer is vetoed** (ADR-002, 006, 012). The one scoped extra
   call is the exercise pick at the end of a framework. `test_a_turn_costs_exactly_one_provider_call` still
   holds for a draft that needs no redraft.
-- **Offers follow Mani's confidence** (ADR-007). Every reply before an offer asks one question (ADR-008).
+- **Offers follow Mani's confidence** (ADR-007). A reply asks at most one question and may ask none; ADR-012
+  (proposed) replaced ADR-008's question in every reply.
 - **Memory is per person** (ADR-005).
 - Settled without an ADR yet, listed at the foot of the index: OpenRouter only, asyncpg not PostgREST, the
   `public` and `admin` split, the `mani_service` role, three security definer write functions, the
@@ -164,8 +176,8 @@ Ordered by what breaks first.
 - **`threads.vague_streak`** is granted to the backend and written by nothing; the pacing it belongs to is
   designed, not built.
 - **`appropriate_when` and `not_when`** in the framework files are read by nothing (each file says so).
-- The words "worried", "concerned" and "a lot" still reach about 1 reply in 10 in some scenarios; repairs log
-  them. The feeling check now redrafts the ones in `repairs.FEELING_WORDS`.
+- "a lot" still reaches about 1 reply in 18 in the stress before a deadline conversation, and meanings the word
+  lists cannot see ("stuck in a loop") reach people. Open for the client: may "a lot" stay, as their own lines use it.
 
 ## Latest measurements
 
@@ -184,5 +196,38 @@ change to prompts, framework content or the offer rules, and compare with these.
 - Replies with no question before an offer: 1 of 39 on that chat (from 8 of 47).
 - Wrong framework offered early: Direct chose ACT or a plan for a colleague chat that wants ABCDE, until offers
   for ABCDE, Thought Reframe and ACT were made to wait for the third message (Direct then chose ABCDE 3 of 3).
+- Client style conversations, baseline taken 2026-10-04 with `scripts/eval_client_style.py` (three runs, model
+  `google/gemini-3.1-flash-lite`, `mani_base` md5 `84627c5f`, commit `476edf0`; 36 conversations). This is the
+  measurement Natural Mani (scope rows 33 to 35) is judged against:
+  - Every reply asked exactly one question: questions equal replies in all 12 conversation and style rows.
+  - The offer came at message 2 to 6. Three of 36 came after the client's two to four (panic Supportive and
+    Reflective, stress Reflective). Direct was at 2 to 4 every time.
+  - Stock phrases ("I hear you", "I'm here for/with you", "That makes sense") per conversation: Supportive 0.6,
+    Reflective 0.4, Direct 0.1. Panic is the worst, 2.0 for Supportive.
+  - Replies opening like the one before them, per conversation: Supportive 0.8, Reflective 0.4, Direct 0.2.
+  - Dashes: 2 in all 36 conversations, both in panic Supportive.
+  - The counts carry run to run noise (panic Reflective offered at 6, 4, 2), so compare means of three runs, never one.
+- Client style conversations after specification 0002 (scope row 33), same check, same model, three runs each.
+  Baseline recounted with the extended check, then the code change alone with the old prompt, then the rewrite
+  (`mani_base` 120 lines). Full tables and what differs from the spec's figures: `mani-vault/Journal/natural-mani-build-2026-10-04.md`.
+  - Questions per reply, Mani's own words: 0.59 baseline, 0.60 code alone, 0.48 rewritten. (The 0.7 bar was already met.)
+  - Stock phrases per conversation: 0.08 / 0.42 / 0.58 (Direct, Reflective, Supportive) baseline, 0 / 0 / 0 rewritten.
+  - Feelings never used: 0 baseline, 10 code alone, 0 / 2 / 2 across three prompt only checks, 0 with the feeling and
+    size redraft restored (muhammad, 2026-10-04). AC-6's bar settled at under 0.5 own words (0.47 measured).
+  - Offers: 36 of 36, 35 at exchange 2 to 4 (baseline 33). Dashes 0 (baseline 2). Replies over three sentences 0 (baseline 1).
+  - Size phrases never used without "a lot": 0 (baseline 5); "a lot" 4 (baseline 16). Last check: own questions 0.49, 36 of 36 offered, 35 at exchange 2 to 4.
+  - Final check (`style-lines-1`, the prompt in force: `mani_base` 120 lines with the restating rule and the three
+    style lines, and the stock phrase ban repeated in `response_format.md`), same model, three runs: own questions
+    0.54 per reply, stock phrases 0.83 / 0.00 / 0.67 (Direct, Reflective, Supportive), "It sounds like" or "It seems
+    like" 14 in 36 conversations (baseline 49, 9 to 15 across the last checks), feelings and size phrases never used
+    0, "a lot" 3, offers 36 of 36 all at exchange 2 to 4, dashes 0, replies over three sentences 0.
+  - Read blind by a fresh model whose marks muhammad accepted as final (his choice, a departure from the spec as first written):
+    restating 42% of eligible replies (8 of 19) against 88% before the rule (15 of 17), AC-14 met; meaning stated as
+    fact 0 against 5 at baseline, AC-8 met. The same reader scored the same baseline 43%, 60%, 57% and 47% across
+    four files, so compare only inside one file.
+  - Not met: AC-9 (the three styles differ in what Mani does) reads 10 of 18 against a bar of 15, after both rounds
+    the spec allows. The offer part of the base says the questions are ones "you could go through together" in every
+    style, so offers read Supportive; scope row 6 rewrites that. AC-7's zero for "sounds like" and its per style
+    bar of 0.3 are also not met; muhammad accepted the rate and the client is to be asked. `/architect` amends both.
 - Local Supabase answers on 54321 to 54324 on this machine, not the 5434x in `config.toml`. See
   `.claude/BACKEND.md`.

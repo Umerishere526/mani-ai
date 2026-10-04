@@ -60,6 +60,8 @@ class Exchange:
     framework: tuple[str, str, str | None] | None = None
     chat: int = 1
     finding: str | None = None
+    # The message was a tap on a button Mani had offered, not something the person typed.
+    tapped: bool = False
 
 
 class _RepairNoteCapture(logging.Handler):
@@ -161,6 +163,7 @@ async def _run_one(
     try:
         for line in turns:
             finding = None
+            tapped = False
             if line == "@newchat":
                 await memory.fold_finished(claims, keep=None)
                 thread = await _open_chat(claims, style)
@@ -172,12 +175,13 @@ async def _run_one(
                     continue
                 offer = next((p for p in last_prompts if p.technique), None)
                 if offer is not None:
-                    message, accepted = offer.label, True
+                    message, accepted, tapped = offer.label, True, True
                 else:
                     message = line.partition("|")[2] or "Yes, I'd like some help with this."
             elif line.startswith("@tap:"):
                 message = line.removeprefix("@tap:")
-                if not any(p.label.lower() == message.lower() for p in last_prompts):
+                tapped = any(p.label.lower() == message.lower() for p in last_prompts)
+                if not tapped:
                     finding = f"no '{message}' button to tap"
             else:
                 message = line
@@ -192,7 +196,7 @@ async def _run_one(
                     offered=any(p.technique for p in turn.prompts),
                     buttons=[p.label for p in turn.prompts],
                     framework=await _framework_after(claims, thread.id),
-                    chat=chat, finding=finding,
+                    chat=chat, finding=finding, tapped=tapped,
                 )
             )
     finally:
@@ -205,7 +209,6 @@ async def _run_one(
 def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> list[validators.Finding]:
     """Every check that applies to this scenario.
 
-    `heard`: someone asking only to be heard, where a reply with no question is right.
     `expect_framework`: a journey, which must reach a framework and hand off at its end.
     `markers`: words only the first chat used, which the second must not bring across.
     """
@@ -224,8 +227,6 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
         in_chat = [e for e in exchanges if e.chat == chat]
         findings += validators.repeated_openers([e.reply for e in in_chat])
         findings += validators.repeated_question([e.reply for e in in_chat])
-        if not scenario.get("heard"):
-            findings += validators.unasked_before_offer([(e.reply, e.offered) for e in in_chat])
     for index, exchange in enumerate(exchanges):
         state = exchange.framework
         if state and state[1] == "accepted" and state[2] not in (None, "offering", "closing") \

@@ -12,6 +12,7 @@ from mani.chat.repairs import (
     FEELING_WORDS,
     MAX_CAPSULE_WORDS,
     SELF_JUDGMENTS,
+    SIZE_PHRASES,
     WORD,
     words,
 )
@@ -39,14 +40,6 @@ ASSUMED_MOTIVE = (
     "he probably", "she probably", "they probably", "he didn't mean", "he did not mean",
     "she didn't mean", "she did not mean", "they didn't mean", "they did not mean",
     "was trying to help", "were trying to help", "did not intend", "didn't intend",
-)
-
-# Scale and weight the person did not put there themselves. This one is already a rule in
-# response_format.md's own constraints, which is why it belongs in the same set.
-ADDED_SCALE = (
-    "a lot", "so much", "weighing on you", "that is tough", "that's tough",
-    "that is hard", "that's hard", "so exhausting", "must be so", "such a big",
-    "really significant", "so heavy", "overwhelming", "burden",
 )
 
 # A question start, not any occurrence of the word: the specification's own bad example
@@ -214,7 +207,7 @@ def check(reply: str, user_message: str, *, in_framework: bool = False) -> list[
     # Scale gets the same treatment as feeling words: the rule is "if they did not describe
     # the scale, neither do you", so a phrase the person used first is theirs to mirror.
     said = user_message.lower()
-    added = [p for p in _hits(reply, ADDED_SCALE) if p not in said]
+    added = [p for p in _hits(reply, SIZE_PHRASES) if p not in said]
     if added:
         findings.append(Finding("added scale", f"{added}"))
 
@@ -261,27 +254,6 @@ def style_findings(reply: str, style: str) -> list[Finding]:
             findings.append(Finding("off-style", f"presence announced outside Supportive: {announced}"))
     if style == "reflective" and "i hear you" in lowered:
         findings.append(Finding("off-style", "a Reflective reply used \"I hear you\""))
-    return findings
-
-
-_INVITES = re.compile(r"\b(tell me|say more|walk me through)\b", re.IGNORECASE)
-
-
-def unasked_before_offer(replies: list[tuple[str, bool]]) -> list[Finding]:
-    """Replies that ask nothing while Mani is still understanding the issue.
-
-    The client's cadence spends the first two to four exchanges asking, checking and
-    confirming. `replies` pairs each reply with whether it offered a framework; every reply up
-    to and including the first offer must carry a question - the offer's own being its
-    permission question.
-    """
-    findings: list[Finding] = []
-    for text, offered in replies:
-        # An invitation asks too: the client's own "Tell me what is happening right now."
-        if "?" not in text and not _INVITES.search(text):
-            findings.append(Finding("stalled", f"no question before an offer: {text[:60]!r}"))
-        if offered:
-            break
     return findings
 
 

@@ -118,7 +118,6 @@
 # A question is not what every moment needs. These turns are the ones where asking another
 # would be the failure, so they are the only place the question-free shapes can be observed.
 - name: disclosure_no_question_needed
-  heard: true
   turns:
     - "nobody in my family knows about any of this"
     - "please don't give me a technique right now, I just need to get it out"

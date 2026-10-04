@@ -125,8 +125,8 @@ def test_a_correct_response_is_not_flagged(reply: str, user_message: str):
 
 
 def test_a_standalone_mirror_is_caught_only_inside_a_framework():
-    """`mani_base` explicitly allows a reply with no question outside a framework -
-    "presence only" is one of its six shapes. Inside one, every mirror carries a question."""
+    """`mani_base` explicitly allows a reply with no question outside a framework. Inside one,
+    every mirror carries a question."""
     mirror = "You stopped speaking and avoided her."
 
     assert "standalone mirror" in {
@@ -192,16 +192,15 @@ def test_presence_may_be_said_in_any_style_while_openers_still_vary():
     assert "Do not open your new reply the same way." in " ".join(response_format.split())
 
 
-def test_every_style_value_the_schema_allows_is_taught():
-    """The schema asks the model to declare the shape it used. Any value it can return and was
-    never taught is one it will either avoid entirely or use without meaning. Shapes are
-    taught in a table, so each is pinned to the row that defines it."""
-    from mani.llm.schema import SHAPES
+def test_every_style_value_the_schema_allows_is_named_in_its_description():
+    """The schema asks the model to declare the shape it used. The instructions no longer teach
+    the shapes, so the description is the only place the model learns the values it may return."""
+    from mani.llm.schema import SHAPES, Style
 
-    base = (PROMPTS_DIR / "mani_base.md").read_text().lower()
+    description = Style.model_fields["shape"].description
 
     for name in SHAPES:
-        assert f"| {name} |" in base, f"schema allows shape {name!r}, prompt never teaches it"
+        assert name in description, f"schema allows shape {name!r}, its description never names it"
 
 
 def test_a_capsule_that_judges_the_person_is_caught():

@@ -162,14 +162,9 @@ def closest_fit_due(ctx: TurnContext) -> bool:
     return ctx.technique is None and _their_messages(ctx) >= CLOSEST_FIT_AFTER
 
 
-# What a person says when they have given almost nothing, and when they are telling Mani it
-# missed something they already said. Whole messages / phrases, after normalising, so a vague
-# word inside a real sentence ("yeah, my manager shouted") is not mistaken for either.
-_VAGUE_REPLIES = frozenset({
-    "yeah", "yea", "yup", "yep", "ok", "okay", "maybe", "hmm", "hm", "sure", "i guess",
-    "idk", "dunno", "i do not know", "do not know", "i am not sure", "not sure", "no idea",
-    "kind of", "sort of", "kinda", "i suppose",
-})
+# What a person says when they ask only to be listened to, and when they are telling Mani it
+# missed something they already said. Phrases, after normalising, so a word inside a real
+# sentence is not mistaken for either.
 _HEARD_PHRASES = (
     "just need to get it out", "just want to get it out", "just need to vent", "just want to vent",
     "just want to talk", "just need to talk", "just listen", "dont want advice", "do not want advice",
@@ -184,6 +179,18 @@ _CORRECTION_PHRASES = (
 )
 
 
+# A message this short is read as the answer to the question Mani just asked.
+SHORT_REPLY_WORDS = 3
+_RAW_WORD = re.compile(r"[^\W_]+(?:['’][^\W_]+)*")
+
+
+def word_count(text: str) -> int:
+    """The words in a message as they were typed: punctuation does not count and a contraction
+    stays one word, so "I don't know" is three. `normalize` expands "don't" to "do not", which
+    would make it four, so it is not used here."""
+    return len(_RAW_WORD.findall(text))
+
+
 def with_rewrite_notes(prefix: str, reasons: list[str]) -> str:
     """The same [ctx] block with a line per reason the draft cannot stand, so the model writes it
     again. Said in the block the model already reads."""
@@ -192,17 +199,42 @@ def with_rewrite_notes(prefix: str, reasons: list[str]) -> str:
 
 
 def classify_reply(text: str) -> str | None:
-    """`vague` for a reply that says almost nothing, `correction` for one that says Mani missed
-    what they had already said, `heard` for one that asks only to be listened to, otherwise None. A deterministic read, so the model is told rather
-    than left to notice."""
+    """`heard` for a reply that asks only to be listened to, `correction` for one that says Mani
+    missed what they had already said, `short` for one of three raw words or fewer, otherwise
+    None, in that order of priority. A deterministic read, so the model is told rather than left
+    to notice."""
     normalized = normalize(text)
     if any(phrase in normalized for phrase in _HEARD_PHRASES):
         return "heard"
     if any(phrase in normalized for phrase in _CORRECTION_PHRASES):
         return "correction"
-    if normalized in _VAGUE_REPLIES:
-        return "vague"
+    if word_count(text) <= SHORT_REPLY_WORDS:
+        return "short"
     return None
+
+
+_QUESTION = re.compile(r"[^.!?\n]*\?")
+# The longest stretch of Mani's last question that is sent back to the model.
+MAX_ANSWERING_CHARS = 200
+
+
+def last_question(text: str) -> str | None:
+    """The last question in a message, found wherever it sits in it: the words from the sentence
+    break before it up to its question mark."""
+    questions = _QUESTION.findall(text)
+    return questions[-1].strip() if questions else None
+
+
+def _answering(history: list[Message]) -> str | None:
+    """The question Mani last asked, for a person who has answered it in a word or two. Not the
+    code's own permission question: it answers an offer, and the offer is what `offer_waiting`
+    is for."""
+    last = next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None)
+    question = last_question(last) if last else None
+    if not question or question in repairs.PERMISSION_QUESTIONS.values():
+        return None
+    quoted = re.sub(r"[\"“”]", "'", question)
+    return disarm(quoted[-MAX_ANSWERING_CHARS:].strip())
 
 
 def resolve_style(ctx: TurnContext) -> str:
@@ -276,17 +308,15 @@ def build(
     lines.append(f"conversation_phase: {phase}")
     if not running and not clarification_used(history):
         lines.append("clarification_available: yes")
-    if not running:
-        # What the question is about while no stage decides it (muhammad, 2026-09-24): said
-        # here, next to the message, because the style rule in the long prompt alone did not hold.
-        focus = "feeling, then the way through" if resolve_style(ctx) == "direct" else "feelings"
-        lines.append(f"question_focus: {focus}")
     if their_last and not offer_waiting and not safety_concern and (
-        not running or their_last == "correction"
+        not running or their_last in ("correction", "short")
     ):
-        # A vague reply is not flagged while the questions run: each stage already says what to
-        # do with one. A correction is, because no stage says to take what they already told you.
+        # Said while the questions run too, except `heard`: a stage says what to do when an
+        # answer is unclear, and the base says that guidance wins over `answering`.
         lines.append(f"their_last: {their_last}")
+        answering = _answering(history or []) if their_last == "short" else None
+        if answering:
+            lines.append(f'answering: "{answering}"')
     if offer_waiting:
         # Mani's last reply was an offer, and they typed rather than tapped.
         lines.append("offer_waiting: yes")

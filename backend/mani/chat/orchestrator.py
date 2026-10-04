@@ -430,7 +430,8 @@ async def send(
         ctx, shortlist=shortlist, framework=active_framework, candidate=candidate,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
         framework_starting=accepted_this_turn, urgent=urgent,
-        their_last=context.classify_reply(content),
+        # A tap is a choice among Mani's own buttons, not words to read.
+        their_last=None if tapped else context.classify_reply(content),
     )
     for_model = (
         f'User tapped the button: "{tapped.label}".'
@@ -467,15 +468,6 @@ async def send(
     reply = call.value
     clear_ok = context.cooldown_passed(ctx, urgent=urgent)
     closest_ok = context.closest_fit_ok(ctx, urgent=urgent)
-    framework_going = ctx.technique is not None and ctx.technique.outcome is TechniqueOutcome.ACCEPTED
-    # Every reply before an offer asks one question, so the conversation keeps moving. Not while
-    # the questions run (each stage asks its own), not on a safety concern, and not when they
-    # have asked only to be heard.
-    needs_question = (
-        not framework_going
-        and not assessment.blocks_framework
-        and context.classify_reply(content) != "heard"
-    )
 
     def _earliest_ok(draft: Reply) -> bool:
         named = redraft.offered(draft, config.registry)
@@ -489,24 +481,18 @@ async def send(
             earliest_wait=(draft.offer_fit != "closest" and clear_ok and not _earliest_ok(draft)),
             # A fit that is not clear waits for the closest fit's own window. A typed reply to an
             # offer already open is Keep chatting unless it asks about the offer, so offering
-            # again there needs the same window; the repeat used to be dropped and leave no
-            # question.
+            # again there needs the same window.
             offer_not_allowed=(not deferred or "?" not in content)
             and not (closest_ok if draft.offer_fit == "closest" else clear_ok),
             closest_fit_due=context.closest_fit_due(ctx) and not assessment.blocks_framework
             and not deferred,
-            needs_question=needs_question,
-            last_mani_text=next(
-                (m.content for m in reversed(history) if m.role is MessageRole.MANI), None
-            ),
         )
 
     why = _why(reply)
-    attempts = 0
-    # A draft that names a feeling they never did, offers before it may, offers what they said
-    # rules out, or asks nothing gets one more try, told why; a missing question gets a second.
-    # What still fails is corrected by repairs.apply. See ADR-006 and ADR-008.
-    while why and attempts < 2 and (attempts == 0 or any("asks no question" in w for w in why)):
+    # A draft that uses a feeling or size they never gave, offers before it may, offers what they
+    # said rules out, or leaves a due closest fit unoffered gets one more try, told why. What
+    # still fails is corrected by repairs.apply, or left as drafted.
+    if why:
         logger.info("thread %s redrafting: %s", ctx.thread.id, "; ".join(why))
         again = await client.complete(
             [{"role": "system", "content": system.text}]
@@ -523,8 +509,6 @@ async def send(
             prompt_version_id=None,
         )
         reply = again.value
-        attempts += 1
-        why = _why(reply)
     if reply.heading_toward:
         # Read by the steering evals and by anyone asking why a question went where it did:
         # the id only, never a word of what the person said.

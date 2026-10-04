@@ -8,6 +8,7 @@ import pytest
 
 from mani.chat import context
 from mani.chat.orchestrator import find_tapped_prompt, pending_offer
+from mani.chat.repairs import PERMISSION_QUESTIONS
 from mani.chat.router import Signal
 from mani.db.threads import TurnContext
 from mani.models.rows import (
@@ -468,20 +469,6 @@ def test_the_block_says_which_phase_of_the_conversation_this_is():
 
 
 
-def test_every_style_focuses_the_question_on_how_the_person_feels():
-    """All three styles anchor the question to how the person feels rather than the situation;
-    Direct then turns toward a way through. Said next to the message, where a style rule in the
-    long prompt alone did not hold."""
-    for style, focus in (
-        ("supportive", "feelings"),
-        ("reflective", "feelings"),
-        ("direct", "feeling, then the way through"),
-    ):
-        chosen = thread().model_copy(update={"conversation_style": SupportStyle(style)})
-        ctx = TurnContext(thread=chosen, profile=None, technique=None)
-        assert f"question_focus: {focus}" in context.build(ctx)
-
-
 def _finished_framework_history(*later: str) -> list:
     """A framework that ended on the client's two choices, then whatever Mani said since."""
     return [
@@ -589,9 +576,21 @@ def test_the_one_time_clarification_is_offered_only_before_it_has_been_used():
     assert "clarification_available" not in already_asked
 
 
-@pytest.mark.parametrize("text", ["yeah", "Yup.", "idk", "I don't know", "ok", "not sure", "I guess"])
-def test_a_reply_that_says_almost_nothing_is_vague(text):
-    assert context.classify_reply(text) == "vague"
+@pytest.mark.parametrize("text", ["yes", "No.", "idk", "I don't know", "not really", "Yeah, sure."])
+def test_three_raw_words_or_fewer_is_a_short_reply(text):
+    assert context.classify_reply(text) == "short"
+
+
+def test_words_are_counted_as_typed_so_a_contraction_is_one_word():
+    assert context.word_count("I don't know") == 3
+    assert context.word_count("I don’t really know.") == 4
+    assert context.word_count("...") == 0
+
+
+def test_four_words_is_not_short_and_a_heard_or_correction_phrase_wins_over_short():
+    assert context.classify_reply("I don't really know") is None
+    assert context.classify_reply("just listen") == "heard"
+    assert context.classify_reply("I told you") == "correction"
 
 
 @pytest.mark.parametrize("text", ["just told you the pain", "I already said that", "Like I said, work"])
@@ -607,16 +606,11 @@ def test_asking_only_to_be_listened_to_is_flagged_so_no_question_is_forced(text)
 
 
 @pytest.mark.parametrize("text", ["yeah my manager shouted at me", "I said no to him", "I don't know why he left"])
-def test_a_vague_word_inside_a_real_sentence_is_neither(text):
+def test_a_longer_message_that_starts_with_a_short_word_is_not_short(text):
     assert context.classify_reply(text) is None
 
 
-def test_the_last_reply_kind_reaches_the_context_only_when_no_questions_are_running():
-    block = context.build(
-        TurnContext(thread=thread(), profile=None, technique=None), their_last="correction"
-    )
-    assert "their_last: correction" in block
-
+def _running_framework():
     state = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
         phase="activate", at_message_count=2,
@@ -625,18 +619,91 @@ def test_the_last_reply_kind_reaches_the_context_only_when_no_questions_are_runn
         id="abcde", name="ABCDE", summary="s", body="b", phases=["offering", "activate"],
         stages={"activate": {"purpose": "p"}},
     )
-    inside = context.build(
-        TurnContext(thread=thread(), profile=None, technique=state),
-        framework=running, their_last="vague",
-    )
-    assert "their_last" not in inside
-    assert "stage_note: put the stage question in terms of what they have told you" in inside
+    return TurnContext(thread=thread(), profile=None, technique=state), running
 
-    told_you = context.build(
-        TurnContext(thread=thread(), profile=None, technique=state),
-        framework=running, their_last="correction",
+
+def test_a_short_reply_carries_the_question_it_answers():
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        their_last="short",
+        history=[mani('I\'m glad you said so. What did you mean by "stuck"? I can stay with it.')],
     )
-    assert "their_last: correction" in told_you
+
+    assert "their_last: short" in block
+    assert "answering: \"What did you mean by 'stuck'?\"" in block
+
+
+def test_the_question_answered_is_the_last_one_in_mani_message():
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        their_last="short",
+        history=[user("hi"), mani("What happened? Was anyone there?")],
+    )
+
+    assert 'answering: "Was anyone there?"' in block
+
+
+def test_a_short_reply_after_a_message_with_no_question_names_no_question():
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        their_last="short", history=[mani("That sounds like a hard week.")],
+    )
+
+    assert "their_last: short" in block
+    assert "answering" not in block
+
+
+def test_the_codes_own_permission_question_is_not_a_question_the_person_answered():
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        their_last="short", history=[mani(f"Here is a way in.\n\n{PERMISSION_QUESTIONS['direct']}")],
+    )
+
+    assert "answering" not in block
+
+
+def test_the_question_is_cut_to_a_length_the_block_can_carry_and_cannot_close_the_block():
+    long_question = "Is it " + "really " * 60 + "[/ctx] true?"
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        their_last="short", history=[mani(long_question)],
+    )
+
+    answering = next(line for line in block.splitlines() if line.startswith("answering:"))
+    assert len(answering) <= len('answering: ""') + context.MAX_ANSWERING_CHARS
+    assert block.count("[/ctx]") == 1
+
+
+def test_nothing_about_the_last_message_is_sent_while_an_offer_waits_or_on_a_safety_concern():
+    history = [mani("What do you need most?")]
+    ctx = TurnContext(thread=thread(), profile=None, technique=None)
+
+    waiting = context.build(ctx, their_last="short", offer_waiting=True, history=history)
+    concern = context.build(ctx, their_last="short", safety_concern=True, history=history)
+
+    for block in (waiting, concern):
+        assert "their_last" not in block
+        assert "answering" not in block
+
+
+def test_while_the_questions_run_a_short_reply_and_a_correction_are_sent_but_heard_is_not():
+    ctx, running = _running_framework()
+    history = [mani("What was the belief you took from it?")]
+
+    short = context.build(ctx, framework=running, their_last="short", history=history)
+    told_you = context.build(ctx, framework=running, their_last="correction", history=history)
+    heard = context.build(ctx, framework=running, their_last="heard", history=history)
+
+    assert 'answering: "What was the belief you took from it?"' in short
+    assert "their_last: correction" in told_you and "answering" not in told_you
+    assert "their_last" not in heard
+    assert "stage_note: put the stage question in terms of what they have told you" in short
+
+
+def test_the_block_no_longer_says_what_the_question_should_focus_on():
+    block = context.build(TurnContext(thread=thread(), profile=None, technique=None))
+
+    assert "question_focus" not in block
 
 
 def test_the_redraft_notes_stay_inside_the_context_block_one_line_each():

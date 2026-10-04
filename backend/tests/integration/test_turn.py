@@ -172,35 +172,44 @@ async def test_a_turn_costs_exactly_one_provider_call(alice, model):
     assert turn.prompts == []
 
 
-async def test_a_draft_naming_a_feeling_they_never_used_is_redrafted_once(alice, model):
-    """The exception to one provider call a turn: "An exam sounds incredibly stressful" was said
-    to someone who never said stressed. The second draft is the one they read."""
+async def test_a_reply_that_asks_nothing_or_asks_again_costs_one_provider_call_and_is_not_changed(alice, model):
+    """A question asked a second time and a reply with no question are what the instructions are
+    for; neither costs another call or is changed in code."""
+    repeated = "Which part of the exam feels most urgent?"
+    comfort = "It is okay to feel that way. I am here with you."
+    scripted = model(Reply(text=repeated), Reply(text=repeated), Reply(text=comfort))
+    thread = await start(alice)
+
+    turns = [
+        await send(alice, thread.id, message)
+        for message in ("i've an exam in 24 hours and i have not studied at all", "the maths part", "i felt small")
+    ]
+
+    assert scripted.calls == 3
+    assert [t.content for t in turns] == [repeated, repeated, comfort]
+
+
+async def test_a_draft_with_a_feeling_they_never_used_is_redrafted_once_and_the_second_is_kept(alice, model):
+    """The one tone check kept in code: "An exam sounds incredibly stressful" was said to someone
+    who never said stressed. A second draft that still does it is left as drafted, not trimmed."""
     scripted = model(
         Reply(text="An exam in 24 hours sounds incredibly stressful. What do you need first?"),
         Reply(text="An exam in 24 hours and nothing studied. What do you need first?"),
-    )
-    thread = await start(alice)
-    turn = await send(alice, thread.id, "i've an exam in 24 hours and i have not studied at all")
-
-    assert scripted.calls == 2
-    assert "stressful" not in turn.content
-    assert turn.content == "An exam in 24 hours and nothing studied. What do you need first?"
-
-
-async def test_a_second_draft_that_still_names_one_is_trimmed_not_sent_again(alice, model):
-    scripted = model(
-        Reply(text="That sounds stressful. What do you need first?"),
         Reply(text="That sounds so stressful. What do you need first?"),
     )
     thread = await start(alice)
-    turn = await send(alice, thread.id, "i've an exam in 24 hours and i have not studied at all")
+    first = await send(alice, thread.id, "i've an exam in 24 hours and i have not studied at all")
+    still = await send(alice, thread.id, "it is the maths part")
 
-    assert scripted.calls == 2
-    assert turn.content == "What do you need first?"
+    # Two calls for the first turn, then a draft and its one redraft, both still stressful.
+    assert scripted.calls == 4
+    assert first.content == "An exam in 24 hours and nothing studied. What do you need first?"
+    assert still.content == "That sounds so stressful. What do you need first?"
 
 
-async def test_an_offer_before_the_clients_cadence_allows_it_is_redrafted_into_a_question(alice, model):
-    """Dropped in code it left a reply that asked nothing; the model is asked once instead."""
+async def test_an_offer_before_the_clients_cadence_allows_it_is_redrafted_once(alice, model):
+    """The model is asked once more, told the offer is too early, rather than the offer being
+    dropped in code."""
     early = Reply(
         text="There are some questions we could go through together. Would you like to try it?",
         prompts=[SmartPrompt(label="Try it", technique="structured_problem_solving"),
@@ -314,9 +323,9 @@ async def test_a_motive_they_believe_in_reaches_the_closest_fit_with_the_deeper_
     assert "offer_ask:" in final_prompt
 
 
-async def test_offering_again_after_they_typed_past_an_offer_is_redrafted_into_a_question(alice, model):
-    """Typing past an offer is Keep chatting; a second offer in that same reply used to be dropped,
-    and the reply was left without a question."""
+async def test_offering_again_after_they_typed_past_an_offer_is_redrafted_once(alice, model):
+    """Typing past an offer is Keep chatting; a second offer in that same reply is asked for again
+    once."""
     scripted = model(
         _offer("structured_problem_solving", "clear"),
         _offer("structured_problem_solving", "clear"),
@@ -330,29 +339,6 @@ async def test_offering_again_after_they_typed_past_an_offer_is_redrafted_into_a
     assert scripted.calls == 3
     assert turn.content == "Which of those two would cost you less if it went wrong?"
     assert turn.prompts == []
-
-
-async def test_a_comforting_reply_with_no_question_is_redrafted_until_it_asks_one(alice, model):
-    """The person had to push the conversation on themselves. Two tries for a missing question."""
-    scripted = model(
-        Reply(text="It is okay to feel that way. I am here with you."),
-        Reply(text="That is understandable and you are not alone in it."),
-        Reply(text="When she raised it in front of the team, what did that say to you about yourself?"),
-    )
-    thread = await start(alice)
-    turn = await send(alice, thread.id, "i felt small when she questioned me in front of everyone")
-
-    assert scripted.calls == 3
-    assert turn.content.endswith("about yourself?")
-
-
-async def test_someone_who_asks_only_to_be_heard_is_not_forced_to_answer_a_question(alice, model):
-    scripted = model(Reply(text="That sounds like it has been sitting with you for a long time."))
-    thread = await start(alice)
-    turn = await send(alice, thread.id, "please don't ask me anything, i just need to get it out")
-
-    assert scripted.calls == 1
-    assert "?" not in turn.content
 
 
 async def test_abcde_is_not_offered_before_they_have_said_what_it_meant(alice, model):
@@ -428,6 +414,87 @@ async def test_tapping_the_offer_records_acceptance(alice, model):
     assert ctx.technique.phase == "activate"
     # So the first stage builds on what they already said instead of asking it again.
     assert "framework_starting: yes" in scripted.last_messages[-1]["content"]
+
+
+async def test_a_typed_yes_reaches_the_model_with_the_question_it_answers(alice, model):
+    scripted = model(
+        Reply(text="Something happened at work. What did you mean by stuck?"),
+        Reply(text="Stuck how, then: unable to start, or unable to finish?"),
+    )
+    thread = await start(alice)
+    await send(alice, thread.id, "I feel stuck")
+    await send(alice, thread.id, "Yes")
+
+    final_prompt = scripted.last_messages[-1]["content"]
+    assert "their_last: short" in final_prompt
+    assert 'answering: "What did you mean by stuck?"' in final_prompt
+
+
+async def test_tapping_a_button_is_not_read_as_a_short_reply(alice, model):
+    scripted = model(
+        Reply(
+            text="Want to try something?",
+            prompts=[SmartPrompt(label="Try it", technique="abcde")],
+            state=TechniqueState(technique="abcde", step="offering"),
+        ),
+        Reply(text="Good. What happened first?", state=TechniqueState(technique="abcde", step="activate")),
+    )
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "I keep spiralling")
+    await send(alice, thread.id, "Try it")
+
+    assert "their_last" not in scripted.last_messages[-1]["content"]
+    assert "answering" not in scripted.last_messages[-1]["content"]
+
+
+async def test_a_four_word_reply_is_not_read_as_an_answer_to_the_last_question(alice, model):
+    # covers: AC-4
+    scripted = model(
+        Reply(text="Something happened at work. What did you mean by stuck?"),
+        Reply(text="What part of the day feels most stuck?"),
+    )
+    thread = await start(alice)
+    await send(alice, thread.id, "I feel stuck")
+    await send(alice, thread.id, "I don't really know")
+
+    final_prompt = scripted.last_messages[-1]["content"]
+    assert "their_last" not in final_prompt
+    assert "answering" not in final_prompt
+
+
+async def test_a_short_reply_while_an_offer_waits_carries_no_answering_line(alice, model):
+    # covers: AC-4
+    offer = Reply(
+        text="I have a sequence of questions that could help. Would you like to try it?",
+        prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
+        state=TechniqueState(technique="abcde", step="offering"),
+    )
+    scripted = model(offer, Reply(text="What happens right before you pick it up?"))
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "my manager criticized me in front of everyone")
+    await send(alice, thread.id, "not sure")
+
+    final_prompt = scripted.last_messages[-1]["content"]
+    assert "offer_waiting: yes" in final_prompt
+    assert "their_last" not in final_prompt
+    assert "answering" not in final_prompt
+
+
+async def test_a_short_reply_on_a_safety_concern_carries_no_answering_line(alice, model):
+    # covers: AC-4
+    scripted = model(
+        Reply(text="What does stuck look like today?"),
+        Reply(text="I'm with you. What is happening right now?"),
+    )
+    thread = await start(alice)
+    await send(alice, thread.id, "I feel stuck")
+    await send(alice, thread.id, "hurt myself")
+
+    final_prompt = scripted.last_messages[-1]["content"]
+    assert "safety: concern" in final_prompt
+    assert "their_last" not in final_prompt
+    assert "answering" not in final_prompt
 
 
 async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, model):

@@ -139,20 +139,13 @@ def test_reply_text_mirroring_an_established_feeling_is_not_flagged(registry):
     assert fixed.notes == []
 
 
-def test_a_sentence_naming_a_feeling_they_never_used_is_dropped_when_the_question_survives(registry):
-    """"MANI never introduces a feeling word the user did not use." The orchestrator redrafts
-    once; what still arrives here loses the offending sentence, never the question."""
+def test_a_feeling_they_never_used_is_noted_and_the_reply_is_left_as_drafted(registry):
+    """"MANI never introduces a feeling word the user did not use": the note says so for whoever
+    reads the log, and the text is the model's own."""
     invented = reply(text="You're worried about it. What happens next?")
     fixed = fix(registry, invented, said="I have a presentation tomorrow")
-    assert fixed.text == "What happens next?"
+    assert fixed.text == "You're worried about it. What happens next?"
     assert any("worried" in note for note in fixed.notes)
-
-
-def test_a_reply_whose_only_question_names_the_feeling_is_left_whole(registry):
-    """Dropping it would leave the person with nothing to answer."""
-    invented = reply(text="Are you worried about it?")
-    fixed = fix(registry, invented, said="I have a presentation tomorrow")
-    assert fixed.text == "Are you worried about it?"
 
 
 def test_their_own_feeling_word_comes_back_untouched(registry):
