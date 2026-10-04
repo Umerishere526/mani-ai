@@ -310,13 +310,28 @@ def test_an_unconfident_shortlist_carries_no_candidate_content():
     """Below the confidence threshold, the shortlist is ids and scores only - central
     indications for those ids already sit in the static Framework Index."""
     block = context.build(
-        TurnContext(thread=thread(), profile=None, technique=None),
+        TurnContext(thread=thread(message_count=5), profile=None, technique=None),
         shortlist=[Signal("abcde", 0.6, ["she said"])],
         candidate=framework(),
     )
     assert "framework_shortlist: abcde (0.60)" in block
     assert "offer_purpose" not in block
     assert "offer_ask" not in block
+
+
+def test_the_closest_fit_carries_its_offer_line_even_when_the_router_is_not_confident():
+    # covers: AC-3
+    block = context.build(
+        TurnContext(
+            thread=thread(message_count=10),
+            profile=Profile(user_id=USER, support_style="direct"),
+            technique=None,
+        ),
+        shortlist=[Signal("abcde", 0.45, ["embarrassed me"])],
+        candidate=framework(),
+    )
+    assert "closest_fit: due" in block
+    assert "offer_ask: Would you like to work through it?" in block
 
 
 def test_an_active_framework_carries_current_and_next_stage_resolved_to_style():

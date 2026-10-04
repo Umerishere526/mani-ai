@@ -28,7 +28,7 @@ History (how the port went, what was fixed from review, old measurements) is in
   1. The deterministic safety screen (`safety.py`) runs before anything else. An explicit statement locks
      the thread with no model call. An indirect one (including passive ideation and "pills in my hand")
      is a concern: it suspends frameworks and offers without locking.
-  2. The router (`router.py`) shortlists frameworks from phrases. It is a hint, never a requirement.
+  2. The router (`router.py`) shortlists frameworks from phrases over their last four messages. It is a hint, never a requirement. When the nearest fit falls due, the top of the shortlist carries its offer wording even if the router is not confident of it.
   3. `context.py` builds the `[ctx]` block: style, offer timing, the stage in progress, and `their_last`
      (a vague reply, a correction, or a request only to be heard).
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,

@@ -41,7 +41,7 @@ activation:
   contraindications:
     - "The person describes abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger - examining what it means must never turn into questioning whether it was real or as serious as it felt, and Mani must not reinterpret the behaviour as harmless"
   # Short fragments, not the full example sentences from the spec. router.py matches these as
-  # plain substrings against what the person actually typed - a real message practically never
+  # whole words against what the person actually typed - a real message practically never
   # contains a whole authored sentence verbatim, but it very often contains the three or four
   # words that carry the pattern ("so i must be", "proves i will never"). Confidence now also
   # requires corroboration (two fragments, or one repeated) before a framework is offered, so
@@ -63,6 +63,12 @@ activation:
     - "terrible at my job"
     - "because i do not matter"
     - "i failed once"
+    - "wants me to fail"
+    - "want me to fail"
+    - "wanted me to fail"
+    - "embarrassed me"
+    - "embarassed me"
+    - "humiliated me"
   redirects:
     - signal: "Nobody cares about me, and I want a quick way to look at that thought."
       instead: thought_reframe
