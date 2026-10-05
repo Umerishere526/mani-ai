@@ -18,17 +18,15 @@ the framework at any point in this route.
 ```yaml
 stages:
   somatic_checkin:
-    purpose: "Check in with the body after the framework, without summarizing what was done. Ask the check-in question exactly as written, once; Mani's reflection of their last answer comes before it. If their closing answer already points to an action they are going to take, skip the check-in, support that action, and let the handoff capsules follow."
+    purpose: "Check in with the body after the framework, without summarizing what was done. Ask the check-in question exactly as written, once; Mani's reflection of their last answer comes before it."
     listen_for: "Whether they name a change in the body, and whether they name where they feel it."
-    ready_when: "They have answered the check-in, or declined it, or were skipped for action-readiness."
+    ready_when: "They have answered the check-in, or declined it."
     boundaries:
       - "must not summarize the framework before asking"
       - "must not ask the check-in more than once"
       - "must not add a feeling or a body sensation the user did not name"
       - "receive their answer and check it back once before the practice (\"Your thoughts feel slower, but there is still some tightness in your chest. Does that feel right?\")"
     if_unclear:
-      - when: "their closing answer already names an action they are going to take"
-        reply: "It sounds like you're ready to act on that. We can skip the body check-in. Would you like to keep chatting or go to the Library?"
       - when: "they agree to notice but have not said what they notice"
         reply: "What do you notice in your body?"
       - when: "the user declines the check-in"
@@ -41,7 +39,7 @@ stages:
   somatic_practice:
     purpose: "Offer one short grounding practice for where they feel it, then let the handoff capsules follow. Select the practice by the place the user names and deliver it word for word. Do not ask about the body a second time."
     listen_for: "Where in the body they feel it. If they already named a place in the check-in, use it and do not ask again."
-    ready_when: "A practice has been offered for the place they named, or they were routed to the capsules by a skip, decline, or safety-out."
+    ready_when: "A practice has been offered for the place they named, or they were routed to the capsules by a decline or safety-out."
     boundaries:
       - "must not ask about the body a second time"
       - "must not give a practice if they mention pain, trouble breathing, or feeling faint - stay with them instead"

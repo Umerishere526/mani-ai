@@ -1,7 +1,9 @@
 ---
 id: act_choice_point
 name: ACT Choice Point
-summary: "These questions help you notice the difficult thought or feeling, reconnect with what matters to you, and choose an action that reflects the person you want to be. By the end, you will have a direction you can take even when the situation or your feelings have not changed."
+# The client's sentence, with the name and the steps around it so they know what they are
+# starting (client meeting, 2026-10-02). The added wording awaits the client's sign-off.
+summary: "There's an approach called ACT Choice Point that fits this. These questions help you notice the difficult thought or feeling, reconnect with what matters to you, and choose an action that reflects the person you want to be. By the end, you will have a direction you can take even when the situation or your feelings have not changed. We'll take it one step at a time: the situation, what is showing up for you, where it pulls you, what matters to you, a step toward that, and one action. You can stop at any point."
 display_order: 5
 phases: [offering, situation, present, pull, matters, toward, action, closing]
 activation:

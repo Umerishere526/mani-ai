@@ -1,7 +1,9 @@
 ---
 id: thought_reframe
 name: Thought Reframe
-summary: "These questions help you examine a troubling thought and consider a more balanced perspective. By the end, you will be able to see the situation differently."
+# The client's sentence, with the name and the steps around it so they know what they are
+# starting (client meeting, 2026-10-02). The added wording awaits the client's sign-off.
+summary: "There's an approach called Thought Reframe that fits this. These questions help you examine a troubling thought and consider a more balanced perspective. By the end, you will be able to see the situation differently. We'll take it one step at a time: the thought itself, what it means to you, what you actually know, another way to read it, and a fairer thought to keep. You can stop at any point."
 display_order: 2
 phases: [offering, thought, significance, facts, alternative, reframe, closing]
 activation:

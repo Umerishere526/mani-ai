@@ -1,7 +1,7 @@
 # ABOUTME: Checks the style validator used by the live eval against known replies.
 # ABOUTME: The eval can only measure style separation if this check itself is right.
 
-from tests.evals.validators import style_findings, unasked_before_offer
+from tests.evals.validators import style_findings
 
 
 def test_direct_may_open_on_i_as_the_clients_own_lines_do_but_never_on_presence():
@@ -22,21 +22,6 @@ def test_announced_presence_belongs_to_supportive_only():
 def test_a_reflective_reply_never_says_i_hear_you():
     assert style_findings("I hear you. What does it mean to you?", "reflective")
     assert not style_findings("You said it keeps coming back. What does it mean to you?", "reflective")
-
-
-def test_a_reply_that_asks_nothing_before_the_offer_is_a_stall():
-    replies = [
-        ("You're feeling like a panic attack is coming on.", False),
-        ("Your chest is tight. What feels strongest right now?", False),
-        ("I have a structured approach. Would you like to try it?", True),
-        ("Okay. Let's look at it together, one step at a time.", False),  # after: not judged
-    ]
-    [finding] = unasked_before_offer(replies)
-    assert "panic attack" in str(finding)
-
-
-def test_an_invitation_to_say_more_counts_as_asking():
-    assert not unasked_before_offer([("I'm sorry you're feeling this way. Tell me what is happening right now.", False)])
 
 
 def test_a_framework_that_ends_without_its_hand_off_buttons_is_caught():
@@ -86,13 +71,13 @@ def test_the_clients_own_two_question_lines_are_not_counted_as_stacking():
     assert question_count("What happened? And how did she react?") == 2
 
 
-def test_saying_what_a_framework_is_called_or_the_word_itself_is_caught():
-    from tests.evals.validators import says_framework
+def test_an_offer_that_does_not_say_what_it_is_called_is_caught():
+    """Client meeting, 2026-10-02: "I never knew what framework I was in"."""
+    from tests.evals.validators import offer_unnamed
 
     names = ["Example Method"]
-    assert says_framework("I have an approach called the Example Method.", names)
-    assert says_framework("This framework could help.", names)
-    assert not says_framework("I have a sequence of questions that could help.", names)
+    assert not offer_unnamed("There's an approach called the Example Method.", names)
+    assert offer_unnamed("I have a sequence of questions that could help.", names)
 
 
 def test_the_three_questions_after_a_framework_are_checked():

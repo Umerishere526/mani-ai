@@ -40,6 +40,10 @@ EXPLAIN_LABELS = {TELL_ME_ABOUT_THIS_LABEL.lower(), "tell me more"}
 CHAT_MORE_LABEL = "Chat More"
 GO_TO_LIBRARY_LABEL = "Go to Library"
 
+# The specification's answer when they stop part way through a framework: no pressure to
+# finish, and the two choices a framework ends on.
+STOPPED_REPLY = "You want to stop here. Would you like to continue chatting?"
+
 # Asked in this order, one per reply, once a framework has finished and the person carries on
 # with the same issue - the client's "three forward-moving reflective questions".
 AFTER_FRAMEWORK_QUESTIONS = (

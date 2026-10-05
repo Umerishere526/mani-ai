@@ -264,27 +264,6 @@ def style_findings(reply: str, style: str) -> list[Finding]:
     return findings
 
 
-_INVITES = re.compile(r"\b(tell me|say more|walk me through)\b", re.IGNORECASE)
-
-
-def unasked_before_offer(replies: list[tuple[str, bool]]) -> list[Finding]:
-    """Replies that ask nothing while Mani is still understanding the issue.
-
-    The client's cadence spends the first two to four exchanges asking, checking and
-    confirming. `replies` pairs each reply with whether it offered a framework; every reply up
-    to and including the first offer must carry a question - the offer's own being its
-    permission question.
-    """
-    findings: list[Finding] = []
-    for text, offered in replies:
-        # An invitation asks too: the client's own "Tell me what is happening right now."
-        if "?" not in text and not _INVITES.search(text):
-            findings.append(Finding("stalled", f"no question before an offer: {text[:60]!r}"))
-        if offered:
-            break
-    return findings
-
-
 # Words too common to show a reply is about the person's own situation.
 _COMMON_WORDS = frozenset((
     "that this with from have been were what when your about they them then than into just "
@@ -392,13 +371,12 @@ def repeated_question(replies: list[str], overlap: float = 0.8) -> list[Finding]
     return findings
 
 
-def says_framework(reply: str, names: list[str]) -> list[Finding]:
-    """The person never hears what a framework is called, or the word itself: to them it is a
-    sequence of questions. `names` are the display names, read from the content, not listed here."""
-    hits = [name for name in names if re.search(rf"\b{re.escape(name)}\b", reply, re.IGNORECASE)]
-    if re.search(r"\bframeworks?\b", reply, re.IGNORECASE):
-        hits.append("framework")
-    return [Finding("said a framework", f"{hits}")] if hits else []
+def offer_unnamed(reply: str, names: list[str]) -> list[Finding]:
+    """An offer says what the framework is called, so the person knows what they are starting.
+    `names` are the display names, read from the content, not listed here."""
+    if any(re.search(rf"\b{re.escape(name)}\b", reply, re.IGNORECASE) for name in names):
+        return []
+    return [Finding("unnamed offer", reply[:80])]
 
 
 def after_framework_questions_asked(replies: list[str], questions: tuple[str, ...]) -> list[Finding]:

@@ -54,6 +54,8 @@ class Exchange:
     message: str
     reply: str
     repair_notes: list[str] = field(default_factory=list)
+    # How many times the draft was sent back to the model on this turn, read from the same log.
+    redrafts: int = 0
     offered: bool = False
     buttons: list[str] = field(default_factory=list)
     # The framework row after this turn, as the database holds it: (id, outcome, phase).
@@ -63,17 +65,21 @@ class Exchange:
 
 
 class _RepairNoteCapture(logging.Handler):
-    """Collects the repair notes orchestrator.py already logs. Changes nothing it does."""
+    """Collects the repair and redraft notes orchestrator.py already logs. Changes nothing it does."""
 
     def __init__(self) -> None:
         super().__init__(level=logging.INFO)
         self.notes: list[str] = []
+        self.redrafts: list[str] = []
 
     def emit(self, record: logging.LogRecord) -> None:
-        if record.name == "mani.chat.orchestrator" and record.getMessage().startswith(
-            "repaired reply"
-        ):
-            self.notes.append(record.getMessage())
+        if record.name != "mani.chat.orchestrator":
+            return
+        message = record.getMessage()
+        if message.startswith("repaired reply"):
+            self.notes.append(message)
+        elif " redrafting: " in message:
+            self.redrafts.append(message)
 
 
 async def _fresh_user(scenario: str, style: SupportStyle) -> str:
@@ -183,12 +189,14 @@ async def _run_one(
                 message = line
 
             capture.notes.clear()
+            capture.redrafts.clear()
             async with pool.as_user(claims) as conn:
                 turn = await orchestrator.send(conn, claims, thread.id, message)
             last_prompts = list(turn.prompts)
             exchanges.append(
                 Exchange(
                     message=message, reply=turn.content, repair_notes=list(capture.notes),
+                    redrafts=len(capture.redrafts),
                     offered=any(p.technique for p in turn.prompts),
                     buttons=[p.label for p in turn.prompts],
                     framework=await _framework_after(claims, thread.id),
@@ -205,7 +213,6 @@ async def _run_one(
 def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> list[validators.Finding]:
     """Every check that applies to this scenario.
 
-    `heard`: someone asking only to be heard, where a reply with no question is right.
     `expect_framework`: a journey, which must reach a framework and hand off at its end.
     `markers`: words only the first chat used, which the second must not bring across.
     """
@@ -215,7 +222,8 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
         said = " ".join(e.message for e in exchanges[: index + 1] if e.chat == exchange.chat)
         findings += validators.check(exchange.reply, said)
         findings += validators.style_findings(exchange.reply, style.value)
-        findings += validators.says_framework(exchange.reply, FRAMEWORK_NAMES)
+        if exchange.offered:
+            findings += validators.offer_unnamed(exchange.reply, FRAMEWORK_NAMES)
         if exchange.finding:
             findings.append(validators.Finding("script", exchange.finding))
         if exchange.chat > 1 and scenario.get("markers"):
@@ -224,8 +232,6 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
         in_chat = [e for e in exchanges if e.chat == chat]
         findings += validators.repeated_openers([e.reply for e in in_chat])
         findings += validators.repeated_question([e.reply for e in in_chat])
-        if not scenario.get("heard"):
-            findings += validators.unasked_before_offer([(e.reply, e.offered) for e in in_chat])
     for index, exchange in enumerate(exchanges):
         state = exchange.framework
         if state and state[1] == "accepted" and state[2] not in (None, "offering", "closing") \
@@ -278,7 +284,7 @@ async def main() -> int:
     failures = 0
     # Every reply per style, for the separation table at the end: the styles are meant to
     # behave differently, and nothing else in the run would show that they do not.
-    by_style: dict[str, list[str]] = {}
+    by_style: dict[str, list[Exchange]] = {}
     offers: dict[str, list[str | None]] = {}
 
     # pool.as_user() needs the pool open; nothing here runs under FastAPI's lifespan.
@@ -292,7 +298,7 @@ async def main() -> int:
                 created.append(user_id)
             exchanges = await _run_one(user_id, style, scenario["turns"], scenario.get("start_in"))
             findings = _score(exchanges, style, scenario)
-            by_style.setdefault(style.value, []).extend(e.reply for e in exchanges)
+            by_style.setdefault(style.value, []).extend(exchanges)
             offers.setdefault(style.value, []).append(_first_offer(exchanges))
             failures += len(findings)
 
@@ -309,6 +315,8 @@ async def main() -> int:
                         print("    [offered a framework]")
                     if exchange.repair_notes:
                         print(f"    [repair] {'; '.join(exchange.repair_notes)}")
+                    if exchange.redrafts:
+                        print(f"    [redrafted x{exchange.redrafts}]")
                     print()
             for finding in findings:
                 print(f"  FAIL {finding}")
@@ -317,13 +325,15 @@ async def main() -> int:
 
     await _remove_users(created)
     await pool.close_pool()
-    print("\nstyle         replies  avg chars  asks a question  opens with I  first offer at message")
-    for name, replies in by_style.items():
+    print("\nstyle         replies  avg chars  asks a question  opens with I  redrafted  first offer at message")
+    for name, style_exchanges in by_style.items():
+        replies = [e.reply for e in style_exchanges]
         n = len(replies) or 1
+        redrafted = 100 * sum(e.redrafts > 0 for e in style_exchanges) / n
         chars = sum(len(r) for r in replies) / n
         asks = 100 * sum("?" in r for r in replies) / n
         own = 100 * sum(r.lstrip().lower().startswith(("i ", "i'", "i\u2019")) for r in replies) / n
-        print(f"{name:<13} {len(replies):>7}  {chars:>9.0f}  {asks:>14.0f}%  {own:>11.0f}%  {offers[name]}")
+        print(f"{name:<13} {len(replies):>7}  {chars:>9.0f}  {asks:>14.0f}%  {own:>11.0f}%  {redrafted:>8.0f}%  {offers[name]}")
     print(f"\ntotal findings: {failures}")
     return 1 if failures else 0
 

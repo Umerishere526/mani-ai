@@ -1,7 +1,9 @@
 ---
 id: structured_problem_solving
 name: Structured Problem-Solving
-summary: "We'll go through a few focused questions. By the end, you will have turned a problem that feels unclear or overwhelming into a practical next step."
+# The client's sentence, with the name and the steps around it so they know what they are
+# starting (client meeting, 2026-10-02). The added wording awaits the client's sign-off.
+summary: "There's an approach called Structured Problem-Solving that fits this. We'll go through a few focused questions. By the end, you will have turned a problem that feels unclear or overwhelming into a practical next step. We'll take it one step at a time: what the problem is, what you know for sure, what is in your control, what you want to come of it, your options, how they compare, which one you pick, and your first action. You can stop at any point."
 display_order: 4
 phases: [offering, problem, facts, control, outcome, options, compare, select, first_action, closing]
 activation:

@@ -19,13 +19,17 @@ COOLDOWN_AFTER_DECLINE = 6
 
 # A confident offer may come from the person's second message, in any style: it was four rounds
 # for Supportive and Reflective until Mani's own confidence was made the signal (muhammad,
-# 2026-10-01). When it has not offered by their fourth message the closest fit is due: it offers
-# that, with Keep chatting beside it. Counted in the person's own messages.
+# 2026-10-01). A fit that is only the nearest may be offered from their fourth message, when
+# Mani judges the situation clear enough; it is never owed by a count (client meeting,
+# 2026-10-02). Counted in the person's own messages.
 CLEAR_OFFER_AFTER = 2
 CLOSEST_FIT_AFTER = 4
 # After "Keep chatting" a confident offer may come back after two more exchanges; the closest
 # fit waits the full COOLDOWN_AFTER_DECLINE.
 CLEAR_COOLDOWN_AFTER_DECLINE = 4
+# A stage asked about this many times without being met is moved on from (client meeting,
+# 2026-10-02: "if she doesn't get an outcome after two or three turns, we need to pivot").
+STAGE_ASKS_BEFORE_MOVING_ON = 3
 # The greeting, the style they tapped, and that style's opener.
 OPENING_MESSAGES = 3
 COOLDOWN_AFTER_COMPLETE = 45
@@ -157,18 +161,14 @@ def closest_fit_ok(ctx: TurnContext, *, urgent: bool = False) -> bool:
     )
 
 
-def closest_fit_due(ctx: TurnContext) -> bool:
-    """The first offer has not come by their fourth message: the closest fit is owed now."""
-    return ctx.technique is None and _their_messages(ctx) >= CLOSEST_FIT_AFTER
-
-
 # What a person says when they have given almost nothing, and when they are telling Mani it
 # missed something they already said. Whole messages / phrases, after normalising, so a vague
 # word inside a real sentence ("yeah, my manager shouted") is not mistaken for either.
 _VAGUE_REPLIES = frozenset({
     "yeah", "yea", "yup", "yep", "ok", "okay", "maybe", "hmm", "hm", "sure", "i guess",
     "idk", "dunno", "i do not know", "do not know", "i am not sure", "not sure", "no idea",
-    "kind of", "sort of", "kinda", "i suppose",
+    "kind of", "sort of", "kinda", "i suppose", "yes", "yeah right", "no", "nope",
+    "i do not know what i need", "i do not know what i want",
 })
 _HEARD_PHRASES = (
     "just need to get it out", "just want to get it out", "just need to vent", "just want to vent",
@@ -176,11 +176,28 @@ _HEARD_PHRASES = (
     "not looking for advice", "dont ask me", "do not ask me", "no questions",
     "dont give me a technique", "do not give me a technique", "dont want a technique",
     "do not want a technique", "dont want to do an exercise", "do not want to do an exercise",
+    "stop asking me questions", "stop asking questions", "enough questions",
+    "so many questions", "too many questions",
+    "dont want a framework", "do not want a framework",
 )
 _CORRECTION_PHRASES = (
     "just told you", "i told you", "already told you", "i already told", "i just said",
     "already said", "i said that", "like i said", "as i said", "you asked that",
-    "you already asked", "i just answered", "i answered",
+    "you already asked", "i just answered", "i answered", "already answered",
+    "that is not what i said", "that is not what i mean", "not what i meant",
+    "you are misunderstanding", "you misunderstood",
+)
+# The person has turned to the conversation itself: how Mani is listening or talking. That is
+# answered before anything else, and nothing is offered on that turn (client meeting,
+# 2026-10-02: "I'm frustrated with you" was answered with an offer of questions).
+_ABOUT_MANI_PHRASES = (
+    "you are not listening", "you do not listen", "you dont listen", "you never listen",
+    "you are not hearing me", "you do not hear me", "you dont hear me",
+    "you do not understand me", "you dont understand me", "frustrated with you",
+    "annoyed with you", "angry with you", "angry at you", "that is not helpful",
+    "this is not helpful", "you are not helping", "can we go back", "you are going off topic",
+    "going off topic", "why are you asking", "sounds robotic", "you sound like a robot",
+    "talk normally", "speak normally", "talk like a person", "in plain words", "down to earth",
 )
 
 
@@ -191,18 +208,56 @@ def with_rewrite_notes(prefix: str, reasons: list[str]) -> str:
     return prefix.replace("\n[/ctx]", f"\n{lines}\n[/ctx]", 1)
 
 
+# A whole message that ends the framework they are in. Whole messages only, so "he won't stop
+# calling me" or "I want to stop drinking" is never read as one.
+_STOP_REPLIES = frozenset({
+    "stop", "stop here", "stop this", "lets stop", "let s stop", "let us stop", "lets stop here",
+    "let s stop here",
+    "can we stop", "can we stop here", "can we stop this", "i want to stop", "i want to stop here",
+    "i want to stop this", "i would like to stop", "never mind", "nevermind", "forget it",
+    "leave it", "drop it", "not now", "enough", "that is enough", "i am done", "im done",
+    "i do not want to do this", "i do not want to do this anymore", "i do not want to continue",
+    "forget it i do not want to do this anymore", "forget it i do not want to do this",
+})
+_STOP_FILLER = frozenset({"ok", "okay", "please", "mani", "just", "no"})
+
+
+def wants_to_stop(text: str) -> bool:
+    """Whether the whole message asks to end the framework now."""
+    words = normalize(text).split()
+    while words and words[0] in _STOP_FILLER:
+        words = words[1:]
+    while words and words[-1] in _STOP_FILLER:
+        words = words[:-1]
+    return " ".join(words) in _STOP_REPLIES
+
+
+def _says(normalized: str, phrases: tuple[str, ...]) -> bool:
+    """Whether any phrase appears as whole words, so "i told you" is not found in "i told your"."""
+    padded = f" {normalized} "
+    return any(f" {phrase} " in padded for phrase in phrases)
+
+
 def classify_reply(text: str) -> str | None:
     """`vague` for a reply that says almost nothing, `correction` for one that says Mani missed
-    what they had already said, `heard` for one that asks only to be listened to, otherwise None. A deterministic read, so the model is told rather
-    than left to notice."""
+    what they had already said, `heard` for one that asks only to be listened to, `about_mani`
+    for one about how Mani is listening or talking, otherwise None. A deterministic read, so
+    the model is told rather than left to notice."""
     normalized = normalize(text)
-    if any(phrase in normalized for phrase in _HEARD_PHRASES):
+    if _says(normalized, _HEARD_PHRASES):
         return "heard"
-    if any(phrase in normalized for phrase in _CORRECTION_PHRASES):
+    if _says(normalized, _CORRECTION_PHRASES):
         return "correction"
+    if _says(normalized, _ABOUT_MANI_PHRASES):
+        return "about_mani"
     if normalized in _VAGUE_REPLIES:
         return "vague"
     return None
+
+
+# What they said about the conversation itself is answered before anything else is asked or
+# offered.
+HOLDS_THE_QUESTIONS = ("correction", "about_mani", "heard")
 
 
 def resolve_style(ctx: TurnContext) -> str:
@@ -282,10 +337,10 @@ def build(
         focus = "feeling, then the way through" if resolve_style(ctx) == "direct" else "feelings"
         lines.append(f"question_focus: {focus}")
     if their_last and not offer_waiting and not safety_concern and (
-        not running or their_last == "correction"
+        not running or their_last in ("correction", "about_mani")
     ):
         # A vague reply is not flagged while the questions run: each stage already says what to
-        # do with one. A correction is, because no stage says to take what they already told you.
+        # do with one. A correction or a word about Mani is, because no stage says what to do.
         lines.append(f"their_last: {their_last}")
     if offer_waiting:
         # Mani's last reply was an offer, and they typed rather than tapped.
@@ -297,11 +352,8 @@ def build(
     # Told to the model as it is enforced: a first offer used to read "yes" here whatever the
     # count, and the code then dropped what the model had been told it could do.
     lines.append(f"cooldown_passed: {'yes' if cooldown_passed(ctx, urgent=urgent) else 'no'}")
-    if not safety_concern and not running:
-        if closest_fit_due(ctx):
-            lines.append("closest_fit: due")
-        elif closest_fit_ok(ctx, urgent=urgent):
-            lines.append("closest_fit: ok")
+    if not safety_concern and not running and closest_fit_ok(ctx, urgent=urgent):
+        lines.append("closest_fit: ok")
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
         lines.append(f"since_last: {since_last}")
@@ -341,8 +393,9 @@ def build(
         lines.append(f"framework_shortlist: {ranked}")
         if (
             candidate is not None
-            and (is_confident(shortlist) or closest_fit_due(ctx))
+            and is_confident(shortlist)
             and cooldown_passed(ctx, urgent=urgent)
+            and their_last not in HOLDS_THE_QUESTIONS
         ):
             # The client's description is not here: the backend adds it to the offer, and a
             # model given the text copied it, so offers showed it twice.
@@ -360,8 +413,9 @@ def build(
         # The turn they say yes, a first stage their words already answer (by its ready_when) is
         # said back and the second stage's question is asked; otherwise the first is asked.
         index = framework.phase_index(technique.phase)
-        if offer_waiting:
-            # The offering stage's question is the offer they have just typed past.
+        if offer_waiting or their_last == "about_mani":
+            # The offering stage's question is the offer they have just typed past; and a word
+            # about how Mani is talking is answered before the next question is asked.
             stage = [line for line in stage if not line.startswith("stage_ask:")]
         if framework_starting and technique.phase == "offering" and index + 1 < len(framework.phases):
             index += 1
@@ -380,12 +434,27 @@ def build(
                 "stage_note: put the stage question in terms of what they have told you, in "
                 "their words; never send it bare"
             )
+        asks = _asks_in_stage(ctx)
+        if asks >= STAGE_ASKS_BEFORE_MOVING_ON and not framework_starting:
+            lines.append(
+                f"stage_note: you have asked about this stage {asks} times; take what they have "
+                "given as enough and ask the next stage's question, or ask whether they want to "
+                "stop here. Never ask for this stage again in other words"
+            )
         if 0 <= index < len(framework.phases) - 1:
             lines.extend(
                 _stage_lines("next_stage", framework, framework.phases[index + 1], style)
             )
 
     return "[ctx]\n" + "\n".join(lines) + "\n[/ctx]\n\n"
+
+
+def _asks_in_stage(ctx: TurnContext) -> int:
+    """How many of Mani's replies have asked about the current stage, this one included."""
+    since = ctx.technique.phase_since if ctx.technique else None
+    if since is None:
+        return 0
+    return (ctx.thread.message_count - since) // 2 + 1
 
 
 def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> list[str]:

@@ -319,8 +319,9 @@ def test_an_unconfident_shortlist_carries_no_candidate_content():
     assert "offer_ask" not in block
 
 
-def test_the_closest_fit_carries_its_offer_line_even_when_the_router_is_not_confident():
-    # covers: AC-3
+def test_a_weak_match_carries_no_offer_line_however_long_they_have_talked():
+    """An offer follows what they have said, not how many messages they have sent (client
+    meeting, 2026-10-02): a match the router is not confident of is a hint, never a script."""
     block = context.build(
         TurnContext(
             thread=thread(message_count=10),
@@ -330,8 +331,9 @@ def test_the_closest_fit_carries_its_offer_line_even_when_the_router_is_not_conf
         shortlist=[Signal("abcde", 0.45, ["embarrassed me"])],
         candidate=framework(),
     )
-    assert "closest_fit: due" in block
-    assert "offer_ask: Would you like to work through it?" in block
+    assert "closest_fit: due" not in block
+    assert "closest_fit: ok" in block
+    assert "offer_ask" not in block
 
 
 def test_an_active_framework_carries_current_and_next_stage_resolved_to_style():
@@ -546,11 +548,11 @@ def test_a_confident_offer_may_come_from_the_second_message_in_any_style(style):
     assert context.cooldown_passed(TurnContext(thread=chosen, profile=None, technique=None))
 
 
-def test_the_closest_fit_is_due_by_the_fourth_message_and_not_before():
+def test_the_closest_fit_may_be_offered_from_the_fourth_message_and_is_never_owed():
     assert not context.closest_fit_ok(_on_message(3))
     assert context.closest_fit_ok(_on_message(4))
-    assert context.closest_fit_due(_on_message(4))
-    assert not context.closest_fit_due(_on_message(3))
+    for message in (4, 8, 20):
+        assert "closest_fit: due" not in context.build(_on_message(message))
 
 
 def test_the_context_tells_the_model_the_truth_about_the_first_offer():
@@ -558,7 +560,7 @@ def test_the_context_tells_the_model_the_truth_about_the_first_offer():
     assert "cooldown_passed: no" in context.build(_on_message(1))
     second = context.build(_on_message(2))
     assert "cooldown_passed: yes" in second and "closest_fit" not in second
-    assert "closest_fit: due" in context.build(_on_message(4))
+    assert "closest_fit: ok" in context.build(_on_message(4))
 
 
 def test_after_keep_chatting_a_confident_offer_returns_sooner_than_the_closest_fit():
@@ -589,24 +591,46 @@ def test_the_one_time_clarification_is_offered_only_before_it_has_been_used():
     assert "clarification_available" not in already_asked
 
 
-@pytest.mark.parametrize("text", ["yeah", "Yup.", "idk", "I don't know", "ok", "not sure", "I guess"])
+@pytest.mark.parametrize("text", [
+    "yeah", "Yup.", "idk", "I don't know", "ok", "not sure", "I guess", "Yes.", "yes", "No.",
+    "I don't know what I need",
+])
 def test_a_reply_that_says_almost_nothing_is_vague(text):
     assert context.classify_reply(text) == "vague"
 
 
-@pytest.mark.parametrize("text", ["just told you the pain", "I already said that", "Like I said, work"])
+@pytest.mark.parametrize("text", [
+    "just told you the pain", "I already said that", "Like I said, work", "That's not what I said.",
+    "You're misunderstanding me.", "That's not what I mean", "I already answered that.",
+])
 def test_a_reply_saying_mani_missed_what_was_said_is_a_correction(text):
     assert context.classify_reply(text) == "correction"
 
 
 @pytest.mark.parametrize("text", [
     "I just need to get it out", "please don't give me a technique right now", "I just want to vent",
+    "Stop asking me questions.", "I don't want a framework", "Just listen.",
 ])
 def test_asking_only_to_be_listened_to_is_flagged_so_no_question_is_forced(text):
     assert context.classify_reply(text) == "heard"
 
 
-@pytest.mark.parametrize("text", ["yeah my manager shouted at me", "I said no to him", "I don't know why he left"])
+@pytest.mark.parametrize("text", [
+    "You're not listening.", "I'm frustrated with you. You aren't listening to me.",
+    "That's not helpful.", "Can we go back?", "You're going off topic.",
+    "Why are you asking me this?", "That sounds robotic.", "Talk normally.", "you don't hear me",
+    "You don't understand me",
+])
+def test_a_reply_about_the_conversation_itself_is_about_mani(text):
+    """The person has turned to how Mani is talking to them; that comes before any question list
+    (client meeting, 2026-10-02: "I'm frustrated with you" was answered with an offer)."""
+    assert context.classify_reply(text) == "about_mani"
+
+
+@pytest.mark.parametrize("text", [
+    "yeah my manager shouted at me", "I said no to him", "I don't know why he left",
+    "i told your mother", "my boss is not listening to me",
+])
 def test_a_vague_word_inside_a_real_sentence_is_neither(text):
     assert context.classify_reply(text) is None
 
@@ -661,3 +685,75 @@ def test_after_keep_chatting_the_wait_for_the_meaning_no_longer_applies():
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED, at_message_count=5,
     )
     assert context.earliest_offer_ok(_on_message(2, technique=state), {"earliest_offer_message": 3})
+
+
+def test_a_reply_about_mani_reaches_the_context_and_holds_the_stage_question():
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+        phase="activate", at_message_count=2,
+    )
+    running = Framework(
+        id="abcde", name="ABCDE", summary="s", body="b", phases=["offering", "activate"],
+        stages={"activate": {"purpose": "p", "ask": {"supportive": "What happened?"}}},
+    )
+    inside = context.build(
+        TurnContext(thread=thread(), profile=None, technique=state),
+        framework=running, their_last="about_mani",
+    )
+    assert "their_last: about_mani" in inside
+    assert "stage_ask:" not in inside
+
+
+def test_no_offer_line_reaches_the_context_when_they_are_unhappy_with_mani():
+    def offer_for(their_last):
+        return context.build(
+            TurnContext(
+                thread=thread(message_count=10),
+                profile=Profile(user_id=USER, support_style="direct"),
+                technique=None,
+            ),
+            shortlist=[Signal("abcde", 4.0, ["so i must be", "proves i will never"])],
+            candidate=framework(),
+            their_last=their_last,
+        )
+
+    assert "offer_ask" in offer_for(None)
+    unhappy = offer_for("about_mani")
+    assert "their_last: about_mani" in unhappy
+    assert "offer_ask" not in unhappy
+
+
+@pytest.mark.parametrize("text", [
+    "stop", "Stop.", "please stop", "Let's stop", "Can we stop?", "never mind", "Forget it.",
+    "leave it", "not now", "I don't want to do this", "I don't want to do this anymore",
+    "I'm done", "I want to stop here", "ok stop",
+])
+def test_a_clear_wish_to_stop_is_read_as_stopping(text):
+    assert context.wants_to_stop(text)
+
+
+@pytest.mark.parametrize("text", [
+    "he won't stop calling me", "I can't stop thinking about it", "I want to stop drinking",
+    "never mind what he said, it still hurts", "I don't want to answer that",
+])
+def test_stop_inside_a_real_sentence_is_not_stopping(text):
+    assert not context.wants_to_stop(text)
+
+
+@pytest.mark.parametrize("message_count, note", [(12, False), (14, False), (16, True)])
+def test_a_stage_asked_three_times_is_told_to_move_on(message_count, note):
+    """Client meeting, 2026-10-02: Structured Problem Solving asked for an outcome four times.
+    "If she doesn't get an outcome after two or three turns, we need to pivot." """
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+        phase="activate", at_message_count=4, phase_since=12,
+    )
+    running = Framework(
+        id="abcde", name="ABCDE", summary="s", body="b", phases=["offering", "activate"],
+        stages={"activate": {"purpose": "p"}},
+    )
+    block = context.build(
+        TurnContext(thread=thread(message_count), profile=None, technique=state),
+        framework=running,
+    )
+    assert ("stage_note: you have asked about this stage" in block) is note

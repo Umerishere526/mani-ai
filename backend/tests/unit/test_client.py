@@ -377,3 +377,66 @@ async def test_a_timeout_is_not_retried(monkeypatch, recorded):
             purpose=llm_calls.Purpose.CHAT, settings=settings(),
         )
     assert runnable.calls == 1
+
+
+# What a model reply can say, which a parsing error quotes back when it cannot parse it.
+QUOTED = "You told me you have been thinking about hurting yourself"
+
+
+async def test_a_failure_is_recorded_by_its_kind_never_its_text(monkeypatch, recorded):
+    """error_message is kept with the call long after the conversation, and the
+    ServiceError's message is logged; the kind of failure is all either needs."""
+    install(monkeypatch, FakeRunnable(
+        invalid(ValueError(f"Invalid json output: {QUOTED}")), RuntimeError(QUOTED),
+    ))
+
+    with pytest.raises(ServiceError) as failed:
+        await client.complete(
+            [], Reply, model="m", purpose=llm_calls.Purpose.CHAT, settings=settings()
+        )
+
+    assert [c["error_message"] for c in recorded] == ["attempt 1/2: ValueError", "RuntimeError"]
+    assert QUOTED not in str(failed.value)
+
+
+async def test_an_exhausted_retry_names_the_failure_not_the_reply(monkeypatch, recorded):
+    unparseable = invalid(ValueError(f"Invalid json output: {QUOTED}"))
+    install(monkeypatch, FakeRunnable(unparseable, unparseable))
+
+    with pytest.raises(ServiceError) as failed:
+        await client.complete(
+            [], Reply, model="m", purpose=llm_calls.Purpose.CHAT, settings=settings()
+        )
+
+    assert QUOTED not in str(failed.value)
+    assert all(QUOTED not in c["error_message"] for c in recorded)
+
+
+async def test_a_provider_blip_is_recorded_with_its_status(monkeypatch, recorded):
+    install(monkeypatch, FakeRunnable(provider_down(503), valid()))
+    monkeypatch.setattr(client, "TRANSIENT_RETRY_DELAY_SECONDS", 0)
+
+    await client.complete(
+        [], Reply, model="m", purpose=llm_calls.Purpose.CHAT, settings=settings()
+    )
+
+    assert recorded[0]["error_message"] == "attempt 1/2, retrying: InternalServerError 503"
+
+
+async def test_a_failed_selection_records_its_kind_never_its_text(monkeypatch, recorded, caplog):
+    class Boom(FakeToolRunnable):
+        async def ainvoke(self, messages: list[dict]):
+            raise RuntimeError(QUOTED)
+
+    monkeypatch.setattr(
+        client.chain, "build_tool_choice", lambda *a, **kw: Boom(FakeToolMessage(exercise_id=None))
+    )
+
+    await client.choose_exercise(
+        CANDIDATES, "ABCDE", model="m",
+        purpose=llm_calls.Purpose.EXERCISE_SELECT, settings=settings(),
+    )
+
+    assert [c["error_message"] for c in recorded] == ["RuntimeError"]
+    assert "RuntimeError" in caplog.text
+    assert QUOTED not in caplog.text

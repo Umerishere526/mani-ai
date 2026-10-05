@@ -209,6 +209,19 @@ def strip_script_leakage(text: str) -> tuple[str, list[str]]:
     return cleaned, found
 
 
+_NUMBER_RANGE = re.compile(r"(\d)\s*[—–]\s*(\d)")
+_DASH = re.compile(r"\s*[—–]+\s*")
+_COMMA_BEFORE_STOP = re.compile(r",\s*([.!?,;:])")
+
+
+def without_dashes(text: str) -> str:
+    """Em and en dashes become commas, and a number range keeps a hyphen. The client never wants
+    to see one (client meeting, 2026-10-02), and a rule in the prompt did not hold."""
+    text = _NUMBER_RANGE.sub(r"\1-\2", text)
+    text = _COMMA_BEFORE_STOP.sub(r"\1", _DASH.sub(", ", text))
+    return text.strip(", ")
+
+
 def clean_title(title: str | None) -> str | None:
     """Tidy a title rather than refusing one that is slightly too long.
 
@@ -280,11 +293,11 @@ _PLACE_WORDS = (
     )),
 )
 
-# Saying no to the body check, or already knowing what they will do: either ends the route
-# without a practice.
-_DECLINES_OR_ACTS = re.compile(
-    r"^\W*(no|nope|nah)\W*$|\b(no thanks|not now|maybe later|skip|rather not|don'?t want to"
-    r"|i'?m going to|i am going to|i need to|i'?ll go|i will go)\b",
+# Saying no to the body check ends the route without a practice. Knowing what they will do next
+# does not: the check follows every completed framework (client meeting, 2026-10-02).
+_DECLINES = re.compile(
+    r"^\W*(no|nope|nah)\W*$|\b(no thanks|not now|maybe later|skip|rather not"
+    r"|do not want to check|don'?t want to check|do not want to do that|don'?t want to do that)\b",
     re.IGNORECASE,
 )
 
@@ -294,8 +307,21 @@ def named_place(text: str) -> str | None:
     return next((label for label, words in _PLACE_WORDS if words.search(text)), None)
 
 
-def declines_or_acts(text: str) -> bool:
-    return bool(_DECLINES_OR_ACTS.search(text))
+def declines(text: str) -> bool:
+    return bool(_DECLINES.search(text))
+
+
+# Words a person uses when they say how their body feels, without naming where.
+_BODY_WORDS = re.compile(
+    r"\b(body|breath\w*|tight\w*|tense|tension|lighter|heavier|heavy|relax\w*|calm\w*"
+    r"|loose\w*|shak\w*|heart|numb|warm\w*|sweat\w*)\b",
+    re.IGNORECASE,
+)
+
+
+def describes_body(text: str) -> bool:
+    """Whether they have said how their body feels, by place or by sensation."""
+    return named_place(text) is not None or bool(_BODY_WORDS.search(text))
 
 
 def reply_for(branch: dict, style: str) -> str:
@@ -341,7 +367,7 @@ def practice_in(stage: dict, text: str, style: str) -> bool:
     )
 
 
-def _without_permission_question(text: str) -> str:
+def without_permission_question(text: str) -> str:
     """The reply without a closing question that asks whether they want to try."""
     match = _LAST_QUESTION.search(text)
     if match and _OFFER_WORDS.search(match.group(1)):
@@ -401,6 +427,11 @@ def apply(
     text, leaked = strip_script_leakage(reply.text.strip())
     if leaked:
         notes.append(f"stripped script metadata: {', '.join(leaked)}")
+
+    undashed = without_dashes(text)
+    if undashed != text:
+        notes.append("replaced dashes")
+        text = undashed
 
     if clarification_already_used:
         # The client's one-time check, backstopped in code: [ctx] already told the model not
@@ -556,7 +587,7 @@ def apply(
     # offer can come next turn, and a reply is never left asking two things at once.
     offered_id = next((p.technique for p in kept if p.technique), None)
     if offered_id is not None:
-        part = _without_permission_question(text)
+        part = without_permission_question(text)
         if part != text:
             notes.append("replaced the model's permission question with the client's")
         if "?" in part:

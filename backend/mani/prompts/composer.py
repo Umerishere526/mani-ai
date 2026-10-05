@@ -83,8 +83,9 @@ def framework_index(registry: Registry) -> str | None:
     # The client's description of each is added to the offer by the backend, so it is not
     # listed here: a model given the text copied it, and offers showed it twice.
     lines += [
-        "", "When you offer one, its description is added to your reply for you. You never "
-        "describe the questions or name them: never its name, its id, or the word \"framework\".",
+        "", "When you offer one, its name, its description and its steps are added to your reply "
+        "for you. Do not name or describe it yourself, so it is never said twice, and never "
+        "use its id.",
     ]
 
     # Only the contraindications, not every not_when line: most of those name a different
@@ -98,9 +99,9 @@ def framework_index(registry: Registry) -> str | None:
     if never:
         lines += ["", "## Never offer one when", ""] + never
 
-    # What each one needs to know before it is the right offer. It is how a question can follow
-    # the person's feeling and still be heading somewhere: static, so it sits in the cached
-    # prefix with the rest of the index.
+    # What each one needs to know before it is the right offer. It decides when an offer fits,
+    # never what Mani asks (ADR-015): static, so it sits in the cached prefix with the rest of
+    # the index.
     to_find_out = [
         f"- **{framework.name}**: {'; '.join(items)}"
         + (
@@ -115,9 +116,9 @@ def framework_index(registry: Registry) -> str | None:
     if to_find_out:
         lines += [
             "", "## Finding the fit", "",
-            "From their first message, work out which of these they are heading toward, and let "
-            "your questions reach for what is still missing for it - in their words, about their "
-            "feeling, never as a checklist:", "",
+            "From their messages, notice which of these they are heading toward and what they have "
+            "already told you of it. This tells you when an offer fits; it never sets what you ask:",
+            "",
         ] + to_find_out
 
     return "\n".join(lines)

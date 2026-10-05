@@ -139,8 +139,8 @@ class Reply(BaseModel):
         description=(
             "Choose before writing text: the id from the Framework Index that this "
             "conversation is most likely heading toward, or null when nothing has pointed "
-            "anywhere yet. It decides which missing thing your question reaches for. Not "
-            "shown to the user."
+            "anywhere yet. It decides when an offer fits, never what you ask. Not shown to "
+            "the user."
         ),
     )
     offer_fit: Literal["clear", "closest"] | None = Field(

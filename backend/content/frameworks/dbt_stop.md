@@ -1,7 +1,9 @@
 ---
 id: dbt_stop
 name: DBT STOP
-summary: "These questions help you interrupt an automatic reaction so you can pause, understand what is happening, and choose how you want to respond rather than simply reacting."
+# The client's sentence, with the name and the steps around it so they know what they are
+# starting (client meeting, 2026-10-02). The added wording awaits the client's sign-off.
+summary: "There's a short approach called DBT STOP that fits this. These questions help you interrupt an automatic reaction so you can pause, understand what is happening, and choose how you want to respond rather than simply reacting. It has four quick steps: stop, pause, notice what is happening, then go ahead the way you choose. You can stop at any point."
 display_order: 6
 phases: [offering, stop, pause, observe, proceed, closing]
 activation:

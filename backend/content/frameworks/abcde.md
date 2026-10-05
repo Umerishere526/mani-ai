@@ -1,7 +1,9 @@
 ---
 id: abcde
 name: ABCDE
-summary: "These questions help you separate what happened from what you told yourself about it, question what may not be serving you, and come away with a clearer and more useful way of seeing the situation."
+# The client's sentence, with the name and the steps around it so they know what they are
+# starting (client meeting, 2026-10-02). The added wording awaits the client's sign-off.
+summary: "There's an approach called ABCDE that fits this. These questions help you separate what happened from what you told yourself about it, question what may not be serving you, and come away with a clearer and more useful way of seeing the situation. We'll take it one step at a time: what happened, what you told yourself about it, what that led to, whether that thought holds up, and a more balanced way of seeing it. You can stop at any point."
 display_order: 1
 phases: [offering, activate, belief, consequence, examine, balanced, closing]
 activation:
