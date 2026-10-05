@@ -17,6 +17,7 @@ from mani.chat.greeting import (
     CHAT_MORE_LABEL,
     GO_TO_LIBRARY_LABEL,
     OPENERS,
+    STOPPED_REPLY,
     STYLE_OPTIONS,
     greeting,
 )
@@ -95,7 +96,8 @@ def _body_route_step(
 ) -> repairs.Repaired:
     """The turn after a body question the person has answered: where they feel it, and then
     the practice for that place. The body is asked about once; the choice of Chat More / Go to
-    Library waits for a practice, unless they decline or already know what they will do.
+    Library waits for a practice, unless they decline. Knowing what they will do next does not
+    skip it: the check follows every completed framework (client meeting, 2026-10-02).
 
     Covers a person who answers the check-in, one who says they do not know where, and one who
     described their body before the check-in was asked.
@@ -108,8 +110,20 @@ def _body_route_step(
         and fixed.phase == "somatic_checkin"
         and _ASKS_WHAT_NEXT.search(fixed.text) is not None
     )
-    if not (answering or described_early) or repairs.declines_or_acts(content):
+    if not (answering or described_early) or repairs.declines(content):
         return fixed
+    if described_early and not repairs.describes_body(content):
+        # The reply jumped to the two choices without the check-in, and nothing they said was
+        # about their body: the check-in is asked, word for word.
+        check_in = ((stages.get("somatic_checkin") or {}).get("ask") or {}).get(style)
+        if check_in:
+            return dataclasses.replace(
+                fixed,
+                text=repairs.with_the_check_in(repairs.first_sentence(fixed.text), check_in),
+                framework_id=framework_id,
+                phase="somatic_checkin",
+                prompts=[],
+            )
     stage = stages.get("somatic_practice") or {}
     safety_reply = next(
         (repairs.reply_for(b, style) for b in stage.get("if_unclear") or [] if "pain" in b.get("when", "")),
@@ -387,9 +401,20 @@ async def send(
             updates=updates,
         )
 
+    if (
+        technique is not None
+        and technique.outcome is TechniqueOutcome.ACCEPTED
+        and technique.phase not in repairs.ENDING_STAGES
+        and tapped is None
+        and assessment.level is safety.Level.NONE
+        and context.wants_to_stop(content)
+    ):
+        return await _stop_framework(conn, ctx, technique, content, client_message_id, updates)
+
     # Read by the router below and by the capsule repair further down, which needs everything
     # they have said rather than only this turn.
     user_texts = [m.content for m in history if m.role is MessageRole.USER] + [content]
+    their_last = context.classify_reply(content)
 
     # The router narrows the field it is not the caller's job to decide; the model still
     # confirms whatever it offers, and repairs.apply still validates that choice against the
@@ -407,9 +432,7 @@ async def send(
         )
     ):
         shortlist = router.shortlist(user_texts, config.registry.activations)
-        # The closest fit is owed now, so the top of the shortlist is offered in the client's own
-        # words even when the router is not confident of it.
-        if shortlist and (router.is_confident(shortlist) or context.closest_fit_due(ctx)):
+        if shortlist and router.is_confident(shortlist):
             candidate = config.registry.get(shortlist[0].framework_id)
 
     wants_title = (
@@ -430,7 +453,7 @@ async def send(
         ctx, shortlist=shortlist, framework=active_framework, candidate=candidate,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
         framework_starting=accepted_this_turn, urgent=urgent,
-        their_last=context.classify_reply(content),
+        their_last=their_last,
     )
     for_model = (
         f'User tapped the button: "{tapped.label}".'
@@ -465,17 +488,11 @@ async def send(
         prompt_version_id=None,
     )
     reply = call.value
-    clear_ok = context.cooldown_passed(ctx, urgent=urgent)
-    closest_ok = context.closest_fit_ok(ctx, urgent=urgent)
-    framework_going = ctx.technique is not None and ctx.technique.outcome is TechniqueOutcome.ACCEPTED
-    # Every reply before an offer asks one question, so the conversation keeps moving. Not while
-    # the questions run (each stage asks its own), not on a safety concern, and not when they
-    # have asked only to be heard.
-    needs_question = (
-        not framework_going
-        and not assessment.blocks_framework
-        and context.classify_reply(content) != "heard"
-    )
+    # Nothing is offered on a turn where they have said Mani missed something, asked only to be
+    # heard, or turned to how Mani is talking to them: that is answered first.
+    holds = their_last in context.HOLDS_THE_QUESTIONS
+    clear_ok = context.cooldown_passed(ctx, urgent=urgent) and not holds
+    closest_ok = context.closest_fit_ok(ctx, urgent=urgent) and not holds
 
     def _earliest_ok(draft: Reply) -> bool:
         named = redraft.offered(draft, config.registry)
@@ -493,20 +510,20 @@ async def send(
             # question.
             offer_not_allowed=(not deferred or "?" not in content)
             and not (closest_ok if draft.offer_fit == "closest" else clear_ok),
-            closest_fit_due=context.closest_fit_due(ctx) and not assessment.blocks_framework
-            and not deferred,
-            needs_question=needs_question,
             last_mani_text=next(
                 (m.content for m in reversed(history) if m.role is MessageRole.MANI), None
             ),
+            # A practice stage gives its exercise word for word; that guidance is the framework's.
+            framework_running=ctx.technique is not None
+            and ctx.technique.outcome is TechniqueOutcome.ACCEPTED,
         )
 
     why = _why(reply)
-    attempts = 0
-    # A draft that names a feeling they never did, offers before it may, offers what they said
-    # rules out, or asks nothing gets one more try, told why; a missing question gets a second.
-    # What still fails is corrected by repairs.apply. See ADR-006 and ADR-008.
-    while why and attempts < 2 and (attempts == 0 or any("asks no question" in w for w in why)):
+    # A draft that names a feeling they never did, uses a stock phrase, gives an instruction,
+    # asks last turn's question again, offers before it may, or offers what they said rules out
+    # gets one more try, told why. What still fails is corrected by repairs.apply. See ADR-006
+    # and ADR-015.
+    if why:
         logger.info("thread %s redrafting: %s", ctx.thread.id, "; ".join(why))
         again = await client.complete(
             [{"role": "system", "content": system.text}]
@@ -523,10 +540,8 @@ async def send(
             prompt_version_id=None,
         )
         reply = again.value
-        attempts += 1
-        why = _why(reply)
     if reply.heading_toward:
-        # Read by the steering evals and by anyone asking why a question went where it did:
+        # Read by the steering evals and by anyone asking why an offer came when it did:
         # the id only, never a word of what the person said.
         logger.info("thread %s heading toward %s", ctx.thread.id, reply.heading_toward)
 
@@ -888,6 +903,45 @@ async def _open_in_style(
         content=reply,
         created_at=pair.created_at,
         title=ctx.thread.title,
+    )
+
+
+async def _stop_framework(
+    conn: asyncpg.Connection,
+    ctx: threads.TurnContext,
+    technique: TechniqueState,
+    content: str,
+    client_message_id: uuid.UUID | str | None,
+    updates: threads.ThreadUpdates,
+) -> Turn:
+    """End the framework they asked to stop, with the specification's reply and the two choices.
+
+    No model call: a clear stop is answered the same way every time, and nothing generated can
+    slip another stage question in after it. No body check-in either, which follows a framework
+    that was completed (muhammad, 2026-10-04).
+    """
+    prompts = _handoff()
+    pair = await messages_db.create_pair(
+        conn, ctx.thread.id, content, STOPPED_REPLY,
+        prompt_options=[p.model_dump(mode="json", exclude_none=True) for p in prompts],
+        client_message_id=client_message_id,
+    )
+    updates.retire_technique = False
+    updates.technique = TechniqueState(
+        thread_id=ctx.thread.id,
+        framework_id=technique.framework_id,
+        outcome=TechniqueOutcome.STOPPED,
+        phase=None,
+        at_message_count=ctx.thread.message_count + 2,
+    )
+    await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
+    return Turn(
+        message_id=pair.mani_message_id,
+        content=STOPPED_REPLY,
+        created_at=pair.created_at,
+        prompts=prompts,
+        title=ctx.thread.title,
+        was_duplicate=pair.was_duplicate,
     )
 
 

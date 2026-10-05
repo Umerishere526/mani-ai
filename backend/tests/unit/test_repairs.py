@@ -681,12 +681,22 @@ def test_the_place_a_person_names_is_read_from_their_own_words():
     assert repairs.named_place("idk") is None
 
 
-def test_declining_or_knowing_what_to_do_is_told_apart_from_not_knowing_where():
-    assert repairs.declines_or_acts("not now")
-    assert repairs.declines_or_acts("No")
-    assert repairs.declines_or_acts("I'm going to call her")
-    assert not repairs.declines_or_acts("idk")
-    assert not repairs.declines_or_acts("no idea where")
+def test_declining_is_told_apart_from_not_knowing_where():
+    assert repairs.declines("not now")
+    assert repairs.declines("No")
+    assert repairs.declines("I'd rather not")
+    assert not repairs.declines("idk")
+    assert not repairs.declines("no idea where")
+
+
+@pytest.mark.parametrize("text", [
+    "I'm going to call her", "I need to text him tonight", "I'll go for a walk",
+    "I don't want to feel this tight anymore",
+])
+def test_naming_what_they_will_do_does_not_skip_the_body_check(text):
+    """Client meeting, 2026-10-02: the body check follows every completed framework before the
+    two choices; only a decline, or pain, breathing or faintness, leaves it out."""
+    assert not repairs.declines(text)
 
 
 def test_a_practice_is_the_clients_words_for_the_place_in_the_style_being_spoken():
@@ -715,3 +725,24 @@ def test_the_acknowledgement_before_a_question_is_the_replys_first_sentence():
     text = "It is okay not to know where. Try bringing gentle attention there. Where is it?"
     assert repairs.first_sentence(text) == "It is okay not to know where."
     assert repairs.first_sentence("No full stop here") == "No full stop here"
+
+
+@pytest.mark.parametrize("model_text, sent", [
+    ("That sounds heavy — what happened next?", "That sounds heavy, what happened next?"),
+    ("You stayed late—again—and nobody noticed?", "You stayed late, again, and nobody noticed?"),
+    ("Two – maybe three – times?", "Two, maybe three, times?"),
+    ("It took 2–4 weeks?", "It took 2-4 weeks?"),
+    ("Something changed —.", "Something changed."),
+])
+def test_no_dash_reaches_the_person(registry, model_text, sent):
+    """The client never wants to see an em dash (client meeting, 2026-10-02); the prompt rule
+    alone did not hold."""
+    assert fix(registry, reply(text=model_text)).text == sent
+
+
+@pytest.mark.parametrize("text, described", [
+    ("a bit lighter", True), ("my shoulders feel looser", True), ("calmer now", True),
+    ("I'm going to text him tonight", False), ("yes that helped", False),
+])
+def test_a_body_described_is_told_apart_from_an_answer_about_something_else(text, described):
+    assert repairs.describes_body(text) is described

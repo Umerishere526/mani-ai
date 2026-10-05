@@ -283,3 +283,17 @@ def test_staying_on_a_stage_is_not_told_to_repeat_the_same_wording():
     something else. The prompt now says explicitly not to do that."""
     base = (PROMPTS_DIR / "mani_base.md").read_text()
     assert "never ask twice for the same thing the same way" in base
+
+
+@pytest.mark.parametrize("path", sorted(FRAMEWORKS_DIR.glob("*.md")), ids=lambda p: p.stem)
+def test_every_offer_says_what_it_is_called_what_happens_and_that_they_can_stop(path):
+    """Client meeting, 2026-10-02: "there's a framework called ABCDE, A is this, B is this…
+    would you want to try it?" The offer description is what the person reads at the offer."""
+    from scripts.seed import parse_framework
+
+    framework = parse_framework(path)
+    description = framework["summary"]
+    assert framework["name"].lower() in description.lower()
+    assert "step" in description.lower()
+    assert "stop" in description.lower()
+    assert "—" not in description and "–" not in description

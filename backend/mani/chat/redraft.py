@@ -30,13 +30,41 @@ def ruled_out(reply: Reply, user_texts: list[str], registry: Registry) -> str | 
     return None
 
 
-# While pain may still be physical the offer is held (the prompt says so), so a closest fit that
-# is due is not forced then.
-_PAIN = ("pain", "hurts", "hurting", "ache", "aching", "injury", "injured")
+# Stock empathy that could be said to anyone (client meeting, 2026-10-02: "every answer was: it
+# sounds like"; the specification: "avoids repetitive reassurance"). Not used at all
+# (muhammad, 2026-10-05). Earlier in the list wins, so the note names the phrase as written.
+STOCK_PHRASES = (
+    "that sounds", "it sounds like", "sounds like you", "i hear you", "i hear that", "i can hear",
+    "it seems like", "it feels like",
+    "that must be", "it makes sense", "that makes sense", "makes sense that",
+    "it's okay to feel", "it is okay to feel", "thank you for sharing", "i'm here for you",
+    "i am here for you", "it is understandable", "it's understandable", "sounds very",
+    "sounds really", "sounds so", "sounds hard", "sounds difficult", "sounds tough", "sounds rough",
+    "sounds painful",
+)
 
 
-def pain_mentioned(user_texts: list[str]) -> bool:
-    return any(word in text.lower() for text in user_texts for word in _PAIN)
+# Guidance of Mani's own: breathing, grounding, "focus on…". Not given outside a framework, not
+# even in panic (muhammad, 2026-10-05); practices come from a practice stage or the Library.
+_INSTRUCTION = re.compile(
+    r"\b(focus on (your|the|being)\b|take (a|some) (deep |slow )?breaths?\b|breathe (in|out|slowly|deeply)\b"
+    r"|slow (down )?your breath|ground yourself|feet on the floor|count to \w+|5-4-3-2-1"
+    r"|try to (relax|calm|breathe|ground|focus)|just focus\b"
+    r"|(?:^|[.!?]\s+)(?:(?:please|just|now)\s+)*(?:breathe|keep breathing)\b)",
+    re.IGNORECASE,
+)
+
+
+def instruction(reply: Reply) -> str | None:
+    """The first piece of guidance of Mani's own in the draft, if any."""
+    match = _INSTRUCTION.search(reply.text)
+    return match.group(0) if match else None
+
+
+def stock_phrase(reply: Reply) -> str | None:
+    """The first stock phrase the draft uses, if any."""
+    draft = reply.text.lower().replace("\u2019", "'")
+    return next((p for p in STOCK_PHRASES if p in draft), None)
 
 
 _QUESTION = re.compile(r"[^.!?\n]*\?")
@@ -61,10 +89,9 @@ def reasons(
     registry: Registry,
     *,
     offer_not_allowed: bool,
-    closest_fit_due: bool = False,
-    needs_question: bool = False,
     earliest_wait: bool = False,
     last_mani_text: str | None = None,
+    framework_running: bool = False,
 ) -> list[str]:
     """What is wrong with the draft that only the model can fix, as lines for the model to read.
     Empty when the draft stands."""
@@ -77,17 +104,26 @@ def reasons(
             "name no feeling they have not named"
         )
 
+    told = None if framework_running else instruction(reply)
+    if told:
+        notes.append(
+            f'your draft gives an instruction of your own ("{told}"); give no instructions, '
+            "exercises or techniques: stay with what they said and ask one simple question"
+        )
+
+    stock = stock_phrase(reply)
+    if stock:
+        notes.append(
+            f'your draft says "{stock}", stock empathy that could be said to anyone; leave it '
+            "out and answer them directly, about what they said, in plain words"
+        )
+
     technique = offered(reply, registry)
     if not technique and repeats(reply, last_mani_text):
         notes.append(
             "your draft asks the question you asked last turn, with the same choices; answer "
             "what they just said first (a yes or a question of theirs counts), then move on: "
             "if they asked you to choose, offer one small step as a draft they can accept or change"
-        )
-    if needs_question and not technique and "?" not in reply.text:
-        notes.append(
-            "your draft asks no question; end with one question that follows what they just said "
-            "and moves toward which set of questions fits them, in their words"
         )
     if technique and earliest_wait:
         framework = registry.get(technique)
@@ -101,20 +137,20 @@ def reasons(
         notes.append(
             "your draft offered a set of questions, which is not allowed yet for a fit that is "
             "not clear; if you are confident which set fits, set offer_fit to clear, otherwise "
-            "offer nothing and ask one question that follows what they just said and moves "
-            "toward which set fits them"
-        )
-    elif not technique and closest_fit_due and reply.heading_toward and not pain_mentioned(user_texts):
-        notes.append(
-            "you have talked for several replies and not offered: offer the nearest set of "
-            "questions now, with offer_fit closest unless you are confident, and say it is the "
-            "nearest and that they can keep talking instead"
+            "offer nothing and reply to what they just said"
         )
     elif technique and ruled_out(reply, user_texts, registry):
         framework = registry.get(technique)
         name = framework.name if framework else technique
         notes.append(
             f"your draft offered {name}, which does not fit what they have told you (see "
-            "'Never offer one when'); offer nothing and ask one question instead"
+            "'Never offer one when'); offer nothing and reply to what they just said"
+        )
+    elif technique and "?" in repairs.without_permission_question(reply.text):
+        # Left as it is, the repair drops the offer's buttons so the reply asks one thing.
+        notes.append(
+            "your draft offers and also asks a question of its own; an offer ends on your part "
+            "with no question (asking whether they want to try is added for you), so either "
+            "drop your question and keep the offer, or keep the question and offer nothing"
         )
     return notes

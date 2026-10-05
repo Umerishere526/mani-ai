@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -21,11 +20,6 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://127.0.0.1:54341")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-
-# Every test user shares one password: a local tool against a local Supabase, where the name
-# is the whole identity. The same name signs back in to the same conversations.
-_PASSWORD = "chat-tester-local-only"
-_EMAIL_DOMAIN = "tester.mani.local"
 
 
 class ApiError(Exception):
@@ -117,16 +111,6 @@ def sign_up(email: str, password: str) -> Session:
     if not created.ok:
         raise RuntimeError(f"Could not sign up: {_reason(created)}")
     return sign_in_with_password(email, password)
-
-
-def sign_in(name: str) -> Session:
-    """A quick test user by name: the same name signs back in to the same conversations."""
-    slug = re.sub(r"[^a-z0-9._-]+", "-", name.strip().lower()).strip("-") or "tester"
-    email = f"{slug}@{_EMAIL_DOMAIN}"
-    try:
-        return sign_in_with_password(email, _PASSWORD)
-    except RuntimeError:
-        return sign_up(email, _PASSWORD)
 
 
 def refresh(session: Session) -> Session:

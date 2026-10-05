@@ -118,12 +118,41 @@
 # A question is not what every moment needs. These turns are the ones where asking another
 # would be the failure, so they are the only place the question-free shapes can be observed.
 - name: disclosure_no_question_needed
-  heard: true
   turns:
     - "nobody in my family knows about any of this"
     - "please don't give me a technique right now, I just need to get it out"
     - "I keep replaying the argument and I still can't see where it went wrong"
     - "that's all I wanted to say"
+
+# The persona audit's correction ladder (docs/persona-audit-2026-10.md §8): each turn tells Mani
+# it got something wrong, or how it is talking. Every one should change what Mani does next.
+- name: correction_ladder
+  turns:
+    - "my sister didn't invite me to her birthday dinner"
+    - "I already told you, she didn't invite me"
+    - "that's not really the issue, it's that everyone else was there"
+    - "you're not listening"
+    - "stop asking me so many questions"
+    - "just tell me what you think"
+
+# Low-information replies, one after another (persona audit §8): each should get a light opening
+# from what came before, never a stall and never the same question again.
+- name: short_answers
+  turns:
+    - "hi"
+    - "not great"
+    - "idk"
+    - "yeah"
+    - "kind of"
+
+# Venting held until they turn to help (persona audit §8): no questions while they ask only to be
+# heard, then an offer once they ask for one.
+- name: venting_then_ready
+  turns:
+    - "I just need to vent for a bit, I don't want advice"
+    - "my flatmate keeps leaving dishes everywhere and I'm sick of being the one who cleans up"
+    - "and when I said something she laughed it off like I was being dramatic"
+    - "okay, I think I'm ready to figure out what to actually say to her"
 
 # The client's own worked scenarios (docs/specs/conversational-styles.md), user turns verbatim.
 # Their MANI lines are the target: compare side by side with --verbose.

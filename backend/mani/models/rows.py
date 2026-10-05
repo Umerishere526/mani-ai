@@ -39,6 +39,8 @@ class TechniqueOutcome(StrEnum):
     OFFERED = "offered"
     ACCEPTED = "accepted"
     DECLINED = "declined"
+    # They ended it part way; the specification lets them stop at any time.
+    STOPPED = "stopped"
 
 
 class SupportStyle(StrEnum):
@@ -92,6 +94,8 @@ class TechniqueState(Row):
     phase: str | None = None
     at_message_count: int
     library_offered_since: bool = False
+    # The thread's message count when the current phase began; kept while the phase holds.
+    phase_since: int | None = None
 
 
 class ResponseStyle(Row):

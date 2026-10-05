@@ -1,7 +1,9 @@
 ---
 id: behavioral_activation
 name: Behavioral Activation
-summary: "These questions help you identify what you have stopped doing and choose one realistic activity you can begin. By the end, you will have a specific, manageable action that helps you start moving forward again."
+# The client's sentence, with the name and the steps around it so they know what they are
+# starting (client meeting, 2026-10-02). The added wording awaits the client's sign-off.
+summary: "There's an approach called Behavioral Activation that fits this. These questions help you identify what you have stopped doing and choose one realistic activity you can begin. By the end, you will have a specific, manageable action that helps you start moving forward again. We'll take it one step at a time: what you've stopped doing, why it matters to you, one activity to start with, making it small enough to do, when you'll do it, and what might get in the way. You can stop at any point."
 display_order: 3
 phases: [offering, stopped, matters, choose, manageable, begin, barrier, closing]
 activation:

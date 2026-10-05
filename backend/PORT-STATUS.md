@@ -7,14 +7,14 @@ the same change as the work.**
 History (how the port went, what was fixed from review, old measurements) is in
 `mani-vault/Journal/port-history-2026-09.md`. It is accurate as of the end of the port, not as of today.
 
-## Status, 2026-10-01
+## Status, 2026-10-05
 
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
-- Tests: `pytest` runs 798 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
+- Tests: `pytest` runs 938 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
   JWKS-configured project).
-- Database: 10 migrations, 15 tables (8 `public`, 7 `admin`), 6 frameworks and 5 prompts seeded.
+- Database: 12 migrations, 15 tables (8 `public`, 7 `admin`), 6 frameworks and 5 prompts seeded.
   `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
-  private `exercises` bucket (`scripts/seed_exercises.py`). A hosted project does not exist yet.
+  private `exercises` bucket (`scripts/seed_exercises.py`). A hosted deployment exists (see `b865adf`).
 - Models: `google/gemini-3.1-flash-lite` for chat and `openai/gpt-oss-120b` for summaries (`mani/config.py`).
 - Web and mobile do not call this API yet; they run on placeholder data.
 
@@ -27,35 +27,57 @@ History (how the port went, what was fixed from review, old measurements) is in
 - **A chat turn** (`mani/chat/orchestrator.py`), in order:
   1. The deterministic safety screen (`safety.py`) runs before anything else. An explicit statement locks
      the thread with no model call. An indirect one (including passive ideation and "pills in my hand")
-     is a concern: it suspends frameworks and offers without locking.
-  2. The router (`router.py`) shortlists frameworks from phrases over their last four messages. It is a hint, never a requirement. When the nearest fit falls due, the top of the shortlist carries its offer wording even if the router is not confident of it.
-  3. `context.py` builds the `[ctx]` block: style, offer timing, the stage in progress, and `their_last`
-     (a vague reply, a correction, or a request only to be heard).
-  4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,
+     is a concern: it suspends frameworks and offers without locking. Phrases match as whole words, after
+     reading digits inside a word as letters ("k1ll") and "kms" / "unalive" as what they mean. A denied
+     phrase ("I would never…", "I do not want to…") is not counted; hyperbole ("makes me want to…", "die of
+     embarrassment"), someone else's safety, and harm wished on another person without a plan ("I want to
+     kill my husband") ask rather than lock; a plan or a weapon ("confront him with a knife") locks.
+     `tests/unit/test_safety_recall.py` is the labelled table.
+  2. A whole message asking to stop a running framework ends it with no model call: outcome `stopped`, the
+     specification's "You want to stop here. Would you like to continue chatting?" and Chat More / Go to
+     Library (ADR-014).
+  3. The router (`router.py`) shortlists frameworks from phrases over their last four messages. It is a
+     hint, never a requirement; only a confident match carries its offer wording.
+  4. `context.py` builds the `[ctx]` block: style, offer timing, the stage in progress, how many times the
+     stage has been asked (from the third, Mani is told to move on or offer to stop), and `their_last`
+     (a vague reply, a correction, a request only to be heard, or a word about how Mani is talking,
+     `about_mani`). Nothing is offered on a correction, `heard` or `about_mani` turn.
+  5. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,
      `heading_toward`, `offer_fit`, then `text`. The order is deliberate.
-  5. `redraft.py` may ask once more (twice for a missing question): a feeling the person never named, an
-     offer before it is allowed or one their words rule out, an offer that is due and missing, no
-     question, or the last reply's question asked again. ADR-006, ADR-007, ADR-008, ADR-011.
-  6. `repairs.py` corrects what remains, in code: script leakage, buttons, an early offer, an unnamed feeling.
-  7. Crisis, the reply, the framework state and the summary are written together.
+  6. `redraft.py` may ask once more: a feeling the person never named, any stock empathy ("that sounds",
+     "it makes sense", "I hear you"), an instruction of Mani's own outside a framework ("focus on your
+     breathing"), an offer that also asks its own question, an offer before it is allowed or one their
+     words rule out, or the last reply's question asked again. A reply with no question is not a reason
+     (ADR-015, ADR-016). ADR-006, ADR-011, ADR-012.
+  7. `repairs.py` corrects what remains, in code: script leakage, dashes (every em or en dash becomes a
+     comma), buttons, an early offer, an unnamed feeling.
+  8. Crisis, the reply, the framework state and the summary are written together.
 - **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): six, each reviewed against the
   client's specification. A confident offer may come from the person's second message (third for ABCDE,
-  Thought Reframe and ACT); the nearest fit is due by the fourth, with "Try the closest fit" beside
-  "Keep chatting". The shared body check-in and practice come from `content/prompts/somatic.md`.
+  Thought Reframe and ACT); the nearest fit may be offered from the fourth, with "Try the closest fit"
+  beside "Keep chatting", and is never owed by a count (ADR-012). Every offer carries the framework's
+  `summary`: its name, the client's sentence, its steps and "You can stop at any point" (ADR-013; the added
+  wording awaits the client's sign-off). The shared body check-in and practice come from `content/prompts/somatic.md`.
   The body route is held in code (`orchestrator._body_route_step`): the check-in is asked once; whatever
   the person answers, the next reply asks where, with Chest / Head / Stomach / Somewhere else; "idk" asks
   again; a place gets the client's practice for that place and style, word for word, ending "How do you feel
   now?". The framework is not retired, and Chat More / Go to Library do not appear, until a practice has been
-  given (or they decline, or say what they will do). "It comes back" gets the client's waves reply for the
+  given or they decline. Saying what they will do next no longer skips it: a reply that jumps to the two
+  choices gets the check-in itself when nothing they said was about their body. "It comes back" gets the client's waves reply for the
   style.
-- **Memory** (ADR-005): per person, folded from earlier chats by `mani/memory.py`; idle threads fold through
-  `scripts/fold_idle_threads.py` or `GET /internal/cron/fold-summaries` behind `CRON_SECRET`.
+- **Memory** (ADR-005): per person, folded from earlier chats by `mani/memory.py` when a new chat starts;
+  idle threads fold only through `scripts/fold_idle_threads.py`. `GET /internal/cron/fold-summaries` behind
+  `CRON_SECRET` reconciles thread summaries, not memory (the idle-fold route exists only in an unapplied
+  stash, see `mani-vault/Journal/git-state-2026-10-04.md`).
 - **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). A completing framework picks one
   exercise from the whole active catalog with one bound tool call (`mani/llm/tools.py`): the framework's own
   exercises are listed first, and the pick sees the person's last three messages and the thread's current
   issue. `GET /v1/exercises` is the whole catalog, and responses never carry the storage path.
 - **Admin**: prompt CRUD with versioning, exercise CRUD, crisis event review, a user's memory.
 - **Account deletion**: `DELETE /v1/account` removes the user and everything they own.
+- **Error reports** (`main.py`): Sentry gets no request body, no frame locals and no breadcrumbs.
+  `llm_calls.error_message` and the model client's `ServiceError` messages name a failure by kind and
+  status, never its text. A chained third-party exception's message still reaches Sentry.
 - **Eval harness**: `scripts/eval_replies.py` runs scripted conversations through the real stack and removes
   the users it created. `tests/evals/` holds the deterministic checks every suite runs.
 
@@ -80,16 +102,17 @@ History (how the port went, what was fixed from review, old measurements) is in
 | GET POST, PATCH DELETE | `/v1/admin/exercises`, `/{id}` | catalog CRUD |
 | GET | `/v1/admin/crisis-events` | review queue |
 | GET | `/v1/admin/users/{id}/memory` | what is remembered about a person |
-| GET | `/internal/cron/fold-summaries` | idle memory fold, bearer `CRON_SECRET`, no JWT |
+| GET | `/internal/cron/fold-summaries` | overdue thread summaries, bearer `CRON_SECRET`, no JWT |
 
 ## Decisions in force
 
 The record is `mani-vault/Decisions/_Index.md`. In short:
 
-- **A turn is one model call, or more when a draft is redrafted** (ADR-002, 006, 008). The one scoped extra
+- **A turn is one model call, or two when a draft is redrafted** (ADR-002, 006). The one scoped extra
   call is the exercise pick at the end of a framework. `test_a_turn_costs_exactly_one_provider_call` still
   holds for a draft that needs no redraft.
-- **Offers follow Mani's confidence** (ADR-007). Every reply before an offer asks one question (ADR-008).
+- **Offers follow Mani's confidence** (ADR-007, 012). Every reply before an offer ends in one question, by the
+  prompt alone with no redraft; questions never chase a framework's missing fields (ADR-015, ADR-016).
 - **Memory is per person** (ADR-005).
 - Settled without an ADR yet, listed at the foot of the index: OpenRouter only, asyncpg not PostgREST, the
   `public` and `admin` split, the `mani_service` role, three security definer write functions, the
@@ -108,7 +131,8 @@ Ordered by what breaks first.
    send with the same `client_message_id` returns the first reply for free.
 3. **Crisis resources are empty.** `mani/chat/crisis.py` returns `[]`, and `safety.PROTOCOLS` and
    `CLARIFICATION` are empty too: the specifications refer to an approved protocol and do not contain one.
-   Needs countries and services from muhammad. Do not invent numbers.
+   Needs countries and services from muhammad. Do not invent numbers. The screen's phrase lists and which
+   level each reads at are engineering's reading of the specification and have had no clinical review.
 4. **Migrations are not run by anything.** `supabase db push` is manual.
 5. **Memory fold and summaries need a scheduler.** Summaries run as in process background tasks (lost on a
    crash). The cron route exists but nothing calls it. Hosting is not decided: a container platform that can
@@ -116,8 +140,10 @@ Ordered by what breaks first.
 6. **`CORS_ORIGINS` must name the deployed web origin**, or `web/` gets no browser response. Mobile is
    unaffected.
 7. **Pool and load.** `mani/db/pool.py` is min 2, max 10 with a 90 second command timeout, sized by reasoning.
-   A turn holds a transaction open across the model call, so about 10 turns per process is the ceiling, and
-   any `idle_in_transaction_session_timeout` below the model's latency kills turns. Nothing has been load
+   A turn holds a transaction open across every model call while each call records `llm_calls` on a
+   second connection, so about 10 concurrent turns deadlock the pool, not merely queue (audit 2026-10-04,
+   CF-5, not yet reproduced here); `acquire()` has no timeout and `/health/ready` hangs with it. Any
+   `idle_in_transaction_session_timeout` below the model's latency kills turns. Nothing has been load
    tested. `config.py` also defines `db_pool_*` settings that nothing reads.
 8. **The backend's database role.** `001_initial_schema.sql` grants `mani_service` to `postgres`. If the
    deployed `DATABASE_URL` connects as anything else, `set local role mani_service` fails. Grant it to that role,
