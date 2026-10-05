@@ -147,15 +147,89 @@
     - "I don't know where to start."
     - "Mostly the deadline. It's on Friday and I haven't begun."
 
-# Inside a framework: starts with ABCDE accepted, then answers its stages the way a person would.
+# Inside a framework: each starts with the framework accepted at its first stage, so the first
+# message answers that stage. The replies mix a real answer, "I don't know", "yes", "sure", a
+# question of their own, a request to hear a question again (twice in a row, so the second one
+# must be moved past) and, where the stage asks for a choice, a request to suggest something.
+# Every stage should be asked once, a hold should be one of the legitimate ones, and the run
+# should reach the body check.
 - name: framework_abcde_stages
   start_in: {framework: abcde, phase: activate}
+  expect_framework: true
   turns:
     - "My manager criticized my presentation in front of the whole team."
-    - "She said two of my recommendations didn't have enough support."
-    - "That I'm bad at my job and everyone saw it."
-    - "I stopped talking for the rest of the meeting and avoided her after."
-    - "Well, she also asked me to lead the next project, so maybe not everyone thinks that."
+    - "That I'm bad at my job."
+    - "Why does it matter what I believe?"
+    - "I don't know"
+    - "I don't get it"
+    - "I still don't get it"
+    - "yes"
+    - "sure"
+- name: framework_thought_reframe_stages
+  start_in: {framework: thought_reframe, phase: thought}
+  expect_framework: true
+  turns:
+    - "I keep thinking she ignored my message because she is done with me."
+    - "It would mean I'm not worth keeping around."
+    - "I don't know"
+    - "I don't get it"
+    - "I still don't get it"
+    - "Is that a fair thing to think?"
+    - "yes"
+    - "sure"
+- name: framework_behavioral_activation_stages
+  start_in: {framework: behavioral_activation, phase: stopped}
+  expect_framework: true
+  turns:
+    - "I stopped cooking and going to the gym."
+    - "I don't know"
+    - "Suggest something"
+    - "yes"
+    - "Tonight after work, I guess."
+    - "I don't get it"
+    - "I still don't get it"
+    - "Is it normal to lose motivation like this?"
+    - "sure"
+- name: framework_structured_problem_solving_stages
+  start_in: {framework: structured_problem_solving, phase: problem}
+  expect_framework: true
+  turns:
+    - "My deadline is Friday and I haven't started the report."
+    - "I know it is due Friday and my manager has not offered more time."
+    - "I don't know"
+    - "I don't get it"
+    - "I still don't get it"
+    - "I could ask for more time or work this weekend."
+    - "Does it matter which one I pick first?"
+    - "Suggest something"
+    - "yes"
+    - "Start the outline tonight."
+    - "sure"
+- name: framework_act_choice_point_stages
+  start_in: {framework: act_choice_point, phase: situation}
+  expect_framework: true
+  turns:
+    - "I can't control whether my parents approve of my decision."
+    - "I don't know"
+    - "I don't get it"
+    - "I still don't get it"
+    - "Being honest with them."
+    - "yes"
+    - "Tell them on Sunday."
+    - "Will that be enough?"
+    - "sure"
+- name: framework_dbt_stop_stages
+  start_in: {framework: dbt_stop, phase: stop}
+  expect_framework: true
+  turns:
+    - "I haven't sent it yet."
+    - "I started typing again."
+    - "yes"
+    - "I don't get it"
+    - "I still don't get it"
+    - "I don't know"
+    - "Why does waiting help?"
+    - "sure"
 
 # ---------------------------------------------------------------------------
 # Demo rehearsal: whole journeys, improvised openings, and a returning person.

@@ -90,6 +90,19 @@ def parse_framework(path: pathlib.Path) -> dict:
     }
 
 
+def with_somatic_route(framework: dict, somatic_stages: dict) -> dict:
+    """A parsed framework as stored: its own stages, then the shared somatic route after them.
+
+    The files end at `closing`, and this is rebuilt from the file every run, so appending is
+    idempotent - there is nothing to dedupe.
+    """
+    return {
+        **framework,
+        "phases": framework["phases"] + list(somatic_stages),
+        "stages": {**framework["stages"], **somatic_stages},
+    }
+
+
 async def seed() -> None:
     settings = get_settings()
     conn = await asyncpg.connect(settings.database_url)
@@ -100,15 +113,9 @@ async def seed() -> None:
                 raise SystemExit(f"no framework files in {FRAMEWORKS_DIR}")
 
             somatic_stages = load_somatic_stages()
-            somatic_phases = list(somatic_stages)
 
             for path in framework_files:
-                framework = parse_framework(path)
-                # Append the shared somatic route after each framework's own phases. The files
-                # end at `closing`, and this is rebuilt from the file every run, so appending is
-                # idempotent - there is nothing to dedupe.
-                framework["phases"] = framework["phases"] + somatic_phases
-                framework["stages"] = {**framework["stages"], **somatic_stages}
+                framework = with_somatic_route(parse_framework(path), somatic_stages)
                 await conn.execute(
                     """
                     insert into admin.frameworks

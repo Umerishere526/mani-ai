@@ -9,8 +9,8 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 
 ## Epics
 
-- [Conversation](conversation.md): natural replies, the body check, framework offers and framework questions. 22 features: 5 done, 15 planned, 2 dropped (row 30 is GA).
-- [Safety and privacy](safety.md): danger detection, crisis help, safety mode, private data, permissions. 9 features, all planned, all GA.
+- [Conversation](conversation.md): natural replies, the body check, framework offers and framework questions. 23 features: 5 done, 16 planned, 2 dropped (row 30 is GA).
+- [Safety and privacy](safety.md): danger detection, crisis help, safety mode, private data, permissions. 10 features: 1 done, 9 planned, all GA.
 - [Production readiness](production.md): staying up, limits, monitoring, fallback, automatic checks. 5 features planned, 10 deferred.
 
 ## At a glance
@@ -34,7 +34,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 15  | Usage and request limits                                                       | Slice 7 | planned |
 | 16  | Monitoring and alerts                                                          | Slice 7 | planned |
 | 17  | Guide questions match the client's wording                                     | Slice 8 | planned |
-| 18  | A framework stage moves on after one answer                                    | Natural Mani | planned |
+| 18  | A framework stage moves on after one answer                                    | Natural Mani | in-progress |
 | 19  | Body check in follows every framework                                          | Slice 8 | planned |
 | 20  | A framework stops when the person asks                                         | Slice 8 | planned |
 | 21  | Hard safety rules enforced in code                                             | Slice 9 | planned |
@@ -53,8 +53,10 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 34  | No dashes in any reply                                                         | Natural Mani | planned |
 | 35  | The model is chosen on real conversations                                      | Natural Mani | planned |
 | 36  | A short answer to Mani's safety question is checked                            | Slice 6 | planned |
+| 37  | The model's safety flag does not stall DBT STOP                                | Slice 6 | done |
+| 38  | A request to hear a question again also reads "whats that mean"                | Natural Mani | in-progress |
 
-Natural Mani (rows 32, 33, 34, 18, 6, 35, in that order) is the current focus and comes before every slice below it. It overrides parts of ADRs 006, 007, 008, 010 and 011, and row 33's spec records which. Slices 6 and 7 are what has to be true before a limited beta. Slice 9 is what has to be true before an open launch. Slice 8 can run alongside either, as client answers arrive.
+Natural Mani (rows 32, 33, 34, 18, 38, 6, 35, in that order) is the current focus and comes before every slice below it. It overrides parts of ADRs 006, 007, 008, 010 and 011, and row 33's spec records which. Slices 6 and 7 are what has to be true before a limited beta. Slice 9 is what has to be true before an open launch. Slice 8 can run alongside either, as client answers arrive.
 
 ## Open questions for the client
 

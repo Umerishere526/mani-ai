@@ -210,6 +210,11 @@ select pg_temp.want('the backend can write summaries and technique state',
   and has_table_privilege('mani_service', 'public.thread_technique_state', 'INSERT')
   and has_table_privilege('mani_service', 'public.thread_technique_state', 'UPDATE'), true);
 
+-- A stage takes at most one extra turn; the code enforces it, and the column refuses a count
+-- that would let a conversation loop.
+select pg_temp.want('a framework stage cannot hold more than once, in the database as well',
+  exists (select 1 from pg_constraint where conname = 'technique_state_holds_bounded'), true);
+
 -- Topics are written by the person and pasted into every system prompt.
 select pg_temp.want('profile topics are bounded in the database, not only in the API',
   exists (select 1 from pg_constraint where conname = 'profiles_topics_bounded'), true);

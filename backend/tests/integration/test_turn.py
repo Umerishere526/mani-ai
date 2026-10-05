@@ -7,7 +7,7 @@ import asyncpg
 import pytest
 
 from mani.auth.jwt import Claims
-from mani.chat import context, crisis, orchestrator
+from mani.chat import context, crisis, orchestrator, safety
 from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
@@ -158,7 +158,7 @@ async def test_a_turn_costs_exactly_one_provider_call(alice, model):
                 SmartPrompt(label="Later"),
                 SmartPrompt(label="Not now"),
             ],
-            state=TechniqueState(technique="abcde", step="examine"),
+            state=TechniqueState(technique="abcde", step="balanced"),
             style=Style(shape="mirror and ask"),
         )
     )
@@ -1515,3 +1515,212 @@ async def test_the_body_check_in_is_sent_from_the_script_not_reworded(alice, mod
 
     turn = await send(alice, thread.id, "yes, that fits what happened")
     assert turn.content.endswith("Would you like to notice what is happening in your body?")
+
+
+async def _stored_stage(alice, thread_id):
+    from mani.db import pool
+
+    async with pool.as_user(alice) as conn:
+        ctx = await threads.load_turn_context(conn, thread_id, ALICE)
+    return ctx.technique.phase, ctx.technique.holds
+
+
+async def _stand_at(alice, thread_id, phase: str) -> None:
+    from mani.db import pool
+
+    async with pool.as_user(alice) as conn:
+        await threads.set_technique_outcome(
+            conn, thread_id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
+            at_message_count=2, phase=phase,
+        )
+
+
+async def test_a_hold_is_counted_in_the_database_and_cleared_by_the_next_move(alice, model):
+    model(
+        Reply(text="Put another way: what did it mean to you?",
+              state=TechniqueState(technique="abcde", step="belief")),
+        Reply(text="What changed after you believed that?",
+              state=TechniqueState(technique="abcde", step="consequence")),
+    )
+    thread = await start(alice)
+    await _stand_at(alice, thread.id, "belief")
+
+    await send(alice, thread.id, "what do you mean?")
+    assert await _stored_stage(alice, thread.id) == ("belief", 1)
+
+    await send(alice, thread.id, "oh, I see, she thinks I am lazy")
+    assert await _stored_stage(alice, thread.id) == ("consequence", 0)
+
+
+async def test_a_reply_with_no_state_still_moves_the_stored_stage_on(alice, model):
+    model(Reply(text="What changed after you believed that?"))
+    thread = await start(alice)
+    await _stand_at(alice, thread.id, "belief")
+
+    await send(alice, thread.id, "I don't know")
+
+    assert await _stored_stage(alice, thread.id) == ("consequence", 0)
+
+
+async def test_a_request_to_hear_the_question_again_shows_the_model_only_that_question_and_is_held(alice, model):
+    scripted = model(Reply(text="Put simply: what did that mean to you?"))
+    thread = await start(alice)
+    await _stand_at(alice, thread.id, "belief")
+
+    await send(alice, thread.id, "I don't get it")
+
+    prompt = scripted.last_messages[-1]["content"]
+    assert "asked_again: yes" in prompt
+    assert "answered_ask:" in prompt
+    assert "\nstage:" not in prompt
+    assert "their_last" not in prompt
+    # The reply reported no state, and the code still holds the stage and counts it.
+    assert await _stored_stage(alice, thread.id) == ("belief", 1)
+
+
+async def test_a_second_request_after_the_extra_turn_moves_on(alice, model):
+    scripted = model(
+        Reply(text="Put simply: what did that mean to you?"),
+        Reply(text="That may help with the next one. What changed after you believed that?"),
+    )
+    thread = await start(alice)
+    await _stand_at(alice, thread.id, "belief")
+
+    await send(alice, thread.id, "I don't get it")
+    await send(alice, thread.id, "I still don't get it")
+
+    prompt = scripted.last_messages[-1]["content"]
+    assert "hold_used: yes" in prompt and "asked_again" not in prompt
+    assert await _stored_stage(alice, thread.id) == ("consequence", 0)
+
+
+URGE = "I keep typing the message and deleting it"
+LOGGER = "mani.chat.orchestrator"
+
+
+def _flagged(kind, text="What do you notice right now?", step="consequence", **extra) -> Reply:
+    return Reply(
+        text=text, state=TechniqueState(technique="abcde", step=step),
+        crisis=Crisis(reason="SECRET words the person used", category=kind), **extra,
+    )
+
+
+@pytest.mark.parametrize("kind", [c.value for c in safety.Category])
+async def test_a_flag_of_a_real_kind_pauses_a_running_framework_and_leaves_the_reply_alone(
+    alice, model, caplog, kind
+):
+    model(_flagged(kind))
+    thread = await start(alice)
+    await _stand_at(alice, thread.id, "belief")
+
+    with caplog.at_level("INFO", logger=LOGGER):
+        turn = await send(alice, thread.id, URGE)
+
+    assert turn.content == "What do you notice right now?"
+    assert await _stored_stage(alice, thread.id) == ("belief", 0)
+    assert f"framework paused: concern {kind}" in caplog.text
+
+
+@pytest.mark.parametrize("category", [None, "", "banana", "OTHERS", 3])
+async def test_a_flag_with_no_readable_kind_pauses_as_unspecified(alice, model, caplog, category):
+    model(Reply(
+        text="What do you notice right now?", state=TechniqueState(technique="abcde", step="consequence"),
+        crisis=Crisis.model_validate({"reason": "SECRET words", "category": category}),
+    ))
+    thread = await start(alice)
+    await _stand_at(alice, thread.id, "belief")
+
+    with caplog.at_level("INFO", logger=LOGGER):
+        await send(alice, thread.id, URGE)
+
+    assert await _stored_stage(alice, thread.id) == ("belief", 0)
+    assert "framework paused: concern unspecified" in caplog.text
+    assert "banana" not in caplog.text and "OTHERS" not in caplog.text
+
+
+async def test_a_flag_of_other_is_a_reply_with_no_flag_in_a_running_framework(alice, model, caplog):
+    model(_flagged("other"))
+    thread = await start(alice)
+    await _stand_at(alice, thread.id, "belief")
+
+    with caplog.at_level("INFO", logger=LOGGER):
+        await send(alice, thread.id, URGE)
+
+    assert await _stored_stage(alice, thread.id) == ("consequence", 0)
+    assert "concern flagged as other, framework continued" in caplog.text
+    assert "framework paused" not in caplog.text
+
+
+async def test_the_log_carries_the_kind_and_never_what_the_model_wrote_about_the_person(alice, model, caplog):
+    model(_flagged("self_harm"))
+    thread = await start(alice)
+    await _stand_at(alice, thread.id, "belief")
+
+    with caplog.at_level("INFO", logger=LOGGER):
+        await send(alice, thread.id, URGE)
+
+    assert "model flagged a safety concern" in caplog.text
+    assert "self_harm" in caplog.text
+    assert "SECRET" not in caplog.text
+
+
+async def test_a_turn_the_screen_blocks_pauses_whatever_kind_the_model_gave(alice, model, caplog):
+    model(_flagged("other"))
+    thread = await start(alice)
+    await _stand_at(alice, thread.id, "belief")
+
+    with caplog.at_level("INFO", logger=LOGGER):
+        await send(alice, thread.id, "honestly I don’t want to be here anymore")
+
+    assert await _stored_stage(alice, thread.id) == ("belief", 0)
+    assert "framework paused: screen" in caplog.text
+
+
+async def _make_the_confident_offer(alice, model, kind):
+    from mani.db import pool
+    from mani.models.rows import SupportStyle
+
+    model(
+        Reply(text="What is the hardest part of it?", heading_toward="structured_problem_solving"),
+        Reply(
+            text="Some questions we could go through together?",
+            prompts=[SmartPrompt(label="Try it", technique="structured_problem_solving"), SmartPrompt(label="Keep chatting", decline=True)],
+            offer_fit="clear", crisis=Crisis(category=kind),
+        ),
+    )
+    thread = await start(alice)
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set conversation_style = $2, message_count = message_count + 2 where id = $1",
+            thread.id, SupportStyle.SUPPORTIVE.value,
+        )
+    await send(alice, thread.id, "i have an exam tomorrow and i don't know where to start")
+    return await send(alice, thread.id, "i'm confused between studying everything or picking topics")
+
+
+async def test_outside_a_framework_a_flag_of_other_keeps_the_offer(alice, model):
+    kept = await _make_the_confident_offer(alice, model, "other")
+    assert [p.technique for p in kept.prompts if p.technique] == ["structured_problem_solving"]
+
+
+async def test_outside_a_framework_a_flag_of_a_real_kind_drops_a_new_offer(alice, model):
+    dropped = await _make_the_confident_offer(alice, model, "abuse_or_violence")
+    assert not any(p.technique for p in dropped.prompts)
+
+
+@pytest.mark.parametrize("kind,practice", [(None, True), ("other", True), ("medical_emergency", False)])
+async def test_the_body_route_runs_for_other_exactly_as_for_no_flag_and_not_for_a_real_kind(
+    alice, model, kind, practice
+):
+    crisis = Crisis(category=kind) if kind else None
+    model(Reply(
+        text="What do you notice?", crisis=crisis,
+        state=TechniqueState(technique="abcde", step="somatic_checkin"),
+    ))
+    thread = await start(alice)
+    await _stand_at(alice, thread.id, "somatic_checkin")
+
+    await send(alice, thread.id, "my chest feels tight")
+
+    phase, _ = await _stored_stage(alice, thread.id)
+    assert (phase == "somatic_practice") is practice

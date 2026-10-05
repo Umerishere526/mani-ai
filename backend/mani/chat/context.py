@@ -9,6 +9,7 @@ from mani.chat import repairs
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
 from mani.chat.router import Signal, is_confident
 from mani.chat.safety import normalize
+from mani.chat.techniques import SOMATIC_STAGES, moves_on_after
 from mani.db.threads import TurnContext
 from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
 
@@ -191,6 +192,60 @@ def word_count(text: str) -> int:
     return len(_RAW_WORD.findall(text))
 
 
+# What a person says when they did not understand a question or want it another way, as it reads
+# after `normalize`. A free phrase counts anywhere in the message, as whole words.
+HEARD_AGAIN_FREE_PHRASES = (
+    "i do not get it", "do not get it", "i do not understand", "do not understand",
+    "what you mean", "what do you mean", "what did you mean", "what d you mean",
+    "what does that mean", "what s that mean", "whats that mean", "what do u mean", "wdym", "wym",
+    "i do not follow", "do not follow", "not following", "what are you asking",
+    "say that differently", "say that another way", "say it differently", "say it another way",
+    "can you rephrase", "rephrase that", "i am confused", "i am lost",
+)
+# These read as a story or an objection inside a longer sentence ("I applied and didn't get it",
+# "No, you didn't understand", "I don't want to repeat that"), so they count only when the
+# message is the phrase, with at most "i", "can you" or "could you" before it and a few short
+# words after it.
+HEARD_AGAIN_ANCHORED_PHRASES = (
+    "did not understand", "did not get it", "did not get that", "did not catch that",
+    "say that again", "repeat that", "that does not make sense", "that makes no sense",
+    "does not make sense", "makes no sense", "do not know what that means",
+    "not sure what that means", "no idea what that means", "idk what that means",
+)
+_ANCHORED_AFTER = ("it", "that", "you", "u", "the question", "to me", "what you mean", "what you meant")
+_ANCHORED = re.compile(
+    r"^(?:(?:i|can you|could you) )?(?:"
+    + "|".join(re.escape(phrase) for phrase in HEARD_AGAIN_ANCHORED_PHRASES)
+    + r")(?: (?:" + "|".join(re.escape(word) for word in _ANCHORED_AFTER) + r"))*$"
+)
+# Words that do not change what was said.
+_HEARD_AGAIN_FILLER = frozenset(
+    {"still", "really", "so", "sorry", "just", "very", "honestly", "actually", "please", "quite"}
+)
+# Words that make the same phrase a statement about their situation, not about the question:
+# "I don't understand why he left", "I'm confused about my feelings".
+_ABOUT_THEIR_SITUATION = (
+    "why", "how", "about", "without", "because", "for me", "mean for", "means for", "not want",
+    "my", "he", "she", "they", "him", "her", "them",
+)
+HEARD_AGAIN_MAX_WORDS = 8
+
+
+def asks_to_hear_again(text: str) -> bool:
+    """Whether a typed message says they did not understand the question or asks for it another
+    way. A short list of phrases, so a request in other words is left to the model."""
+    if word_count(text) > HEARD_AGAIN_MAX_WORDS:
+        return False
+    words = [w for w in normalize(text).split() if w not in _HEARD_AGAIN_FILLER]
+    said = " ".join(words)
+    padded = f" {said} "
+    if any(f" {word} " in padded for word in _ABOUT_THEIR_SITUATION):
+        return False
+    return any(f" {phrase} " in padded for phrase in HEARD_AGAIN_FREE_PHRASES) or bool(
+        _ANCHORED.match(said)
+    )
+
+
 def with_rewrite_notes(prefix: str, reasons: list[str]) -> str:
     """The same [ctx] block with a line per reason the draft cannot stand, so the model writes it
     again. Said in the block the model already reads."""
@@ -262,6 +317,7 @@ def build(
     framework_starting: bool = False,
     urgent: bool = False,
     their_last: str | None = None,
+    asked_again: bool | None = None,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -297,6 +353,12 @@ def build(
         framework is not None and technique is not None and technique.phase
         and not safety_concern
     )
+    # They asked to hear the question again, on a turn that moves on. Their message is then not an
+    # answer to go on from, so `their_last` and `answering` are left out whatever the count.
+    heard_again = bool(
+        asked_again and running and not framework_starting and not offer_waiting
+        and moves_on_after(framework, technique.phase)
+    )
     if running:
         phase = "framework"
     elif not ctx.techniques_offered and technique is None:
@@ -308,7 +370,7 @@ def build(
     lines.append(f"conversation_phase: {phase}")
     if not running and not clarification_used(history):
         lines.append("clarification_available: yes")
-    if their_last and not offer_waiting and not safety_concern and (
+    if their_last and not offer_waiting and not safety_concern and not heard_again and (
         not running or their_last in ("correction", "short")
     ):
         # Said while the questions run too, except `heard`: a stage says what to do when an
@@ -379,65 +441,205 @@ def build(
             lines.extend(_stage_lines("offer", candidate, "offering", resolve_style(ctx)))
 
     if running:
-        style = resolve_style(ctx)
-        if framework_starting:
-            # They have just said yes. What they told Mani before this counts toward the first
-            # stage; the note below says how to use it.
-            lines.append("framework_starting: yes")
-        lines.append(f"active_framework: {framework.id}")
-        lines.append(f"framework_stages: {', '.join(framework.phases)}")
-        stage = _stage_lines("stage", framework, technique.phase, style)
-        # The turn they say yes, a first stage their words already answer (by its ready_when) is
-        # said back and the second stage's question is asked; otherwise the first is asked.
-        index = framework.phase_index(technique.phase)
-        if offer_waiting:
-            # The offering stage's question is the offer they have just typed past.
-            stage = [line for line in stage if not line.startswith("stage_ask:")]
-        if framework_starting and technique.phase == "offering" and index + 1 < len(framework.phases):
-            index += 1
-            stage = _stage_lines("stage", framework, framework.phases[index], style)
-        lines.extend(stage)
-        if framework_starting:
-            lines.append(
-                "stage_note: first judge whether what they have told you meets stage_ready_when. "
-                "If it does, say it back in a clause, in their words, and ask the next stage's "
-                "question (next_stage_ask) in the same reply, never asking them to confirm it. "
-                "If it does not, ask stage_ask built from what they said, in their words, so "
-                "that it asks for the missing thing"
+        lines.extend(
+            _running_lines(
+                framework, technique.phase, resolve_style(ctx), technique.holds,
+                framework_starting=framework_starting, offer_waiting=offer_waiting,
+                rephrase=heard_again and technique.holds == 0,
             )
-        else:
-            lines.append(
-                "stage_note: put the stage question in terms of what they have told you, in "
-                "their words; never send it bare"
-            )
-        if 0 <= index < len(framework.phases) - 1:
-            lines.extend(
-                _stage_lines("next_stage", framework, framework.phases[index + 1], style)
-            )
+        )
 
     return "[ctx]\n" + "\n".join(lines) + "\n[/ctx]\n\n"
 
 
-def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> list[str]:
+def _running_lines(
+    framework: Framework,
+    phase: str,
+    style: str,
+    holds: int,
+    *,
+    framework_starting: bool,
+    offer_waiting: bool,
+    rephrase: bool = False,
+) -> list[str]:
+    """The framework section of the block: which stages Mani sees and how to use them."""
+    lines: list[str] = []
+    if framework_starting:
+        # They have just said yes. What they told Mani before this counts toward the first
+        # stage; the note below says how to use it.
+        lines.append("framework_starting: yes")
+    lines.append(f"active_framework: {framework.id}")
+    lines.append(f"framework_stages: {', '.join(framework.phases)}")
+    if not framework_starting and moves_on_after(framework, phase):
+        lines.extend(_move_on_lines(framework, phase, style, holds, rephrase=rephrase))
+        return lines
+    stage = _stage_lines("stage", framework, phase, style)
+    # The turn they say yes, a first stage their words already answer (by its ready_when) is
+    # said back and the second stage's question is asked; otherwise the first is asked.
+    index = framework.phase_index(phase)
+    if offer_waiting:
+        # The offering stage's question is the offer they have just typed past.
+        stage = [line for line in stage if not line.startswith("stage_ask:")]
+    if framework_starting and phase == "offering" and index + 1 < len(framework.phases):
+        index += 1
+        stage = _stage_lines("stage", framework, framework.phases[index], style)
+    lines.extend(stage)
+    if framework_starting:
+        lines.append(
+            "stage_note: first judge whether what they have told you meets stage_ready_when. "
+            "If it does, say it back in a clause, in their words, and ask the next stage's "
+            "question (next_stage_ask) in the same reply, never asking them to confirm it. "
+            "If it does not, ask stage_ask built from what they said, in their words, so "
+            "that it asks for the missing thing"
+        )
+    else:
+        lines.append(
+            "stage_note: put the stage question in terms of what they have told you, in "
+            "their words; never send it bare"
+        )
+    if 0 <= index < len(framework.phases) - 1:
+        lines.extend(
+            _stage_lines("next_stage", framework, framework.phases[index + 1], style)
+        )
+    return lines
+
+
+def _branch_lines(branches: list[dict], style: str, *, mark_counted: bool = False) -> str:
+    """A stage's branches on one line. On the stage just answered, a branch that keeps Mani on
+    it is marked as using the stage's one extra turn."""
+    return " | ".join(
+        f"if {e['when']}{' (uses your extra turn)' if mark_counted and e.get('counted') else ''}: "
+        f"{repairs.reply_for(e, style)}"
+        for e in branches
+    )
+
+
+# The stage asked on a turn that moves on, word for word. The model reports `stage` as its
+# step, or `answered` when it holds.
+_MOVE_ON_NOTE = (
+    "stage_note: they have replied to the answered stage, so it is done. Ask stage_ask now, "
+    "in their words, never bare. If stage_if_earlier_missing is given and nothing usable was "
+    "said at that stage, ask that instead. Report stage as your step. Stay on the answered "
+    "stage, reporting answered as your step, only in these cases: they did not understand the "
+    "question, so say it again once in simpler everyday words; or a branch in "
+    "answered_if_unclear applies (a branch marked uses your extra turn uses it up) or you use "
+    "one of the client's lines, so use its reply as written"
+)
+
+# The same turn at a stage where they choose among options they named: the exception to
+# asking the next stage comes first, because it was folded into the next question when it came
+# after "ask stage_ask now".
+_PICKS_NOTE = (
+    "stage_note: they have replied to the answered stage, which asks them to choose among "
+    "options they named. If they named two or more options in this conversation and say they "
+    "do not know, cannot choose, or ask you to suggest or pick one, stay on the answered stage, "
+    "reporting answered as your step, and do not ask stage_ask: offer ONE of their options with "
+    "a short reason from what they said, and ask whether it suits them or another would be "
+    "easier. Never decide for them. Otherwise it is done: if they asked you to choose, say "
+    "plainly that this one is theirs to say, then ask stage_ask now, in their words, never "
+    "bare. If stage_if_earlier_missing is given and nothing usable was said at that stage, ask "
+    "that instead. Report stage as your step. Also stay on the answered stage only if they did "
+    "not understand the question, so say it again once in simpler everyday words, or a branch "
+    "in answered_if_unclear applies or you use one of the client's lines, so use its reply as "
+    "written"
+)
+
+# The turn they asked to hear the question again: the model is shown only that stage's own
+# question, so there is nothing to fold the request into.
+_REPHRASE_NOTE = (
+    "stage_note: they say they did not understand your last message or ask for it another way. "
+    "Stay on the answered stage, reporting answered as your step, and ask no other question: "
+    "say again the question your last message asked, in simpler, shorter, everyday words, as "
+    "ONE question, using answered_ask as its model, with nothing added after it, no new topic, "
+    "no new example and no explaining of the method. If your last message asked none or more "
+    "than one, say answered_ask again in simpler words instead. If a branch in "
+    "answered_if_unclear applies, use its reply as written instead, with nothing added"
+)
+
+# The same turn once the stage has used its extra turn: it is done whatever they said.
+_HOLD_USED_NOTE = (
+    "stage_note: you have already stayed on the answered stage once, so it is done whatever "
+    "they said. Ask stage_ask now, in their words, never bare. If stage_if_earlier_missing is "
+    "given and nothing usable was said at that stage, ask that instead. Report stage as your "
+    "step. If your last message offered one of their options, they are answering that, so use "
+    "the one they chose in what you ask. If they say they still did not understand, say in a "
+    "clause that the next question may help, then ask stage_ask. Only a branch in "
+    "answered_if_unclear that is not "
+    "marked uses your extra turn, or one of the client's lines, may keep you on the answered "
+    "stage, and then use its reply as written"
+)
+
+
+def _move_on_lines(
+    framework: Framework, phase: str, style: str, holds: int, *, rephrase: bool = False
+) -> list[str]:
+    """A turn that moves on: the stage they have just answered, then the one to ask.
+
+    The answered stage's question and its readiness are withheld, so there is nothing to ask
+    twice, and so is any branch that only asks it again. The body check stages go in full: its
+    branches are the client's routing and not a way of asking again. `holds` is how many extra
+    turns the answered stage has already used.
+    """
+    answered = framework.stages.get(phase) or {}
+    lines = [f"answered: {phase}"]
+    if answered.get("purpose"):
+        lines.append(f"answered_purpose: {answered['purpose']}")
+    if rephrase:
+        # Only this stage's own question, so the model can say it again and nothing else.
+        ask = (answered.get("ask") or {}).get(style)
+        if ask:
+            lines.append(f"answered_ask: {ask}")
+        lines.append("asked_again: yes")
+        branches = [e for e in answered.get("if_unclear") or [] if not e.get("start_only")]
+        if branches:
+            lines.append(f"answered_if_unclear: {_branch_lines(branches, style, mark_counted=True)}")
+        lines.append(_REPHRASE_NOTE)
+        return lines
+    if answered.get("picks_from_options") and holds == 0:
+        lines.append("answered_picks_options: yes")
+    if holds:
+        lines.append("hold_used: yes")
+    branches = [e for e in answered.get("if_unclear") or [] if not e.get("start_only")]
+    if branches:
+        lines.append(f"answered_if_unclear: {_branch_lines(branches, style, mark_counted=True)}")
+    to_ask = framework.phases[framework.phase_index(phase) + 1]
+    lines.extend(_stage_lines("stage", framework, to_ask, style, to_ask=to_ask not in SOMATIC_STAGES))
+    if holds:
+        lines.append(_HOLD_USED_NOTE)
+    else:
+        lines.append(_PICKS_NOTE if answered.get("picks_from_options") else _MOVE_ON_NOTE)
+    return lines
+
+
+def _stage_lines(
+    prefix: str, framework: Framework, phase: str, style: str, *, to_ask: bool = False
+) -> list[str]:
     """One stage's full guidance - current or next - resolved to one conversation style.
 
     Purpose, listening cues, readiness and boundaries are clinical rather than tonal and do
     not vary; `ask` is the one leaf a style changes, so only the resolved style's variant is
-    sent rather than all three.
+    sent rather than all three. A stage that is about to be asked (`to_ask`) leaves out its
+    readiness and its branches, which only matter once it has been answered, and carries the
+    question to use when an earlier answer was never given.
     """
     stage = framework.stages.get(phase)
     if not stage:
         return [f"{prefix}: {phase}"]
 
     lines = [f"{prefix}: {phase}"]
-    for field in ("purpose", "listen_for", "ready_when"):
+    for field in ("purpose", "listen_for") if to_ask else ("purpose", "listen_for", "ready_when"):
         if stage.get(field):
             lines.append(f"{prefix}_{field}: {stage[field]}")
     if stage.get("boundaries"):
         lines.append(f"{prefix}_boundaries: " + "; ".join(stage["boundaries"]))
-    if stage.get("if_unclear"):
-        rendered = " | ".join(f"if {e['when']}: {repairs.reply_for(e, style)}" for e in stage["if_unclear"])
-        lines.append(f"{prefix}_if_unclear: {rendered}")
+    if stage.get("if_unclear") and not to_ask:
+        lines.append(f"{prefix}_if_unclear: {_branch_lines(stage['if_unclear'], style)}")
+    missing = stage.get("if_earlier_missing")
+    if missing and to_ask:
+        lines.append(
+            f"{prefix}_if_earlier_missing: if nothing usable was said at {missing['needs']}: "
+            f"{repairs.reply_for(missing, style)}"
+        )
     ask = (stage.get("ask") or {}).get(style)
     if ask:
         lines.append(f"{prefix}_ask: {ask}")

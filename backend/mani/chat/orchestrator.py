@@ -432,6 +432,7 @@ async def send(
         framework_starting=accepted_this_turn, urgent=urgent,
         # A tap is a choice among Mani's own buttons, not words to read.
         their_last=None if tapped else context.classify_reply(content),
+        asked_again=None if tapped else context.asks_to_hear_again(content),
     )
     for_model = (
         f'User tapped the button: "{tapped.label}".'
@@ -519,12 +520,13 @@ async def send(
     # locks. A model-reported crisis is kept as a non-locking concern - logged, and the framework
     # held off this turn - so a genuine novel phrasing still gets careful handling without
     # cutting off the conversation the person came for.
-    model_concern = reply.crisis is not None
-    if model_concern:
-        logger.info(
-            "model reported a safety concern on thread %s: %s",
-            ctx.thread.id, reply.crisis.reason,
-        )
+    flagged = reply.crisis is not None
+    flag_kind = safety.flag_kind(reply.crisis.category) if reply.crisis is not None else None
+    # Only a flag that is not `other` pauses anything; `other` is a reply with no flag.
+    model_concern = flagged and safety.flag_pauses(reply.crisis.category)
+    if flagged:
+        # The kind only: the model's `reason` is a summary of what the person said.
+        logger.info("model flagged a safety concern on thread %s: %s", ctx.thread.id, flag_kind)
 
     if deferred:
         if reply.state is not None and reply.state.accepted is True:
@@ -596,12 +598,22 @@ async def send(
                     for m in [m for m in history if m.role is MessageRole.MANI][1:])
         ),
         clarification_already_used=context.clarification_used(history),
+        current_holds=technique.holds if technique else 0,
+        asked_again=False if tapped else context.asks_to_hear_again(content),
     )
+    framework_running = outcome is TechniqueOutcome.ACCEPTED
     if assessment.blocks_framework or model_concern:
         # A concern pauses the framework rather than ending it: nothing this reply reports
         # about a stage is applied, and it may not open a new one. The stored state is left
         # exactly as it was, so the framework resumes from there once the concern has passed.
         paused = [p.technique for p in fixed.prompts if p.technique]
+        pause_note = []
+        if framework_running:
+            pause_note = [
+                f"framework paused: screen {assessment.category.value if assessment.category else assessment.level.value}"
+                if assessment.blocks_framework
+                else f"framework paused: concern {flag_kind}"
+            ]
         fixed = dataclasses.replace(
             fixed,
             framework_id=None,
@@ -609,7 +621,12 @@ async def send(
             prompts=[p for p in fixed.prompts if not p.technique],
             notes=fixed.notes
             + ([f"dropped a technique offered on a safety-concern turn: {', '.join(paused)}"]
-               if paused else []),
+               if paused else [])
+            + pause_note,
+        )
+    elif flagged and framework_running:
+        fixed = dataclasses.replace(
+            fixed, notes=fixed.notes + ["concern flagged as other, framework continued"]
         )
     if technique is not None and not (assessment.blocks_framework or model_concern):
         fixed = _body_route_step(
@@ -712,6 +729,7 @@ async def send(
                 else count_after
             ),
             library_offered_since=False,
+            holds=fixed.holds,
         )
         if accepted_this_turn:
             updates.offer_frameworks.append(decided)

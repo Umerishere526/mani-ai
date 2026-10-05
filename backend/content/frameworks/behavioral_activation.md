@@ -132,10 +132,13 @@ stages:
     if_unclear:
       - when: "\"Everything.\""
         reply: "Everything feels difficult to begin. What is one thing you miss doing?"
+        start_only: true
       - when: "several activities named"
         reply: "You named several things. Which one matters most today?"
+        start_only: true
       - when: "they named a wish but no activity - \"I want to be more productive.\" Do not go on to why it matters"
         reply: "What things would you want to do to be more productive?"
+        start_only: true
       - when: "they report an injury, severe or sudden physical symptoms, intoxication, or a medical condition as the reason"
         reply: "A physical symptom like that comes first, and I would not ask you to push through it. What would be most helpful right now?"
     ask:
@@ -145,34 +148,31 @@ stages:
   matters:
     purpose: "Establish why returning to this activity matters to the user."
     listen_for: "The user's reason for wanting to return to the activity."
-    ready_when: "Why the activity matters is clear. MANI does not assign a reason."
     boundaries:
       - "must not tell the user why the activity should matter"
       - "must not use guilt"
       - "must not connect the activity to productivity unless the user does"
       - "must not pressure the user toward an activity they do not value"
-    if_unclear:
-      - when: "it does not matter - \"I only think I should do it.\""
-        reply: "This action does not matter to you right now. What would matter more?"
+    if_earlier_missing:
+      needs: stopped
+      reply: "What is it about this that matters to you?"
     ask:
       supportive: "Why does this matter to you?"
       reflective: "Why does this matter to you?"
       direct: "Why does this matter to you?"
   choose:
     purpose: "Select one activity rather than attempting everything."
+    picks_from_options: true
     listen_for: "The single activity the user wants to address first."
-    ready_when: "One activity is selected. The framework does not become a list of tasks."
     boundaries:
       - "must not choose the activity for them - but when they ask you to pick, offer one of the things they named, as a small first step, for them to accept or change"
       - "must not create a long task list"
       - "must not select several activities"
       - "must not prioritize without the user's input"
       - "must not let the activity be unrelated to what stopped - it should interrupt the same pattern (answering the person they've gone quiet on, not an unrelated pleasant activity instead), or it treats the symptom rather than the avoidance"
-    if_unclear:
-      - when: "wants to address everything"
-        reply: "You want to address everything at once. Which one action would make a beginning?"
-      - when: "asks MANI to pick - \"Pick one for me.\" / \"What should I start with?\""
-        reply: "<one of the things they named, as a small first step>. Does that work, or would you change it?"
+    if_earlier_missing:
+      needs: stopped
+      reply: "What is one small thing you would like to get back to?"
     ask:
       supportive: "Which one do you want to begin with?"
       reflective: "Which one do you want to begin with?"
@@ -180,7 +180,6 @@ stages:
   manageable:
     purpose: "Reduce the activity until it fits the user's present capacity."
     listen_for: "A limited action the user believes is possible within current capacity."
-    ready_when: "The activity is specific, limited, within the user's control, safe, and realistic within current capacity - the real test is whether they could do it today feeling exactly as they do now, not whether they expect to feel more able later. If the answer to that is no, shrink the action again rather than proceeding."
     boundaries:
       - "must not make the action larger"
       - "must not dismiss a small action as insufficient"
@@ -188,11 +187,9 @@ stages:
       - "must not assume the action is safe"
       - "must not prescribe exercise or physical activity without considering limitations"
       - "may suggest up to three very small options, and only when the user cannot name one - never a longer list, and the user chooses"
-    if_unclear:
-      - when: "still too large - \"I will answer every message tonight.\""
-        reply: "Answering every message is a large first action. What smaller part are you confident you can complete?"
-      - when: "cannot identify an action - \"I don't know.\""
-        reply: "The first action is not clear yet. Would <one to three very small options that fit what they stopped, such as getting dressed, opening the curtains, or texting someone> feel most manageable?"
+    if_earlier_missing:
+      needs: choose
+      reply: "What is one small thing you could do today?"
     ask:
       supportive: "What is the smallest version you could do?"
       reflective: "What is the smallest version you could do?"
@@ -200,16 +197,15 @@ stages:
   begin:
     purpose: "Turn the activity into a specific action rather than a general intention."
     listen_for: "A specific time, cue, place, or starting condition."
-    ready_when: "When or how they will begin is named. A specific time is useful but not required - a cue may be sufficient."
     boundaries:
       - "must not force an exact time"
       - "must not create an elaborate schedule"
       - "must not require reminders the user does not want"
       - "must not turn the process into productivity management"
       - "must not ask whether they feel ready or feel up to it - the plan is meant to hold even when mood does not cooperate, and asking makes feeling ready the precondition it was designed not to need"
-    if_unclear:
-      - when: "cannot choose a time"
-        reply: "A set time does not work for you. What could remind you to begin?"
+    if_earlier_missing:
+      needs: manageable
+      reply: "When could you start on something small?"
     ask:
       supportive: "When will you do it?"
       reflective: "When will you do it?"
@@ -217,36 +213,31 @@ stages:
   barrier:
     purpose: "Identify what may prevent action and what the user can do if it appears."
     listen_for: "A likely obstacle and a response the user considers realistic."
-    ready_when: "The most likely barrier and a manageable response are named. No detailed contingency plan is required."
     boundaries:
       - "must not list every possible obstacle"
       - "must not assume why the user may not act"
       - "must not frame difficulty completing the action as failure"
       - "must not demand certainty that the user will complete it"
     if_unclear:
-      - when: "cannot identify a barrier"
-        reply: "The barrier is not clear yet. What usually happens when you try to begin?"
-      - when: "the action depends on someone else - \"I need my partner to apologize.\""
-        reply: "The apology depends on your partner. What action is within your control?"
       - when: "the action is unsafe"
         reply: "That action could place you at risk. What is a safer action you can take?"
+    if_earlier_missing:
+      needs: manageable
+      reply: "What might get in the way of starting?"
     ask:
       supportive: "What could prevent you from beginning?"
       reflective: "What could prevent you from beginning?"
       direct: "What could prevent you from beginning?"
   closing:
     purpose: "Confirm completion in the user's own terms, without promising the plan will work or that the user will feel better."
-    ready_when: >-
-      The user has identified what they stopped or avoided, why it matters, selected one
-      activity, reduced it to a manageable action, identified when or how to begin, and
-      identified a likely barrier and a response. The user does not need to complete the action
-      during the conversation, select several activities, report a change in mood, feel
-      motivated, promise a result, create a long-term plan, or guarantee nothing will interfere.
     boundaries:
       - "must not promise the plan will work or that the user will feel better"
       - "must not summarize the completed framework"
       - "must not require the user to feel motivated to be done"
       - "must not say the action feels manageable unless the user used similar language"
+    if_earlier_missing:
+      needs: manageable
+      reply: "Is there anything you would add before we finish?"
     ask:
       supportive: "You chose one action that feels manageable today. How is that sitting with you?"
       reflective: "You chose one action without waiting for motivation. What changes when you approach it this way?"

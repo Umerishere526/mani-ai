@@ -259,6 +259,9 @@ def _asks():
         for stage, body in framework["stages"].items():
             for style, text in body["ask"].items():
                 yield f"{path.stem}.{stage}.{style}", text
+            reply = (body.get("if_earlier_missing") or {}).get("reply")
+            for style, text in (reply.items() if isinstance(reply, dict) else [("every style", reply)] if reply else []):
+                yield f"{path.stem}.{stage}.if_earlier_missing.{style}", text
 
 
 @pytest.mark.parametrize("where,text", list(_asks()))
@@ -276,9 +279,9 @@ def test_a_stage_ask_poses_one_question(where, text):
     assert text.count("?") == 1, f"{where} asks {text.count('?')} questions: {text}"
 
 
-def test_staying_on_a_stage_is_not_told_to_repeat_the_same_wording():
+def test_an_answered_stage_is_not_asked_again():
     """Observed live (2026-09-24): ABCDE's activate stage asked for 'the literal words your
     manager used' three times in a row, near-verbatim, while the person kept answering with
-    something else. The prompt now says explicitly not to do that."""
-    base = (PROMPTS_DIR / "mani_base.md").read_text()
-    assert "never ask twice for the same thing the same way" in base
+    something else. The prompt says a stage is asked once and then the next one."""
+    base = " ".join((PROMPTS_DIR / "mani_base.md").read_text().split())
+    assert "never ask an answered stage again" in base

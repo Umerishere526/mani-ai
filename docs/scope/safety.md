@@ -32,6 +32,24 @@ When Mani asks whether someone is safe and they reply "yes" or "no", the safety 
 
 - [ ] Design it (spec): `/architect a short answer to Mani's safety question is checked`
 
+### 37. The model's safety flag does not stall DBT STOP · done · GA
+
+When the model reports a safety concern, the running framework is paused for that turn: nothing is recorded, so the stage lags and the person can be asked the same question twice or miss the body check. In DBT STOP the model reports one often, because the person is describing an urge to act ("potentially volatile situation"), which is what the framework is for. From spec 0003 (a framework stage moves on after one answer): in 54 real conversations two did not reach the body check, and a trace showed the pause on those turns. It overlaps row 11, which decides what a flag from the model means.
+**Done when:** a person in DBT STOP whom the model flags as in a volatile situation, but not at risk of harm, keeps moving through the stages and reaches the body check, a real risk still stops the framework and gets the safety response, and a test over the client's STOP conversations shows both.
+
+Spec: [0004](../specs/0004-safety-flag-kind-decides-pause/index.md) · code in backend/mani/chat/, backend/mani/llm/schema.py, backend/scripts/
+
+- [x] Design it (spec): `/architect the model's safety flag does not stall DBT STOP`
+- [x] Build it: `/develop the model's safety flag does not stall DBT STOP`
+  - [x] The authored risk set and the baseline on today's code (AC-9)
+  - [x] The kind on the flag, the rule, the orchestrator, notes and log (AC-1 to AC-5, AC-7)
+  - [x] The instruction on the flag, in the prompt and the description, with its test (AC-6)
+  - [x] Measure, client sign off, record it (AC-8, AC-9, AC-10)
+- [x] Verify it: `/check verify the model's safety flag does not stall DBT STOP`
+- [x] Test it: `/test the model's safety flag does not stall DBT STOP`
+- [x] Review it (fresh model): `/check review the model's safety flag does not stall DBT STOP`
+- [x] Document it: `/document the model's safety flag does not stall DBT STOP`
+
 ## Slice 7: Ready for a limited beta
 
 ### 13. Private conversations stay private · needs a decision · GA

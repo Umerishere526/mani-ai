@@ -92,6 +92,8 @@ class TechniqueState(Row):
     phase: str | None = None
     at_message_count: int
     library_offered_since: bool = False
+    # Extra turns the stored stage has used, 0 or 1; see migration 011.
+    holds: int = 0
 
 
 class ResponseStyle(Row):

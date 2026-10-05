@@ -127,6 +127,7 @@ One row per thread — the currently (or most recently) active framework.
 | 6 | `at_message_count` | integer | required | Thread's `message_count` when this state was last written — the cooldown clock. |
 | 7 | `library_offered_since` | boolean | default `false` | Whether the library follow-up has been offered since acceptance. |
 | 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
+| 9 | `holds` | smallint | default `0`, 0–1 (CHECK) | Extra turns the stored stage has used: 1 after a counted hold (a question said again once, one of the person's options offered once, DBT STOP's acting hold), back to 0 on every move. Written with the stage by `mani_service` only (migration 011). |
 
 ### `public.thread_techniques_offered`
 Frequency-limiting log — every framework ever offered in a thread.

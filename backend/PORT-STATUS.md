@@ -50,6 +50,21 @@ History (how the port went, what was fixed from review, old measurements) is in
   now?". The framework is not retired, and Chat More / Go to Library do not appear, until a practice has been
   given (or they decline, or say what they will do). "It comes back" gets the client's waves reply for the
   style.
+  Inside a framework a reply to a stage is answered by asking the stage after it (spec 0003, ADR-013 proposed):
+  whatever they say, "I don't know" included, `context.build` shows `answered` and the next `stage` without the
+  old question, and `repairs.apply` records only the next stage or a hold (`held at <stage>` in the repair
+  notes). The turn they accept, a stored `offering` and the body check keep the earlier rules. Stages with no
+  `ready_when` after the first; 36 branches kept, 49 dropped; 26 stages carry an `if_earlier_missing` question for
+  an earlier answer that never came; ABCDE and Thought Reframe have one more stage each (`evidence_for` and
+  `evidence_against`, `facts_for` and `facts_against`). A local thread stored at the old `examine` or `facts` restarts
+  at the offering.
+  A stage may take one extra turn, counted in `thread_technique_state.holds` (migration 011): a question said
+  again once in simpler words, one of the person's own options offered at Behavioral Activation `choose` and
+  Structured Problem Solving `select` (those stages get a `stage_note` of their own that leads with the offer),
+  and DBT STOP's five acting branches (`counted: true`). A redirect (safety, a framework that does not fit, the
+  client's three lines) is not counted, and the code recognises it from the reply or Mani's message before it
+  (`repairs.carries_redirect`); the model marks nothing. A second counted hold records the next stage
+  (`hold limit at <stage>`). 27 stages carry `if_earlier_missing`.
 - **Memory** (ADR-005): per person, folded from earlier chats by `mani/memory.py`; idle threads fold through
   `scripts/fold_idle_threads.py` or `GET /internal/cron/fold-summaries` behind `CRON_SECRET`.
 - **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). A completing framework picks one
@@ -149,6 +164,22 @@ Ordered by what breaks first.
 - Tell the client about ADR-010: after Try it Mani no longer asks the first stage's question when the person
   has already said it, and a person who cannot say what to do is offered up to three options at the first
   "I don't know". Both depart from the literal Structured Problem Solving example.
+- Spec 0003, redirects: the model's own mark was wrong 24 of 24 times and is removed; the code now recognises a
+  redirect by its words. No scenario contains a real redirect, so how often the model quotes a safety branch or
+  one of the client's lines is unmeasured. Open follow up work in the spec: end or pause the framework on a safety
+  branch instead of holding, four redirect branches whose reply is scenario wording and cannot be recognised, the
+  "I misunderstood" line used as an uncounted rephrase, and no exit state for the "stop here" line.
+- Spec 0004 (row 37), the model's safety flag now names a kind (`Crisis.category`, the screen's eight kinds plus `other`).
+  A real kind pauses a running framework as before; `other` is treated as no flag; a missing or unknown kind pauses.
+  Built and tested; measured on 38 authored messages: urge messages flagged 11 of 40 before and 0 of 40 after, risk
+  messages 148 of 150 both times. The nine kinds must be in the system prompt (`response_format.md`), not only the
+  schema, or the model writes its own labels; that section also carries the rule that doubt goes to a danger kind and not
+  `other`, and a test checks the prompt and the description name exactly the set the code reads. A threat or a wish to hurt a person
+  is `harm_to_other` even when angry or vague, never `other`; six ambiguous threats (AC-9) paused 25 of 30 runs after
+  that sentence (23 before), the one gap being a resentful wish, "I want her to suffer the way I did". The risk bar was accepted by muhammad on these numbers. DBT STOP run once (3 conversations): all reached the
+  body check, and a model flag read as `other` let the framework go on. The client approved the kinds, both texts and
+  the set (AC-10, an earlier page; the corrected page was not re-sent). Final wording measured: risk 176 of 180
+  (every message but the known gap 5 of 5, none called `other`), urge pauses 4 of 40 (11 before). Done 2026-10-04.
 - Panic with no action in sight: the overview sends it to DBT STOP, the STOP specification is written around an
   action about to be taken. The client's call.
 - Whether a crisis turn should hand off to an exercise. Left out on purpose; do not add it as a missing branch.
@@ -229,5 +260,28 @@ change to prompts, framework content or the offer rules, and compare with these.
     the spec allows. The offer part of the base says the questions are ones "you could go through together" in every
     style, so offers read Supportive; scope row 6 rewrites that. AC-7's zero for "sounds like" and its per style
     bar of 0.3 are also not met; muhammad accepted the rate and the client is to be asked. `/architect` amends both.
+- Moving a stage on after one answer (spec 0003), first real runs 2026-10-04 with `scripts/eval_replies.py`, one
+  scenario per framework started inside it, three runs, every style (54 conversations, `mani_base` 120 lines):
+  - One stage per reply, in order, in all 54. No stage stayed put without a hold and none was asked twice.
+  - Reached the body check in 50 of 54; the four misses each followed a hold that used up a turn.
+  - Four holds, none of them in the spec's list: three Behavioral Activation replies to "what do you mean?" at
+    `barrier`, and one Structured Problem Solving reply that gave the hand off but reported `closing`, which dropped
+    the Chat More buttons.
+  - "Pick one for me" at Behavioral Activation `choose` gave one step in 9 of 9. "Tell me what to do" at Structured
+    Problem Solving `options` got "that is yours to decide" in 8 of 9, because that framework's own boundaries say
+    never choose for them. Changing the base prompt's wording did not move it.
+  - Replies to "what do you mean?" were answered in a clause and moved on in 51 of 54.
+- The two holds (spec 0003, tasks 6 to 8), 2026-10-04, 54 conversations, scenarios with a rephrase asked twice and
+  "suggest something": reached the body check 54 of 54; no `hold limit`; 27 counted holds and 24 marked redirect, none
+  of the 24 a real redirect; "I don't get it" held about four times in ten (ABCDE and Thought Reframe nearly always
+  moved on); "suggest something" held 5 of 9 at Structured Problem Solving `select`, 1 of 9 at Behavioral Activation
+  `choose`. muhammad read one transcript per framework on 2026-10-04: pass for all six.
+- Same day after removing the redirect mark and adding the pick note, 54 conversations again: 54 of 54 reached the body
+  check, no hold limit, no redirect hold, no stage held twice; "suggest something" held 7 of 9 at `choose` and 8 of 9
+  at `select`; 63 counted holds. muhammad read one transcript per framework: pass for all six. ADR-013 accepted.
+- A request to hear a question again (spec 0003, AC-17), 54 conversations: the code recognises it from phrases, shows
+  the model only the stage's own question and records the counted hold; the first "I don't get it" was held 9 of 9 at
+  every framework (was 25 of 54), the second never, 54 of 54 reached the body check, and after the note was reworded to
+  ask one question no rephrase had two (was 20 of 54). muhammad read one transcript per framework: pass for all six.
 - Local Supabase answers on 54321 to 54324 on this machine, not the 5434x in `config.toml`. See
   `.claude/BACKEND.md`.

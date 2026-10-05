@@ -8,6 +8,7 @@ import asyncio
 import logging
 import os
 import pathlib
+import re
 import sys
 import time
 import uuid
@@ -206,6 +207,62 @@ async def _run_one(
     return exchanges
 
 
+_HOLD_NOTE = re.compile(r"\b(redirect held|held|hold limit) at (\w+)")
+
+
+def _hold(exchange: Exchange) -> tuple[str, str] | None:
+    """What the code recorded for this reply when it held or was refused a hold: the kind
+    (`redirect held`, `held` for a counted one, `hold limit`) and the stage."""
+    for note in exchange.repair_notes:
+        match = _HOLD_NOTE.search(note)
+        if match:
+            return match.group(1), match.group(2)
+    return None
+
+
+def _stage_findings(exchanges: list[Exchange], start_in: dict | None) -> list[validators.Finding]:
+    """Whether the stored stage moved one on after every reply, and every turn that held.
+
+    A hold is the reply reporting the stage the person just answered. Each is listed with its
+    kind, counted or redirect, so that it can be read and judged against the base prompt's
+    reasons. A `hold limit` means the model held after its extra turn was used, so the next stage
+    was recorded without having been asked. A stage that stayed put with no hold means the reply
+    left out its state, so the record lags what was asked.
+    """
+    findings: list[validators.Finding] = []
+    before = start_in["phase"] if start_in else None
+    for exchange in exchanges:
+        state = exchange.framework
+        if state is None or state[1] != "accepted" or before is None:
+            before = state[2] if state and state[1] == "accepted" else None
+            continue
+        held = _hold(exchange)
+        if held and held[0] == "hold limit":
+            findings.append(validators.Finding("hold limit", f"{held[1]}: {exchange.reply[:90]}"))
+        elif held:
+            kind = "redirect" if held[0] == "redirect held" else "counted"
+            findings.append(validators.Finding("held", f"{kind} at {held[1]}: {exchange.reply[:90]}"))
+        elif state[2] == before and not str(before).startswith("somatic"):
+            findings.append(validators.Finding("stage", f"stayed at {before} with no hold: {exchange.reply[:90]}"))
+        before = state[2]
+    return findings
+
+
+_ASKS_AGAIN_MESSAGES = ("i don't get it", "i still don't get it")
+
+
+def _rephrase_findings(exchange: Exchange) -> list[validators.Finding]:
+    """A reply on a rephrase turn says the one question again and nothing else. A rephrase turn
+    is a reply to a request to hear the question again that the code held (a counted hold)."""
+    held = _hold(exchange)
+    if exchange.message.strip().lower() not in _ASKS_AGAIN_MESSAGES or not held or held[0] != "held":
+        return []
+    two = any(f.rule == "multiple questions" for f in validators.check(exchange.reply, exchange.message))
+    if exchange.reply.count("?") == 1 and not two:
+        return []
+    return [validators.Finding("rephrase questions", f"{exchange.reply.count('?')} question marks: {exchange.reply[:90]}")]
+
+
 def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> list[validators.Finding]:
     """Every check that applies to this scenario.
 
@@ -219,6 +276,7 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
         findings += validators.check(exchange.reply, said)
         findings += validators.style_findings(exchange.reply, style.value)
         findings += validators.says_framework(exchange.reply, FRAMEWORK_NAMES)
+        findings += _rephrase_findings(exchange)
         if exchange.finding:
             findings.append(validators.Finding("script", exchange.finding))
         if exchange.chat > 1 and scenario.get("markers"):
@@ -226,7 +284,10 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
     for chat in sorted({e.chat for e in exchanges}):
         in_chat = [e for e in exchanges if e.chat == chat]
         findings += validators.repeated_openers([e.reply for e in in_chat])
-        findings += validators.repeated_question([e.reply for e in in_chat])
+        # A reply that holds says the question again on purpose, in simpler words.
+        findings += validators.repeated_question(
+            [e.reply for e in in_chat if not (_hold(e) and _hold(e)[0] == "held")]
+        )
     for index, exchange in enumerate(exchanges):
         state = exchange.framework
         if state and state[1] == "accepted" and state[2] not in (None, "offering", "closing") \
@@ -244,6 +305,7 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
                 # From the reply to Chat More itself, which asks the first of the three.
                 [e.reply for e in exchanges[tapped:]], AFTER_FRAMEWORK_QUESTIONS
             )
+    findings += _stage_findings(exchanges, scenario.get("start_in"))
     if scenario.get("expect_framework"):
         reached = [e.framework[2] for e in exchanges if e.framework and e.framework[1] == "accepted"]
         if not reached:

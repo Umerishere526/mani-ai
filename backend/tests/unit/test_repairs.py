@@ -1,6 +1,8 @@
 # ABOUTME: Checks the deterministic corrections that replaced six regeneration calls.
 # ABOUTME: Each case here cost an entire extra model call in the implementation ported from.
 
+import pathlib
+
 import pytest
 
 from mani.chat import repairs
@@ -18,9 +20,16 @@ ABCDE = Framework(
 )
 
 
+# Every seeded framework ends on the body check.
+BODY_CHECKED = Framework(
+    id="staged", name="Staged", summary="s", body="b",
+    phases=["offering", "activate", "belief", "closing", "somatic_checkin", "somatic_practice"],
+)
+
+
 @pytest.fixture
 def registry() -> Registry:
-    return Registry([REFRAMING, ABCDE])
+    return Registry([REFRAMING, ABCDE, BODY_CHECKED])
 
 
 def reply(**overrides) -> Reply:
@@ -708,3 +717,275 @@ def test_the_acknowledgement_before_a_question_is_the_replys_first_sentence():
     text = "It is okay not to know where. Try bringing gentle attention there. Where is it?"
     assert repairs.first_sentence(text) == "It is okay not to know where."
     assert repairs.first_sentence("No full stop here") == "No full stop here"
+
+
+def answer(registry, step, phase, **overrides):
+    """A turn in a running framework where the person has answered the stage they were on."""
+    return fix(
+        registry, reply(state=TechniqueState(technique="staged", step=step)),
+        framework_running=True, current_framework_id="staged", current_phase=phase, **overrides,
+    )
+
+
+def test_the_reply_after_an_answer_asks_the_next_stage(registry):
+    fixed = answer(registry, "belief", "activate")
+    assert fixed.phase == "belief"
+    assert not fixed.notes
+
+
+def test_a_reply_that_holds_on_the_answered_stage_is_recorded_as_a_hold(registry):
+    fixed = answer(registry, "belief", "belief")
+    assert fixed.phase == "belief"
+    assert fixed.notes == ["held at belief"]
+
+
+def test_a_reply_that_goes_back_is_recorded_one_ahead_of_the_stage_just_answered(registry):
+    fixed = answer(registry, "activate", "belief")
+    assert fixed.phase == "closing"
+    assert fixed.holds == 0
+    assert fixed.notes == ["corrected phase 'activate' to 'closing' (stepped_back)"]
+
+
+def test_a_reply_two_stages_ahead_is_recorded_one_ahead(registry):
+    fixed = answer(registry, "closing", "activate")
+    assert fixed.phase == "belief"
+    assert fixed.notes == ["corrected phase 'closing' to 'belief' (skipped belief)"]
+
+
+def test_the_last_stage_before_the_body_check_moves_to_it(registry):
+    assert answer(registry, "somatic_checkin", "closing").phase == "somatic_checkin"
+
+
+def test_a_stage_the_framework_does_not_have_is_recorded_one_ahead(registry):
+    fixed = answer(registry, "examine", "belief")
+    assert fixed.framework_id == "staged"
+    assert fixed.phase == "closing"
+    assert fixed.notes == ["corrected phase 'examine' to 'closing' (unknown_phase)"]
+
+
+def test_a_reply_with_no_state_still_records_the_next_stage(registry):
+    fixed = fix(
+        registry, reply(), framework_running=True, current_framework_id="staged",
+        current_phase="belief",
+    )
+    assert (fixed.framework_id, fixed.phase, fixed.holds) == ("staged", "closing", 0)
+    assert fixed.notes == ["no state, recorded closing"]
+
+
+def test_a_reply_naming_another_framework_records_the_next_stage_of_the_running_one(registry):
+    fixed = fix(
+        registry, reply(state=TechniqueState(technique="abcde", step="belief")),
+        framework_running=True, current_framework_id="staged", current_phase="belief",
+    )
+    assert (fixed.framework_id, fixed.phase) == ("staged", "closing")
+
+
+def test_the_body_check_steps_as_it_did_before_a_stage_moved_on(registry):
+    stepped_back = answer(registry, "closing", "somatic_checkin")
+    assert stepped_back.phase == "closing"
+    assert not stepped_back.notes
+
+
+def test_the_turn_they_accept_is_not_held_to_the_move_on_rule(registry):
+    fixed = answer(registry, "activate", "offering", accepted_this_turn=True)
+    assert fixed.phase == "activate"
+    assert not fixed.notes
+
+
+def hold(registry, *, holds=0, phase="belief"):
+    """A reply that stays on the stage the person has just answered."""
+    return fix(
+        registry,
+        reply(state=TechniqueState(technique="staged", step=phase)),
+        framework_running=True, current_framework_id="staged", current_phase=phase,
+        current_holds=holds,
+    )
+
+
+def test_a_first_hold_is_counted(registry):
+    fixed = hold(registry)
+    assert (fixed.phase, fixed.holds) == ("belief", 1)
+    assert fixed.notes == ["held at belief"]
+
+
+def test_a_second_counted_hold_records_the_next_stage(registry):
+    fixed = hold(registry, holds=1)
+    assert (fixed.phase, fixed.holds) == ("closing", 0)
+    assert fixed.notes == ["hold limit at belief"]
+
+
+@pytest.mark.parametrize("holds", [0, 1])
+def test_any_move_clears_the_count(registry, holds):
+    moved = fix(
+        registry, reply(state=TechniqueState(technique="staged", step="closing")),
+        framework_running=True, current_framework_id="staged", current_phase="belief",
+        current_holds=holds,
+    )
+    assert (moved.phase, moved.holds) == ("closing", 0)
+    no_state = fix(
+        registry, reply(), framework_running=True, current_framework_id="staged",
+        current_phase="belief", current_holds=holds,
+    )
+    assert (no_state.phase, no_state.holds) == ("closing", 0)
+
+
+def test_a_turn_that_is_not_a_move_on_turn_writes_no_hold(registry):
+    start = fix(
+        registry, reply(state=TechniqueState(technique="staged", step="activate")),
+        framework_running=True, current_framework_id="staged", current_phase="offering",
+        accepted_this_turn=True, current_holds=1,
+    )
+    body_check = fix(
+        registry, reply(state=TechniqueState(technique="staged", step="somatic_checkin")),
+        framework_running=True, current_framework_id="staged", current_phase="somatic_checkin",
+        current_holds=1,
+    )
+    assert start.holds == 0 and body_check.holds == 0
+
+
+SAFETY = "What is happening sounds serious, and staying safe comes first. What would help most?"
+RISK = "<the risk, in a clause>. Contacting the bank is usually the first step. Have you reached them?"
+
+# A stage with every kind of branch: one that protects, one that uses the stage's extra turn,
+# one that asks the same stage again, one whose reply has a placeholder, and one with no fixed
+# words long enough to recognise.
+BRANCHED = Framework(
+    id="branched", name="Branched", summary="s", body="b",
+    phases=["offering", "activate", "belief", "closing", "somatic_checkin", "somatic_practice"],
+    stages={
+        "belief": {"if_unclear": [
+            {"when": "abuse", "reply": SAFETY},
+            {"when": "acting now", "reply": "You returned to the message. Can you pause the typing?", "counted": True},
+            {"when": "too broad", "reply": "Which one matters most to you right now?", "start_only": True},
+            {"when": "open risk", "reply": RISK},
+            {"when": "short", "reply": "<a clause>. Which?"},
+        ]},
+    },
+)
+
+
+@pytest.fixture
+def branched() -> Registry:
+    return Registry([BRANCHED])
+
+
+def say(branched, text, *, step="belief", holds=0, previous=None, running_phase="belief"):
+    state = TechniqueState(technique="branched", step=step) if step else None
+    return fix(
+        branched, reply(text=text, state=state), framework_running=True,
+        current_framework_id="branched", current_phase=running_phase, current_holds=holds,
+        last_mani_text=previous,
+    )
+
+
+@pytest.mark.parametrize("holds", [0, 1])
+def test_a_quoted_safety_branch_is_a_redirect_that_leaves_the_count_alone(branched, holds):
+    fixed = say(branched, SAFETY, holds=holds)
+    assert (fixed.phase, fixed.holds) == ("belief", holds)
+    assert fixed.notes == ["redirect held at belief"]
+
+
+def test_a_rephrase_at_a_stage_that_has_a_safety_branch_is_counted(branched):
+    fixed = say(branched, "Let me put it another way. What did that mean to you?")
+    assert (fixed.phase, fixed.holds) == ("belief", 1)
+    assert fixed.notes == ["held at belief"]
+
+
+@pytest.mark.parametrize("text", [
+    "You returned to the message. Can you pause the typing?",
+    "Which one matters most to you right now?",
+])
+def test_a_branch_that_uses_the_extra_turn_or_asks_again_is_never_a_redirect(branched, text):
+    fixed = say(branched, text)
+    assert (fixed.phase, fixed.holds) == ("belief", 1)
+
+
+def test_a_branch_with_a_placeholder_is_recognised_by_its_fixed_part(branched):
+    fixed = say(branched, "The card is still live. Contacting the bank is usually the first step. Have you reached them?")
+    assert fixed.notes == ["redirect held at belief"]
+
+
+def test_a_branch_with_no_fixed_part_long_enough_cannot_be_recognised(branched):
+    assert say(branched, "Here is a clause. Which?").notes == ["held at belief"]
+
+
+def test_recognising_a_branch_ignores_case_quotes_and_spacing(branched):
+    shouting = SAFETY.upper().replace("IS HAPPENING", "is   happening")
+    assert say(branched, shouting).notes == ["redirect held at belief"]
+
+
+@pytest.mark.parametrize("line", repairs.CLIENT_LINES)
+def test_each_of_the_clients_lines_is_a_redirect_at_any_stage(registry, line):
+    fixed = fix(
+        registry, reply(text=line, state=TechniqueState(technique="staged", step="belief")),
+        framework_running=True, current_framework_id="staged", current_phase="belief",
+    )
+    assert (fixed.phase, fixed.holds, fixed.notes) == ("belief", 0, ["redirect held at belief"])
+
+
+def test_a_reply_that_quotes_a_redirect_holds_even_when_it_reports_the_next_stage_or_none(branched):
+    assert say(branched, SAFETY, step="closing").phase == "belief"
+    assert say(branched, SAFETY, step=None).phase == "belief"
+
+
+def test_a_hold_right_after_mani_quoted_a_redirect_is_a_redirect_too(branched):
+    fixed = say(branched, "I am still here. What would help most?", previous=SAFETY)
+    assert (fixed.phase, fixed.holds) == ("belief", 0)
+    assert fixed.notes == ["redirect held at belief"]
+
+
+def test_a_redirect_in_mani_s_last_message_does_not_turn_a_move_into_a_hold(branched):
+    fixed = say(branched, "What did that mean to you?", step="closing", previous=SAFETY)
+    assert (fixed.phase, fixed.holds, fixed.notes) == ("closing", 0, [])
+
+
+def test_the_turn_they_accept_is_not_read_for_a_redirect(branched):
+    fixed = fix(
+        branched, reply(text=SAFETY, state=TechniqueState(technique="branched", step="activate")),
+        framework_running=True, current_framework_id="branched", current_phase="offering",
+        accepted_this_turn=True,
+    )
+    assert (fixed.phase, fixed.notes) == ("activate", [])
+
+
+def test_the_clients_lines_are_the_words_the_base_prompt_gives_the_model():
+    base = " ".join((pathlib.Path(__file__).parents[2] / "content/prompts/mani_base.md").read_text().split())
+    for line in repairs.CLIENT_LINES:
+        assert line in base
+
+
+def ask_again(branched, text, *, step="closing", holds=0, previous=None):
+    state = TechniqueState(technique="branched", step=step) if step else None
+    return fix(
+        branched, reply(text=text, state=state), framework_running=True,
+        current_framework_id="branched", current_phase="belief", current_holds=holds,
+        last_mani_text=previous, asked_again=True,
+    )
+
+
+@pytest.mark.parametrize("step", ["belief", "closing", None])
+def test_a_request_to_hear_the_question_again_is_a_counted_hold_whatever_the_reply_reported(branched, step):
+    fixed = ask_again(branched, "Let me put it more simply. What did that mean to you?", step=step)
+    assert (fixed.phase, fixed.holds, fixed.notes) == ("belief", 1, ["held at belief"])
+
+
+def test_a_second_request_after_the_extra_turn_is_used_moves_on(branched):
+    fixed = ask_again(branched, "What do you notice?", step="closing", holds=1)
+    assert (fixed.phase, fixed.holds) == ("closing", 0)
+
+
+def test_a_rephrase_that_quotes_a_branch_is_a_redirect_not_a_counted_hold(branched):
+    fixed = ask_again(branched, SAFETY)
+    assert (fixed.phase, fixed.holds, fixed.notes) == ("belief", 0, ["redirect held at belief"])
+
+
+@pytest.mark.parametrize("line", repairs.CLIENT_LINES)
+def test_a_client_line_is_not_a_redirect_on_a_rephrase_turn(branched, line):
+    fixed = ask_again(branched, line)
+    assert (fixed.phase, fixed.holds, fixed.notes) == ("belief", 1, ["held at belief"])
+
+
+def test_a_client_line_in_mani_s_last_message_is_not_evidence_for_a_later_hold(branched):
+    fixed = say(branched, "I am still here. What would help most?", previous=repairs.CLIENT_LINES[1])
+    assert (fixed.phase, fixed.holds, fixed.notes) == ("belief", 1, ["held at belief"])
+

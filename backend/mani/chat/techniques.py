@@ -12,6 +12,27 @@ from mani.models.rows import Framework
 # on it to tell "nothing started" apart from "started at the beginning".
 OFFERING = "offering"
 
+# The two stages every framework ends on. The body check owns the turns from the first of them.
+SOMATIC_STAGES = frozenset({"somatic_checkin", "somatic_practice"})
+
+
+def moves_on_after(framework: Framework | None, phase: str | None) -> bool:
+    """Whether a reply to `phase` is answered by asking the stage after it.
+
+    True from the first stage after the offering up to the stage before the body check. The
+    offering's own turn (accepting it), the body check and a phase the framework does not know
+    are left to the turn rules that apply there.
+    """
+    if framework is None or not framework.knows_phase(phase) or phase in SOMATIC_STAGES:
+        return False
+    offering = framework.phase_index(OFFERING)
+    return 0 <= offering < framework.phase_index(phase) < len(framework.phases) - 1
+
+
+def _phase_after(framework: Framework, phase: str | None) -> str | None:
+    index = framework.phase_index(phase)
+    return framework.phases[index + 1] if 0 <= index < len(framework.phases) - 1 else None
+
 
 class Verdict(StrEnum):
     OK = "ok"
@@ -19,6 +40,7 @@ class Verdict(StrEnum):
     UNKNOWN_PHASE = "unknown_phase"
     SKIPPED_PHASES = "skipped_phases"
     MISSING_OFFERING = "missing_offering"
+    STEPPED_BACK = "stepped_back"
 
 
 @dataclass(frozen=True)
@@ -84,8 +106,16 @@ class Registry:
         framework_id: str | None,
         current_phase: str | None,
         next_phase: str | None,
+        *,
+        moving_on: bool = False,
     ) -> Transition:
         """Whether a technique may move from current_phase to next_phase.
+
+        Staying on a phase is always allowed. Stepping back is allowed too, except on a turn
+        that moves on (`moves_on_after`): the person has answered current_phase, so going back
+        to it or earlier asks it again. There a step back, and a phase the framework does not
+        have, are corrected to the phase after current_phase, never to current_phase itself:
+        only an explicit hold, which the caller decides, keeps the stage.
 
         The implementation this replaces returned *valid* for an unrecognised framework
         or an unrecognised phase, so one hallucinated identifier silently switched the
@@ -98,12 +128,20 @@ class Registry:
             return Transition(Verdict.UNKNOWN_FRAMEWORK)
 
         if not framework.knows_phase(next_phase):
-            return Transition(Verdict.UNKNOWN_PHASE)
+            return Transition(
+                Verdict.UNKNOWN_PHASE,
+                expected_next=_phase_after(framework, current_phase) if moving_on else None,
+            )
 
         # A phase we do not recognise is treated as nothing having started, which makes
         # the only legal move the opening one.
         current_index = framework.phase_index(current_phase)
         next_index = framework.phase_index(next_phase)
+
+        if moving_on and next_index < current_index:
+            return Transition(
+                Verdict.STEPPED_BACK, expected_next=_phase_after(framework, current_phase)
+            )
 
         if next_index <= current_index:
             # Holding on a phase, or stepping back, is a legitimate conversational move.
@@ -130,6 +168,8 @@ class Registry:
         framework_id: str | None,
         current_phase: str | None,
         next_phase: str | None,
+        *,
+        moving_on: bool = False,
     ) -> str | None:
         """The phase to actually record, correcting a bad one instead of regenerating.
 
@@ -137,7 +177,9 @@ class Registry:
         own header - so a skip is worth correcting in code rather than paying for
         another model call, which is what it cost before.
         """
-        transition = self.validate_transition(framework_id, current_phase, next_phase)
+        transition = self.validate_transition(
+            framework_id, current_phase, next_phase, moving_on=moving_on
+        )
         if transition.ok:
             return next_phase
         # Unknown framework or phase leaves nothing trustworthy to record.

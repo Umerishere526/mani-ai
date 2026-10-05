@@ -81,8 +81,8 @@ class TechniqueState(BaseModel):
     )
     step: str = Field(
         description=(
-            "The current stage id you are executing, from framework_stages in [ctx]. "
-            "Stages must follow that list's order - you cannot skip one."
+            "The stage you asked in this reply: stage in [ctx], or answered when you hold. "
+            "Stages must follow framework_stages in [ctx] - you cannot skip one."
         )
     )
     accepted: bool | None = Field(
@@ -101,7 +101,31 @@ class TechniqueState(BaseModel):
 class Crisis(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    reason: str = Field(description="Brief description of the crisis signal")
+    reason: str = Field(
+        default="",
+        description="Brief description of the crisis signal. Never read back to anyone.",
+    )
+    category: str | None = Field(
+        default=None,
+        description=(
+            "What kind of concern, one of: suicide, self_harm, harm_to_other, cannot_stay_safe, "
+            "abuse_or_violence, overdose, medical_emergency, loss_of_contact_with_reality, other. "
+            "Use other only for something you thought about that is not danger."
+        ),
+    )
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def _no_reason_is_empty(cls, value: object) -> object:
+        """A flag with a null reason is still a flag; reading it as empty keeps the reply."""
+        return "" if value is None else value
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def _only_text_names_a_kind(cls, value: object) -> object:
+        """A number or a list there is no kind. Reading it as none keeps the reply, and a flag
+        with no kind is treated as a real concern."""
+        return value if isinstance(value, str) else None
 
 
 class Style(BaseModel):
@@ -174,16 +198,20 @@ class Reply(BaseModel):
     crisis: Crisis | None = Field(
         default=None,
         description=(
-            "Set when the person shows a genuine safety concern - suicidal thoughts, an intent "
-            "to self-harm, or a wish to die. This does NOT cut off the conversation; it flags "
-            "the moment so the framework pauses and the reply stays with them. Do NOT set it "
-            "for ordinary sadness or frustration, hopelessness or exhaustion (\"I can not do "
-            "this anymore\"), physical pain or injury (\"I broke my arm\", \"I fell and hurt "
-            "myself\"), or an ambiguous \"I need help\". For a physical injury, ask whether they "
-            "have been able to get it seen to and how it is affecting them, then support the "
-            "emotional side. For anything else ambiguous, ask one gentle question to learn "
-            "whether they are in danger or hurting emotionally first. Set to null when there is "
-            "no safety concern."
+            "Set when something in their message made you stop and think about whether they, or "
+            "someone else, may be in danger: suicidal thoughts, an intent to self-harm, a wish to "
+            "die, an intent to hurt another person, violence or control done to them, a medical "
+            "emergency happening now, a possible overdose. Name the kind in category. If it was "
+            "danger, choose that kind. When it is unclear, choose the kind that fits, not other. "
+            "If you thought about it and it is not danger (an urge to act on a message, a heated "
+            "moment that made you stop and think), choose other; frustration that did not is no flag. A threat or a wish to hurt a person is "
+            "harm_to_other, even when it is angry or vague, never other. Do NOT set it for ordinary sadness or frustration, "
+            "hopelessness or exhaustion (\"I can not do this anymore\"), physical pain or injury "
+            "(\"I broke my arm\", \"I fell and hurt myself\"), or an ambiguous \"I need help\". For a "
+            "physical injury, ask whether they have been able to get it seen to and how it is "
+            "affecting them, then support the emotional side. For anything else ambiguous, ask "
+            "one gentle question to learn whether they are in danger or hurting emotionally "
+            "first. Set to null when there is no safety concern."
         ),
     )
     state: TechniqueState | None = Field(

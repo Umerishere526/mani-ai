@@ -109,8 +109,10 @@ stages:
     if_unclear:
       - when: "\"I cannot stop myself.\""
         reply: "Stopping feels out of reach right now. Can you pause the action for sixty seconds?"
+        counted: true
       - when: "already acted - \"I already sent it.\""
         reply: "The message has already been sent. Is there another action you are about to take?"
+        counted: true
     ask:
       supportive: "Can you stop the action before it happens?"
       reflective: "Can you stop the action before it happens?"
@@ -118,10 +120,6 @@ stages:
   pause:
     purpose: "Enter Pause Mode and remain with MANI without returning to the action."
     listen_for: "Whether the action remains paused and the user remains engaged with MANI."
-    ready_when: >-
-      The user confirms the action remains paused, they are not returning to it, they are
-      remaining with MANI, and they can continue to Observe. Pause Mode does not require the
-      user to put down the phone, leave the app, move away, or perform another activity.
     boundaries:
       - "must not tell the user to put down the phone or place it out of reach"
       - "must not tell the user to leave the app, move away, or perform another activity"
@@ -131,10 +129,16 @@ stages:
     if_unclear:
       - when: "returns to the action - \"I started typing again.\""
         reply: "You returned to the message. Can you pause the typing and remain here with me?"
+        counted: true
       - when: "wants to leave - \"I am going back to the message.\""
         reply: "You want to return to it now. Can you remain paused with me for one more response?"
+        counted: true
       - when: "the pause needs an anchor - the person is not physically leaving anywhere, so the pause is about where attention goes, not where the body does. One slow breath, naming what is in view, or a hand flat on the desk are usable even mid-conversation"
         reply: "Would one slow breath help you stay with the pause?"
+        counted: true
+    if_earlier_missing:
+      needs: stop
+      reply: "Can you hold off on acting for a minute and stay here with me?"
     ask:
       supportive: "You have stopped before acting. Can you remain paused here with me?"
       reflective: "You interrupted the immediate reaction. Can you stay with the pause and notice what is happening?"
@@ -142,7 +146,6 @@ stages:
   observe:
     purpose: "Notice what is happening internally and externally without acting on it."
     listen_for: "What the user notices in thoughts, urges, physical experience, and immediate situation, using only their language."
-    ready_when: "The user identifies what is happening now - known facts, thoughts, urges, physical sensations, what is happening around them - in their own words."
     boundaries:
       - "must not assign thoughts or feelings"
       - "must not interpret physical sensations"
@@ -152,13 +155,9 @@ stages:
       - "must not assume another person's motive"
       - "must not ask several questions at once"
       - "must not ask why they feel or think something - Observe is describing what is there, not explaining it; \"why\" turns the pause into another lap of the same thinking that produced the urge"
-    if_unclear:
-      - when: "\"I don't know.\""
-        reply: "It is difficult to notice right now. What is the strongest urge?"
-      - when: "assumed motive - \"He wrote that because he wants to humiliate me.\""
-        reply: "You believe he wants to humiliate you. What did he write?"
-      - when: "several urges at once"
-        reply: "Several urges are present. Which one is strongest?"
+    if_earlier_missing:
+      needs: pause
+      reply: "What do you notice right now?"
     ask:
       supportive: "You are staying with the pause. What do you notice right now?"
       reflective: "You are no longer acting immediately. What is present for you right now?"
@@ -166,15 +165,6 @@ stages:
   proceed:
     purpose: "Choose whether to wait, act, or respond differently."
     listen_for: "Whether the user chooses to wait, act, or respond differently, and what they want that response to accomplish."
-    ready_when: >-
-      The user identifies what happens next. They may choose to continue waiting, leave the
-      message unsent, rewrite it later, respond more briefly, ask for information, continue
-      chatting with MANI, speak after more time, choose not to respond, or - genuinely - decide
-      the original action is still what they want once the pause has let the urge settle.
-      Success is the pause itself, not a particular outcome: STOP is not failing if they
-      proceed with what they first intended, as long as it is a considered choice made after
-      observing rather than the immediate reaction it started as. No immediate action is
-      required.
     boundaries:
       - "must not choose the response"
       - "must not solve the underlying problem"
@@ -184,10 +174,6 @@ stages:
       - "must not promise that waiting will resolve the problem"
       - "must not present non-action as the only correct choice"
     if_unclear:
-      - when: "still wants the original action"
-        reply: "You still want to send it. What do you want the message to accomplish?"
-      - when: "cannot identify a response"
-        reply: "The next response is not clear yet. Would remaining paused be better than acting now?"
       - when: "chooses retaliation"
         reply: "You want him to experience what you experienced. What response would avoid intensifying the situation?"
     ask:
@@ -196,15 +182,12 @@ stages:
       direct: "What response would help rather than intensify this?"
   closing:
     purpose: "Confirm completion in the user's own terms, without claiming the user has calmed down or made the correct decision."
-    ready_when: >-
-      The user has stopped the immediate action, remained paused with MANI, observed what is
-      happening using their own language, and identified an intentional next response. The user
-      does not need to become calm, stop having the urge, change the original thought, resolve
-      the underlying problem, contact another person, make a permanent decision, act
-      immediately, or agree with MANI.
     boundaries:
       - "must not tell the user they have calmed down or made the correct decision"
       - "must not summarize the completed framework"
+    if_earlier_missing:
+      needs: proceed
+      reply: "Is there anything you would add before we finish?"
     ask:
       supportive: "You chose to leave the message unsent for now. How is that choice sitting with you?"
       reflective: "The urge remains, but you are choosing how to respond. What changes when the action is no longer immediate?"

@@ -88,12 +88,44 @@ Mani's replies never use a dash as punctuation. The base instructions use dashes
 
 - [ ] Build it: `/develop no dashes in replies`
 
-### 18. A framework stage moves on after one answer · needs a decision
+### 18. A framework stage moves on after one answer · in-progress
 
 Inside a framework, whatever the person replies to a stage's question (a real answer, "I don't know", "sure", "yeah", "yes", or a question of their own), Mani moves to the next stage instead of asking again in other words. A question they ask is answered first, then Mani goes on. Today a stage holds until its `ready_when` is met (ADR 011), and "I don't know" gets up to three options, a draft, or the same question reworded (ADR 010). The cost to design around: the next stage must work with what it has, so a skipped answer never leaves a later stage with nothing to ask about (for example ABCDE's dispute step after "I don't know" at the belief step). This also settles the open client question about suggesting options when someone is stuck.
 **Done when:** in every framework, a real answer, "I don't know", "yes", "sure" and a question of their own each move to the next stage within one reply, no stage question is asked twice, the framework still reaches the body check in, and a test covers each framework.
 
-- [ ] Design it (spec): `/architect a framework stage moves on after one answer`
+Spec: [0003](../specs/0003-stage-moves-on-one-answer/index.md) · code in backend/mani/chat/, backend/content/frameworks/, backend/content/prompts/, backend/scripts/eval_replies.py
+
+- [x] Design it (spec): `/architect a framework stage moves on after one answer`
+- [x] Build it: `/develop a framework stage moves on after one answer`
+  - [x] Code moves the stage on and limits what a reply records (AC-1, AC-2, AC-3, AC-10)
+  - [x] Prompt rules for moving on, the holds and pick for me (AC-4, AC-5, AC-11)
+  - [x] ABCDE end to end: split stage, content, walk test, eval run and read (AC-6 to AC-9)
+  - [x] The other five frameworks, one at a time, with muhammad's if_earlier_missing questions (AC-6 to AC-9)
+  - [x] The hold count: migration, stored count, redirect mark, the recorded stage rule (AC-2, AC-8, AC-12)
+  - [x] Prompt and content for the two holds, DBT counted branches, first_action's question (AC-4, AC-5, AC-6, AC-11, AC-13, AC-14)
+  - [x] Measure the holds again and read every held turn with muhammad (AC-9)
+  - [x] The redirect is decided in code from the reply, and the mark is removed (AC-4, AC-12, AC-15)
+  - [x] The notes: reworded, and a note of its own on a stage that picks from options (AC-13, AC-16)
+  - [x] Measure again against the bar and read one transcript per framework (AC-9a)
+  - [x] ADR-013, PORT-STATUS and the journal entry (AC-9)
+  - [x] A request to hear the question again is recognised in code and held (AC-14, AC-16, AC-17)
+  - [x] Measure again against the bar and verify again (AC-9b)
+- [ ] Verify it: `/check verify a framework stage moves on after one answer`
+- [ ] Test it: `/test a framework stage moves on after one answer`
+
+### 38. A request to hear a question again also reads "whats that mean" · in-progress
+
+Spec 0003 recognises a request to hear a question again from a short list of phrases. A check of 40 typings found the gaps: "whats that mean" (the shared word cleanup turns "what's" into "what s" and has no entry for "whats"), the past tense ("I didn't understand"), "say that again", "repeat that" and the texting forms "what do u mean" and "wdym". The past tense and the repeat forms read as a story or an objection inside a longer sentence, so they count only on their own.
+**Done when:** the phrases people actually type for "I did not understand", with and without apostrophes, are recognised, a longer statement about their situation is not, each is covered by a test, and spec 0003's list says so.
+
+Spec: [0003](../specs/0003-stage-moves-on-one-answer/index.md) · code in backend/mani/chat/context.py
+
+- [x] Design it (spec): `/architect the request to hear a question again also reads whats that mean`
+- [x] Build it: `/develop the request to hear a question again also reads whats that mean`
+  - [x] Free phrases and the anchored set, with the filler and blocked words (AC-17)
+  - [x] Typed positives and negatives as tests (AC-17)
+- [ ] Verify it: `/check verify the request to hear a question again also reads whats that mean`
+- [ ] Test it: `/test the request to hear a question again also reads whats that mean`
 
 ### 6. The offer names the framework, introduces it, and gives three choices · needs a decision
 

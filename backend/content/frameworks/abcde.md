@@ -3,7 +3,7 @@ id: abcde
 name: ABCDE
 summary: "These questions help you separate what happened from what you told yourself about it, question what may not be serving you, and come away with a clearer and more useful way of seeing the situation."
 display_order: 1
-phases: [offering, activate, belief, consequence, examine, balanced, closing]
+phases: [offering, activate, belief, consequence, evidence_for, evidence_against, balanced, closing]
 activation:
   central_indication: >-
     A specific event triggered a belief that is now producing an emotional or behavioural
@@ -116,8 +116,10 @@ stages:
     if_unclear:
       - when: "assumed motive - \"My manager embarrassed me because she wants me to fail.\""
         reply: "You believe she wants you to fail. What did she say or do?"
+        start_only: true
       - when: "event too broad - \"Everything went wrong.\""
         reply: "Several things went wrong. Which event do you want to examine?"
+        start_only: true
       - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
         reply: "What happened sounds serious, and I am not going to ask you to see it differently. What would be most helpful to talk through?"
     ask:
@@ -127,7 +129,6 @@ stages:
   belief:
     purpose: "Identify what the user believes the event means."
     listen_for: "The conclusion, prediction, expectation, or judgment the user attached to the event."
-    ready_when: "One central belief identified in the user's own language. If several beliefs appear, ask which one affected the user most."
     boundaries:
       - "must not select the belief for the user"
       - "must not assign a feeling"
@@ -135,11 +136,9 @@ stages:
       - "must not call the belief irrational or distorted"
       - "must not investigate several beliefs at once"
       - "must not use a feeling word the user did not use"
-    if_unclear:
-      - when: "a feeling instead of a belief - \"I felt embarrassed.\""
-        reply: "You felt embarrassed. What were you telling yourself at that point?"
-      - when: "several beliefs at once"
-        reply: "Several thoughts came at once. Which one affected you most?"
+    if_earlier_missing:
+      needs: activate
+      reply: "When you think about it, what comes up first?"
     ask:
       supportive: "What did that come to mean for you?"
       reflective: "What did that come to mean for you?"
@@ -147,23 +146,18 @@ stages:
   consequence:
     purpose: "Identify how believing that affected what the user felt, did, avoided, or wanted to do."
     listen_for: "What changed in emotions, behaviour, avoidance, or intended response after believing the thought."
-    ready_when: "A consequence the user identified themselves - something felt, did, avoided, or wanted to do. Do not introduce a consequence the user did not name."
     boundaries:
       - "must not name a consequence the user did not identify"
       - "must not tell the user how the belief must have affected them"
       - "must not retell the complete event-belief-consequence sequence"
       - "must not assume the event itself had no effect"
-    if_unclear:
-      - when: "consequence unclear - \"It affected everything.\""
-        reply: "It affected everything. What changed first?"
     ask:
       supportive: "It reached into everything for you. What felt most affected?"
       reflective: "You noticed it affecting everything. Where did you see the effect most?"
       direct: "It affected everything. What changed first?"
-  examine:
-    purpose: "Determine whether the belief is fully supported, partly supported, incomplete, assumed, or broader than the facts."
-    listen_for: "What supports the belief, what challenges it, what may be accurate, what may be assumed, what remains uncertain."
-    ready_when: "In this order: first what supports the belief, then what challenges it, then what the full evidence suggests. The user has considered what may be accurate, what may be broader than the facts, and what remains uncertain. The user does not have to disprove the belief. Stay on the current step until the user has answered it."
+  evidence_for:
+    purpose: "Establish what supports the belief and what may be accurate in it."
+    listen_for: "What supports the belief, and what may be accurate in it."
     boundaries:
       - "must not argue with the user"
       - "must not decide the belief is false"
@@ -172,23 +166,34 @@ stages:
       - "must not assume another person's intention"
       - "must not use rhetorical questions to force a conclusion"
       - "must not reinterpret danger or mistreatment"
-    if_unclear:
-      - when: "part of the belief is accurate - \"I was not prepared enough.\""
-        reply: "You were not prepared enough for those questions. Does that prove you are incompetent?"
-      - when: "no contrary evidence comes to mind - \"Nothing challenges it.\""
-        reply: "Nothing comes to mind yet. Has anything happened that does not fit the belief?"
-      - when: "what supports the belief has been said, and what challenges it has not yet been asked"
-        reply: "What might challenge the broader belief that <their belief, in their words>?"
-      - when: "the user has named evidence that challenges the belief (use the line for the selected tone)"
-        reply: "supportive: She has also trusted you with important work. How does that affect the original belief? | reflective: That evidence does not fully fit the original belief. What does it suggest instead? | direct: That evidence challenges the original belief. What conclusion do the full facts support?"
+    if_earlier_missing:
+      needs: belief
+      reply: "What makes it seem that way to you?"
     ask:
       supportive: "What supports that belief?"
       reflective: "What supports that belief?"
       direct: "What supports that belief?"
+  evidence_against:
+    purpose: "Determine whether the belief is incomplete, assumed, or broader than the facts."
+    listen_for: "What challenges the belief, what may be assumed, what remains uncertain."
+    boundaries:
+      - "must not argue with the user"
+      - "must not decide the belief is false"
+      - "must not ignore evidence supporting it"
+      - "must not invent contrary evidence"
+      - "must not assume another person's intention"
+      - "must not use rhetorical questions to force a conclusion"
+      - "must not reinterpret danger or mistreatment"
+    if_earlier_missing:
+      needs: belief
+      reply: "Is there anything about this you are unsure of?"
+    ask:
+      supportive: "What might challenge that belief?"
+      reflective: "What might challenge that belief?"
+      direct: "What might challenge that belief?"
   balanced:
     purpose: "Develop a believable belief that includes the relevant evidence and remains in the user's language."
     listen_for: "A credible belief that includes the known facts without becoming falsely positive."
-    ready_when: "A belief that acknowledges what happened, includes the evidence, avoids a broad judgment unsupported by the facts, sounds believable, and uses language the user accepts."
     boundaries:
       - "must not force positive language"
       - "must not write a belief that does not sound like the user"
@@ -196,28 +201,23 @@ stages:
       - "must not replace one unsupported certainty with another"
       - "must not require the user to feel differently"
       - "must not continue changing a belief the user already finds credible"
-    if_unclear:
-      - when: "falsely positive - \"I am brilliant, and my manager was completely wrong.\""
-        reply: "That removes the parts you said needed improvement. What belief includes all the evidence?"
-      - when: "cannot form a balanced belief"
-        reply: "You said the recommendations needed more support, but one presentation does not define your ability. How would you put those together?"
+    if_earlier_missing:
+      needs: evidence_for
+      reply: "From what you know so far, what seems fairest to say about this?"
     ask:
       supportive: "You can recognize the mistake without defining yourself by it. What would feel fairer and still true?"
       reflective: "The full evidence is different from the original conclusion. What belief holds all of it?"
       direct: "The original belief is broader than the facts. What do the facts support?"
   closing:
     purpose: "Confirm completion in the user's own terms, without declaring that the framework worked."
-    ready_when: >-
-      The user has identified what happened, what they believed it meant, how that belief
-      affected them, what supports and challenges the belief, and a more balanced belief. The
-      user does not have to feel differently, eliminate the original belief, view the event
-      positively, forgive anyone, take immediate action, agree with MANI, or resolve the
-      external situation.
     boundaries:
       - "must not require the user to feel differently, forgive anyone, or take action to be done"
       - "must not summarize the completed framework"
       - "must not tell the user the framework worked"
       - "must not say the belief feels fairer unless the user used similar language"
+    if_earlier_missing:
+      needs: balanced
+      reply: "Is there anything you would add before we finish?"
     ask:
       supportive: "This belief feels fairer to what happened. How is it sitting with you?"
       reflective: "The new belief includes the full evidence. What changes when you see it this way?"

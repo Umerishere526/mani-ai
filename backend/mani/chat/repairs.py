@@ -7,9 +7,10 @@ import re
 from difflib import SequenceMatcher
 from dataclasses import dataclass, field
 
+from mani.chat import safety
 from mani.chat.greeting import CLARIFICATION_QUESTIONS, EXPLAIN_LABELS
-from mani.chat.techniques import Registry
-from mani.llm.schema import SHAPES, LibrarySection, Reply, SmartPrompt, Style
+from mani.chat.techniques import Registry, moves_on_after
+from mani.llm.schema import SHAPES, LibrarySection, Reply, SmartPrompt, Style, TechniqueState
 
 MAX_PROMPTS = 3
 MAX_TITLE_LENGTH = 100
@@ -230,6 +231,8 @@ class Repaired:
     style: Style | None = None
     # What was corrected, for the log and for a metric on how often the model needs it.
     notes: list[str] = field(default_factory=list)
+    # Extra turns the recorded stage has used: 1 after a counted hold, 0 after any move.
+    holds: int = 0
 
 
 def _is_offer_button(prompt: SmartPrompt) -> bool:
@@ -303,6 +306,53 @@ def reply_for(branch: dict, style: str) -> str:
     return reply[style] if isinstance(reply, dict) else reply
 
 
+# The client's three lines for a person who brings another issue, corrects Mani or wants to stop.
+# mani_base.md gives the model the same words.
+CLIENT_LINES = (
+    "Another issue is coming into this. Do you want to stay with the one we selected?",
+    "I misunderstood what you meant. What would be more accurate?",
+    "You want to stop here. Would you like to continue chatting?",
+)
+
+_PLACEHOLDER = re.compile(r"<[^>]*>")
+_SENTENCE_END = re.compile(r"(?<=[.?!])\s")
+MIN_KEY_CHARS = 20
+MAX_KEY_CHARS = 40
+
+
+def _match_key(text: str) -> str | None:
+    """The words of an authored reply that show it was used: its longest fixed part, with any
+    <placeholder> split out, normalised, cut to a whole word at 40 characters. None when no
+    fixed part is 20 characters long, so such a reply cannot be recognised."""
+    longest = max((safety.normalize(part) for part in _PLACEHOLDER.split(text)), key=len)
+    if len(longest) < MIN_KEY_CHARS:
+        return None
+    if len(longest) <= MAX_KEY_CHARS:
+        return longest
+    cut = longest[:MAX_KEY_CHARS]
+    return cut if longest[MAX_KEY_CHARS] == " " else cut.rsplit(" ", 1)[0]
+
+
+def redirect_keys(stage: dict, style: str, *, client_lines: bool = True) -> list[str]:
+    """What a reply carries when it leaves the stage question for a redirect: a branch that
+    protects the person or leaves the framework (not one that asks again, nor one that uses
+    the stage's extra turn), or one of the client's three lines."""
+    keys = [
+        _match_key(reply_for(branch, style))
+        for branch in stage.get("if_unclear") or []
+        if not branch.get("counted") and not branch.get("start_only")
+    ]
+    if client_lines:
+        keys += [safety.normalize(_SENTENCE_END.split(line)[0]) for line in CLIENT_LINES]
+    return [key for key in keys if key]
+
+
+def carries_redirect(stage: dict, text: str | None, style: str, *, client_lines: bool = True) -> bool:
+    """Whether a message uses a redirect of the stage, found anywhere in its words."""
+    said = f" {safety.normalize(text or '')} "
+    return any(f" {key} " in said for key in redirect_keys(stage, style, client_lines=client_lines))
+
+
 def practice_for(stage: dict, place: str, style: str) -> tuple[str, list[str]] | None:
     """The client's practice for a place in this style, word for word, and its button labels."""
     for branch in stage.get("if_unclear") or []:
@@ -365,6 +415,54 @@ def _compose_offer(
     return "\n\n".join(p for p in (part, description, PERMISSION_QUESTIONS[style]) if p)
 
 
+def _stage_after_a_reply(
+    registry: Registry,
+    framework_id: str,
+    stored: str,
+    state: TechniqueState | None,
+    stored_holds: int,
+    notes: list[str],
+    *,
+    redirects: bool,
+    redirected_before: bool,
+    rephrase: bool = False,
+) -> tuple[str, int]:
+    """The stage and hold count to record once the person has replied to `stored`.
+
+    The stage after it, unless the reply holds. A reply that uses a redirect of the stage
+    (`redirects`) holds whatever it reported, and so does a reported hold right after Mani's
+    own redirect (`redirected_before`, because the follow up to one is worded afresh). A redirect
+    is not counted. Any other hold is counted, allowed once per stage: a second records the
+    next stage, the model having been told its extra turn was used.
+    """
+    framework = registry.get(framework_id)
+    following = framework.phases[framework.phase_index(stored) + 1]
+    if redirects:
+        notes.append(f"redirect held at {stored}")
+        return stored, stored_holds
+    if rephrase:
+        notes.append(f"held at {stored}")
+        return stored, 1
+    if state is None:
+        notes.append(f"no state, recorded {following}")
+        return following, 0
+    transition = registry.validate_transition(framework_id, stored, state.step, moving_on=True)
+    recorded = registry.clamp(framework_id, stored, state.step, moving_on=True)
+    if not transition.ok:
+        notes.append(f"corrected phase {state.step!r} to {recorded!r} ({transition.reason})")
+        return recorded, 0
+    if recorded != stored:
+        return recorded, 0
+    if redirected_before:
+        notes.append(f"redirect held at {stored}")
+        return stored, stored_holds
+    if stored_holds == 0:
+        notes.append(f"held at {stored}")
+        return stored, 1
+    notes.append(f"hold limit at {stored}")
+    return following, 0
+
+
 def _normalize(name: str) -> str:
     return name.strip().lower().replace(" ", "_")
 
@@ -388,6 +486,8 @@ def apply(
     name_said_before: bool = False,
     clarification_already_used: bool = False,
     closest_fit: bool = False,
+    current_holds: int = 0,
+    asked_again: bool = False,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again.
 
@@ -563,38 +663,61 @@ def apply(
 
     framework_id: str | None = None
     phase: str | None = None
-    if reply.state is not None:
-        if reply.state.technique not in registry:
-            notes.append(f"ignored state for unknown technique: {reply.state.technique}")
-        elif framework_running and reply.state.technique != current_framework_id:
-            # Every framework shares stage ids like somatic and closing, so the transition
-            # check alone would let a reply record a framework the person never accepted.
+    holds = 0
+    state = reply.state
+    if state is not None and state.technique not in registry:
+        notes.append(f"ignored state for unknown technique: {state.technique}")
+        state = None
+    elif state is not None and framework_running and state.technique != current_framework_id:
+        # Every framework shares stage ids like somatic and closing, so the transition
+        # check alone would let a reply record a framework the person never accepted.
+        notes.append(
+            f"ignored state for {state.technique}, not the running one "
+            f"({current_framework_id})"
+        )
+        state = None
+
+    # The person answered the stage they were on, so the reply is the next stage's question
+    # or a hold on this one, never an earlier stage. Whatever the reply reports, a stage is
+    # recorded: a lost or garbled state must never keep a stage on screen.
+    moving_on = (
+        framework_running
+        and not accepted_this_turn
+        and moves_on_after(registry.get(current_framework_id), current_phase)
+    )
+    if moving_on:
+        framework_id = current_framework_id
+        stage = registry.get(framework_id).stages.get(current_phase) or {}
+        # They asked to hear the question again with the extra turn unused: the model was shown
+        # only that question, so the hold is recorded here, and a client line is no redirect.
+        rephrase = asked_again and current_holds == 0
+        phase, holds = _stage_after_a_reply(
+            registry, framework_id, current_phase, state, current_holds, notes,
+            redirects=carries_redirect(stage, text, conversation_style, client_lines=not rephrase),
+            redirected_before=carries_redirect(
+                stage, last_mani_text, conversation_style, client_lines=False
+            ),
+            rephrase=rephrase,
+        )
+    elif state is not None:
+        framework_id = state.technique
+        # Accepting an offer this turn means the phase being left is the offering one,
+        # whatever the stored row still says. What they told Mani before accepting
+        # answers the first stage, so the reply may already be asking the second.
+        previous = current_phase
+        if accepted_this_turn:
+            known = registry.get(framework_id)
+            phases = known.phases if known else []
+            first = phases.index("offering") + 1 if "offering" in phases else -1
+            previous = phases[first] if 0 < first < len(phases) else "offering"
+        transition = registry.validate_transition(framework_id, previous, state.step)
+        phase = registry.clamp(framework_id, previous, state.step)
+        if not transition.ok:
             notes.append(
-                f"ignored state for {reply.state.technique}, not the running one "
-                f"({current_framework_id})"
+                f"corrected phase {state.step!r} to {phase!r} ({transition.reason})"
             )
-        else:
-            framework_id = reply.state.technique
-            # Accepting an offer this turn means the phase being left is the offering one,
-            # whatever the stored row still says. What they told Mani before accepting
-            # answers the first stage, so the reply may already be asking the second.
-            previous = current_phase
-            if accepted_this_turn:
-                known = registry.get(framework_id)
-                phases = known.phases if known else []
-                first = phases.index("offering") + 1 if "offering" in phases else -1
-                previous = phases[first] if 0 < first < len(phases) else "offering"
-            transition = registry.validate_transition(
-                framework_id, previous, reply.state.step
-            )
-            phase = registry.clamp(framework_id, previous, reply.state.step)
-            if not transition.ok:
-                notes.append(
-                    f"corrected phase {reply.state.step!r} to {phase!r} "
-                    f"({transition.reason})"
-                )
-            if phase is None:
-                framework_id = None
+        if phase is None:
+            framework_id = None
 
     at_the_end = framework_running and (phase or current_phase) in ENDING_STAGES
     if kept and not at_the_end and not any(p.technique for p in kept):
@@ -623,4 +746,5 @@ def apply(
         phase=phase,
         style=style,
         notes=notes,
+        holds=holds,
     )
