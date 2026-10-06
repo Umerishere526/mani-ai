@@ -1,9 +1,9 @@
-# ABOUTME: Checks the two phrase rules the router keeps: an action about to happen, and words that rule a framework out.
-# ABOUTME: Driven by the shipped framework content; the choice from facts is tested in test_framework_fit.py.
+# ABOUTME: Checks the phrase rules the router keeps: an action about to happen, words that rule a framework out, the stuck check.
+# ABOUTME: Driven by the shipped framework content, the same structures that reach Registry.activations at runtime.
 
 import pytest
 
-from mani.chat.router import kept_facts, urgent, vetoes
+from mani.chat.router import asked_the_check, stuck_framework, urgent, vetoes
 from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
 # The shipped activation data, parsed by the seeder itself - the same structures that reach
@@ -62,10 +62,11 @@ def test_a_framework_lists_what_said_anywhere_rules_it_out():
     assert vetoes({"never_offer_when_said": ["grief"]}, ["a grievance at work"]) == []
 
 
-def test_a_kept_fact_carries_the_words_the_person_typed():
-    kept = kept_facts(
-        [("event", "the very next day i had an exam"), ("meaning", "idiot")],
-        ["I went to a concert and the very next day I had an exam"],
-    )
-    assert kept.present == frozenset({"event"})
-    assert kept.words == {"event": "the very next day i had an exam"}
+def test_the_stuck_offer_goes_to_the_framework_whose_file_flags_it():
+    assert stuck_framework(ACTIVATIONS) == "abcde"
+    assert stuck_framework({"x": {}}) is None
+
+
+def test_the_stuck_check_is_found_in_any_case_or_punctuation():
+    assert asked_the_check(["That is okay. are you feeling STUCK"])
+    assert not asked_the_check(["What does being alone feel like?"])

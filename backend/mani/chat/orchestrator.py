@@ -12,20 +12,22 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import context, redraft, repairs, router, safety
+from mani.chat import context, repairs, router, safety
 from mani.chat.greeting import (
     CHAT_MORE_LABEL,
+    EXPLAIN_LABEL,
     GO_TO_LIBRARY_LABEL,
     OPENERS,
     STYLE_OPTIONS,
     greeting,
 )
-from mani.chat.techniques import Registry, covered_stages, passed_over_stages
+from mani.chat.techniques import STUCK_BRANCH, Registry
 from mani.config import get_settings
 from mani.db import (
     exercises as exercises_db,
     llm_calls,
     messages as messages_db,
+    outcomes,
     profiles,
     summaries,
     threads,
@@ -237,38 +239,26 @@ def _finished(technique: TechniqueState | None) -> bool:
 
 
 def stuck_offer_candidate(
-    ctx: threads.TurnContext, registry: Registry, mani_texts: list[str], user_texts: list[str]
+    ctx: threads.TurnContext,
+    registry: Registry,
+    history: list[Message],
+    user_texts: list[str],
 ) -> Framework | None:
     """The framework whose offer lines go into [ctx] on the turn right after Mani asked "Are you
-    feeling stuck?", so a yes can be met in its words (spec 0009). None while a framework is
-    offered or running, before its earliest message, or when it is ruled out or finished."""
+    feeling stuck?", so a yes can be met in its words. None while a framework is offered or
+    running, when no offer is allowed, or when their words rule it out."""
+    mani_texts = [m.content for m in history if m.role is MessageRole.MANI]
     stuck_id = router.stuck_framework(registry.activations)
     technique = ctx.technique
     if stuck_id is None or not router.asked_the_check(mani_texts[-1:]):
         return None
     if technique is not None and technique.outcome is not TechniqueOutcome.DECLINED:
         return None
-    if stuck_id in _not_offerable_now(ctx, registry, user_texts):
+    if router.vetoes(registry.activations.get(stuck_id) or {}, user_texts):
         return None
-    if not context.earliest_offer_ok(ctx, registry.activations.get(stuck_id)):
+    if context.offer_refusal(ctx, history) is not None:
         return None
     return registry.get(stuck_id)
-
-
-def _not_offerable_now(
-    ctx: threads.TurnContext, registry: Registry, user_texts: list[str]
-) -> frozenset[str]:
-    """Frameworks the facts may not point to on this turn: one their words rule out, and the one
-    they have finished, which repairs refuses anyway. A declined one is not here: while its
-    cooldown runs nothing at all may be offered, and after it the same one may come back."""
-    excluded = {
-        framework_id
-        for framework_id, activation in registry.activations.items()
-        if router.vetoes(activation, user_texts)
-    }
-    if _finished(ctx.technique):
-        excluded.add(ctx.technique.framework_id)
-    return frozenset(excluded)
 
 
 def _conversation(history: list[Message]) -> list[dict[str, str]]:
@@ -361,6 +351,9 @@ async def send(
     # this turn's [ctx] reports the cooldown the completion just started instead of
     # reporting that nothing has ever run.
     retiring_framework_id: str | None = None
+    # On the turn that retires a framework, the place whose practice Mani's last reply gave, if it
+    # gave one: this turn's message is then how they feel after it (spec 0010, AC-7, AC-8).
+    practiced_place: str | None = None
     if (
         technique is not None
         and technique.outcome is TechniqueOutcome.ACCEPTED
@@ -368,6 +361,12 @@ async def send(
         and not _awaiting_place(history)
     ):
         retiring_framework_id = technique.framework_id
+        last_reply = next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None)
+        practiced_place = repairs.practice_place(
+            config.registry.get(retiring_framework_id).stages.get("somatic_practice") or {},
+            last_reply,
+            context.resolve_style(ctx),
+        )
         updates.retire_technique = True
         ctx = dataclasses.replace(
             ctx, technique=technique.model_copy(update={"phase": None})
@@ -426,22 +425,36 @@ async def send(
 
     # An action about to happen is the one case decided before the model is asked: DBT STOP's
     # own offer lines go into [ctx], since waiting a turn may be too late. Every other choice is
-    # made from the facts the model reports, below.
+    # the model's (spec 0010).
     urgent = router.urgent(user_texts)
     candidate = (
         config.registry.get(router.URGENT_FRAMEWORK)
         if urgent and technique is None and assessment.level is safety.Level.NONE
         else None
     )
-    mani_texts = [m.content for m in history if m.role is MessageRole.MANI]
     stuck_offer = (
-        stuck_offer_candidate(ctx, config.registry, mani_texts, user_texts)
+        stuck_offer_candidate(ctx, config.registry, history, user_texts)
         if candidate is None and assessment.level is safety.Level.NONE
         else None
     )
     stuck_candidate = stuck_offer is not None
     if stuck_offer is not None:
         candidate = stuck_offer
+
+    # Why no new offer may stand this turn, told to the model and enforced on its reply.
+    refusal = context.offer_refusal(
+        ctx, history, urgent=urgent, safety_concern=assessment.blocks_framework
+    )
+    # They asked to hear more about the offer waiting for them: a tap on Tell me more, or a
+    # question typed past it. The explanation then stands alone with two choices.
+    explaining = (
+        config.registry.get(offer.technique)
+        if offer is not None and (
+            (tapped is not None and tapped.label.strip().lower() == EXPLAIN_LABEL.lower())
+            or (deferred and "?" in content)
+        )
+        else None
+    )
 
     wants_title = (
         ctx.thread.message_count >= TITLE_AFTER_MESSAGES and not ctx.thread.title
@@ -457,23 +470,12 @@ async def send(
     model, parameters, routing = composer.model_settings(config)
 
     active_framework = config.registry.get(technique.framework_id) if technique else None
-    # Stages that what they said before accepting already answers; the same list shapes
-    # the [ctx] block now and the stage recorded after the reply.
-    told = (
-        covered_stages(active_framework, technique.known)
-        if technique is not None and technique.outcome is TechniqueOutcome.OFFERED
-        else []
-    )
-    # Offered because they were stuck: the first stages are passed over with no words.
-    passed = (
-        passed_over_stages(active_framework, technique.known)
-        if technique is not None and technique.outcome is TechniqueOutcome.OFFERED
-        else []
-    )
     prefix = context.build(
         ctx, framework=active_framework, candidate=candidate,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
-        framework_starting=accepted_this_turn, urgent=urgent, stuck_candidate=stuck_candidate,
+        framework_starting=accepted_this_turn, stuck_candidate=stuck_candidate,
+        refusal=refusal, explaining=explaining,
+        answering_practice=practiced_place is not None,
         # A tap is a choice among Mani's own buttons, not words to read.
         their_last=None if tapped else context.classify_reply(content),
         asked_again=None if tapped else context.asks_to_hear_again(content),
@@ -512,86 +514,6 @@ async def send(
         prompt_version_id=None,
     )
     reply = call.value
-    clear_ok = context.cooldown_passed(ctx, urgent=urgent)
-
-    def _earliest_ok(framework_id: str | None) -> bool:
-        return context.earliest_offer_ok(
-            ctx, config.registry.activations.get(framework_id) if framework_id else None,
-            urgent=urgent,
-        )
-
-    # The facts are read only where an offer could follow: nothing running, no button tapped,
-    # nothing accepted yet, no safety concern. They are taken from the first draft and kept, so
-    # a second draft cannot add a fact to make its own offer fit.
-    fact_turn = (
-        (technique is None or technique.outcome is TechniqueOutcome.OFFERED)
-        and not tapped
-        and not accepted_this_turn
-        and not assessment.blocks_framework
-    )
-    fit: router.Fit | None = None
-    fact_notes: list[str] = []
-    fact_words: dict[str, str] = {}
-    if fact_turn:
-        kept = router.kept_facts(
-            [(f.fact, f.words) for f in reply.facts or []], user_texts, mani_messages=mani_texts
-        )
-        fact_notes = kept.notes
-        fact_words = kept.words
-        # The imminent action phrases are deterministic evidence of the same fact.
-        facts = kept.present | ({"about_to_act"} if urgent else set())
-        fit = router.choose(
-            frozenset(facts),
-            config.registry.activations,
-            {i: config.registry.get(i).display_order for i in config.registry.ids},
-            excluded=_not_offerable_now(ctx, config.registry, user_texts),
-        )
-        # Ids only, never their words.
-        logger.info(
-            "thread %s facts %s pick %s leading %s",
-            ctx.thread.id, sorted(fit.facts), fit.pick or "none", fit.leading or "none",
-        )
-        await log_facts(
-            call.call_id,
-            router.call_log_record([f.fact for f in reply.facts or []], kept, fit),
-        )
-
-    def _why(draft: Reply) -> list[str]:
-        return redraft.reasons(
-            draft, user_texts, config.registry,
-            fit=fit,
-            style=context.resolve_style(ctx),
-            clear_ok=clear_ok,
-            offer_due=context.offer_due(ctx) and not deferred,
-            earliest_ok=_earliest_ok,
-            # A typed reply to an offer already open is Keep chatting unless it asks about the
-            # offer, so showing it again needs the usual window unless they asked.
-            waiting=offer.technique if deferred else None,
-            asked_about_waiting="?" in content,
-        )
-
-    why = _why(reply)
-    # A draft that uses a feeling or size they never gave, offers before it may, offers what they
-    # said rules out or the facts do not fit, or leaves a due fit unoffered gets one more try,
-    # told why. What still fails is corrected by repairs.apply, or left as drafted.
-    if why:
-        logger.info("thread %s redrafting: %s", ctx.thread.id, "; ".join(why))
-        again = await client.complete(
-            [{"role": "system", "content": system.text}]
-            + _conversation(history)
-            + [{"role": "user", "content": context.with_rewrite_notes(prefix, why) + for_model}],
-            Reply,
-            model=model,
-            purpose=llm_calls.Purpose.CHAT,
-            temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
-            max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
-            reasoning_effort=parameters.get("reasoning_effort"),
-            routing=routing,
-            user_id=user_id,
-            thread_id=ctx.thread.id,
-            prompt_version_id=None,
-        )
-        reply = again.value
 
     # The model's own crisis judgment no longer locks the thread: a small model over-fires it
     # on ordinary distress, pain or injury. Only the deterministic screen (safety.screen, above)
@@ -634,15 +556,11 @@ async def send(
         accepted_this_turn = True
         offered_now.append(technique.framework_id)
 
-    final_offer = redraft.offered(reply, config.registry)
+    vetoed = repairs.ruled_out(reply, user_texts, config.registry)
     fixed = repairs.apply(
         reply,
         config.registry,
-        # Everything they have said in this thread, not only this turn: a capsule may mirror
-        # a feeling they named four messages ago, and mani_base.md asks for exactly that.
-        said=" ".join(user_texts),
-        # Only the framework they have just finished is off the table. One they said no to
-        # may come back once the cooldown has passed (muhammad, 2026-09-24).
+        # Only the framework they have just finished is off the table.
         already_offered=[ctx.technique.framework_id] if _finished(ctx.technique) else [],
         # A declined offer is no longer pending, so re-showing it is a new offer, and a new
         # offer waits out the cooldown like any other.
@@ -657,35 +575,17 @@ async def send(
         framework_running=outcome is TechniqueOutcome.ACCEPTED,
         # The reply that takes a no never carries the next offer, however long the last one
         # stood open.
-        # An offer a second draft still makes after what they said ruled it out is dropped the
-        # way an early one is.
-        # Judged against the first draft's facts. An offer that still disagrees with them after
-        # the redraft is dropped the way an early one is.
-        cooldown_passed=(
-            redraft.offers_the_pick(final_offer, fit)
-            and clear_ok
-            and _earliest_ok(final_offer)
-            and outcome is not TechniqueOutcome.DECLINED
-            and not redraft.ruled_out(reply, user_texts, config.registry)
+        offer_allowed=(
+            refusal is None and vetoed is None and outcome is not TechniqueOutcome.DECLINED
         ),
         conversation_style=context.resolve_style(ctx),
         wants_title=wants_title,
-        # An offer made again after they asked what it involves doesn't repeat the description.
         last_mani_text=next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None),
-        nickname=ctx.profile.nickname if ctx.profile else None,
-        # The greeting says their name by design; the model's own replies count from there.
-        name_said_before=bool(
-            ctx.profile and ctx.profile.nickname
-            and any(ctx.profile.nickname in m.content
-                    for m in [m for m in history if m.role is MessageRole.MANI][1:])
-        ),
-        clarification_already_used=context.clarification_used(history),
+        explaining=explaining is not None,
         current_holds=technique.holds if technique else 0,
         asked_again=False if tapped else context.asks_to_hear_again(content),
-        skipped_stages=len(told) + len(passed),
+        current_ending=technique.ending if technique else None,
     )
-    if fact_notes:
-        fixed = dataclasses.replace(fixed, notes=fact_notes + fixed.notes)
     framework_running = outcome is TechniqueOutcome.ACCEPTED
     if assessment.blocks_framework or model_concern:
         # A concern pauses the framework rather than ending it: nothing this reply reports
@@ -733,6 +633,28 @@ async def send(
             fixed = dataclasses.replace(fixed, text=repairs.with_the_check_in(fixed.text, script))
     if fixed.notes:
         logger.info("repaired reply on thread %s: %s", ctx.thread.id, "; ".join(fixed.notes))
+    # How they say they feel after the practice, only on the turn that answers it and with no
+    # concern raised on it.
+    felt_after = (
+        repairs.known_value(reply.felt_after, repairs.FELT_AFTER)
+        if practiced_place is not None and not (assessment.blocks_framework or model_concern)
+        else None
+    )
+    if practiced_place is not None and felt_after is None:
+        logger.info("thread %s answered the practice with no outcome reported", ctx.thread.id)
+    decision = turn_decision(
+        reply, fixed, config.registry,
+        refusal=refusal,
+        vetoed=vetoed,
+        concern=assessment.blocks_framework or model_concern,
+        declined=outcome is TechniqueOutcome.DECLINED,
+        running=framework_running,
+        step_from=technique.phase if technique else None,
+    )
+    decision["felt_after"] = felt_after
+    # Ids and codes only, never their words.
+    logger.info("thread %s decision %s", ctx.thread.id, decision)
+    await log_decision(call.call_id, decision)
     if technique is not None and (
         config.registry.is_final(technique.framework_id, fixed.phase)
         or fixed.phase == "somatic_checkin"
@@ -787,6 +709,19 @@ async def send(
         client_message_id=client_message_id,
     )
 
+    if felt_after is not None and not pair.was_duplicate:
+        await outcomes.record(
+            conn,
+            user_id=user_id,
+            thread_id=ctx.thread.id,
+            message_id=pair.user_message_id,
+            framework_id=retiring_framework_id,
+            conversation_style=context.resolve_style(ctx),
+            ending=ctx.technique.ending or "resolved",
+            body_place=practiced_place,
+            outcome=felt_after,
+        )
+
     count_after = ctx.thread.message_count + 2
     new_offer = next((p for p in fixed.prompts if p.technique), None)
     library_offer = next((p for p in fixed.prompts if p.library), None)
@@ -799,7 +734,13 @@ async def send(
             outcome=TechniqueOutcome.OFFERED,
             phase=fixed.phase or "offering",
             at_message_count=count_after,
-            known=fact_words,
+            # An offer made on the turn after "Are you feeling stuck?" starts at the stuck
+            # questions once accepted.
+            known=(
+                {STUCK_BRANCH: "yes"}
+                if stuck_offer is not None and new_offer.technique == stuck_offer.id
+                else {}
+            ),
         )
         updates.offer_frameworks.append(new_offer.technique)
     elif (decided := _decided_framework(fixed.framework_id, outcome, technique)) is not None:
@@ -816,6 +757,9 @@ async def send(
             ),
             library_offered_since=False,
             holds=fixed.holds,
+            # The stuck flag and the ending stay with the framework they belong to.
+            known=technique.known if technique and technique.framework_id == decided else {},
+            ending=fixed.ending if outcome is TechniqueOutcome.ACCEPTED else None,
         )
         if accepted_this_turn:
             updates.offer_frameworks.append(decided)
@@ -957,19 +901,59 @@ async def link_call(call_id: uuid.UUID, message_id: uuid.UUID) -> None:
             await asyncio.sleep(LINK_RETRY_DELAY_SECONDS)
 
 
-async def log_facts(call_id: uuid.UUID | None, facts: dict) -> None:
-    """Keep on the draft's call row what the router read from its facts. The row was written
-    and committed by client.complete, so no wait is needed; a failure costs a trace, never
-    the reply, so it is logged and swallowed."""
+def turn_decision(
+    reply: Reply,
+    fixed: repairs.Repaired,
+    registry: Registry,
+    *,
+    refusal: str | None,
+    vetoed: str | None,
+    concern: bool,
+    declined: bool,
+    running: bool,
+    step_from: str | None,
+) -> dict:
+    """What the call log keeps of a turn's decisions (spec 0010, AC-10): the framework the reply
+    offered and, when its offer was removed, why; and the step it moved from and to. Ids and
+    codes only, never the person's words, and never an id outside the registry, which is the
+    model's own text."""
+    drafted = next((p.technique for p in reply.prompts or [] if p.technique), None)
+    kept = next((p.technique for p in fixed.prompts if p.technique), None)
+    refused = None
+    if drafted is not None and kept is None:
+        refused = (
+            "unknown" if drafted not in registry
+            else "safety_concern" if concern
+            else refusal
+            or ("vetoed" if vetoed else None)
+            or ("cooling_down" if declined else None)
+            or ("running" if running else None)
+            or "another_question"
+        )
+    return {
+        "offered": drafted if drafted in registry else None,
+        "refused": refused,
+        "step_from": step_from,
+        # A step only for an offer that stands or a framework that runs.
+        "step_to": fixed.phase if running or kept is not None else None,
+        "ending": fixed.ending,
+        "felt_after": None,
+    }
+
+
+async def log_decision(call_id: uuid.UUID | None, decision: dict) -> None:
+    """Keep a turn's decisions on its call row. The row was written and committed by
+    client.complete, so no wait is needed; a failure costs a trace, never the reply, so it is
+    logged and swallowed."""
     from mani.db import pool
 
     if call_id is None:
         return
     try:
         async with pool.as_admin() as conn:
-            await llm_calls.attach_facts(conn, call_id, facts)
+            await llm_calls.attach_decision(conn, call_id, decision)
     except asyncpg.PostgresError:
-        logger.exception("failed to keep the facts of llm call %s", call_id)
+        logger.exception("failed to keep the decision of llm call %s", call_id)
 
 
 async def _open_in_style(

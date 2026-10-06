@@ -366,12 +366,12 @@
     - "@tap:Chat More"
     - "Thanks."
 
-# Saying "Keep chatting" to an offer, carrying on, and being offered something again once it fits.
+# Saying "I want to keep talking" to an offer, carrying on, and being offered something again once it fits.
 - name: decline_then_reoffer
   turns:
     - "My manager criticized my presentation in front of the whole team."
     - "She said two of my recommendations didn't have enough support, and now I keep thinking I'm bad at my job."
-    - "@tap:Keep chatting"
+    - "@tap:I want to keep talking"
     - "I just keep replaying her words."
     - "It's been going round in my head all day."
     - "I really can't shake the feeling I'm not good enough at this job."

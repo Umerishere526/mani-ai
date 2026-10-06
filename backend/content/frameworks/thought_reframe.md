@@ -8,12 +8,6 @@ activation:
   central_indication: >-
     One specific painful thought or interpretation is intensifying distress, and the user wants
     a brief shift in perspective rather than a deep event-by-event examination.
-  # A confident offer waits for their third message: the fit depends on what they took the event or
-  # the thought to mean, which the first two messages rarely say.
-  earliest_offer_message: 3
-  # The facts that make this framework fit: every fact in one set (router.FACTS). Read by
-  # router.choose; the client's tie rules between frameworks are in router.TIE_RULES.
-  fits_when: [[painful_thought]]
   to_find_out:
     - "the exact thought going round, in their words"
     - "the situation it is attached to"
@@ -22,7 +16,7 @@ activation:
     - "whether it could be tested against facts (a loss or a settled fact is not a thought to test)"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads fits_when.
+  # router reads never_offer_when_said and stuck_offer.
   appropriate_when:
     - "One specific thought is intensifying the user's difficulty"
     - "The thought contains an assumption, prediction, or broad conclusion"
@@ -98,7 +92,6 @@ stages:
         start_only: true
       - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
         reply: "What happened sounds serious, and I am not going to ask you to see it differently. What would be most helpful to talk through?"
-    ask_simpler: "Is that the thought you want to talk about?"
     ask:
       supportive: "Is that the thought you want to look at together?"
       reflective: "Is that the thought you want to look at?"
@@ -111,10 +104,6 @@ stages:
       - "must not tell the user why the thought is painful"
       - "must not introduce history the user has not mentioned"
       - "must not expand the brief framework into a deeper investigation"
-    if_earlier_missing:
-      needs: thought
-      reply: "Why does this matter to you?"
-    ask_simpler: "Why does that thought stay with you?"
     ask:
       supportive: "Why does that thought matter to you?"
       reflective: "Why does that thought matter to you?"
@@ -133,10 +122,6 @@ stages:
     if_unclear:
       - when: "the thought is supported by an established fact - \"She told me she does not want the friendship.\""
         reply: "She directly ended the friendship. What thought about yourself or your future do you want help examining?"
-    if_earlier_missing:
-      needs: thought
-      reply: "What makes it seem that way to you?"
-    ask_simpler: "Why do you believe that is true?"
     ask:
       supportive: "What makes you think that is true?"
       reflective: "What makes you think that is true?"
@@ -151,10 +136,6 @@ stages:
       - "must not invent contrary evidence"
       - "must not assume another person's intentions"
       - "must not use rhetorical questions to push a conclusion"
-    if_earlier_missing:
-      needs: thought
-      reply: "Is there anything about this you are unsure of?"
-    ask_simpler: "Is there anything that doesn't match that thought?"
     ask:
       supportive: "Is there anything you know that doesn't match that thought?"
       reflective: "Is there anything you know that doesn't match that thought?"
@@ -168,10 +149,6 @@ stages:
       - "must not minimize a legitimate concern"
       - "must not reinterpret danger or mistreatment"
       - "must not choose the alternative for the user"
-    if_earlier_missing:
-      needs: facts_for
-      reply: "What else could be going on here?"
-    ask_simpler: "What else might be true?"
     ask:
       supportive: "What else could be going on?"
       reflective: "What else could be going on?"
@@ -190,10 +167,6 @@ stages:
       - when: "they say they do not know what would be fair, or cannot put it into words"
         reply: "That is fine. What is one thing about this that you do know is true?"
         counted: true
-    if_earlier_missing:
-      needs: facts_for
-      reply: "What would you say is true about this?"
-    ask_simpler: "From all of that, what do you know is true about this?"
     ask:
       supportive: "Putting those together, what would you say is true about this?"
       reflective: "Putting those together, what would you say is true about this?"

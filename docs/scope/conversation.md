@@ -54,12 +54,22 @@ Spec: [0001](../specs/0001-abcde-framework-offer.md) · code in backend/mani/cha
 
 From the client meeting in October 2026 and the client's style document ("directive, reflective, supportive"). The client finds Mani robotic, too complicated, too full of questions, and repeating "I hear you"; people do not feel heard. This phase is built first, ahead of the slices below: measure (row 32), then rewrite (rows 42, 33, 34, 18, 40, 41, 6), then choose the model (row 35) on the same check.
 
-### 42. Mani follows the client's documents, and our conversation rules that disagree are removed · needs a decision
+### 42. Mani follows the client's documents, and our conversation rules that disagree are removed · in-progress
 
 The client says Mani is moving in a direction they do not want. Their documents are the target: "Good, Acceptable, Bad Conversations" (each "Mani Standard" reply is one short line that adds meaning in fresh words, then one clear question, often a "most" question such as "What worries you most about that?"), the style document, and the framework document. Over time we added word bans, question rules, redrafts and offer gates, many recorded in ADRs that now block this. Every conversation rule the documents do not ask for, or that they contradict, goes, and so does the ADR behind it (muhammad, 2026-10-06: the client's documents win, and stale ADRs may be deleted). Safety, privacy and permissions stay out of reach: the crisis screen, crisis replies, the grief veto, row level security and token checks change only through their own rows. Overrides row 40's ranking ban (spec 0008).
 **Done when:** every rule in the base prompt, the answer format, the `[ctx]` notes, the redrafts and the repairs is either traced to a line in the client's documents or removed; every ADR whose rule was removed is deleted with its index line; nothing in the prompt forbids a "Mani Standard" reply; replays of muhammad's 6 October chat and three of the document's bad transcripts, run after muhammad says yes, read like the corrected responses; and the safety, privacy and permission tests still pass unchanged.
 
-- [ ] Design it (spec): `/architect Mani follows the client's documents`
+Spec: [0010](../specs/0010-mani-follows-client-documents/index.md) (the client's documents in source order, newest first, with Lolly's email of 6 October on top; the model judges the offer, the steps and the synthesis; six offer refusals and one extra attempt per step stay in code; every framework ends in the somatic check, whose answer is stored in `framework_outcomes`; the Done when's paid replays are replaced by muhammad's three live conversations in chat-tester; covers row 6's three button offer) · code in backend/mani/chat/, backend/mani/db/outcomes.py, backend/mani/llm/schema.py, backend/content/, backend/supabase/migrations/013_llm_call_decision.sql to 015_framework_outcomes.sql, backend/scripts/wording.py
+
+- [x] Design it (spec): `/architect Mani follows the client's documents`
+- [ ] Build it: `/develop Mani follows the client's documents`
+  - [x] The prompts on the client's rules, the model chooses the offer, no redrafts, the three button offer, the call log decision (AC-1 to AC-4, AC-9, AC-10)
+  - [x] Steps judged by the model and every ending into the somatic check (AC-5, AC-6)
+  - [x] Mani answers what they report, and the outcome table (AC-7, AC-8)
+  - [x] Evals and tests on the client's rules, the ADRs and specs deleted, ADR-019 and the records (AC-9, AC-11 to AC-13)
+  - [ ] muhammad's three live conversations, read against Lolly's nine points (AC-14)
+- [ ] Verify it: `/check verify Mani follows the client's documents`
+- [ ] Test it: `/test Mani follows the client's documents`
 
 ### 32. The client's style conversations are a standing check
 
@@ -166,6 +176,13 @@ Spec: [0009](../specs/0009-stuck-person-offered-abcde/index.md) (a `stuck` fact 
   - [ ] The stuck_body_pain scenario, expect_offer, ADR-018, PORT-STATUS and journal, then the shared paid run after muhammad says yes (AC-9, AC-10, AC-11)
 - [x] Verify it: `/check verify A person who stays stuck while Mani is understanding is offered ABCDE`
 - [x] Test it: `/test A person who stays stuck while Mani is understanding is offered ABCDE`
+
+### 43. The team sees whether conversations helped · needs a decision · from spec 0010
+
+Spec 0010 stores how a person felt after the somatic practice (better, mixed, unchanged, worse, unsure) with the framework, style and how the framework ended. The team reads it with SQL for now. An admin view shows the counts by framework, style and ending, so the client can judge effectiveness and not only engagement.
+**Done when:** an admin can see outcome counts by framework, style and ending over a chosen period, behind the existing admin access, with no person's words shown.
+
+- [ ] Design it (spec): `/architect the team sees whether conversations helped`
 
 ### 6. The offer names the framework, introduces it, and gives three choices · needs a decision
 

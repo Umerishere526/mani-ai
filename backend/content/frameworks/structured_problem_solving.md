@@ -9,9 +9,6 @@ activation:
     A specific, practical problem exists and the user does not know what to do next - the
     situation can be influenced through a decision or action, and the user wants a direct
     solution rather than reflection alone.
-  # The facts that make this framework fit: every fact in one set (router.FACTS). Read by
-  # router.choose; the client's tie rules between frameworks are in router.TIE_RULES.
-  fits_when: [[practical_problem, unsure_what_to_do]]
   to_find_out:
     - "the practical problem, in one sentence"
     - "whether a decision or an action could change it"
@@ -19,7 +16,7 @@ activation:
     - "whether they do not know what to do, as opposed to knowing and not starting"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads fits_when.
+  # router reads never_offer_when_said and stuck_offer.
   appropriate_when:
     - "The user has a specific practical problem"
     - "The problem can be influenced through action"
@@ -97,7 +94,6 @@ stages:
       - when: "they have already described the problem before the stage began - do not ask them to confirm it"
         reply: "<their problem, in a clause, in their words>. What do you know for certain about it?"
         start_only: true
-    ask_simpler: "What is the one problem you want to fix?"
     ask:
       supportive: "What is the main problem you want to sort out?"
       reflective: "What is the main problem you want to sort out?"
@@ -113,7 +109,6 @@ stages:
     if_unclear:
       - when: "a time critical risk is still open - cards or accounts that can still be used, a deadline about to pass, something that gets worse by the hour"
         reply: "<the risk, in a clause>. Contacting <whoever can stop it, such as the bank or the police> is usually the first step. Have you been able to reach them?"
-    ask_simpler: "What do you know for sure?"
     ask:
       supportive: "What do you know for certain?"
       reflective: "What do you know for certain?"
@@ -126,7 +121,6 @@ stages:
       - "must not assign responsibility for another person's behaviour"
       - "must not encourage control over an uncontrollable outcome"
       - "must not treat abuse as a mutual communication problem"
-    ask_simpler: "Which part can you do something about?"
     ask:
       supportive: "Which part can you do something about?"
       reflective: "Which part can you do something about?"
@@ -139,7 +133,6 @@ stages:
       - "must not promise the outcome is achievable"
       - "must not define success as receiving a particular response from someone else"
       - "must not pressure the user toward reconciliation, confrontation, forgiveness, or separation"
-    ask_simpler: "What do you want to happen?"
     ask:
       supportive: "What do you want to come out of this?"
       reflective: "What do you want to come out of this?"
@@ -154,7 +147,6 @@ stages:
       - "must not exclude the user from generating options"
       - "must not disguise a recommendation as the user's decision"
       - "must not accept several options that are really one approach worded differently - real breadth is at least two genuinely different approaches, not variations on the same one"
-    ask_simpler: "What could you do about it?"
     ask:
       supportive: "What could you do about it?"
       reflective: "What could you do about it?"
@@ -167,27 +159,18 @@ stages:
       - "must not exaggerate consequences"
       - "must not make legal, medical, financial, or professional conclusions"
       - "must not push the option MANI prefers"
-    if_earlier_missing:
-      needs: options
-      reply: "What is good and not so good about each way you could respond?"
-    ask_simpler: "What is good and bad about each one?"
     ask:
       supportive: "What is good and not so good about each of those?"
       reflective: "What is good and not so good about each of those?"
       direct: "What is good and not so good about each of those?"
   select:
     purpose: "Help the user choose the option that best fits the outcome and circumstances."
-    picks_from_options: true
     listen_for: "The user's own decision and the reason it fits."
     boundaries:
       - "must not make the decision"
       - "must not pressure the user to choose quickly"
       - "must not praise one choice in a way that discourages reconsideration"
       - "must not treat uncertainty as failure"
-    if_earlier_missing:
-      needs: options
-      reply: "What do you think would be the best way to respond?"
-    ask_simpler: "Which one seems best?"
     ask:
       supportive: "Which of those fits best?"
       reflective: "Which of those fits best?"
@@ -200,10 +183,6 @@ stages:
       - "must not make the first action too large"
       - "must not require immediate completion"
       - "must not select an action outside the user's control"
-    if_earlier_missing:
-      needs: select
-      reply: "What is one small thing you could do first?"
-    ask_simpler: "What is the first thing you would do?"
     ask:
       supportive: "What is the first thing you would do?"
       reflective: "What is the first thing you would do?"

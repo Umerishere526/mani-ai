@@ -94,9 +94,12 @@ class TechniqueState(Row):
     library_offered_since: bool = False
     # Extra turns the stored stage has used, 0 or 1; see migration 011.
     holds: int = 0
-    # The facts kept when the framework was offered, each with the person's own words; see
-    # migration 012. Read by the turn that accepts the offer.
+    # Only {"stuck": "yes"}, for a framework offered after a yes to "Are you feeling stuck?", so
+    # its stuck questions are shown once it runs; see migration 012.
     known: dict[str, str] = Field(default_factory=dict)
+    # How the framework ended: resolved, pivoted or stopped; see migration 014. Set on the turn
+    # it moves into the body check in and kept until it retires.
+    ending: str | None = None
 
 
 class ResponseStyle(Row):

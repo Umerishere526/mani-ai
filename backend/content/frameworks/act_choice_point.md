@@ -9,12 +9,6 @@ activation:
     The user may not be able to change or resolve the situation, but does not want it deciding
     how they act - the focus shifts from making the thought or feeling go away to choosing how
     to respond while it is present.
-  # A confident offer waits for their third message: the fit depends on what they took the event or
-  # the thought to mean, which the first two messages rarely say.
-  earliest_offer_message: 3
-  # The facts that make this framework fit: every fact in one set (router.FACTS). Read by
-  # router.choose; the client's tie rules between frameworks are in router.TIE_RULES.
-  fits_when: [[cannot_control]]
   to_find_out:
     - "what part of the situation they cannot change or control"
     - "the thought, feeling or urge that stays with them"
@@ -22,7 +16,7 @@ activation:
     - "whether they want help choosing how to respond, not solving or disproving it"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads fits_when.
+  # router reads never_offer_when_said and stuck_offer.
   appropriate_when:
     - "The user cannot fully control or resolve the situation"
     - "A thought cannot be proved or disproved"
@@ -97,7 +91,6 @@ stages:
         reply: "You can compare the bills and make a decision. Would practical problem-solving fit better than this framework?"
       - when: "what they describe is abuse, threats, coercion, harassment, or other danger"
         reply: "What is happening sounds serious, and staying safe comes first. What would be most helpful to talk through?"
-    ask_simpler: "What part of this can't you change?"
     ask:
       supportive: "What part of this can you not control?"
       reflective: "What part of this can you not control?"
@@ -110,7 +103,6 @@ stages:
       - "must not interpret the user's internal experience"
       - "must not diagnose the user"
       - "must not require the user to accept or like what is present"
-    ask_simpler: "What goes through your mind when you think about it?"
     ask:
       supportive: "What comes up for you when you think about it?"
       reflective: "What comes up for you when you think about it?"
@@ -125,10 +117,6 @@ stages:
       - "must not decide that a protective action is an \"away\" response"
       - "ask only what it pulls them toward doing - one thing. Do not add \"or avoiding\" or any second half to the question; if they avoid something, they will say so"
       - "must not move to what matters before acknowledging what the pull is actually getting them - avoidance has a real payoff (less conflict, less exposure, a moment's relief), and skipping straight to its cost reads as moralising, not understanding"
-    if_earlier_missing:
-      needs: present
-      reply: "When this comes up, what do you find yourself doing?"
-    ask_simpler: "What do you feel like doing when that comes up?"
     ask:
       supportive: "What does that make you want to do?"
       reflective: "What does that make you want to do?"
@@ -142,7 +130,6 @@ stages:
       - "must not define what a good person would do"
       - "must not pressure the user to preserve a relationship"
       - "must not treat self-protection as selfish"
-    ask_simpler: "What do you care about most here?"
     ask:
       supportive: "What matters to you in how you handle this?"
       reflective: "What matters to you in how you handle this?"
@@ -160,10 +147,6 @@ stages:
     if_unclear:
       - when: "response creates danger - \"I should confront him alone.\""
         reply: "Confronting him alone could place you at risk. What response protects your safety?"
-    if_earlier_missing:
-      needs: matters
-      reply: "What response would you want to be able to look back on?"
-    ask_simpler: "What is one thing you could do about that?"
     ask:
       supportive: "What could you do that fits with that?"
       reflective: "What could you do that fits with that?"
@@ -176,7 +159,6 @@ stages:
       - "must not require immediate completion"
       - "must not promise the action will remove the difficult experience"
       - "must not select an action outside the user's control"
-    ask_simpler: "What is one small thing you could do?"
     ask:
       supportive: "What is one thing you could do?"
       reflective: "What is one thing you could do?"

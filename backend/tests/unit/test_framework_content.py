@@ -3,7 +3,6 @@
 
 import pytest
 
-from mani.chat.router import FACTS
 from scripts.seed import FRAMEWORKS_DIR, load_somatic_stages, parse_framework
 
 FRAMEWORKS = {p.stem: parse_framework(p) for p in sorted(FRAMEWORKS_DIR.glob("*.md"))}
@@ -41,16 +40,6 @@ LATER_BRANCHES = {
 }
 
 
-# The stages whose own question makes no sense without an earlier answer, so each carries a
-# question to ask when that answer never came.
-NEEDS_AN_EARLIER_ANSWER = {
-    "abcde": {"belief", "evidence_for", "evidence_against", "balanced"},
-    "thought_reframe": {"significance", "facts_for", "facts_against", "alternative", "reframe"},
-    "behavioral_activation": {"matters", "choose", "manageable", "begin", "barrier"},
-    "act_choice_point": {"pull", "toward"},
-    "dbt_stop": {"pause", "observe"},
-    "structured_problem_solving": {"compare", "select", "first_action"},
-}
 STYLES = {"supportive", "reflective", "direct"}
 
 
@@ -101,38 +90,6 @@ def test_the_two_part_stages_are_two_stages_that_each_ask_one_thing():
         for stage in FRAMEWORKS[framework_id]["stages"].values():
             for ask in stage["ask"].values():
                 assert ask.count("?") == 1
-
-
-def test_only_the_listed_stages_carry_a_question_for_a_missing_answer():
-    found = {
-        framework_id: {s for s, body in framework["stages"].items() if "if_earlier_missing" in body}
-        for framework_id, framework in FRAMEWORKS.items()
-    }
-    assert found == NEEDS_AN_EARLIER_ANSWER
-    assert sum(len(stages) for stages in found.values()) == 21
-
-
-@pytest.mark.parametrize("framework_id", sorted(FIRST_STAGE))
-def test_a_missing_answer_question_names_an_earlier_stage_and_a_reply_for_every_style(framework_id):
-    framework = FRAMEWORKS[framework_id]
-    phases = framework["phases"]
-    for stage, body in framework["stages"].items():
-        missing = body.get("if_earlier_missing")
-        if not missing:
-            continue
-        assert phases.index(missing["needs"]) < phases.index(stage), f"{stage} needs {missing['needs']}"
-        reply = missing["reply"]
-        assert isinstance(reply, str) or set(reply) == STYLES, f"{stage} lacks a style"
-
-
-def test_behavioral_activation_and_structured_problem_solving_pick_from_options_and_nothing_else_does():
-    flagged = {
-        (framework_id, stage)
-        for framework_id, framework in FRAMEWORKS.items()
-        for stage, body in framework["stages"].items()
-        if body.get("picks_from_options")
-    }
-    assert flagged == {("behavioral_activation", "choose"), ("structured_problem_solving", "select")}
 
 
 def test_only_dbt_stops_acting_branches_and_the_balanced_thought_branches_use_the_extra_turn():
@@ -188,11 +145,20 @@ def test_the_scenario_worded_redirects_listed_above_still_exist():
         ), f"{framework_id} {stage} {when} is no longer a redirect branch: take it off the list"
 
 
-def test_every_framework_names_its_fit_with_known_facts_only():
+def test_only_abcde_is_offered_after_a_yes_to_the_stuck_check():
+    flagged = [fid for fid, f in FRAMEWORKS.items() if f["activation"].get("stuck_offer")]
+    assert flagged == ["abcde"]
+
+
+def test_no_framework_carries_the_fields_the_model_now_judges_without():
+    """The model judges when a step is done and which framework fits (spec 0010), so nothing
+    seeded may still carry the removed fit or step fields."""
+    removed = {"fits_when", "earliest_offer_message"}
+    step_fields = {"if_earlier_missing", "ask_simpler", "picks_from_options", "answered_by"}
     for framework_id, framework in FRAMEWORKS.items():
-        sets = framework["activation"].get("fits_when")
-        assert sets, framework_id
-        assert {fact for s in sets for fact in s} <= set(FACTS), framework_id
+        assert not removed & set(framework["activation"]), framework_id
+        for stage, body in framework["stages"].items():
+            assert not step_fields & set(body), f"{framework_id} {stage}"
 
 
 # A person panicked with no action in view must never be asked about one.

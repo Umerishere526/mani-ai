@@ -10,20 +10,16 @@ from dataclasses import dataclass, field
 
 from mani.chat import context, repairs
 from scripts.seed import FRAMEWORKS_DIR, parse_framework
+from scripts.wording import introduced_feelings
 from tests.evals import validators
 
-SOUNDS_LIKE = re.compile(r"\b(?:it |that )?sounds (?:like|as if|as though)\b")
-SEEMS_LIKE = re.compile(r"\b(?:it |that )?seems (?:like|as if|as though)\b")
-
-# The phrases the client's document names as the ones Mani must not lean on, and the two that
-# read as a machine once a person had read the transcripts, matched on text where "I am" has
-# been written "I'm", apostrophes are straight and capitals are lower case.
+# The phrases the client's style document names as formulas Mani must not lean on, matched on
+# text where "I am" has been written "I'm", apostrophes are straight and capitals are lower case.
+# The document's own replies use some of them once; what it forbids is repeating them.
 STOCK_PHRASES = (
     re.compile(r"\bi hear you\b"),
     re.compile(r"\bi'm (?:right )?here (?:for|with) you\b"),
     re.compile(r"\bthat makes sense\b"),
-    SOUNDS_LIKE,
-    SEEMS_LIKE,
 )
 
 # An em dash, an en dash, or a hyphen with a space on both sides. A hyphen inside a word
@@ -41,8 +37,6 @@ SHORT_MESSAGE_WORDS = 3
 # The conversation the styles are read on, and how many replies from its start (AC-9).
 STYLE_READ_CONVERSATION = "panic"
 STYLE_READ_POINTS = 2
-# Reported on its own line: the client's own lines use it, so whether it may stay is open.
-SIZE_PHRASE_REPORTED_ALONE = "a lot"
 
 
 @dataclass(frozen=True)
@@ -66,9 +60,9 @@ def framework_descriptions() -> frozenset[str]:
 
 
 def own_words(reply: str, descriptions: frozenset[str]) -> str:
-    """Mani's part of a reply. An offer is composed by the code as Mani's part, the framework's
-    description and the permission question, one paragraph each; the last two are not Mani's.
-    Stripped wherever they appear, since an offer whose buttons were dropped keeps its text."""
+    """Mani's part of a reply: without the permission question the code adds to an offer, and
+    without any framework description, each its own paragraph. Stripped wherever they appear,
+    since an offer whose buttons were dropped keeps its text."""
     permission = set(repairs.PERMISSION_QUESTIONS.values())
     paragraphs = [p.strip() for p in _PARAGRAPH_BREAK.split(reply.strip())]
     return "\n\n".join(
@@ -102,13 +96,9 @@ class ConversationCounts:
     # Per stock phrase, how often Mani's own words said it before the offer was accepted.
     own_phrases: dict[str, int] = field(default_factory=dict)
     unused_feelings: list[str] = field(default_factory=list)
-    unused_sizes: list[str] = field(default_factory=list)
-    # Questions a person would have to stop and work out (spec 0008), over every reply in Mani's
-    # own words, the offer's description and permission question left out.
-    long_questions: int = 0
+    # Questions that open on a clause restating what came before, which the client's PDF marks
+    # as hard to read, over every reply in Mani's own words.
     lead_clauses: int = 0
-    flagged_words: int = 0
-    either_ors: int = 0
 
     @property
     def questions(self) -> int:
@@ -167,24 +157,16 @@ def _accepted_at(turns: list[Turn]) -> int | None:
 
 
 QUESTION_RULES = {
-    "long question": "long_questions",
     "lead clause": "lead_clauses",
-    "flagged word": "flagged_words",
-    "either/or": "either_ors",
 }
 
 
 def count_question_findings(turns: list[Turn], descriptions: frozenset[str]) -> dict[str, int]:
     """How often each question rule is broken over the whole conversation, keyed by the
-    `ConversationCounts` field it fills. Replies from the acceptance of an offer on are inside
-    the framework."""
-    accepted = _accepted_at(turns)
+    `ConversationCounts` field it fills."""
     totals = dict.fromkeys(QUESTION_RULES.values(), 0)
-    for index, turn in enumerate(turns):
-        in_framework = accepted is not None and index >= accepted
-        for finding in validators.question_findings(
-            own_words(turn.reply, descriptions), turn.message, in_framework=in_framework
-        ):
+    for turn in turns:
+        for finding in validators.question_findings(own_words(turn.reply, descriptions)):
             totals[QUESTION_RULES[finding.rule]] += 1
     return totals
 
@@ -198,7 +180,6 @@ def count_conversation(turns: list[Turn], descriptions: frozenset[str]) -> Conve
     own_questions = double = long_replies = 0
     own_phrases: dict[str, int] = {}
     unused: list[str] = []
-    unused_sizes: list[str] = []
     said: list[str] = []
     for turn in own_turns:
         said.append(turn.message)
@@ -210,8 +191,7 @@ def count_conversation(turns: list[Turn], descriptions: frozenset[str]) -> Conve
             double += 1
         if _sentences(words) >= LONG_REPLY_SENTENCES:
             long_replies += 1
-        unused += repairs.introduced_feelings(words, " ".join(said))
-        unused_sizes += repairs.introduced_size(words, " ".join(said))
+        unused += introduced_feelings(words, " ".join(said))
 
     return ConversationCounts(
         replies=[count_reply(r) for r in replies],
@@ -223,7 +203,6 @@ def count_conversation(turns: list[Turn], descriptions: frozenset[str]) -> Conve
         long_replies=long_replies,
         own_phrases=own_phrases,
         unused_feelings=unused,
-        unused_sizes=unused_sizes,
         **count_question_findings(turns, descriptions),
     )
 
@@ -352,17 +331,7 @@ def figures(records: list[tuple[str, int, ConversationCounts]]) -> dict[str, flo
         ),
         "replies_with_two_questions": sum(c.double_question_replies for c in all_counts),
         "phrases_said_twice": sum(c.phrases_said_twice for c in all_counts),
-        "sounds_or_seems_like": sum(
-            c.own_phrases.get(p.pattern, 0) for c in all_counts for p in (SOUNDS_LIKE, SEEMS_LIKE)
-        ),
-        "sounds_or_seems_like_all": sum(
-            r.phrases.get(p.pattern, 0) for c in all_counts for r in c.replies for p in (SOUNDS_LIKE, SEEMS_LIKE)
-        ),
         "unused_feelings": sum(len(c.unused_feelings) for c in all_counts),
-        "unused_size_phrases": sum(
-            1 for c in all_counts for p in c.unused_sizes if p != SIZE_PHRASE_REPORTED_ALONE
-        ),
-        "unused_a_lot": sum(c.unused_sizes.count(SIZE_PHRASE_REPORTED_ALONE) for c in all_counts),
         "long_replies": sum(c.long_replies for c in all_counts),
         "dashes": sum(c.dashes for c in all_counts),
         "conversations": len(all_counts),

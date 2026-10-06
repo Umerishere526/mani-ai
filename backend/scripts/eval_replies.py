@@ -53,8 +53,8 @@ class Exchange:
 
     `repair_notes` is read from the same `logger.info` call orchestrator.py already makes
     after `repairs.apply()` - captured, not recomputed, so this is what production actually
-    did on this turn, not a second opinion on it. `choice_notes` is the same for how the
-    framework was chosen: the fact ids, pick and leading framework, and any redraft reason.
+    did on this turn, not a second opinion on it. `choice_notes` is the same for the turn's
+    decisions: the framework offered, why an offer was removed, and the step moved to.
     """
 
     message: str
@@ -70,13 +70,13 @@ class Exchange:
     # The message was a tap on a button Mani had offered, not something the person typed.
     tapped: bool = False
     # Wall time of the whole turn, as the person waits for it: every model call in it,
-    # including a redraft or a retry.
+    # including a retry.
     seconds: float = 0.0
 
 
-# The orchestrator's lines about how the framework was chosen. Fact ids and authored reason
-# text only: neither carries the person's words.
-_CHOICE = re.compile(r"^thread \S+ (facts |redrafting: )")
+# The orchestrator's line with a turn's decisions (spec 0010): ids and codes only, never the
+# person's words.
+_CHOICE = re.compile(r"^thread \S+ decision ")
 
 
 class _RepairNoteCapture(logging.Handler):
@@ -313,8 +313,7 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
         findings += validators.style_findings(exchange.reply, style.value)
         findings += validators.says_framework(exchange.reply, FRAMEWORK_NAMES)
         findings += _rephrase_findings(exchange)
-        in_framework = bool(exchange.framework and exchange.framework[1] == "accepted")
-        findings += validators.question_findings(exchange.reply, exchange.message, in_framework=in_framework)
+        findings += validators.question_findings(exchange.reply)
         if exchange.finding:
             findings.append(validators.Finding("script", exchange.finding))
         if exchange.chat > 1 and scenario.get("markers"):
@@ -326,13 +325,6 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
         findings += validators.repeated_question(
             [e.reply for e in in_chat if not (_hold(e) and _hold(e)[0] == "held")]
         )
-    for index, exchange in enumerate(exchanges):
-        state = exchange.framework
-        if state and state[1] == "accepted" and state[2] not in (None, "offering") \
-                and not str(state[2]).startswith("somatic"):
-            said = " ".join(e.message for e in exchanges[: index + 1] if e.chat == exchange.chat)
-            findings += validators.names_their_situation(exchange.reply, said)
-            findings += validators.asks_to_confirm(exchange.reply)
     phases = [(e.framework[2] if e.framework and e.framework[1] == "accepted" else None, e.buttons)
               for e in exchanges]
     findings += validators.missing_handoff(phases, [e.message for e in exchanges])

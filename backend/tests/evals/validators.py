@@ -6,17 +6,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-# The capsule vocabulary lives beside the code that enforces it, so the eval and the runtime
-# cannot drift into disagreeing about which words are which.
-from mani.chat.repairs import (
-    CLIENT_LINES,
-    FEELING_WORDS,
-    MAX_CAPSULE_WORDS,
-    SELF_JUDGMENTS,
-    SIZE_PHRASES,
-    WORD,
-    words,
-)
+# The feeling and button vocabulary is shared with the style counts, so the two cannot drift
+# into disagreeing about which words are which.
+from scripts.wording import FEELING_WORDS, MAX_CAPSULE_WORDS, SELF_JUDGMENTS, WORD, words
 
 # Clinical vocabulary. The specifications forbid naming the user's thinking, in every
 # framework: "MANI does not use clinical language with the user."
@@ -183,13 +175,10 @@ def check_capsules(labels: list[str], user_message: str) -> list[Finding]:
     return findings
 
 
-def check(reply: str, user_message: str, *, in_framework: bool = False) -> list[Finding]:
-    """Every rule this reply broke. Empty means it passed.
-
-    `in_framework` turns on the rules that only apply once a framework is running: inside
-    one, every mirror must carry a question and exactly one question is allowed. Outside
-    one, `mani_base` explicitly permits a reply with no question at all.
-    """
+def check(reply: str, user_message: str) -> list[Finding]:
+    """Every rule this reply broke. Empty means it passed. A reply with no question is never a
+    fault: the style document asks Mani to mirror selectively, and Lolly lets it state what the
+    person has established and move on (spec 0010)."""
     findings: list[Finding] = []
 
     introduced = introduced_feelings(reply, user_message)
@@ -205,13 +194,6 @@ def check(reply: str, user_message: str, *, in_framework: bool = False) -> list[
         if hits:
             findings.append(Finding(rule, f"{hits}"))
 
-    # Scale gets the same treatment as feeling words: the rule is "if they did not describe
-    # the scale, neither do you", so a phrase the person used first is theirs to mirror.
-    said = user_message.lower()
-    added = [p for p in _hits(reply, SIZE_PHRASES) if p not in said]
-    if added:
-        findings.append(Finding("added scale", f"{added}"))
-
     questions = question_count(reply)
     interrogatives = len(_INTERROGATIVE.findall(reply))
     if questions > 1:
@@ -222,9 +204,6 @@ def check(reply: str, user_message: str, *, in_framework: bool = False) -> list[
         findings.append(
             Finding("multiple questions", f"{interrogatives} questions under one '?'")
         )
-
-    if in_framework and questions == 0:
-        findings.append(Finding("standalone mirror", "no question, inside a framework"))
 
     word_count = len(reply.split())
     if word_count > MAX_WORDS:
@@ -256,47 +235,6 @@ def style_findings(reply: str, style: str) -> list[Finding]:
     if style == "reflective" and "i hear you" in lowered:
         findings.append(Finding("off-style", "a Reflective reply used \"I hear you\""))
     return findings
-
-
-# Words too common to show a reply is about the person's own situation.
-_COMMON_WORDS = frozenset((
-    "that this with from have been were what when your about they them then than into just "
-    "like some also very much more most only over such even need want know feel felt think "
-    "said told tell here there would could should these those which while where being does "
-    "doing done make made take took each other their whose really something thing things "
-    "right still back going come comes goes first next step steps help helps sure okay "
-    "exact certain problem resolve focus ready begin start started"
-).split())
-
-
-def _content_words(text: str) -> set[str]:
-    return {w for w in re.findall(r"[a-z]{4,}", text.lower()) if w not in _COMMON_WORDS}
-
-
-def names_their_situation(reply: str, said: str) -> list[Finding]:
-    """A question asked inside a framework must be about what the person told Mani, so it
-    shares at least one of their own content words. "What is the exact problem you want to
-    resolve?" sent to someone who has just described an exam shares none: it could be sent to
-    anyone, and tells them Mani has not kept the conversation."""
-    if _content_words(reply) & _content_words(said):
-        return []
-    return [Finding("generic", f"framework question shares nothing they said: {reply[:70]!r}")]
-
-
-_CONFIRMS = re.compile(
-    r"\b(is that|is this)\b[^?]*\b(problem|issue|thing|one)\b[^?]*\b(want|need)\b[^?]*\bresolve\b"
-    r"|to make sure i have (it|this) right"
-    r"|do i have (it|this) right",
-    re.IGNORECASE,
-)
-
-
-def asks_to_confirm(reply: str) -> list[Finding]:
-    """Inside a framework, asking the person to confirm what they have just told Mani. Someone
-    panicking over a lost wallet was asked "is that the problem you want to resolve?"; of course it is."""
-    if _CONFIRMS.search(reply):
-        return [Finding("confirms", f"asked them to confirm what they said: {reply[:80]!r}")]
-    return []
 
 
 HANDOFF_BUTTONS = ("chat more", "go to library")
@@ -354,58 +292,20 @@ def _last_question_words(reply: str) -> set[str]:
     return set(re.findall(r"[a-z']+", questions[-1].lower())) if questions else set()
 
 
-# A question the person has to stop and work out (spec 0008). Sixteen words is past what the
-# client's "Mani Standard" rewrites ever need ("What time are you aiming for right now?").
-MAX_QUESTION_WORDS = 15
-# Openings that wrap the question in a restatement. "When", "with" and "as" are left out: they
-# often open a fine question ("When you try to stop, what happens?").
+# Openings that wrap the question in a restatement, which the client's PDF marks as a grammar
+# fault ("Since you are holding it that way now, what are you noticing?"). "When", "with" and "as"
+# are left out: they often open a fine question ("When you try to stop, what happens?").
 _LEAD_CLAUSE = re.compile(r"^(since|given|now that|looking at|knowing|considering)\b")
-# Worksheet and abstract words, whole words only, so "reflective" and "meaningful" are not caught.
-_FLAGGED_WORD = re.compile(
-    r"\b(belief|process|reflect|pattern|example|conclusion|meaning|explor\w*)\b"
-    r"|present for you|pulling on you|pulling the most"
-)
-_EITHER_OR_OPENING = re.compile(r"^(would you|do you|should we|shall we|is it|are you)\b")
-_STUCK = re.compile(
-    r"i don't know|dont know|\bidk\b|not sure|can't think|cant think|can't decide|cant decide|confused"
-)
-# Choices the client wrote, which are hers to offer, not Mani handing a stuck person a choice.
-_CLIENT_CHOICES = ("keep chatting or go to the library", *(line.lower() for line in CLIENT_LINES))
 
 
-def _plain(text: str) -> str:
-    return text.lower().replace("’", "'")
-
-
-def is_stuck(message: str) -> bool:
-    """The person says they cannot think, cannot decide, do not know, or are confused."""
-    return bool(_STUCK.search(_plain(message)))
-
-
-def question_findings(reply: str, their_message: str, *, in_framework: bool = False) -> list[Finding]:
-    """Questions the person would have to stop and think about before answering.
-
-    `their_message` is the one message this reply answers, never the conversation so far: an
-    either/or is only a fault when it is handed to someone who has just said they are stuck.
-    Inside a framework a stage may ask them to choose among options they named, so either/or
-    is not counted there.
-    """
-    findings: list[Finding] = []
-    stuck = not in_framework and is_stuck(their_message)
-    for question in (q.strip() for q in _QUESTION.findall(_plain(reply))):
-        if len(question.split()) > MAX_QUESTION_WORDS:
-            findings.append(Finding("long question", f"{len(question.split())} words: {question[:80]!r}"))
-        if _LEAD_CLAUSE.search(question):
-            findings.append(Finding("lead clause", question[:80]))
-        flagged = sorted({m.group(0) for m in _FLAGGED_WORD.finditer(question)})
-        if flagged:
-            findings.append(Finding("flagged word", f"{flagged}: {question[:80]!r}"))
-        either_or = " or " in question and (
-            _EITHER_OR_OPENING.search(question) or "would you rather" in question
-        )
-        if stuck and either_or and not any(question in choice or choice in question for choice in _CLIENT_CHOICES):
-            findings.append(Finding("either/or", f"after {their_message!r}: {question[:80]!r}"))
-    return findings
+def question_findings(reply: str) -> list[Finding]:
+    """Questions that open on a clause restating what came before, which the client marks as
+    hard to read. Length, wording and choices are the client's own to use (spec 0010)."""
+    return [
+        Finding("lead clause", question[:80])
+        for question in (q.strip() for q in _QUESTION.findall(reply.lower().replace("\u2019", "'")))
+        if _LEAD_CLAUSE.search(question)
+    ]
 
 
 def repeated_question(replies: list[str], overlap: float = 0.8) -> list[Finding]:

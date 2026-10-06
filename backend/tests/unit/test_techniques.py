@@ -3,7 +3,7 @@
 
 import pytest
 
-from mani.chat.techniques import OFFERING, Registry, Verdict, covered_stages, moves_on_after
+from mani.chat.techniques import OFFERING, Registry, Verdict, moves_on_after
 from mani.models.rows import Framework
 
 REFRAMING = Framework(
@@ -55,12 +55,10 @@ def test_stepping_back_is_allowed(registry):
     assert registry.validate_transition("thought_reframing", "explore", "surface").ok
 
 
-def test_jumping_ahead_is_refused_and_names_what_was_skipped(registry):
-    t = registry.validate_transition("thought_reframing", "offering", "explore")
-    assert not t.ok
-    assert t.verdict is Verdict.SKIPPED_PHASES
-    assert t.skipped == ["surface", "externalize"]
-    assert t.expected_next == "surface"
+def test_moving_past_steps_already_answered_is_allowed(registry):
+    """The model judges when a step is done, so it may move forward past steps the person has
+    already answered (spec 0010, AC-5)."""
+    assert registry.validate_transition("thought_reframing", "offering", "explore").ok
 
 
 def test_starting_mid_technique_is_refused(registry):
@@ -99,8 +97,9 @@ def test_phases_belong_to_their_own_framework(registry):
 
 
 def test_clamp_corrects_instead_of_discarding_the_turn(registry):
-    # A skip is worth a corrected field, not another paid model call.
-    assert registry.clamp("thought_reframing", "offering", "explore") == "surface"
+    # A framework that has not started is corrected to its offering, not another paid call;
+    # a step forward past answered ones is kept.
+    assert registry.clamp("thought_reframing", "offering", "explore") == "explore"
     assert registry.clamp("thought_reframing", None, "explore") == OFFERING
     assert registry.clamp("thought_reframing", "offering", "surface") == "surface"
 
@@ -179,21 +178,11 @@ def test_a_turn_that_moves_on_records_the_next_stage_for_one_the_framework_does_
     assert body_checked.clamp("staged", "belief", "examine") is None
 
 
-def test_a_turn_that_moves_on_still_refuses_to_skip_a_stage(body_checked):
-    assert body_checked.clamp("staged", "activate", "closing", moving_on=True) == "belief"
-
-
-
-def test_stages_their_earlier_words_answer_are_the_unbroken_run_after_the_offering():
-    abcde = Framework(
-        id="abcde", name="ABCDE", summary="s", body="b",
-        phases=["offering", "activate", "belief", "consequence", "closing", "somatic_checkin"],
-        stages={"activate": {"answered_by": "event"}, "belief": {"answered_by": "meaning"}},
-    )
-    assert covered_stages(abcde, {"event": "i had an exam", "meaning": "i feel like i idiot"}) == [
-        "activate", "belief",
-    ]
-    assert covered_stages(abcde, {"event": "i had an exam"}) == ["activate"]
-    assert covered_stages(abcde, {"meaning": "i feel like i idiot"}) == []
-    assert covered_stages(abcde, {}) == []
-    assert covered_stages(None, {"event": "i had an exam"}) == []
+def test_a_turn_that_moves_on_may_pass_a_stage_but_never_past_the_body_check_in(body_checked):
+    assert body_checked.clamp("staged", "activate", "closing", moving_on=True) == "closing"
+    assert body_checked.validate_transition("staged", "activate", "somatic_checkin", moving_on=True).ok
+    past = body_checked.validate_transition("staged", "belief", "somatic_practice", moving_on=True)
+    assert past.verdict is Verdict.PAST_THE_CHECK_IN
+    assert body_checked.clamp("staged", "belief", "somatic_practice", moving_on=True) == "somatic_checkin"
+    # The practice after the check in belongs to the body route.
+    assert body_checked.validate_transition("staged", "somatic_checkin", "somatic_practice").ok

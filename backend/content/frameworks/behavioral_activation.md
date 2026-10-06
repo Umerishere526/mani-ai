@@ -9,15 +9,12 @@ activation:
     The user knows what they could do but cannot get themselves to begin - low mood,
     discouragement, or withdrawal has interrupted something that matters, and they need help
     selecting and beginning one manageable action, not a thought examined or a decision made.
-  # The facts that make this framework fit: every fact in one set (router.FACTS). Read by
-  # router.choose; the client's tie rules between frameworks are in router.TIE_RULES.
-  fits_when: [[cannot_begin], [low_mood]]
   to_find_out:
     - "what they have stopped doing or are avoiding"
     - "whether they know what they could do but cannot begin"
     - "what gets in the way of beginning"
     - "whether anything physical or medical explains it, or whether this is early grief (then not this)"
-  # Said anywhere in the conversation, an offer of this framework is redrafted and then dropped:
+  # Said anywhere in the conversation, an offer of this framework is removed by the code:
   # early grief is not the avoidance it treats. Whole phrases, matched as whole words.
   never_offer_when_said:
     - "died"
@@ -32,7 +29,7 @@ activation:
     - "grief"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads fits_when.
+  # router reads never_offer_when_said and stuck_offer.
   appropriate_when:
     - "The user knows something they want or need to do"
     - "The user is having difficulty beginning"
@@ -111,7 +108,6 @@ stages:
         start_only: true
       - when: "they report an injury, severe or sudden physical symptoms, intoxication, or a medical condition as the reason"
         reply: "A physical symptom like that comes first, and I would not ask you to push through it. What would be most helpful right now?"
-    ask_simpler: "What have you stopped doing lately?"
     ask:
       supportive: "What have you stopped doing?"
       reflective: "What have you stopped doing?"
@@ -124,17 +120,12 @@ stages:
       - "must not use guilt"
       - "must not connect the activity to productivity unless the user does"
       - "must not pressure the user toward an activity they do not value"
-    if_earlier_missing:
-      needs: stopped
-      reply: "What is it about this that matters to you?"
-    ask_simpler: "Why is that important to you?"
     ask:
       supportive: "Why does this matter to you?"
       reflective: "Why does this matter to you?"
       direct: "Why does this matter to you?"
   choose:
     purpose: "Select one activity rather than attempting everything."
-    picks_from_options: true
     listen_for: "The single activity the user wants to address first."
     boundaries:
       - "must not choose the activity for them - but when they ask you to pick, offer one of the things they named, as a small first step, for them to accept or change"
@@ -142,10 +133,6 @@ stages:
       - "must not select several activities"
       - "must not prioritize without the user's input"
       - "must not let the activity be unrelated to what stopped - it should interrupt the same pattern (answering the person they've gone quiet on, not an unrelated pleasant activity instead), or it treats the symptom rather than the avoidance"
-    if_earlier_missing:
-      needs: stopped
-      reply: "What is one small thing you would like to get back to?"
-    ask_simpler: "Which one would you start with?"
     ask:
       supportive: "Which one do you want to begin with?"
       reflective: "Which one do you want to begin with?"
@@ -160,10 +147,6 @@ stages:
       - "must not assume the action is safe"
       - "must not prescribe exercise or physical activity without considering limitations"
       - "may suggest up to three very small options, and only when the user cannot name one - never a longer list, and the user chooses"
-    if_earlier_missing:
-      needs: choose
-      reply: "What is one small thing you could do today?"
-    ask_simpler: "What is a really small first step?"
     ask:
       supportive: "What is the smallest way you could start?"
       reflective: "What is the smallest way you could start?"
@@ -177,10 +160,6 @@ stages:
       - "must not require reminders the user does not want"
       - "must not turn the process into productivity management"
       - "must not ask whether they feel ready or feel up to it - the plan is meant to hold even when mood does not cooperate, and asking makes feeling ready the precondition it was designed not to need"
-    if_earlier_missing:
-      needs: manageable
-      reply: "When could you start on something small?"
-    ask_simpler: "When could you do it?"
     ask:
       supportive: "When will you do it?"
       reflective: "When will you do it?"
@@ -196,10 +175,6 @@ stages:
     if_unclear:
       - when: "the action is unsafe"
         reply: "That action could place you at risk. What is a safer action you can take?"
-    if_earlier_missing:
-      needs: manageable
-      reply: "What might get in the way of starting?"
-    ask_simpler: "What could stop you from doing it?"
     ask:
       supportive: "What might get in the way?"
       reflective: "What might get in the way?"

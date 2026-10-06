@@ -52,8 +52,10 @@ else
     -e POSTGRES_PASSWORD=postgres -p "$PORT:5432" "$IMAGE" >/dev/null
 
   printf 'waiting for postgres'
+  # Over TCP, not the socket: the image first runs a temporary server on the socket alone for its
+  # init scripts and then restarts, so a socket probe can pass just before that restart.
   for _ in $(seq 1 120); do
-    if docker exec "$CONTAINER" psql -U postgres -c 'select 1' >/dev/null 2>&1; then
+    if docker exec "$CONTAINER" psql -h 127.0.0.1 -U postgres -c 'select 1' >/dev/null 2>&1; then
       echo " ready"
       break
     fi

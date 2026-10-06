@@ -80,13 +80,13 @@ async def attach_message(
     )
 
 
-async def attach_facts(
-    conn: asyncpg.Connection, call_id: uuid.UUID | str, facts: dict
+async def attach_decision(
+    conn: asyncpg.Connection, call_id: uuid.UUID | str, decision: dict
 ) -> None:
-    """Keep what the router read from the call's facts (`router.call_log_record`), so an offer
-    that was or was not made can be traced to the facts behind it."""
+    """Keep a chat turn's decisions on its call row (`orchestrator.turn_decision`), so an offer
+    made or refused, or a step moved, can be traced afterwards."""
     await conn.execute(
-        "update admin.llm_calls set facts = $2 where id = $1", call_id, facts
+        "update admin.llm_calls set decision = $2 where id = $1", call_id, decision
     )
 
 

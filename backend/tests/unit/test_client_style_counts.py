@@ -3,8 +3,6 @@
 
 from mani.chat.repairs import PERMISSION_QUESTIONS
 from scripts.client_style_counts import (
-    SEEMS_LIKE,
-    SOUNDS_LIKE,
     Turn,
     count_conversation,
     count_dashes,
@@ -44,17 +42,10 @@ def test_stock_phrases_are_found_however_the_model_spells_them():
     assert count_reply(reply).stock_phrases == 4
 
 
-def test_sounds_like_and_seems_like_are_found_in_every_form_and_counted_per_phrase():
-    reply = (
-        "It sounds like a hard day. That sounds like a lot. Sounds like you tried. "
-        "It SEEMS LIKE it went fast, and it seems as if you stopped. It seems as though it ended."
-    )
-
-    phrases = count_reply(reply).phrases
-
-    assert phrases[SOUNDS_LIKE.pattern] == 3
-    assert phrases[SEEMS_LIKE.pattern] == 3
-    assert count_reply("It sounds like. It sounds like.").phrases == {SOUNDS_LIKE.pattern: 2}
+def test_sounds_like_is_the_clients_own_wording_and_is_not_counted_as_a_formula():
+    """The style document's replies say "It sounds like a lot is happening at once"; only the
+    phrases it names as formulas are counted (spec 0010)."""
+    assert count_reply("It sounds like a hard day. It seems like it went fast.").stock_phrases == 0
 
 
 def test_only_dash_punctuation_counts_not_a_hyphen_inside_a_word_or_a_list_marker():
@@ -107,31 +98,6 @@ def test_a_feeling_mani_names_that_the_person_never_used_is_counted():
     ]
 
     assert count_conversation(turns, DESCRIPTIONS).unused_feelings == ["exhausting"]
-
-
-def test_a_size_phrase_mani_adds_is_counted_and_one_the_person_used_is_not():
-    turns = [
-        Turn("I have a lot on", "That is a lot to hold."),
-        Turn("work is hard", "So much is riding on it."),
-    ]
-
-    assert count_conversation(turns, DESCRIPTIONS).unused_sizes == ["so much"]
-
-
-def test_a_size_phrase_in_the_description_the_code_adds_is_not_counted():
-    turns = [Turn("I keep scrolling", f"Okay.\n\nA lot of people find {DESCRIPTION}\n\n{PERMISSION}")]
-    description = f"A lot of people find {DESCRIPTION}"
-
-    assert count_conversation(turns, frozenset({description})).unused_sizes == []
-
-
-def test_figures_report_a_lot_apart_from_the_other_size_phrases():
-    turns = [Turn("a", "That is a lot."), Turn("b", "It is a burden.")]
-
-    result = figures([("direct", 1, count_conversation(turns, DESCRIPTIONS))])
-
-    assert result["unused_a_lot"] == 1
-    assert result["unused_size_phrases"] == 1
 
 
 def test_the_style_read_shows_the_first_two_replies_in_mani_own_words_each_under_its_message():
@@ -242,24 +208,24 @@ def test_a_stock_phrase_said_twice_in_a_conversation_is_counted_once_per_phrase(
 
 
 def test_stock_phrases_are_counted_in_mani_own_words_before_the_person_accepts():
-    description = "It sounds like these questions help you pause."
+    description = "I hear you, these questions help you pause."
     turns = [
-        Turn("I can't stop scrolling", "It sounds like a loop. What starts it?"),
+        Turn("I can't stop scrolling", "I hear you. What starts it?"),
         Turn("I get bored", f"Boredom pulls.\n\n{description}\n\n{PERMISSION}", offered=True),
-        Turn("Try it", "Okay. It sounds like you are ready. What is first?", tapped=True),
+        Turn("Try it", "Okay. I hear you are ready. What is first?", tapped=True),
     ]
 
     counts = count_conversation(turns, frozenset({description}))
 
-    assert counts.own_phrases == {SOUNDS_LIKE.pattern: 1}
+    assert counts.own_phrases == {r"\bi hear you\b": 1}
     assert counts.stock_phrases == 1
     assert counts.all_stock_phrases == 3
 
 
 def test_a_stock_phrase_said_twice_in_mani_own_words_is_counted_once_per_phrase():
     turns = [
-        Turn("a", "It sounds like a hard week."),
-        Turn("b", "That sounds like a long one. It seems like you are tired."),
+        Turn("a", "I hear you. A hard week."),
+        Turn("b", "I hear you, a long one. That makes sense."),
     ]
 
     counts = count_conversation(turns, DESCRIPTIONS)
@@ -268,16 +234,14 @@ def test_a_stock_phrase_said_twice_in_mani_own_words_is_counted_once_per_phrase(
     assert counts.stock_phrases == 3
 
 
-def test_figures_total_sounds_like_and_seems_like_in_own_words_and_in_every_reply():
+def test_figures_total_stock_phrases_in_own_words_and_in_every_reply():
     turns = [
-        Turn("a", "It sounds like a hard week.", offered=True),
-        Turn("Try it", "It seems like a start.", tapped=True),
+        Turn("a", "I hear you. A hard week.", offered=True),
+        Turn("Try it", "That makes sense as a start.", tapped=True),
     ]
 
     result = figures([("direct", 1, count_conversation(turns, DESCRIPTIONS))])
 
-    assert result["sounds_or_seems_like"] == 1
-    assert result["sounds_or_seems_like_all"] == 2
     assert result["stock_phrases_per_conversation_direct"] == 1
     assert result["stock_phrases_all_per_conversation_direct"] == 2
 
@@ -315,16 +279,19 @@ def test_figures_take_the_question_ratio_within_a_run_then_average_the_runs():
     assert result["offered"] == 0
 
 
-def test_question_findings_are_counted_over_the_whole_conversation_with_either_or_only_before_acceptance():
+def test_only_a_lead_clause_is_counted_among_questions():
+    """Length, wording and choices are the client's to use (spec 0010); a clause in front of the
+    question is what the client's PDF marks as hard to read."""
     choice = "Would you like to name one, or would you rather wait?"
     turns = [
         Turn("i dont know", f"That's okay. {choice}"),
         Turn("I get bored", an_offer("Since you get bored, what would you like to explore first?"), offered=True),
         Turn("Try it", "Okay. What gives it that meaning?", tapped=True),
-        Turn("i cant decide", choice),
     ]
 
     counts = count_conversation(turns, DESCRIPTIONS)
 
-    assert (counts.long_questions, counts.lead_clauses, counts.flagged_words, counts.either_ors) == (0, 1, 2, 1)
-    assert figures([("direct", 1, counts)])["flagged_words"] == 2
+    assert counts.lead_clauses == 1
+    assert figures([("direct", 1, counts)])["lead_clauses"] == 1
+
+

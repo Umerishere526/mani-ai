@@ -8,7 +8,7 @@ tags: [decision, ai, frameworks, conversation]
 
 # ADR-018: A person who stays stuck is offered ABCDE
 
-**Status:** proposed, 2026-10-05 (built; the real model run, shared with spec 0008's AC-9 as nine conversations, is still to come and muhammad has to say yes before it runs).
+**Status:** proposed, 2026-10-05 (built). Amended by [[ADR-019-mani-follows-the-clients-documents]] on 2026-10-06: the `stuck` fact, the fit set and the passed over stages are gone; ABCDE is found by `stuck_offer: true`, its stuck lines still reach the model after a yes to the check, and the model judges which step to start at, with ABCDE's stuck questions shown once it runs.
 Amends [[ADR-014-a-framework-is-offered-only-when-the-facts-fit]] (a new fit set, counted below every other) and [[ADR-017-questions-are-asked-plainly]] (the stuck check may now lead to an offer).
 **Affects:** backend (`router.py`, `techniques.py`, `context.py`, `orchestrator.py`, `redraft.py`, `composer.py`, `abcde.md`, `mani_base.md`, `eval_replies.py`, `eval_conversations.yaml`)
 

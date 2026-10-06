@@ -1,5 +1,5 @@
 # ABOUTME: Walks every seeded framework from the turn they accept it to the body check.
-# ABOUTME: Whatever the person replies, one stage is asked per turn and none is asked twice.
+# ABOUTME: The model judges each step (spec 0010); the code keeps one extra attempt per step and never goes back.
 
 import datetime as dt
 import uuid
@@ -49,17 +49,25 @@ def turn(
 
 def recorded(
     framework: Framework, reports: str, phase: str, *, accepting=False, holds=0, text="Thank you.",
-    asked_again=False,
+    asked_again=False, ending=None,
 ):
     """What the code records when the model reports stage `reports`, having been at `phase`
     with `holds` extra turns already used."""
-    reply = Reply(text=text, state=ReportedState(technique=framework.id, step=reports))
+    reply = Reply(text=text, state=ReportedState(technique=framework.id, step=reports), ending=ending)
     return repairs.apply(
-        reply, Registry([framework]), said="", already_offered=[], current_framework_id=framework.id,
+        reply, Registry([framework]), already_offered=[], current_framework_id=framework.id,
         current_phase=phase, selected_label=None, accepted_this_turn=accepting, framework_running=True,
-        cooldown_passed=True, conversation_style=STYLE, wants_title=False, current_holds=holds,
+        offer_allowed=True, conversation_style=STYLE, wants_title=False, current_holds=holds,
         asked_again=asked_again,
     )
+
+
+def steps(lines: list[str]) -> list[str]:
+    return [line.removeprefix("step: ") for line in lines if line.startswith("step: ")]
+
+
+def question_steps(framework: Framework) -> list[str]:
+    return framework.phases[1 : framework.phase_index("somatic_checkin")]
 
 
 def shown(lines: list[str], key: str) -> str | None:
@@ -67,45 +75,80 @@ def shown(lines: list[str], key: str) -> str | None:
 
 
 @pytest.mark.parametrize("framework_id", sorted(FRAMEWORKS))
-def test_a_framework_asks_one_stage_per_turn_to_the_body_check_whatever_they_reply(framework_id):
+def test_a_framework_walked_one_step_at_a_time_reaches_the_body_check_resolved(framework_id):
     framework = FRAMEWORKS[framework_id]
-    # The turn they accept: the model asks the second stage, as ADR 011 allows.
-    second = framework.phases[2]
     start = turn(framework, "offering", outcome=TechniqueOutcome.OFFERED, starting=True)
-    assert shown(start, "stage") == framework.phases[1]
-    fixed = recorded(framework, second, "offering", accepting=True)
-    assert fixed.phase == second
+    assert steps(start) == question_steps(framework)
+    first = question_steps(framework)[0]
+    stored = recorded(framework, first, "offering", accepting=True).phase
+    assert stored == first
 
-    stored, asked, turns = fixed.phase, [], 0
+    asked, turns, fixed = [], 0, None
     while stored != "somatic_checkin":
-        said = REPLIES[turns % len(REPLIES)]
-        lines = turn(framework, stored, said=said)
-        next_stage = framework.phases[framework.phase_index(stored) + 1]
-        assert shown(lines, "answered") == stored
-        assert shown(lines, "stage") == next_stage
-        assert not any(line.startswith(("next_stage", "answered_ask")) for line in lines)
-        if next_stage not in SOMATIC_STAGES:
-            assert not any(line.startswith(("stage_ready_when", "stage_if_unclear")) for line in lines)
-        ask = shown(lines, "stage_ask")
-        assert ask and ask not in asked, f"{stored} -> {next_stage} asks {ask!r} a second time"
-        asked.append(ask)
-
-        fixed = recorded(framework, next_stage, stored)
-        assert fixed.phase == next_stage
-        assert not fixed.notes
+        lines = turn(framework, stored, said=REPLIES[turns % len(REPLIES)])
+        remaining = question_steps(framework)[question_steps(framework).index(stored):]
+        assert shown(lines, "current_step") == stored
+        assert steps(lines) == remaining
+        following = framework.phases[framework.phase_index(stored) + 1]
+        fixed = recorded(framework, following, stored)
+        assert fixed.phase == following
+        if following not in SOMATIC_STAGES:
+            assert following not in asked, f"{following} asked a second time"
+            asked.append(following)
         stored, turns = fixed.phase, turns + 1
         assert turns < len(framework.phases), "the walk did not reach the body check"
+    assert fixed.ending == "resolved"
 
 
 @pytest.mark.parametrize("framework_id", sorted(FRAMEWORKS))
-def test_a_hold_keeps_the_answered_stage_and_shows_the_same_next_stage_again(framework_id):
+def test_the_model_may_move_straight_to_a_later_step(framework_id):
     framework = FRAMEWORKS[framework_id]
-    answered = framework.phases[2]
-    before = turn(framework, answered, said="I don't know")
-    held = recorded(framework, answered, answered)
-    assert held.phase == answered
-    assert held.notes == [f"held at {answered}"]
-    assert shown(turn(framework, held.phase, said="ok"), "stage") == shown(before, "stage")
+    questions = question_steps(framework)
+    if len(questions) < 3:
+        pytest.skip("too few steps to pass one")
+    fixed = recorded(framework, questions[2], questions[0])
+    assert (fixed.phase, fixed.holds, fixed.notes) == (questions[2], 0, [])
+
+
+@pytest.mark.parametrize(("ending", "expected"), [("pivoted", "pivoted"), ("stopped", "stopped"), ("resolved", "resolved")])
+@pytest.mark.parametrize("framework_id", sorted(FRAMEWORKS))
+def test_an_ending_on_any_step_goes_to_the_body_check_in(framework_id, ending, expected):
+    framework = FRAMEWORKS[framework_id]
+    stored = question_steps(framework)[0]
+    fixed = recorded(framework, stored, stored, ending=ending)
+    assert (fixed.phase, fixed.ending) == ("somatic_checkin", expected)
+
+
+@pytest.mark.parametrize("framework_id", sorted(FRAMEWORKS))
+def test_reaching_the_check_in_early_with_no_ending_reported_is_recorded_as_pivoted(framework_id):
+    framework = FRAMEWORKS[framework_id]
+    fixed = recorded(framework, "somatic_checkin", question_steps(framework)[0])
+    assert (fixed.phase, fixed.ending) == ("somatic_checkin", "pivoted")
+
+
+@pytest.mark.parametrize("framework_id", sorted(FRAMEWORKS))
+def test_a_step_never_moves_back_and_never_past_the_check_in(framework_id):
+    framework = FRAMEWORKS[framework_id]
+    questions = question_steps(framework)
+    stored = questions[1] if len(questions) > 1 else questions[0]
+    back = recorded(framework, "offering", stored)
+    assert back.phase == framework.phases[framework.phase_index(stored) + 1]
+    past = recorded(framework, "somatic_practice", questions[0])
+    assert past.phase == "somatic_checkin"
+
+
+@pytest.mark.parametrize("framework_id", sorted(FRAMEWORKS))
+def test_one_more_attempt_is_counted_once_then_the_next_step_is_recorded(framework_id):
+    framework = FRAMEWORKS[framework_id]
+    answered = question_steps(framework)[0]
+    following = framework.phases[framework.phase_index(answered) + 1]
+    first = recorded(framework, answered, answered)
+    assert (first.phase, first.holds, first.notes) == (answered, 1, [f"held at {answered}"])
+    used = turn(framework, answered, said="I still do not get it", holds=first.holds)
+    assert "hold_used: yes" in used
+    second = recorded(framework, answered, answered, holds=first.holds)
+    assert (second.phase, second.holds) == (following, 0)
+    assert second.notes == [f"hold limit at {answered}"]
 
 
 def test_dbt_stop_holds_at_the_pause_while_they_act_on_the_urge():
@@ -113,28 +156,12 @@ def test_dbt_stop_holds_at_the_pause_while_they_act_on_the_urge():
     held = recorded(framework, "pause", "pause")
     assert held.phase == "pause"
     assert held.notes == ["held at pause"]
-    assert shown(turn(framework, "pause", said="I started typing again"), "stage") == "observe"
-
-
-@pytest.mark.parametrize("framework_id", sorted(FRAMEWORKS))
-def test_a_counted_hold_is_used_once_then_the_next_stage_is_recorded(framework_id):
-    framework = FRAMEWORKS[framework_id]
-    answered = framework.phases[2]
-    following = framework.phases[3]
-    first = recorded(framework, answered, answered)
-    assert (first.phase, first.holds) == (answered, 1)
-    used = turn(framework, answered, said="I still do not get it", holds=first.holds)
-    assert "hold_used: yes" in used
-    assert shown(used, "stage") == following
-    second = recorded(framework, answered, answered, holds=first.holds)
-    assert (second.phase, second.holds) == (following, 0)
-    assert second.notes == [f"hold limit at {answered}"]
 
 
 @pytest.mark.parametrize("framework_id", sorted(FRAMEWORKS))
 def test_a_client_line_holds_without_using_the_extra_turn(framework_id):
     framework = FRAMEWORKS[framework_id]
-    answered = framework.phases[2]
+    answered = question_steps(framework)[0]
     for holds in (0, 1):
         fixed = recorded(framework, answered, answered, holds=holds, text=repairs.CLIENT_LINES[0])
         assert (fixed.phase, fixed.holds) == (answered, holds)
@@ -151,36 +178,11 @@ def test_dbt_stops_acting_branches_use_the_extra_turn_even_when_quoted():
 @pytest.mark.parametrize("framework_id", sorted(FRAMEWORKS))
 def test_a_person_who_keeps_asking_for_the_question_again_still_reaches_the_body_check(framework_id):
     framework = FRAMEWORKS[framework_id]
-    stored, holds, turns = framework.phases[2], 0, 0
+    stored, holds, turns = question_steps(framework)[0], 0, 0
     while stored != "somatic_checkin":
-        # The model holds whenever it may, and moves on when told its extra turn is used.
+        # The model holds whenever it may, and moves on when told its extra attempt is used.
         lines = turn(framework, stored, said="what do you mean?", holds=holds)
-        reports = stored if "hold_used: yes" not in lines else shown(lines, "stage")
-        fixed = recorded(framework, reports, stored, holds=holds)
+        reports = stored if "hold_used: yes" not in lines else framework.phases[framework.phase_index(stored) + 1]
+        fixed = recorded(framework, reports, stored, holds=holds, asked_again=holds == 0)
         stored, holds, turns = fixed.phase, fixed.holds, turns + 1
         assert turns <= 2 * len(framework.phases), "the walk did not reach the body check"
-    assert turns <= 2 * (len(framework.phases) - 3)
-
-
-@pytest.mark.parametrize("framework_id", sorted(FRAMEWORKS))
-def test_a_request_to_hear_the_question_again_shows_only_that_question_and_is_held_once(framework_id):
-    framework = FRAMEWORKS[framework_id]
-    answered = framework.phases[2]
-    state = TechniqueState(
-        thread_id=THREAD, framework_id=framework.id, outcome=TechniqueOutcome.ACCEPTED,
-        phase=answered, at_message_count=6, holds=0,
-    )
-    thread = Thread(id=THREAD, user_id=USER, message_count=6, created_at=NOW, last_message_at=NOW)
-    lines = context.build(
-        TurnContext(thread=thread, profile=None, technique=state), framework=framework, asked_again=True,
-    ).splitlines()
-    assert shown(lines, "answered") == answered
-    assert shown(lines, "asked_again") == "yes"
-    assert shown(lines, "answered_ask") == framework.stages[answered]["ask"][STYLE]
-    assert shown(lines, "stage") is None
-
-    first = recorded(framework, framework.phases[3], answered, asked_again=True)
-    assert (first.phase, first.holds) == (answered, 1)
-    second = recorded(framework, framework.phases[3], answered, holds=1, asked_again=True)
-    assert (second.phase, second.holds) == (framework.phases[3], 0)
-

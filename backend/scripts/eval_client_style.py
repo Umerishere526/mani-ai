@@ -57,8 +57,7 @@ def _transcript_block(exchanges: list[Exchange], counts: ConversationCounts, sty
         "",
         f"_questions {counts.questions} ({counts.own_questions} in Mani's own words), stock phrases "
         f"{counts.stock_phrases} in Mani's own words ({counts.all_stock_phrases} in every reply), repeated openers {counts.repeated_openers}, dashes {counts.dashes}, "
-        f"feelings never used {len(counts.unused_feelings)}, size phrases never used "
-        f"{len(counts.unused_sizes)}, replies over three sentences "
+        f"feelings never used {len(counts.unused_feelings)}, replies over three sentences "
         f"{counts.long_replies}, offer at {counts.offer_at or 'never'}_",
         "",
     ]
@@ -110,20 +109,14 @@ def _figures(records: list[dict]) -> str:
         f"{per_style('stock_phrases_per_conversation')}",
         f"   all replies: {per_style('stock_phrases_all_per_conversation')}",
         f"stock phrases said twice in one conversation (AC-7, none): {f['phrases_said_twice']:.0f}",
-        f"\"sounds like\" and \"seems like\" in Mani's own words (AC-7, at most 16): "
-        f"{f['sounds_or_seems_like']:.0f}   all replies: {f['sounds_or_seems_like_all']:.0f}",
         f"repeated openers per conversation (AC-7, no worse than baseline): "
         f"{per_style('repeated_openers_per_conversation')}",
         f"feelings never used (AC-8, none): {f['unused_feelings']:.0f}",
-        f"size phrases never used, without \"a lot\" (AC-8, no more than baseline): "
-        f"{f['unused_size_phrases']:.0f}",
-        f"\"a lot\" never used (AC-8, reported only): {f['unused_a_lot']:.0f}",
         f"offered: {f['offered']:.0f} of {f['conversations']:.0f}, at exchange 2 to 4: "
         f"{f['offered_at_2_to_4']:.0f} (AC-10, 33 or more)",
         f"dashes (AC-10, no more than baseline): {f['dashes']:.0f}",
         f"replies over three sentences (AC-12, no more than baseline): {f['long_replies']:.0f}",
-        f"questions (spec 0008): long {f['long_questions']:.0f}, lead clause {f['lead_clauses']:.0f}, "
-        f"flagged word {f['flagged_words']:.0f}, either/or after a stuck message {f['either_ors']:.0f}",
+        f"questions opening on a lead clause: {f['lead_clauses']:.0f}",
     ])
 
 
@@ -205,7 +198,6 @@ def _save(
                 "double_question_replies": r["counts"].double_question_replies,
                 "long_replies": r["counts"].long_replies,
                 "unused_feelings": r["counts"].unused_feelings,
-                "unused_sizes": r["counts"].unused_sizes,
                 **{name: getattr(r["counts"], name) for name in QUESTION_RULES.values()},
                 "offer_at": r["counts"].offer_at,
                 "replies": [asdict(c) for c in r["counts"].replies],

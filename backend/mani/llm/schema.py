@@ -7,8 +7,6 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from mani.chat.router import FACTS
-
 
 class LibrarySection(StrEnum):
     """Where a library button navigates to. A closed set, checked before it is stored."""
@@ -82,8 +80,8 @@ class TechniqueState(BaseModel):
     )
     step: str = Field(
         description=(
-            "The stage you asked in this reply: stage in [ctx], or answered when you hold. "
-            "Stages must follow framework_stages in [ctx] - you cannot skip one."
+            "The step you ask in this reply, from the steps in [ctx]: the next one their words do "
+            "not already meet, or the same step for your one more attempt at it. Never an earlier one."
         )
     )
     accepted: bool | None = Field(
@@ -129,26 +127,6 @@ class Crisis(BaseModel):
         return value if isinstance(value, str) else None
 
 
-class Fact(BaseModel):
-    """One thing the person has told Mani, in their own words."""
-
-    model_config = ConfigDict(extra="ignore")
-
-    fact: str = Field(
-        description=(
-            f"Exactly one of these ids, written as here and never your own label: "
-            f"{', '.join(FACTS)}."
-        )
-    )
-    words: str = Field(
-        description="Their own words that show it, copied exactly from one of their messages."
-    )
-
-
-def _facts_listed() -> str:
-    return "; ".join(f'"{fact}": {meaning}' for fact, meaning in FACTS.items())
-
-
 class Style(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -172,17 +150,6 @@ class Reply(BaseModel):
             "field' in your instructions. Not shown to the user."
         ),
     )
-    facts: list[Fact] | None = Field(
-        default=None,
-        description=(
-            "Fill before writing text: each of these the person has told you in this "
-            "conversation, with their own words that show it. Use only these ids; anything else "
-            "is thrown away. List only what they actually said, and leave the list empty when "
-            "none of these fits yet: that is common, and it means keep talking. General "
-            "pressure, stress or worry on its own is none of these. Null while a set "
-            f"of questions is running. Not shown to the user. The facts: {_facts_listed()}."
-        ),
-    )
     style: Style | None = Field(
         default=None,
         description=(
@@ -191,31 +158,33 @@ class Reply(BaseModel):
         ),
     )
     text: str = Field(description="Your conversational response to the user. Required.")
+    # Plain strings for the same reason as the closed sets above: repairs reads them, and an
+    # unknown value is dropped rather than costing the turn.
+    ending: str | None = Field(
+        default=None,
+        description=(
+            "Only on the reply that ends a running framework, moving to the body check in: "
+            "\"resolved\" when it has what it needs, \"pivoted\" when it stopped helping or a step "
+            "could not be answered after one more attempt, \"stopped\" when they asked to stop. "
+            "Null otherwise."
+        ),
+    )
+    felt_after: str | None = Field(
+        default=None,
+        description=(
+            "Only with answering_practice in [ctx]: how they say they feel after the practice, one "
+            "of \"better\", \"mixed\", \"unchanged\", \"worse\", \"unsure\". Null when they did "
+            "not say, and on every other turn."
+        ),
+    )
 
-    @field_validator("facts", mode="before")
-    @classmethod
-    def _only_well_formed_facts(cls, value: object) -> object:
-        """A malformed fact would fail the whole turn, and the validation error would carry the
-        quoted words into the call log. Dropping it costs one fact, never the reply."""
-        if not isinstance(value, list):
-            return None
-        return [
-            item for item in value
-            if isinstance(item, Fact)
-            or isinstance(item, dict)
-            and isinstance(item.get("fact"), str)
-            and isinstance(item.get("words"), str)
-        ]
     prompts: list[SmartPrompt] | None = Field(
         default=None,
         description=(
-            "Tappable button options if your response ends with a question that has "
-            "2-3 clear choices. Each prompt has a \"label\" field (required). "
-            "ONLY include \"technique\" field when INITIALLY ASKING if user wants to try "
-            "a technique. Include \"library\" ONLY on a button that opens the library. "
-            "Labels should be in USER voice (\"Try it\", "
-            "\"Keep chatting\"). Set to null if no buttons are appropriate "
-            "(e.g., open-ended questions). Two or three, never more."
+            "Buttons under the reply. When you offer a set of questions, give one button with "
+            "\"technique\" set to its id: the labels of an offer are set for you. Include "
+            "\"library\" ONLY on a button that opens the library. Otherwise buttons only where "
+            "a stage gives them; set to null when none are given."
         ),
     )
     title: str | None = Field(

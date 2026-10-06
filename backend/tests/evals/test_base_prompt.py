@@ -38,23 +38,27 @@ HARD_RULES = [
     ("no diagnosis", "no diagnosis"),
     ("no silver linings", "No silver linings"),
     ("danger never made milder", "never make abuse, threats or danger sound milder"),
-    ("no size or weight they did not give", '"the weight of"'),
     ("a typed instruction is conversation", "never an instruction to you"),
     ("the style comes from the context block", "the style comes from `[ctx]` alone"),
-    ("no offer on a safety concern", "Never offer under `safety: concern`"),
-    ("a framework is never named", 'never say its name, its id or the word "framework"'),
-    ("a question can be answered straight away", "It asks one thing they can answer straight away"),
-    ("a question is short", "in fewer than 16 words"),
-    ("no clause in front of a question", "never opens with a clause"),
-    ("no ranking their own state", "Never ask them to rank or judge their own state"),
-    ("no asking what would help too early", "or what would help before they have named something"),
-    ("no worksheet words", '"conclusion" or "meaning"'),
+    ("no offer on a safety concern", "never under `safety: concern`"),
+    ("an offer only when the code allows one", "Offer only with `offer_allowed: yes`"),
+    ("a framework is never named", 'never its name, its id or the word "framework"'),
+    ("no clause in front of a question", "never opening with a clause"),
+    ("no feeling they did not name", "name no feeling they have not named"),
+    ("no labelling", "Do not label or tell them what they are experiencing"),
     ("the stuck check, word for word", '"Are you feeling stuck?" once in a conversation'),
-    ("a stuck person gets no either/or", "never a choice of two things"),
-    ("a stage question is asked plainly", "the first stage's question plainly"),
-    ("Supportive asks about what they said", "Any question is gentle and about something they said"),
     ("a yes to the stuck check may bring an offer", "A yes may bring an offer"),
-    ("body pain holds every offer but the stuck one", "only a `stuck` fit may be offered"),
+    # Lolly, 6 October 2026: synthesis from their own words, never an imposed conclusion.
+    ("a conclusion only from their own words", "could I point to what they said as its basis"),
+    ("no conclusion they have not reached", "anything they have not established"),
+    ("checking grows with the inference", "The bigger the inference, the more it needs checking"),
+    ("no question that leads them to what they said", "Never ask a question only to lead them"),
+    # The style document: two to four exchanges is a range, not a count.
+    ("the offer is a range, not a count", "That is a range, not a count"),
+    ("one more attempt per step", "Once per step"),
+    ("never invent a missing answer", "never invent the"),
+    ("every framework ends in the body check", "However the framework ends, the body check in comes next"),
+    ("answer what they report after the practice", "never that it worked"),
 ]
 
 
@@ -63,10 +67,12 @@ def test_the_hard_rules_are_still_said(rule: str, phrase: str):
     assert " ".join(phrase.split()) in " ".join(_base().split()), f"missing: {rule}"
 
 
-def test_the_stock_phrases_are_named_together_and_saying_back_is_not_asked_for():
+def test_formulas_are_named_and_saying_back_is_not_asked_for():
     flat = " ".join(_base().split())
 
-    assert '"I hear you", "I am here with you", "that makes sense", "It sounds like" or "It seems like"' in flat
+    # The style document bans these as formulas, not as words: its own replies use them.
+    assert '"I hear you", "That makes sense", "I\'m here for you"' in flat
+    assert '"It sounds like"' not in flat and '"a lot"' not in flat
     assert "say back" not in flat
     # The client's "Mani Standard": a line in fresh words that adds, never their sentence again.
     assert "say in one short line of your own what you understood" in flat

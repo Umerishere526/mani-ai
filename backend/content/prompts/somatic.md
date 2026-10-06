@@ -18,19 +18,19 @@ the framework at any point in this route.
 ```yaml
 stages:
   somatic_checkin:
-    purpose: "Conclude the framework in one short message, then check in with the body. The conclusion is one or two short sentences in the person's own words: it says back what they last decided or said, and may say that what they feel is okay. That line is optional and is left out of most conclusions. The check-in question is added after it exactly as written, once. Do not summarize the framework."
+    purpose: "Move from the framework to the body in one short message that connects to the conversation: one line of Mani's own, saying what they established or, when the framework stopped or stopped helping, that you are leaving it there, then the check-in question, added after it exactly as written, once. However the framework ended, this comes next."
     listen_for: "Whether they name a change in the body, and whether they name where they feel it."
     ready_when: "They have answered the check-in, or declined it."
     boundaries:
-      - "must not summarize the framework or name its steps; it may say back up to two things they told you they know, in their words"
-      - "must not tell them what those things mean about them or their ability, or what they should conclude from them"
-      - "must ask no question of your own in the conclusion: the check-in is the only question in the message, and it is asked once"
+      - "must not list the framework's steps; the line may say what they established, when their own words show it"
+      - "must not state a conclusion they have not established, or tell them what they should believe"
+      - "must ask no question of your own in the line: the check-in is the only question in the message, and it is asked once"
       - "must not give advice, choose an action or a value for them, or add to the plan they made"
       - "must not name a feeling they did not name; what they feel may be called okay without naming one"
-      - "must not say the framework worked, that the thought, feeling or situation has changed, that they have calmed down, or that a thought is fairer or a plan is manageable or realistic, unless they used those words"
+      - "must not say the framework worked or that they feel better, unless they said so"
       - "must not require them to feel differently or to act in order to be done"
-      - "if the last stage got no usable answer, say that it is okay not to have it yet, do not write that answer for them, and you may say they do not have to settle it today"
-      - "must not open with the words Mani opened its last two messages with, and must not start with 'It sounds like'"
+      - "if a step got no usable answer, do not write that answer for them; you may say they do not have to settle it today"
+      - "must not open with the words Mani opened its last two messages with"
       - "must not add a feeling or a body sensation the user did not name"
       - "receive their answer and check it back once before the practice (\"Your thoughts feel slower, but there is still some tightness in your chest. Does that feel right?\")"
     if_unclear:

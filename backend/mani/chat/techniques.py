@@ -6,7 +6,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from mani.chat.router import STUCK_FACT
 from mani.models.rows import Framework
 
 # Every framework opens by offering itself. The schema enforces it; the machine relies
@@ -30,44 +29,9 @@ def moves_on_after(framework: Framework | None, phase: str | None) -> bool:
     return 0 <= offering < framework.phase_index(phase) < len(framework.phases) - 1
 
 
-def covered_stages(framework: Framework | None, known: dict[str, str]) -> list[str]:
-    """The stages right after the offering that what the person said before accepting answers.
-
-    A stage names the fact that answers it in `answered_by`. Only an unbroken run from the first
-    stage counts, and the last stage before the body check is never covered, so there is always
-    a question left to ask.
-    """
-    if framework is None or OFFERING not in framework.phases:
-        return []
-    covered: list[str] = []
-    for phase in framework.phases[framework.phase_index(OFFERING) + 1 : -1]:
-        if phase in SOMATIC_STAGES or (framework.stages.get(phase) or {}).get("answered_by") not in known:
-            break
-        covered.append(phase)
-    return covered
-
-
-# The branch a stage carries for a person offered the framework because they were stuck.
+# The branch a stage carries for a person offered the framework because they were stuck, and the
+# key in `known` that marks such a start.
 STUCK_BRANCH = "stuck"
-
-
-def passed_over_stages(framework: Framework | None, known: dict[str, str]) -> list[str]:
-    """The stages right after the offering that are passed over with no words (spec 0009).
-
-    For a person offered the framework because they were stuck, when what they said answers
-    none of its first stages: every stage before the first one carrying a `stuck` branch. Those
-    are never asked and never said back; the `stuck` stage is asked through its branch.
-    """
-    if framework is None or STUCK_FACT not in known or OFFERING not in framework.phases:
-        return []
-    if covered_stages(framework, known):
-        return []
-    after = framework.phases[framework.phase_index(OFFERING) + 1 : -1]
-    first = next(
-        (i for i, phase in enumerate(after) if STUCK_BRANCH in (framework.stages.get(phase) or {})),
-        None,
-    )
-    return after[:first] if first else []
 
 
 def _phase_after(framework: Framework, phase: str | None) -> str | None:
@@ -79,9 +43,9 @@ class Verdict(StrEnum):
     OK = "ok"
     UNKNOWN_FRAMEWORK = "unknown_framework"
     UNKNOWN_PHASE = "unknown_phase"
-    SKIPPED_PHASES = "skipped_phases"
     MISSING_OFFERING = "missing_offering"
     STEPPED_BACK = "stepped_back"
+    PAST_THE_CHECK_IN = "past_the_check_in"
 
 
 @dataclass(frozen=True)
@@ -96,8 +60,6 @@ class Transition:
 
     @property
     def reason(self) -> str:
-        if self.verdict is Verdict.SKIPPED_PHASES:
-            return f"skipped {', '.join(self.skipped)}"
         return self.verdict.value
 
 
@@ -152,11 +114,12 @@ class Registry:
     ) -> Transition:
         """Whether a technique may move from current_phase to next_phase.
 
-        Staying on a phase is always allowed. Stepping back is allowed too, except on a turn
-        that moves on (`moves_on_after`): the person has answered current_phase, so going back
-        to it or earlier asks it again. There a step back, and a phase the framework does not
-        have, are corrected to the phase after current_phase, never to current_phase itself:
-        only an explicit hold, which the caller decides, keeps the stage.
+        The model judges when a step is done, so it may move forward past steps the person has
+        already answered (spec 0010, AC-5), but only as far as the body check in: the practice
+        after it belongs to the body route. Staying on a phase is allowed. Stepping back is
+        allowed too, except on a turn that moves on (`moves_on_after`): the person has answered
+        current_phase, so going back to it or earlier asks it again. There a step back, and a
+        phase the framework does not have, are corrected to the phase after current_phase.
 
         The implementation this replaces returned *valid* for an unrecognised framework
         or an unrecognised phase, so one hallucinated identifier silently switched the
@@ -195,12 +158,9 @@ class Registry:
                 expected_next=OFFERING,
             )
 
-        if next_index - current_index > 1:
-            return Transition(
-                Verdict.SKIPPED_PHASES,
-                skipped=framework.phases[current_index + 1 : next_index],
-                expected_next=framework.phases[current_index + 1],
-            )
+        check_in = framework.phase_index("somatic_checkin")
+        if 0 <= check_in < next_index and current_index < check_in:
+            return Transition(Verdict.PAST_THE_CHECK_IN, expected_next="somatic_checkin")
 
         return Transition(Verdict.OK)
 

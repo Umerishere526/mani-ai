@@ -9,13 +9,8 @@ activation:
     A specific event triggered a belief that is now producing an emotional or behavioural
     consequence, and the user wants deeper reflection and understanding rather than a quick
     reframe.
-  # A confident offer waits for their third message: the fit depends on what they took the event or
-  # the thought to mean, which the first two messages rarely say.
-  earliest_offer_message: 3
-  # The facts that make this framework fit: every fact in one set (router.FACTS). Read by
-  # router.choose; the client's tie rules between frameworks are in router.TIE_RULES.
-  # `[stuck]` fits after Mani asked "Are you feeling stuck?", only when no other set fits (spec 0009).
-  fits_when: [[event, meaning], [stuck]]
+  # Offered on the turn after a yes to "Are you feeling stuck?" (the client's October meeting).
+  stuck_offer: true
   to_find_out:
     - "the specific event that set it off"
     - "what they told themselves about it, about them or the other person"
@@ -23,7 +18,7 @@ activation:
     - "whether they want to look at the whole sequence in depth, not one quick thought"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads fits_when.
+  # router reads never_offer_when_said and stuck_offer.
   appropriate_when:
     - "A specific event occurred"
     - "The user formed a belief about what the event means"
@@ -82,10 +77,9 @@ stages:
         - "must not say \"stuck\" back to them"
   activate:
     # The router fact that, once the person has said it, answers this stage.
-    answered_by: event
     purpose: "Identify the specific event without adding assumptions, explanations, or motives."
     listen_for: "What occurred, what was said or done, which part matters, and whether the user is describing facts or inferred meaning."
-    ready_when: "What occurred is clear, the specific event the user wants to examine is settled, and it is described as observed rather than assumed. If the event remains unclear, stay in this stage."
+    ready_when: "What occurred is clear, the specific event the user wants to examine is settled, and it is described as observed rather than assumed. If it is still unclear after one more attempt, never invent it."
     boundaries:
       - "must not assume why the event occurred"
       - "must not assign another person's motive"
@@ -101,13 +95,11 @@ stages:
         start_only: true
       - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
         reply: "What happened sounds serious, and I am not going to ask you to see it differently. What would be most helpful to talk through?"
-    ask_simpler: "What happened? Just tell me what took place."
     ask:
       supportive: "What happened?"
       reflective: "What happened?"
       direct: "What happened?"
   belief:
-    answered_by: meaning
     purpose: "Identify what the user believes the event means."
     listen_for: "The conclusion, prediction, expectation, or judgment the user attached to the event."
     boundaries:
@@ -117,10 +109,6 @@ stages:
       - "must not call the belief irrational or distorted"
       - "must not investigate several beliefs at once"
       - "must not use a feeling word the user did not use"
-    if_earlier_missing:
-      needs: activate
-      reply: "When you think about it, what comes up first?"
-    ask_simpler: "What went through your mind about it?"
     ask:
       supportive: "What did you tell yourself about it?"
       reflective: "What did you tell yourself about it?"
@@ -141,7 +129,6 @@ stages:
       - "must not tell the user how the belief must have affected them"
       - "must not retell the complete event-belief-consequence sequence"
       - "must not assume the event itself had no effect"
-    ask_simpler: "How has that thought changed what you do or feel?"
     ask:
       supportive: "How has thinking that affected you?"
       reflective: "How has thinking that affected you?"
@@ -157,10 +144,6 @@ stages:
       - "must not assume another person's intention"
       - "must not use rhetorical questions to force a conclusion"
       - "must not reinterpret danger or mistreatment"
-    if_earlier_missing:
-      needs: belief
-      reply: "What makes it seem that way to you?"
-    ask_simpler: "Why do you believe that?"
     ask:
       supportive: "What makes you think that is true?"
       reflective: "What makes you think that is true?"
@@ -176,10 +159,6 @@ stages:
       - "must not assume another person's intention"
       - "must not use rhetorical questions to force a conclusion"
       - "must not reinterpret danger or mistreatment"
-    if_earlier_missing:
-      needs: belief
-      reply: "Is there anything about this you are unsure of?"
-    ask_simpler: "Is there anything that doesn't match that?"
     ask:
       supportive: "Is there anything you know that doesn't match that thought?"
       reflective: "Is there anything you know that doesn't match that thought?"
@@ -198,10 +177,6 @@ stages:
       - when: "they say they do not know what would be fair, or cannot put it into words"
         reply: "That is fine. What is one thing about this that you do know is true?"
         counted: true
-    if_earlier_missing:
-      needs: evidence_for
-      reply: "From what you know so far, what would you say is true about this?"
-    ask_simpler: "From all of that, what do you know is true about this?"
     ask:
       supportive: "Putting those together, what would you say is true about this?"
       reflective: "Putting those together, what would you say is true about this?"

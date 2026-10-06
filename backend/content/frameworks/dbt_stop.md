@@ -13,9 +13,6 @@ activation:
     impulsively, and needs help pausing before responding, not analysis of the underlying
     problem. When an action is about to happen it is time critical and comes before whatever
     else the conversation was pointing toward.
-  # The facts that make this framework fit: every fact in one set (router.FACTS). Read by
-  # router.choose; the client's tie rules between frameworks are in router.TIE_RULES.
-  fits_when: [[about_to_act], [overwhelmed_now]]
   to_find_out:
     - "what they are about to do, or whether they are panicked right now with no action in view"
     - "whether it has already happened"
@@ -23,7 +20,7 @@ activation:
     - "whether anyone is at risk (then safety, not this)"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads fits_when.
+  # router reads never_offer_when_said and stuck_offer.
   appropriate_when:
     - "The user is close to acting impulsively"
     - "The action has not yet occurred"
@@ -109,7 +106,6 @@ stages:
       - when: "already acted - \"I already sent it.\""
         reply: "The message has already been sent. Is there another action you are about to take?"
         counted: true
-    ask_simpler: "Can you stop before you do it?"
     ask:
       supportive: "Can you stop the action before it happens?"
       reflective: "Can you stop the action before it happens?"
@@ -139,10 +135,6 @@ stages:
       - when: "the pause needs an anchor - the person is not physically leaving anywhere, so the pause is about where attention goes, not where the body does. One slow breath, naming what is in view, or a hand flat on the desk are usable even mid-conversation"
         reply: "Would one slow breath help you stay with the pause?"
         counted: true
-    if_earlier_missing:
-      needs: stop
-      reply: "Can you hold off on acting for a minute and stay here with me?"
-    ask_simpler: "Can you wait a moment and stay here with me?"
     ask:
       supportive: "Can you hold off for a moment and stay here with me?"
       reflective: "Can you hold off for a moment and stay here with me?"
@@ -165,10 +157,6 @@ stages:
       - "must not assume another person's motive"
       - "must not ask several questions at once"
       - "must not ask why they feel or think something - Observe is describing what is there, not explaining it; \"why\" turns the pause into another lap of the same thinking that produced the urge"
-    if_earlier_missing:
-      needs: pause
-      reply: "What do you notice right now?"
-    ask_simpler: "What is going on right now?"
     ask:
       supportive: "What do you notice right now?"
       reflective: "What do you notice right now?"
@@ -193,7 +181,6 @@ stages:
     if_unclear:
       - when: "chooses retaliation"
         reply: "You want him to experience what you experienced. What response would avoid intensifying the situation?"
-    ask_simpler: "What would actually help right now?"
     ask:
       supportive: "What would help right now, rather than make it worse?"
       reflective: "What would help right now, rather than make it worse?"
