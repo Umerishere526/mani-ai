@@ -17,11 +17,13 @@ endpoint, the real LangChain call, the real router and safety screen - this is n
 - **Real, too:** the library page (sidebar **Library**, or any **Go to Library** button). It lists
   every exercise from `GET /v1/exercises` on one page, grouped by topic, each playable from its
   signed link. Go to Library opens it rather than sending a message, as the apps navigate there.
-- **Real, too:** the sign-in that happens automatically on load, through Supabase Auth. The
+- **Real, too:** sign-in and sign-up, through Supabase Auth with an email and password. The
   backend verifies the token exactly as it will a phone's, and it is refreshed when it expires.
-- **Fixed, on purpose:** there is no sign-up or sign-in screen. The app always signs in as
-  `CHAT_TESTER_FIXED_USER` (one name, one account, created via the Admin API the first time
-  it's needed) - a public link to this tool can never create or reach any other account.
+  Each account sees only its own conversations - the backend scopes every thread to the
+  signed-in user.
+- **Open, on purpose:** anyone who can reach the page can create an account. Sign-up goes
+  through the Admin API (created confirmed, no email sent), so it uses the service role key and
+  every new account can spend model credit. Don't put a link to this tool anywhere public.
 
 ## Setup
 
@@ -58,10 +60,10 @@ Then, in another terminal:
 cd chat-tester && source venv/bin/activate && streamlit run app.py
 ```
 
-There is no sign-in screen. On load, the app signs in as `CHAT_TESTER_FIXED_USER`
-(`.env.example` default: `streamlit-tester`, i.e. `streamlit-tester@tester.mani.local`) -
-creating that one account the first time it's needed - and resumes its conversation.
-The sidebar's **New conversation** button starts a fresh thread for that same user. Under it,
+The app opens on a **Sign in** / **Sign up** screen. Sign up takes an email, a password and an
+optional nickname the greeting uses; after that, the same email and password sign back in to the
+same conversations. Refreshing the browser tab signs you out. The sidebar's **Sign out** switches
+accounts, and **New conversation** starts a fresh thread for the signed-in user. Under it,
 **Conversations** lists that user's threads, most recently active first (the latest 20, titled once a
 thread has had an exchange, "Untitled" before that). Tap one to open it and continue; the open one is
 marked ▶. Hover a title to see its message count and last activity. An opened thread shows its latest 100

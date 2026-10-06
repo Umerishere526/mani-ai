@@ -12,6 +12,7 @@ import streamlit.components.v1 as components
 
 import client as mani
 from library import render_library
+from login import render_login
 
 # Off wherever this flag is unset - a deployed, client-facing instance - so there is no
 # control on screen that could show a framework id, a stage name, or a database read.
@@ -38,21 +39,14 @@ def reset_thread_state(thread: dict, messages: list[dict]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Session - one fixed test user, signed in automatically. No sign-up or sign-in
-# screen: a public link to this tool must not be able to create or reach any
-# account but this one against the real backend.
+# Session - each person signs in or signs up with their own email and password,
+# and the backend scopes every thread to the signed-in account. Keyed on the email
+# because sign-in sets it alongside the client; a tab without one has no account to show.
 # ---------------------------------------------------------------------------
 
-FIXED_TEST_USER = os.environ.get("CHAT_TESTER_FIXED_USER", "streamlit-tester")
-
-if "client" not in st.session_state:
-    try:
-        session = mani.sign_in(FIXED_TEST_USER)
-    except (RuntimeError, mani.ApiError) as exc:
-        st.error(f"Could not sign in the test user: {exc}")
-        st.stop()
-    st.session_state.client = mani.ManiClient(session=session)
-    st.session_state.user_id = session.user_id
+if "email" not in st.session_state:
+    render_login()
+    st.stop()
 
 # A browser tab keeps its session across edits to client.py, so it can hold an instance of the
 # class as it was before the edit, without the methods added since. Same sign-in, current class.
@@ -62,7 +56,10 @@ if not isinstance(st.session_state.client, mani.ManiClient):
 with st.sidebar:
     st.header("Session")
     st.caption(f"backend: {mani.API_BASE_URL}")
-    st.caption(f"test user: {FIXED_TEST_USER}")
+    st.caption(f"signed in: {st.session_state.email}")
+    if st.button("Sign out", use_container_width=True):
+        st.session_state.clear()
+        st.rerun()
 
     # The control itself is gone, not just off, wherever CHAT_TESTER_DEV_MODE is unset - a
     # deployed, client-facing instance - so there is nothing on screen a client could click
@@ -103,7 +100,7 @@ thread = st.session_state.thread
 
 st.title("🧠 Mani chat tester")
 if developer:
-    st.caption(f"user: {FIXED_TEST_USER}  ·  thread: {thread['id'][:8]}…")
+    st.caption(f"user: {st.session_state.email}  ·  thread: {thread['id'][:8]}…")
 
 # The style is chosen the way a person chooses it in the apps: by tapping one of the
 # greeting's three buttons, which the backend turns into the style and its opener.
