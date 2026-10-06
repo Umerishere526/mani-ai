@@ -113,6 +113,46 @@ def sign_up(email: str, password: str) -> Session:
     return sign_in_with_password(email, password)
 
 
+def send_recovery_code(email: str) -> None:
+    """Email a six-digit code to this address, if an account has it.
+
+    Says nothing about whether the account exists: that would let anyone with the page
+    enumerate who has signed up. Supabase answers 200 either way and so do we.
+    """
+    _require_keys()
+    response = _auth("recover", {"email": email.strip()}, SUPABASE_ANON_KEY)
+    if not response.ok:
+        raise RuntimeError(f"Could not send the code: {_reason(response)}")
+
+
+def reset_password_with_code(email: str, code: str, new_password: str) -> Session:
+    """Prove the mailbox is theirs with the code, then set their own password.
+
+    The code is what makes this safe: the admin API could set anybody's password from this
+    page, so only the person who can read the email gets to change it. The password is then
+    set with that person's own token, exactly as a real client would.
+    """
+    _require_keys()
+    verified = _auth(
+        "verify", {"type": "recovery", "email": email.strip(), "token": code.strip()},
+        SUPABASE_ANON_KEY,
+    )
+    if not verified.ok:
+        raise RuntimeError(f"That code did not work: {_reason(verified)}")
+    session = _session(verified.json())
+
+    updated = requests.put(
+        f"{SUPABASE_URL}/auth/v1/user",
+        json={"password": new_password},
+        headers={"apikey": SUPABASE_ANON_KEY,
+                 "Authorization": f"Bearer {session.access_token}"},
+        timeout=10,
+    )
+    if not updated.ok:
+        raise RuntimeError(f"Could not set the new password: {_reason(updated)}")
+    return sign_in_with_password(email, new_password)
+
+
 def refresh(session: Session) -> Session:
     """A new access token for the same session, as a real app gets one when it expires."""
     response = _auth(
