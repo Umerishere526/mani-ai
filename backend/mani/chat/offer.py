@@ -77,6 +77,7 @@ def decide(
     accepted_this_turn: bool = False,
     finishing: bool = False,
     vetoed: frozenset[str] | tuple[str, ...] = (),
+    clarified_already: bool = False,
 ) -> Decision:
     """What this turn should do. Deterministic: the same inputs always give the same action.
 
@@ -132,6 +133,16 @@ def decide(
         return Decision(Action.OFFER_FRAMEWORK, top.framework_id, why="clear fit")
 
     if routing.status is sr.RouteStatus.AMBIGUOUS and len(routing.candidates) >= 2:
+        if clarified_already:
+            # The separating question has been asked, and their answer rarely moves the
+            # vectors: it says which set fits, not what happened. Asking it again loops, so
+            # the nearest of the two is offered once the cadence allows and the person has
+            # had the room the style gives them. Their answer is the evidence for it.
+            if cooldown_passed and their_messages >= soonest:
+                return Decision(
+                    Action.OFFER_FRAMEWORK, top.framework_id, why="they answered the clarify"
+                )
+            return Decision(Action.ASK, top.framework_id, why="clarify already asked")
         return Decision(
             Action.CLARIFY,
             top.framework_id,

@@ -108,6 +108,29 @@ def clarification_used(history: list[Message] | None) -> bool:
     )
 
 
+# What the separating question sounds like however Mani words it: two possibilities offered
+# back as a choice. The router's CLARIFY is the only turn that asks one, so finding one in
+# Mani's own replies is how a later turn knows it has already been asked.
+_OFFERS_A_CHOICE = re.compile(
+    r"\b(or (do|would|are|is|does)|, or\b|either\b).*\?|"
+    r"\?.*\b(or (do|would|are|is|does))\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def asked_which_fits(history: list[Message] | None) -> bool:
+    """Whether Mani has already asked the question that tells two sets of questions apart.
+
+    Read from Mani's own replies: the question is worded freshly every time, so there is no
+    fixed phrase, but it always offers two possibilities back as a choice. Not stored, because
+    it is true for a few turns and a column would outlive the fact.
+    """
+    return any(
+        m.role is MessageRole.MANI and _OFFERS_A_CHOICE.search(m.content)
+        for m in (history or [])
+    )
+
+
 def offer_refusal(
     ctx: TurnContext,
     history: list[Message] | None,

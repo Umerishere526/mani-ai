@@ -177,3 +177,26 @@ def test_accepting_starts_the_framework():
 def test_the_same_inputs_always_give_the_same_decision():
     kwargs = dict(style="direct", their_messages=3, cooldown_passed=True)
     assert decide(routing(), **kwargs) == decide(routing(), **kwargs)
+
+
+def test_the_question_that_separates_two_sets_is_asked_once_not_every_turn():
+    """Their answer says which set fits, not what happened, so it rarely moves the vectors:
+    without this the same clarify question is asked every turn forever."""
+    first = decide(ambiguous(), style="direct", their_messages=3, cooldown_passed=True)
+    assert first.action is Action.CLARIFY
+
+    # Their answer is the evidence: the nearest of the two is offered rather than asked about
+    # again, once the style's cadence has given them the room it gives.
+    answered = decide(
+        ambiguous(), style="direct", their_messages=4, cooldown_passed=True,
+        clarified_already=True,
+    )
+    assert answered.action is Action.OFFER_FRAMEWORK
+
+    # Still inside the cadence, it waits rather than offering early.
+    early = decide(
+        ambiguous(), style="direct", their_messages=1, cooldown_passed=True,
+        clarified_already=True,
+    )
+    assert early.action is Action.ASK
+    assert not early.offers

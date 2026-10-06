@@ -499,6 +499,7 @@ async def send(
             accepted_this_turn=accepted_this_turn,
             finishing=False,
             vetoed=vetoed_ids,
+            clarified_already=context.asked_which_fits(history),
         )
         logger.info(
             "thread %s routed %s, decided %s (%s)",

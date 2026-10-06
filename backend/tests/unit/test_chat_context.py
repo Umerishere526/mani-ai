@@ -950,3 +950,21 @@ def test_a_skipped_step_tells_the_model_to_leave_the_question_rather_than_rephra
     )
     assert "skipped: yes" in block
     assert "never ask it again in any form" in block
+
+
+@pytest.mark.parametrize("said, asked", [
+    ("Would you rather look at that one thought, or unpack the whole chain?", True),
+    ("Are you looking to take a quick look, or do you want to go deeper?", True),
+    ("What did they say about the report?", False),
+    ("That sounds hard. How has it been affecting you?", False),
+    # The client's own line, which is about staying with a framework, not choosing between two.
+    ("Another issue is coming into this. Do you want to stay with the one we selected?", False),
+])
+def test_the_question_that_tells_two_sets_apart_is_recognised_in_manis_own_words(said, asked):
+    """It is worded freshly every time, so there is no phrase to match: what it always does is
+    offer two possibilities back as a choice."""
+    message = Message(
+        id=uuid.uuid4(), thread_id=THREAD, user_id=USER, role=MessageRole.MANI,
+        content=said, created_at=NOW,
+    )
+    assert context.asked_which_fits([message]) is asked
