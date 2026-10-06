@@ -215,3 +215,76 @@ def test_the_balanced_thought_is_asked_for_as_what_is_true_never_as_what_is_fair
             texts += [missing["reply"]] if isinstance(missing["reply"], str) else list(missing["reply"].values())
         for text in texts:
             assert "fair" not in text.lower(), (framework_id, stage, text)
+
+
+# Lolly's review of the meetings chat (spec 0011).
+
+
+@pytest.mark.parametrize("framework_id", sorted(FIRST_STAGE))
+def test_what_they_said_before_accepting_meets_the_first_step(framework_id):
+    """She was asked to confirm the very thought the offer was built on (AC-5)."""
+    ready = FRAMEWORKS[framework_id]["stages"][FIRST_STAGE[framework_id]]["ready_when"]
+    assert "What they said before they accepted counts" in ready
+    assert "the offer was built on" in ready
+
+
+@pytest.mark.parametrize("framework_id", sorted(FRAMEWORKS))
+def test_each_summary_says_what_you_look_at_in_one_sentence(framework_id):
+    """The offer and Tell me more say what you look at together (AC-3), so it is one plain
+    sentence with no promised result."""
+    summary = FRAMEWORKS[framework_id]["summary"]
+    assert summary.startswith("We ")
+    assert summary.count(".") == 1 and summary.endswith(".")
+    assert "help" not in summary.lower()
+
+
+def test_no_ask_hands_them_the_worksheet_question():
+    """"Putting those together, what would you say is true about this?" read as a teacher
+    marking a worksheet (AC-8); "What else could be going on?" left them to decipher it (AC-7)."""
+    for framework_id, framework in FRAMEWORKS.items():
+        for stage, body in framework["stages"].items():
+            for text in body.get("ask", {}).values():
+                assert "Putting those together" not in text, (framework_id, stage)
+                assert "What else could be going on" not in text, (framework_id, stage)
+
+
+@pytest.mark.parametrize("framework_id, stage", [("abcde", "balanced"), ("thought_reframe", "reframe")])
+def test_the_last_step_states_the_conclusion_before_it_asks(framework_id, stage):
+    purpose = FRAMEWORKS[framework_id]["stages"][stage]["purpose"]
+    assert purpose.startswith("When what they have said supports")
+    assert "ask nothing, and end the framework as resolved" in purpose
+
+
+def _practices() -> list[tuple[str, str, str]]:
+    stage = load_somatic_stages()["somatic_practice"]
+    return [
+        (branch["when"], style, text)
+        for branch in stage["if_unclear"]
+        if branch["when"].startswith("they feel it")
+        for style, text in branch["reply"].items()
+    ]
+
+
+def test_the_practices_are_instructions_with_no_claim_about_bodies():
+    """"The chest is often where the body holds tension first" (AC-12)."""
+    for when, style, text in _practices():
+        assert not text.startswith(("The chest", "When ", "Anxiety")), (when, style)
+        assert "often" not in text and "usually" not in text, (when, style)
+        assert "Let's do something brief" not in text and "signal" not in text, (when, style)
+        assert text.endswith("How do you feel now?"), (when, style)
+
+
+def test_each_practice_is_still_told_apart_by_its_opening_words():
+    """`repairs.practice_place` and `practice_in` find a practice by its first 30 characters."""
+    for style in STYLES:
+        openings = [text[:30] for _, s, text in _practices() if s == style]
+        assert len(openings) == len(set(openings)) == 4, style
+
+
+def test_the_one_body_question_is_where():
+    """"What do you notice in your body now?" then "Where do you feel that most?" asked twice
+    (AC-10)."""
+    stage = load_somatic_stages()["somatic_checkin"]
+    assert set(stage["ask"]) == STYLES
+    assert all(ask.startswith("Where ") for ask in stage["ask"].values())
+    assert [branch["when"] for branch in stage["if_unclear"]] == ["the user declines the check-in"]

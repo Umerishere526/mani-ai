@@ -242,16 +242,17 @@ def test_a_candidate_adds_its_offer_line_resolved_to_style():
     assert "offer_ask: Would you like to work through it?" in block
 
 
-def test_the_model_is_never_handed_the_description_it_must_not_write():
-    """The backend adds the client's description to every offer (muhammad, 2026-09-24). Given
-    the text as well, the model copied it, and offers showed it twice."""
-    confident = framework().model_copy(update={"summary": "These questions help you see it clearly."})
+def test_an_offer_is_told_the_name_and_what_it_looks_at():
+    """Lolly's review (spec 0011, AC-1): the offer says the framework's name and what you look
+    at together, so the model is given both alongside the offer stage."""
+    confident = framework().model_copy(update={"summary": "We look at what happened."})
     block = context.build(
         TurnContext(thread=thread(), profile=None, technique=None),
         candidate=confident,
-    )
-    assert "offer_" in block, "the offer stage itself still reaches the model"
-    assert "These questions help you see it clearly." not in block
+    ).splitlines()
+    assert f"offer_name: {confident.name}" in block
+    assert "offer_looks_at: We look at what happened." in block
+    assert any(line.startswith("offer_purpose: ") for line in block)
 
 
 def test_the_turn_a_framework_starts_says_so():
@@ -363,13 +364,14 @@ def test_the_turn_answering_the_practice_says_so():
     assert "answering_practice" not in context.build(TurnContext(thread=thread(), profile=None, technique=None))
 
 
-def test_a_request_to_hear_more_brings_the_clients_explanation_and_what_it_looks_at():
+def test_a_request_to_hear_more_brings_the_name_and_what_it_looks_at():
     described = framework().model_copy(update={"summary": "We look at what happened and what you told yourself."})
     block = context.build(
         TurnContext(thread=thread().model_copy(update={"conversation_style": SupportStyle("direct")}), profile=None, technique=None),
         explaining=described,
     ).splitlines()
-    assert any(line.startswith("explain_offer: It gives us a clear way to work through") for line in block)
+    assert "explain_offer: yes" in block
+    assert f"offer_name: {described.name}" in block
     assert "offer_looks_at: We look at what happened and what you told yourself." in block
 
 
@@ -990,3 +992,11 @@ def test_an_assessment_turn_carries_what_is_unknown_never_the_framework_ids():
     assert "what part of the situation they cannot change" in block
     assert "act_choice_point" not in block
     assert "behavioral_activation" not in block
+
+
+def test_a_question_of_theirs_is_flagged_so_it_is_answered_first():
+    """Spec 0011, AC-19: their own question is answered before any question back."""
+    ctx = TurnContext(thread=thread(), profile=None, technique=None)
+    assert "their_question: yes" in context.build(ctx, their_question=True).splitlines()
+    assert "their_question" not in context.build(ctx)
+    assert "their_question" not in context.build(ctx, their_question=True, safety_concern=True)

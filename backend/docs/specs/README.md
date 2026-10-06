@@ -19,7 +19,8 @@ names someone or hands over a feeling word.
 | `framework-structured-problem-solving.md` | Framework 4 | |
 | `framework-act-choice-point.md` | Framework 5 | |
 | `framework-dbt-stop.md` | Framework 6 | |
-| `client-email-2026-10-06.md` | Lolly's email of 6 October 2026 | Mani may state what the person has established; frameworks adapt, pivot or stop; every ending goes to the somatic check, whose answer is the effectiveness signal. The newest document: it wins where they disagree |
+| `client-email-2026-10-06.md` | Lolly's email of 6 October 2026 | Mani may state what the person has established; frameworks adapt, pivot or stop; every ending goes to the somatic check, whose answer is the effectiveness signal |
+| `client-review-meetings-chat-2026-10-06.md` | Lolly's line by line review of a Direct Thought Reframe chat, 6 October 2026 | Spoken words never stronger than the person's; the framework named in the offer and Tell me more; no consent line or Skip button; a stated conclusion at the last step; one body question; no claims about bodies in the practices; a plain stop, with no question or exercise, when it did not help. The newest document: it wins where they disagree |
 
 Each framework file follows the source's own numbering: therapeutic purpose, governing rules,
 mirror cadence, tone by style, when appropriate, **what MANI may hear**, what must be understood

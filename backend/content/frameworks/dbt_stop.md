@@ -1,7 +1,7 @@
 ---
 id: dbt_stop
 name: DBT STOP
-summary: "These questions help you pause before you react, so you can choose what to do."
+summary: "We pause before you react, notice what's going on inside you and around you, and then choose what to do next."
 display_order: 6
 phases: [offering, stop, pause, observe, proceed]
 activation:
@@ -105,11 +105,12 @@ stages:
     purpose: "Interrupt the intended action before it occurs."
     listen_for: "Whether the text, email, call, post, argument, purchase, or decision has been stopped before completion."
     ready_when: >-
-      The immediate action is stopped: the message remains unsent, the call has not been
-      placed, the post has not been published, the purchase has not been completed, the user
-      has stopped typing, the argument has been paused, or the decision has not been made. If
-      the action already occurred, identify whether another immediate action needs to be
-      paused.
+      The immediate action is stopped: the message remains unsent, the call has not been placed,
+      the post has not been published, the purchase has not been completed, the user has stopped
+      typing, the argument has been paused, or the decision has not been made. If the action
+      already occurred, identify whether another immediate action needs to be paused. What they
+      said before they accepted counts, including the action the offer was built on: when it
+      already gives this, the step is done and is not asked.
     boundaries:
       - "must not shame the urge"
       - "must not assume every immediate action is harmful"

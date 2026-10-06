@@ -108,9 +108,8 @@ def test_no_framework_is_offered_from_inside_a_running_one(registry):
         current_phase="belief",
         framework_running=True,
     )
-    # A stage in the middle of a framework carries no buttons of the model's own, only the
-    # way past the question.
-    assert [p.label for p in fixed.prompts] == [repairs.SKIP_LABEL]
+    # A stage in the middle of a framework carries no buttons at all (spec 0011, AC-6).
+    assert fixed.prompts == []
     assert sum("inside a running framework" in n for n in fixed.notes) == 2
 
 
@@ -291,16 +290,32 @@ def test_an_offer_carries_the_clients_three_choices_whatever_the_model_wrote(reg
     assert [bool(p.decline) for p in fixed.prompts] == [False, False, True]
 
 
-def test_after_tell_me_more_the_explanation_stands_alone_with_two_choices(registry):
+def test_after_tell_me_more_the_explanation_stands_alone_named_with_two_choices(registry):
     """The client: "Tell me more" explains, then gives another chance to begin or keep talking.
-    No permission question follows the explanation."""
+    No question follows the explanation, and it says what the framework is called (spec 0011,
+    AC-2): left out, the name goes first."""
     explained = reply(
-        text="It gives us a clear way to look at what happened one step at a time. Would you like to try it?",
+        text="We look at what happened and what you told yourself. Would you like to try it?",
         prompts=[SmartPrompt(label="Try it", technique="abcde")],
     )
     fixed = fix(registry, explained, explaining=True, current_framework_id="abcde",
                 current_phase="offering")
-    assert fixed.text == "It gives us a clear way to look at what happened one step at a time."
+    name = registry.get("abcde").name
+    assert fixed.text == f"It's called {name}. We look at what happened and what you told yourself."
+    assert [p.label for p in fixed.prompts] == [ACCEPT_LABEL, KEEP_TALKING_LABEL]
+
+
+def test_an_explanation_keeps_its_two_choices_whatever_it_asks(registry):
+    """A question in the explanation used to send it down the path that drops an offer's buttons,
+    leaving nothing to tap. The question goes instead."""
+    name = registry.get("abcde").name
+    explained = reply(
+        text=f"{name} looks at what happened. What part of it do you want to start with?",
+        prompts=[SmartPrompt(label="Try it", technique="abcde")],
+    )
+    fixed = fix(registry, explained, explaining=True, current_framework_id="abcde",
+                current_phase="offering")
+    assert fixed.text == f"{name} looks at what happened."
     assert [p.label for p in fixed.prompts] == [ACCEPT_LABEL, KEEP_TALKING_LABEL]
 
 
@@ -434,13 +449,13 @@ def test_the_end_of_a_framework_keeps_its_buttons(registry):
     assert [p.label for p in fixed.prompts] == ["I tried it", "Not yet", "Feeling better"]
 
 
-def test_a_stage_in_the_middle_of_a_framework_carries_only_the_way_past_it(registry):
-    """The model's own buttons still go: a stage is a question, not a menu. The one button it
-    keeps is the way past the question, so nobody is held on a step (muhammad, 2026-10-06)."""
+def test_a_stage_in_the_middle_of_a_framework_carries_no_buttons(registry):
+    """A stage is a question, not a menu, and a button under every question made the framework
+    read as a form (Lolly's review, spec 0011, AC-6)."""
     mid = reply(text="What did she say?", prompts=[SmartPrompt(label="Not sure")])
     fixed = fix(registry, mid, framework_running=True, current_phase="belief",
                 current_framework_id="abcde")
-    assert [p.label for p in fixed.prompts] == [repairs.SKIP_LABEL]
+    assert fixed.prompts == []
 
 
 DESCRIBED = Framework(
@@ -453,21 +468,40 @@ OFFER_BUTTONS = [
 ]
 
 
-def test_an_offer_is_manis_line_then_the_clients_question_with_no_description():
-    """The style document's offer is Mani's own sentence and the permission question; the
-    description waits for "Tell me more" (spec 0010, AC-4)."""
-    part = ("Her silence keeps coming back to you. "
-            "I have a structured approach that can help you look at it.")
+def test_an_offer_is_manis_line_then_the_clients_question():
+    """Mani's own sentence, naming the framework, then the client's permission question
+    (spec 0011, AC-1)."""
+    part = "Her silence keeps coming back to you. We could use abcde to look at it."
     fixed = fix(Registry([DESCRIBED]), reply(text=part, prompts=OFFER_BUTTONS),
                 conversation_style="supportive")
     assert fixed.text == f"{part}\n\nWould you like to try it together?"
-    assert DESCRIBED.summary not in fixed.text
+    assert not any("name" in note for note in fixed.notes)
+
+
+def test_an_offer_that_leaves_out_the_name_says_it_before_the_question():
+    """Lolly's review: the offer hid the framework behind "a structured approach". Left out, the
+    name goes after Mani's sentence and before the permission question."""
+    part = "I have a structured approach that can help you look at it."
+    fixed = fix(Registry([DESCRIBED]), reply(text=part, prompts=OFFER_BUTTONS),
+                conversation_style="direct")
+    assert fixed.text == f"{part} It's called ABCDE.\n\nWould you like to try it with me?"
+
+
+@pytest.mark.parametrize("text, name, named", [
+    ("We could use a Thought Reframe here.", "Thought Reframe", True),
+    ("We could use structured problem-solving here.", "Structured Problem-Solving", True),
+    ("We could use structured problem solving here.", "Structured Problem-Solving", True),
+    ("ACT can help with this.", "ACT Choice Point", False),
+    ("A thought you could reframe.", "Thought Reframe", False),
+])
+def test_the_name_counts_only_when_said_in_full(text: str, name: str, named: bool):
+    assert repairs.names_framework(text, name) is named
 
 
 def test_the_models_own_permission_question_gives_way_to_the_clients():
     """Told not to ask, the model sometimes asks anyway. Two permission questions in one reply
     read as a form, so the client's wording is the one that stays."""
-    part = "You keep going over what he said. There are some questions we could go through."
+    part = "You keep going over what he said. ABCDE is some questions we could go through."
     fixed = fix(Registry([DESCRIBED]),
                 reply(text=f"{part} Would you like to try them?", prompts=OFFER_BUTTONS),
                 conversation_style="direct")
@@ -894,4 +928,36 @@ def test_a_skip_is_never_spent_as_the_stages_one_extra_attempt(registry):
     fixed = fix(registry, held, framework_running=True, current_phase="belief",
                 current_framework_id="abcde", skipped=True, asked_again=True, current_holds=0)
     assert fixed.phase == "consequence"
+    assert fixed.holds == 0
+
+
+def test_a_conclusion_stated_at_the_last_step_ends_it_without_a_reported_ending(registry):
+    """At the last step Mani states what their words establish and asks nothing (spec 0011,
+    AC-8). The model forgot to report the ending, so a statement with nothing to answer would
+    stall; it is recorded as resolved and the body check follows."""
+    stated = reply(text="So far you know the meetings changed, and your work has not.",
+                   state=TechniqueState(technique="staged", step="closing"))
+    fixed = fix(registry, stated, framework_running=True, current_phase="closing",
+                current_framework_id="staged")
+    assert fixed.phase == "somatic_checkin"
+    assert fixed.ending == "resolved"
+
+
+def test_a_question_at_the_last_step_is_still_its_one_more_attempt(registry):
+    asked = reply(text="What would be a more balanced thought?",
+                  state=TechniqueState(technique="staged", step="closing"))
+    fixed = fix(registry, asked, framework_running=True, current_phase="closing",
+                current_framework_id="staged")
+    assert fixed.phase == "closing"
+    assert fixed.holds == 1
+
+
+def test_answering_their_question_holds_the_step_without_spending_its_attempt(registry):
+    """"Is this normal?" in the middle of the questions is answered first (spec 0011, AC-19).
+    The step waits, and its one more attempt is still there for when they do not understand it."""
+    answered = reply(text="It makes sense to ask, given what she said. What did you tell yourself?",
+                     state=TechniqueState(technique="abcde", step="belief"))
+    fixed = fix(registry, answered, framework_running=True, current_phase="belief",
+                current_framework_id="abcde", their_question=True)
+    assert fixed.phase == "belief"
     assert fixed.holds == 0

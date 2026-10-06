@@ -1,7 +1,7 @@
 ---
 id: thought_reframe
 name: Thought Reframe
-summary: "These questions help you look at a thought that keeps bothering you and find a fairer way to see it."
+summary: "We look at the thought you're having, what supports it, what doesn't, and whether there's a more accurate way to see the situation."
 display_order: 2
 phases: [offering, thought, significance, facts_for, facts_against, alternative, reframe]
 activation:
@@ -85,10 +85,9 @@ stages:
     purpose: "Isolate one specific thought in the user's own language."
     listen_for: "One specific assumption, conclusion, prediction, or belief in the user's language."
     ready_when: >-
-      One specific thought identified. If several appear, ask which one to examine. Once you have
-      mirrored it back, anything other than a no confirms it: an elaboration, a detail about when
-      it came up, or a yes all mean move on to its significance. Never ask for that confirmation
-      a second time.
+      One specific thought identified, in their words. What they said before they accepted counts,
+      including the thought the offer was built on: when that thought is clear, the step is done
+      without asking them to confirm it. If several appear, ask which one to examine.
     boundaries:
       - "must not select the thought for the user"
       - "must not combine several thoughts"
@@ -120,9 +119,9 @@ stages:
       - "must not introduce history the user has not mentioned"
       - "must not expand the brief framework into a deeper investigation"
     ask:
-      supportive: "Why does that thought matter to you?"
-      reflective: "Why does that thought matter to you?"
-      direct: "Why does that thought matter to you?"
+      supportive: "What makes that thought hard for you?"
+      reflective: "What makes that thought hard for you?"
+      direct: "What makes that thought hard for you?"
   facts_for:
     purpose: "Establish what the user knows supports the thought."
     listen_for: "What supports the thought, and what is known rather than assumed."
@@ -152,9 +151,9 @@ stages:
       - "must not assume another person's intentions"
       - "must not use rhetorical questions to push a conclusion"
     ask:
-      supportive: "Is there anything you know that doesn't match that thought?"
-      reflective: "Is there anything you know that doesn't match that thought?"
-      direct: "Is there anything you know that doesn't match that thought?"
+      supportive: "Is there anything that makes you think it might not be true?"
+      reflective: "Is there anything that makes you think it might not be true?"
+      direct: "Is there anything that makes you think it might not be true?"
   alternative:
     purpose: "Help the user recognize the original interpretation may not be the only possibility."
     listen_for: "At least one credible possibility that does not deny known facts."
@@ -165,11 +164,11 @@ stages:
       - "must not reinterpret danger or mistreatment"
       - "must not choose the alternative for the user"
     ask:
-      supportive: "What else could be going on?"
-      reflective: "What else could be going on?"
-      direct: "What else could be going on?"
+      supportive: "What's one other reason this could be happening?"
+      reflective: "What's one other reason this could be happening?"
+      direct: "What's one other reason this could be happening?"
   reframe:
-    purpose: "Develop a brief, balanced thought grounded in the facts the user identified."
+    purpose: "When what they have said supports a balanced conclusion without a new assumption, state it plainly in their words and no further (what they know, what does not fit the thought, what is still unknown), ask nothing, and end the framework as resolved. Only when stating it would need an inference of your own, ask for a more balanced thought."
     listen_for: "A thought the user considers accurate, balanced, and believable."
     boundaries:
       - "must not write a polished reframe that does not sound like the user"
@@ -183,9 +182,9 @@ stages:
         reply: "That is fine. What is one thing about this that you do know is true?"
         counted: true
     ask:
-      supportive: "Putting those together, what would you say is true about this?"
-      reflective: "Putting those together, what would you say is true about this?"
-      direct: "Putting those together, what would you say is true about this?"
+      supportive: "What would be a more balanced thought?"
+      reflective: "What would be a more balanced thought?"
+      direct: "What would be a more balanced thought?"
 ---
 
 # Thought Reframe

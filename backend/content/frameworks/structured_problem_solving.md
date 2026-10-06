@@ -1,7 +1,7 @@
 ---
 id: structured_problem_solving
 name: Structured Problem-Solving
-summary: "These questions help you break the problem down and pick a first step."
+summary: "We look at the problem, what you know for sure, what you want to happen and the options you have, then pick a first step."
 display_order: 4
 phases: [offering, problem, facts, control, outcome, options, compare, select, first_action]
 activation:
@@ -86,7 +86,10 @@ stages:
   problem:
     purpose: "Reduce a broad difficulty to one specific problem."
     listen_for: "One specific problem rather than several connected problems."
-    ready_when: "One specific problem is named. If several, the user chooses which one."
+    ready_when: >-
+      One specific problem is named. If several, the user chooses which one. What they said before
+      they accepted counts, including the problem the offer was built on: when it already gives
+      this, the step is done and is not asked.
     boundaries:
       - "must not define the problem for the user"
       - "must not combine several problems"

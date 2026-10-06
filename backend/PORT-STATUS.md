@@ -15,7 +15,7 @@ History (how the port went, what was fixed from review, old measurements) is in
 - Database: 10 migrations, 15 tables (8 `public`, 7 `admin`), 6 frameworks and 5 prompts seeded.
   `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
   private `exercises` bucket (`scripts/seed_exercises.py`). A hosted project does not exist yet.
-- Models: `google/gemini-3.8-flash` for chat, titles and the exercise pick (low reasoning effort, no temperature sent, pinned to Google Vertex with zero data retention, `mani_base.md`); `google/gemini-3.1-flash-lite` for summaries and memory folding; `openai/whisper-large-v3` for speech to text (`mani/config.py`, `mani/stt.py`). `openai/gpt-oss-120b` is only the fallback for a summary prompt with no model.
+- Models: `openai/gpt-6-luna` for chat, titles and the exercise pick (medium reasoning effort, no temperature sent, pinned to Azure with zero data retention, `mani_base.md`); `google/gemini-3.1-flash-lite` for summaries and memory folding; `openai/whisper-large-v3` for speech to text (`mani/config.py`, `mani/stt.py`). `openai/gpt-oss-120b` is only the fallback for a summary prompt with no model.
 - Web and mobile do not call this API yet; they run on placeholder data.
 
 ## What the service does
@@ -446,3 +446,20 @@ is no `.vercelignore`, so the vectors deploy with the code. **Re-run
 `scripts/embed_frameworks.py` and commit the result after any edit to a framework's
 `exemplars` or `to_find_out`**, then `scripts/seed.py` against hosted - Vercel ships code,
 never database rows.
+
+## 2026-10-06, Lolly's review of the meetings chat (spec 0011)
+
+Lolly reviewed one Direct Thought Reframe chat line by line (`backend/docs/specs/client-review-meetings-chat-2026-10-06.md`, now the newest client document). Half the lines she rejected were her own earlier wording; `mani-vault/Journal/lolly-meetings-chat-objections-land-on-her-own-lines-2026-10-06.md` traces each one. What changed:
+
+- **The framework is named.** The offer and Tell me more say its name and what you look at together (each framework's rewritten `summary`, now also a column of the Framework Index, since hosted runs with `SEMANTIC_ROUTER` off). `repairs` adds "It's called {name}." when the model leaves it out; the word "framework" and ids still never reach the person. The per style Tell me more texts (`greeting.EXPLANATIONS`) are gone, and a Tell me more reply loses any question in code and keeps its two buttons.
+- **No consent line, no Skip button.** A yes goes straight to the first step their words have not met; each framework's first step counts what they said before accepting. "Skip this one" is gone from every reply; a skip is read from the words alone, so a stored Skip button still works when tapped.
+- **Spoken words, never stronger than they said; Mani talks like a good therapist and never claims to be one.** It says it is an AI when asked, and answers their own questions first ("Is this normal?") inside the guardrails (no diagnosis, no medical advice, no softening danger). A question of theirs mid framework holds the step without spending its one more attempt (`their_question`). The base prompt's line cap went 130 to 138 for these rules.
+- **A stated conclusion at the last step.** Thought Reframe and ABCDE state what the person's words establish instead of "Putting those together, what would you say is true about this?"; a reply asking nothing at the last step is recorded as resolved. Thought Reframe's abstract asks were rewritten.
+- **One body question.** The ending asks where they feel it, with the place buttons, never "what do you notice" first; a place already named goes straight to its practice; no place gets one plainer try; "nothing", a decline or no place twice gets the decline line and the two choices, set in code. The twelve practices lost their claims about bodies and their filler.
+- **It did not help, so Mani stops.** A `worse` or `unchanged` answer to the practice gets "This didn't help, so I'm going to stop here." with Chat More and Go to Library, no question and no exercise; the outcome row is still written. No exercise follows a body route that gave no practice either.
+
+No schema change; the OpenAPI schema is byte identical to `main`. `pytest` 1519 passed, 4 skipped, integration running. Content changed, so hosted needs `scripts/seed.py` after deploy. Open: muhammad's Direct replay of her conversation in chat-tester (spec 0011, AC-17); telling Lolly which rejected lines were her own documents.
+
+## 2026-10-06, main model moved to GPT-6 Luna
+
+muhammad's call, on cost: $0.10 / $0.50 per million tokens against Gemini 3.8 Flash's $0.75 / $3.75. Measured on 43 local Gemini turns (8,522 tokens in, 237 out on average, 22 turns a conversation) that is about $0.021 a conversation against $0.160, before medium reasoning adds output. Route: `azure`, `zdr: true` (Azure is on OpenRouter's zero-retention list for this model), `require_parameters: true`, no fallback; LangChain sends `max_completion_tokens`, which Azure lists, and no temperature. Reasoning effort is `medium`, raised from `low`. Seeded locally; `pytest` 1519 passed, 4 skipped. Not yet run on the real model, so tone, schema validity, latency and real cost per turn are unmeasured. Open: the exercise pick inherits `medium` but keeps the 200-token default (`DEFAULT_EXERCISE_MAX_TOKENS`), which reasoning may use up, leaving the pick on the first candidate; hosted needs `scripts/seed.py`.

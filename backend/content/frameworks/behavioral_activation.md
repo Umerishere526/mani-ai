@@ -1,7 +1,7 @@
 ---
 id: behavioral_activation
 name: Behavioral Activation
-summary: "These questions help you pick one small thing to start with and when to do it."
+summary: "We look at what you've stopped doing, pick one small thing you could do, and decide when you'll do it."
 display_order: 3
 phases: [offering, stopped, matters, choose, manageable, begin, barrier]
 activation:
@@ -106,7 +106,10 @@ stages:
   stopped:
     purpose: "Identify the activity, routine, connection, responsibility, or act of care the user has stopped or is avoiding."
     listen_for: "What the user has stopped, delayed, canceled, or avoided."
-    ready_when: "What the user has stopped or is avoiding is named. If several, the user chooses which one."
+    ready_when: >-
+      What the user has stopped or is avoiding is named. If several, the user chooses which one.
+      What they said before they accepted counts, including the thing they stopped doing the offer
+      was built on: when it already gives this, the step is done and is not asked.
     boundaries:
       - "must not decide what the user should restart"
       - "must not label the user as withdrawn or unmotivated"

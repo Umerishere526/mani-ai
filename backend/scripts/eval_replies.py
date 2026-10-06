@@ -28,13 +28,9 @@ from mani.errors import ServiceError  # noqa: E402
 from mani.llm.chain import REASONING_EFFORTS  # noqa: E402
 from mani.models.rows import SupportStyle, TechniqueOutcome  # noqa: E402
 from scripts import model_trial  # noqa: E402
-from scripts.seed import FRAMEWORKS_DIR, parse_framework  # noqa: E402
 from tests.evals import validators  # noqa: E402
 
 SCENARIOS = pathlib.Path(__file__).with_name("eval_conversations.yaml")
-
-# What each framework is called, read from the content so the check never lists them itself.
-FRAMEWORK_NAMES = [parse_framework(p)["name"] for p in sorted(FRAMEWORKS_DIR.glob("*.md"))]
 
 # Every eval user is created fresh under this domain, so none of them carries another run's
 # threads or memory, and they can be found and removed afterwards.
@@ -311,7 +307,7 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
         said = " ".join(e.message for e in exchanges[: index + 1] if e.chat == exchange.chat)
         findings += validators.check(exchange.reply, said)
         findings += validators.style_findings(exchange.reply, style.value)
-        findings += validators.says_framework(exchange.reply, FRAMEWORK_NAMES)
+        findings += validators.says_framework(exchange.reply)
         findings += _rephrase_findings(exchange)
         findings += validators.question_findings(exchange.reply)
         if exchange.finding:
