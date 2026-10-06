@@ -23,6 +23,12 @@ activation:
     - "I'm so angry I'm about to do something stupid."
     - "I keep typing and deleting and I'm about to hit send."
     - "I want to quit today, right now, before I change my mind."
+    # How people actually open, in a few words. A short opener matched no long
+    # exemplar closely enough to clear the bar, so the framework was never reached.
+    - "I am about to do something I'll regret."
+    - "I'm panicking."
+    - "I'm furious right now."
+    - "I can't hold it together."
   to_find_out:
     - "what they are about to do, or whether they are panicked right now with no action in view"
     - "whether it has already happened"

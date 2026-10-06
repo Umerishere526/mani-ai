@@ -29,8 +29,8 @@ TOPIC_CHANGE = 0.55
 # conversation and a one-message one were indistinguishable. Offer timing is the cadence in
 # offer.py instead, which is what the client specified anyway.
 
-# How many of their messages are read for routing. Not four, and not recency-weighted: the
-# old router's weights were a lexical trick, and averaging unrelated messages in embedding
+# How many of their recent messages are read for routing. Not four, and not recency-weighted:
+# the old router's weights were a lexical trick, and averaging unrelated messages in embedding
 # space blurs both. Two keeps the previous message's context without the drift.
 WINDOW = 2
 
@@ -54,12 +54,21 @@ class Candidate:
     time_critical: bool = False
 
 
+# How many frameworks the shortlist names. Three is what a person's opening line can plausibly
+# be about; past that the things they have in common are too general to ask a question from.
+SHORTLIST = 3
+
+
 @dataclass(frozen=True)
 class Routing:
     status: RouteStatus
     candidates: tuple[Candidate, ...]
     topic_changed: bool = False
     query_text: str = ""
+    # The nearest few, whatever the status, ranked. `candidates` is what may be acted on;
+    # this is what the conversation looks like it might be about, which is a different
+    # question and the one that decides what is worth asking next.
+    nearest: tuple[Candidate, ...] = ()
 
     @property
     def top(self) -> Candidate | None:
@@ -70,7 +79,18 @@ NO_MATCH = Routing(status=RouteStatus.NO_MATCH, candidates=())
 
 
 def _query(messages: list[str]) -> str:
-    return "\n".join(t.strip() for t in messages[-WINDOW:] if t.strip())
+    """Their opening line and their most recent messages, in the order they said them.
+
+    The opening is what names the situation, and a window of the last two alone dropped it by
+    the third turn: a conversation that opened "I am depressed" routed to behavioral
+    activation twice and then wandered as soon as those words scrolled out, which is how a
+    conversation reached its end without ever being offered anything (muhammad, 2026-10-06).
+    Deduplicated, so the first two turns are not the opening twice.
+    """
+    said = [t.strip() for t in messages if t.strip()]
+    if not said:
+        return ""
+    return "\n".join(dict.fromkeys([said[0], *said[-WINDOW:]]))
 
 
 def route(
@@ -126,14 +146,21 @@ def route(
     second = ranked[1][1] if len(ranked) > 1 else 0.0
     margin = best - second
 
-    if best < FLOOR:
-        return Routing(RouteStatus.NO_MATCH, (), query_text=query)
-
     def candidate(framework_id: str, score: float, gap: float) -> Candidate:
         return Candidate(framework_id, score, gap)
 
+    # Carried whatever the status, including no match: "I am in pain" names no framework but
+    # the nearest few are what it might be about, which is what decides the next question.
+    nearest = tuple(candidate(fid, score, best - score) for fid, score in ranked[:SHORTLIST])
+
+    if best < FLOOR:
+        return Routing(RouteStatus.NO_MATCH, (), query_text=query, nearest=nearest)
+
     if best >= BAR and margin >= MARGIN:
-        return Routing(RouteStatus.MATCH, (candidate(best_id, best, margin),), query_text=query)
+        return Routing(
+            RouteStatus.MATCH, (candidate(best_id, best, margin),),
+            query_text=query, nearest=nearest,
+        )
 
     if best >= BAR:
         tied = tuple(
@@ -141,8 +168,9 @@ def route(
             for fid, score in ranked
             if best - score < MARGIN
         )
-        return Routing(RouteStatus.AMBIGUOUS, tied, query_text=query)
+        return Routing(RouteStatus.AMBIGUOUS, tied, query_text=query, nearest=nearest)
 
     return Routing(
-        RouteStatus.WEAK_MATCH, (candidate(best_id, best, margin),), query_text=query
+        RouteStatus.WEAK_MATCH, (candidate(best_id, best, margin),),
+        query_text=query, nearest=nearest,
     )

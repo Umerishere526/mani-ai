@@ -437,6 +437,13 @@ def build(
         lines.append(f"action: {decision.action.value}")
         if decision.action is OfferAction.CLARIFY and decision.separates_as_text:
             lines.append(f"separates: {decision.separates_as_text}")
+        if decision.action is OfferAction.ASSESS and decision.to_find_out:
+            # What the nearest sets of questions still need to know. The model picks the one
+            # worth asking and the words for it; this is never a list to work through, and
+            # the framework ids it came from are not here, so none can be echoed.
+            lines.append(
+                "to_find_out: " + "; ".join(decision.to_find_out)
+            )
 
     if skipped:
         # They passed the question over. The step is already being left, so the reply must not

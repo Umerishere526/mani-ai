@@ -98,8 +98,15 @@ def test_a_provider_failure_is_no_match_not_an_exception(index):
     assert sr.route(["I keep putting it off"], index=index, embedder=fails).status is sr.RouteStatus.NO_MATCH
 
 
-def test_no_vectors_is_no_match_not_a_crash():
-    assert sr.route(["anything"], index=None).status is sr.RouteStatus.NO_MATCH
+def test_no_vectors_is_no_match_not_a_crash(monkeypatch):
+    """A missing vectors file degrades to "keep talking" rather than failing the turn.
+
+    `index=None` cannot express this on its own: it is the parameter's own default, so it
+    means "load the shipped file", and the test passed only while that file happened to
+    match nothing. The absence is what has to be simulated.
+    """
+    monkeypatch.setattr(sr.vectors, "load", lambda *a, **kw: None)
+    assert sr.route(["anything"]).status is sr.RouteStatus.NO_MATCH
 
 
 @pytest.mark.parametrize("messages", [[], [""], ["   "]])
@@ -110,15 +117,31 @@ def test_an_empty_message_routes_nowhere(messages, index):
     assert sr.route(messages, index=index, embedder=explode).status is sr.RouteStatus.NO_MATCH
 
 
-def test_only_the_last_messages_are_read(recorded, index):
-    """Older messages are context, not a request: the query is the recent window, so an
-    older unrelated message does not change where a two-message case routes."""
-    case = next(
-        c for c in recorded["cases"]
-        if c["expected"] == "structured_problem_solving" and len(c["messages"]) == sr.WINDOW
+def test_the_query_is_their_opening_and_their_most_recent_messages(index):
+    """The opening line names the situation, so it is always read: a window of the last two
+    alone dropped it by the third turn and the conversation wandered. The middle is left out,
+    so the query stays about what they came with and what they are saying now.
+    """
+    said = ["I am depressed", "it started after the breakup", "I keep replaying it", "yeah"]
+    assert sr._query(said) == "I am depressed\nI keep replaying it\nyeah"
+    # Nothing is repeated while the conversation is shorter than the window.
+    assert sr._query(["I am depressed"]) == "I am depressed"
+    assert sr._query(["I am depressed", "since the breakup"]) == (
+        "I am depressed\nsince the breakup"
     )
-    with_history = ["we talked about my sister last week"] + case["messages"]
-    assert route(with_history, recorded, index).top.framework_id == "structured_problem_solving"
+
+
+def test_an_unrelated_opening_does_not_take_over_a_clear_conversation(recorded, index):
+    """The opening is read, so it dilutes - it took this case from 0.81 to 0.58 - but a
+    conversation that clearly points somewhere still routes there with room to spare."""
+    messages = [
+        "we talked about my sister last week",
+        "I am behind on everything and do not know where to begin",
+        "work, my landlord, and a family thing",
+    ]
+    result = route(messages, recorded, index)
+    assert result.status is sr.RouteStatus.MATCH
+    assert result.top.framework_id == "structured_problem_solving"
 
 
 def test_routing_is_deterministic(recorded, index):

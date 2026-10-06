@@ -968,3 +968,25 @@ def test_the_question_that_tells_two_sets_apart_is_recognised_in_manis_own_words
         content=said, created_at=NOW,
     )
     assert context.asked_which_fits([message]) is asked
+
+
+def test_an_assessment_turn_carries_what_is_unknown_never_the_framework_ids():
+    """The model is given what to find out, in the frameworks' own words, so its question
+    moves toward a real fit. The ids it came from never appear: it could echo one."""
+    from mani.chat.offer import Action, Decision
+
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        decision=Decision(
+            Action.ASSESS,
+            shortlist=("act_choice_point", "behavioral_activation"),
+            to_find_out=(
+                "what part of the situation they cannot change or control",
+                "what they have stopped doing or are avoiding",
+            ),
+        ),
+    )
+    assert "action: assess" in block
+    assert "what part of the situation they cannot change" in block
+    assert "act_choice_point" not in block
+    assert "behavioral_activation" not in block
