@@ -1,10 +1,12 @@
-# Dark forest-green theme for the Mani chat tester. Local tooling only - not shipped
-# anywhere a client sees, so this can be as opinionated as the person running it likes.
+# Light theme for the Mani chat tester: near-white surfaces, a muted green accent, Inter for
+# text and Plus Jakarta Sans for headings. Local tooling only - not shipped anywhere a client
+# sees, so this can be as opinionated as the person running it likes.
 [theme]
-base = "dark"
-primaryColor = "#2F9E5C"
-backgroundColor = "#08150F"
-secondaryBackgroundColor = "#122A1E"
-textColor = "#E7F5EC"
-font = "sans serif"
-borderColor = "#1F4A33"
+base = "light"
+primaryColor = "#1F7A5A"
+backgroundColor = "#FAFBFA"
+secondaryBackgroundColor = "#EEF3F0"
+textColor = "#1C2621"
+borderColor = "#D5E0DA"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap, sans-serif"
+headingFont = "Plus Jakarta Sans:https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&display=swap, sans-serif"
