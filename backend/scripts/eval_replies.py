@@ -9,6 +9,7 @@ import logging
 import os
 import pathlib
 import re
+import statistics
 import sys
 import time
 import uuid
@@ -23,7 +24,10 @@ from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS  # noqa: E402
 from mani.auth.jwt import Claims  # noqa: E402
 from mani.chat import orchestrator  # noqa: E402
 from mani.db import pool, profiles, threads  # noqa: E402
+from mani.errors import ServiceError  # noqa: E402
+from mani.llm.chain import REASONING_EFFORTS  # noqa: E402
 from mani.models.rows import SupportStyle, TechniqueOutcome  # noqa: E402
+from scripts import model_trial  # noqa: E402
 from scripts.seed import FRAMEWORKS_DIR, parse_framework  # noqa: E402
 from tests.evals import validators  # noqa: E402
 
@@ -49,12 +53,14 @@ class Exchange:
 
     `repair_notes` is read from the same `logger.info` call orchestrator.py already makes
     after `repairs.apply()` - captured, not recomputed, so this is what production actually
-    did on this turn, not a second opinion on it.
+    did on this turn, not a second opinion on it. `choice_notes` is the same for how the
+    framework was chosen: the fact ids, pick and leading framework, and any redraft reason.
     """
 
     message: str
     reply: str
     repair_notes: list[str] = field(default_factory=list)
+    choice_notes: list[str] = field(default_factory=list)
     offered: bool = False
     buttons: list[str] = field(default_factory=list)
     # The framework row after this turn, as the database holds it: (id, outcome, phase).
@@ -63,20 +69,33 @@ class Exchange:
     finding: str | None = None
     # The message was a tap on a button Mani had offered, not something the person typed.
     tapped: bool = False
+    # Wall time of the whole turn, as the person waits for it: every model call in it,
+    # including a redraft or a retry.
+    seconds: float = 0.0
+
+
+# The orchestrator's lines about how the framework was chosen. Fact ids and authored reason
+# text only: neither carries the person's words.
+_CHOICE = re.compile(r"^thread \S+ (facts |redrafting: )")
 
 
 class _RepairNoteCapture(logging.Handler):
-    """Collects the repair notes orchestrator.py already logs. Changes nothing it does."""
+    """Collects the repair notes and framework choice lines orchestrator.py already logs.
+    Changes nothing it does."""
 
     def __init__(self) -> None:
         super().__init__(level=logging.INFO)
         self.notes: list[str] = []
+        self.choices: list[str] = []
 
     def emit(self, record: logging.LogRecord) -> None:
-        if record.name == "mani.chat.orchestrator" and record.getMessage().startswith(
-            "repaired reply"
-        ):
-            self.notes.append(record.getMessage())
+        if record.name != "mani.chat.orchestrator":
+            return
+        message = record.getMessage()
+        if message.startswith("repaired reply"):
+            self.notes.append(message)
+        elif _CHOICE.match(message):
+            self.choices.append(message)
 
 
 async def _fresh_user(scenario: str, style: SupportStyle) -> str:
@@ -188,16 +207,32 @@ async def _run_one(
                 message = line
 
             capture.notes.clear()
-            async with pool.as_user(claims) as conn:
-                turn = await orchestrator.send(conn, claims, thread.id, message)
+            capture.choices.clear()
+            started = time.perf_counter()
+            try:
+                async with pool.as_user(claims) as conn:
+                    turn = await orchestrator.send(conn, claims, thread.id, message)
+            except ServiceError as failure:
+                # A refused route, a rate limit or a timeout: reported as a failed turn, never
+                # retried here, and the conversation stops where it broke.
+                exchanges.append(
+                    Exchange(
+                        message=message, reply="", choice_notes=list(capture.choices),
+                        chat=chat, tapped=tapped, seconds=time.perf_counter() - started,
+                        finding=f"turn failed ({failure.category.value}): {failure}",
+                    )
+                )
+                break
+            seconds = time.perf_counter() - started
             last_prompts = list(turn.prompts)
             exchanges.append(
                 Exchange(
                     message=message, reply=turn.content, repair_notes=list(capture.notes),
+                    choice_notes=list(capture.choices),
                     offered=any(p.technique for p in turn.prompts),
                     buttons=[p.label for p in turn.prompts],
                     framework=await _framework_after(claims, thread.id),
-                    chat=chat, finding=finding, tapped=tapped,
+                    chat=chat, finding=finding, tapped=tapped, seconds=seconds,
                 )
             )
     finally:
@@ -290,7 +325,7 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
         )
     for index, exchange in enumerate(exchanges):
         state = exchange.framework
-        if state and state[1] == "accepted" and state[2] not in (None, "offering", "closing") \
+        if state and state[1] == "accepted" and state[2] not in (None, "offering") \
                 and not str(state[2]).startswith("somatic"):
             said = " ".join(e.message for e in exchanges[: index + 1] if e.chat == exchange.chat)
             findings += validators.names_their_situation(exchange.reply, said)
@@ -324,8 +359,7 @@ def _first_offer(exchanges: list[Exchange]) -> str | None:
     if found is None:
         return None
     index, exchange = found
-    closest = "*" if "Try the closest fit" in exchange.buttons else ""
-    return f"{index}:{exchange.framework[0] if exchange.framework else '?'}{closest}"
+    return f"{index}:{exchange.framework[0] if exchange.framework else '?'}"
 
 
 async def main() -> int:
@@ -333,7 +367,36 @@ async def main() -> int:
     parser.add_argument("--user", help="run every scenario as this existing user instead of a fresh one each")
     parser.add_argument("--verbose", action="store_true", help="print every reply")
     parser.add_argument("--scenario", help="run only the scenario with this name")
+    parser.add_argument(
+        "--style", choices=[s.value for s in SupportStyle],
+        help="run only this conversation style (each paid run costs the client's tokens)",
+    )
+    trial_flags = parser.add_argument_group(
+        "model trial",
+        "Try another model in this process only; seeded prompts and the database are untouched. "
+        "It is always served on --provider with zero data retention, and a refusal stops the run.",
+    )
+    trial_flags.add_argument("--model", help="the model to try, for chat, titles and the exercise pick")
+    trial_flags.add_argument("--provider", help="the OpenRouter endpoint to pin it to, e.g. google-vertex/global")
+    trial_flags.add_argument("--reasoning-effort", choices=REASONING_EFFORTS)
+    trial_flags.add_argument("--max-tokens", type=int, help="the room for a chat reply, thinking included")
+    trial_flags.add_argument("--exercise-max-tokens", type=int, help="the room for the exercise pick")
+    for name in ("input", "cached-input", "output"):
+        trial_flags.add_argument(
+            f"--price-{name}", type=float, help=f"dollars per million {name.replace('-', ' ')} tokens"
+        )
     args = parser.parse_args()
+    prices = [args.price_input, args.price_cached_input, args.price_output]
+    if any(p is not None for p in prices) and any(p is None for p in prices):
+        parser.error("give all three of --price-input, --price-cached-input and --price-output, or none")
+    try:
+        trial = model_trial.from_flags(
+            model=args.model, provider=args.provider, reasoning_effort=args.reasoning_effort,
+            max_tokens=args.max_tokens, exercise_max_tokens=args.exercise_max_tokens,
+            prices=model_trial.Prices(*prices) if prices[0] is not None else None,
+        )
+    except ValueError as refused:
+        parser.error(str(refused))
 
     scenarios = yaml.safe_load(SCENARIOS.read_text())
     if args.scenario:
@@ -348,38 +411,66 @@ async def main() -> int:
     await pool.open_pool()
 
     created: list[str] = []
-    for style in SupportStyle:
-        for scenario in scenarios:
-            user_id = args.user or await _fresh_user(scenario["name"], style)
-            if not args.user:
-                created.append(user_id)
-            exchanges = await _run_one(user_id, style, scenario["turns"], scenario.get("start_in"))
-            findings = _score(exchanges, style, scenario)
-            by_style.setdefault(style.value, []).extend(e.reply for e in exchanges)
-            offers.setdefault(style.value, []).append(_first_offer(exchanges))
-            failures += len(findings)
+    restore = model_trial.install(trial) if trial else None
+    try:
+        for line in model_trial.header(trial, await model_trial.instructions_in_force()):
+            print(line)
+        stopped = False
+        for style in [SupportStyle(args.style)] if args.style else SupportStyle:
+            for scenario in scenarios:
+                user_id = args.user or await _fresh_user(scenario["name"], style)
+                if not args.user:
+                    created.append(user_id)
+                exchanges = await _run_one(user_id, style, scenario["turns"], scenario.get("start_in"))
+                findings = _score(exchanges, style, scenario)
+                by_style.setdefault(style.value, []).extend(e.reply for e in exchanges)
+                offers.setdefault(style.value, []).append(_first_offer(exchanges))
+                failures += len(findings)
 
-            print(f"\n=== {scenario['name']} / {style.value} ===")
-            if args.verbose:
-                for exchange in exchanges:
-                    print(f"  > {exchange.message}\n  < {exchange.reply}")
-                    state = exchange.framework
-                    print(f"    [chat {exchange.chat} | framework {state[0]} {state[1]} {state[2]}]"
-                          if state else f"    [chat {exchange.chat} | no framework]")
-                    if exchange.buttons:
-                        print(f"    [buttons] {exchange.buttons}")
-                    if exchange.offered:
-                        print("    [offered a framework]")
-                    if exchange.repair_notes:
-                        print(f"    [repair] {'; '.join(exchange.repair_notes)}")
-                    print()
-            for finding in findings:
-                print(f"  FAIL {finding}")
-            if not findings:
-                print("  clean")
+                print(f"\n=== {scenario['name']} / {style.value} ===")
+                if args.verbose:
+                    for exchange in exchanges:
+                        print(f"  > {exchange.message}\n  < {exchange.reply}")
+                        state = exchange.framework
+                        print(f"    [chat {exchange.chat} | framework {state[0]} {state[1]} {state[2]}]"
+                              if state else f"    [chat {exchange.chat} | no framework]")
+                        if exchange.buttons:
+                            print(f"    [buttons] {exchange.buttons}")
+                        if exchange.offered:
+                            print("    [offered a framework]")
+                        for note in exchange.choice_notes:
+                            print(f"    [choice] {note}")
+                        if exchange.repair_notes:
+                            print(f"    [repair] {'; '.join(exchange.repair_notes)}")
+                        print(f"    [time] {exchange.seconds:.1f}s")
+                        print()
+                for finding in findings:
+                    print(f"  FAIL {finding}")
+                if not findings:
+                    print("  clean")
 
-    await _remove_users(created)
-    await pool.close_pool()
+                # Read before the users are removed: removing them removes their cost rows.
+                seconds = [e.seconds for e in exchanges if e.seconds]
+                if seconds:
+                    print(f"  turn time: median {statistics.median(seconds):.1f}s, "
+                          f"longest {max(seconds):.1f}s over {len(seconds)} turns")
+                figures = await model_trial.figures_for(user_id, trial)
+                print(f"  calls: {figures.calls}, schema failures: {figures.schema_failures}")
+                for figure_line in figures.lines:
+                    print(figure_line)
+
+                if trial and any(e.finding and e.finding.startswith("turn failed") for e in exchanges):
+                    print("\nstopped: a turn failed on the trial route; nothing was retried or rerouted")
+                    stopped = True
+                    break
+            if stopped:
+                break
+    finally:
+        # A stopped or crashed run still takes out the people and cost rows it made.
+        if restore:
+            restore()
+        await _remove_users(created)
+        await pool.close_pool()
     print("\nstyle         replies  avg chars  asks a question  opens with I  first offer at message")
     for name, replies in by_style.items():
         n = len(replies) or 1

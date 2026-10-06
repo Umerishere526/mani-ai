@@ -1,7 +1,7 @@
 ---
 id: somatic
 name: somatic
-description: Shared somatic route. seed.py appends these two stages to every framework's phases and stages (after `closing`). Not a prompt row, not a composer layer.
+description: Shared somatic route. seed.py appends these two stages to every framework's phases and stages (after the last stage). Not a prompt row, not a composer layer.
 ---
 
 # Somatic route (seed-merge source)
@@ -18,17 +18,22 @@ the framework at any point in this route.
 ```yaml
 stages:
   somatic_checkin:
-    purpose: "Check in with the body after the framework, without summarizing what was done. Ask the check-in question exactly as written, once; Mani's reflection of their last answer comes before it. If their closing answer already points to an action they are going to take, skip the check-in, support that action, and let the handoff capsules follow."
+    purpose: "Conclude the framework in one short message, then check in with the body. The conclusion is one or two short sentences in the person's own words: it says back what they last decided or said, and may say that what they feel is okay. That line is optional and is left out of most conclusions. The check-in question is added after it exactly as written, once. Do not summarize the framework."
     listen_for: "Whether they name a change in the body, and whether they name where they feel it."
-    ready_when: "They have answered the check-in, or declined it, or were skipped for action-readiness."
+    ready_when: "They have answered the check-in, or declined it."
     boundaries:
-      - "must not summarize the framework before asking"
-      - "must not ask the check-in more than once"
+      - "must not summarize the framework or name its steps; it may say back up to two things they told you they know, in their words"
+      - "must not tell them what those things mean about them or their ability, or what they should conclude from them"
+      - "must ask no question of your own in the conclusion: the check-in is the only question in the message, and it is asked once"
+      - "must not give advice, choose an action or a value for them, or add to the plan they made"
+      - "must not name a feeling they did not name; what they feel may be called okay without naming one"
+      - "must not say the framework worked, that the thought, feeling or situation has changed, that they have calmed down, or that a thought is fairer or a plan is manageable or realistic, unless they used those words"
+      - "must not require them to feel differently or to act in order to be done"
+      - "if the last stage got no usable answer, say that it is okay not to have it yet, do not write that answer for them, and you may say they do not have to settle it today"
+      - "must not open with the words Mani opened its last two messages with, and must not start with 'It sounds like'"
       - "must not add a feeling or a body sensation the user did not name"
       - "receive their answer and check it back once before the practice (\"Your thoughts feel slower, but there is still some tightness in your chest. Does that feel right?\")"
     if_unclear:
-      - when: "their closing answer already names an action they are going to take"
-        reply: "It sounds like you're ready to act on that. We can skip the body check-in. Would you like to keep chatting or go to the Library?"
       - when: "they agree to notice but have not said what they notice"
         reply: "What do you notice in your body?"
       - when: "the user declines the check-in"
@@ -53,13 +58,13 @@ stages:
         prompts: ["Chest", "Head", "Stomach", "Somewhere else"]
       - when: "they feel it in the chest"
         reply:
-          supportive: "This makes sense given what you're dealing with. The chest is often where anxiety shows up when your body thinks something is at risk. Let's do something brief together. Place one hand on your chest. Breathe in through your nose for four. Breathe out slowly through your mouth for six. Do that three times. You do not need to change anything else. Just notice. How do you feel now?"
-          direct: "The chest is often where anxiety shows up first. Let's do something brief together. Place one hand on your chest. Breathe in through your nose for four. Breathe out slowly through your mouth for six. Do that three times. Just notice the sensation. How do you feel now?"
+          supportive: "The chest is often where the body holds tension when it thinks something is at risk. Let's do something brief together. Place one hand on your chest. Breathe in through your nose for four. Breathe out slowly through your mouth for six. Do that three times. You do not need to change anything else. Just notice. How do you feel now?"
+          direct: "The chest is often where the body holds tension first. Let's do something brief together. Place one hand on your chest. Breathe in through your nose for four. Breathe out slowly through your mouth for six. Do that three times. Just notice the sensation. How do you feel now?"
           reflective: "When it shows up in your chest, that's often where the body reacts to perceived risk.\nLet's observe it for a moment.\nPlace one hand on your chest.\nBreathe in through your nose for four.\nBreathe out slowly through your mouth for six.\nDo that three times.\nJust notice.\nHow do you feel now?"
       - when: "they feel it in the head"
         reply:
-          supportive: "When anxiety sits in the head, it usually shows up as racing or looping thoughts. Let's quiet that for a moment. Press your feet into the floor. Name three things you can see. Name two things you can hear. Take one slow breath out. You are not trying to stop your thoughts. You are giving your mind something real to focus on. How do you feel now?"
-          direct: "When anxiety sits in the head, it usually shows up as looping thoughts. Let's quiet that for a moment. Press your feet into the floor. Name three things you can see. Name two things you can hear. Take one slow breath out. Give your mind something real to focus on. How do you feel now?"
+          supportive: "When your head is spinning, it usually shows up as racing or looping thoughts. Let's quiet that for a moment. Press your feet into the floor. Name three things you can see. Name two things you can hear. Take one slow breath out. You are not trying to stop your thoughts. You are giving your mind something real to focus on. How do you feel now?"
+          direct: "When your head is spinning, it usually shows up as looping thoughts. Let's quiet that for a moment. Press your feet into the floor. Name three things you can see. Name two things you can hear. Take one slow breath out. Give your mind something real to focus on. How do you feel now?"
           reflective: "When it shows up in your head, it often comes as racing or looping thoughts.\nPress your feet into the floor.\nName three things you can see.\nName two things you can hear.\nTake one slow breath out.\nNotice where your attention goes.\nHow do you feel now?"
       - when: "they feel it in the stomach"
         reply:

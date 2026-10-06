@@ -15,7 +15,7 @@ History (how the port went, what was fixed from review, old measurements) is in
 - Database: 10 migrations, 15 tables (8 `public`, 7 `admin`), 6 frameworks and 5 prompts seeded.
   `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
   private `exercises` bucket (`scripts/seed_exercises.py`). A hosted project does not exist yet.
-- Models: `google/gemini-3.1-flash-lite` for chat and `openai/gpt-oss-120b` for summaries (`mani/config.py`).
+- Models: `google/gemini-3.8-flash` for chat, titles and the exercise pick (low reasoning effort, no temperature sent, pinned to Google Vertex with zero data retention, `mani_base.md`); `google/gemini-3.1-flash-lite` for summaries and memory folding; `openai/whisper-large-v3` for speech to text (`mani/config.py`, `mani/stt.py`). `openai/gpt-oss-120b` is only the fallback for a summary prompt with no model.
 - Web and mobile do not call this API yet; they run on placeholder data.
 
 ## What the service does
@@ -28,22 +28,35 @@ History (how the port went, what was fixed from review, old measurements) is in
   1. The deterministic safety screen (`safety.py`) runs before anything else. An explicit statement locks
      the thread with no model call. An indirect one (including passive ideation and "pills in my hand")
      is a concern: it suspends frameworks and offers without locking.
-  2. The router (`router.py`) shortlists frameworks from phrases over their last four messages. It is a hint, never a requirement. When the nearest fit falls due, the top of the shortlist carries its offer wording even if the router is not confident of it.
+  2. An action about to happen (`router.urgent`, phrases over their last two messages) puts DBT STOP's offer
+     wording in `[ctx]` before the call. Every other choice is made after the draft, from its facts (step 5).
   3. `context.py` builds the `[ctx]` block: style, offer timing, the stage in progress, and `their_last`
      (a short reply of three words or fewer, with `answering`, the question Mani last asked; a correction; or a
      request only to be heard).
-  4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,
-     `heading_toward`, `offer_fit`, then `text`. The order is deliberate.
-  5. `redraft.py` may ask once more: a feeling word or size phrase the person never used, an offer before it is
-     allowed or one their words rule out, or an offer that is due and missing. The notes never ask for a question.
-     A repeated question and a reply with no question go through as drafted. ADR-006, ADR-007, ADR-012.
+  4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `facts`,
+     `style`, then `text`. The order is deliberate. `facts` are ids from the client's selection table, each with
+     the person's own words; one counts only when those words are in one of their messages (ADR-014, spec 0005).
+  4a. What they said before accepting is not asked again (ADR-015). The facts kept on the offer turn are stored
+     with their words on the technique row (`known`, migration 012). Accepting, by tap or typed yes, skips the
+     stages those facts answer (`answered_by` in the framework file; only ABCDE's `activate` and `belief` today),
+     and `[ctx]` carries `already_told`. A bare "what?" or "huh" is read as not following, and the rephrase
+     turn is given the stage's authored `ask_simpler`. Scripted phrases ("It sounds like", "I hear you") are a
+     redraft reason.
+  5. `router.choose` applies each framework's `fits_when` and six tie rules to the first draft's facts: the pick,
+     or when nothing fits, the framework the facts point to most and what it still needs. `redraft.py` may ask once
+     more: a feeling word or size phrase the person never used, or an offer that is not allowed yet, ruled out,
+     not the pick, or made when nothing fully fits, or a pick still unoffered from the fourth message. An offer still wrong after
+     the redraft is removed. A repeated question and a reply with no question go through as drafted. ADR-006,
+     ADR-012, ADR-014.
   6. `repairs.py` corrects what remains, in code: script leakage, buttons, an early offer. A second draft that still
      uses a feeling word they never used is logged and left as drafted, never trimmed.
   7. Crisis, the reply, the framework state and the summary are written together.
 - **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): six, each reviewed against the
   client's specification. A confident offer may come from the person's second message (third for ABCDE,
-  Thought Reframe and ACT); the nearest fit is due by the fourth, with "Try the closest fit" beside
-  "Keep chatting". The shared body check-in and practice come from `content/prompts/somatic.md`.
+  Thought Reframe and ACT), and only for a framework the facts fully fit; there is no nearest offer, and
+  until something fits Mani keeps asking about what is missing. DBT STOP covers
+  someone panicked right now as well as an action about to happen, with a `panic` branch on each stage
+  that is ours until the client signs it off. The shared body check-in and practice come from `content/prompts/somatic.md`.
   The body route is held in code (`orchestrator._body_route_step`): the check-in is asked once; whatever
   the person answers, the next reply asks where, with Chest / Head / Stomach / Somewhere else; "idk" asks
   again; a place gets the client's practice for that place and style, word for word, ending "How do you feel
@@ -64,7 +77,13 @@ History (how the port went, what was fixed from review, old measurements) is in
   and DBT STOP's five acting branches (`counted: true`). A redirect (safety, a framework that does not fit, the
   client's three lines) is not counted, and the code recognises it from the reply or Mani's message before it
   (`repairs.carries_redirect`); the model marks nothing. A second counted hold records the next stage
-  (`hold limit at <stage>`). 27 stages carry `if_earlier_missing`.
+  (`hold limit at <stage>`). 21 stages carry `if_earlier_missing`.
+  A framework has no closing stage (spec 0007, ADR-016). The reply to the last question stage is a short
+  conclusion the model writes under the rules in the `somatic_checkin` stage, then the client's fixed body
+  question, appended by `repairs.with_the_check_in` after every question sentence of the model's own is dropped.
+  The body check is always asked. ABCDE `balanced` and Thought Reframe `reframe` each carry one counted branch
+  for "I don't know" ("That is fine. What is one thing about this that you do know is true?"). Those two stages ask
+  "Putting those together, what would you say is true about this?", not for "a fairer way".
 - **Memory** (ADR-005): per person, folded from earlier chats by `mani/memory.py`; idle threads fold through
   `scripts/fold_idle_threads.py` or `GET /internal/cron/fold-summaries` behind `CRON_SECRET`.
 - **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). A completing framework picks one
@@ -117,10 +136,12 @@ The record is `mani-vault/Decisions/_Index.md`. In short:
   holds for a draft that needs no redraft.
 - **Offers follow Mani's confidence** (ADR-007). A reply asks at most one question and may ask none; ADR-012
   (proposed) replaced ADR-008's question in every reply.
+- **A framework is chosen from the facts the model states** (ADR-014, proposed): code applies the client's
+  selection table to them, and only a full fit is ever offered; the owed closest fit of ADR-007 is gone.
 - **Memory is per person** (ADR-005).
 - Settled without an ADR yet, listed at the foot of the index: OpenRouter only, asyncpg not PostgREST, the
   `public` and `admin` split, the `mani_service` role, three security definer write functions, the
-  deterministic safety screen as the only thing that locks a thread, in process routing, no streaming.
+  deterministic safety screen as the only thing that locks a thread, no streaming.
 
 ## Before it takes real traffic
 
@@ -156,6 +177,9 @@ Ordered by what breaks first.
 ## Open decisions for muhammad
 
 - Crisis resources, `PROTOCOLS` and `CLARIFICATION` wording (point 3 above).
+- Tell the client about ADR-016: the closing question is gone, each framework ends on a short conclusion and
+  the body check is always asked. The real model read of the endings (spec 0007 AC-8, 27 conversations) waits
+  for muhammad to say it may run.
 - Tell the client about ADR-007, which replaced their offer cadence, and have them read about five real
   Supportive and Reflective transcripts.
 - Tell the client about ADR-011: when a person asks Mani to pick, it offers one small draft step to accept
@@ -169,6 +193,9 @@ Ordered by what breaks first.
   one of the client's lines is unmeasured. Open follow up work in the spec: end or pause the framework on a safety
   branch instead of holding, four redirect branches whose reply is scenario wording and cannot be recognised, the
   "I misunderstood" line used as an uncounted rephrase, and no exit state for the "stop here" line.
+- Spec 0005 (row 8): the DBT STOP `panic` branch and the rule that panic does not take precedence over a full
+  Structured Problem Solving fit are ours; they are on the client sign off list. The choice depends on how well
+  the model fills `facts`, which no paid run has measured yet (AC-15 waits for muhammad's yes).
 - Spec 0004 (row 37), the model's safety flag now names a kind (`Crisis.category`, the screen's eight kinds plus `other`).
   A real kind pauses a running framework as before; `other` is treated as no flag; a missing or unknown kind pauses.
   Built and tested; measured on 38 authored messages: urge messages flagged 11 of 40 before and 0 of 40 after, risk
@@ -227,6 +254,15 @@ change to prompts, framework content or the offer rules, and compare with these.
 - Replies with no question before an offer: 1 of 39 on that chat (from 8 of 47).
 - Wrong framework offered early: Direct chose ACT or a plan for a colleague chat that wants ABCDE, until offers
   for ABCDE, Thought Reframe and ACT were made to wait for the third message (Direct then chose ABCDE 3 of 3).
+- Framework choice from facts (spec 0005), 2026-10-05, Supportive, one run each. First run: panic offered DBT
+  STOP at message 2, the manager chat ABCDE at 3, grief ACT at 3, the stress chat nothing by 4; but the model
+  invented fact ids in most replies. After the `fact` field named the ten ids: none invented; grief ACT at 4;
+  the stress chat got ACT at 3, because the model marked `cannot_control` from general pressure. With that
+  meaning tightened, three stress runs: ACT at 4, Structured Problem Solving as the nearest at 4, no offer. The
+  stress chat meets AC-15 in 1 of 3. After full fits only (AC-17): stress ACT in 3 of 3 from loosely marked
+  `cannot_control`, grief no offer (facts changed every turn), deadlines Behavioral Activation from a loosely
+  marked `cannot_begin` that the tie rules then preferred. The model's fact marking is the open problem, for
+  muhammad. Journal: framework-fit-from-facts-first-runs-2026-10-05.
 - Client style conversations, baseline taken 2026-10-04 with `scripts/eval_client_style.py` (three runs, model
   `google/gemini-3.1-flash-lite`, `mani_base` md5 `84627c5f`, commit `476edf0`; 36 conversations). This is the
   measurement Natural Mani (scope rows 33 to 35) is judged against:
@@ -285,3 +321,17 @@ change to prompts, framework content or the offer rules, and compare with these.
   ask one question no rephrase had two (was 20 of 54). muhammad read one transcript per framework: pass for all six.
 - Local Supabase answers on 54321 to 54324 on this machine, not the 5434x in `config.toml`. See
   `.claude/BACKEND.md`.
+
+## 2026-10-05, the idiot and concert chat replayed
+
+`scripts/eval_replies.py --scenario idiot_concert_direct --style direct`, `google/gemini-3.1-flash-lite`, 12 turns,
+two real runs (15 calls the second). Before the fixes: "What happened?" asked again after accepting, a "what?" was
+answered with a leading question that handed over the label "idiot". After: accepting a typed yes goes to the
+consequence stage, "what?" gets "Why do you believe that?", every framework question reads plain. Still open on this
+model: "It sounds like" survives the one redraft in some offers, restating before a question, and a closing question
+asked after "i don't know" at the balanced stage. The wider model choice is spec 0006.
+
+## 2026-10-05, main model moved to Gemini 3.8 Flash
+
+muhammad chose the switch without the spec 0006 measured run. Route: `google-vertex/global`, `zdr: true`, `require_parameters: true`, no fallback. The first call was refused (404, no endpoint) because Vertex lists no `temperature` parameter, so `mani_base.md` sets `temperature: null` and nothing is sent. Replay of the concert chat: 13 calls, no schema failures, median 4.9 s a turn (2.4 s on the lite model), 117k tokens in. Spec 0006's AC-5 to AC-7 (the twelve runs, cost per conversation, ADR) are not done. Summaries and memory folding are still on the lite model and a route without zero retention.
+

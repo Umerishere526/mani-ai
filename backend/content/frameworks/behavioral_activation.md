@@ -1,21 +1,24 @@
 ---
 id: behavioral_activation
 name: Behavioral Activation
-summary: "These questions help you identify what you have stopped doing and choose one realistic activity you can begin. By the end, you will have a specific, manageable action that helps you start moving forward again."
+summary: "These questions help you pick one small thing to start with and when to do it."
 display_order: 3
-phases: [offering, stopped, matters, choose, manageable, begin, barrier, closing]
+phases: [offering, stopped, matters, choose, manageable, begin, barrier]
 activation:
   central_indication: >-
     The user knows what they could do but cannot get themselves to begin - low mood,
     discouragement, or withdrawal has interrupted something that matters, and they need help
     selecting and beginning one manageable action, not a thought examined or a decision made.
+  # The facts that make this framework fit: every fact in one set (router.FACTS). Read by
+  # router.choose; the client's tie rules between frameworks are in router.TIE_RULES.
+  fits_when: [[cannot_begin], [low_mood]]
   to_find_out:
     - "what they have stopped doing or are avoiding"
     - "whether they know what they could do but cannot begin"
     - "what gets in the way of beginning"
     - "whether anything physical or medical explains it, or whether this is early grief (then not this)"
   # Said anywhere in the conversation, an offer of this framework is redrafted and then dropped:
-  # early grief is not the avoidance it treats. Whole phrases, matched as the signals are.
+  # early grief is not the avoidance it treats. Whole phrases, matched as whole words.
   never_offer_when_said:
     - "died"
     - "passed away"
@@ -29,7 +32,7 @@ activation:
     - "grief"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # router reads fits_when.
   appropriate_when:
     - "The user knows something they want or need to do"
     - "The user is having difficulty beginning"
@@ -55,39 +58,6 @@ activation:
     - "Fatigue with no identifiable avoidance pattern behind it - nothing they used to do and stopped, no trigger they are avoiding - which points to an undiagnosed medical cause (thyroid, anaemia, sleep, medication) rather than a Behavioral Activation case"
     - "The person cannot complete basic care, or their inactivity looks like an impairment that needs professional evaluation - activity planning is not the response, and they must never be told to push through a limitation"
     - "Acute grief in the period right after a loss - the withdrawal Behavioral Activation treats is avoidance of reminders and of life going on, not the ordinary work of mourning itself"
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "but i cannot start"
-    - "but i cannot begin"
-    - "in bed all day"
-    - "stopped answering"
-    - "keep avoiding the task"
-    # The open fragment, so "cannot make myself start", "begin", "get up" and "do anything"
-    # all match. The two specific forms it replaces left the commonest phrasing routing nowhere.
-    - "cannot make myself"
-  signals:
-    - "stopped cooking"
-    - "not been getting dressed"
-    - "stopped going outside"
-    - "kept up with anything"
-    - "no structure anymore"
-    - "ignored everyone's messages"
-    - "keep canceling plans"
-    - "speak to anyone"
-    - "stopped calling my family"
-    - "when i feel ready"
-    - "waiting to want to"
-    - "i have no motivation"
-    - "i will start tomorrow"
-  redirects:
-    - signal: "I do not know what I should do."
-      instead: structured_problem_solving
-    - signal: "I know what to do, but I am certain I will fail."
-      instead: thought_reframe
-    - signal: "I am about to send an angry message."
-      instead: dbt_stop
-    - signal: "I cannot change the situation, but I need to decide how to respond."
-      instead: act_choice_point
   distinctions:
     structured_problem_solving: >-
       Behavioral Activation when the user generally knows what they could do, beginning is the
@@ -141,6 +111,7 @@ stages:
         start_only: true
       - when: "they report an injury, severe or sudden physical symptoms, intoxication, or a medical condition as the reason"
         reply: "A physical symptom like that comes first, and I would not ask you to push through it. What would be most helpful right now?"
+    ask_simpler: "What have you stopped doing lately?"
     ask:
       supportive: "What have you stopped doing?"
       reflective: "What have you stopped doing?"
@@ -156,6 +127,7 @@ stages:
     if_earlier_missing:
       needs: stopped
       reply: "What is it about this that matters to you?"
+    ask_simpler: "Why is that important to you?"
     ask:
       supportive: "Why does this matter to you?"
       reflective: "Why does this matter to you?"
@@ -173,6 +145,7 @@ stages:
     if_earlier_missing:
       needs: stopped
       reply: "What is one small thing you would like to get back to?"
+    ask_simpler: "Which one would you start with?"
     ask:
       supportive: "Which one do you want to begin with?"
       reflective: "Which one do you want to begin with?"
@@ -190,10 +163,11 @@ stages:
     if_earlier_missing:
       needs: choose
       reply: "What is one small thing you could do today?"
+    ask_simpler: "What is a really small first step?"
     ask:
-      supportive: "What is the smallest version you could do?"
-      reflective: "What is the smallest version you could do?"
-      direct: "What is the smallest version you could do?"
+      supportive: "What is the smallest way you could start?"
+      reflective: "What is the smallest way you could start?"
+      direct: "What is the smallest way you could start?"
   begin:
     purpose: "Turn the activity into a specific action rather than a general intention."
     listen_for: "A specific time, cue, place, or starting condition."
@@ -206,6 +180,7 @@ stages:
     if_earlier_missing:
       needs: manageable
       reply: "When could you start on something small?"
+    ask_simpler: "When could you do it?"
     ask:
       supportive: "When will you do it?"
       reflective: "When will you do it?"
@@ -224,24 +199,11 @@ stages:
     if_earlier_missing:
       needs: manageable
       reply: "What might get in the way of starting?"
+    ask_simpler: "What could stop you from doing it?"
     ask:
-      supportive: "What could prevent you from beginning?"
-      reflective: "What could prevent you from beginning?"
-      direct: "What could prevent you from beginning?"
-  closing:
-    purpose: "Confirm completion in the user's own terms, without promising the plan will work or that the user will feel better."
-    boundaries:
-      - "must not promise the plan will work or that the user will feel better"
-      - "must not summarize the completed framework"
-      - "must not require the user to feel motivated to be done"
-      - "must not say the action feels manageable unless the user used similar language"
-    if_earlier_missing:
-      needs: manageable
-      reply: "Is there anything you would add before we finish?"
-    ask:
-      supportive: "You chose one action that feels manageable today. How is that sitting with you?"
-      reflective: "You chose one action without waiting for motivation. What changes when you approach it this way?"
-      direct: "You have one action, a starting point, and a response to the barrier. Is the plan realistic?"
+      supportive: "What might get in the way?"
+      reflective: "What might get in the way?"
+      direct: "What might get in the way?"
 ---
 
 # Behavioral Activation

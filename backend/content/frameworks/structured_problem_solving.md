@@ -1,14 +1,17 @@
 ---
 id: structured_problem_solving
 name: Structured Problem-Solving
-summary: "We'll go through a few focused questions. By the end, you will have turned a problem that feels unclear or overwhelming into a practical next step."
+summary: "These questions help you break the problem down and pick a first step."
 display_order: 4
-phases: [offering, problem, facts, control, outcome, options, compare, select, first_action, closing]
+phases: [offering, problem, facts, control, outcome, options, compare, select, first_action]
 activation:
   central_indication: >-
     A specific, practical problem exists and the user does not know what to do next - the
     situation can be influenced through a decision or action, and the user wants a direct
     solution rather than reflection alone.
+  # The facts that make this framework fit: every fact in one set (router.FACTS). Read by
+  # router.choose; the client's tie rules between frameworks are in router.TIE_RULES.
+  fits_when: [[practical_problem, unsure_what_to_do]]
   to_find_out:
     - "the practical problem, in one sentence"
     - "whether a decision or an action could change it"
@@ -16,7 +19,7 @@ activation:
     - "whether they do not know what to do, as opposed to knowing and not starting"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # router reads fits_when.
   appropriate_when:
     - "The user has a specific practical problem"
     - "The problem can be influenced through action"
@@ -40,48 +43,6 @@ activation:
     - "The decision requires professional expertise MANI cannot provide - a medical treatment plan, a legal conclusion, an investment or financial decision. Mani may help the person work out who could advise them, and must not replace qualified judgment"
     - "The plan would be retaliation, deception, an unsafe confrontation, or harm to the person or someone else"
     - "The situation is abuse, a threat, or emergency danger - it is never a communication problem or an ordinary decision, and the safety protocol applies, not a plan"
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "do not know which option"
-    - "every choice has a downside"
-    - "keep changing my mind"
-    - "need to make a decision"
-    - "everything is a mess"
-    - "do not know where to begin"
-    # This framework's own appropriate_when already names it; only the signal list omitted it,
-    # so the plainest way of saying it matched nothing at all.
-    - "do not know what to do"
-    - "do not even know where to begin"
-    - "do not know where to start"
-    - "do not know what i should do"
-    - "do not know what to say to"
-  signals:
-    - "behind on everything"
-    - "confused between"
-    - "missed the deadline"
-    - "missed the report deadline"
-    - "compare my options"
-    - "make a plan"
-    - "need to decide what to do"
-    - "too many things happening"
-    - "cannot separate any of it"
-    - "missed a deadline"
-    - "cannot afford all these bills"
-    - "problem with my roommate"
-    - "two commitments at the same time"
-    - "prepare for a difficult conversation"
-    - "thought about this for days"
-    - "going over the same options"
-    - "worrying instead of deciding"
-  redirects:
-    - signal: "I know what to do, but I cannot make myself begin."
-      instead: behavioral_activation
-    - signal: "I know my manager will think I am incompetent."
-      instead: thought_reframe
-    - signal: "There is nothing I can do to change the outcome."
-      instead: act_choice_point
-    - signal: "I am about to send a message I will regret."
-      instead: dbt_stop
   distinctions:
     behavioral_activation: >-
       Structured Problem-Solving when the user does not know what to do, options need
@@ -136,10 +97,11 @@ stages:
       - when: "they have already described the problem before the stage began - do not ask them to confirm it"
         reply: "<their problem, in a clause, in their words>. What do you know for certain about it?"
         start_only: true
+    ask_simpler: "What is the one problem you want to fix?"
     ask:
-      supportive: "What is the exact problem you want to resolve?"
-      reflective: "What is the exact problem you want to resolve?"
-      direct: "What is the exact problem you want to resolve?"
+      supportive: "What is the main problem you want to sort out?"
+      reflective: "What is the main problem you want to sort out?"
+      direct: "What is the main problem you want to sort out?"
   facts:
     purpose: "Clarify what is known, what is believed, and what remains uncertain."
     listen_for: "Verified information, interpretations, predictions, and missing information."
@@ -151,6 +113,7 @@ stages:
     if_unclear:
       - when: "a time critical risk is still open - cards or accounts that can still be used, a deadline about to pass, something that gets worse by the hour"
         reply: "<the risk, in a clause>. Contacting <whoever can stop it, such as the bank or the police> is usually the first step. Have you been able to reach them?"
+    ask_simpler: "What do you know for sure?"
     ask:
       supportive: "What do you know for certain?"
       reflective: "What do you know for certain?"
@@ -163,10 +126,11 @@ stages:
       - "must not assign responsibility for another person's behaviour"
       - "must not encourage control over an uncontrollable outcome"
       - "must not treat abuse as a mutual communication problem"
+    ask_simpler: "Which part can you do something about?"
     ask:
-      supportive: "Which part is within your control?"
-      reflective: "Which part is within your control?"
-      direct: "Which part is within your control?"
+      supportive: "Which part can you do something about?"
+      reflective: "Which part can you do something about?"
+      direct: "Which part can you do something about?"
   outcome:
     purpose: "Identify what the user wants the response to accomplish."
     listen_for: "A realistic result the user wants their response to support."
@@ -175,10 +139,11 @@ stages:
       - "must not promise the outcome is achievable"
       - "must not define success as receiving a particular response from someone else"
       - "must not pressure the user toward reconciliation, confrontation, forgiveness, or separation"
+    ask_simpler: "What do you want to happen?"
     ask:
-      supportive: "What do you want your response to accomplish?"
-      reflective: "What do you want your response to accomplish?"
-      direct: "What do you want your response to accomplish?"
+      supportive: "What do you want to come out of this?"
+      reflective: "What do you want to come out of this?"
+      direct: "What do you want to come out of this?"
   options:
     purpose: "Identify realistic options without judging them immediately."
     listen_for: "More than one safe and realistic option when possible."
@@ -189,10 +154,11 @@ stages:
       - "must not exclude the user from generating options"
       - "must not disguise a recommendation as the user's decision"
       - "must not accept several options that are really one approach worded differently - real breadth is at least two genuinely different approaches, not variations on the same one"
+    ask_simpler: "What could you do about it?"
     ask:
-      supportive: "What are your possible responses?"
-      reflective: "What are your possible responses?"
-      direct: "What are your possible responses?"
+      supportive: "What could you do about it?"
+      reflective: "What could you do about it?"
+      direct: "What could you do about it?"
   compare:
     purpose: "Consider the relevant benefits, limitations, risks, and consequences of each option."
     listen_for: "The consequences, limitations, risks, timing, and fit of each response."
@@ -203,11 +169,12 @@ stages:
       - "must not push the option MANI prefers"
     if_earlier_missing:
       needs: options
-      reply: "What are the strengths and limitations of the ways you could respond?"
+      reply: "What is good and not so good about each way you could respond?"
+    ask_simpler: "What is good and bad about each one?"
     ask:
-      supportive: "What are the strengths and limitations of each?"
-      reflective: "What are the strengths and limitations of each?"
-      direct: "What are the strengths and limitations of each?"
+      supportive: "What is good and not so good about each of those?"
+      reflective: "What is good and not so good about each of those?"
+      direct: "What is good and not so good about each of those?"
   select:
     purpose: "Help the user choose the option that best fits the outcome and circumstances."
     picks_from_options: true
@@ -220,10 +187,11 @@ stages:
     if_earlier_missing:
       needs: options
       reply: "What do you think would be the best way to respond?"
+    ask_simpler: "Which one seems best?"
     ask:
-      supportive: "Which response best fits what you want to accomplish?"
-      reflective: "Which response best fits what you want to accomplish?"
-      direct: "Which response best fits what you want to accomplish?"
+      supportive: "Which of those fits best?"
+      reflective: "Which of those fits best?"
+      direct: "Which of those fits best?"
   first_action:
     purpose: "Turn the selected response into one specific beginning."
     listen_for: "A specific, manageable action within the user's control."
@@ -235,24 +203,11 @@ stages:
     if_earlier_missing:
       needs: select
       reply: "What is one small thing you could do first?"
+    ask_simpler: "What is the first thing you would do?"
     ask:
-      supportive: "What is the first action?"
-      reflective: "What is the first action?"
-      direct: "What is the first action?"
-  closing:
-    purpose: "Confirm completion in the user's own terms, without promising the decision will produce the desired outcome."
-    boundaries:
-      - "must not promise the decision will produce the desired outcome"
-      - "must not summarize the completed framework"
-      - "must not require the user to feel certain to be done"
-      - "must not say the response feels manageable unless the user used similar language"
-    if_earlier_missing:
-      needs: first_action
-      reply: "Is there anything you would add before we finish?"
-    ask:
-      supportive: "You chose a response that feels manageable to you. How is that decision sitting with you?"
-      reflective: "You chose the response that best supports your intended outcome. What changes now that the decision is clearer?"
-      direct: "You selected the response and the first action. Is the plan realistic?"
+      supportive: "What is the first thing you would do?"
+      reflective: "What is the first thing you would do?"
+      direct: "What is the first thing you would do?"
 ---
 
 # Structured Problem-Solving

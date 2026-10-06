@@ -229,6 +229,15 @@ def test_the_reply_that_starts_a_framework_may_ask_the_second_stage(registry):
     assert fixed.phase == "belief"
 
 
+def test_a_reply_never_goes_back_to_a_stage_their_earlier_words_answered(registry):
+    """They gave the event and the belief before accepting, so the first open stage is the third."""
+    for reported in ("activate", "belief", "consequence", "dispute"):
+        asked = reply(state=TechniqueState(technique="abcde", step=reported))
+        fixed = fix(registry, asked, accepted_this_turn=True, framework_running=True,
+                    current_framework_id="abcde", current_phase="offering", skipped_stages=2)
+        assert fixed.phase in ("consequence", "dispute"), reported
+
+
 def test_a_skipped_phase_is_corrected_rather_than_regenerated(registry):
     jumped = reply(state=TechniqueState(technique="thought_reframing", step="land"))
     fixed = fix(registry, jumped, current_framework_id="thought_reframing",
@@ -608,6 +617,17 @@ def test_the_body_check_in_is_sent_word_for_word():
     )
 
 
+def test_no_question_of_the_models_own_stands_beside_the_check_in():
+    asked_early = "What did that mean to you? You chose a way to begin. Does that feel right?"
+    assert repairs.with_the_check_in(asked_early, CHECK_IN) == f"You chose a way to begin.\n\n{CHECK_IN}"
+    only_a_question = "How is that sitting with you?"
+    assert repairs.with_the_check_in(only_a_question, CHECK_IN) == CHECK_IN
+    paragraphs = "You chose to go.\n\nIs that realistic?\n\nIt is yours to decide."
+    assert repairs.with_the_check_in(paragraphs, CHECK_IN) == (
+        f"You chose to go.\n\nIt is yours to decide.\n\n{CHECK_IN}"
+    )
+
+
 def test_a_check_in_already_word_for_word_is_left_alone():
     exact = f"You can wait without deciding what it means. {CHECK_IN}"
     assert repairs.with_the_check_in(exact, CHECK_IN) == exact
@@ -635,16 +655,6 @@ def test_a_plain_form_of_their_own_feeling_word_is_theirs_but_another_feeling_is
     assert repairs.introduced_feelings("The loneliness and the sadness and the stress.", said) == []
     assert repairs.introduced_feelings("That sounds overwhelming and stressful.", said) == ["overwhelming"]
 
-
-def test_an_offer_of_the_nearest_fit_says_so_on_its_button_and_keeps_keep_chatting(registry):
-    nearest = reply(
-        text="Nothing is a perfect match. Would you like to try it?",
-        prompts=[SmartPrompt(label="Try it", technique="abcde"),
-                 SmartPrompt(label="Keep chatting", decline=True)],
-    )
-    fixed = fix(registry, nearest, closest_fit=True)
-    assert [p.label for p in fixed.prompts] == ["Try the closest fit", "Keep chatting"]
-    assert fixed.prompts[0].technique == "abcde" and fixed.prompts[1].decline is True
 
 
 def test_a_confident_offer_keeps_its_own_label(registry):
@@ -989,3 +999,13 @@ def test_a_client_line_in_mani_s_last_message_is_not_evidence_for_a_later_hold(b
     fixed = say(branched, "I am still here. What would help most?", previous=repairs.CLIENT_LINES[1])
     assert (fixed.phase, fixed.holds, fixed.notes) == ("belief", 1, ["held at belief"])
 
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("It sounds like you were tired.", ["it sounds like"]),
+    ("I hear you. That makes sense.", ["i hear you", "that makes sense"]),
+    ("It\u2019s clear. I\u2019m here with you.", ["i'm here with you"]),
+    ("What sounds like fun to you?", []),
+])
+def test_scripted_phrases_are_found_whatever_the_casing(text, expected):
+    assert repairs.used_stock_phrases(text) == expected

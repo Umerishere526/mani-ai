@@ -196,16 +196,13 @@ def test_every_shipped_framework_says_what_it_needs_to_find_out():
         assert len(found) >= 3, f"{path.name} needs at least three things to find out"
 
 
-def test_the_reply_commits_to_a_lean_before_it_writes_the_text():
-    """Structured output is generated in schema order, so a lean declared after the text could
+def test_the_reply_states_its_facts_and_shape_before_it_writes_the_text():
+    """Structured output is generated in schema order, so facts declared after the text could
     only describe a reply already written."""
     from mani.llm.schema import Reply
 
     fields = list(Reply.model_fields)
-    assert fields.index("heading_toward") < fields.index("text")
-    assert fields.index("style") < fields.index("heading_toward")
-    assert fields.index("heading_toward") < fields.index("offer_fit") < fields.index("text")
-
+    assert fields.index("facts") < fields.index("style") < fields.index("text")
 
 def test_what_is_remembered_across_chats_reaches_the_prompt_after_the_static_layers(config):
     """After the per-user context, never before the static layers: the cached prefix has to
@@ -268,3 +265,41 @@ def test_the_index_marks_the_frameworks_whose_offer_waits_for_their_third_messag
     assert "- **ABCDE**: the event; what it meant (offer it only from their message 3" in index
     assert "- **Structured Problem-Solving**: the problem; whether it can change" in index
     assert "whether it can change (offer it only" not in index
+
+
+def test_the_framework_index_says_in_plain_words_what_makes_each_shipped_framework_fit():
+    """covers spec 0005 AC-10: the model reads the same fact sets the code chooses with."""
+    from mani.chat.router import FACTS
+    from scripts.seed import FRAMEWORKS_DIR, parse_framework
+
+    shipped = [
+        Framework.model_validate(parse_framework(p)) for p in sorted(FRAMEWORKS_DIR.glob("*.md"))
+    ]
+    index = composer.framework_index(Registry(shipped))
+    assert "## What makes each fit" in index
+    for framework in shipped:
+        line = next(l for l in index.splitlines() if l.startswith(f"- **{framework.name}**: `"))
+        for fact_set in framework.activation["fits_when"]:
+            for fact in fact_set:
+                assert f"`{fact}` ({FACTS[fact]})" in line
+
+
+def test_no_prompt_names_a_field_the_reply_no_longer_has():
+    from scripts.seed import PROMPTS_DIR
+
+    for path in sorted(PROMPTS_DIR.glob("*.md")):
+        text = path.read_text()
+        for removed in ("heading_toward", "offer_fit", "framework_shortlist"):
+            assert removed not in text, f"{path.name} names {removed}"
+
+
+def test_nothing_the_model_reads_offers_a_nearest_fit_or_says_an_offer_is_due():
+    """covers spec 0005 AC-16: only a full fit is offered, and nothing pushes an offer."""
+    from scripts.seed import FRAMEWORKS_DIR, PROMPTS_DIR, parse_framework
+
+    shipped = [Framework.model_validate(parse_framework(p)) for p in sorted(FRAMEWORKS_DIR.glob("*.md"))]
+    texts = {p.name: p.read_text() for p in sorted(PROMPTS_DIR.glob("*.md"))}
+    texts["framework_index"] = composer.framework_index(Registry(shipped))
+    for name, text in texts.items():
+        for pushed in ("closest_fit", "closest fit", "nearest", "an offer is due", "offer is due"):
+            assert pushed not in text.lower(), f"{name} says {pushed}"

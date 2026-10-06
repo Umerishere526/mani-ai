@@ -24,7 +24,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 5   | ABCDE is offered when an event and a belief about it are named                 | Slice 3 | done    |
 | 6   | The offer names the framework, introduces it, and gives three choices          | Natural Mani | planned |
 | 7   | The manager chat is a standing real conversation check                         | Slice 4 | planned |
-| 8   | Mani picks the best framework from the person's situation and steers toward it | Slice 5 | planned |
+| 8   | Mani picks the best framework from the person's situation and steers toward it | Slice 5 | in-progress |
 | 9   | Crisis help a person can use                                                   | Slice 6 | planned |
 | 10  | Danger detection catches real phrasing                                         | Slice 6 | planned |
 | 11  | Safety mode follows the person                                                 | Slice 6 | planned |
@@ -35,7 +35,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 16  | Monitoring and alerts                                                          | Slice 7 | planned |
 | 17  | Guide questions match the client's wording                                     | Slice 8 | planned |
 | 18  | A framework stage moves on after one answer                                    | Natural Mani | in-progress |
-| 19  | Body check in follows every framework                                          | Slice 8 | planned |
+| 19  | Body check in follows every framework                                          | Slice 8 | in-progress |
 | 20  | A framework stops when the person asks                                         | Slice 8 | planned |
 | 21  | Hard safety rules enforced in code                                             | Slice 9 | planned |
 | 22  | Reply shape built into Mani's answer format                                    | Slice 9 | dropped |
@@ -51,10 +51,11 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 32  | The client's style conversations are a standing check                          | Natural Mani | in-progress |
 | 33  | Mani speaks naturally: short, neutral, humble instructions                     | Natural Mani | done |
 | 34  | No dashes in any reply                                                         | Natural Mani | planned |
-| 35  | The model is chosen on real conversations                                      | Natural Mani | planned |
+| 35  | The model is chosen on real conversations                                      | Natural Mani | in-progress |
 | 36  | A short answer to Mani's safety question is checked                            | Slice 6 | planned |
 | 37  | The model's safety flag does not stall DBT STOP                                | Slice 6 | done |
 | 38  | A request to hear a question again also reads "whats that mean"                | Natural Mani | in-progress |
+| 39  | Stage questions flagged in the 2026-10-05 chats                                | Natural Mani | planned |
 
 Natural Mani (rows 32, 33, 34, 18, 38, 6, 35, in that order) is the current focus and comes before every slice below it. It overrides parts of ADRs 006, 007, 008, 010 and 011, and row 33's spec records which. Slices 6 and 7 are what has to be true before a limited beta. Slice 9 is what has to be true before an open launch. Slice 8 can run alongside either, as client answers arrive.
 
@@ -69,7 +70,7 @@ Natural Mani (rows 32, 33, 34, 18, 38, 6, 35, in that order) is the current focu
 - After a crisis, should the chat lock (as today) or should the person move into a safety mode where Mani keeps talking only in approved wording?
 - When someone cannot think of an action, may Mani suggest one, or up to three? The document says one in Behavioral Activation but shows three in its intro example (row 18).
 - When someone asks Mani to choose ("tell me what to do"), may Mani offer a suggestion they can accept or change (row 18)?
-- Should the body check in always follow a framework, even when the person has just named what they will do next (row 19)?
+- Should the body check in always follow a framework, even when the person has just named what they will do next (row 19)? muhammad decided yes on 2026-10-05; the client has not been told yet.
 - If abuse comes up during ABCDE or Thought Reframe, should Mani end the framework or carry on without reinterpreting it (row 17)?
 - Should crisis records be kept after someone deletes their account? This needs legal advice.
 - The team added rules the document does not have (grief, fatigue, "too light for I am a failure", ACT's "to ease a feeling" check, DBT STOP's breathing anchor, ending ABCDE on abuse, waiting rules before an offer). Which should stay (row 29)?

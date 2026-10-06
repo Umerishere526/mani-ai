@@ -27,7 +27,6 @@ after_framework_question: <one of the client's three>
 safety: concern
 recent_crisis: yes
 cooldown_passed: yes | no
-closest_fit: due | ok
 since_last: N
 this_thread: framework_id (outcome)
 library_pending: yes
@@ -35,9 +34,8 @@ current_phase: <stage id>
 history: technique (helpful/not helpful), ...
 recent_styles: mirror and ask → presence only
 recent_openers: "your manager", "that sounds"
-framework_shortlist: framework_id (score), ...
 offer: offering
-offer_purpose / offer_listen_for / offer_ready_when / offer_boundaries / offer_if_unclear / offer_ask
+offer_purpose / offer_listen_for / offer_ready_when / offer_boundaries / offer_if_unclear / offer_ask / offer_when_panicked
 framework_starting: yes
 active_framework: framework_id
 framework_stages: <every stage id, in order>
@@ -48,10 +46,10 @@ asked_again: yes
 answered_picks_options: yes
 hold_used: yes
 stage: <stage id>
-stage_purpose / stage_listen_for / stage_ready_when / stage_boundaries / stage_if_unclear / stage_if_earlier_missing / stage_ask
+stage_purpose / stage_listen_for / stage_ready_when / stage_boundaries / stage_if_unclear / stage_if_earlier_missing / stage_ask / stage_when_panicked
 stage_note: <what to do this turn>
 next_stage: <stage id>
-next_stage_purpose / next_stage_listen_for / next_stage_ready_when / next_stage_boundaries / next_stage_if_unclear / next_stage_ask
+next_stage_purpose / next_stage_listen_for / next_stage_ready_when / next_stage_boundaries / next_stage_if_unclear / next_stage_ask / next_stage_when_panicked
 [/ctx]
 
 <what the person actually said>
@@ -72,9 +70,7 @@ What each line tells you:
   offer again in this reply.
 - `their_last`, `answering`: what their last message was, and the question it answered. Your
   instructions say what to do. Never mention them.
-- `cooldown_passed`, `since_last`: a confident offer may be made only when `cooldown_passed: yes`.
-- `closest_fit`: present when the nearest fit may be offered: `due` means offer it now, `ok`
-  means you may.
+- `cooldown_passed`, `since_last`: an offer may be made only when `cooldown_passed: yes`.
 - `this_thread`, `history`: what has been offered and tried in this conversation. One they
   declined may come back once the cooldown has passed, if it still fits; one they just finished
   may not. If they ask for one they declined, that is a yes at any time: begin it, and report it
@@ -88,8 +84,10 @@ What each line tells you:
   not mention it unless they do.
 - `recent_styles`, `recent_openers`: the shapes and the literal first words of your last few
   replies. Do not open your new reply the same way.
-- `framework_shortlist`, `offer_*`: the backend's ranked guess from their words and the offering
-  stage of the likeliest fit. A hint to weigh against your own reading, never a requirement.
+- `offer_*`: present when they are about to act: the offering stage of the set that pauses an
+  action, so you can offer it now.
+- `*_when_panicked`: that set's lines for someone panicked right now with no action named. When
+  that is what they told you, follow these instead of the lines above them.
 - `framework_starting: yes`: they just said yes. Put the first stage question in their words;
   if what they said already meets the stage's ready_when, say it back in a clause and ask the
   next stage's question in the same reply.
@@ -114,9 +112,9 @@ Fill it first, in a line or two for each step.
 1. **Their last message**: if `their_last` is present, what are they telling you or answering?
 2. **What they said**: in their words. Is any feeling or size word in your draft one they did not
    use? If so, use their word or none.
-3. **Heading toward**: which id in the Framework Index is this most likely heading toward, or
-   none yet? Set `heading_toward` to it, or null. Is an offer due? See `cooldown_passed` and
-   `closest_fit`, and set `offer_fit` if you offer.
+3. **Facts**: fill `facts` with what they have told you, each with their exact words. Which set
+   do they fully fit, under "What makes each fit"? If none, which do they point to most, and
+   what is still missing for it? Offer only a set they fully fit, once `cooldown_passed: yes`.
 
 # The safety flag
 

@@ -1,9 +1,9 @@
 ---
 id: thought_reframe
 name: Thought Reframe
-summary: "These questions help you examine a troubling thought and consider a more balanced perspective. By the end, you will be able to see the situation differently."
+summary: "These questions help you look at a thought that keeps bothering you and find a fairer way to see it."
 display_order: 2
-phases: [offering, thought, significance, facts_for, facts_against, alternative, reframe, closing]
+phases: [offering, thought, significance, facts_for, facts_against, alternative, reframe]
 activation:
   central_indication: >-
     One specific painful thought or interpretation is intensifying distress, and the user wants
@@ -11,6 +11,9 @@ activation:
   # A confident offer waits for their third message: the fit depends on what they took the event or
   # the thought to mean, which the first two messages rarely say.
   earliest_offer_message: 3
+  # The facts that make this framework fit: every fact in one set (router.FACTS). Read by
+  # router.choose; the client's tie rules between frameworks are in router.TIE_RULES.
+  fits_when: [[painful_thought]]
   to_find_out:
     - "the exact thought going round, in their words"
     - "the situation it is attached to"
@@ -19,7 +22,7 @@ activation:
     - "whether it could be tested against facts (a loss or a settled fact is not a thought to test)"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # router reads fits_when.
   appropriate_when:
     - "One specific thought is intensifying the user's difficulty"
     - "The thought contains an assumption, prediction, or broad conclusion"
@@ -43,37 +46,6 @@ activation:
     - "The thought keeps returning as a repeated request to check whether it is true, especially about harm, contamination, or identity - in OCD this checking is the compulsion, and answering it again only feeds the loop it is trying to escape"
     - "The person describes abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger - examining the thought must never turn into questioning whether it was real or as serious as it felt, and Mani must not reinterpret the behaviour as harmless"
     - "The painful statement is itself an established fact - a relationship ended, a person said they want to end the friendship - the fact is not reframed, only a related thought about themselves or their future"
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "nobody cares about me"
-    - "did not answer because"
-    - "going to fail"
-    - "do not like me"
-  signals:
-    - "why else would he"
-    - "why else would she"
-    - "only one explanation"
-    - "already know how this will end"
-    - "point of trying"
-    - "i am a failure"
-    - "she hates me"
-    - "he hates me"
-    - "it is hopeless"
-    - "i ruined everything"
-    - "this proves i"
-    - "proves i will never"
-    - "everyone must think i am"
-    - "i know i do not matter"
-    - "know if that is accurate"
-    - "certain i will fail"
-    - "will think i am"
-  redirects:
-    - signal: "I keep thinking I am incompetent, and I want to understand why one criticism affected me so strongly."
-      instead: abcde
-    - signal: "I know the thought may never go away, but I do not want it making my decisions."
-      instead: act_choice_point
-    - signal: "I know what I need to do, but I cannot make myself begin."
-      instead: behavioral_activation
   distinctions:
     abcde: >-
       Reframe when one thought is already clear, a shorter process is wanted, and the full
@@ -126,10 +98,11 @@ stages:
         start_only: true
       - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
         reply: "What happened sounds serious, and I am not going to ask you to see it differently. What would be most helpful to talk through?"
+    ask_simpler: "Is that the thought you want to talk about?"
     ask:
-      supportive: "This is the thought that keeps returning. Is this the one you want to look at together?"
-      reflective: "Is that the thought you want to examine?"
-      direct: "Is that the thought you want to test?"
+      supportive: "Is that the thought you want to look at together?"
+      reflective: "Is that the thought you want to look at?"
+      direct: "Is that the thought you want to look at?"
   significance:
     purpose: "Understand what makes the thought matter, without labelling their experience."
     listen_for: "Why the thought matters and what the user believes it says about themselves, another person, or the future."
@@ -141,10 +114,11 @@ stages:
     if_earlier_missing:
       needs: thought
       reply: "Why does this matter to you?"
+    ask_simpler: "Why does that thought stay with you?"
     ask:
-      supportive: "What makes that thought difficult for you?"
-      reflective: "What gives it that meaning?"
-      direct: "What is that conclusion based on?"
+      supportive: "Why does that thought matter to you?"
+      reflective: "Why does that thought matter to you?"
+      direct: "Why does that thought matter to you?"
   facts_for:
     purpose: "Establish what the user knows supports the thought."
     listen_for: "What supports the thought, and what is known rather than assumed."
@@ -162,10 +136,11 @@ stages:
     if_earlier_missing:
       needs: thought
       reply: "What makes it seem that way to you?"
+    ask_simpler: "Why do you believe that is true?"
     ask:
-      supportive: "What supports that thought?"
-      reflective: "What supports that thought?"
-      direct: "What supports that thought?"
+      supportive: "What makes you think that is true?"
+      reflective: "What makes you think that is true?"
+      direct: "What makes you think that is true?"
   facts_against:
     purpose: "Find what does not support the thought, what is assumed or predicted, and what remains unknown."
     listen_for: "What does not support the thought, what is assumed, what remains unknown."
@@ -179,10 +154,11 @@ stages:
     if_earlier_missing:
       needs: thought
       reply: "Is there anything about this you are unsure of?"
+    ask_simpler: "Is there anything that doesn't match that thought?"
     ask:
-      supportive: "What else do you know about the situation?"
-      reflective: "What does not support the full conclusion?"
-      direct: "What facts do not fit that conclusion?"
+      supportive: "Is there anything you know that doesn't match that thought?"
+      reflective: "Is there anything you know that doesn't match that thought?"
+      direct: "Is there anything you know that doesn't match that thought?"
   alternative:
     purpose: "Help the user recognize the original interpretation may not be the only possibility."
     listen_for: "At least one credible possibility that does not deny known facts."
@@ -195,10 +171,11 @@ stages:
     if_earlier_missing:
       needs: facts_for
       reply: "What else could be going on here?"
+    ask_simpler: "What else might be true?"
     ask:
-      supportive: "You do not know the reason yet. What else might be possible?"
-      reflective: "The silence allows more than one interpretation. What is another possibility?"
-      direct: "The facts do not confirm the reason. What is another explanation?"
+      supportive: "What else could be going on?"
+      reflective: "What else could be going on?"
+      direct: "What else could be going on?"
   reframe:
     purpose: "Develop a brief, balanced thought grounded in the facts the user identified."
     listen_for: "A thought the user considers accurate, balanced, and believable."
@@ -209,26 +186,18 @@ stages:
       - "must not require the user to feel differently"
       - "must not continue revising a thought the user already finds credible"
       - "if the user says the reframe does not feel true, must not argue it"
+    if_unclear:
+      - when: "they say they do not know what would be fair, or cannot put it into words"
+        reply: "That is fine. What is one thing about this that you do know is true?"
+        counted: true
     if_earlier_missing:
       needs: facts_for
-      reply: "What would be a fairer way to put it?"
+      reply: "What would you say is true about this?"
+    ask_simpler: "From all of that, what do you know is true about this?"
     ask:
-      supportive: "What thought would be fairer to what you know?"
-      reflective: "The original thought treats one explanation as certain. What belief includes the uncertainty?"
-      direct: "The reason remains unknown. What conclusion do the facts support?"
-  closing:
-    purpose: "Confirm completion in the user's own terms, without declaring that the framework worked."
-    boundaries:
-      - "must not require the user to eliminate the original thought or feel differently to be done"
-      - "must not summarize the completed framework"
-      - "must not tell the user the framework worked"
-    if_earlier_missing:
-      needs: reframe
-      reply: "Is there anything you would add before we finish?"
-    ask:
-      supportive: "How is that thought sitting with you?"
-      reflective: "The new thought includes what you know and what remains unknown. What changes when you see it this way?"
-      direct: "The new thought fits the available facts. Does it feel accurate?"
+      supportive: "Putting those together, what would you say is true about this?"
+      reflective: "Putting those together, what would you say is true about this?"
+      direct: "Putting those together, what would you say is true about this?"
 ---
 
 # Thought Reframe

@@ -56,6 +56,9 @@ def parse_prompt(path: pathlib.Path) -> dict:
         "content": body.strip(),
         "model_id": meta.get("model_id"),
         "model_parameters": meta.get("model_parameters") or {},
+        # The provider pin and data rules for this prompt's model, beside the model id they
+        # belong to. The files are authoritative: a reseed replaces whatever the portal set.
+        "routing": meta.get("routing") or {},
     }
 
 
@@ -155,13 +158,15 @@ async def seed() -> None:
                 await conn.execute(
                     """
                     insert into admin.prompts
-                        (id, name, description, content, model_id, model_parameters)
-                    values (coalesce($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6::jsonb)
+                        (id, name, description, content, model_id, model_parameters, routing)
+                    values (coalesce($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6::jsonb,
+                            $7::jsonb)
                     on conflict (name) do update set
                         description = excluded.description,
                         content = excluded.content,
                         model_id = excluded.model_id,
-                        model_parameters = excluded.model_parameters
+                        model_parameters = excluded.model_parameters,
+                        routing = excluded.routing
                     """,
                     prompt["id"],
                     prompt["name"],
@@ -169,6 +174,7 @@ async def seed() -> None:
                     prompt["content"],
                     prompt["model_id"],
                     json.dumps(prompt["model_parameters"]),
+                    json.dumps(prompt["routing"]),
                 )
                 print(f"  {prompt['name']:<18} {len(prompt['content']):>6} chars")
             print(f"prompts: {len(files)}")

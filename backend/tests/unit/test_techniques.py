@@ -3,7 +3,7 @@
 
 import pytest
 
-from mani.chat.techniques import OFFERING, Registry, Verdict, moves_on_after
+from mani.chat.techniques import OFFERING, Registry, Verdict, covered_stages, moves_on_after
 from mani.models.rows import Framework
 
 REFRAMING = Framework(
@@ -182,3 +182,18 @@ def test_a_turn_that_moves_on_records_the_next_stage_for_one_the_framework_does_
 def test_a_turn_that_moves_on_still_refuses_to_skip_a_stage(body_checked):
     assert body_checked.clamp("staged", "activate", "closing", moving_on=True) == "belief"
 
+
+
+def test_stages_their_earlier_words_answer_are_the_unbroken_run_after_the_offering():
+    abcde = Framework(
+        id="abcde", name="ABCDE", summary="s", body="b",
+        phases=["offering", "activate", "belief", "consequence", "closing", "somatic_checkin"],
+        stages={"activate": {"answered_by": "event"}, "belief": {"answered_by": "meaning"}},
+    )
+    assert covered_stages(abcde, {"event": "i had an exam", "meaning": "i feel like i idiot"}) == [
+        "activate", "belief",
+    ]
+    assert covered_stages(abcde, {"event": "i had an exam"}) == ["activate"]
+    assert covered_stages(abcde, {"meaning": "i feel like i idiot"}) == []
+    assert covered_stages(abcde, {}) == []
+    assert covered_stages(None, {"event": "i had an exam"}) == []

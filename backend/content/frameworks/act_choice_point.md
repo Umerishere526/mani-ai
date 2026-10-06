@@ -1,9 +1,9 @@
 ---
 id: act_choice_point
 name: ACT Choice Point
-summary: "These questions help you notice the difficult thought or feeling, reconnect with what matters to you, and choose an action that reflects the person you want to be. By the end, you will have a direction you can take even when the situation or your feelings have not changed."
+summary: "These questions help you work out what matters to you here and one thing you can do about it, even if nothing else changes."
 display_order: 5
-phases: [offering, situation, present, pull, matters, toward, action, closing]
+phases: [offering, situation, present, pull, matters, toward, action]
 activation:
   central_indication: >-
     The user may not be able to change or resolve the situation, but does not want it deciding
@@ -12,6 +12,9 @@ activation:
   # A confident offer waits for their third message: the fit depends on what they took the event or
   # the thought to mean, which the first two messages rarely say.
   earliest_offer_message: 3
+  # The facts that make this framework fit: every fact in one set (router.FACTS). Read by
+  # router.choose; the client's tie rules between frameworks are in router.TIE_RULES.
+  fits_when: [[cannot_control]]
   to_find_out:
     - "what part of the situation they cannot change or control"
     - "the thought, feeling or urge that stays with them"
@@ -19,7 +22,7 @@ activation:
     - "whether they want help choosing how to respond, not solving or disproving it"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # router reads fits_when.
   appropriate_when:
     - "The user cannot fully control or resolve the situation"
     - "A thought cannot be proved or disproved"
@@ -42,38 +45,6 @@ activation:
   contraindications:
     - "The situation is something that should change rather than be accepted - ongoing abuse, an unsafe workplace, a real medical or financial risk. Accepting a feeling is not the same as accepting a harmful situation, and this framework must never blur that line"
     - "The experience is being used to push the person toward forgiving, tolerating, or accepting what is unjust or harmful, or away from medical, legal, or emergency help - self-protection is never a move away from what matters"
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "cannot change what happened"
-    - "cannot make them"
-    - "cannot make my family"
-    - "cannot control whether"
-    - "never receive an apology"
-    - "cannot control what"
-    - "make the uncertainty go away"
-  signals:
-    - "cannot stop thinking"
-    - "cannot change the situation"
-    - "thought may never go away"
-    - "do not want it making my decisions"
-    - "may keep coming back"
-    - "get rid of this feeling"
-    - "waiting to feel certain"
-    - "this fear making my decisions"
-    - "avoiding the conversation"
-    - "keep defending myself"
-    - "being approved of"
-    - "want to say no"
-    - "withdrawing from people"
-  redirects:
-    - signal: "I think everyone believes I am incompetent, and I want to know if that is accurate."
-      instead: thought_reframe
-    - signal: "One criticism made me believe I was a failure, and I want to understand why."
-      instead: abcde
-    - signal: "I need to compare my options and make a plan."
-      instead: structured_problem_solving
-    - signal: "I know what I want to do, but I cannot begin."
-      instead: behavioral_activation
   distinctions:
     thought_reframe: >-
       Reframe when evidence can help examine the thought, another interpretation may be more
@@ -126,6 +97,7 @@ stages:
         reply: "You can compare the bills and make a decision. Would practical problem-solving fit better than this framework?"
       - when: "what they describe is abuse, threats, coercion, harassment, or other danger"
         reply: "What is happening sounds serious, and staying safe comes first. What would be most helpful to talk through?"
+    ask_simpler: "What part of this can't you change?"
     ask:
       supportive: "What part of this can you not control?"
       reflective: "What part of this can you not control?"
@@ -138,10 +110,11 @@ stages:
       - "must not interpret the user's internal experience"
       - "must not diagnose the user"
       - "must not require the user to accept or like what is present"
+    ask_simpler: "What goes through your mind when you think about it?"
     ask:
-      supportive: "What is showing up for you when you think about it?"
-      reflective: "What is showing up for you when you think about it?"
-      direct: "What is showing up for you when you think about it?"
+      supportive: "What comes up for you when you think about it?"
+      reflective: "What comes up for you when you think about it?"
+      direct: "What comes up for you when you think about it?"
   pull:
     purpose: "Recognize what the internal experience is pulling the user toward doing or avoiding."
     listen_for: "The action, reaction, avoidance, or pattern the experience is encouraging."
@@ -155,10 +128,11 @@ stages:
     if_earlier_missing:
       needs: present
       reply: "When this comes up, what do you find yourself doing?"
+    ask_simpler: "What do you feel like doing when that comes up?"
     ask:
-      supportive: "What is that pulling you toward doing?"
-      reflective: "What is that pulling you toward doing?"
-      direct: "What is that pulling you toward doing?"
+      supportive: "What does that make you want to do?"
+      reflective: "What does that make you want to do?"
+      direct: "What does that make you want to do?"
   matters:
     purpose: "Clarify how the user wants to act and what they want their response to represent."
     listen_for: "The quality, principle, relationship, responsibility, or way of acting the user values here."
@@ -168,10 +142,11 @@ stages:
       - "must not define what a good person would do"
       - "must not pressure the user to preserve a relationship"
       - "must not treat self-protection as selfish"
+    ask_simpler: "What do you care about most here?"
     ask:
-      supportive: "What matters to you in how you respond?"
-      reflective: "What matters to you in how you respond?"
-      direct: "What matters to you in how you respond?"
+      supportive: "What matters to you in how you handle this?"
+      reflective: "What matters to you in how you handle this?"
+      direct: "What matters to you in how you handle this?"
   toward:
     purpose: "Identify a response that moves toward what the user said matters."
     listen_for: "A behaviour that reflects what the user identified as important."
@@ -188,10 +163,11 @@ stages:
     if_earlier_missing:
       needs: matters
       reply: "What response would you want to be able to look back on?"
+    ask_simpler: "What is one thing you could do about that?"
     ask:
-      supportive: "What response would move you toward that?"
-      reflective: "What response would move you toward that?"
-      direct: "What response would move you toward that?"
+      supportive: "What could you do that fits with that?"
+      reflective: "What could you do that fits with that?"
+      direct: "What could you do that fits with that?"
   action:
     purpose: "Turn the chosen direction into one manageable action."
     listen_for: "A specific, safe, realistic action within the user's control."
@@ -200,23 +176,11 @@ stages:
       - "must not require immediate completion"
       - "must not promise the action will remove the difficult experience"
       - "must not select an action outside the user's control"
+    ask_simpler: "What is one small thing you could do?"
     ask:
-      supportive: "What is one action you can take?"
-      reflective: "What is one action you can take?"
-      direct: "What is one action you can take?"
-  closing:
-    purpose: "Confirm completion in the user's own terms, without claiming the thought or feeling has changed."
-    boundaries:
-      - "must not claim the thought or feeling has changed"
-      - "must not summarize the completed framework"
-      - "must not require the outcome to be resolved to be done"
-    if_earlier_missing:
-      needs: action
-      reply: "Is there anything you would add before we finish?"
-    ask:
-      supportive: "You chose an action that reflects what matters to you. How is that choice sitting with you?"
-      reflective: "The thought may remain, but it no longer has to make the decision. What changes when you see that choice?"
-      direct: "You identified what matters and the action that supports it. Is that action realistic?"
+      supportive: "What is one thing you could do?"
+      reflective: "What is one thing you could do?"
+      direct: "What is one thing you could do?"
 ---
 
 # ACT Choice Point

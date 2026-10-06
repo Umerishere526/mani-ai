@@ -134,12 +134,20 @@ When Mani offers a framework it says the framework's plain name and a short intr
 
 - [ ] Design it (spec): `/architect the offer names and introduces the framework`
 
-### 35. The model is chosen on real conversations · needs a decision
+### 35. The model is chosen on real conversations · in-progress
 
-Every reply today comes from the smallest, cheapest tier of a single model family. An earlier comparison only checked whether a model could carry a conversation through every stage. Candidates from the major providers and from the open model families are compared on row 32's check with the new instructions: how natural the replies read, whether it follows what the person means, whether it completes a framework through the body check in, how reliably it returns the structured reply, time per reply, and cost per conversation.
-**Done when:** at least four candidates, two of them open models, run three times each on row 32's check, the numbers and one transcript per candidate are recorded in the decision, and the chosen model is in the seeded prompts.
+Every reply today comes from the smallest, cheapest tier of a single model family. An earlier comparison only checked whether a model could carry a conversation through every stage. Candidates from the major providers and from the open model families are compared on row 32's check with the new instructions: how natural the replies read, whether it follows what the person means, whether it completes a framework through the body check in, how reliably it returns the structured reply, time per reply, and cost per conversation. Since 5 October 2026 the first test is row 8's fact checklist: the current model marks facts by topic and changes them every turn, so framework choice fails on the stress, grief and deadlines chats (journal `framework-fit-from-facts-first-runs-2026-10-05`); those five chats are the cheapest discriminating check. The choice covers two roles: the main model (every reply) and the secondary model (summaries, memory folding, titles). Conversation content is health data, so a candidate needs a zero data retention route and must not have mental health messages blocked by provider moderation. The test budget is small (about 3.7 dollars of credit on 5 October), so candidates are run cheapest first.
+**Done when:** at least four candidates, two of them open models, run on row 8's five chats and three times each on row 32's check, the numbers and one transcript per candidate are recorded in the decision, and the chosen main and secondary models are in the seeded prompts.
 
-- [ ] Design it (spec): `/architect the model is chosen on real conversations`
+Spec: [0006](../specs/0006-main-model-chosen-on-conversations/index.md) (step one: Gemini 3.8 Flash only; the wider comparison in Done when stays open) · code in backend/mani/llm/, backend/mani/chat/orchestrator.py, backend/scripts/, backend/content/prompts/mani_base.md
+
+- [x] Design it (spec): `/architect the model is chosen on real conversations`
+- [ ] Build it: `/develop the model is chosen on real conversations`
+  - [x] Reasoning effort, max tokens and routing reach the call from the prompt file (AC-1, AC-2)
+  - [x] The runner tries a model in its own process, zero retention by default, figures kept before cleanup (AC-3, AC-4)
+  - [ ] The paid run after muhammad says yes, then switch or record (AC-5, AC-6, AC-7)
+- [ ] Verify it: `/check verify the model is chosen on real conversations`
+- [ ] Test it: `/test the model is chosen on real conversations`
 
 ## Slice 4: Offers and checks
 
@@ -152,12 +160,25 @@ The reported manager chat becomes a scenario in the real model evals, so a later
 
 ## Slice 5: Judgment, not phrase lists
 
-### 8. Mani picks the best framework from the person's situation and steers toward it · needs a decision
+### 8. Mani picks the best framework from the person's situation and steers toward it · in-progress
 
-Framework choice today rests on phrase lists in the router, and every missed case means another phrase or rule (row 5 was one). Instead, Mani should judge which framework fits from the whole conversation and the client's distinction rules, and use its questions to find out what is missing for that framework (event, belief, effect, what the person wants), so a chat moves toward an offer and does not circle. This decides what the phrase router is still for, how the choice is made and checked, and how the steering is measured. It touches ADR 002 (one model call per turn) and ADR 007 (offers follow confidence), so the decision is recorded before anything is built.
-**Done when:** a set of real style chats (the manager chat and the client's own examples for all six frameworks) each reach the best suited framework offer within the client's cadence without adding a phrase to the router, and a chat that fits none of them keeps talking instead of looping.
+Framework choice today rests on phrase lists in the router, and every missed case means another phrase or rule (row 5 was one). Instead, Mani should judge which framework fits from the whole conversation and the client's distinction rules, and use its questions to find out what is missing for that framework (event, belief, effect, what the person wants), so a chat moves toward an offer and does not circle. This decides what the phrase router is still for, how the choice is made and checked, and how the steering is measured. It touches ADR 002 (one model call per turn) and ADR 007 (offers follow confidence), so the decision is recorded before anything is built. Two chats from 5 October 2026 show the gap: "work pressure, parents pressure, society pressure" got Structured Problem Solving as the closest fit at message four before any event, thought or single problem was named; and "I might have a panic attack" got ACT as the closest fit after grounding, although the client's overview lists "panicked" under DBT STOP and our DBT STOP file only covers "about to act".
+**Done when:** a set of real style chats (the manager chat, the two 5 October chats, and the client's own examples for all six frameworks) each reach the best suited framework offer within the client's cadence without adding a phrase to the router, and a chat that fits none of them keeps talking instead of looping.
 
-- [ ] Design it (spec): `/architect how Mani chooses and steers toward a framework`
+Spec: [0005](../specs/0005-framework-fit-from-stated-facts/index.md) · code in backend/mani/chat/, backend/mani/llm/schema.py, backend/content/frameworks/, backend/content/prompts/, backend/mani/prompts/composer.py, backend/scripts/eval_replies.py
+
+- [x] Design it (spec): `/architect how Mani chooses and steers toward a framework`
+- [ ] Build it: `/develop how Mani chooses and steers toward a framework`
+  - [x] The checklist in the reply, the words check, fit sets and tie rules (AC-1 to AC-5)
+  - [x] DBT STOP for panic, then chat 2 end to end: redraft chain, computed offers, urgent STOP lines (AC-6 to AC-9, AC-11, AC-14)
+  - [x] Chat 1 and the manager chat, and the prompt rewritten around facts (AC-10, AC-14)
+  - [x] Phrase scoring removed, tests rewritten, ADR 014 and the records (AC-12, AC-13)
+  - [ ] The three chats as eval scenarios, then the small paid run once muhammad says yes (AC-15)
+  - [x] Full fits only: offers are the pick or nothing, the closest fit retired, tests rewritten (AC-5, AC-7, AC-16)
+  - [x] Prompt and records: nearest wording out, the runner prints fact ids and redraft reasons, ADR 014 and docs (AC-16, AC-17)
+  - [ ] The re-check: stress three times, grief and deadlines once, after muhammad says yes (AC-17)
+- [ ] Verify it: `/check verify how Mani chooses and steers toward a framework`
+- [ ] Test it: `/test how Mani chooses and steers toward a framework`
 
 ## Slice 8: Guides match the client
 
@@ -168,12 +189,29 @@ The October 2026 review compared each framework file with the client's document.
 
 - [ ] Design it (spec): `/architect guide questions match the client`
 
-### 19. Body check in follows every framework · needs a decision
+### 19. Body check in follows every framework · in-progress
 
 A shared rule skips the body check in when the person's last answer names something they plan to do. Structured Problem Solving, Behavioral Activation, ACT and DBT STOP almost always end that way, so the check in is usually skipped. In every one of the client's examples Mani still asks "What do you notice in your body?". This waits on the client's answer in the index.
 **Done when:** the client's worked example for each of the six frameworks reaches the body check in (or the agreed exception), covered by a test.
 
-- [ ] Design it (spec): `/architect body check in follows every framework`
+Spec: [0007](../specs/0007-framework-ends-with-conclusion/index.md) (muhammad decided on 2026-10-05: always ask, no exception; the spec also replaces each framework's closing question with a short conclusion) · code in backend/mani/chat/, backend/content/frameworks/, backend/content/prompts/, backend/scripts/
+
+- [x] Design it (spec): `/architect body check in follows every framework`
+- [ ] Build it: `/develop body check in follows every framework`
+  - [x] The shared body check stage, the conclusion note and the question drop, then ACT end to end (AC-1 to AC-4)
+  - [x] The other five frameworks and the tests that name `closing` (AC-1, AC-7)
+  - [x] The two balanced thought branches for "I don't know" (AC-5)
+  - [x] The base prompt paragraph, ADR-016, PORT-STATUS and the journal (AC-6, AC-7)
+  - [ ] The real model read of the endings, after muhammad says yes (AC-8)
+- [ ] Verify it: `/check verify body check in follows every framework`
+- [ ] Test it: `/test body check in follows every framework`
+
+### 39. Stage questions flagged in the 2026-10-05 chats · needs a decision · from spec 0007
+
+Two things in muhammad's marked up chats are not part of the ending change. In the ABCDE chat, "From what you know so far, what seems fairest to say about your work?" was the question asked for a missing earlier answer at the balanced stage. It fired after the person answered "yes" at the evidence for stage, although the evidence against stage had real evidence, and muhammad marked it as a bad question. In the ACT chat, the person's answer to "what matters" already named a response (the half day), so the toward stage was skipped, and Mani then asked a second action question ("what is the next small thing") before ending.
+**Done when:** the test for "nothing usable was said at an earlier stage" no longer fires when a later stage held the real answer, the balanced stage's missing answer question is reworded, and a person who names a response while answering what matters is not asked two action questions.
+
+- [ ] Design it (spec): `/architect stage questions flagged in the 2026-10-05 chats`
 
 ### 20. A framework stops when the person asks · needs a decision
 
@@ -200,7 +238,7 @@ Mani's shared base instructions contradict the client's document in several plac
 
 ### 29. Our additions to the frameworks get client sign off · needs a decision
 
-The team added rules the client's document does not have: a grief rule that blocks Behavioral Activation for the whole chat on words like "died" (so "my phone died" blocks it too), fatigue and long covid exclusions, "Thought Reframe is too light for I am a failure", ACT lines that question a choice made to ease a feeling and say "That would help the anxiety settle", "a concrete goal is enough" in ACT, a breathing anchor in DBT STOP, ending ABCDE when abuse comes up, and the waiting rules before a framework may be offered. Some may be right, but each one changes the client's design.
+The team added rules the client's document does not have: a grief rule that blocks Behavioral Activation for the whole chat on words like "died" (so "my phone died" blocks it too), fatigue and long covid exclusions, "Thought Reframe is too light for I am a failure", ACT lines that question a choice made to ease a feeling and say "That would help the anxiety settle", "a concrete goal is enough" in ACT, a breathing anchor in DBT STOP, ending ABCDE when abuse comes up, the waiting rules before a framework may be offered, and from spec 0005 a panic branch on every DBT STOP stage and the rule that panic does not come before a full Structured Problem Solving fit. Some may be right, but each one changes the client's design.
 **Done when:** every addition is either signed off by the client, changed, or removed; the grief rule no longer fires on everyday words; and each kept addition is noted where a clinician reading the file can see it.
 
 - [ ] Design it (spec): `/architect our framework additions signed off`

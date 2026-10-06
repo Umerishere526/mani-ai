@@ -16,13 +16,16 @@ other knowledge lives: [[ADR-009-where-knowledge-lives]].
 | 004 | [[ADR-004-web-admin-styling-tailwind-only]] | accepted | | `web/app/globals.css` |
 | 005 | [[ADR-005-per-person-memory-across-conversations]] | accepted | | `backend/mani/memory.py`, migration `009`, `scripts/fold_idle_threads.py` |
 | 006 | [[ADR-006-a-turn-may-be-redrafted-once]] | accepted | amends 002; amended by 007 and 008 | `backend/mani/chat/redraft.py`, `orchestrator.py` |
-| 007 | [[ADR-007-offers-follow-confidence-and-the-closest-fit-is-owed]] | accepted | replaces the 2026-09-24 offer cadence; amends 006 | `backend/mani/chat/context.py`, `Reply.offer_fit` |
+| 007 | [[ADR-007-offers-follow-confidence-and-the-closest-fit-is-owed]] | accepted | replaces the 2026-09-24 offer cadence; amends 006; its owed closest fit superseded by 014 once accepted | `backend/mani/chat/context.py` |
 | 008 | [[ADR-008-every-reply-before-an-offer-asks-a-question]] | accepted | amends 006 | `redraft.py` (`needs_question`), `context.classify_reply` |
 | 009 | [[ADR-009-where-knowledge-lives]] | accepted | supersedes 001 | `CLAUDE.md`, this vault |
 | 010 | [[ADR-010-a-person-in-panic-is-guided-not-quizzed]] | accepted | adds to 007 and 008; amended by 011 | `context.build`, `repairs.apply`, `structured_problem_solving.md` |
 | 011 | [[ADR-011-first-stage-by-its-own-test-and-one-draft-when-asked-to-pick]] | accepted | amends 010 and 006 | `context.build`, `redraft.repeats`, `behavioral_activation.md` |
 | 012 | [[ADR-012-mani-speaks-plainly-and-tone-is-the-prompts-job]] | accepted | supersedes 008; amends 006 and 011 | `context.build` (`short`, `answering`), `redraft.py`, `content/prompts/mani_base.md` |
 | 013 | [[ADR-013-a-framework-stage-moves-on-after-one-answer]] | accepted | amends 010 and 011 | `context.build`, `repairs.apply`, `techniques.py`, the six framework files, `mani_base.md` |
+| 014 | [[ADR-014-a-framework-is-offered-only-when-the-facts-fit]] | proposed | supersedes 007's owed closest fit | `router.py`, `redraft.py`, `orchestrator.py`, `Reply.facts`, the six framework files |
+| 015 | [[ADR-015-what-the-person-said-before-accepting-is-not-asked-again]] | accepted | amends 013 and 012 | `techniques.covered_stages`, `context.py`, `repairs.apply`, `redraft.py`, migration `012`, the six framework files |
+| 016 | [[ADR-016-a-framework-ends-with-a-conclusion-and-the-body-check]] | proposed | amends 013 | `context.py`, `repairs.with_the_check_in`, `somatic.md`, `mani_base.md`, the six framework files |
 
 ## In force, recorded elsewhere, no ADR yet
 
@@ -37,7 +40,6 @@ questioned; until then the source named here is the record.
 | Ordinary traffic runs as `mani_service`, a member of `authenticated`, so RLS applies to real requests; never granted to `authenticator` | `.claude/SUPABASE.md` |
 | Three writes are security definer functions, not grants: `create_message_pair`, `create_greeting`, `mark_thread_crisis` | `.claude/SUPABASE.md` |
 | The deterministic safety screen is the only thing that locks a thread; the model's crisis flag never locks | `backend/mani/chat/safety.py`, commit `541b2f9` |
-| Framework routing is in process phrase matching, not a model call | `backend/mani/chat/router.py` |
 | Six repair checks are code, not model calls | `backend/mani/chat/repairs.py` |
 | No streaming in version one | PORT-STATUS |
 | One scoped second call at the end of a framework to pick an exercise | PORT-STATUS |

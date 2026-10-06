@@ -27,7 +27,7 @@ def test_a_reflective_reply_never_says_i_hear_you():
 def test_a_framework_that_ends_without_its_hand_off_buttons_is_caught():
     from tests.evals.validators import missing_handoff
 
-    ok = [("closing", []), ("somatic", []), (None, ["Chat More", "Go to Library"])]
+    ok = [("balanced", []), ("somatic", []), (None, ["Chat More", "Go to Library"])]
     assert missing_handoff(ok) == []
     bare = [("somatic", []), (None, ["Tell me more"])]
     assert missing_handoff(bare)

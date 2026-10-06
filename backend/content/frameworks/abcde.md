@@ -1,9 +1,9 @@
 ---
 id: abcde
 name: ABCDE
-summary: "These questions help you separate what happened from what you told yourself about it, question what may not be serving you, and come away with a clearer and more useful way of seeing the situation."
+summary: "These questions help you look at what happened, what you took it to mean, and whether that really fits."
 display_order: 1
-phases: [offering, activate, belief, consequence, evidence_for, evidence_against, balanced, closing]
+phases: [offering, activate, belief, consequence, evidence_for, evidence_against, balanced]
 activation:
   central_indication: >-
     A specific event triggered a belief that is now producing an emotional or behavioural
@@ -12,6 +12,9 @@ activation:
   # A confident offer waits for their third message: the fit depends on what they took the event or
   # the thought to mean, which the first two messages rarely say.
   earliest_offer_message: 3
+  # The facts that make this framework fit: every fact in one set (router.FACTS). Read by
+  # router.choose; the client's tie rules between frameworks are in router.TIE_RULES.
+  fits_when: [[event, meaning]]
   to_find_out:
     - "the specific event that set it off"
     - "what they took it to mean about themselves or the other person"
@@ -19,7 +22,7 @@ activation:
     - "whether they want to look at the whole sequence in depth, not one quick thought"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # router reads fits_when.
   appropriate_when:
     - "A specific event occurred"
     - "The user formed a belief about what the event means"
@@ -40,42 +43,6 @@ activation:
     - "A safety concern requires the approved safety protocol"
   contraindications:
     - "The person describes abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger - examining what it means must never turn into questioning whether it was real or as serious as it felt, and Mani must not reinterpret the behaviour as harmless"
-  # Short fragments, not the full example sentences from the spec. router.py matches these as
-  # whole words against what the person actually typed - a real message practically never
-  # contains a whole authored sentence verbatim, but it very often contains the three or four
-  # words that carry the pattern ("so i must be", "proves i will never"). Confidence now also
-  # requires corroboration (two fragments, or one repeated) before a framework is offered, so
-  # shortening these to raise recall no longer trades away precision the way it would have
-  # before that gate existed.
-  strong_signals:
-    - "so i must be"
-    - "must mean i am"
-  signals:
-    - "this proves i"
-    - "proves i will never"
-    - "everyone must think i am"
-    - "i always ruin everything"
-    - "i will always be alone"
-    - "i know i will fail again"
-    - "nothing will ever improve"
-    - "has no respect for me"
-    - "because nobody likes me"
-    - "terrible at my job"
-    - "because i do not matter"
-    - "i failed once"
-    - "wants me to fail"
-    - "want me to fail"
-    - "wanted me to fail"
-    - "embarrassed me"
-    - "embarassed me"
-    - "humiliated me"
-  redirects:
-    - signal: "Nobody cares about me, and I want a quick way to look at that thought."
-      instead: thought_reframe
-    - signal: "I know what happened, but I need to decide what to do."
-      instead: structured_problem_solving
-    - signal: "I cannot control what happened, but I do not want it directing my choices."
-      instead: act_choice_point
   distinctions:
     thought_reframe: >-
       Reframe when one painful thought is identified, a brief process is wanted, and the goal
@@ -104,6 +71,8 @@ stages:
       reflective: "You believe this event says something important about you. Would it help to look at what happened, what you believe it means, and how that belief is affecting you?"
       direct: "You want to determine whether this conclusion fits what happened. Would you like to work through it?"
   activate:
+    # The router fact that, once the person has said it, answers this stage.
+    answered_by: event
     purpose: "Identify the specific event without adding assumptions, explanations, or motives."
     listen_for: "What occurred, what was said or done, which part matters, and whether the user is describing facts or inferred meaning."
     ready_when: "What occurred is clear, the specific event the user wants to examine is settled, and it is described as observed rather than assumed. If the event remains unclear, stay in this stage."
@@ -122,11 +91,13 @@ stages:
         start_only: true
       - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
         reply: "What happened sounds serious, and I am not going to ask you to see it differently. What would be most helpful to talk through?"
+    ask_simpler: "What happened? Just tell me what took place."
     ask:
       supportive: "What happened?"
       reflective: "What happened?"
       direct: "What happened?"
   belief:
+    answered_by: meaning
     purpose: "Identify what the user believes the event means."
     listen_for: "The conclusion, prediction, expectation, or judgment the user attached to the event."
     boundaries:
@@ -139,10 +110,11 @@ stages:
     if_earlier_missing:
       needs: activate
       reply: "When you think about it, what comes up first?"
+    ask_simpler: "What went through your mind about it?"
     ask:
-      supportive: "What did that come to mean for you?"
-      reflective: "What did that come to mean for you?"
-      direct: "What did that come to mean for you?"
+      supportive: "What did you tell yourself about it?"
+      reflective: "What did you tell yourself about it?"
+      direct: "What did you tell yourself about it?"
   consequence:
     purpose: "Identify how believing that affected what the user felt, did, avoided, or wanted to do."
     listen_for: "What changed in emotions, behaviour, avoidance, or intended response after believing the thought."
@@ -151,10 +123,11 @@ stages:
       - "must not tell the user how the belief must have affected them"
       - "must not retell the complete event-belief-consequence sequence"
       - "must not assume the event itself had no effect"
+    ask_simpler: "How has that thought changed what you do or feel?"
     ask:
-      supportive: "It reached into everything for you. What felt most affected?"
-      reflective: "You noticed it affecting everything. Where did you see the effect most?"
-      direct: "It affected everything. What changed first?"
+      supportive: "How has thinking that affected you?"
+      reflective: "How has thinking that affected you?"
+      direct: "How has thinking that affected you?"
   evidence_for:
     purpose: "Establish what supports the belief and what may be accurate in it."
     listen_for: "What supports the belief, and what may be accurate in it."
@@ -169,10 +142,11 @@ stages:
     if_earlier_missing:
       needs: belief
       reply: "What makes it seem that way to you?"
+    ask_simpler: "Why do you believe that?"
     ask:
-      supportive: "What supports that belief?"
-      reflective: "What supports that belief?"
-      direct: "What supports that belief?"
+      supportive: "What makes you think that is true?"
+      reflective: "What makes you think that is true?"
+      direct: "What makes you think that is true?"
   evidence_against:
     purpose: "Determine whether the belief is incomplete, assumed, or broader than the facts."
     listen_for: "What challenges the belief, what may be assumed, what remains uncertain."
@@ -187,10 +161,11 @@ stages:
     if_earlier_missing:
       needs: belief
       reply: "Is there anything about this you are unsure of?"
+    ask_simpler: "Is there anything that doesn't match that?"
     ask:
-      supportive: "What might challenge that belief?"
-      reflective: "What might challenge that belief?"
-      direct: "What might challenge that belief?"
+      supportive: "Is there anything you know that doesn't match that thought?"
+      reflective: "Is there anything you know that doesn't match that thought?"
+      direct: "Is there anything you know that doesn't match that thought?"
   balanced:
     purpose: "Develop a believable belief that includes the relevant evidence and remains in the user's language."
     listen_for: "A credible belief that includes the known facts without becoming falsely positive."
@@ -201,27 +176,18 @@ stages:
       - "must not replace one unsupported certainty with another"
       - "must not require the user to feel differently"
       - "must not continue changing a belief the user already finds credible"
+    if_unclear:
+      - when: "they say they do not know what would be fair, or cannot put it into words"
+        reply: "That is fine. What is one thing about this that you do know is true?"
+        counted: true
     if_earlier_missing:
       needs: evidence_for
-      reply: "From what you know so far, what seems fairest to say about this?"
+      reply: "From what you know so far, what would you say is true about this?"
+    ask_simpler: "From all of that, what do you know is true about this?"
     ask:
-      supportive: "You can recognize the mistake without defining yourself by it. What would feel fairer and still true?"
-      reflective: "The full evidence is different from the original conclusion. What belief holds all of it?"
-      direct: "The original belief is broader than the facts. What do the facts support?"
-  closing:
-    purpose: "Confirm completion in the user's own terms, without declaring that the framework worked."
-    boundaries:
-      - "must not require the user to feel differently, forgive anyone, or take action to be done"
-      - "must not summarize the completed framework"
-      - "must not tell the user the framework worked"
-      - "must not say the belief feels fairer unless the user used similar language"
-    if_earlier_missing:
-      needs: balanced
-      reply: "Is there anything you would add before we finish?"
-    ask:
-      supportive: "This belief feels fairer to what happened. How is it sitting with you?"
-      reflective: "The new belief includes the full evidence. What changes when you see it this way?"
-      direct: "This belief is supported by the facts you identified. Does it feel accurate?"
+      supportive: "Putting those together, what would you say is true about this?"
+      reflective: "Putting those together, what would you say is true about this?"
+      direct: "Putting those together, what would you say is true about this?"
 ---
 
 # ABCDE

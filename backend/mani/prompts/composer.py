@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from mani.chat.router import FACTS
 from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.llm.schema import Memory
@@ -59,6 +60,25 @@ def framework_index(registry: Registry) -> str | None:
         lines.append(
             f"| {framework.name} | `{framework.id}` | {' '.join(indication.split())} |"
         )
+
+    # Which of the facts make each one fit, in the same plain words the `facts` field defines,
+    # from the one table in router.py. The code applies the same sets to choose.
+    fits = [
+        f"- **{framework.name}**: "
+        + " or ".join(
+            " and ".join(f"`{fact}` ({FACTS.get(fact, fact)})" for fact in fact_set)
+            for fact_set in (framework.activation or {}).get("fits_when") or []
+        )
+        for framework in present
+        if (framework.activation or {}).get("fits_when")
+    ]
+    if fits:
+        lines += [
+            "", "## What makes each fit", "",
+            "A set fits when every fact on one side of an \"or\" is in your `facts`. Only some "
+            "of a set's facts is not a fit: pointing to a set is never an offer; ask about what "
+            "is missing.", "",
+        ] + fits
 
     known = set(registry.ids)
     # Each distinction is written from both sides in the framework files - ABCDE explains
@@ -115,7 +135,7 @@ def framework_index(registry: Registry) -> str | None:
     if to_find_out:
         lines += [
             "", "## Finding the fit", "",
-            "From their first message, work out which of these they are heading toward, and let "
+            "From their first message, notice which of these their facts point to, and let "
             "your questions reach for what is still missing for it - in their words, about their "
             "feeling, never as a checklist:", "",
         ] + to_find_out

@@ -29,6 +29,23 @@ def moves_on_after(framework: Framework | None, phase: str | None) -> bool:
     return 0 <= offering < framework.phase_index(phase) < len(framework.phases) - 1
 
 
+def covered_stages(framework: Framework | None, known: dict[str, str]) -> list[str]:
+    """The stages right after the offering that what the person said before accepting answers.
+
+    A stage names the fact that answers it in `answered_by`. Only an unbroken run from the first
+    stage counts, and the last stage before the body check is never covered, so there is always
+    a question left to ask.
+    """
+    if framework is None or OFFERING not in framework.phases:
+        return []
+    covered: list[str] = []
+    for phase in framework.phases[framework.phase_index(OFFERING) + 1 : -1]:
+        if phase in SOMATIC_STAGES or (framework.stages.get(phase) or {}).get("answered_by") not in known:
+            break
+        covered.append(phase)
+    return covered
+
+
 def _phase_after(framework: Framework, phase: str | None) -> str | None:
     index = framework.phase_index(phase)
     return framework.phases[index + 1] if 0 <= index < len(framework.phases) - 1 else None

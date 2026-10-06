@@ -1,22 +1,29 @@
 ---
 id: dbt_stop
 name: DBT STOP
-summary: "These questions help you interrupt an automatic reaction so you can pause, understand what is happening, and choose how you want to respond rather than simply reacting."
+summary: "These questions help you pause before you react, so you can choose what to do."
 display_order: 6
-phases: [offering, stop, pause, observe, proceed, closing]
+phases: [offering, stop, pause, observe, proceed]
 activation:
+  # The client's overview wording (six-frameworks-overview.md). The detailed STOP specification
+  # covers only an action about to happen; the `panic` key on each stage below is our wording
+  # for a person panicked with no action named, on the client sign off list (scope row 29).
   central_indication: >-
-    The user is about to act - send, post, call, confront, decide - and needs help pausing
-    before the action, not analysis of the underlying problem. Time-critical: this overrides
-    whatever else the conversation was scoring toward.
+    The user is emotionally overwhelmed, highly reactive, panicked, or close to acting
+    impulsively, and needs help pausing before responding, not analysis of the underlying
+    problem. When an action is about to happen it is time critical and comes before whatever
+    else the conversation was pointing toward.
+  # The facts that make this framework fit: every fact in one set (router.FACTS). Read by
+  # router.choose; the client's tie rules between frameworks are in router.TIE_RULES.
+  fits_when: [[about_to_act], [overwhelmed_now]]
   to_find_out:
-    - "what they are about to do"
+    - "what they are about to do, or whether they are panicked right now with no action in view"
     - "whether it has already happened"
     - "whether it can safely wait a moment"
     - "whether anyone is at risk (then safety, not this)"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # router reads fits_when.
   appropriate_when:
     - "The user is close to acting impulsively"
     - "The action has not yet occurred"
@@ -39,28 +46,6 @@ activation:
     - "The intended action involves suicide, self-harm, harm to another person, overdose, immediate danger, or inability to remain safe - the safety protocol, not STOP"
     - "The action itself is protective - leaving, getting away from someone, calling emergency services, or seeking medical help. STOP exists to interrupt a regrettable action, and pausing a protective one is the same failure with the direction reversed: it delays the person from doing the thing that helps"
     - "The person would be kept near an abusive person, kept from contacting emergency help, or kept in the conversation when outside emergency support is needed - Pause Mode never takes priority over leaving danger or getting help"
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "about to send a message"
-    - "already wrote the email"
-    - "call her right now"
-    - "about to post everything"
-    - "keep typing and deleting"
-    - "about to lose it"
-    - "confront her right now"
-    - "quitting today"
-    - "ending the relationship right now"
-  signals:
-    - "tell him exactly what i think"
-    - "something that will hurt him"
-    - "if she says one more thing"
-    - "canceling everything"
-    - "this purchase even though"
-    - "will regret it"
-    - "will make things worse"
-    - "react this way"
-    - "need help stopping myself"
-    - "cannot think before i respond"
   distinctions:
     somatic_transition: >-
       STOP interrupts an immediate action. The somatic transition follows a completed process
@@ -84,7 +69,18 @@ stages:
     boundaries:
       - "must not command the user to calm down"
       - "must not use STOP instead of the safety protocol"
-      - "must not offer this before the specific action is named - a pause on an unnamed urge cannot be told apart from a pause on someone about to leave, call for help, or get away from danger, and those are the opposite of what STOP is for"
+      - "when they are about to act, must not offer this before the specific action is named - a pause on an unnamed urge cannot be told apart from a pause on someone about to leave, call for help, or get away from danger, and those are the opposite of what STOP is for"
+    panic:
+      purpose: "Say back what they told you is happening right now and ask one permission question to pause here together."
+      boundaries:
+        - "must not offer this before you have asked what is happening for them right now"
+        - "must not command them to calm down or promise the feeling will pass"
+        - "must not name or interpret a body sensation they did not describe"
+        - "must not use STOP when they describe a medical emergency or a safety concern - the safety protocol comes first"
+      ask:
+        supportive: "A lot is happening right now. Would it help to pause here with me and take this one moment at a time?"
+        reflective: "Everything is moving quickly right now. Would it help to pause here with me and notice what is happening?"
+        direct: "Would you like to pause here with me and work through this moment together?"
     if_unclear:
       - when: "the user declines"
         reply: "You do not want to use Pause Mode. What would be most helpful right now?"
@@ -113,10 +109,17 @@ stages:
       - when: "already acted - \"I already sent it.\""
         reply: "The message has already been sent. Is there another action you are about to take?"
         counted: true
+    ask_simpler: "Can you stop before you do it?"
     ask:
       supportive: "Can you stop the action before it happens?"
       reflective: "Can you stop the action before it happens?"
       direct: "Can you stop the action before it happens?"
+    panic:
+      purpose: "Stop for a moment with MANI, without needing the feeling to go away first."
+      ask:
+        supportive: "Can you stop here with me for a moment, just as things are?"
+        reflective: "Can you stop here with me for a moment, just as things are?"
+        direct: "Can you stop here with me for a moment, just as things are?"
   pause:
     purpose: "Enter Pause Mode and remain with MANI without returning to the action."
     listen_for: "Whether the action remains paused and the user remains engaged with MANI."
@@ -139,10 +142,17 @@ stages:
     if_earlier_missing:
       needs: stop
       reply: "Can you hold off on acting for a minute and stay here with me?"
+    ask_simpler: "Can you wait a moment and stay here with me?"
     ask:
-      supportive: "You have stopped before acting. Can you remain paused here with me?"
-      reflective: "You interrupted the immediate reaction. Can you stay with the pause and notice what is happening?"
-      direct: "The action is paused. Can you keep it paused while we continue?"
+      supportive: "Can you hold off for a moment and stay here with me?"
+      reflective: "Can you hold off for a moment and stay here with me?"
+      direct: "Can you hold off for a moment and stay here with me?"
+    panic:
+      purpose: "Stay in the pause with MANI, without needing the feeling to change."
+      ask:
+        supportive: "You have stopped here with me. Can you stay with me for a few moments?"
+        reflective: "You have stopped for a moment. Can you stay here with me and let this moment be as it is?"
+        direct: "You have stopped. Can you stay here with me while we take the next step?"
   observe:
     purpose: "Notice what is happening internally and externally without acting on it."
     listen_for: "What the user notices in thoughts, urges, physical experience, and immediate situation, using only their language."
@@ -158,10 +168,17 @@ stages:
     if_earlier_missing:
       needs: pause
       reply: "What do you notice right now?"
+    ask_simpler: "What is going on right now?"
     ask:
-      supportive: "You are staying with the pause. What do you notice right now?"
-      reflective: "You are no longer acting immediately. What is present for you right now?"
-      direct: "The action remains paused. What are the facts right now?"
+      supportive: "What do you notice right now?"
+      reflective: "What do you notice right now?"
+      direct: "What is actually happening right now?"
+    panic:
+      purpose: "Notice what is present inside and around them, in their words, without interpreting it."
+      ask:
+        supportive: "You are staying here with me. What do you notice right now, inside you or around you?"
+        reflective: "What is present for you right now, inside you or around you?"
+        direct: "What do you notice right now, inside you and around you?"
   proceed:
     purpose: "Choose whether to wait, act, or respond differently."
     listen_for: "Whether the user chooses to wait, act, or respond differently, and what they want that response to accomplish."
@@ -176,22 +193,17 @@ stages:
     if_unclear:
       - when: "chooses retaliation"
         reply: "You want him to experience what you experienced. What response would avoid intensifying the situation?"
+    ask_simpler: "What would actually help right now?"
     ask:
-      supportive: "What response would help rather than intensify this?"
-      reflective: "What response would help rather than intensify this?"
-      direct: "What response would help rather than intensify this?"
-  closing:
-    purpose: "Confirm completion in the user's own terms, without claiming the user has calmed down or made the correct decision."
-    boundaries:
-      - "must not tell the user they have calmed down or made the correct decision"
-      - "must not summarize the completed framework"
-    if_earlier_missing:
-      needs: proceed
-      reply: "Is there anything you would add before we finish?"
-    ask:
-      supportive: "You chose to leave the message unsent for now. How is that choice sitting with you?"
-      reflective: "The urge remains, but you are choosing how to respond. What changes when the action is no longer immediate?"
-      direct: "Is that your next step?"
+      supportive: "What would help right now, rather than make it worse?"
+      reflective: "What would help right now, rather than make it worse?"
+      direct: "What would help right now, rather than make it worse?"
+    panic:
+      purpose: "Choose what would help in the next few minutes."
+      ask:
+        supportive: "What would help you most in the next few minutes?"
+        reflective: "What would help you most in the next few minutes?"
+        direct: "What would help you most in the next few minutes?"
 ---
 
 # DBT STOP

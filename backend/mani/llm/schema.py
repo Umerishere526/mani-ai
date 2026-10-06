@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from mani.chat.router import FACTS
 
 
 class LibrarySection(StrEnum):
@@ -128,6 +129,26 @@ class Crisis(BaseModel):
         return value if isinstance(value, str) else None
 
 
+class Fact(BaseModel):
+    """One thing the person has told Mani, in their own words."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    fact: str = Field(
+        description=(
+            f"Exactly one of these ids, written as here and never your own label: "
+            f"{', '.join(FACTS)}."
+        )
+    )
+    words: str = Field(
+        description="Their own words that show it, copied exactly from one of their messages."
+    )
+
+
+def _facts_listed() -> str:
+    return "; ".join(f'"{fact}": {meaning}' for fact, meaning in FACTS.items())
+
+
 class Style(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -151,6 +172,17 @@ class Reply(BaseModel):
             "field' in your instructions. Not shown to the user."
         ),
     )
+    facts: list[Fact] | None = Field(
+        default=None,
+        description=(
+            "Fill before writing text: each of these the person has told you in this "
+            "conversation, with their own words that show it. Use only these ids; anything else "
+            "is thrown away. List only what they actually said, and leave the list empty when "
+            "none of these fits yet: that is common, and it means keep talking. General "
+            "pressure, stress or worry on its own is none of these. Null while a set "
+            f"of questions is running. Not shown to the user. The facts: {_facts_listed()}."
+        ),
+    )
     style: Style | None = Field(
         default=None,
         description=(
@@ -158,23 +190,22 @@ class Reply(BaseModel):
             "repeat; the opening words may not."
         ),
     )
-    heading_toward: str | None = Field(
-        default=None,
-        description=(
-            "Choose before writing text: the id from the Framework Index that this "
-            "conversation is most likely heading toward, or null when nothing has pointed "
-            "anywhere yet. It decides what you are listening for. Not shown to the user."
-        ),
-    )
-    offer_fit: Literal["clear", "closest"] | None = Field(
-        default=None,
-        description=(
-            "Only when this reply offers a set of questions: \"clear\" when you are confident "
-            "it fits what they have told you, \"closest\" when nothing fits well and it is the "
-            "nearest. Null when you are not offering. Choose before writing text."
-        ),
-    )
     text: str = Field(description="Your conversational response to the user. Required.")
+
+    @field_validator("facts", mode="before")
+    @classmethod
+    def _only_well_formed_facts(cls, value: object) -> object:
+        """A malformed fact would fail the whole turn, and the validation error would carry the
+        quoted words into the call log. Dropping it costs one fact, never the reply."""
+        if not isinstance(value, list):
+            return None
+        return [
+            item for item in value
+            if isinstance(item, Fact)
+            or isinstance(item, dict)
+            and isinstance(item.get("fact"), str)
+            and isinstance(item.get("words"), str)
+        ]
     prompts: list[SmartPrompt] | None = Field(
         default=None,
         description=(

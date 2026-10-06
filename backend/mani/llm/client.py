@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_MAX_TOKENS = 2048
+# The room the exercise pick has for its one tool call, unless the prompt row names more.
+DEFAULT_EXERCISE_MAX_TOKENS = 200
 
 # One retry, shared by a malformed reply and a provider that is briefly down. Without it
 # either loses the person's typed message entirely - complete() is called before the turn
@@ -166,8 +168,9 @@ async def complete[T: BaseModel](
     *,
     model: str,
     purpose: llm_calls.Purpose,
-    temperature: float = DEFAULT_TEMPERATURE,
+    temperature: float | None = DEFAULT_TEMPERATURE,
     max_tokens: int = DEFAULT_MAX_TOKENS,
+    reasoning_effort: str | None = None,
     routing: dict[str, Any] | None = None,
     user_id: uuid.UUID | str | None = None,
     thread_id: uuid.UUID | str | None = None,
@@ -194,6 +197,7 @@ async def complete[T: BaseModel](
         model=model,
         temperature=temperature,
         max_tokens=max_tokens,
+        reasoning_effort=reasoning_effort,
         routing=routing,
         settings=settings,
     )
@@ -290,8 +294,9 @@ async def choose_exercise(
     purpose: llm_calls.Purpose,
     said: Sequence[str] = (),
     current_issue: str | None = None,
-    temperature: float = DEFAULT_TEMPERATURE,
-    max_tokens: int = 200,
+    temperature: float | None = DEFAULT_TEMPERATURE,
+    max_tokens: int = DEFAULT_EXERCISE_MAX_TOKENS,
+    reasoning_effort: str | None = None,
     routing: dict[str, Any] | None = None,
     user_id: uuid.UUID | str | None = None,
     thread_id: uuid.UUID | str | None = None,
@@ -315,7 +320,7 @@ async def choose_exercise(
 
     runnable = chain.build_tool_choice(
         tools.StartExercise, model=model, temperature=temperature, max_tokens=max_tokens,
-        routing=routing, settings=settings,
+        reasoning_effort=reasoning_effort, routing=routing, settings=settings,
     )
 
     listing = "\n".join(

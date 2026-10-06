@@ -94,6 +94,9 @@ class TechniqueState(Row):
     library_offered_since: bool = False
     # Extra turns the stored stage has used, 0 or 1; see migration 011.
     holds: int = 0
+    # The facts kept when the framework was offered, each with the person's own words; see
+    # migration 012. Read by the turn that accepts the offer.
+    known: dict[str, str] = Field(default_factory=dict)
 
 
 class ResponseStyle(Row):

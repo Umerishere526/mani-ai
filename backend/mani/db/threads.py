@@ -303,18 +303,19 @@ async def apply(
             """
             insert into public.thread_technique_state
                 (thread_id, user_id, framework_id, outcome, phase,
-                 at_message_count, library_offered_since, holds)
-            values ($1, $2, $3, $4, $5, $6, $7, $8)
+                 at_message_count, library_offered_since, holds, known)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
             on conflict (thread_id) do update set
                 framework_id         = excluded.framework_id,
                 outcome              = excluded.outcome,
                 phase                = excluded.phase,
                 at_message_count     = excluded.at_message_count,
                 library_offered_since = excluded.library_offered_since,
-                holds                = excluded.holds
+                holds                = excluded.holds,
+                known                = excluded.known
             """,
             thread_id, user_id, t.framework_id, t.outcome.value, t.phase,
-            t.at_message_count, t.library_offered_since, t.holds,
+            t.at_message_count, t.library_offered_since, t.holds, t.known,
         )
 
     if updates.offer_frameworks:

@@ -187,7 +187,7 @@ Append-only log of the model's self-reported style per reply.
 | 9 | `created_at` | timestamptz | default `now()` | |
 | 10 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
 | 11 | `stages` | jsonb | default `'{}'`, must be a JSON object (CHECK) | Per-phase content: purpose, listen_for, ready_when, boundaries, `ask.{style}`. |
-| 12 | `activation` | jsonb | default `'{}'`, must be a JSON object (CHECK) | `strong_signals`/`signals`/`distinctions` — what `mani/chat/router.py` actually reads. |
+| 12 | `activation` | jsonb | default `'{}'`, must be a JSON object (CHECK) | `fits_when` (the fact sets `mani/chat/router.py` chooses with), `never_offer_when_said`, and what the prompt reads (`central_indication`, `to_find_out`, `distinctions`, `contraindications`). |
 
 ### `admin.prompts`
 | # | Column | Type | Required | Purpose |

@@ -8,15 +8,16 @@ import pytest
 from scripts.client_style_counts import count_dashes
 
 BASE = pathlib.Path(__file__).resolve().parents[2] / "content" / "prompts" / "mani_base.md"
-MAX_LINES = 120
+MAX_LINES = 115
 
 
 def _base() -> str:
     return BASE.read_text()
 
 
-def test_the_base_instructions_fit_in_a_hundred_and_twenty_lines():
-    assert len(_base().splitlines()) <= MAX_LINES
+def test_the_base_instructions_body_fits_in_a_hundred_and_fifteen_lines():
+    body = _base().split("\n---\n", 1)[1]
+    assert len(body.splitlines()) <= MAX_LINES
 
 
 def test_the_base_instructions_use_no_dash_as_punctuation():

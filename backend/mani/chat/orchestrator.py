@@ -20,6 +20,7 @@ from mani.chat.greeting import (
     STYLE_OPTIONS,
     greeting,
 )
+from mani.chat.techniques import Registry, covered_stages
 from mani.config import get_settings
 from mani.db import (
     exercises as exercises_db,
@@ -55,10 +56,6 @@ TITLE_AFTER_MESSAGES = 3
 # history window rather than set beside it: any value above the window leaves messages that
 # have scrolled out of the history the model sees and are not yet in the summary either.
 SUMMARY_THRESHOLD = messages_db.CONTEXT_WINDOW
-
-# The router narrows once there is enough to narrow from. Below this, one or two messages
-# is not a pattern - it is the start of a conversation.
-ROUTER_MIN_EXCHANGES = 2
 
 _HANDOFF_LABELS = {CHAT_MORE_LABEL.lower(), GO_TO_LIBRARY_LABEL.lower()}
 
@@ -238,6 +235,22 @@ def _finished(technique: TechniqueState | None) -> bool:
     return bool(technique and technique.outcome is TechniqueOutcome.ACCEPTED and not technique.phase)
 
 
+def _not_offerable_now(
+    ctx: threads.TurnContext, registry: Registry, user_texts: list[str]
+) -> frozenset[str]:
+    """Frameworks the facts may not point to on this turn: one their words rule out, and the one
+    they have finished, which repairs refuses anyway. A declined one is not here: while its
+    cooldown runs nothing at all may be offered, and after it the same one may come back."""
+    excluded = {
+        framework_id
+        for framework_id, activation in registry.activations.items()
+        if router.vetoes(activation, user_texts)
+    }
+    if _finished(ctx.technique):
+        excluded.add(ctx.technique.framework_id)
+    return frozenset(excluded)
+
+
 def _conversation(history: list[Message]) -> list[dict[str, str]]:
     return [
         {
@@ -391,26 +404,15 @@ async def send(
     # they have said rather than only this turn.
     user_texts = [m.content for m in history if m.role is MessageRole.USER] + [content]
 
-    # The router narrows the field it is not the caller's job to decide; the model still
-    # confirms whatever it offers, and repairs.apply still validates that choice against the
-    # registry. No model call, so a false or missing shortlist costs relevance, never safety.
-    shortlist: list[router.Signal] = []
-    candidate = None
+    # An action about to happen is the one case decided before the model is asked: DBT STOP's
+    # own offer lines go into [ctx], since waiting a turn may be too late. Every other choice is
+    # made from the facts the model reports, below.
     urgent = router.urgent(user_texts)
-    if (
-        technique is None
-        and assessment.level is safety.Level.NONE
-        and (
-            ctx.thread.message_count // 2 >= ROUTER_MIN_EXCHANGES
-            # An imminent action is the one case not worth waiting two exchanges on.
-            or urgent
-        )
-    ):
-        shortlist = router.shortlist(user_texts, config.registry.activations)
-        # The closest fit is owed now, so the top of the shortlist is offered in the client's own
-        # words even when the router is not confident of it.
-        if shortlist and (router.is_confident(shortlist) or context.closest_fit_due(ctx)):
-            candidate = config.registry.get(shortlist[0].framework_id)
+    candidate = (
+        config.registry.get(router.URGENT_FRAMEWORK)
+        if urgent and technique is None and assessment.level is safety.Level.NONE
+        else None
+    )
 
     wants_title = (
         ctx.thread.message_count >= TITLE_AFTER_MESSAGES and not ctx.thread.title
@@ -426,8 +428,15 @@ async def send(
     model, parameters, routing = composer.model_settings(config)
 
     active_framework = config.registry.get(technique.framework_id) if technique else None
+    # Stages that what they said before accepting already answers; the same list shapes
+    # the [ctx] block now and the stage recorded after the reply.
+    told = (
+        covered_stages(active_framework, technique.known)
+        if technique is not None and technique.outcome is TechniqueOutcome.OFFERED
+        else []
+    )
     prefix = context.build(
-        ctx, shortlist=shortlist, framework=active_framework, candidate=candidate,
+        ctx, framework=active_framework, candidate=candidate,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
         framework_starting=accepted_this_turn, urgent=urgent,
         # A tap is a choice among Mani's own buttons, not words to read.
@@ -461,6 +470,7 @@ async def send(
         purpose=llm_calls.Purpose.CHAT,
         temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
         max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
+        reasoning_effort=parameters.get("reasoning_effort"),
         routing=routing,
         user_id=user_id,
         thread_id=ctx.thread.id,
@@ -468,31 +478,63 @@ async def send(
     )
     reply = call.value
     clear_ok = context.cooldown_passed(ctx, urgent=urgent)
-    closest_ok = context.closest_fit_ok(ctx, urgent=urgent)
 
-    def _earliest_ok(draft: Reply) -> bool:
-        named = redraft.offered(draft, config.registry)
+    def _earliest_ok(framework_id: str | None) -> bool:
         return context.earliest_offer_ok(
-            ctx, config.registry.activations.get(named) if named else None, urgent=urgent
+            ctx, config.registry.activations.get(framework_id) if framework_id else None,
+            urgent=urgent,
+        )
+
+    # The facts are read only where an offer could follow: nothing running, no button tapped,
+    # nothing accepted yet, no safety concern. They are taken from the first draft and kept, so
+    # a second draft cannot add a fact to make its own offer fit.
+    fact_turn = (
+        (technique is None or technique.outcome is TechniqueOutcome.OFFERED)
+        and not tapped
+        and not accepted_this_turn
+        and not assessment.blocks_framework
+    )
+    fit: router.Fit | None = None
+    fact_notes: list[str] = []
+    fact_words: dict[str, str] = {}
+    if fact_turn:
+        kept = router.kept_facts(
+            [(f.fact, f.words) for f in reply.facts or []], user_texts
+        )
+        fact_notes = kept.notes
+        fact_words = kept.words
+        # The imminent action phrases are deterministic evidence of the same fact.
+        facts = kept.present | ({"about_to_act"} if urgent else set())
+        fit = router.choose(
+            frozenset(facts),
+            config.registry.activations,
+            {i: config.registry.get(i).display_order for i in config.registry.ids},
+            excluded=_not_offerable_now(ctx, config.registry, user_texts),
+        )
+        # Ids only, never their words.
+        logger.info(
+            "thread %s facts %s pick %s leading %s",
+            ctx.thread.id, sorted(fit.facts), fit.pick or "none", fit.leading or "none",
         )
 
     def _why(draft: Reply) -> list[str]:
         return redraft.reasons(
             draft, user_texts, config.registry,
-            earliest_wait=(draft.offer_fit != "closest" and clear_ok and not _earliest_ok(draft)),
-            # A fit that is not clear waits for the closest fit's own window. A typed reply to an
-            # offer already open is Keep chatting unless it asks about the offer, so offering
-            # again there needs the same window.
-            offer_not_allowed=(not deferred or "?" not in content)
-            and not (closest_ok if draft.offer_fit == "closest" else clear_ok),
-            closest_fit_due=context.closest_fit_due(ctx) and not assessment.blocks_framework
-            and not deferred,
+            fit=fit,
+            style=context.resolve_style(ctx),
+            clear_ok=clear_ok,
+            offer_due=context.offer_due(ctx) and not deferred,
+            earliest_ok=_earliest_ok,
+            # A typed reply to an offer already open is Keep chatting unless it asks about the
+            # offer, so showing it again needs the usual window unless they asked.
+            waiting=offer.technique if deferred else None,
+            asked_about_waiting="?" in content,
         )
 
     why = _why(reply)
     # A draft that uses a feeling or size they never gave, offers before it may, offers what they
-    # said rules out, or leaves a due closest fit unoffered gets one more try, told why. What
-    # still fails is corrected by repairs.apply, or left as drafted.
+    # said rules out or the facts do not fit, or leaves a due fit unoffered gets one more try,
+    # told why. What still fails is corrected by repairs.apply, or left as drafted.
     if why:
         logger.info("thread %s redrafting: %s", ctx.thread.id, "; ".join(why))
         again = await client.complete(
@@ -504,16 +546,13 @@ async def send(
             purpose=llm_calls.Purpose.CHAT,
             temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
             max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
+            reasoning_effort=parameters.get("reasoning_effort"),
             routing=routing,
             user_id=user_id,
             thread_id=ctx.thread.id,
             prompt_version_id=None,
         )
         reply = again.value
-    if reply.heading_toward:
-        # Read by the steering evals and by anyone asking why a question went where it did:
-        # the id only, never a word of what the person said.
-        logger.info("thread %s heading toward %s", ctx.thread.id, reply.heading_toward)
 
     # The model's own crisis judgment no longer locks the thread: a small model over-fires it
     # on ordinary distress, pain or injury. Only the deterministic screen (safety.screen, above)
@@ -556,6 +595,7 @@ async def send(
         accepted_this_turn = True
         offered_now.append(technique.framework_id)
 
+    final_offer = redraft.offered(reply, config.registry)
     fixed = repairs.apply(
         reply,
         config.registry,
@@ -580,9 +620,12 @@ async def send(
         # stood open.
         # An offer a second draft still makes after what they said ruled it out is dropped the
         # way an early one is.
-        closest_fit=reply.offer_fit == "closest",
+        # Judged against the first draft's facts. An offer that still disagrees with them after
+        # the redraft is dropped the way an early one is.
         cooldown_passed=(
-            (closest_ok if reply.offer_fit == "closest" else clear_ok and _earliest_ok(reply))
+            redraft.offers_the_pick(final_offer, fit)
+            and clear_ok
+            and _earliest_ok(final_offer)
             and outcome is not TechniqueOutcome.DECLINED
             and not redraft.ruled_out(reply, user_texts, config.registry)
         ),
@@ -600,7 +643,10 @@ async def send(
         clarification_already_used=context.clarification_used(history),
         current_holds=technique.holds if technique else 0,
         asked_again=False if tapped else context.asks_to_hear_again(content),
+        skipped_stages=len(told),
     )
+    if fact_notes:
+        fixed = dataclasses.replace(fixed, notes=fact_notes + fixed.notes)
     framework_running = outcome is TechniqueOutcome.ACCEPTED
     if assessment.blocks_framework or model_concern:
         # A concern pauses the framework rather than ending it: nothing this reply reports
@@ -714,6 +760,7 @@ async def send(
             outcome=TechniqueOutcome.OFFERED,
             phase=fixed.phase or "offering",
             at_message_count=count_after,
+            known=fact_words,
         )
         updates.offer_frameworks.append(new_offer.technique)
     elif (decided := _decided_framework(fixed.framework_id, outcome, technique)) is not None:
@@ -756,7 +803,8 @@ async def send(
     if retiring_framework_id is not None:
         said = [m.content for m in history if m.role is MessageRole.USER][-2:] + [content]
         exercise = await _offer_exercise(
-            conn, retiring_framework_id, config, model, routing, user_id, ctx.thread.id,
+            conn, retiring_framework_id, config, model, parameters, routing, user_id,
+            ctx.thread.id,
             said=said, current_issue=ctx.summary.current_issue if ctx.summary else None,
         )
 
@@ -785,6 +833,7 @@ async def _offer_exercise(
     framework_id: str,
     config,
     model: str,
+    parameters: dict,
     routing: dict | None,
     user_id: str,
     thread_id: uuid.UUID,
@@ -821,6 +870,10 @@ async def _offer_exercise(
         purpose=llm_calls.Purpose.EXERCISE_SELECT,
         said=said,
         current_issue=current_issue,
+        # A model that thinks first needs room for it as well as for the tool call; the pick
+        # falls back to the first candidate when no call is made.
+        max_tokens=parameters.get("exerciseMaxTokens", client.DEFAULT_EXERCISE_MAX_TOKENS),
+        reasoning_effort=parameters.get("reasoning_effort"),
         routing=routing,
         user_id=user_id,
         thread_id=thread_id,

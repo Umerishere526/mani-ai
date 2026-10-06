@@ -9,7 +9,6 @@ import datetime
 import json
 import pathlib
 import statistics
-import subprocess
 import sys
 from dataclasses import asdict
 
@@ -24,6 +23,7 @@ from scripts.client_style_counts import (  # noqa: E402
     framework_descriptions, restating_read, short_message_turns, shuffled_for_reading, style_read_replies,
 )
 from scripts.eval_replies import Exchange, _fresh_user, _remove_users, _run_one  # noqa: E402
+from scripts.model_trial import instructions_in_force  # noqa: E402
 
 CONVERSATIONS = pathlib.Path(__file__).with_name("client_style_conversations.yaml")
 DEFAULT_OUT = pathlib.Path(__file__).resolve().parent.parent / ".eval" / "client_style"
@@ -35,21 +35,6 @@ def _turns(script: list[str], no_answer_line: str, extra_turns: int) -> list[str
     made one, so the conversation reaches the offer the way the client's cadence does."""
     first, *rest = script
     return [first, *(f"@accept|{line}" for line in rest), *[f"@accept|{no_answer_line}"] * extra_turns]
-
-
-async def _instructions_in_force() -> dict[str, str]:
-    async with pool.as_admin() as conn:
-        base = await conn.fetchrow(
-            "select model_id, version, md5(content) as digest from admin.prompts where name = 'mani_base'"
-        )
-    commit = subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=False,
-        cwd=pathlib.Path(__file__).parent,
-    ).stdout.strip()
-    return {
-        "model": base["model_id"], "mani_base_version": str(base["version"]),
-        "mani_base_md5": base["digest"], "git_commit": commit,
-    }
 
 
 def _turns_of(exchanges: list[Exchange], scripted_turns: int) -> list[Turn]:
@@ -261,7 +246,7 @@ async def main() -> int:
     created: list[str] = []
     records: list[dict] = []
     try:
-        meta = {**await _instructions_in_force(), "runs": str(args.runs)}
+        meta = {**await instructions_in_force(), "runs": str(args.runs)}
         for run in range(1, args.runs + 1):
             for conversation in conversations:
                 for style in SupportStyle:

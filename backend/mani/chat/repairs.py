@@ -80,6 +80,12 @@ SIZE_PHRASES = (
     "the weight of",
 )
 
+# Phrases that make Mani sound scripted. Mani never says them, whatever the person said.
+STOCK_PHRASES = (
+    "it sounds like", "it seems like", "i hear you", "that makes sense", "that makes total sense",
+    "i am here with you", "i'm here with you", "i am here for you", "i'm here for you",
+)
+
 # Judgments a person may hold about themselves but must never be handed as a button to press.
 # Observed live: a reply offered "I'm overthinking it" as a capsule.
 SELF_JUDGMENTS = (
@@ -87,9 +93,6 @@ SELF_JUDGMENTS = (
     "over reacting", "being silly", "being stupid", "my fault", "i'm weak", "i am weak",
     "i'm broken", "i am broken", "not enough", "being needy", "being difficult",
 )
-
-# The label on an offer of the nearest set of questions when none fits well.
-CLOSEST_FIT_LABEL = "Try the closest fit"
 
 # Five: room for a choice in the person's own voice. Past that a label is becoming a sentence.
 MAX_CAPSULE_WORDS = 5
@@ -169,6 +172,12 @@ def introduced_size(text: str, said: str) -> list[str]:
     """Size and weight phrases in `text` that the person has not used."""
     lowered, theirs = text.lower(), said.lower()
     return [p for p in SIZE_PHRASES if re.search(rf"\b{re.escape(p)}\b", lowered) and p not in theirs]
+
+
+def used_stock_phrases(text: str) -> list[str]:
+    """Scripted phrases in `text`, in the order STOCK_PHRASES lists them."""
+    lowered = text.lower().replace("\u2019", "'")
+    return [p for p in STOCK_PHRASES if re.search(rf"\b{re.escape(p)}\b", lowered)]
 
 
 def _skeleton(stem: str) -> str:
@@ -259,13 +268,22 @@ def _without_their_name(text: str, name: str, *, keep_one: bool) -> str:
     return text
 
 
+def without_questions(text: str) -> str:
+    """The text with every sentence that ends in a question mark taken out."""
+    lines = [
+        " ".join(s for s in _SENTENCE_END.split(line.strip()) if s and not s.endswith("?"))
+        for line in text.split("\n")
+    ]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
 def with_the_check_in(text: str, script: str) -> str:
     """The body check-in, sent word for word. The client's flow (2026-09-24) treats it as
-    fixed content: Mani's reflection stays, its own version of the question does not."""
+    fixed content: Mani's reflection stays, and no question of its own does, so the check-in
+    is the one question the person is asked."""
     if script in text:
         return text
-    match = _LAST_QUESTION.search(text)
-    reflection = text[: match.start(1)].rstrip() if match else text.rstrip()
+    reflection = without_questions(text)
     return f"{reflection}\n\n{script}" if reflection else script
 
 
@@ -485,9 +503,9 @@ def apply(
     nickname: str | None = None,
     name_said_before: bool = False,
     clarification_already_used: bool = False,
-    closest_fit: bool = False,
     current_holds: int = 0,
     asked_again: bool = False,
+    skipped_stages: int = 0,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again.
 
@@ -614,12 +632,6 @@ def apply(
                 notes.append(f"dropped an already-offered technique: {prompt.technique}")
                 continue
 
-        if prompt.technique is not None and closest_fit:
-            # An offer of the nearest fit says so on the button, so the person chooses it knowing
-            # it is not a perfect match; Keep chatting beside it is the other way out.
-            prompt = prompt.model_copy(update={"label": CLOSEST_FIT_LABEL})
-            key = CLOSEST_FIT_LABEL.lower()
-
         seen_labels.add(key)
         kept.append(prompt)
 
@@ -705,13 +717,19 @@ def apply(
         # whatever the stored row still says. What they told Mani before accepting
         # answers the first stage, so the reply may already be asking the second.
         previous = current_phase
+        first = -1
+        phases: list[str] = []
         if accepted_this_turn:
             known = registry.get(framework_id)
             phases = known.phases if known else []
-            first = phases.index("offering") + 1 if "offering" in phases else -1
+            # Stages their earlier words answered are not asked, so the first open stage is
+            # the one the reply is on, whatever it reports.
+            first = phases.index("offering") + 1 + skipped_stages if "offering" in phases else -1
             previous = phases[first] if 0 < first < len(phases) else "offering"
         transition = registry.validate_transition(framework_id, previous, state.step)
         phase = registry.clamp(framework_id, previous, state.step)
+        if skipped_stages and phase is not None and 0 < first < len(phases) and phases.index(phase) < first:
+            phase = phases[first]
         if not transition.ok:
             notes.append(
                 f"corrected phase {state.step!r} to {phase!r} ({transition.reason})"

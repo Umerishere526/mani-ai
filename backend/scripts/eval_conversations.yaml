@@ -381,7 +381,7 @@
 # is asked once; "yes" and "idk" lead to where, with its buttons, and the exercise comes before
 # any Chat More / Go to Library choice.
 - name: panic_somatic_once
-  start_in: {framework: dbt_stop, phase: closing}
+  start_in: {framework: dbt_stop, phase: proceed}
   turns:
     - "it is better i guess"
     - "not a 100% but it feels a little better i guess"
@@ -390,3 +390,43 @@
     - "idk"
     - "Chest"
     - "I feel calmer for a second, then it comes back"
+
+# Spec 0005 (row 8): the chats the phrase router got wrong on 2026-10-05, and the manager chat from
+# spec 0001. Turns verbatim. Expected: the stress chat asks what happened and offers nothing by its
+# fourth message; the panic chat offers DBT STOP; the manager chat offers ABCDE.
+- name: stress_nothing_named_yet
+  turns:
+    - "i feel emotionally stressed"
+    - "work pressure, parents pressure, society pressure"
+    - "yes"
+    - "i suggest at all of them."
+- name: panic_attack_grounding
+  turns:
+    - "I feel like I might have a panic attack."
+    - "yea i see my laptop in front of me"
+    - "it looks very shiny and clean"
+    - "a coffee mug, my vape.."
+- name: manager_embarrassed_me
+  turns:
+    - "I'm very upset. My manager embarrassed me today because he wants me to fail."
+    - "EVERYTHING WENT WRONG"
+    - "I felt really embarrassed."
+    - "He does it all the time in front of everyone"
+
+# muhammad's own chat, 2026-10-05, Direct: the event and what it meant to them were said before
+# the offer, and they did not follow three of the framework's questions ("what?"). After the
+# accept nothing already said is asked again, and a "what?" gets the same question, simpler.
+- name: idiot_concert_direct
+  turns:
+    - "i feel like i idiot"
+    - "sometimes i make decision that i know that i shouldn't take but i still make that decision."
+    - "I went to a concert and the very next day i had an exam. i wish hadn't went to the concert and studied for the exam"
+    - "yes"
+    - "@accept|Try it"
+    - "what?"
+    - "i bomb the exam and i'm sure i'll fail"
+    - "cause i make stupid decisions"
+    - "i don't know"
+    - "i feel like i should be smart enough to make smart choices myself but when the moment comes i always make the bad decision"
+    - "i feel my head is spining"
+    - "good i think"
