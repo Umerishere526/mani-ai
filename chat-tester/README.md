@@ -17,11 +17,34 @@ endpoint, the real LangChain call, the real router and safety screen - this is n
 - **Real, too:** the library page (sidebar **Library**, or any **Go to Library** button). It lists
   every exercise from `GET /v1/exercises` on one page, grouped by topic, each playable from its
   signed link. Go to Library opens it rather than sending a message, as the apps navigate there.
-- **Real, too:** the sign-in that happens automatically on load, through Supabase Auth. The
-  backend verifies the token exactly as it will a phone's, and it is refreshed when it expires.
-- **Fixed, on purpose:** there is no sign-up or sign-in screen. The app always signs in as
-  `CHAT_TESTER_FIXED_USER` (one name, one account, created via the Admin API the first time
-  it's needed) - a public link to this tool can never create or reach any other account.
+- **Real, too:** sign-in, sign-up and forgot-password, through Supabase Auth with an email and
+  password. The backend verifies the token exactly as it will a phone's, and it is refreshed when
+  it expires. Each account sees only its own conversations - the backend scopes every thread to
+  the signed-in user. A forgotten password is reset with a six-digit code emailed to the account,
+  so only the person who can read that mailbox can change it.
+- **Open, on purpose:** anyone who can reach the page can create an account. Sign-up goes
+  through the Admin API (created confirmed, no email sent), so it uses the service role key and
+  every new account can spend model credit. Don't put a link to this tool anywhere public.
+
+## Deploying this
+
+Two things to set beyond the environment variables above.
+
+**The password-reset email template.** `supabase/config.toml` configures local Supabase only. On a
+hosted project, set the same template by hand under Authentication → Email Templates → Reset
+Password, with a body containing `{{ .Token }}` (the six-digit code). Without it the hosted project
+sends its default *link*, which redirects to that project's Site URL - not this app - and the person
+lands on a dead page. Check the project's email rate limit too: the hosted default is far lower than
+the local `max_frequency = "1s"`.
+
+**Where sessions are kept.** A signed-in session lives in a file on the instance that handled the
+sign-in, so a reload is recognised by that instance. On one container - how this tool is run - that
+is every reload. Behind more than one replica a reload that lands elsewhere falls back to the login
+screen, which is no worse than not having this at all and never an error. `CHAT_TESTER_SESSION_DIR`
+points it at a mounted volume so sessions survive a restart.
+
+Leave `CHAT_TESTER_DEV_MODE` unset on anything a client sees, and remember sign-up is open to
+anyone who can reach the page: every new account can spend model credit.
 
 ## Setup
 
@@ -58,10 +81,12 @@ Then, in another terminal:
 cd chat-tester && source venv/bin/activate && streamlit run app.py
 ```
 
-There is no sign-in screen. On load, the app signs in as `CHAT_TESTER_FIXED_USER`
-(`.env.example` default: `streamlit-tester`, i.e. `streamlit-tester@tester.mani.local`) -
-creating that one account the first time it's needed - and resumes its conversation.
-The sidebar's **New conversation** button starts a fresh thread for that same user. Under it,
+The app opens on a **Sign in** / **Sign up** screen. Sign up takes an email, a password and an
+optional nickname the greeting uses; after that, the same email and password sign back in to the
+same conversations. **Forgot password** emails a six-digit code to the account's address; entering
+it with a new password sets that password and signs you in. Refreshing the browser tab keeps you
+signed in - the session is remembered for fourteen days. The sidebar's **Sign out** switches
+accounts, and **New conversation** starts a fresh thread for the signed-in user. Under it,
 **Conversations** lists that user's threads, most recently active first (the latest 20, titled once a
 thread has had an exchange, "Untitled" before that). Tap one to open it and continue; the open one is
 marked ▶. Hover a title to see its message count and last activity. An opened thread shows its latest 100

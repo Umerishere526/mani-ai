@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -21,11 +20,6 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://127.0.0.1:54341")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-
-# Every test user shares one password: a local tool against a local Supabase, where the name
-# is the whole identity. The same name signs back in to the same conversations.
-_PASSWORD = "chat-tester-local-only"
-_EMAIL_DOMAIN = "tester.mani.local"
 
 
 class ApiError(Exception):
@@ -119,14 +113,44 @@ def sign_up(email: str, password: str) -> Session:
     return sign_in_with_password(email, password)
 
 
-def sign_in(name: str) -> Session:
-    """A quick test user by name: the same name signs back in to the same conversations."""
-    slug = re.sub(r"[^a-z0-9._-]+", "-", name.strip().lower()).strip("-") or "tester"
-    email = f"{slug}@{_EMAIL_DOMAIN}"
-    try:
-        return sign_in_with_password(email, _PASSWORD)
-    except RuntimeError:
-        return sign_up(email, _PASSWORD)
+def send_recovery_code(email: str) -> None:
+    """Email a six-digit code to this address, if an account has it.
+
+    Says nothing about whether the account exists: that would let anyone with the page
+    enumerate who has signed up. Supabase answers 200 either way and so do we.
+    """
+    _require_keys()
+    response = _auth("recover", {"email": email.strip()}, SUPABASE_ANON_KEY)
+    if not response.ok:
+        raise RuntimeError(f"Could not send the code: {_reason(response)}")
+
+
+def reset_password_with_code(email: str, code: str, new_password: str) -> Session:
+    """Prove the mailbox is theirs with the code, then set their own password.
+
+    The code is what makes this safe: the admin API could set anybody's password from this
+    page, so only the person who can read the email gets to change it. The password is then
+    set with that person's own token, exactly as a real client would.
+    """
+    _require_keys()
+    verified = _auth(
+        "verify", {"type": "recovery", "email": email.strip(), "token": code.strip()},
+        SUPABASE_ANON_KEY,
+    )
+    if not verified.ok:
+        raise RuntimeError(f"That code did not work: {_reason(verified)}")
+    session = _session(verified.json())
+
+    updated = requests.put(
+        f"{SUPABASE_URL}/auth/v1/user",
+        json={"password": new_password},
+        headers={"apikey": SUPABASE_ANON_KEY,
+                 "Authorization": f"Bearer {session.access_token}"},
+        timeout=10,
+    )
+    if not updated.ok:
+        raise RuntimeError(f"Could not set the new password: {_reason(updated)}")
+    return sign_in_with_password(email, new_password)
 
 
 def refresh(session: Session) -> Session:
