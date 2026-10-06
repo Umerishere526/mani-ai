@@ -151,11 +151,12 @@ def test_a_weak_fit_asks_rather_than_offering_inside_the_window():
 
 
 @pytest.mark.parametrize("status", [sr.RouteStatus.WEAK_MATCH, sr.RouteStatus.AMBIGUOUS])
-def test_past_the_window_the_closest_fit_is_offered_rather_than_another_question(status):
-    """The cadence exists so the conversation arrives somewhere: past Direct's fifth message,
-    another question is the worse answer."""
+def test_a_fit_that_is_only_the_closest_is_never_offered_however_long_they_talk(status):
+    """Nobody is handed a framework because the conversation has gone on (muhammad,
+    2026-10-06). Only a clear fit is ever offered; everything else keeps talking."""
     route = ambiguous() if status is sr.RouteStatus.AMBIGUOUS else routing(status)
-    assert decide(route, style="direct", their_messages=5, cooldown_passed=True).action is Action.OFFER_FRAMEWORK
+    decision = decide(route, style="direct", their_messages=12, cooldown_passed=True)
+    assert not decision.offers
 
 
 def test_nothing_fitting_is_never_rounded_up_to_the_nearest_framework():

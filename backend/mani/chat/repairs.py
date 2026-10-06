@@ -192,6 +192,31 @@ def declines_or_acts(text: str) -> bool:
     return bool(_DECLINES_OR_ACTS.search(text))
 
 
+# The button a running step carries so a question can always be passed over, and what a person
+# types instead of tapping it. A step nobody wants to answer is skipped rather than asked again:
+# the questions are theirs to use, not a form to fill (muhammad, 2026-10-06).
+SKIP_LABEL = "Skip this one"
+_SKIPS_THE_STEP = re.compile(
+    r"^\W*(skip|next|pass)\W*$"
+    r"|\b(skip (this|that|it|this one|this question)|next question"
+    r"|rather not answer|prefer not to answer|don'?t want to answer|do not want to answer"
+    r"|no comment|can we skip)\b"
+    # "move on" is a skip only when it is the whole message: "he said I should move on from
+    # it" is them telling Mani something, not passing the question over.
+    r"|^\W*(can we |let'?s |i want to )?move on\W*$",
+    re.IGNORECASE,
+)
+
+
+def skips_the_step(text: str) -> bool:
+    """Whether the person is passing over the question rather than answering it.
+
+    Only a message that is the skip, or says it plainly: "pass" alone is a skip, "I'll pass on
+    going tonight" is them answering.
+    """
+    return bool(_SKIPS_THE_STEP.search(text))
+
+
 def reply_for(branch: dict, style: str) -> str:
     """A stage branch's reply: one text for every style, or the client's text for this one."""
     reply = branch["reply"]
@@ -337,6 +362,7 @@ def _stage_after_a_reply(
     redirects: bool,
     redirected_before: bool,
     rephrase: bool = False,
+    skipped: bool = False,
 ) -> tuple[str, int, str | None]:
     """The step, hold count and ending to record once the person has replied to `stored`.
 
@@ -345,12 +371,22 @@ def _stage_after_a_reply(
     equal to `stored` is its one more attempt, counted once per step: a second records the
     next step. A reply that uses a redirect of the stage (`redirects`), or a hold right after
     Mani's own redirect (`redirected_before`), holds without counting.
+
+    `skipped` is the person passing the question over. It moves to the next step whatever the
+    reply reports, so a step is never asked again because the model did not notice the skip.
     """
     framework = registry.get(framework_id)
     following = framework.phases[framework.phase_index(stored) + 1]
     if ending is not None:
         notes.append(f"framework ended {ending} at {stored}")
         return CHECK_IN, 0, ending
+    if skipped:
+        notes.append(f"skipped {stored} at their request")
+        if following == CHECK_IN:
+            # The last question before the body check: skipping it ends the questions rather
+            # than leaving a framework with nothing left to ask.
+            return CHECK_IN, 0, _ending_of(framework, stored, None)
+        return following, 0, None
     if redirects:
         notes.append(f"redirect held at {stored}")
         return stored, stored_holds, None
@@ -401,6 +437,9 @@ def apply(
     current_holds: int = 0,
     asked_again: bool = False,
     current_ending: str | None = None,
+    skipped: bool = False,
+    offer_decided: bool = False,
+    required_offer: str | None = None,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again.
 
@@ -509,11 +548,38 @@ def apply(
     # reply with something else, so it is dropped: the offer can come next turn, and a reply is
     # never left asking two things at once.
     offered_id = next((p.technique for p in kept if p.technique), None)
+
+    if offer_decided:
+        # Code decided whether a framework is offered (mani/chat/offer.py), so the model's own
+        # choice is not consulted: an offer it failed to carry is added, one it invented goes.
+        if required_offer is not None and offered_id != required_offer and registry.get(required_offer):
+            kept = [p for p in kept if not p.technique and not _is_offer_button(p)]
+            kept = kept + offer_buttons(required_offer, explaining=explaining)
+            notes.append(f"added the offer this turn decided on: {required_offer}")
+            offered_id = required_offer
+        elif required_offer is None and offered_id is not None:
+            dropped = [p.label for p in kept if _is_offer_button(p) or p.technique]
+            kept = [p for p in kept if not p.technique and not _is_offer_button(p)]
+            notes.append(f"dropped an offer this turn did not decide on: {dropped}")
+            text = _BLANK_RUN.sub("\n\n", _OFFER_SENTENCE.sub("", text)).strip() or text
+            offered_id = None
+
     if offered_id is not None:
         part = _without_permission_question(text)
         if part != text:
             notes.append("replaced the model's permission question with the client's")
-        if "?" in part:
+        if "?" in part and offer_decided and required_offer == offered_id:
+            # The offer is this turn's decision, so the model's extra question gives way to it
+            # rather than the other way round: trim the question, keep the offer.
+            trimmed = _LAST_QUESTION.sub("", part).strip()
+            if trimmed:
+                notes.append("trimmed a question from the reply that carries the offer")
+                part = trimmed
+            text = "\n\n".join(
+                p for p in (part, PERMISSION_QUESTIONS[conversation_style]) if p
+            )
+            kept = offer_buttons(offered_id, explaining=explaining)
+        elif "?" in part:
             dropped = [p.label for p in kept if _is_offer_button(p)]
             kept = [p for p in kept if not _is_offer_button(p)]
             notes.append(f"dropped offer buttons under a question that is not the offer: {dropped}")
@@ -557,15 +623,19 @@ def apply(
         stage = registry.get(framework_id).stages.get(current_phase) or {}
         # They asked to hear the question again with the extra turn unused: the hold is recorded
         # here, and a client line is no redirect.
-        rephrase = asked_again and current_holds == 0
+        rephrase = asked_again and current_holds == 0 and not skipped
         phase, holds, ending = _stage_after_a_reply(
             registry, framework_id, current_phase, state, current_holds, notes,
             ending=reported_ending,
-            redirects=carries_redirect(stage, text, conversation_style, client_lines=not rephrase),
+            redirects=(
+                not skipped
+                and carries_redirect(stage, text, conversation_style, client_lines=not rephrase)
+            ),
             redirected_before=carries_redirect(
                 stage, last_mani_text, conversation_style, client_lines=False
             ),
             rephrase=rephrase,
+            skipped=skipped,
         )
     elif state is not None:
         framework_id = state.technique
@@ -588,6 +658,11 @@ def apply(
     if kept and not at_the_end and not any(p.technique for p in kept):
         notes.append(f"dropped buttons outside an offer or a framework's end: {[p.label for p in kept]}")
         kept = []
+
+    if framework_running and (phase or current_phase) not in ENDING_STAGES and not kept:
+        # A running question always carries a way past it, so nobody is held on a step they do
+        # not want to answer. Not on the body stages: those already end the framework.
+        kept = [SmartPrompt(label=SKIP_LABEL)]
 
     title = clean_title(reply.title) if wants_title else None
 

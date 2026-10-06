@@ -9,6 +9,7 @@ from mani.chat import repairs
 from mani.chat.greeting import (
     AFTER_FRAMEWORK_QUESTIONS, CHAT_MORE_LABEL, CLARIFICATION_QUESTIONS, EXPLANATIONS, STYLE_OPTIONS,
 )
+from mani.chat.offer import Action as OfferAction, Decision
 from mani.chat.safety import normalize
 from mani.chat.techniques import OFFERING, SOMATIC_STAGES, STUCK_BRANCH, moves_on_after
 from mani.db.threads import TurnContext
@@ -292,6 +293,8 @@ def build(
     refusal: str | None = None,
     explaining: Framework | None = None,
     answering_practice: bool = False,
+    decision: Decision | None = None,
+    skipped: bool = False,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -403,6 +406,22 @@ def build(
         lines.append(f"explain_offer: {EXPLANATIONS[resolve_style(ctx)]}")
         if explaining.summary:
             lines.append(f"offer_looks_at: {' '.join(explaining.summary.split())}")
+
+    if decision is not None and not safety_concern:
+        # Code has already decided what this turn does, so the model is told the action rather
+        # than the evidence: a shortlist invites it to choose again. The framework id is never
+        # named outside the offer's own lines, so it cannot be echoed to the person.
+        lines.append(f"action: {decision.action.value}")
+        if decision.action is OfferAction.CLARIFY and decision.separates_as_text:
+            lines.append(f"separates: {decision.separates_as_text}")
+
+    if skipped:
+        # They passed the question over. The step is already being left, so the reply must not
+        # ask it again in any form; the next step's question is in the steps below.
+        lines.append(
+            "skipped: yes\nstep_note: they are passing this question over. Take it lightly in a "
+            "few words, never ask it again in any form, and go straight on to the next step"
+        )
 
     if candidate is not None and refusal is None:
         lines.extend(_stage_lines("offer", candidate, "offering", resolve_style(ctx)))

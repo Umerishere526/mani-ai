@@ -16,9 +16,9 @@ from mani.chat import semantic_router as sr
 #   Supportive  7-9, never past 9
 #   Reflective  7-10
 #
-# `soonest` is the earliest a clear fit may be offered. `latest` is where a fit that is
-# merely the closest one is offered rather than asking yet another question - the point of
-# the cadence is that the conversation arrives somewhere.
+# `soonest` is the earliest a clear fit may be offered. Only a clear fit is ever offered:
+# a conversation that does not point at one keeps going, because a framework nobody needs
+# is worse than no framework (muhammad, 2026-10-06).
 CADENCE: dict[str, tuple[int, int]] = {
     "direct": (3, 5),
     "supportive": (7, 9),
@@ -122,7 +122,7 @@ def decide(
     if routing.topic_changed:
         return Decision(Action.ASK, why="topic changed")
 
-    soonest, latest = cadence_for(style)
+    soonest, _ = cadence_for(style)
 
     if routing.status is sr.RouteStatus.MATCH and top is not None:
         if not cooldown_passed:
@@ -132,10 +132,6 @@ def decide(
         return Decision(Action.OFFER_FRAMEWORK, top.framework_id, why="clear fit")
 
     if routing.status is sr.RouteStatus.AMBIGUOUS and len(routing.candidates) >= 2:
-        # Past the window, asking another question is the worse answer: offer the nearest of
-        # the two and say so, rather than keeping them in a conversation that goes nowhere.
-        if their_messages >= latest and cooldown_passed:
-            return Decision(Action.OFFER_FRAMEWORK, top.framework_id, why="closest fit past the window")
         return Decision(
             Action.CLARIFY,
             top.framework_id,
@@ -144,8 +140,6 @@ def decide(
         )
 
     if routing.status is sr.RouteStatus.WEAK_MATCH and top is not None:
-        if their_messages >= latest and cooldown_passed:
-            return Decision(Action.OFFER_FRAMEWORK, top.framework_id, why="closest fit past the window")
         return Decision(Action.ASK, top.framework_id, why="weak fit")
 
     # Nothing fits. Follow them; a framework is not owed.

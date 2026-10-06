@@ -902,3 +902,51 @@ def test_the_typings_people_use_for_not_understanding_are_recognised(said):
 def test_a_story_or_an_objection_that_contains_the_same_words_is_not(said):
     assert not context.asks_to_hear_again(said)
 
+
+
+def test_the_block_tells_the_model_the_action_rather_than_the_evidence():
+    """With the router deciding, a shortlist would invite the model to choose again. It is told
+    what this turn does; the framework id never appears outside the offer's own lines."""
+    from mani.chat.offer import Action, Decision
+
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        decision=Decision(Action.ASK, "abcde", why="before 3 messages"),
+    )
+    assert "action: ask" in block
+    assert "abcde" not in block
+    assert "framework_shortlist" not in block
+
+
+def test_a_clarify_turn_carries_the_difference_in_words_never_the_two_ids():
+    from mani.chat.offer import Action, Decision
+
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        decision=Decision(
+            Action.CLARIFY, "abcde", separates=("abcde", "thought_reframe"),
+            separates_as_text="a specific event that led to a belief ... or ... one painful thought",
+        ),
+    )
+    assert "separates: a specific event" in block
+    assert "thought_reframe" not in block
+
+
+def test_a_safety_concern_leaves_the_action_out_of_the_block():
+    """Nothing is routed or offered while the person may not be safe."""
+    from mani.chat.offer import Action, Decision
+
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        safety_concern=True,
+        decision=Decision(Action.OFFER_FRAMEWORK, "abcde"),
+    )
+    assert "action:" not in block
+
+
+def test_a_skipped_step_tells_the_model_to_leave_the_question_rather_than_rephrase_it():
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None), skipped=True
+    )
+    assert "skipped: yes" in block
+    assert "never ask it again in any form" in block

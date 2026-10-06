@@ -8,7 +8,7 @@ import asyncpg
 import pytest
 
 from mani.auth.jwt import Claims
-from mani.chat import context, crisis, orchestrator, safety
+from mani.chat import context, crisis, orchestrator, repairs, safety
 from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
@@ -161,6 +161,39 @@ async def after_the_style_tap(thread):
             "update public.threads set conversation_style = $2, message_count = message_count + 2 "
             "where id = $1",
             thread.id, SupportStyle.SUPPORTIVE.value,
+        )
+    return thread
+
+
+async def in_direct_style(thread):
+    """The Direct style tapped and its opener, as the greeting flow adds them. Direct is the
+    style whose cadence reaches a framework soonest, so it is what the offer tests use."""
+    from mani.db import pool
+    from mani.models.rows import SupportStyle
+
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set conversation_style = $2, message_count = message_count + 2 "
+            "where id = $1",
+            thread.id, SupportStyle.DIRECT.value,
+        )
+    return thread
+
+
+async def said_before(thread, theirs: str, manis: str):
+    """One more exchange already in the conversation, so the person's message count is what a
+    real conversation of that length would give."""
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        for role, content in (("user", theirs), ("mani", manis)):
+            await conn.execute(
+                "insert into public.messages (thread_id, user_id, role, content) "
+                "values ($1, $2, $3, $4)",
+                thread.id, thread.user_id, role, content,
+            )
+        await conn.execute(
+            "update public.threads set message_count = message_count + 2 where id = $1", thread.id
         )
     return thread
 
@@ -975,7 +1008,9 @@ async def test_buttons_are_returned_only_on_manis_newest_message(alice, model):
 
     assert newest.id == live and newest.content == "Good. What happened first?"
     assert offer.prompts == [], "an answered offer must not stay tappable"
-    assert [m for m in rendered if m.prompts] == []
+    # Only the newest message carries buttons, and on a running step that is the way past it.
+    assert [m.id for m in rendered if m.prompts] == [live]
+    assert [p.label for p in newest.prompts] == [repairs.SKIP_LABEL]
     # What the person chose stays in the record even once the offer is gone.
     assert [m.selected_prompt for m in rendered if m.selected_prompt] == [
         "Yes, let's try it"
@@ -2018,3 +2053,85 @@ async def test_tell_me_more_gets_the_clients_explanation_then_two_choices(alice,
     assert "offer_looks_at: " in sent
     assert [p.label for p in explained.prompts] == [ACCEPT_LABEL, KEEP_TALKING_LABEL]
     assert "?" not in explained.content
+
+
+async def test_a_person_can_pass_a_question_over_and_the_framework_carries_on(alice, model):
+    """The questions are theirs to use, not a form to fill (muhammad, 2026-10-06): a skipped
+    step advances and is never asked again, and the framework keeps running."""
+    from mani.db import pool
+
+    model(
+        Reply(text="Want to try something?",
+              prompts=[SmartPrompt(label="Yes, let's try it", technique="abcde")]),
+        Reply(text="Good. What happened first?",
+              state=TechniqueState(technique="abcde", step="activate")),
+        # The model holds the same step, not having noticed the skip. Code moves on anyway.
+        Reply(text="Take your time. What happened first?",
+              state=TechniqueState(technique="abcde", step="activate")),
+    )
+
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, ABCDE_SAID)
+    await send(alice, thread.id, "Yes, let's try it")
+
+    async with pool.as_user(alice) as conn:
+        before = (await threads.load_turn_context(conn, thread.id, ALICE)).technique
+    assert before.phase == "activate"
+
+    turn = await send(alice, thread.id, repairs.SKIP_LABEL)
+
+    async with pool.as_user(alice) as conn:
+        after = (await threads.load_turn_context(conn, thread.id, ALICE)).technique
+    assert after.phase == "belief", "the skipped step must not be asked again"
+    assert after.outcome is TechniqueOutcome.ACCEPTED, "skipping one question does not end it"
+    assert after.holds == 0, "a skip is not the stage's one extra attempt"
+    assert [p.label for p in turn.prompts] == [repairs.SKIP_LABEL]
+
+
+async def test_with_the_router_on_the_offer_is_the_codes_decision_not_the_models(
+    alice, model, monkeypatch
+):
+    """The model is told the action, never a shortlist, and the offer it did not make is added
+    with both buttons. A real embedding call is not made: routing is stubbed to a clear match."""
+    from mani.chat import offer as offer_policy, semantic_router as sr
+    from mani.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "semantic_router", True)
+    monkeypatch.setattr(
+        sr, "route",
+        lambda messages, **kw: sr.Routing(
+            sr.RouteStatus.MATCH, (sr.Candidate("abcde", 0.81, 0.40),), query_text="q",
+        ),
+    )
+    seen: list[str] = []
+    original = offer_policy.decide
+
+    def record(*args, **kwargs):
+        decision = original(*args, **kwargs)
+        seen.append(decision.action.value)
+        return decision
+
+    monkeypatch.setattr(offer_policy, "decide", record)
+
+    # The model replies with no offer at all; code decided there is one.
+    model(Reply(text="That sounds like it landed hard."))
+    thread = await in_direct_style(await past_the_opening(await start(alice)))
+    # Direct offers a clear fit from their third message, which is the client's cadence.
+    await said_before(thread, "it has been building for weeks", "What happened?")
+    turn = await send(alice, thread.id, ABCDE_SAID)
+
+    assert seen == ["offer_framework"]
+    assert [p.technique for p in turn.prompts if p.technique] == ["abcde"]
+
+
+async def test_with_the_router_off_nothing_about_the_turn_changes(alice, model, monkeypatch):
+    """The flag is the whole difference: off, the model's own reply stands as it always did."""
+    from mani.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "semantic_router", False)
+    model(Reply(text="That sounds like it landed hard."))
+    thread = await after_the_style_tap(await past_the_opening(await start(alice)))
+    turn = await send(alice, thread.id, ABCDE_SAID)
+
+    assert turn.content == "That sounds like it landed hard."
+    assert [p for p in turn.prompts if p.technique] == []

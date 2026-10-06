@@ -12,7 +12,10 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import context, repairs, router, safety
+from mani.chat import context, repairs, router, safety, semantic_router
+# `offer` is a local variable in send() for the offer awaiting an answer, so the module that
+# decides whether to make one is imported under a name that cannot be shadowed by it.
+from mani.chat import offer as offer_policy
 from mani.chat.greeting import (
     CHAT_MORE_LABEL,
     EXPLAIN_LABEL,
@@ -21,7 +24,7 @@ from mani.chat.greeting import (
     STYLE_OPTIONS,
     greeting,
 )
-from mani.chat.techniques import STUCK_BRANCH, Registry
+from mani.chat.techniques import SOMATIC_STAGES, STUCK_BRANCH, Registry
 from mani.config import get_settings
 from mani.db import (
     exercises as exercises_db,
@@ -261,6 +264,24 @@ def stuck_offer_candidate(
     return registry.get(stuck_id)
 
 
+def _separates_as_text(registry: Registry, separates: tuple[str, str]) -> str:
+    """What two plausible frameworks are each for, in plain words.
+
+    The model is never given a framework id to ask about - it is given the difference, so the
+    question it asks sounds like a person wondering, not a system narrowing a list.
+    """
+    parts = []
+    for framework_id in separates:
+        framework = registry.get(framework_id)
+        activation = (registry.activations or {}).get(framework_id) or {}
+        central = " ".join((activation.get("central_indication") or "").split())
+        if central:
+            parts.append(central.rstrip("."))
+        elif framework is not None:
+            parts.append(framework.name)
+    return " ... or ... ".join(parts)
+
+
 def _conversation(history: list[Message]) -> list[dict[str, str]]:
     return [
         {
@@ -445,6 +466,51 @@ async def send(
     refusal = context.offer_refusal(
         ctx, history, urgent=urgent, safety_concern=assessment.blocks_framework
     )
+
+    # Routing on meaning, and the offer decided in code rather than by the model. Behind a flag:
+    # with it off the model chooses, exactly as before.
+    decision: offer_policy.Decision | None = None
+    if settings.semantic_router:
+        running_now = technique is not None and outcome is TechniqueOutcome.ACCEPTED
+        # "yeah" has no routing signal, and embedding it produces a confident-looking vector
+        # for nothing, so routing is skipped on a tap, a vague reply, and under any concern.
+        routing_result = (
+            semantic_router.route(user_texts)
+            if not running_now
+            and assessment.level is safety.Level.NONE
+            and not assessment.blocks_framework
+            and tapped is None
+            and context.classify_reply(content) not in ("heard", "short")
+            else semantic_router.NO_MATCH
+        )
+        vetoed_ids = frozenset(
+            framework_id
+            for framework_id, activation in config.registry.activations.items()
+            if router.vetoes(activation, user_texts)
+        )
+        decision = offer_policy.decide(
+            routing_result,
+            style=context.resolve_style(ctx),
+            their_messages=context.their_messages(history),
+            cooldown_passed=refusal is None,
+            safety_concern=assessment.blocks_framework,
+            their_last=context.classify_reply(content) if not tapped else None,
+            framework_running=running_now,
+            accepted_this_turn=accepted_this_turn,
+            finishing=False,
+            vetoed=vetoed_ids,
+        )
+        logger.info(
+            "thread %s routed %s, decided %s (%s)",
+            ctx.thread.id, routing_result.status.value, decision.action.value, decision.why,
+        )
+        if decision.offers and decision.framework_id and refusal is None:
+            candidate = config.registry.get(decision.framework_id)
+        elif decision.separates:
+            decision = dataclasses.replace(
+                decision,
+                separates_as_text=_separates_as_text(config.registry, decision.separates),
+            )
     # They asked to hear more about the offer waiting for them: a tap on Tell me more, or a
     # question typed past it. The explanation then stands alone with two choices.
     explaining = (
@@ -469,12 +535,24 @@ async def send(
     )
     model, parameters, routing = composer.model_settings(config)
 
+    # They are passing the question over rather than answering it. Read before the model is
+    # asked, so the reply is written knowing the step is being left rather than pressed again.
+    skipped = bool(
+        technique is not None
+        and outcome is TechniqueOutcome.ACCEPTED
+        and technique.phase not in SOMATIC_STAGES
+        and (
+            (tapped is not None and tapped.label.strip().lower() == repairs.SKIP_LABEL.lower())
+            or (tapped is None and repairs.skips_the_step(content))
+        )
+    )
+
     active_framework = config.registry.get(technique.framework_id) if technique else None
     prefix = context.build(
         ctx, framework=active_framework, candidate=candidate,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
         framework_starting=accepted_this_turn, stuck_candidate=stuck_candidate,
-        refusal=refusal, explaining=explaining,
+        refusal=refusal, explaining=explaining, decision=decision, skipped=skipped,
         answering_practice=practiced_place is not None,
         # A tap is a choice among Mani's own buttons, not words to read.
         their_last=None if tapped else context.classify_reply(content),
@@ -585,6 +663,15 @@ async def send(
         current_holds=technique.holds if technique else 0,
         asked_again=False if tapped else context.asks_to_hear_again(content),
         current_ending=technique.ending if technique else None,
+        skipped=skipped,
+        # When code decided the offer it is added or dropped here rather than being the
+        # model's to make: that is the whole point of deciding it in code.
+        offer_decided=decision is not None,
+        required_offer=(
+            decision.framework_id
+            if decision is not None and decision.offers and refusal is None
+            else None
+        ),
     )
     framework_running = outcome is TechniqueOutcome.ACCEPTED
     if assessment.blocks_framework or model_concern:
