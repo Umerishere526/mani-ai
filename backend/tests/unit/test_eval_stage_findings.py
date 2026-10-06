@@ -82,3 +82,18 @@ def test_a_reply_that_is_not_a_held_request_is_not_read_as_a_rephrase():
     assert _rephrase_findings(asked("why does that matter?", "What happened? Why?")) == []
     assert _rephrase_findings(asked("I don't get it", "What happened? Why?", notes=("redirect held at belief",))) == []
 
+
+
+def test_a_scenario_that_expects_an_offer_reports_a_different_or_missing_first_offer():
+    """covers spec 0009 AC-9."""
+    from scripts.eval_replies import _score
+    from mani.models.rows import SupportStyle
+
+    def journey(*exchanges):
+        return [f.detail for f in _score(list(exchanges), SupportStyle.DIRECT, {"expect_offer": "abcde"}) if f.rule == "journey"]
+
+    abcde = Exchange(message="yes", reply="Some questions could help.", offered=True, framework=("abcde", "offered", "offering"))
+    ba = Exchange(message="yes", reply="Some questions could help.", offered=True, framework=("behavioral_activation", "offered", "offering"))
+    assert journey(abcde) == []
+    assert journey(ba) == ["first offer was behavioral_activation, expected abcde"]
+    assert journey(Exchange(message="yes", reply="What happened?")) == ["first offer was never made, expected abcde"]

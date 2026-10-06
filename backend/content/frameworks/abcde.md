@@ -14,11 +14,12 @@ activation:
   earliest_offer_message: 3
   # The facts that make this framework fit: every fact in one set (router.FACTS). Read by
   # router.choose; the client's tie rules between frameworks are in router.TIE_RULES.
-  fits_when: [[event, meaning]]
+  # `[stuck]` fits after Mani asked "Are you feeling stuck?", only when no other set fits (spec 0009).
+  fits_when: [[event, meaning], [stuck]]
   to_find_out:
     - "the specific event that set it off"
-    - "what they took it to mean about themselves or the other person"
-    - "how believing that has affected what they felt, did or avoided"
+    - "what they told themselves about it, about them or the other person"
+    - "how thinking that changed what they felt or did"
     - "whether they want to look at the whole sequence in depth, not one quick thought"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
@@ -31,6 +32,8 @@ activation:
     - "The user wants a deeper process rather than a quick reframe"
     - "The issue has been clearly identified"
     - "The user has agreed to try a framework"
+  # Kept as the specification wrote it. Spec 0009 still offers this to a person who stays stuck
+  # with no event named, once they say yes to "Are you feeling stuck?" (the client's meeting).
   not_when:
     - "The user wants to continue chatting without a framework"
     - "The issue has not been clearly identified"
@@ -70,6 +73,13 @@ stages:
       supportive: "This one event has come to mean something much larger about you. Would it help to look at it together?"
       reflective: "You believe this event says something important about you. Would it help to look at what happened, what you believe it means, and how that belief is affecting you?"
       direct: "You want to determine whether this conclusion fits what happened. Would you like to work through it?"
+    # Mani's part of the offer for someone who said yes to "Are you feeling stuck?" and named no
+    # event (spec 0009). The description and the permission question are added by the code.
+    stuck:
+      purpose: "Say in one plain sentence that it is hard to put into words right now, then that there are some questions you could go through together, one step at a time."
+      boundaries:
+        - "must not name a feeling they did not name"
+        - "must not say \"stuck\" back to them"
   activate:
     # The router fact that, once the person has said it, answers this stage.
     answered_by: event
@@ -115,6 +125,14 @@ stages:
       supportive: "What did you tell yourself about it?"
       reflective: "What did you tell yourself about it?"
       direct: "What did you tell yourself about it?"
+    # The first question for someone offered this because they were stuck, with no event named:
+    # "What happened?" is passed over (spec 0009).
+    stuck:
+      purpose: "Find what goes through their mind when they feel this, when they have named no event."
+      ask:
+        supportive: "What goes through your mind when you feel this?"
+        reflective: "What goes through your mind when you feel this?"
+        direct: "What goes through your mind when you feel this?"
   consequence:
     purpose: "Identify how believing that affected what the user felt, did, avoided, or wanted to do."
     listen_for: "What changed in emotions, behaviour, avoidance, or intended response after believing the thought."

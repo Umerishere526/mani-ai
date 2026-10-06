@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from mani.chat.router import STUCK_FACT
 from mani.models.rows import Framework
 
 # Every framework opens by offering itself. The schema enforces it; the machine relies
@@ -44,6 +45,29 @@ def covered_stages(framework: Framework | None, known: dict[str, str]) -> list[s
             break
         covered.append(phase)
     return covered
+
+
+# The branch a stage carries for a person offered the framework because they were stuck.
+STUCK_BRANCH = "stuck"
+
+
+def passed_over_stages(framework: Framework | None, known: dict[str, str]) -> list[str]:
+    """The stages right after the offering that are passed over with no words (spec 0009).
+
+    For a person offered the framework because they were stuck, when what they said answers
+    none of its first stages: every stage before the first one carrying a `stuck` branch. Those
+    are never asked and never said back; the `stuck` stage is asked through its branch.
+    """
+    if framework is None or STUCK_FACT not in known or OFFERING not in framework.phases:
+        return []
+    if covered_stages(framework, known):
+        return []
+    after = framework.phases[framework.phase_index(OFFERING) + 1 : -1]
+    first = next(
+        (i for i, phase in enumerate(after) if STUCK_BRANCH in (framework.stages.get(phase) or {})),
+        None,
+    )
+    return after[:first] if first else []
 
 
 def _phase_after(framework: Framework, phase: str | None) -> str | None:

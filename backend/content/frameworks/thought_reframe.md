@@ -17,7 +17,7 @@ activation:
   to_find_out:
     - "the exact thought going round, in their words"
     - "the situation it is attached to"
-    - "why that thought hurts"
+    - "what makes that thought hard for them"
     - "whether they want a brief look rather than a deep one"
     - "whether it could be tested against facts (a loss or a settled fact is not a thought to test)"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.

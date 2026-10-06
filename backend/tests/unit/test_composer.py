@@ -303,3 +303,14 @@ def test_nothing_the_model_reads_offers_a_nearest_fit_or_says_an_offer_is_due():
     for name, text in texts.items():
         for pushed in ("closest_fit", "closest fit", "nearest", "an offer is due", "offer is due"):
             assert pushed not in text.lower(), f"{name} says {pushed}"
+
+
+def test_the_stuck_set_is_said_to_fit_only_when_no_other_set_does():
+    """covers spec 0009 AC-3: read as "event and meaning, or stuck", stuck would look as strong."""
+    from scripts.seed import FRAMEWORKS_DIR, parse_framework
+
+    abcde = Framework.model_validate(parse_framework(FRAMEWORKS_DIR / "abcde.md"))
+    line = next(l for l in composer.framework_index(Registry([abcde])).splitlines() if l.startswith("- **ABCDE**"))
+
+    assert line.endswith("(only when no other set fits)")
+    assert line.count("(only when no other set fits)") == 1

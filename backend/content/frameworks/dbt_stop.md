@@ -177,7 +177,7 @@ stages:
       purpose: "Notice what is present inside and around them, in their words, without interpreting it."
       ask:
         supportive: "You are staying here with me. What do you notice right now, inside you or around you?"
-        reflective: "What is present for you right now, inside you or around you?"
+        reflective: "What do you notice right now, inside you or around you?"
         direct: "What do you notice right now, inside you and around you?"
   proceed:
     purpose: "Choose whether to wait, act, or respond differently."

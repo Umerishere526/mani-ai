@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from mani.chat.safety import normalize
@@ -76,7 +77,18 @@ FACTS: dict[str, str] = {
     "about_to_act": (
         "they are about to do something they may regret: send, post, call, confront, quit"
     ),
+    "stuck": (
+        "they keep saying they do not know, cannot think or are stuck in answer to your "
+        "questions (twice or more, in any order), or they answered yes to \"Are you feeling "
+        "stuck?\"; after a no to that check, only once they have said it twice more. Quote their "
+        "longest stuck words"
+    ),
 }
+
+# A person stuck while Mani is understanding (spec 0009). It counts only once Mani has asked the
+# check, and a set holding it fits only when no other set does, so any full fit wins over it.
+STUCK_FACT = "stuck"
+STUCK_CHECK = "Are you feeling stuck"
 
 # The two facts about the state they are in now. A panic from eight messages ago is not where
 # they are, so these count only when quoted from their latest messages.
@@ -97,19 +109,44 @@ class KeptFacts:
     words: dict[str, str] = field(default_factory=dict)
 
 
-def kept_facts(reported: list[tuple[str, str]], messages: list[str]) -> KeptFacts:
+def stuck_framework(activations: dict[str, dict]) -> str | None:
+    """The framework a person who stays stuck is offered: the one with a fit set holding `stuck`."""
+    return next(
+        (
+            framework_id
+            for framework_id, activation in sorted(activations.items())
+            if any(STUCK_FACT in fact_set for fact_set in activation.get("fits_when") or [])
+        ),
+        None,
+    )
+
+
+def asked_the_check(mani_messages: Sequence[str]) -> bool:
+    """Whether one of Mani's messages asked "Are you feeling stuck?", in any case or punctuation."""
+    check = normalize(STUCK_CHECK)
+    return any(_says(check, normalize(text)) for text in mani_messages)
+
+
+def kept_facts(
+    reported: list[tuple[str, str]], messages: list[str], *, mani_messages: Sequence[str] = (),
+) -> KeptFacts:
     """The reported facts whose words the person typed, within one of their own messages.
 
     `reported` is (fact id, quoted words) pairs from the reply; `messages` are the person's own
-    messages, oldest first. This proves the words exist, not that they mean the fact.
+    messages, oldest first. This proves the words exist, not that they mean the fact. `stuck`
+    also needs the check among `mani_messages`, Mani's own messages.
     """
     normalized = [normalize(text) for text in messages]
+    check_asked = asked_the_check(mani_messages)
     present: set[str] = set()
     notes: list[str] = []
     kept_words: dict[str, str] = {}
     for fact, words in reported:
         if fact not in FACTS:
             notes.append(f"dropped an unknown fact: {fact}")
+            continue
+        if fact == STUCK_FACT and not check_asked:
+            notes.append(f"dropped {STUCK_FACT} before the check")
             continue
         quote = normalize(words)
         searched = normalized[-CURRENT_WINDOW:] if fact in CURRENT_FACTS else normalized
@@ -186,13 +223,15 @@ class Fit:
     """Which framework the facts point to.
 
     `pick` is the framework that fits, after the tie rules. When none fits, `leading` is the one
-    with the most of its facts present, and `missing` is the fact it still needs.
+    with the most of its facts present, and `missing` is the fact it still needs. `stuck_route`
+    is true when the pick fits only through a set holding `stuck`.
     """
 
     facts: frozenset[str]
     pick: str | None = None
     leading: str | None = None
     missing: str | None = None
+    stuck_route: bool = False
 
 
 def choose(
@@ -208,16 +247,21 @@ def choose(
     fact sets that make it fit. `order` is each framework's display order, the base order before
     the tie rules. `excluded` is what may not be offered now: vetoed, or declined and cooling down.
     """
-    sets = {
+    offerable = {
         framework_id: [list(s) for s in activation.get("fits_when") or []]
         for framework_id, activation in activations.items()
         if framework_id not in excluded
     }
+    sets = {i: [s for s in found if STUCK_FACT not in s] for i, found in offerable.items()}
+    stuck_sets = {i: [s for s in found if STUCK_FACT in s] for i, found in offerable.items()}
     by_order = sorted(sets, key=lambda framework_id: (order.get(framework_id, 0), framework_id))
 
     fitting = [i for i in by_order if any(set(s) <= facts for s in sets[i])]
     if fitting:
         return Fit(facts, pick=_apply_tie_rules(fitting, facts)[0])
+    stuck_fitting = [i for i in by_order if any(set(s) <= facts for s in stuck_sets[i])]
+    if stuck_fitting:
+        return Fit(facts, pick=stuck_fitting[0], stuck_route=True)
 
     def present(framework_id: str) -> int:
         return max((len(set(s) & facts) for s in sets[framework_id]), default=0)

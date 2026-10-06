@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from mani.chat.router import FACTS
+from mani.chat.router import FACTS, STUCK_FACT
 from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.llm.schema import Memory
@@ -63,10 +63,12 @@ def framework_index(registry: Registry) -> str | None:
 
     # Which of the facts make each one fit, in the same plain words the `facts` field defines,
     # from the one table in router.py. The code applies the same sets to choose.
+    # A set holding `stuck` fits only when no other set does (router.choose), and says so.
     fits = [
         f"- **{framework.name}**: "
         + " or ".join(
             " and ".join(f"`{fact}` ({FACTS.get(fact, fact)})" for fact in fact_set)
+            + (" (only when no other set fits)" if STUCK_FACT in fact_set else "")
             for fact_set in (framework.activation or {}).get("fits_when") or []
         )
         for framework in present

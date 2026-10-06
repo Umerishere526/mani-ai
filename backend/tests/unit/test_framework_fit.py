@@ -149,3 +149,56 @@ def test_an_excluded_framework_is_never_picked():
     """An ABCDE they have already finished hands the pick to the next that fits."""
     result = fit("event", "meaning", "painful_thought", excluded=frozenset({"abcde"}))
     assert result.pick == "thought_reframe"
+
+
+# ---------------------------------------------------------------------------
+# A person stuck while Mani is understanding (spec 0009, AC-2, AC-3)
+# ---------------------------------------------------------------------------
+
+STUCK_WORDS = [("stuck", "dont know cant think")]
+STUCK_MESSAGES = ["i am depressed", "i dont know cant think of anything", "yes"]
+
+
+def test_stuck_is_dropped_until_mani_has_asked_the_check():
+    kept = kept_facts(STUCK_WORDS, STUCK_MESSAGES, mani_messages=["What does being alone feel like?"])
+
+    assert kept.present == frozenset()
+    assert kept.notes == ["dropped stuck before the check"]
+
+
+def test_stuck_is_kept_once_the_check_was_asked_in_any_case_or_punctuation():
+    kept = kept_facts(STUCK_WORDS, STUCK_MESSAGES, mani_messages=["That is okay. are you feeling STUCK"])
+
+    assert kept.present == {"stuck"}
+
+
+def test_stuck_alone_picks_abcde_on_the_stuck_route_with_nothing_leading():
+    result = fit("stuck")
+
+    assert (result.pick, result.stuck_route, result.leading) == ("abcde", True, None)
+
+
+@pytest.mark.parametrize(
+    ("facts", "expected"),
+    [
+        (("stuck", "painful_thought"), "thought_reframe"),
+        (("stuck", "about_to_act"), "dbt_stop"),
+        (("stuck", "overwhelmed_now"), "dbt_stop"),
+    ],
+)
+def test_any_full_fit_wins_over_stuck(facts, expected):
+    result = fit(*facts)
+
+    assert (result.pick, result.stuck_route) == (expected, False)
+
+
+def test_abcde_through_event_and_meaning_is_not_the_stuck_route():
+    result = fit("event", "meaning", "stuck")
+
+    assert (result.pick, result.stuck_route) == ("abcde", False)
+
+
+def test_stuck_with_abcde_ruled_out_leads_nowhere():
+    result = fit("stuck", excluded=frozenset({"abcde"}))
+
+    assert (result.pick, result.leading, result.missing) == (None, None, None)

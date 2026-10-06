@@ -313,3 +313,18 @@ def test_figures_take_the_question_ratio_within_a_run_then_average_the_runs():
     assert result["questions_per_reply_own"] == (0.5 + 1.0) / 2
     assert result["conversations"] == 2
     assert result["offered"] == 0
+
+
+def test_question_findings_are_counted_over_the_whole_conversation_with_either_or_only_before_acceptance():
+    choice = "Would you like to name one, or would you rather wait?"
+    turns = [
+        Turn("i dont know", f"That's okay. {choice}"),
+        Turn("I get bored", an_offer("Since you get bored, what would you like to explore first?"), offered=True),
+        Turn("Try it", "Okay. What gives it that meaning?", tapped=True),
+        Turn("i cant decide", choice),
+    ]
+
+    counts = count_conversation(turns, DESCRIPTIONS)
+
+    assert (counts.long_questions, counts.lead_clauses, counts.flagged_words, counts.either_ors) == (0, 1, 2, 1)
+    assert figures([("direct", 1, counts)])["flagged_words"] == 2

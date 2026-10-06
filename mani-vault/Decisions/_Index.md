@@ -26,6 +26,8 @@ other knowledge lives: [[ADR-009-where-knowledge-lives]].
 | 014 | [[ADR-014-a-framework-is-offered-only-when-the-facts-fit]] | proposed | supersedes 007's owed closest fit | `router.py`, `redraft.py`, `orchestrator.py`, `Reply.facts`, the six framework files |
 | 015 | [[ADR-015-what-the-person-said-before-accepting-is-not-asked-again]] | accepted | amends 013 and 012 | `techniques.covered_stages`, `context.py`, `repairs.apply`, `redraft.py`, migration `012`, the six framework files |
 | 016 | [[ADR-016-a-framework-ends-with-a-conclusion-and-the-body-check]] | proposed | amends 013 | `context.py`, `repairs.with_the_check_in`, `somatic.md`, `mani_base.md`, the six framework files |
+| 017 | [[ADR-017-questions-are-asked-plainly]] | proposed | amends 015 and 012 | `context.py` (stage notes), `mani_base.md`, `response_format.md`, `somatic.md`, `validators.question_findings`, `client_style_counts.py` |
+| 018 | [[ADR-018-a-stuck-person-is-offered-abcde]] | proposed | amends 014 and 017 | `router.py` (`stuck`, `stuck_route`), `techniques.passed_over_stages`, `context.py`, `orchestrator.stuck_offer_candidate`, `redraft.py`, `abcde.md`, `mani_base.md` |
 
 ## In force, recorded elsewhere, no ADR yet
 

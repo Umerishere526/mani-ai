@@ -8,7 +8,9 @@ import re
 from mani.chat import repairs
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
 from mani.chat.safety import normalize
-from mani.chat.techniques import SOMATIC_STAGES, covered_stages, moves_on_after
+from mani.chat.techniques import (
+    SOMATIC_STAGES, STUCK_BRANCH, covered_stages, moves_on_after, passed_over_stages,
+)
 from mani.db.threads import TurnContext
 from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
 
@@ -302,6 +304,7 @@ def build(
     urgent: bool = False,
     their_last: str | None = None,
     asked_again: bool | None = None,
+    stuck_candidate: bool = False,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -312,8 +315,10 @@ def build(
 
     `framework` is the one already active; its current and next stage go in full. `candidate`
     is DBT STOP when an action is about to happen (`router.urgent`) - its offer lines go in, so
-    that offer draws on authored language before the model is asked. Every other offer is
-    checked against the facts after the draft. Never both at once: a framework is either
+    that offer draws on authored language before the model is asked - or, with
+    `stuck_candidate`, the framework for a person who stays stuck, on the turn right after Mani
+    asked "Are you feeling stuck?" (spec 0009). Every other offer is checked against the facts
+    after the draft. Never both at once: a framework is either
     running or being considered, not both.
 
     `history` is the same window the caller already loads for the model's own conversation
@@ -410,6 +415,9 @@ def build(
         # The client's description is not here: the backend adds it to the offer, and a
         # model given the text copied it, so offers showed it twice.
         lines.extend(_stage_lines("offer", candidate, "offering", resolve_style(ctx)))
+        branch = (candidate.stages.get("offering") or {}).get(STUCK_BRANCH)
+        if stuck_candidate and branch:
+            lines.append(f"offer_when_stuck: {stuck_guidance(branch, _STUCK_CHECK_ANSWERED)}")
 
     if running:
         lines.extend(
@@ -452,14 +460,16 @@ def _running_lines(
     if offer_waiting:
         # The offering stage's question is the offer they have just typed past.
         stage = [line for line in stage if not line.startswith("stage_ask:")]
-    told = (
-        covered_stages(framework, known or {})
-        if (framework_starting or offer_waiting) and phase == "offering"
-        else []
-    )
+    starting = (framework_starting or offer_waiting) and phase == "offering"
+    told = covered_stages(framework, known or {}) if starting else []
+    # Offered because they were stuck, with none of the first stages answered: those are passed
+    # over with no words, and the questions begin at the stage with a `stuck` branch.
+    passed = passed_over_stages(framework, known or {}) if starting else []
     if framework_starting and phase == "offering" and index + 1 < len(framework.phases):
-        index += 1 + len(told)
-        stage = _stage_lines("stage", framework, framework.phases[index], style, to_ask=bool(told))
+        index += 1 + len(told) + len(passed)
+        stage = _stage_lines(
+            "stage", framework, framework.phases[index], style, to_ask=bool(told), stuck=bool(passed),
+        )
     lines.extend(stage)
     if told:
         lines.append(_told_line(framework, told, known or {}))
@@ -467,24 +477,27 @@ def _running_lines(
         if offer_waiting:
             # If they said yes, the stage to begin with is the first one they have not answered.
             index += len(told)
+    elif passed:
+        lines.append(_STUCK_START_NOTE if framework_starting else _STUCK_IF_YES_NOTE)
+        if offer_waiting:
+            index += len(passed)
     elif framework_starting:
         lines.append(
             "stage_note: first judge whether what they have told you meets stage_ready_when. "
-            "If it does, say it back in a clause, in their words, and ask the next stage's "
-            "question (next_stage_ask) in the same reply, never asking them to confirm it. "
-            "If it does not, ask stage_ask built from what they said, in their words, so "
-            "that it asks for the missing thing"
+            "If it does, say it back in one short sentence of its own, in their words, never a "
+            "clause leading into the question, then ask the next stage's question "
+            "(next_stage_ask) in the same reply, never asking them to confirm it. If it does "
+            f"not, ask stage_ask. Either way, {_ASK_PLAINLY}"
         )
     else:
         lines.append(
-            "stage_note: put the stage question in terms of what they have told you, in "
-            "their words; never send it bare"
+            f"stage_note: the stage question is stage_ask; {_ASK_PLAINLY}"
         )
     if 0 <= index < len(framework.phases) - 1:
         lines.extend(
             _stage_lines(
                 "next_stage", framework, framework.phases[index + 1], style,
-                to_ask=offer_waiting and bool(told),
+                to_ask=offer_waiting and bool(told), stuck=offer_waiting and bool(passed),
             )
         )
     return lines
@@ -509,28 +522,63 @@ def _branch_lines(branches: list[dict], style: str, *, mark_counted: bool = Fals
     )
 
 
+# How every stage question is asked: short and about one thing, so the person can answer it
+# without first working out what is being asked (spec 0008).
+_ASK_PLAINLY = (
+    "ask it plainly: as written, or with one of their words in place of a general one, with no "
+    "clause in front of it"
+)
+
+# The say back on a turn that credits what they told before accepting: its own sentence, so the
+# question after it stays plain.
+_SAY_BACK = (
+    "say back what they told you in one short sentence of its own, in their words, adding no "
+    "feeling or meaning they did not give, never a clause leading into the question"
+)
+
 # The first turn of a framework when what they said before accepting already answers its first
 # stages: those are not asked, and the reply shows they were heard.
 _TOLD_NOTE = (
     "stage_note: they told you the stages in already_told, in the words shown, before they "
-    "accepted. Never ask those stages. Say back what they told you in one short clause, in "
-    "their words, adding no feeling or meaning they did not give, then ask stage_ask in their "
-    "words, never bare. Report stage as your step"
+    f"accepted. Never ask those stages. First {_SAY_BACK}. Then ask stage_ask, and "
+    f"{_ASK_PLAINLY}. Report stage as your step"
 )
+
+# The first turn of a framework offered because they were stuck: the stages before the one with
+# a `stuck` branch are passed over, with nothing said back, since nothing was told for them.
+_STUCK_START_NOTE = (
+    "stage_note: they accepted after saying they are stuck, so the questions begin here. Ask "
+    f"stage_ask now, and {_ASK_PLAINLY}. Report stage as your step"
+)
+
+# The same, for an offer they answered by typing.
+_STUCK_IF_YES_NOTE = (
+    "stage_note: if they said yes, they accepted after saying they are stuck, so the questions "
+    "begin at next_stage. Open with the client's line, then ask next_stage_ask, and "
+    f"{_ASK_PLAINLY}. Report next_stage as your step"
+)
+
+# The offer's stuck branch on the turn right after "Are you feeling stuck?" was asked.
+_STUCK_CHECK_ANSWERED = (
+    "only if they answered yes to \"Are you feeling stuck?\", offer with this instead of the lines "
+    "above; if they said no, offer nothing"
+)
+
+# The same branch when the facts already show they are stuck.
+STUCK_FIT_LABEL = "they are stuck and have named no event, so use this instead of the lines above"
 
 # The same, for an offer they answered by typing: the model decides whether that was a yes.
 _TOLD_IF_YES_NOTE = (
     "stage_note: if they said yes, they told you the stages in already_told, in the words shown, "
-    "before the offer. Never ask those. Open with the client's line, say back what they told you "
-    "in one short clause, in their words, adding no feeling or meaning they did not give, then "
-    "ask next_stage_ask in their words, never bare, and report next_stage as your step"
+    f"before the offer. Never ask those. Open with the client's line, then {_SAY_BACK}. Then "
+    f"ask next_stage_ask, and {_ASK_PLAINLY}. Report next_stage as your step"
 )
 
 # The stage asked on a turn that moves on, word for word. The model reports `stage` as its
 # step, or `answered` when it holds.
 _MOVE_ON_NOTE = (
     "stage_note: they have replied to the answered stage, so it is done. Ask stage_ask now, "
-    "in their words, never bare. If stage_if_earlier_missing is given and nothing usable was "
+    f"and {_ASK_PLAINLY}. If stage_if_earlier_missing is given and nothing usable was "
     "said at that stage, ask that instead. Report stage as your step. Stay on the answered "
     "stage, reporting answered as your step, only in these cases: they did not understand the "
     "question, so say it again once in simpler everyday words; or a branch in "
@@ -548,8 +596,8 @@ _PICKS_NOTE = (
     "reporting answered as your step, and do not ask stage_ask: offer ONE of their options with "
     "a short reason from what they said, and ask whether it suits them or another would be "
     "easier. Never decide for them. Otherwise it is done: if they asked you to choose, say "
-    "plainly that this one is theirs to say, then ask stage_ask now, in their words, never "
-    "bare. If stage_if_earlier_missing is given and nothing usable was said at that stage, ask "
+    f"plainly that this one is theirs to say, then ask stage_ask now, and {_ASK_PLAINLY}. If "
+    "stage_if_earlier_missing is given and nothing usable was said at that stage, ask "
     "that instead. Report stage as your step. Also stay on the answered stage only if they did "
     "not understand the question, so say it again once in simpler everyday words, or a branch "
     "in answered_if_unclear applies or you use one of the client's lines, so use its reply as "
@@ -594,11 +642,11 @@ _CONCLUDE_USED_NOTE = (
 # The same turn once the stage has used its extra turn: it is done whatever they said.
 _HOLD_USED_NOTE = (
     "stage_note: you have already stayed on the answered stage once, so it is done whatever "
-    "they said. Ask stage_ask now, in their words, never bare. If stage_if_earlier_missing is "
+    f"they said. Ask stage_ask now, and {_ASK_PLAINLY}. If stage_if_earlier_missing is "
     "given and nothing usable was said at that stage, ask that instead. Report stage as your "
     "step. If your last message offered one of their options, they are answering that, so use "
-    "the one they chose in what you ask. If they say they still did not understand, say in a "
-    "clause that the next question may help, then ask stage_ask. Only a branch in "
+    "the one they chose in what you ask. If they say they still did not understand, say in one "
+    "short sentence that the next question may help, then ask stage_ask. Only a branch in "
     "answered_if_unclear that is not "
     "marked uses your extra turn, or one of the client's lines, may keep you on the answered "
     "stage, and then use its reply as written"
@@ -651,7 +699,8 @@ def _move_on_lines(
 
 
 def _stage_lines(
-    prefix: str, framework: Framework, phase: str, style: str, *, to_ask: bool = False
+    prefix: str, framework: Framework, phase: str, style: str, *, to_ask: bool = False,
+    stuck: bool = False,
 ) -> list[str]:
     """One stage's full guidance - current or next - resolved to one conversation style.
 
@@ -659,11 +708,15 @@ def _stage_lines(
     not vary; `ask` is the one leaf a style changes, so only the resolved style's variant is
     sent rather than all three. A stage that is about to be asked (`to_ask`) leaves out its
     readiness and its branches, which only matter once it has been answered, and carries the
-    question to use when an earlier answer was never given.
+    question to use when an earlier answer was never given. `stuck` asks the stage through its
+    `stuck` branch, the first question for a person offered the framework because they were stuck.
     """
     stage = framework.stages.get(phase)
     if not stage:
         return [f"{prefix}: {phase}"]
+    branch = stage.get(STUCK_BRANCH)
+    if stuck and branch:
+        return _stuck_stage_lines(prefix, phase, stage, branch, style)
 
     lines = [f"{prefix}: {phase}"]
     for field in ("purpose", "listen_for") if to_ask else ("purpose", "listen_for", "ready_when"):
@@ -687,6 +740,30 @@ def _stage_lines(
         # DBT STOP's second branch: the lines above are for an action about to happen.
         lines.append(f"{prefix}_when_panicked: {panic_guidance(panic, style)}")
     return lines
+
+
+def _stuck_stage_lines(prefix: str, phase: str, stage: dict, branch: dict, style: str) -> list[str]:
+    """A stage asked through its `stuck` branch. The earlier stages were passed over, so there is
+    no question for an earlier answer that never came, and no readiness or branches yet."""
+    lines = [f"{prefix}: {phase}", f"{prefix}_purpose: {branch.get('purpose') or stage.get('purpose', '')}"]
+    if stage.get("listen_for"):
+        lines.append(f"{prefix}_listen_for: {stage['listen_for']}")
+    boundaries = [*(stage.get("boundaries") or []), *(branch.get("boundaries") or [])]
+    if boundaries:
+        lines.append(f"{prefix}_boundaries: " + "; ".join(boundaries))
+    ask = (branch.get("ask") or {}).get(style)
+    if ask:
+        lines.append(f"{prefix}_ask: {ask}")
+    return lines
+
+
+def stuck_guidance(branch: dict, label: str) -> str:
+    """The offer's branch for a person who stays stuck, on one line. It carries no question: the
+    description and the permission question are added to the offer by the code."""
+    parts = [label, branch.get("purpose", "")]
+    if branch.get("boundaries"):
+        parts.append("; ".join(branch["boundaries"]))
+    return ". ".join(p for p in parts if p)
 
 
 def panic_guidance(panic: dict, style: str) -> str:

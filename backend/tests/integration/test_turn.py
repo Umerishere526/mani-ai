@@ -1582,7 +1582,7 @@ async def test_the_body_is_asked_about_once_then_where_then_the_practice(alice, 
     model(
         Reply(text="You were able to stay with the pause. How has it been?",
               state=TechniqueState(technique="abcde", step="somatic_checkin")),
-        Reply(text="It feels a little better. Would you like to notice what is happening in your body?",
+        Reply(text="It feels a little better. What are you noticing in your body right now?",
               state=TechniqueState(technique="abcde", step="somatic_checkin")),
         Reply(text="It is not always easy to say where. Is it your chest or your shoulders?",
               state=TechniqueState(technique="abcde", step="somatic_practice")),
@@ -1593,10 +1593,10 @@ async def test_the_body_is_asked_about_once_then_where_then_the_practice(alice, 
     await _land_on(alice, thread.id, "balanced")
 
     checked_in = await send(alice, thread.id, "not a 100% but a little better")
-    assert checked_in.content.endswith("Would you like to notice what is happening in your body?")
+    assert checked_in.content.endswith("What are you noticing in your body right now?")
 
     said_yes = await send(alice, thread.id, "yes")
-    assert said_yes.content.count("notice what is happening in your body") == 0
+    assert said_yes.content.count("noticing in your body") == 0
     assert said_yes.content.endswith("Where are you feeling that most right now?")
     assert [p.label for p in said_yes.prompts] == PLACES
 
@@ -1784,7 +1784,7 @@ async def test_the_body_check_in_is_sent_from_the_script_not_reworded(alice, mod
         )
 
     turn = await send(alice, thread.id, "yes, that fits what happened")
-    assert turn.content.endswith("Would you like to notice what is happening in your body?")
+    assert turn.content.endswith("What are you noticing in your body right now?")
 
 
 async def _stored_stage(alice, thread_id):
@@ -2071,3 +2071,34 @@ async def test_the_body_route_runs_for_other_exactly_as_for_no_flag_and_not_for_
 
     phase, _ = await _stored_stage(alice, thread.id)
     assert (phase == "somatic_practice") is practice
+
+
+async def test_a_yes_to_the_stuck_check_is_offered_abcde_which_starts_at_the_stuck_line(alice, model):
+    """covers spec 0009 AC-2, AC-4 and AC-7: after "Are you feeling stuck?" and a yes, ABCDE is
+    offered on `stuck` alone, and accepting it passes over "What happened?" with nothing said back."""
+    stuck_line = "What goes through your mind when you feel this?"
+    scripted = model(
+        Reply(text="What has today been like?"),
+        Reply(text="That is okay. Are you feeling stuck?"),
+        _offer("abcde", Fact(fact="stuck", words="dont know cant think")),
+        Reply(
+            text=f"Okay. I'll guide you through it one step at a time. {stuck_line}",
+            state=TechniqueState(technique="abcde", step="belief", accepted=True),
+        ),
+    )
+    thread = await after_the_style_tap(await start(alice))
+    await send(alice, thread.id, "i am depressed")
+    await send(alice, thread.id, "i dont know cant think of anything")
+    offered = await send(alice, thread.id, "yes")
+
+    assert "offer_when_stuck: only if they answered yes" in scripted.last_messages[-1]["content"]
+    assert [p.technique for p in offered.prompts if p.technique] == ["abcde"]
+
+    started = await send(alice, thread.id, "Try it")
+
+    sent = scripted.last_messages[-1]["content"]
+    assert f"stage_ask: {stuck_line}" in sent
+    assert "already_told" not in sent and "stage_if_earlier_missing" not in sent
+    assert (await _stored_stage(alice, thread.id))[0] == "belief"
+    assert started.content.endswith(stuck_line)
+    assert scripted.calls == 4

@@ -103,6 +103,12 @@ class ConversationCounts:
     own_phrases: dict[str, int] = field(default_factory=dict)
     unused_feelings: list[str] = field(default_factory=list)
     unused_sizes: list[str] = field(default_factory=list)
+    # Questions a person would have to stop and work out (spec 0008), over every reply in Mani's
+    # own words, the offer's description and permission question left out.
+    long_questions: int = 0
+    lead_clauses: int = 0
+    flagged_words: int = 0
+    either_ors: int = 0
 
     @property
     def questions(self) -> int:
@@ -160,6 +166,29 @@ def _accepted_at(turns: list[Turn]) -> int | None:
     )
 
 
+QUESTION_RULES = {
+    "long question": "long_questions",
+    "lead clause": "lead_clauses",
+    "flagged word": "flagged_words",
+    "either/or": "either_ors",
+}
+
+
+def count_question_findings(turns: list[Turn], descriptions: frozenset[str]) -> dict[str, int]:
+    """How often each question rule is broken over the whole conversation, keyed by the
+    `ConversationCounts` field it fills. Replies from the acceptance of an offer on are inside
+    the framework."""
+    accepted = _accepted_at(turns)
+    totals = dict.fromkeys(QUESTION_RULES.values(), 0)
+    for index, turn in enumerate(turns):
+        in_framework = accepted is not None and index >= accepted
+        for finding in validators.question_findings(
+            own_words(turn.reply, descriptions), turn.message, in_framework=in_framework
+        ):
+            totals[QUESTION_RULES[finding.rule]] += 1
+    return totals
+
+
 def count_conversation(turns: list[Turn], descriptions: frozenset[str]) -> ConversationCounts:
     replies = [r.reply for r in turns]
     first_offer = next((i for i, t in enumerate(turns, 1) if t.offered), None)
@@ -195,6 +224,7 @@ def count_conversation(turns: list[Turn], descriptions: frozenset[str]) -> Conve
         own_phrases=own_phrases,
         unused_feelings=unused,
         unused_sizes=unused_sizes,
+        **count_question_findings(turns, descriptions),
     )
 
 
@@ -338,6 +368,7 @@ def figures(records: list[tuple[str, int, ConversationCounts]]) -> dict[str, flo
         "conversations": len(all_counts),
         "offered": sum(1 for c in all_counts if c.offer_at is not None),
         "offered_at_2_to_4": sum(1 for c in all_counts if c.offer_at is not None and 2 <= c.offer_at <= 4),
+        **{name: sum(getattr(c, name) for c in all_counts) for name in QUESTION_RULES.values()},
     }
     for style in styles:
         result[f"stock_phrases_per_conversation_{style}"] = per_style(style, lambda c: c.stock_phrases)

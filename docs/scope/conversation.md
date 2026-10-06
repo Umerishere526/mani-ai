@@ -52,7 +52,7 @@ Spec: [0001](../specs/0001-abcde-framework-offer.md) · code in backend/mani/cha
 
 ## Natural Mani: current focus
 
-From the client meeting in October 2026 and the client's style document ("directive, reflective, supportive"). The client finds Mani robotic, too complicated, too full of questions, and repeating "I hear you"; people do not feel heard. This phase is built first, ahead of the slices below: measure (row 32), then rewrite (rows 33, 34, 18, 6), then choose the model (row 35) on the same check.
+From the client meeting in October 2026 and the client's style document ("directive, reflective, supportive"). The client finds Mani robotic, too complicated, too full of questions, and repeating "I hear you"; people do not feel heard. This phase is built first, ahead of the slices below: measure (row 32), then rewrite (rows 33, 34, 18, 40, 41, 6), then choose the model (row 35) on the same check.
 
 ### 32. The client's style conversations are a standing check
 
@@ -126,6 +126,39 @@ Spec: [0003](../specs/0003-stage-moves-on-one-answer/index.md) · code in backen
   - [x] Typed positives and negatives as tests (AC-17)
 - [ ] Verify it: `/check verify the request to hear a question again also reads whats that mean`
 - [ ] Test it: `/test the request to hear a question again also reads whats that mean`
+
+### 40. Mani's questions can be answered without stopping to think · in-progress
+
+The team lead points to questions from the earlier Mani ("What does being alone feel like for you today?", "What would you like to explore first?") as plain, neutral and down to earth. Many questions today are not: framework steps send the client's worksheet sentences as written ("What did that come to mean for you?", "What is a more balanced way to describe this?"), and people answer "what?" (journal `idiot-concert-chat-why-mani-reads-as-a-worksheet-2026-10-05`). Every question, before the offer and at every framework step, uses everyday words and asks about one concrete thing the person already said. At most one short line comes before it, and that line adds meaning instead of restating, as in the "Mani Standard" rewrites in the client's "Good, Acceptable, Bad Conversations" document ("What time are you aiming for right now?"). The old chat also shows the limit: its open "what would feel most supportive" question and its either/or questions got "i dont know" and "i cant decide", so a person who is stuck gets one simple concrete question, not a choice. Where a client question cannot be followed, this overrides row 17's "the client's own question" (muhammad allowed rewriting client wording on 2026-10-05). Notes: journal `questions-easy-to-answer-old-mani-chat-2026-10-05`.
+**Done when:** replays of the concert chat, the "i am depressed" chat and three of the document's bad transcripts reach the offer and the body check with no question a reader marks as hard to follow; no framework step question uses worksheet words ("belief", "balanced", "perspective", "come to mean"), and the evals check it; a person who says they are stuck or cannot decide is never given an either/or choice; and the team lead reads the transcripts and agrees they read like the old examples.
+
+Spec: [0008](../specs/0008-questions-answerable-without-thinking/index.md) (the step questions themselves were already rewritten plainly on 2026-10-05; the spec targets the clause the model puts in front of them, its own abstract and ranking questions, the stuck check "Are you feeling stuck?", and two body check lines; the Done when's replays are narrowed to the concert and "i am depressed" chats, one paid run after muhammad says yes) · code in backend/mani/chat/context.py, backend/content/prompts/, backend/content/frameworks/, backend/tests/evals/validators.py, backend/scripts/client_style_counts.py
+
+- [x] Design it (spec): `/architect Mani's questions can be answered without stopping to think`
+- [ ] Build it: `/develop Mani's questions can be answered without stopping to think`
+  - [x] Free question counts in the evals, with the exemptions (AC-7)
+  - [x] Content: the DBT STOP panic line, two body check lines, the framework index wording, and a test over every authored question (AC-5, AC-6, AC-11)
+  - [x] Plain step questions in every stage note and prompt line (AC-1)
+  - [x] Base prompt: question rule, Supportive line, the stuck check, within 115 lines (AC-2, AC-3, AC-4) (118 lines, muhammad raised the limit on 2026-10-05)
+  - [x] The depressed_alone scenario, ADR-017, PORT-STATUS and journal, then the six conversation paid run after muhammad says yes (AC-8, AC-9, AC-10)
+- [x] Verify it: `/check verify Mani's questions can be answered without stopping to think`
+- [x] Test it: `/test Mani's questions can be answered without stopping to think`
+
+### 41. A person who stays stuck while Mani is understanding is offered ABCDE · in-progress
+
+From the client meeting in October 2026. Someone comes to Mani in pain, in their body or their mind, and Mani asks questions to understand. The pain itself starts nothing. If they keep saying "I don't know" or "I can't think", or the conversation goes round in a loop, Mani offers ABCDE, because its questions walk them step by step through what is going on. If a thought is what hurts, Thought Reframe is offered, as today. This changes settled rules, so `/architect` decides it first: ABCDE today needs an event and what they made of it (spec 0005's full fit); its own "when not to use" list names an unclear issue and a person who cannot answer reflective questions; the client's overview puts "stuck" under Behavioral Activation; spec 0008 AC-4 says "Are you feeling stuck?" never leads to an offer; and Mani offers nothing to someone in physical pain. The spec settles what counts as stuck or looping and after how many turns, how this sits with "Are you feeling stuck?", and what ABCDE's first steps ask someone who has named no event. Builds on rows 8 and 40.
+**Done when:** in a replay of the "i am depressed" chat (`depressed_alone`), a person who still answers "i dont know" or "cant think" after Mani's understanding questions is offered ABCDE; a person who names a thought that hurts is offered Thought Reframe; nothing is offered under `safety: concern`; and someone who named no event can answer the ABCDE steps that follow.
+
+Spec: [0009](../specs/0009-stuck-person-offered-abcde/index.md) (a `stuck` fact kept only after "Are you feeling stuck?", fitting ABCDE below every other fit; ABCDE opens with "What goes through your mind when you feel this?"; the body pain hold lifts on this route; the paid run is shared with spec 0008's) · code in backend/mani/chat/router.py, backend/mani/chat/techniques.py, backend/mani/chat/context.py, backend/mani/chat/orchestrator.py, backend/mani/chat/redraft.py, backend/content/frameworks/abcde.md, backend/content/prompts/mani_base.md
+
+- [x] Design it (spec): `/architect A person who stays stuck while Mani is understanding is offered ABCDE`
+- [ ] Build it: `/develop A person who stays stuck while Mani is understanding is offered ABCDE`
+  - [x] The `stuck` fact, the check gate, the fit below every other, and the fit text (AC-1, AC-2, AC-3)
+  - [x] ABCDE's stuck branches, the offer turn, the passed over first step, and the pain hold, with the integration test (AC-4, AC-6, AC-7, AC-8)
+  - [x] The base prompt's stuck check and pain lines within 118 lines (AC-5, AC-6)
+  - [ ] The stuck_body_pain scenario, expect_offer, ADR-018, PORT-STATUS and journal, then the shared paid run after muhammad says yes (AC-9, AC-10, AC-11)
+- [x] Verify it: `/check verify A person who stays stuck while Mani is understanding is offered ABCDE`
+- [x] Test it: `/test A person who stays stuck while Mani is understanding is offered ABCDE`
 
 ### 6. The offer names the framework, introduces it, and gives three choices · needs a decision
 

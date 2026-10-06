@@ -20,7 +20,7 @@ from mani.chat.greeting import (
     STYLE_OPTIONS,
     greeting,
 )
-from mani.chat.techniques import Registry, covered_stages
+from mani.chat.techniques import Registry, covered_stages, passed_over_stages
 from mani.config import get_settings
 from mani.db import (
     exercises as exercises_db,
@@ -35,6 +35,7 @@ from mani.llm import client
 from mani.llm.schema import LibrarySection, Reply, SmartPrompt
 from mani.models.rows import (
     Exercise,
+    Framework,
     Message,
     MessageRole,
     ResponseStyle,
@@ -235,6 +236,25 @@ def _finished(technique: TechniqueState | None) -> bool:
     return bool(technique and technique.outcome is TechniqueOutcome.ACCEPTED and not technique.phase)
 
 
+def stuck_offer_candidate(
+    ctx: threads.TurnContext, registry: Registry, mani_texts: list[str], user_texts: list[str]
+) -> Framework | None:
+    """The framework whose offer lines go into [ctx] on the turn right after Mani asked "Are you
+    feeling stuck?", so a yes can be met in its words (spec 0009). None while a framework is
+    offered or running, before its earliest message, or when it is ruled out or finished."""
+    stuck_id = router.stuck_framework(registry.activations)
+    technique = ctx.technique
+    if stuck_id is None or not router.asked_the_check(mani_texts[-1:]):
+        return None
+    if technique is not None and technique.outcome is not TechniqueOutcome.DECLINED:
+        return None
+    if stuck_id in _not_offerable_now(ctx, registry, user_texts):
+        return None
+    if not context.earliest_offer_ok(ctx, registry.activations.get(stuck_id)):
+        return None
+    return registry.get(stuck_id)
+
+
 def _not_offerable_now(
     ctx: threads.TurnContext, registry: Registry, user_texts: list[str]
 ) -> frozenset[str]:
@@ -413,6 +433,15 @@ async def send(
         if urgent and technique is None and assessment.level is safety.Level.NONE
         else None
     )
+    mani_texts = [m.content for m in history if m.role is MessageRole.MANI]
+    stuck_offer = (
+        stuck_offer_candidate(ctx, config.registry, mani_texts, user_texts)
+        if candidate is None and assessment.level is safety.Level.NONE
+        else None
+    )
+    stuck_candidate = stuck_offer is not None
+    if stuck_offer is not None:
+        candidate = stuck_offer
 
     wants_title = (
         ctx.thread.message_count >= TITLE_AFTER_MESSAGES and not ctx.thread.title
@@ -435,10 +464,16 @@ async def send(
         if technique is not None and technique.outcome is TechniqueOutcome.OFFERED
         else []
     )
+    # Offered because they were stuck: the first stages are passed over with no words.
+    passed = (
+        passed_over_stages(active_framework, technique.known)
+        if technique is not None and technique.outcome is TechniqueOutcome.OFFERED
+        else []
+    )
     prefix = context.build(
         ctx, framework=active_framework, candidate=candidate,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
-        framework_starting=accepted_this_turn, urgent=urgent,
+        framework_starting=accepted_this_turn, urgent=urgent, stuck_candidate=stuck_candidate,
         # A tap is a choice among Mani's own buttons, not words to read.
         their_last=None if tapped else context.classify_reply(content),
         asked_again=None if tapped else context.asks_to_hear_again(content),
@@ -499,7 +534,7 @@ async def send(
     fact_words: dict[str, str] = {}
     if fact_turn:
         kept = router.kept_facts(
-            [(f.fact, f.words) for f in reply.facts or []], user_texts
+            [(f.fact, f.words) for f in reply.facts or []], user_texts, mani_messages=mani_texts
         )
         fact_notes = kept.notes
         fact_words = kept.words
@@ -643,7 +678,7 @@ async def send(
         clarification_already_used=context.clarification_used(history),
         current_holds=technique.holds if technique else 0,
         asked_again=False if tapped else context.asks_to_hear_again(content),
-        skipped_stages=len(told),
+        skipped_stages=len(told) + len(passed),
     )
     if fact_notes:
         fixed = dataclasses.replace(fixed, notes=fact_notes + fixed.notes)

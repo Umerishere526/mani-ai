@@ -302,6 +302,25 @@ def test_the_turn_a_framework_starts_shows_the_first_stage_and_the_second():
     assert any(line.startswith("stage_note: first judge whether") for line in starting)
 
 
+def test_every_note_that_asks_a_stage_question_asks_it_plainly_with_nothing_in_front():
+    """Spec 0008: a clause in front of a stage question ("Since you've mentioned that you find
+    yourself losing an hour to scrolling, what...") makes the person work out what is asked."""
+    ctx, running = _running_framework()
+    starting = context.build(ctx, framework=running, framework_starting=True).splitlines()
+    plain = context.build(ctx, framework=running).splitlines()
+    notes = [
+        note(starting), note(plain), context._TOLD_NOTE, context._TOLD_IF_YES_NOTE,
+        context._MOVE_ON_NOTE, context._PICKS_NOTE, context._HOLD_USED_NOTE,
+        context._STUCK_START_NOTE, context._STUCK_IF_YES_NOTE,
+    ]
+
+    for text in notes:
+        assert "ask it plainly" in text, text
+        assert "never bare" not in text and "never send it" not in text, text
+    for text in (note(starting), context._TOLD_NOTE, context._TOLD_IF_YES_NOTE):
+        assert "one short sentence of its own" in text and "never a clause leading into the question" in text
+
+
 def test_the_turn_a_framework_starts_does_not_ask_what_they_already_told_it():
     """Observed live: after Try it, Mani asked "what happened?" and "what did that mean?" of
     someone who had said both before the offer. The stages their words answer are named, with
@@ -949,7 +968,7 @@ def test_while_the_questions_run_a_short_reply_and_a_correction_are_sent_but_hea
     assert 'answering: "What was the belief you took from it?"' in short
     assert "their_last: correction" in told_you and "answering" not in told_you
     assert "their_last" not in heard
-    assert "stage_note: put the stage question in terms of what they have told you" in short
+    assert "stage_note: the stage question is stage_ask; ask it plainly" in short
 
 
 def test_the_block_no_longer_says_what_the_question_should_focus_on():

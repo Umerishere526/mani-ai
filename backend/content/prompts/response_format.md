@@ -88,9 +88,9 @@ What each line tells you:
   action, so you can offer it now.
 - `*_when_panicked`: that set's lines for someone panicked right now with no action named. When
   that is what they told you, follow these instead of the lines above them.
-- `framework_starting: yes`: they just said yes. Put the first stage question in their words;
-  if what they said already meets the stage's ready_when, say it back in a clause and ask the
-  next stage's question in the same reply.
+- `framework_starting: yes`: they just said yes. Ask the first stage question plainly; if what
+  they said already meets the stage's ready_when, say it back in one short sentence of its own and
+  ask the next stage's question plainly in the same reply.
 - `current_phase`, `active_framework`, `framework_stages`, `answered*`, `stage_*`, `next_stage_*`:
   while the questions run. After the first stage you get `answered`, the stage they have just
   replied to, with its purpose and the branches for an unclear reply, and `stage`, the one to

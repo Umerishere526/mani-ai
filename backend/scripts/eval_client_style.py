@@ -19,7 +19,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from mani.db import pool  # noqa: E402
 from mani.models.rows import SupportStyle  # noqa: E402
 from scripts.client_style_counts import (  # noqa: E402
-    STYLE_READ_CONVERSATION, ConversationCounts, Turn, count_conversation, figures,
+    QUESTION_RULES, STYLE_READ_CONVERSATION, ConversationCounts, Turn, count_conversation, figures,
     framework_descriptions, restating_read, short_message_turns, shuffled_for_reading, style_read_replies,
 )
 from scripts.eval_replies import Exchange, _fresh_user, _remove_users, _run_one  # noqa: E402
@@ -122,6 +122,8 @@ def _figures(records: list[dict]) -> str:
         f"{f['offered_at_2_to_4']:.0f} (AC-10, 33 or more)",
         f"dashes (AC-10, no more than baseline): {f['dashes']:.0f}",
         f"replies over three sentences (AC-12, no more than baseline): {f['long_replies']:.0f}",
+        f"questions (spec 0008): long {f['long_questions']:.0f}, lead clause {f['lead_clauses']:.0f}, "
+        f"flagged word {f['flagged_words']:.0f}, either/or after a stuck message {f['either_ors']:.0f}",
     ])
 
 
@@ -204,6 +206,7 @@ def _save(
                 "long_replies": r["counts"].long_replies,
                 "unused_feelings": r["counts"].unused_feelings,
                 "unused_sizes": r["counts"].unused_sizes,
+                **{name: getattr(r["counts"], name) for name in QUESTION_RULES.values()},
                 "offer_at": r["counts"].offer_at,
                 "replies": [asdict(c) for c in r["counts"].replies],
             }

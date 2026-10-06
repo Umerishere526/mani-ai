@@ -9,6 +9,7 @@ from dataclasses import dataclass
 # The capsule vocabulary lives beside the code that enforces it, so the eval and the runtime
 # cannot drift into disagreeing about which words are which.
 from mani.chat.repairs import (
+    CLIENT_LINES,
     FEELING_WORDS,
     MAX_CAPSULE_WORDS,
     SELF_JUDGMENTS,
@@ -351,6 +352,60 @@ _QUESTION = re.compile(r"[^.!?\n]*\?")
 def _last_question_words(reply: str) -> set[str]:
     questions = _QUESTION.findall(reply)
     return set(re.findall(r"[a-z']+", questions[-1].lower())) if questions else set()
+
+
+# A question the person has to stop and work out (spec 0008). Sixteen words is past what the
+# client's "Mani Standard" rewrites ever need ("What time are you aiming for right now?").
+MAX_QUESTION_WORDS = 15
+# Openings that wrap the question in a restatement. "When", "with" and "as" are left out: they
+# often open a fine question ("When you try to stop, what happens?").
+_LEAD_CLAUSE = re.compile(r"^(since|given|now that|looking at|knowing|considering)\b")
+# Worksheet and abstract words, whole words only, so "reflective" and "meaningful" are not caught.
+_FLAGGED_WORD = re.compile(
+    r"\b(belief|process|reflect|pattern|example|conclusion|meaning|explor\w*)\b"
+    r"|present for you|pulling on you|pulling the most"
+)
+_EITHER_OR_OPENING = re.compile(r"^(would you|do you|should we|shall we|is it|are you)\b")
+_STUCK = re.compile(
+    r"i don't know|dont know|\bidk\b|not sure|can't think|cant think|can't decide|cant decide|confused"
+)
+# Choices the client wrote, which are hers to offer, not Mani handing a stuck person a choice.
+_CLIENT_CHOICES = ("keep chatting or go to the library", *(line.lower() for line in CLIENT_LINES))
+
+
+def _plain(text: str) -> str:
+    return text.lower().replace("’", "'")
+
+
+def is_stuck(message: str) -> bool:
+    """The person says they cannot think, cannot decide, do not know, or are confused."""
+    return bool(_STUCK.search(_plain(message)))
+
+
+def question_findings(reply: str, their_message: str, *, in_framework: bool = False) -> list[Finding]:
+    """Questions the person would have to stop and think about before answering.
+
+    `their_message` is the one message this reply answers, never the conversation so far: an
+    either/or is only a fault when it is handed to someone who has just said they are stuck.
+    Inside a framework a stage may ask them to choose among options they named, so either/or
+    is not counted there.
+    """
+    findings: list[Finding] = []
+    stuck = not in_framework and is_stuck(their_message)
+    for question in (q.strip() for q in _QUESTION.findall(_plain(reply))):
+        if len(question.split()) > MAX_QUESTION_WORDS:
+            findings.append(Finding("long question", f"{len(question.split())} words: {question[:80]!r}"))
+        if _LEAD_CLAUSE.search(question):
+            findings.append(Finding("lead clause", question[:80]))
+        flagged = sorted({m.group(0) for m in _FLAGGED_WORD.finditer(question)})
+        if flagged:
+            findings.append(Finding("flagged word", f"{flagged}: {question[:80]!r}"))
+        either_or = " or " in question and (
+            _EITHER_OR_OPENING.search(question) or "would you rather" in question
+        )
+        if stuck and either_or and not any(question in choice or choice in question for choice in _CLIENT_CHOICES):
+            findings.append(Finding("either/or", f"after {their_message!r}: {question[:80]!r}"))
+    return findings
 
 
 def repeated_question(replies: list[str], overlap: float = 0.8) -> list[Finding]:

@@ -39,7 +39,7 @@ stages:
       - when: "the user declines the check-in"
         reply: "You'd rather not check in with your body right now. Would you like to keep chatting or go to the Library?"
     ask:
-      supportive: "Would you like to notice what is happening in your body?"
+      supportive: "What are you noticing in your body right now?"
       reflective: "What do you notice in your body?"
       direct: "What do you notice in your body now?"
 
@@ -85,6 +85,6 @@ stages:
           reflective: "I hear you noticing it calm for a moment and then come back. That's a common pattern with panic. You don't have to manage it on your own. I have a whole library of tools that help with panic attacks, anytime and anywhere."
     ask:
       supportive: "Where are you feeling that most right now?"
-      reflective: "Where does that sit in your body right now?"
+      reflective: "Where do you feel that in your body?"
       direct: "Where do you feel that most right now?"
 ```

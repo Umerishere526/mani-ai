@@ -430,3 +430,42 @@
     - "i feel like i should be smart enough to make smart choices myself but when the moment comes i always make the bad decision"
     - "i feel my head is spining"
     - "good i think"
+
+# The earlier Mani's chat the team lead picked questions from (journal
+# questions-easy-to-answer-old-mani-chat-2026-10-05). The questions Mani asks are judged: short,
+# plain, no either/or after "i cant decide", and "Are you feeling stuck?" at most once. The turns are
+# scripted, so later ones may read oddly against what Mani actually asked. After the check this
+# person is offered ABCDE (spec 0009).
+- name: depressed_alone
+  expect_offer: abcde
+  turns:
+    - "i am depressed"
+    - "i dont know i am alone and cant think straight"
+    - "i dont know cant think of anything just alone and confused"
+    - "no one to talk to"
+    - "Feeling confused"
+    - "Let's try it"
+    - "what does confusion usually mean , i dont know what the answer should be"
+    - "my feels restless and many thoughts come up"
+    - "Not sure yet"
+    - "i cant decide"
+    - "but i m not comfortable with this feeling"
+    - "Different way"
+
+# Spec 0009: pain in the body, two stuck answers of two words or more, a yes to "Are you feeling
+# stuck?", the offer accepted by typing, then short answers to the ABCDE steps. The pain must not
+# hold this offer back, and the first framework question is "What goes through your mind when you
+# feel this?".
+- name: stuck_body_pain
+  expect_offer: abcde
+  turns:
+    - "my back has been hurting for weeks and i feel awful"
+    - "i dont know, i just cant think properly"
+    - "i really dont know what to say"
+    - "yes"
+    - "Let's try it"
+    - "that i will never get better"
+    - "i stay in bed more"
+    - "it has been weeks"
+    - "the doctor said it will heal"
+    - "maybe it will get better slowly"

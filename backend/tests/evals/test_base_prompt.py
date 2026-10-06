@@ -8,14 +8,14 @@ import pytest
 from scripts.client_style_counts import count_dashes
 
 BASE = pathlib.Path(__file__).resolve().parents[2] / "content" / "prompts" / "mani_base.md"
-MAX_LINES = 115
+MAX_LINES = 118
 
 
 def _base() -> str:
     return BASE.read_text()
 
 
-def test_the_base_instructions_body_fits_in_a_hundred_and_fifteen_lines():
+def test_the_base_instructions_body_fits_in_a_hundred_and_eighteen_lines():
     body = _base().split("\n---\n", 1)[1]
     assert len(body.splitlines()) <= MAX_LINES
 
@@ -43,6 +43,18 @@ HARD_RULES = [
     ("the style comes from the context block", "the style comes from `[ctx]` alone"),
     ("no offer on a safety concern", "Never offer under `safety: concern`"),
     ("a framework is never named", 'never say its name, its id or the word "framework"'),
+    ("a question can be answered straight away", "It asks one thing they can answer straight away"),
+    ("a question is short", "in fewer than 16 words"),
+    ("no clause in front of a question", "never opens with a clause"),
+    ("no ranking their own state", "Never ask them to rank or judge their own state"),
+    ("no asking what would help too early", "or what would help before they have named something"),
+    ("no worksheet words", '"conclusion" or "meaning"'),
+    ("the stuck check, word for word", '"Are you feeling stuck?" once in a conversation'),
+    ("a stuck person gets no either/or", "never a choice of two things"),
+    ("a stage question is asked plainly", "the first stage's question plainly"),
+    ("Supportive asks about what they said", "Any question is gentle and about something they said"),
+    ("a yes to the stuck check may bring an offer", "A yes may bring an offer"),
+    ("body pain holds every offer but the stuck one", "only a `stuck` fit may be offered"),
 ]
 
 

@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 
 from mani.chat import repairs, router
-from mani.chat.context import panic_guidance
-from mani.chat.techniques import Registry
+from mani.chat.context import STUCK_FIT_LABEL, panic_guidance, stuck_guidance
+from mani.chat.techniques import STUCK_BRANCH, Registry, passed_over_stages
 from mani.llm.schema import Reply
 from mani.models.rows import Framework
 
@@ -34,11 +35,12 @@ def ruled_out(reply: Reply, user_texts: list[str], registry: Registry) -> str | 
 
 # While pain may still be physical the offer is held (the prompt says so), so an offer that is
 # due is not asked for then.
-_PAIN = ("pain", "hurts", "hurting", "ache", "aching", "injury", "injured")
+# Whole words, so "painful" (a feeling) is not read as pain in the body.
+_PAIN = re.compile(r"\b(pain|hurts|hurting|ache|aching|injury|injured)\b")
 
 
 def pain_mentioned(user_texts: list[str]) -> bool:
-    return any(word in text.lower() for text in user_texts for word in _PAIN)
+    return any(_PAIN.search(text.lower()) for text in user_texts)
 
 
 def offers_the_pick(technique: str | None, fit: router.Fit | None) -> bool:
@@ -58,13 +60,19 @@ def _named(framework: Framework) -> str:
     return f"{framework.name} (`{framework.id}`)"
 
 
-def _offer_guidance(framework: Framework, style: str, facts: frozenset[str]) -> str:
+def _offer_guidance(
+    framework: Framework, style: str, facts: frozenset[str], *, stuck_route: bool = False,
+) -> str:
     """The framework's own offering stage, so a redrafted offer draws on its authored wording.
-    DBT STOP's panic branch when they are panicked with no action in view."""
+    DBT STOP's panic branch when they are panicked with no action in view; ABCDE's stuck branch
+    when it fits only because they are stuck and its first stages are passed over (spec 0009)."""
     offering = framework.stages.get("offering") or {}
     panic = offering.get("panic")
     if panic and "overwhelmed_now" in facts and "about_to_act" not in facts:
         return f"its offer: {panic_guidance(panic, style)}"
+    stuck = offering.get(STUCK_BRANCH)
+    if stuck and stuck_route and passed_over_stages(framework, dict.fromkeys(facts, "")):
+        return f"its offer: {stuck_guidance(stuck, STUCK_FIT_LABEL)}"
     parts = [offering.get("purpose", "")]
     if offering.get("boundaries"):
         parts.append("; ".join(offering["boundaries"]))
@@ -113,7 +121,7 @@ def _offer_reason(
         if earliest_ok(fit.pick):
             return (
                 f"the facts you listed point to {_named(pick)}: offer that instead; "
-                f"{_offer_guidance(pick, style, fit.facts)}"
+                f"{_offer_guidance(pick, style, fit.facts, stuck_route=fit.stuck_route)}"
             )
         return _NOT_ALLOWED
     # Nothing fits: a framework they only point to is never offered, so ask for what it needs.
@@ -140,7 +148,7 @@ def _due_reason(
         pick = registry.get(fit.pick)
         return (
             f"you have talked for several replies and not offered: offer {_named(pick)}; "
-            f"{_offer_guidance(pick, style, fit.facts)}"
+            f"{_offer_guidance(pick, style, fit.facts, stuck_route=fit.stuck_route)}"
         )
     return None
 
@@ -190,7 +198,7 @@ def reasons(
             technique, reply, user_texts, registry, fit=fit, style=style, clear_ok=clear_ok,
             earliest_ok=earliest_ok, waiting=waiting, asked_about_waiting=asked_about_waiting,
         )
-    elif fit is not None and offer_due and not pain_mentioned(user_texts):
+    elif fit is not None and offer_due and (fit.stuck_route or not pain_mentioned(user_texts)):
         reason = _due_reason(
             registry, fit=fit, style=style, clear_ok=clear_ok, earliest_ok=earliest_ok,
         )

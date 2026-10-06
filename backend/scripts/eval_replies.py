@@ -302,6 +302,7 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
     """Every check that applies to this scenario.
 
     `expect_framework`: a journey, which must reach a framework and hand off at its end.
+    `expect_offer`: the framework the first offer must be (spec 0009).
     `markers`: words only the first chat used, which the second must not bring across.
     """
     findings: list[validators.Finding] = []
@@ -312,6 +313,8 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
         findings += validators.style_findings(exchange.reply, style.value)
         findings += validators.says_framework(exchange.reply, FRAMEWORK_NAMES)
         findings += _rephrase_findings(exchange)
+        in_framework = bool(exchange.framework and exchange.framework[1] == "accepted")
+        findings += validators.question_findings(exchange.reply, exchange.message, in_framework=in_framework)
         if exchange.finding:
             findings.append(validators.Finding("script", exchange.finding))
         if exchange.chat > 1 and scenario.get("markers"):
@@ -347,6 +350,13 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
             findings.append(validators.Finding("journey", "never entered a framework"))
         elif not any(str(phase).startswith("somatic") for phase in reached):
             findings.append(validators.Finding("journey", f"stopped at {reached[-1]}, never reached somatic"))
+    if scenario.get("expect_offer"):
+        first = _first_offer(exchanges)
+        offered = first.split(":", 1)[1] if first else None
+        if offered != scenario["expect_offer"]:
+            findings.append(validators.Finding(
+                "journey", f"first offer was {offered or 'never made'}, expected {scenario['expect_offer']}"
+            ))
     return findings
 
 
