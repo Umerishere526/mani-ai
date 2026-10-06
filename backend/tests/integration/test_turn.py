@@ -1520,3 +1520,90 @@ async def test_the_body_check_in_is_sent_from_the_script_not_reworded(alice, mod
 
     turn = await send(alice, thread.id, "yes, that fits what happened")
     assert turn.content.endswith("Would you like to notice what is happening in your body?")
+
+
+# ---------------------------------------------------------------------------
+# The semantic router, behind SEMANTIC_ROUTER. Code decides whether a framework is
+# offered; the model only words it. The embedder is substituted, so these are about the
+# decision and its enforcement, not about the provider.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def semantic(monkeypatch):
+    """Turn the flag on and route to whatever the test asks for, without the network."""
+    from mani.chat import semantic_router as sr
+
+    def install(routing: sr.Routing):
+        monkeypatch.setenv("SEMANTIC_ROUTER", "true")
+        get_settings.cache_clear()
+        monkeypatch.setattr(orchestrator.semantic_router, "route", lambda *a, **k: routing)
+        return routing
+
+    yield install
+    get_settings.cache_clear()
+
+
+def _match(framework_id: str):
+    from mani.chat import semantic_router as sr
+
+    return sr.Routing(sr.RouteStatus.MATCH, (sr.Candidate(framework_id, 0.7, 0.3),))
+
+
+async def test_code_adds_the_offer_the_model_did_not_make(alice, model, semantic):
+    """The inversion: the model writes a plain reply, and the turn's decision supplies the
+    offer. Before this, an offer only existed if the model thought of it."""
+    from mani.chat import semantic_router as sr
+
+    semantic(_match("abcde"))
+    scripted = model(Reply(text="Criticised in front of everyone, and it stayed with you."))
+    thread = await start(alice)
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        # Direct, past its third message, where the client's cadence allows the offer.
+        await conn.execute(
+            "update public.threads set conversation_style = 'direct', "
+            "message_count = message_count + 6 where id = $1",
+            thread.id,
+        )
+    turn = await send(alice, thread.id, "i keep thinking i'm bad at my job")
+
+    assert scripted.calls == 1
+    assert [p.technique for p in turn.prompts if p.technique] == ["abcde"]
+    assert any(p.decline for p in turn.prompts)
+
+
+async def test_an_offer_the_turn_did_not_decide_on_is_dropped(alice, model, semantic):
+    """The model may still return a technique; without the decision it is not an offer."""
+    from mani.chat import semantic_router as sr
+
+    semantic(sr.Routing(sr.RouteStatus.NO_MATCH, ()))
+    model(
+        Reply(
+            text="There are some questions we could go through. Would you like to try it?",
+            prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                     SmartPrompt(label="Keep chatting", decline=True)],
+        )
+    )
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "my brother called and we talked about our childhood")
+
+    assert [p.technique for p in turn.prompts if p.technique] == []
+
+
+async def test_nothing_is_offered_while_they_ask_only_to_be_heard(alice, model, semantic):
+    semantic(_match("abcde"))
+    model(Reply(text="Nobody else has heard this, and now it is out."))
+    thread = await start(alice)
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set conversation_style = 'direct', "
+            "message_count = message_count + 6 where id = $1",
+            thread.id,
+        )
+    turn = await send(alice, thread.id, "please don't ask me anything, i just need to get it out")
+
+    assert [p.technique for p in turn.prompts if p.technique] == []
