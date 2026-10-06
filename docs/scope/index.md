@@ -9,7 +9,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 
 ## Epics
 
-- [Conversation](conversation.md): natural replies, the body check, framework offers and framework questions. 28 features: 6 done, 9 in progress, 11 planned, 2 dropped (row 30 is GA).
+- [Conversation](conversation.md): natural replies, the body check, framework offers and framework questions. 29 features: 6 done, 10 in progress, 11 planned, 2 dropped (row 30 is GA).
 - [Safety and privacy](safety.md): danger detection, crisis help, safety mode, private data, permissions. 10 features: 1 done, 9 planned, all GA.
 - [Production readiness](production.md): staying up, limits, monitoring, fallback, automatic checks. 5 features planned, 10 deferred.
 
@@ -60,13 +60,13 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 41  | A person who stays stuck while Mani is understanding is offered ABCDE          | Natural Mani | in-progress |
 | 42  | Mani follows the client's documents, and our conversation rules that disagree are removed | Natural Mani | in-progress |
 | 43  | The team sees whether conversations helped                                     | Natural Mani | planned |
+| 44  | Mani follows Lolly's review of the meetings chat                               | Natural Mani | in-progress |
 
-Natural Mani (rows 32, 33, 34, 18, 38, 40, 41, 6, 35, in that order) is the current focus and comes before every slice below it. It overrides parts of ADRs 006, 007, 008, 010 and 011, and row 33's spec records which. Slices 6 and 7 are what has to be true before a limited beta. Slice 9 is what has to be true before an open launch. Slice 8 can run alongside either, as client answers arrive.
+Natural Mani (rows 44, 32, 33, 34, 18, 38, 40, 41, 6, 35, in that order) is the current focus and comes before every slice below it. It overrides parts of ADRs 006, 007, 008, 010 and 011, and row 33's spec records which. Slices 6 and 7 are what has to be true before a limited beta. Slice 9 is what has to be true before an open launch. Slice 8 can run alongside either, as client answers arrive.
 
 ## Open questions for the client
 
 - In the October 2026 meeting you said someone in pain who stays stuck ("I don't know", "I can't think") should be offered ABCDE (row 41, spec 0009). Your overview lists "stuck" under Behavioral Activation, and ABCDE's own "when not to use" list names an unclear issue. Please confirm the meeting version in writing. On this route ABCDE may also be offered when the pain is in the body.
-- The style document's offers say "I have a structured approach..." and never name the framework. We plan to say its name and a short introduction (row 6). Please confirm in writing.
 - Inside a framework, Mani will move to the next step after any answer, including "I don't know" (row 18). Some later steps then have less to work with, for example ABCDE's dispute step when no belief was named. Is that the trade you want?
 - The client's example ends "How do you feel now?" and then goes straight to the "comes back" reply. What should happen when the person answers "better" or "still tense"? The current buttons "I tried it / Still tense / Feeling better" are not in the new flow.
 - Panic conversation: the earlier framework asks about the body once already ("What are you noticing in your body right now compared with when we started?"). Does that count as the one body question, so the somatic check should go straight to "where"?

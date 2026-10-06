@@ -52,7 +52,7 @@ Spec: [0001](../specs/0001-abcde-framework-offer.md) · code in backend/mani/cha
 
 ## Natural Mani: current focus
 
-From the client meeting in October 2026 and the client's style document ("directive, reflective, supportive"). The client finds Mani robotic, too complicated, too full of questions, and repeating "I hear you"; people do not feel heard. This phase is built first, ahead of the slices below: measure (row 32), then rewrite (rows 42, 33, 34, 18, 40, 41, 6), then choose the model (row 35) on the same check.
+From the client meeting in October 2026 and the client's style document ("directive, reflective, supportive"). The client finds Mani robotic, too complicated, too full of questions, and repeating "I hear you"; people do not feel heard. This phase is built first, ahead of the slices below: measure (row 32), then rewrite (rows 42, 44, 33, 34, 18, 40, 41, 6), then choose the model (row 35) on the same check.
 
 ### 42. Mani follows the client's documents, and our conversation rules that disagree are removed · in-progress
 
@@ -70,6 +70,33 @@ Spec: [0010](../specs/0010-mani-follows-client-documents/index.md) (the client's
   - [ ] muhammad's three live conversations, read against Lolly's nine points (AC-14)
 - [ ] Verify it: `/check verify Mani follows the client's documents`
 - [ ] Test it: `/test Mani follows the client's documents`
+
+### 44. Mani follows Lolly's review of the meetings chat · in-progress
+
+Lolly reviewed a Direct Thought Reframe chat on hosted (left out of meetings, "I don't know if I'm making too much of it") line by line on 6 October 2026, and said she hates talking to Mani. Her review is now the newest client document, and muhammad said to make Mani as she says (2026-10-06). Many of the lines she rejects are her own earlier wording (the "one step at a time" consent lines, the Direct "Tell me more" text, "I have a structured approach", the body check in and the chest practice), so this rewrites her documents as well as ours. What she asks for:
+- **Plain spoken words.** Replies sound said, not written. Use the person's own words ("my responsibilities haven't changed") instead of a stiff paraphrase, and skip the say back when it only restates them. Never make what they said stronger than it was: "left out of meetings" is not "dropped", "I'm worried it could mean" is not "it points to", "my responsibilities haven't changed" is not "your role stayed the same". No filler ("leaves things up in the air", "decide on your next move") and no mirroring their words back.
+- **Understand before acting.** Direct does not jump to who to ask or what to do while the situation is still unclear.
+- **Name the framework.** The offer says "Thought Reframe" and what it looks at, then asks. **Tell me more** names it and explains what you will look at, with no "focused questions", "without rushing you" or "you stay in control".
+- **No filler on a yes.** The consent line ("one step at a time") goes. Mani goes straight to the first step their words have not already met, and never asks them to confirm a thought the offer was built on.
+- **Questions anyone can answer at once.** Concrete and specific ("What's one other reason you might not be included in those meetings?"), not abstract ("What makes that thought matter so much?", "What else could be going on?").
+- **Synthesis instead of the worksheet ask.** Where Mani has what it needs, it states what they established, in their words and no further, instead of "Putting those together, what would you say is true about this?" (Thought Reframe and ABCDE). It never sounds like correcting faulty thinking ("what you were filling in").
+- **No "Skip this one".** The button goes from every question. It made the framework a form.
+- **One body question, no assumed effect.** The bridge into the somatic practice never presumes something settled or helped, and the generic body check in before "Where do you feel that most right now?" goes, so the body is asked about once. The practice drops the general claims about bodies ("The chest is often where the body holds tension first") and the filler ("Let's do something brief together").
+- **A negative answer closes.** After the practice, when they say it did not help or the whole experience was bad, Mani says so in one plain line ("I hear you. This didn't help, so I'm going to stop here.") and stops: no question, no further practice, and no exercise offered. Today `orchestrator._offer_exercise` runs on every ending whatever they report.
+
+The decisions it owed (buttons on a negative close, unchanged closing like worse, typed skip, the new wording, transcribing her review) are settled in spec 0011. Covers row 6 (Lolly confirmed the naming here). Reverses spec 0010's "no framework name reaches the person" (AC-4) and the eval check that flags the name. Source tracing in the journal note `lolly-meetings-chat-objections-land-on-her-own-lines-2026-10-06`.
+**Done when:** a replay of the meetings chat in each style, run after muhammad says yes, shows no stronger restatement of their facts, names the framework in the offer and in Tell me more, has no consent filler, no thought asked a second time, no "Skip this one", a stated synthesis instead of the "Putting those together" ask, one body question before the practice, a practice with no general claim about bodies, and a negative answer after the practice that gets one closing line with no question and no exercise; the whole `pytest` passes.
+
+Spec: [0011](../specs/0011-lolly-review-meetings-chat/index.md) (the framework named in the offer and Tell me more, no consent line or Skip button, a stated conclusion at the last step, one body question with place buttons, trimmed practices, "This didn't help, so I'm going to stop here." with Chat More and Go to Library and no exercise after a worse or unchanged answer, and Mani talking like a good therapist that says it is an AI and answers their questions inside the guardrails; no schema change; muhammad's Direct replay in chat-tester is the real model check) · code in backend/mani/chat/ (repairs.py, orchestrator.py, context.py), backend/mani/prompts/composer.py, backend/content/ (prompts and the six framework files)
+
+- [x] Design it (spec): `/architect Mani follows Lolly's review of the meetings chat`
+- [ ] Build it: `/develop Mani follows Lolly's review of the meetings chat`
+  - [x] The offer names the framework, Tell me more explains it, no consent line, the first step already met, no Skip button (AC-1 to AC-6, AC-15)
+  - [x] Spoken words never stronger than they said, concrete questions, the stated conclusion, the therapist voice and answers to their questions (AC-7 to AC-9, AC-18, AC-19)
+  - [x] One body question with place buttons, the re ask and decline close, trimmed practices, the stop line and no exercise (AC-10 to AC-14)
+  - [ ] Tests, records, and muhammad's Direct replay in chat-tester (AC-15 to AC-17)
+- [ ] Verify it: `/check verify Mani follows Lolly's review of the meetings chat`
+- [ ] Test it: `/test Mani follows Lolly's review of the meetings chat`
 
 ### 32. The client's style conversations are a standing check
 
@@ -186,7 +213,7 @@ Spec 0010 stores how a person felt after the somatic practice (better, mixed, un
 
 ### 6. The offer names the framework, introduces it, and gives three choices · needs a decision
 
-When Mani offers a framework it says the framework's plain name and a short introduction to what it does, then the client's three choices: "Yes, let's try it", "Tell me more" and "I want to keep talking". "Tell me more" gets a short explanation in the style in force, then the other two choices again. Today the shared rules forbid the name and the word "framework", the offer has two buttons (Try it, Keep chatting), and the app adds a stored description and "Would you like to try it?". The client's style document says "I have a structured approach..." with no name, so the naming needs the client's confirmation in writing. The October 2026 review still applies: Thought Reframe's description promises "you will be able to see the situation differently", and Structured Problem Solving's names a feeling ("overwhelming").
+When Mani offers a framework it says the framework's plain name and a short introduction to what it does, then the client's three choices: "Yes, let's try it", "Tell me more" and "I want to keep talking". "Tell me more" gets a short explanation in the style in force, then the other two choices again. Today the shared rules forbid the name and the word "framework", the offer has two buttons (Try it, Keep chatting), and the app adds a stored description and "Would you like to try it?". The client's style document says "I have a structured approach..." with no name, so the naming needs the client's confirmation in writing. Lolly confirmed it in her review of 6 October 2026, and the naming is now built as part of row 44. The October 2026 review still applies: Thought Reframe's description promises "you will be able to see the situation differently", and Structured Problem Solving's names a feeling ("overwhelming").
 **Done when:** every offer in every style names the framework and introduces it in plain words, carries the three choices, "Tell me more" returns the remaining two, no introduction promises a result or names a feeling the person did not use, and row 32's check covers it.
 
 - [ ] Design it (spec): `/architect the offer names and introduces the framework`

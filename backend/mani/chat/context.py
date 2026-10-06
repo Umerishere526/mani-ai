@@ -7,7 +7,7 @@ import re
 
 from mani.chat import repairs
 from mani.chat.greeting import (
-    AFTER_FRAMEWORK_QUESTIONS, CHAT_MORE_LABEL, CLARIFICATION_QUESTIONS, EXPLANATIONS, STYLE_OPTIONS,
+    AFTER_FRAMEWORK_QUESTIONS, CHAT_MORE_LABEL, CLARIFICATION_QUESTIONS, STYLE_OPTIONS,
 )
 from mani.chat.offer import Action as OfferAction, Decision
 from mani.chat.safety import normalize
@@ -318,6 +318,7 @@ def build(
     answering_practice: bool = False,
     decision: Decision | None = None,
     skipped: bool = False,
+    their_question: bool = False,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -333,7 +334,8 @@ def build(
     asked "Are you feeling stuck?". Never both at once: a framework is either running or being
     considered, not both. `refusal` is `offer_refusal` for this turn, told to the model as
     `offer_allowed`. `explaining` is the framework whose offer they asked to hear more about:
-    the client's explanation for the style and the framework's description go in.
+    its name and what it looks at go in, as they do with `candidate`, so either reply can say
+    what it is called and what you will look at together.
 
     `history` is the same window the caller already loads for the model's own conversation
     view - nothing new is fetched for it. Only Mani's own messages in it become recent_openers;
@@ -426,9 +428,8 @@ def build(
         # Their message is how they feel after the body practice that ends a framework.
         lines.append("answering_practice: yes")
     if explaining is not None:
-        lines.append(f"explain_offer: {EXPLANATIONS[resolve_style(ctx)]}")
-        if explaining.summary:
-            lines.append(f"offer_looks_at: {' '.join(explaining.summary.split())}")
+        lines.append("explain_offer: yes")
+        lines.extend(_named_offer_lines(explaining))
 
     if decision is not None and not safety_concern:
         # Code has already decided what this turn does, so the model is told the action rather
@@ -453,7 +454,12 @@ def build(
             "few words, never ask it again in any form, and go straight on to the next step"
         )
 
+    if their_question and not safety_concern:
+        # They asked Mani something: answered first, plainly (spec 0011, AC-19).
+        lines.append("their_question: yes")
+
     if candidate is not None and refusal is None:
+        lines.extend(_named_offer_lines(candidate))
         lines.extend(_stage_lines("offer", candidate, "offering", resolve_style(ctx)))
         branch = (candidate.stages.get("offering") or {}).get(STUCK_BRANCH)
         if stuck_candidate and branch:
@@ -469,6 +475,14 @@ def build(
         )
 
     return "[ctx]\n" + "\n".join(lines) + "\n[/ctx]\n\n"
+
+
+def _named_offer_lines(framework: Framework) -> list[str]:
+    """What an offer, or the explanation of one, says the framework is called and looks at."""
+    lines = [f"offer_name: {framework.name}"]
+    if framework.summary:
+        lines.append(f"offer_looks_at: {' '.join(framework.summary.split())}")
+    return lines
 
 
 def _running_lines(
@@ -525,14 +539,15 @@ def _branch_lines(branches: list[dict], style: str) -> str:
     return " | ".join(f"if {e['when']}: {repairs.reply_for(e, style)}" for e in branches)
 
 
-# The turn they say yes: the client's opening line, then the first step not already met.
+# The turn they say yes: straight to the first step not already met, with no opening line
+# (Lolly's review, spec 0011, AC-4). The step the offer was built on is met (AC-5).
 _START_NOTE = (
-    "step_note: they said yes. Open with the client's line for the style, then ask the first step "
-    "whose ready_when what they have told you does not already meet, and report it as step"
+    "step_note: they said yes. Ask the first step whose ready_when what they have told you does "
+    "not already meet, and report it as step. The step the offer was built on is already met"
 )
 _IF_YES_NOTE = (
-    "step_note: if they said yes, open with the client's line for the style, then ask the first "
-    "step whose ready_when what they have told you does not already meet, and report it as step"
+    "step_note: if they said yes, ask the first step whose ready_when what they have told you "
+    "does not already meet, and report it as step. The step the offer was built on is already met"
 )
 # A turn inside the framework: they have answered current_step.
 _STEP_NOTE = (

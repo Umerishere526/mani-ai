@@ -8,7 +8,9 @@ import pytest
 from scripts.client_style_counts import count_dashes
 
 BASE = pathlib.Path(__file__).resolve().parents[2] / "content" / "prompts" / "mani_base.md"
-MAX_LINES = 130
+# Includes the rules for talking like a good therapist without claiming to be one, answering
+# their own questions inside the guardrails, and stating a conclusion at the last step (spec 0011).
+MAX_LINES = 138
 
 
 def _base() -> str:
@@ -42,7 +44,18 @@ HARD_RULES = [
     ("the style comes from the context block", "the style comes from `[ctx]` alone"),
     ("no offer on a safety concern", "never under `safety: concern`"),
     ("an offer only when the code allows one", "Offer only with `offer_allowed: yes`"),
-    ("a framework is never named", 'never its name, its id or the word "framework"'),
+    # Lolly's review, 6 October 2026: the offer says the framework's name, never its id.
+    ("the offer names it", "Say its name"),
+    ("no framework id or the word", 'never its id or the word "framework"'),
+    ("never claims to be a therapist", "You are not a therapist or a clinician and never say you are"),
+    ("says it is an AI when asked", "you are an AI here to talk things through"),
+    ("answers their question first", "answer it first in a sentence or two"),
+    ("no medical advice", "no medication or medical advice"),
+    ("never stronger than they said", "Never make it stronger than they said"),
+    ("Direct understands before acting", "a next step or action only once what is happening is understood"),
+    ("a stated conclusion at the last step", "ask nothing, report `ending: resolved`"),
+    ("no assumed effect after the framework", "Never suggest something settled"),
+    ("a negative answer gets no question", "never that it worked, and ask nothing"),
     ("no clause in front of a question", "never opening with a clause"),
     ("no feeling they did not name", "name no feeling they have not named"),
     ("no labelling", "Do not label or tell them what they are experiencing"),
@@ -74,6 +87,8 @@ def test_formulas_are_named_and_saying_back_is_not_asked_for():
     assert '"I hear you", "That makes sense", "I\'m here for you"' in flat
     assert '"It sounds like"' not in flat and '"a lot"' not in flat
     assert "say back" not in flat
-    # The client's "Mani Standard": a line in fresh words that adds, never their sentence again.
-    assert "say in one short line of your own what you understood" in flat
+    # A line before a question only when it adds, never their sentence again (spec 0011, AC-9).
+    assert "A question can stand on its own" in flat
     assert "Never hand their sentence back" in flat
+    assert "one step at a time" not in flat
+    assert "Skip this one" not in flat

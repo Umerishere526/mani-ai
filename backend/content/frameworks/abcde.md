@@ -1,7 +1,7 @@
 ---
 id: abcde
 name: ABCDE
-summary: "These questions help you look at what happened, what you took it to mean, and whether that really fits."
+summary: "We look at what happened, what you told yourself about it, how that affected you, and what the facts say about it."
 display_order: 1
 phases: [offering, activate, belief, consequence, evidence_for, evidence_against, balanced]
 activation:
@@ -93,7 +93,11 @@ stages:
     # The router fact that, once the person has said it, answers this stage.
     purpose: "Identify the specific event without adding assumptions, explanations, or motives."
     listen_for: "What occurred, what was said or done, which part matters, and whether the user is describing facts or inferred meaning."
-    ready_when: "What occurred is clear, the specific event the user wants to examine is settled, and it is described as observed rather than assumed. If it is still unclear after one more attempt, never invent it."
+    ready_when: >-
+      What occurred is clear, the specific event the user wants to examine is settled, and it is
+      described as observed rather than assumed. If it is still unclear after one more attempt,
+      never invent it. What they said before they accepted counts, including the event the offer
+      was built on: when it already gives this, the step is done and is not asked.
     boundaries:
       - "must not assume why the event occurred"
       - "must not assign another person's motive"
@@ -178,7 +182,7 @@ stages:
       reflective: "Is there anything you know that doesn't match that thought?"
       direct: "Is there anything you know that doesn't match that thought?"
   balanced:
-    purpose: "Develop a believable belief that includes the relevant evidence and remains in the user's language."
+    purpose: "When what they have said supports a balanced belief without a new assumption, state it plainly in their words and no further (what happened, what does not fit the belief, what is still unknown), ask nothing, and end the framework as resolved. Only when stating it would need an inference of your own, ask for a more balanced belief."
     listen_for: "A credible belief that includes the known facts without becoming falsely positive."
     boundaries:
       - "must not force positive language"
@@ -192,9 +196,9 @@ stages:
         reply: "That is fine. What is one thing about this that you do know is true?"
         counted: true
     ask:
-      supportive: "Putting those together, what would you say is true about this?"
-      reflective: "Putting those together, what would you say is true about this?"
-      direct: "Putting those together, what would you say is true about this?"
+      supportive: "What would be a more balanced belief?"
+      reflective: "What would be a more balanced belief?"
+      direct: "What would be a more balanced belief?"
 ---
 
 # ABCDE

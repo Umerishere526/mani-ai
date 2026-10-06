@@ -142,6 +142,29 @@ def offer_buttons(framework_id: str, *, explaining: bool) -> list[SmartPrompt]:
     return [accept, keep_talking] if explaining else [accept, SmartPrompt(label=EXPLAIN_LABEL), keep_talking]
 
 
+def names_framework(text: str, name: str) -> bool:
+    """Whether the text says the framework's full name, ignoring case, a space and a hyphen being
+    the same ("structured problem-solving" names Structured Problem Solving; "ACT" alone does not
+    name ACT Choice Point)."""
+    words = [re.escape(word) for word in re.split(r"[\s-]+", name.strip()) if word]
+    return bool(words) and re.search(
+        r"\b" + r"[\s-]+".join(words) + r"\b", text, re.IGNORECASE
+    ) is not None
+
+
+def _with_the_name(part: str, name: str | None, *, explaining: bool, notes: list[str]) -> str:
+    """An offer and its explanation always say what the framework is called (spec 0011, AC-1,
+    AC-2). Left out by the model, the name goes after an offer's sentence, before the client's
+    permission question, and at the start of an explanation."""
+    if not name or names_framework(part, name):
+        return part
+    notes.append(f"added the framework's name: {name}")
+    sentence = f"It's called {name}."
+    if not part:
+        return sentence
+    return f"{sentence} {part}" if explaining else f"{part} {sentence}"
+
+
 def without_questions(text: str) -> str:
     """The text with every sentence that ends in a question mark taken out."""
     lines = [
@@ -192,10 +215,42 @@ def declines_or_acts(text: str) -> bool:
     return bool(_DECLINES_OR_ACTS.search(text))
 
 
-# The button a running step carries so a question can always be passed over, and what a person
-# types instead of tapping it. A step nobody wants to answer is skipped rather than asked again:
-# the questions are theirs to use, not a form to fill (muhammad, 2026-10-06).
-SKIP_LABEL = "Skip this one"
+# An answer to "where do you feel that" is short. A longer message that happens to hold a place
+# word is not one: "I can't go back to that meeting" names no place (spec 0011, AC-11).
+PLACE_ANSWER_MAX_WORDS = 6
+
+
+def place_answer(text: str) -> str | None:
+    """The place a reply to the body question names: a tapped button sends its label, and a typed
+    answer counts when it is short. A place wins over "nothing" ("nothing, just my head")."""
+    if len(text.split()) > PLACE_ANSWER_MAX_WORDS:
+        return None
+    return named_place(text)
+
+
+# Feeling nothing in the body, said as the whole answer. "Nothing helps" is not this.
+_FEELS_NOTHING = re.compile(
+    r"^\W*(nothing( really)?|not anything|no|i feel fine"
+    r"|i (don'?t|do not|can'?t|cannot) (really )?feel anything)\W*$",
+    re.IGNORECASE,
+)
+
+
+def feels_nothing(text: str) -> bool:
+    return bool(_FEELS_NOTHING.search(text))
+
+
+def decline_reply(stage: dict, style: str) -> str | None:
+    """The client's line for someone who does not take up the body check in."""
+    branch = next(
+        (b for b in stage.get("if_unclear") or [] if "declines" in b.get("when", "")), None
+    )
+    return reply_for(branch, style) if branch else None
+
+
+# What a person says to pass a running question over. A step nobody wants to answer is skipped
+# rather than asked again (muhammad, 2026-10-06). No button offers it: under every question it made
+# the framework read as a form (Lolly's review, spec 0011, AC-6).
 _SKIPS_THE_STEP = re.compile(
     r"^\W*(skip|next|pass)\W*$"
     r"|\b(skip (this|that|it|this one|this question)|next question"
@@ -233,6 +288,12 @@ CLIENT_LINES = (
 # How a framework may end, and how a person may say they feel after the practice (spec 0010).
 ENDINGS = frozenset({"resolved", "pivoted", "stopped"})
 FELT_AFTER = frozenset({"better", "mixed", "unchanged", "worse", "unsure"})
+
+# The answers to the practice that mean it did not help. Mani says so and stops: no question, no
+# further practice, no exercise (Lolly's review, spec 0011, AC-13). Her line, without the "I hear
+# you" her style document lists as a formula.
+NOT_HELPED = frozenset({"unchanged", "worse"})
+NOT_HELPED_LINE = "This didn't help, so I'm going to stop here."
 
 
 def known_value(value: str | None, allowed: frozenset[str]) -> str | None:
@@ -363,6 +424,8 @@ def _stage_after_a_reply(
     redirected_before: bool,
     rephrase: bool = False,
     skipped: bool = False,
+    asks_nothing: bool = False,
+    their_question: bool = False,
 ) -> tuple[str, int, str | None]:
     """The step, hold count and ending to record once the person has replied to `stored`.
 
@@ -374,6 +437,12 @@ def _stage_after_a_reply(
 
     `skipped` is the person passing the question over. It moves to the next step whatever the
     reply reports, so a step is never asked again because the model did not notice the skip.
+
+    `asks_nothing` is a reply with no question in it. At the last question step that is the
+    conclusion stated (spec 0011, AC-8), so it ends the framework as resolved even when the model
+    forgot to report an ending: a statement with nothing to answer would otherwise stall there.
+    `their_question` is the person asking Mani something (AC-19): answering it holds the step
+    without spending its one more attempt.
     """
     framework = registry.get(framework_id)
     following = framework.phases[framework.phase_index(stored) + 1]
@@ -387,6 +456,9 @@ def _stage_after_a_reply(
             # than leaving a framework with nothing left to ask.
             return CHECK_IN, 0, _ending_of(framework, stored, None)
         return following, 0, None
+    if following == CHECK_IN and asks_nothing and not redirects and not their_question:
+        notes.append(f"a reply asking nothing at {stored}, recorded resolved")
+        return CHECK_IN, 0, "resolved"
     if redirects:
         notes.append(f"redirect held at {stored}")
         return stored, stored_holds, None
@@ -404,6 +476,9 @@ def _stage_after_a_reply(
         elif recorded == stored:
             if redirected_before:
                 notes.append(f"redirect held at {stored}")
+                return stored, stored_holds, None
+            if their_question:
+                notes.append(f"their question held at {stored}")
                 return stored, stored_holds, None
             if stored_holds == 0:
                 notes.append(f"held at {stored}")
@@ -440,6 +515,7 @@ def apply(
     skipped: bool = False,
     offer_decided: bool = False,
     required_offer: str | None = None,
+    their_question: bool = False,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again.
 
@@ -568,6 +644,11 @@ def apply(
         part = _without_permission_question(text)
         if part != text:
             notes.append("replaced the model's permission question with the client's")
+        if explaining and "?" in part:
+            # "Tell me more" is answered with no question, and keeps its two choices.
+            part = without_questions(part)
+            notes.append("removed a question from the explanation of an offer")
+        name = registry.get(offered_id).name if registry.get(offered_id) else None
         if "?" in part and offer_decided and required_offer == offered_id:
             # The offer is this turn's decision, so the model's extra question gives way to it
             # rather than the other way round: trim the question, keep the offer.
@@ -575,6 +656,7 @@ def apply(
             if trimmed:
                 notes.append("trimmed a question from the reply that carries the offer")
                 part = trimmed
+            part = _with_the_name(part, name, explaining=explaining, notes=notes)
             text = "\n\n".join(
                 p for p in (part, PERMISSION_QUESTIONS[conversation_style]) if p
             )
@@ -587,6 +669,7 @@ def apply(
             without = _BLANK_RUN.sub("\n\n", _OFFER_SENTENCE.sub("", part)).strip()
             text = without or part
         else:
+            part = _with_the_name(part, name, explaining=explaining, notes=notes)
             text = part if explaining else "\n\n".join(
                 p for p in (part, PERMISSION_QUESTIONS[conversation_style]) if p
             )
@@ -636,6 +719,8 @@ def apply(
             ),
             rephrase=rephrase,
             skipped=skipped,
+            asks_nothing="?" not in text,
+            their_question=their_question,
         )
     elif state is not None:
         framework_id = state.technique
@@ -658,11 +743,6 @@ def apply(
     if kept and not at_the_end and not any(p.technique for p in kept):
         notes.append(f"dropped buttons outside an offer or a framework's end: {[p.label for p in kept]}")
         kept = []
-
-    if framework_running and (phase or current_phase) not in ENDING_STAGES and not kept:
-        # A running question always carries a way past it, so nobody is held on a step they do
-        # not want to answer. Not on the body stages: those already end the framework.
-        kept = [SmartPrompt(label=SKIP_LABEL)]
 
     title = clean_title(reply.title) if wants_title else None
 

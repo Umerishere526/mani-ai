@@ -7,6 +7,8 @@
 
 Mani's replies are now governed by what the client wrote, not by the rules we added on top. The model judges when to offer a framework, which one, and when each step is done; the code keeps only the guards for safety, the first message, a decline and the somatic check. Mani may say a conclusion the person has already reached, and every framework, however it ends, moves into the somatic check, whose answer is stored as an effectiveness signal. About a hundred word bans, question rules, redrafts (a second model call that asks for the reply again) and offer gates are removed, with the ADRs and specs that held them.
 
+Spec [0011](../0011-lolly-review-meetings-chat/index.md) replaces this spec's AC-4 rule that no framework name reaches the person, and parts of AC-6 (the check in line, now where they feel it) and AC-7 (what follows the practice, now a plain stop when it did not help), after Lolly's review of 6 October 2026.
+
 ## Requirements
 
 Linked scope feature: row 42 in [docs/scope/conversation.md](../../scope/conversation.md), "Mani follows the client's documents, and our conversation rules that disagree are removed". Sources, newest first, which win where they clash: Lolly's email of 6 October 2026 (in [rationale.md](rationale.md)), the "Good, Acceptable, Bad Conversations" PDF, the style document ("Directive. Supportive. Reflective."), the six frameworks document. The client's spoken instructions from the meeting count like a document (the stuck route of ADR-018 stays). Out of reach: the safety screen, crisis replies, the model's safety flag, the grief veto, RLS, token checks and rate limits; the per framework content additions of scope row 29.

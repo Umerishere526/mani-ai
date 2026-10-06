@@ -1,5 +1,5 @@
 # ABOUTME: Mani's fixed, client-authored lines: the greeting, the style choice, each style's
-# ABOUTME: opener, and the offer explanation. Written here rather than generated, so they cost nothing.
+# ABOUTME: opener, and the offer's buttons. Written here rather than generated, so they cost nothing.
 
 DEFAULT_NAME = "there"
 
@@ -35,27 +35,6 @@ def greeting(nickname: str | None, returning: bool) -> str:
 ACCEPT_LABEL = "Yes, let's try it"
 EXPLAIN_LABEL = "Tell me more"
 KEEP_TALKING_LABEL = "I want to keep talking"
-
-# What "Tell me more" says in each style, from the same document. The model adapts it to what
-# the person is going through; it is the shape of the explanation, not a script.
-EXPLANATIONS = {
-    "direct": (
-        "It gives us a clear way to work through what is happening one step at a time. I'll ask "
-        "you focused questions, help you look at what is driving the reaction, and guide you "
-        "through the process without rushing you. You stay in control of what you want to share."
-    ),
-    "supportive": (
-        "Of course. It gives us a way to slow things down and work through what is happening one "
-        "step at a time. I'll ask you some questions, we'll look at what is coming up for you, and "
-        "we'll work through it together. You can share as much or as little as feels comfortable."
-    ),
-    "reflective": (
-        "Of course. We'll slow things down and look at what is happening one part at a time. I'll "
-        "reflect back what I'm understanding, ask questions to help you look more closely at what "
-        "is coming up, and check with you along the way to make sure I'm understanding you "
-        "correctly. You can always correct me or tell me when something does not fit."
-    ),
-}
 
 # The two choices every framework ends on - the client's cadence: "Framework completes ->
 # Somatic check-in -> Chat More OR Go to Library".

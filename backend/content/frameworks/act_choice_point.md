@@ -1,7 +1,7 @@
 ---
 id: act_choice_point
 name: ACT Choice Point
-summary: "These questions help you work out what matters to you here and one thing you can do about it, even if nothing else changes."
+summary: "We look at what's pulling at you right now, what matters to you here, and one step you could take toward it."
 display_order: 5
 phases: [offering, situation, present, pull, matters, toward, action]
 activation:
@@ -92,7 +92,9 @@ stages:
     listen_for: "The specific circumstance, outcome, decision, or uncertainty outside the user's control."
     ready_when: >-
       What is outside the user's control, and what part may remain within it, is clear. If the
-      problem can be practically resolved, Structured Problem-Solving may fit better.
+      problem can be practically resolved, Structured Problem-Solving may fit better. What they
+      said before they accepted counts, including the situation the offer was built on: when it
+      already gives this, the step is done and is not asked.
     boundaries:
       - "must not tell the user nothing can be done"
       - "must not ignore parts they can influence"
