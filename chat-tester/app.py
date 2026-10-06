@@ -348,17 +348,19 @@ else:
 
         field_key = f"draft_{st.session_state.composer_cycle}"
         with composer_col:
-            with st.form("composer", border=False):
+            with st.form("composer", border=False, enter_to_submit=False):
                 field_col, button_col = st.columns([5, 1])
                 with field_col:
-                    # A single-line field, so Enter submits the form; a text area would take
-                    # Enter as a new line.
-                    st.text_input(
+                    # A text area so a long message wraps and the field grows, instead of
+                    # scrolling sideways. height="content" (Streamlit >=1.64) grows it with
+                    # the text rather than fixing it at one size.
+                    st.text_area(
                         "Message",
                         value=st.session_state.draft,
                         key=field_key,
                         placeholder="Type, or tap 🎤 and edit before sending…",
                         label_visibility="collapsed",
+                        height="content",
                     )
                 with button_col:
                     submitted = st.form_submit_button(
@@ -374,6 +376,37 @@ else:
             st.session_state.draft = ""
             st.session_state.composer_cycle += 1
             st.rerun()
+
+    # A text_area takes plain Enter as a new line, so sending on Enter (Shift+Enter for a
+    # real line break) is wired up by hand: this intercepts Enter in the composer's textarea
+    # and clicks Send, rather than switching to st.chat_input, which has no way to seed the
+    # field from a voice transcript the way this one does.
+    components.html(
+        """
+        <script>
+        function wireComposerEnter() {
+            const doc = window.parent.document;
+            const bar = doc.querySelector(".st-key-composer_bar");
+            if (!bar) return;
+            const textarea = bar.querySelector("textarea");
+            const button = [...bar.querySelectorAll("button")]
+                .find(b => b.innerText.includes("Send"));
+            if (!textarea || !button || textarea.dataset.enterWired) return;
+            textarea.dataset.enterWired = "1";
+            textarea.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    button.click();
+                }
+            });
+        }
+        wireComposerEnter();
+        new MutationObserver(wireComposerEnter)
+            .observe(window.parent.document.body, {childList: true, subtree: true});
+        </script>
+        """,
+        height=0,
+    )
 
 # ---------------------------------------------------------------------------
 # Dev inspector - direct reads, not API calls. This is the point of the tool: seeing the
