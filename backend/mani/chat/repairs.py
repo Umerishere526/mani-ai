@@ -4,12 +4,12 @@
 from __future__ import annotations
 
 import re
-from difflib import SequenceMatcher
 from dataclasses import dataclass, field
 
-from mani.chat.greeting import CLARIFICATION_QUESTIONS, EXPLAIN_LABELS
-from mani.chat.techniques import Registry
-from mani.llm.schema import SHAPES, LibrarySection, Reply, SmartPrompt, Style
+from mani.chat import router, safety
+from mani.chat.greeting import ACCEPT_LABEL, EXPLAIN_LABEL, KEEP_TALKING_LABEL
+from mani.chat.techniques import Registry, moves_on_after
+from mani.llm.schema import SHAPES, LibrarySection, Reply, SmartPrompt, Style, TechniqueState
 
 MAX_PROMPTS = 3
 MAX_TITLE_LENGTH = 100
@@ -28,67 +28,6 @@ SCRIPT_LEAKAGE = [
 
 _BLANK_RUN = re.compile(r"\n{3,}")
 
-# The reference also refused the words "broken", "weak" and "heavy" anywhere in a reply.
-# That is dropped: the same prompt instructs Mani to mirror the user's own words back, so
-# a person saying "I feel broken" made a correct, caring reply unsendable - and the cost
-# of the collision was an entire extra generation.
-#
-# The lists below are the corrected version of that idea, and they apply to capsule labels
-# rather than to prose. A label is the one thing in a reply the person may send back as
-# their own words, so dropping a bad one is a safe correction where rewriting a sentence
-# would not be. The mirroring collision is handled by exempting anything the person said.
-
-# The feeling words the specifications are strict about: a reply may use one only if the
-# person used it first. "MANI never introduces a feeling word the user did not use."
-FEELING_WORDS = frozenset(
-    {
-        "abandoned", "afraid", "angry", "anxious", "ashamed", "betrayed", "broken",
-        "crushed", "defeated", "dejected", "depressed", "desperate", "devastated",
-        "disappointed", "distressed", "embarrassed", "exhausted", "fearful", "frustrated",
-        "furious", "guilty", "helpless", "hopeless", "humiliated", "hurt", "insecure",
-        "isolated", "lonely", "lost", "miserable", "overwhelmed", "panicked", "rejected",
-        "resentful", "sad", "scared", "stressed", "terrified", "trapped", "unloved",
-        "unwanted", "upset", "worried", "worthless",
-        "empty", "heartbroken", "heavy", "numb", "painful", "scary",
-        # The adjectival forms, which describe the situation rather than the person and are
-        # the shape a capsule label usually takes: "It's frustrating", "It's exhausting".
-        "depressing", "devastating", "draining", "embarrassing", "exhausting",
-        "frustrating", "humiliating", "isolating", "overwhelming", "terrifying",
-        "upsetting", "worrying",
-        # Forms and neighbours that slipped through when the list was a fixed few dozen:
-        # "That sounds incredibly stressful" named a feeling the person never did.
-        "anxiety", "nervous", "nervousness", "tense", "tension", "worry", "worries",
-        "stress", "stressful", "stressing", "dread", "dreading", "dreaded", "fear", "fears",
-        "frightened", "frightening", "panic", "panicking", "overwhelm", "sadness", "unhappy",
-        "anger", "annoyed", "annoying", "irritated", "irritating", "bitter", "jealous",
-        "envious", "guilt", "shame", "shameful", "embarrassment", "humiliation", "loneliness",
-        "isolation", "hopelessness", "despair", "despairing", "depression", "misery",
-        "devastation", "grief", "grieving", "sorrow", "discouraged", "disheartened",
-        "drained", "burnout", "burnt", "hollow", "confused", "confusing", "distress",
-        "relieved", "relief", "calm", "happy", "happiness", "joy", "joyful", "excited",
-        "proud", "grateful", "ecstatic", "thrilled", "terrible", "awful", "dreadful",
-    }
-)
-
-# Judgments a person may hold about themselves but must never be handed as a button to press.
-# Observed live: a reply offered "I'm overthinking it" as a capsule.
-SELF_JUDGMENTS = (
-    "overthinking", "over thinking", "being dramatic", "too sensitive", "overreacting",
-    "over reacting", "being silly", "being stupid", "my fault", "i'm weak", "i am weak",
-    "i'm broken", "i am broken", "not enough", "being needy", "being difficult",
-)
-
-# The label on an offer of the nearest set of questions when none fits well.
-CLOSEST_FIT_LABEL = "Try the closest fit"
-
-# The two buttons an offer carries. Used when code decides to offer and the model did not
-# carry them itself, so the person always has the same two ways to answer.
-TRY_IT_LABEL = "Try it"
-KEEP_CHATTING_LABEL = "Keep chatting"
-
-# Five: room for a choice in the person's own voice. Past that a label is becoming a sentence.
-MAX_CAPSULE_WORDS = 5
-
 # Where a reply may carry buttons besides an offer: the body check-in and the practice that ends
 # a framework. Everywhere else a button reads as a menu instead of a conversation (client,
 # 2026-09-24). The greeting's style buttons and Chat More / Go to Library are written by the
@@ -100,10 +39,10 @@ ENDING_STAGES = frozenset({"somatic_checkin", "somatic_practice", "grounding"})
 _LIBRARY_SECTIONS = {section.value.lower(): section.value for section in LibrarySection}
 
 # The permission question an offer asks, in each style - the client's own wording
-# (docs/specs/conversational-styles.md), shortened only where it named one scenario.
+# (docs/specs/conversational-styles.md, the panic examples).
 PERMISSION_QUESTIONS = {
     "direct": "Would you like to try it with me?",
-    "supportive": "Would it help to work through it together?",
+    "supportive": "Would you like to try it together?",
     "reflective": "Would you like to try it?",
 }
 
@@ -118,7 +57,7 @@ _OFFER_WORDS = re.compile(
 # questions"), or the permission question after them. Offers are worded fresh each time.
 _OFFER_SENTENCE = re.compile(
     r"(?:^|(?<=[.!?])|(?<=\n))[ \t]*[^.!?\n]*"
-    r"(?:(?:sequence|set|series) of questions|\b(?:a few|some) questions\b"
+    r"(?:(?:sequence|set|series) of questions|\b(?:a few|some) questions\b|structured approach"
     r"|would (?:you like|it help) to (?:try|work through|look at|go through)"
     r"|shall we (?:try|go through|look at))"
     r"[^.!?\n]*[.!?]?",
@@ -127,78 +66,6 @@ _OFFER_SENTENCE = re.compile(
 
 # The question a reply ends on, if it ends on one.
 _LAST_QUESTION = re.compile(r"(?:^|(?<=[.!?])[ \t]+|(?<=\n))([^.!?\n]*\?)\s*$")
-
-WORD = re.compile(r"[a-z']+")
-
-
-def words(text: str) -> set[str]:
-    return set(WORD.findall(text.lower()))
-
-
-_SUFFIXES = ("iness", "ness", "ment", "ied", "ful", "ing", "ed", "ion", "ly", "y")
-
-
-def _stem(word: str) -> str:
-    """A rough root, so a feeling word and its plain forms count as one: lonely and loneliness,
-    stressed and stress, overwhelmed and overwhelming. Never merges two different feelings."""
-    for _ in range(2):
-        for suffix in _SUFFIXES:
-            if word.endswith(suffix) and len(word) - len(suffix) >= 3:
-                word = word[: -len(suffix)] + ("y" if suffix in ("iness", "ied") else "")
-                break
-    return word
-
-
-def introduced_feelings(text: str, said: str) -> list[str]:
-    """Feeling words in `text` that the person has not used. "MANI never introduces a feeling
-    word the user did not use": their own word, or a plain form of it, may come back; a
-    different feeling may not."""
-    theirs = {_stem(w) for w in words(said)}
-    return sorted(
-        w for w in words(text) & FEELING_WORDS
-        if _stem(w) not in theirs and not _misspelt_by_them(w, theirs)
-    )
-
-
-def _skeleton(stem: str) -> str:
-    """The consonants of a root with repeats collapsed: "emberess" and "embarrass" are both "mbrs"."""
-    return re.sub(r"(.)\1+", r"\1", re.sub(r"[aeiou]", "", stem))
-
-
-def _misspelt_by_them(word: str, theirs: set[str]) -> bool:
-    """Whether they wrote this feeling word badly ("emberessed" for "embarrassed"): a reply that
-    spells it right has not introduced it. Long words only, and close, so one feeling is never
-    taken for another (sad and mad, lonely and lovely stay different; across the word list only
-    burnout and burnt share a skeleton, and they are one feeling)."""
-    stem = _stem(word)
-    if len(stem) < 5:
-        return False
-    skeleton = _skeleton(stem)
-    return any(
-        len(other) >= 5
-        and (
-            SequenceMatcher(None, stem, other).ratio() >= 0.8
-            or (len(skeleton) >= 4 and other[0] == stem[0] and _skeleton(other) == skeleton)
-        )
-        for other in theirs
-    )
-
-
-_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
-
-
-def without_feeling_sentences(text: str, unwanted: list[str]) -> str | None:
-    """`text` with every sentence that names an unwanted feeling dropped, or None when that
-    would leave nothing to answer with: the question has to survive, so a reply whose only
-    question is in the offending sentence is left alone for the caller to handle."""
-    sentences = _SENTENCE_BREAK.split(text.strip())
-    kept = [s for s in sentences if not (words(s) & set(unwanted))]
-    if not kept or len(kept) == len(sentences):
-        return None
-    if "?" in text and not any("?" in s for s in kept):
-        return None
-    return " ".join(kept)
-
 
 def strip_script_leakage(text: str) -> tuple[str, list[str]]:
     """Remove leaked script metadata. Returns the cleaned text and what was removed."""
@@ -212,19 +79,6 @@ def strip_script_leakage(text: str) -> tuple[str, list[str]]:
     if found:
         cleaned = _BLANK_RUN.sub("\n\n", cleaned).strip()
     return cleaned, found
-
-
-_NUMBER_RANGE = re.compile(r"(\d)\s*[—–]\s*(\d)")
-_DASH = re.compile(r"\s*[—–]+\s*")
-_COMMA_BEFORE_STOP = re.compile(r",\s*([.!?,;:])")
-
-
-def without_dashes(text: str) -> str:
-    """Em and en dashes become commas, and a number range keeps a hyphen. The client never wants
-    to see one (client meeting, 2026-10-02), and a rule in the prompt did not hold."""
-    text = _NUMBER_RANGE.sub(r"\1-\2", text)
-    text = _COMMA_BEFORE_STOP.sub(r"\1", _DASH.sub(", ", text))
-    return text.strip(", ")
 
 
 def clean_title(title: str | None) -> str | None:
@@ -249,39 +103,61 @@ class Repaired:
     style: Style | None = None
     # What was corrected, for the log and for a metric on how often the model needs it.
     notes: list[str] = field(default_factory=list)
+    # Extra turns the recorded stage has used: 1 after a counted hold, 0 after any move.
+    holds: int = 0
+    # How the framework ended, on the turn it moves into the body check in.
+    ending: str | None = None
 
 
 def _is_offer_button(prompt: SmartPrompt) -> bool:
-    return bool(prompt.technique or prompt.decline or prompt.label.strip().lower() in EXPLAIN_LABELS)
+    return bool(
+        prompt.technique or prompt.decline or prompt.label.strip().lower() == EXPLAIN_LABEL.lower()
+    )
 
 
-def _without_clarification(text: str) -> str:
-    """The reply without a repeated ask of the client's fixed clarifying question."""
-    match = _LAST_QUESTION.search(text)
-    if match and match.group(1).strip().lower().rstrip("?") + "?" in CLARIFICATION_QUESTIONS:
-        return text[: match.start(1)].rstrip()
-    return text
+def offered(reply: Reply, registry: Registry) -> str | None:
+    """The framework a reply offers, if it carries an offer button for one that exists. An id the
+    registry does not know is refused in apply, not here."""
+    return next(
+        (p.technique for p in reply.prompts or [] if p.technique and registry.get(p.technique)),
+        None,
+    )
 
 
-def _without_their_name(text: str, name: str, *, keep_one: bool) -> str:
-    """The reply with their name said to them removed: always as the first word, and every
-    time when it has been used already. With `keep_one`, the first later use stays."""
-    first = re.compile(rf"^{re.escape(name)},\s*(\w)")
-    text = first.sub(lambda m: m.group(1).upper(), text)
-    vocative = re.compile(rf",\s*{re.escape(name)}(?=\s*[.!?,])")
-    matches = list(vocative.finditer(text))
-    for match in reversed(matches[1:] if keep_one else matches):
-        text = text[: match.start()] + text[match.end():]
-    return text
+def ruled_out(reply: Reply, user_texts: list[str], registry: Registry) -> str | None:
+    """The framework a reply offers when what the person has said rules it out: the phrases a
+    framework file lists under `never_offer_when_said` (early grief for Behavioral Activation).
+    A prompt rule alone did not hold, so this is checked in code."""
+    technique = offered(reply, registry)
+    activation = registry.activations.get(technique) if technique else None
+    if activation and router.vetoes(activation, user_texts):
+        return technique
+    return None
+
+
+def offer_buttons(framework_id: str, *, explaining: bool) -> list[SmartPrompt]:
+    """The client's choices under an offer, or the two that follow "Tell me more"."""
+    accept = SmartPrompt(label=ACCEPT_LABEL, technique=framework_id)
+    keep_talking = SmartPrompt(label=KEEP_TALKING_LABEL, decline=True)
+    return [accept, keep_talking] if explaining else [accept, SmartPrompt(label=EXPLAIN_LABEL), keep_talking]
+
+
+def without_questions(text: str) -> str:
+    """The text with every sentence that ends in a question mark taken out."""
+    lines = [
+        " ".join(s for s in _SENTENCE_END.split(line.strip()) if s and not s.endswith("?"))
+        for line in text.split("\n")
+    ]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
 def with_the_check_in(text: str, script: str) -> str:
     """The body check-in, sent word for word. The client's flow (2026-09-24) treats it as
-    fixed content: Mani's reflection stays, its own version of the question does not."""
+    fixed content: Mani's reflection stays, and no question of its own does, so the check-in
+    is the one question the person is asked."""
     if script in text:
         return text
-    match = _LAST_QUESTION.search(text)
-    reflection = text[: match.start(1)].rstrip() if match else text.rstrip()
+    reflection = without_questions(text)
     return f"{reflection}\n\n{script}" if reflection else script
 
 
@@ -298,11 +174,11 @@ _PLACE_WORDS = (
     )),
 )
 
-# Saying no to the body check ends the route without a practice. Knowing what they will do next
-# does not: the check follows every completed framework (client meeting, 2026-10-02).
-_DECLINES = re.compile(
-    r"^\W*(no|nope|nah)\W*$|\b(no thanks|not now|maybe later|skip|rather not"
-    r"|do not want to check|don'?t want to check|do not want to do that|don'?t want to do that)\b",
+# Saying no to the body check, or already knowing what they will do: either ends the route
+# without a practice.
+_DECLINES_OR_ACTS = re.compile(
+    r"^\W*(no|nope|nah)\W*$|\b(no thanks|not now|maybe later|skip|rather not|don'?t want to"
+    r"|i'?m going to|i am going to|i need to|i'?ll go|i will go)\b",
     re.IGNORECASE,
 )
 
@@ -312,27 +188,70 @@ def named_place(text: str) -> str | None:
     return next((label for label, words in _PLACE_WORDS if words.search(text)), None)
 
 
-def declines(text: str) -> bool:
-    return bool(_DECLINES.search(text))
-
-
-# Words a person uses when they say how their body feels, without naming where.
-_BODY_WORDS = re.compile(
-    r"\b(body|breath\w*|tight\w*|tense|tension|lighter|heavier|heavy|relax\w*|calm\w*"
-    r"|loose\w*|shak\w*|heart|numb|warm\w*|sweat\w*)\b",
-    re.IGNORECASE,
-)
-
-
-def describes_body(text: str) -> bool:
-    """Whether they have said how their body feels, by place or by sensation."""
-    return named_place(text) is not None or bool(_BODY_WORDS.search(text))
+def declines_or_acts(text: str) -> bool:
+    return bool(_DECLINES_OR_ACTS.search(text))
 
 
 def reply_for(branch: dict, style: str) -> str:
     """A stage branch's reply: one text for every style, or the client's text for this one."""
     reply = branch["reply"]
     return reply[style] if isinstance(reply, dict) else reply
+
+
+# The client's three lines for a person who brings another issue, corrects Mani or wants to stop.
+# mani_base.md gives the model the same words.
+CLIENT_LINES = (
+    "Another issue is coming into this. Do you want to stay with the one we selected?",
+    "I misunderstood what you meant. What would be more accurate?",
+)
+
+# How a framework may end, and how a person may say they feel after the practice (spec 0010).
+ENDINGS = frozenset({"resolved", "pivoted", "stopped"})
+FELT_AFTER = frozenset({"better", "mixed", "unchanged", "worse", "unsure"})
+
+
+def known_value(value: str | None, allowed: frozenset[str]) -> str | None:
+    """A model reported value from a closed set, normalised, or None when it is off the list."""
+    cleaned = (value or "").strip().lower()
+    return cleaned if cleaned in allowed else None
+
+_PLACEHOLDER = re.compile(r"<[^>]*>")
+_SENTENCE_END = re.compile(r"(?<=[.?!])\s")
+MIN_KEY_CHARS = 20
+MAX_KEY_CHARS = 40
+
+
+def _match_key(text: str) -> str | None:
+    """The words of an authored reply that show it was used: its longest fixed part, with any
+    <placeholder> split out, normalised, cut to a whole word at 40 characters. None when no
+    fixed part is 20 characters long, so such a reply cannot be recognised."""
+    longest = max((safety.normalize(part) for part in _PLACEHOLDER.split(text)), key=len)
+    if len(longest) < MIN_KEY_CHARS:
+        return None
+    if len(longest) <= MAX_KEY_CHARS:
+        return longest
+    cut = longest[:MAX_KEY_CHARS]
+    return cut if longest[MAX_KEY_CHARS] == " " else cut.rsplit(" ", 1)[0]
+
+
+def redirect_keys(stage: dict, style: str, *, client_lines: bool = True) -> list[str]:
+    """What a reply carries when it leaves the stage question for a redirect: a branch that
+    protects the person or leaves the framework (not one that asks again, nor one that uses
+    the stage's extra turn), or one of the client's three lines."""
+    keys = [
+        _match_key(reply_for(branch, style))
+        for branch in stage.get("if_unclear") or []
+        if not branch.get("counted") and not branch.get("start_only")
+    ]
+    if client_lines:
+        keys += [safety.normalize(_SENTENCE_END.split(line)[0]) for line in CLIENT_LINES]
+    return [key for key in keys if key]
+
+
+def carries_redirect(stage: dict, text: str | None, style: str, *, client_lines: bool = True) -> bool:
+    """Whether a message uses a redirect of the stage, found anywhere in its words."""
+    said = f" {safety.normalize(text or '')} "
+    return any(f" {key} " in said for key in redirect_keys(stage, style, client_lines=client_lines))
 
 
 def practice_for(stage: dict, place: str, style: str) -> tuple[str, list[str]] | None:
@@ -363,6 +282,20 @@ def first_sentence(text: str) -> str:
     return match.group(1) if match else text
 
 
+# Where a practice was given, as the outcome table names it (spec 0010).
+BODY_PLACES = {"Chest": "chest", "Head": "head", "Stomach": "stomach", "Somewhere else": "elsewhere"}
+
+
+def practice_place(stage: dict, text: str | None, style: str) -> str | None:
+    """The place whose practice a message gave, as the outcome table names it, or None when it
+    gave no practice."""
+    for label, place in BODY_PLACES.items():
+        practice = practice_for(stage, label, style)
+        if practice and text and practice[0][:30] in text:
+            return place
+    return None
+
+
 def practice_in(stage: dict, text: str, style: str) -> bool:
     """Whether a reply already gives one of the client's practices, found by its opening words."""
     return any(
@@ -372,7 +305,7 @@ def practice_in(stage: dict, text: str, style: str) -> bool:
     )
 
 
-def without_permission_question(text: str) -> str:
+def _without_permission_question(text: str) -> str:
     """The reply without a closing question that asks whether they want to try."""
     match = _LAST_QUESTION.search(text)
     if match and _OFFER_WORDS.search(match.group(1)):
@@ -380,21 +313,70 @@ def without_permission_question(text: str) -> str:
     return text
 
 
-def _compose_offer(
-    part: str, registry: Registry, framework_id: str, style: str, last_mani_text: str | None
-) -> str:
-    """Mani's part, the client's description, the client's question: one paragraph each.
+CHECK_IN = "somatic_checkin"
 
-    The description is left out when the last reply already showed it, which is the offer
-    made again after they asked what it involves, or when the model wrote it itself.
+
+def _ending_of(framework, stored: str, reported: str | None) -> str:
+    """How a framework that moves to the body check in ended: what the model reported, or, when
+    it reported nothing, resolved from the last question step and pivoted from an earlier one."""
+    if reported:
+        return reported
+    last_question = framework.phases[framework.phase_index(CHECK_IN) - 1]
+    return "resolved" if stored == last_question else "pivoted"
+
+
+def _stage_after_a_reply(
+    registry: Registry,
+    framework_id: str,
+    stored: str,
+    state: TechniqueState | None,
+    stored_holds: int,
+    notes: list[str],
+    *,
+    ending: str | None,
+    redirects: bool,
+    redirected_before: bool,
+    rephrase: bool = False,
+) -> tuple[str, int, str | None]:
+    """The step, hold count and ending to record once the person has replied to `stored`.
+
+    The model judges when a step is done (spec 0010, AC-5): it may report a later step, never an
+    earlier one, and may end the framework, which records the body check in. A reported step
+    equal to `stored` is its one more attempt, counted once per step: a second records the
+    next step. A reply that uses a redirect of the stage (`redirects`), or a hold right after
+    Mani's own redirect (`redirected_before`), holds without counting.
     """
     framework = registry.get(framework_id)
-    description = " ".join(framework.summary.split()) if framework and framework.summary else ""
-    # Exactly once: not again when the last reply showed it, nor when the model wrote it anyway.
-    already = " ".join(f"{last_mani_text or ''} {part}".split())
-    if description and description in already:
-        description = ""
-    return "\n\n".join(p for p in (part, description, PERMISSION_QUESTIONS[style]) if p)
+    following = framework.phases[framework.phase_index(stored) + 1]
+    if ending is not None:
+        notes.append(f"framework ended {ending} at {stored}")
+        return CHECK_IN, 0, ending
+    if redirects:
+        notes.append(f"redirect held at {stored}")
+        return stored, stored_holds, None
+    if rephrase:
+        notes.append(f"held at {stored}")
+        return stored, 1, None
+    if state is None:
+        notes.append(f"no state, recorded {following}")
+        recorded = following
+    else:
+        transition = registry.validate_transition(framework_id, stored, state.step, moving_on=True)
+        recorded = registry.clamp(framework_id, stored, state.step, moving_on=True)
+        if not transition.ok:
+            notes.append(f"corrected phase {state.step!r} to {recorded!r} ({transition.reason})")
+        elif recorded == stored:
+            if redirected_before:
+                notes.append(f"redirect held at {stored}")
+                return stored, stored_holds, None
+            if stored_holds == 0:
+                notes.append(f"held at {stored}")
+                return stored, 1, None
+            notes.append(f"hold limit at {stored}")
+            recorded = following
+    if recorded == CHECK_IN:
+        return CHECK_IN, 0, _ending_of(framework, stored, None)
+    return recorded, 0, None
 
 
 def _normalize(name: str) -> str:
@@ -405,23 +387,20 @@ def apply(
     reply: Reply,
     registry: Registry,
     *,
-    said: str,
     already_offered: list[str],
     current_framework_id: str | None,
     current_phase: str | None,
     selected_label: str | None,
     accepted_this_turn: bool,
     framework_running: bool,
-    cooldown_passed: bool,
+    offer_allowed: bool,
     conversation_style: str,
     wants_title: bool,
     last_mani_text: str | None = None,
-    nickname: str | None = None,
-    name_said_before: bool = False,
-    clarification_already_used: bool = False,
-    closest_fit: bool = False,
-    required_offer: str | None = None,
-    offer_decided: bool = False,
+    explaining: bool = False,
+    current_holds: int = 0,
+    asked_again: bool = False,
+    current_ending: str | None = None,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again.
 
@@ -434,43 +413,6 @@ def apply(
     text, leaked = strip_script_leakage(reply.text.strip())
     if leaked:
         notes.append(f"stripped script metadata: {', '.join(leaked)}")
-
-    undashed = without_dashes(text)
-    if undashed != text:
-        notes.append("replaced dashes")
-        text = undashed
-
-    if clarification_already_used:
-        # The client's one-time check, backstopped in code: [ctx] already told the model not
-        # to ask again, this is what makes "never twice" true regardless.
-        stripped = _without_clarification(text)
-        if stripped != text:
-            notes.append("removed a repeated one-time clarification")
-            text = stripped
-
-    if nickname:
-        # Their name at most once in a conversation, never as the first word: observed in two
-        # replies out of three. Only the name said to them is removed, never the sentence.
-        named = _without_their_name(text, nickname, keep_one=not name_said_before)
-        if named != text:
-            notes.append("removed their name, already used or said first")
-            text = named
-
-
-    theirs = words(said)
-    # The orchestrator asks the model once more when a draft names a feeling the person did
-    # not. What reaches here after that is trimmed: the offending sentence goes when the
-    # question survives, so the person never reads "that sounds stressful" they did not say.
-    introduced_in_text = introduced_feelings(text, said)
-    if introduced_in_text:
-        notes.append(
-            f"reply text introduced a feeling word the user did not establish: "
-            f"{', '.join(introduced_in_text)}"
-        )
-        trimmed = without_feeling_sentences(text, introduced_in_text)
-        if trimmed is not None:
-            notes.append("dropped a sentence that named a feeling they had not")
-            text = trimmed
 
     offered = {_normalize(name) for name in already_offered}
     # While a framework is only being *offered*, the capsule naming it is the offer itself,
@@ -496,24 +438,6 @@ def apply(
         if selected and key == selected:
             # Offering back the button the user just pressed reads as not listening.
             notes.append(f"dropped the button the user just tapped: {label}")
-            continue
-        if key in EXPLAIN_LABELS and any(p.technique for p in reply.prompts or []):
-            # An offer has two buttons, Try it and Keep chatting (muhammad, 2026-09-24): the
-            # offer's own words already say how the questions would help.
-            notes.append(f"dropped an explain button from an offer: {label}")
-            continue
-        # A label may not name a feeling they did not name, judge them, or run long enough
-        # to be a sentence. Dropping the button is the whole correction: rewriting one would
-        # put different words in their mouth rather than none.
-        introduced = sorted(words(label) & FEELING_WORDS - theirs)
-        if introduced:
-            notes.append(f"dropped a button naming a feeling they did not use: {label}")
-            continue
-        if any(phrase in key for phrase in SELF_JUDGMENTS):
-            notes.append(f"dropped a button that judges them: {label}")
-            continue
-        if len(label.split()) > MAX_CAPSULE_WORDS:
-            notes.append(f"dropped a button that runs long: {label}")
             continue
         if prompt.library is not None:
             # A button pointing nowhere is worse than no button: it navigates the person
@@ -547,10 +471,8 @@ def apply(
                 and current_framework_id is not None
                 and _normalize(prompt.technique) == _normalize(current_framework_id)
             )
-            if not cooldown_passed and not pending_offer:
-                notes.append(
-                    f"dropped a technique offered before the cooldown passed: {prompt.technique}"
-                )
+            if not offer_allowed and not pending_offer:
+                notes.append(f"dropped a technique offered when no offer is allowed: {prompt.technique}")
                 continue
             # A model-supplied identifier is untrusted until it matches the registry.
             if prompt.technique not in registry:
@@ -560,16 +482,10 @@ def apply(
                 notes.append(f"dropped an already-offered technique: {prompt.technique}")
                 continue
 
-        if prompt.technique is not None and closest_fit:
-            # An offer of the nearest fit says so on the button, so the person chooses it knowing
-            # it is not a perfect match; Keep chatting beside it is the other way out.
-            prompt = prompt.model_copy(update={"label": CLOSEST_FIT_LABEL})
-            key = CLOSEST_FIT_LABEL.lower()
-
         seen_labels.add(key)
         kept.append(prompt)
 
-    # Tell me about this and Keep chatting answer an offer, and so does the question asking it.
+    # The explain and keep talking buttons answer an offer, and so does the question asking it.
     # Once the offer's own button is gone they answer nothing, so they go with it - the words
     # only when something is left to send.
     if any(p.technique for p in reply.prompts or []) and not any(p.technique for p in kept):
@@ -586,49 +502,18 @@ def apply(
         notes.append(f"trimmed {len(kept)} buttons to {MAX_PROMPTS}")
         kept = kept[:MAX_PROMPTS]
 
-    # An offer is built here, not by the model (muhammad, 2026-09-24): Mani's own part, then
-    # the client's description of the questions word for word, so the person sees what they
-    # would come away with, then the client's permission question for the style. A question
-    # of the model's own asking that permission gives way to the client's. Any other question
-    # means the offer shares a reply with something else, so its buttons are dropped: the
-    # offer can come next turn, and a reply is never left asking two things at once.
+    # An offer is built here, not by the model: Mani's own part, then the client's permission
+    # question for the style, with the client's three choices (spec 0010, AC-4). After "Tell me
+    # more" the explanation stands alone with the two choices left. A question of the model's own
+    # asking permission gives way to the client's. Any other question means the offer shares a
+    # reply with something else, so it is dropped: the offer can come next turn, and a reply is
+    # never left asking two things at once.
     offered_id = next((p.technique for p in kept if p.technique), None)
-
-    if offer_decided:
-        # Code decides whether a framework is offered (ADR pending; mani/chat/offer.py), so
-        # the model's own choice is not consulted here. An offer it failed to carry is added,
-        # and one it invented is removed.
-        if required_offer is not None and offered_id != required_offer:
-            kept = [p for p in kept if not p.technique and not _is_offer_button(p)]
-            framework = registry.get(required_offer)
-            if framework is not None:
-                kept = kept + [
-                    SmartPrompt(label=TRY_IT_LABEL, technique=required_offer),
-                    SmartPrompt(label=KEEP_CHATTING_LABEL, decline=True),
-                ]
-                notes.append(f"added the offer this turn decided on: {required_offer}")
-                offered_id = required_offer
-        elif required_offer is None and offered_id is not None:
-            dropped = [p.label for p in kept if _is_offer_button(p) or p.technique]
-            kept = [p for p in kept if not p.technique and not _is_offer_button(p)]
-            notes.append(f"dropped an offer this turn did not decide on: {dropped}")
-            without = _BLANK_RUN.sub("\n\n", _OFFER_SENTENCE.sub("", text)).strip()
-            text = without or text
-            offered_id = None
-
     if offered_id is not None:
-        part = without_permission_question(text)
+        part = _without_permission_question(text)
         if part != text:
             notes.append("replaced the model's permission question with the client's")
-        if "?" in part and offer_decided and required_offer == offered_id:
-            # The offer is this turn's decision, so the model's extra question gives way to
-            # it rather than the other way round: trim the question, keep the offer.
-            trimmed = _LAST_QUESTION.sub("", part).strip()
-            if trimmed:
-                notes.append("trimmed a question from the reply that carries the offer")
-                part = trimmed
-            text = _compose_offer(part, registry, offered_id, conversation_style, last_mani_text)
-        elif "?" in part:
+        if "?" in part:
             dropped = [p.label for p in kept if _is_offer_button(p)]
             kept = [p for p in kept if not _is_offer_button(p)]
             notes.append(f"dropped offer buttons under a question that is not the offer: {dropped}")
@@ -636,42 +521,68 @@ def apply(
             without = _BLANK_RUN.sub("\n\n", _OFFER_SENTENCE.sub("", part)).strip()
             text = without or part
         else:
-            text = _compose_offer(part, registry, offered_id, conversation_style, last_mani_text)
+            text = part if explaining else "\n\n".join(
+                p for p in (part, PERMISSION_QUESTIONS[conversation_style]) if p
+            )
+            kept = offer_buttons(offered_id, explaining=explaining)
 
     framework_id: str | None = None
     phase: str | None = None
-    if reply.state is not None:
-        if reply.state.technique not in registry:
-            notes.append(f"ignored state for unknown technique: {reply.state.technique}")
-        elif framework_running and reply.state.technique != current_framework_id:
-            # Every framework shares stage ids like somatic and closing, so the transition
-            # check alone would let a reply record a framework the person never accepted.
+    holds = 0
+    ending = current_ending
+    reported_ending = known_value(reply.ending, ENDINGS)
+    state = reply.state
+    if state is not None and state.technique not in registry:
+        notes.append(f"ignored state for unknown technique: {state.technique}")
+        state = None
+    elif state is not None and framework_running and state.technique != current_framework_id:
+        # Every framework shares stage ids like the body check, so the transition check alone
+        # would let a reply record a framework the person never accepted.
+        notes.append(
+            f"ignored state for {state.technique}, not the running one "
+            f"({current_framework_id})"
+        )
+        state = None
+
+    # The person answered the step they were on, so the reply asks a later step or makes its one
+    # more attempt, never an earlier step. Whatever the reply reports, a step is recorded: a lost
+    # or garbled state must never keep a step on screen.
+    moving_on = (
+        framework_running
+        and not accepted_this_turn
+        and moves_on_after(registry.get(current_framework_id), current_phase)
+    )
+    if moving_on:
+        framework_id = current_framework_id
+        stage = registry.get(framework_id).stages.get(current_phase) or {}
+        # They asked to hear the question again with the extra turn unused: the hold is recorded
+        # here, and a client line is no redirect.
+        rephrase = asked_again and current_holds == 0
+        phase, holds, ending = _stage_after_a_reply(
+            registry, framework_id, current_phase, state, current_holds, notes,
+            ending=reported_ending,
+            redirects=carries_redirect(stage, text, conversation_style, client_lines=not rephrase),
+            redirected_before=carries_redirect(
+                stage, last_mani_text, conversation_style, client_lines=False
+            ),
+            rephrase=rephrase,
+        )
+    elif state is not None:
+        framework_id = state.technique
+        # Accepting an offer this turn means the phase being left is the offering one,
+        # whatever the stored row still says. The reply asks the first step their words do not
+        # already meet, which may be past the first.
+        previous = "offering" if accepted_this_turn else current_phase
+        transition = registry.validate_transition(framework_id, previous, state.step)
+        phase = registry.clamp(framework_id, previous, state.step)
+        if not transition.ok:
             notes.append(
-                f"ignored state for {reply.state.technique}, not the running one "
-                f"({current_framework_id})"
+                f"corrected phase {state.step!r} to {phase!r} ({transition.reason})"
             )
-        else:
-            framework_id = reply.state.technique
-            # Accepting an offer this turn means the phase being left is the offering one,
-            # whatever the stored row still says. What they told Mani before accepting
-            # answers the first stage, so the reply may already be asking the second.
-            previous = current_phase
-            if accepted_this_turn:
-                known = registry.get(framework_id)
-                phases = known.phases if known else []
-                first = phases.index("offering") + 1 if "offering" in phases else -1
-                previous = phases[first] if 0 < first < len(phases) else "offering"
-            transition = registry.validate_transition(
-                framework_id, previous, reply.state.step
-            )
-            phase = registry.clamp(framework_id, previous, reply.state.step)
-            if not transition.ok:
-                notes.append(
-                    f"corrected phase {reply.state.step!r} to {phase!r} "
-                    f"({transition.reason})"
-                )
-            if phase is None:
-                framework_id = None
+        if phase is None:
+            framework_id = None
+        elif phase == CHECK_IN and previous != CHECK_IN and framework_running:
+            ending = reported_ending or "pivoted"
 
     at_the_end = framework_running and (phase or current_phase) in ENDING_STAGES
     if kept and not at_the_end and not any(p.technique for p in kept):
@@ -700,4 +611,6 @@ def apply(
         phase=phase,
         style=style,
         notes=notes,
+        holds=holds,
+        ending=ending,
     )

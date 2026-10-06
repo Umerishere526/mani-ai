@@ -12,7 +12,7 @@ endpoint, the real LangChain call, the real router and safety screen - this is n
 ## What it simulates versus what is real
 
 - **Real:** every chat turn, every capsule tap, style selection (tapping one of the greeting's
-  three style buttons), framework offers (including the nearest fit, shown as "Try the closest fit" beside "Keep chatting"), the somatic hand-off, the exercise hand-off, crisis locking. All of it
+  three style buttons), framework offers (only for a framework the facts fully fit, with "Try it" beside "Keep chatting"), the somatic hand-off, the exercise hand-off, crisis locking. All of it
   goes over HTTP to the actual FastAPI app - nothing here calls `orchestrator.py` directly.
 - **Real, too:** the library page (sidebar **Library**, or any **Go to Library** button). It lists
   every exercise from `GET /v1/exercises` on one page, grouped by topic, each playable from its
@@ -96,8 +96,8 @@ messages, with Mani's buttons live only on its newest message, as in the apps.
 
 The three developer panels below only appear with `CHAT_TESTER_DEV_MODE=1` in `chat-tester/.env`
 **and** the sidebar's "Show developer details" toggle switched on. "What Mani remembers" shows without
-them. The developer view lists an offer's framework id but not whether the offer was a confident one
-or the nearest fit; the button's label ("Try it" or "Try the closest fit") is how you tell.
+them. The developer view lists an offer's framework id; every offer is a full fit, so there is no nearest
+offer to tell apart.
 
 - **The sidebar's "Framework state" panel** - a direct read of `thread_technique_state`,
   refreshed on every interaction. Watch `phase` move through a framework's stages as the

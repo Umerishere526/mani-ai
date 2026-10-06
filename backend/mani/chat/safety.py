@@ -174,6 +174,29 @@ _CONCERN: list[tuple[Category, str]] = [
     (Category.LOSS_OF_CONTACT, "they are watching me"),
 ]
 
+# What kind of concern the model's own flag names: the screen's kinds, and `other` for something it
+# thought about that is not danger. Only `other` leaves a running framework going.
+OTHER_KIND = "other"
+UNSPECIFIED_KIND = "unspecified"
+FLAG_KINDS = frozenset(category.value for category in Category) | {OTHER_KIND}
+
+
+def flag_kind(category: object) -> str:
+    """The kind a model flag names, read as text ignoring case, surrounding spaces and trailing
+    punctuation, with spaces and hyphens as underscores. A kind that is missing, empty, not text
+    or not one of the nine is `unspecified`, never the word the model wrote."""
+    if not isinstance(category, str):
+        return UNSPECIFIED_KIND
+    kind = category.strip().lower().rstrip(".,;:!?").strip().replace(" ", "_").replace("-", "_")
+    return kind if kind in FLAG_KINDS else UNSPECIFIED_KIND
+
+
+def flag_pauses(category: object) -> bool:
+    """Whether a model flag pauses a running framework. Everything it cannot read as `other`
+    does, so a lost or garbled field can only keep the pause, never remove it."""
+    return flag_kind(category) != OTHER_KIND
+
+
 # Contractions and spacing only. No stemming, no synonyms: a safety screen that guesses is
 # worse than one that is narrow and honest about it.
 _CONTRACTIONS = {

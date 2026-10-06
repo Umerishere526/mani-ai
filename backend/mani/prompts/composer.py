@@ -80,12 +80,11 @@ def framework_index(registry: Registry) -> str | None:
     if rendered:
         lines += ["", "## Telling them apart", ""] + rendered
 
-    # The client's description of each is added to the offer by the backend, so it is not
-    # listed here: a model given the text copied it, and offers showed it twice.
+    # Each one's description reaches the model only when they ask to hear more (context.build),
+    # so the offer itself says, in their terms, what the questions can help with.
     lines += [
-        "", "When you offer one, its name, its description and its steps are added to your reply "
-        "for you. Do not name or describe it yourself, so it is never said twice, and never "
-        "use its id.",
+        "", "When you offer one, never say its name, its id, or the word \"framework\". If they "
+        "ask to hear more, `[ctx]` gives you what it looks at.",
     ]
 
     # Only the contraindications, not every not_when line: most of those name a different
@@ -99,16 +98,11 @@ def framework_index(registry: Registry) -> str | None:
     if never:
         lines += ["", "## Never offer one when", ""] + never
 
-    # What each one needs to know before it is the right offer. It decides when an offer fits,
-    # never what Mani asks (ADR-015): static, so it sits in the cached prefix with the rest of
-    # the index.
+    # What each one needs to know before it is the right offer. It is how a question can follow
+    # the person's feeling and still be heading somewhere: static, so it sits in the cached
+    # prefix with the rest of the index.
     to_find_out = [
         f"- **{framework.name}**: {'; '.join(items)}"
-        + (
-            f" (offer it only from their message {earliest}: it depends on what they took it to mean)"
-            if (earliest := (framework.activation or {}).get("earliest_offer_message"))
-            else ""
-        )
         for framework in present
         for items in [(framework.activation or {}).get("to_find_out") or []]
         if items
@@ -116,9 +110,8 @@ def framework_index(registry: Registry) -> str | None:
     if to_find_out:
         lines += [
             "", "## Finding the fit", "",
-            "From their messages, notice which of these they are heading toward and what they have "
-            "already told you of it. This tells you when an offer fits; it never sets what you ask:",
-            "",
+            "What each one needs to know before it is the right offer. Let your questions reach "
+            "for what is still missing, in their words, never as a checklist:", "",
         ] + to_find_out
 
     return "\n".join(lines)
@@ -191,9 +184,9 @@ def techniques_used(offered: list[str]) -> str | None:
         "## Techniques Already Offered\n"
         "These have already been offered in this conversation:\n"
         f"{listed}\n\n"
-        "One they said no to may be offered again once `cooldown_passed: yes`, if it still "
-        "fits best - or a different one, if what they have said since has changed what fits. "
-        "One they have just finished may not be offered again."
+        "One they said no to may be offered again once `offer_allowed: yes`, if it still "
+        "fits best, or a different one, if what they have said since has changed what fits. "
+        "Once one is finished, nothing more is offered in this conversation."
     )
 
 
