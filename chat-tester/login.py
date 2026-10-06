@@ -35,13 +35,13 @@ def render_login() -> None:
     st.title("🧠 Mani chat tester")
     sign_in_tab, sign_up_tab, reset_tab = st.tabs(["Sign in", "Sign up", "Forgot password"])
 
-    with sign_in_tab, st.form("sign_in"):
+    with sign_in_tab, st.form("sign_in", enter_to_submit=False):
         email = st.text_input("Email", key="sign_in_email")
         password = st.text_input("Password", type="password", key="sign_in_password")
         if st.form_submit_button("Sign in", use_container_width=True, type="primary"):
             _start(lambda: mani.sign_in_with_password(email, password), email)
 
-    with sign_up_tab, st.form("sign_up"):
+    with sign_up_tab, st.form("sign_up", enter_to_submit=False):
         email = st.text_input("Email", key="sign_up_email")
         password = st.text_input("Password", type="password", key="sign_up_password")
         nickname = st.text_input("Nickname (optional, used in the greeting)", key="sign_up_nickname")
@@ -53,7 +53,7 @@ def render_login() -> None:
             "We email a six-digit code to the address on the account. Only someone who can "
             "read that mailbox can set a new password."
         )
-        with st.form("send_code"):
+        with st.form("send_code", enter_to_submit=False):
             email = st.text_input("Email", key="reset_email")
             if st.form_submit_button("Email me a code", use_container_width=True):
                 try:
@@ -67,7 +67,7 @@ def render_login() -> None:
                     st.success(f"If {email.strip()} has an account, a code is on its way.")
 
         if st.session_state.get("code_sent_to"):
-            with st.form("use_code"):
+            with st.form("use_code", enter_to_submit=False):
                 st.caption(f"Code sent to {st.session_state.code_sent_to}. It expires in an hour.")
                 code = st.text_input("Six-digit code", key="reset_code", max_chars=6)
                 password = st.text_input("New password", type="password", key="reset_password")
