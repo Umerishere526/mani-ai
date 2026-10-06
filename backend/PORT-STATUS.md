@@ -403,3 +403,46 @@ byte-identical to `4708550`, so no frontend can break on this.
 Open: the margin gate; whether the flag goes on in prod, which is muhammad's call after
 chat-tester; the hosted project needs `supabase db push` and `scripts/seed.py` for any
 change under `supabase/migrations/` or `content/`, since Vercel ships only code.
+
+## 2026-10-06, assessment before a framework, and the cadence per style
+
+The router now reaches a framework from how people actually open. "I am depressed" reached
+nothing at all before this, though the overview's table names Behavioral Activation for
+exactly those words.
+
+- **Short openers route.** Every exemplar had been a 9 to 18 word sentence, so a three word
+  opener matched nothing closely enough to clear `BAR`. Each framework carries the few words
+  people open with, from the specification's own description. Twelve spec-derived openers
+  land 12 of 12, against 5 of 8 before; `BAR`, `MARGIN` and `FLOOR` are unchanged.
+- **The query is their opening plus the recent window.** The last two messages alone dropped
+  the opening by the third turn and routing wandered mid-conversation.
+- **A short message is routed on their first turn.** `classify_reply` marks three words
+  `short`, which means "an answer to Mani's question" - but their first message answers only
+  the greeting's question about how they want to be spoken to.
+- **`assess`** is a new action for a turn that has something real and nothing to act on
+  ("I am in pain"). `[ctx]` carries `to_find_out`, what the nearest sets of questions still
+  need to know, in the frameworks' own words; the model picks the one worth asking and the
+  words for it. Never an offer: a shortlist is not a fit.
+- **A conversation that never names a framework leads to ABCDE**, the file that sets
+  `stuck_offer`, once assessment has run to the top of the style's window. Two frameworks
+  that genuinely tie are told apart by the clarify question instead, not sent to the
+  fallback. The grief veto still overrides both.
+- **Cadence is Direct 3-5, Supportive 5-7, Reflective 6-8** (muhammad, 2026-10-06), counted
+  in the person's own messages across the whole chat. **This deviates from the client's
+  `conversational-styles.md`**, which gives every style "approximately two to four
+  exchanges" and calls it a range, not a count. Deliberate: the styles differ in how much
+  room they give before structure, which one number for all three cannot express.
+- **No unsolicited advice.** The prompt already barred clinical words, diagnosis, labelling
+  and naming a feeling they had not named; it now also bars handing out a solution or a tip
+  they did not ask for, with a protective step under a time critical risk as the exception.
+
+Checked live on the real model with the flag on, Direct: "i am depressed" offers Behavioral
+Activation on message 3; "i am in pain" asks whether it is physical before anything else;
+"i have a situation" reaches ACT Choice Point; a manager tearing into a report reaches
+ABCDE. Replies ran 11 to 40 words. `pytest` 1472 passed, 4 skipped.
+
+`content/framework_vectors.json` is tracked in git and copied by the Dockerfile, and there
+is no `.vercelignore`, so the vectors deploy with the code. **Re-run
+`scripts/embed_frameworks.py` and commit the result after any edit to a framework's
+`exemplars` or `to_find_out`**, then `scripts/seed.py` against hosted - Vercel ships code,
+never database rows.
