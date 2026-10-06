@@ -6,12 +6,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.db import config_tables, pool
 from mani.errors import ErrorCategory, ServiceError
+from mani.llm.chain import REASONING_EFFORTS
 from mani.models.rows import Prompt
 
 logger = logging.getLogger(__name__)
@@ -55,12 +57,27 @@ _config: Config | None = None
 _lock = asyncio.Lock()
 
 
+def refuse_unknown_reasoning_efforts(prompts: Iterable[Prompt]) -> None:
+    """A reasoning effort the provider does not know would be sent on every reply and fail
+    each one, so it is refused when the prompts load, naming the prompt."""
+    for prompt in prompts:
+        effort = prompt.model_parameters.get("reasoning_effort")
+        if effort is not None and effort not in REASONING_EFFORTS:
+            raise ServiceError(
+                f"prompt {prompt.name!r} asks for reasoning_effort {effort!r}; "
+                f"it must be one of {', '.join(REASONING_EFFORTS)}",
+                ErrorCategory.CONFIG_ERROR,
+                user_message="Mani is not available right now.",
+            )
+
+
 async def _read() -> Config:
     async with pool.as_admin() as conn:
         prompts = await config_tables.list_active_prompts(conn)
         frameworks = await config_tables.list_active_frameworks(conn)
 
     by_name = {p.name: p for p in prompts}
+    refuse_unknown_reasoning_efforts(prompts)
     missing = [name for name in REQUIRED_PROMPTS if name not in by_name]
     if missing:
         raise ServiceError(

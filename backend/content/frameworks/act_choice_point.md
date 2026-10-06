@@ -1,17 +1,24 @@
 ---
 id: act_choice_point
 name: ACT Choice Point
-summary: "These questions help you notice the difficult thought or feeling, reconnect with what matters to you, and choose an action that reflects the person you want to be. By the end, you will have a direction you can take even when the situation or your feelings have not changed."
+summary: "These questions help you work out what matters to you here and one thing you can do about it, even if nothing else changes."
 display_order: 5
-phases: [offering, situation, present, pull, matters, toward, action, closing]
+phases: [offering, situation, present, pull, matters, toward, action]
 activation:
   central_indication: >-
     The user may not be able to change or resolve the situation, but does not want it deciding
     how they act - the focus shifts from making the thought or feeling go away to choosing how
     to respond while it is present.
-  # A confident offer waits for their third message: the fit depends on what they took the event or
-  # the thought to mean, which the first two messages rarely say.
-  earliest_offer_message: 3
+  # How a person actually talks when this framework fits. The semantic router embeds
+  # these, not central_indication: clinical prose scored 2/7 on real messages where
+  # these scored 11/11. Authored content - changing them changes which framework is
+  # offered, so they need the same review the summary does.
+  exemplars:
+    - "I can't change the situation and I don't know how to live with it."
+    - "Someone I love is ill and there's nothing I can do about it."
+    - "This isn't going to change and I keep fighting it."
+    - "I'll probably never get an apology and I don't want it running my life."
+    - "I can't make the uncertainty go away but I still have to get through the day."
   to_find_out:
     - "what part of the situation they cannot change or control"
     - "the thought, feeling or urge that stays with them"
@@ -19,7 +26,7 @@ activation:
     - "whether they want help choosing how to respond, not solving or disproving it"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # router reads never_offer_when_said and stuck_offer.
   appropriate_when:
     - "The user cannot fully control or resolve the situation"
     - "A thought cannot be proved or disproved"
@@ -42,38 +49,6 @@ activation:
   contraindications:
     - "The situation is something that should change rather than be accepted - ongoing abuse, an unsafe workplace, a real medical or financial risk. Accepting a feeling is not the same as accepting a harmful situation, and this framework must never blur that line"
     - "The experience is being used to push the person toward forgiving, tolerating, or accepting what is unjust or harmful, or away from medical, legal, or emergency help - self-protection is never a move away from what matters"
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "cannot change what happened"
-    - "cannot make them"
-    - "cannot make my family"
-    - "cannot control whether"
-    - "never receive an apology"
-    - "cannot control what"
-    - "make the uncertainty go away"
-  signals:
-    - "cannot stop thinking"
-    - "cannot change the situation"
-    - "thought may never go away"
-    - "do not want it making my decisions"
-    - "may keep coming back"
-    - "get rid of this feeling"
-    - "waiting to feel certain"
-    - "this fear making my decisions"
-    - "avoiding the conversation"
-    - "keep defending myself"
-    - "being approved of"
-    - "want to say no"
-    - "withdrawing from people"
-  redirects:
-    - signal: "I think everyone believes I am incompetent, and I want to know if that is accurate."
-      instead: thought_reframe
-    - signal: "One criticism made me believe I was a failure, and I want to understand why."
-      instead: abcde
-    - signal: "I need to compare my options and make a plan."
-      instead: structured_problem_solving
-    - signal: "I know what I want to do, but I cannot begin."
-      instead: behavioral_activation
   distinctions:
     thought_reframe: >-
       Reframe when evidence can help examine the thought, another interpretation may be more
@@ -121,6 +96,7 @@ stages:
     if_unclear:
       - when: "focuses on controlling another - \"I need them to approve.\""
         reply: "Their approval depends on them. What remains within your control?"
+        start_only: true
       - when: "the situation is actually controllable - \"I need to decide which bill to pay first.\""
         reply: "You can compare the bills and make a decision. Would practical problem-solving fit better than this framework?"
       - when: "what they describe is abuse, threats, coercion, harassment, or other danger"
@@ -132,28 +108,18 @@ stages:
   present:
     purpose: "Identify the thought, feeling, memory, physical experience, or urge, using only the user's language."
     listen_for: "The user's own words for the thought, feeling, memory, physical experience, or urge."
-    ready_when: "What is present is named in the user's own words. MANI does not assign a thought, feeling, urge, or physical experience."
     boundaries:
       - "must not assign a feeling"
       - "must not interpret the user's internal experience"
       - "must not diagnose the user"
       - "must not require the user to accept or like what is present"
-    if_unclear:
-      - when: "\"I don't know.\""
-        reply: "It is difficult to identify. What keeps returning when you think about the situation?"
-      - when: "several experiences at once"
-        reply: "Several things are present. Which one has the strongest pull on what you do?"
     ask:
-      supportive: "What is showing up for you when you think about it?"
-      reflective: "What is showing up for you when you think about it?"
-      direct: "What is showing up for you when you think about it?"
+      supportive: "What comes up for you when you think about it?"
+      reflective: "What comes up for you when you think about it?"
+      direct: "What comes up for you when you think about it?"
   pull:
     purpose: "Recognize what the internal experience is pulling the user toward doing or avoiding."
     listen_for: "The action, reaction, avoidance, or pattern the experience is encouraging."
-    ready_when: >-
-      What the internal experience is pulling them toward doing or avoiding is named. MANI does
-      not label the behaviour as an "away move" unless that terminology is approved for the user
-      experience.
     boundaries:
       - "must not label the response as wrong"
       - "must not shame avoidance"
@@ -161,47 +127,26 @@ stages:
       - "must not decide that a protective action is an \"away\" response"
       - "ask only what it pulls them toward doing - one thing. Do not add \"or avoiding\" or any second half to the question; if they avoid something, they will say so"
       - "must not move to what matters before acknowledging what the pull is actually getting them - avoidance has a real payoff (less conflict, less exposure, a moment's relief), and skipping straight to its cost reads as moralising, not understanding"
-    if_unclear:
-      - when: "cannot identify the pull"
-        reply: "The effect on your actions is not clear yet. What do you find yourself doing when the thought appears?"
     ask:
-      supportive: "What is that pulling you toward doing?"
-      reflective: "What is that pulling you toward doing?"
-      direct: "What is that pulling you toward doing?"
+      supportive: "What does that make you want to do?"
+      reflective: "What does that make you want to do?"
+      direct: "What does that make you want to do?"
   matters:
     purpose: "Clarify how the user wants to act and what they want their response to represent."
     listen_for: "The quality, principle, relationship, responsibility, or way of acting the user values here."
-    ready_when: >-
-      What matters in how they respond is named. MANI does not supply a value. It does not have
-      to arrive as values-language - a concrete goal ("get through the meeting without walking
-      out") is enough to work with here. What it points to underneath can surface later; do not
-      hold the stage open chasing an abstraction the person has not reached for themselves.
     boundaries:
       - "must not select the user's values"
       - "must not impose honesty, forgiveness, loyalty, independence, or compassion"
       - "must not define what a good person would do"
       - "must not pressure the user to preserve a relationship"
       - "must not treat self-protection as selfish"
-      - "after one answer that does not name what matters, do not ask the same question again in other words - work from something concrete they already said, or use the \"view your response later\" question"
-    if_unclear:
-      - when: "names what another person should do - \"They should respect my decision.\""
-        reply: "You want them to respect your decision. What matters in how you respond, regardless of what they choose?"
-      - when: "cannot identify what matters"
-        reply: "What matters is not clear yet. How would you want to view your response later?"
-      - when: "answers with how it feels instead of what matters - \"It makes me happy and sad.\""
-        reply: "You said <something concrete that already helped or mattered, in their words>. What would you want to do with that?"
     ask:
-      supportive: "What matters to you in how you respond?"
-      reflective: "What matters to you in how you respond?"
-      direct: "What matters to you in how you respond?"
+      supportive: "What matters to you in how you handle this?"
+      reflective: "What matters to you in how you handle this?"
+      direct: "What matters to you in how you handle this?"
   toward:
     purpose: "Identify a response that moves toward what the user said matters."
     listen_for: "A behaviour that reflects what the user identified as important."
-    ready_when: >-
-      A response reflecting what they said matters is named - safe, within their control, and
-      something they could actually do in the moment the pull is strongest, not only once they
-      feel calmer. A towards move that requires the feeling to be gone first is the pull wearing
-      a different name.
     boundaries:
       - "must not choose the response"
       - "must not present one response as morally superior"
@@ -210,50 +155,24 @@ stages:
       - "must not define compliance as acceptance"
       - "must not accept a response framed purely as a way to make the feeling go away - \"I'll do this so I stop feeling this way\" is acceptance used as a control strategy, not a towards move. Ask what it's for, not just what it removes"
     if_unclear:
-      - when: "response depends on another person - \"They need to admit that I am right.\""
-        reply: "Their admission depends on them. What response is within your control?"
       - when: "response creates danger - \"I should confront him alone.\""
         reply: "Confronting him alone could place you at risk. What response protects your safety?"
-      - when: "framed as removing the feeling - \"I'll do this so the anxiety stops.\""
-        reply: "That would help the anxiety settle. What does it move you toward, apart from that?"
     ask:
-      supportive: "What response would move you toward that?"
-      reflective: "What response would move you toward that?"
-      direct: "What response would move you toward that?"
+      supportive: "What could you do that fits with that?"
+      reflective: "What could you do that fits with that?"
+      direct: "What could you do that fits with that?"
   action:
     purpose: "Turn the chosen direction into one manageable action."
     listen_for: "A specific, safe, realistic action within the user's control."
-    ready_when: "One specific and manageable action is named. The action does not need to remove the thought, feeling, or uncertainty."
     boundaries:
       - "must not make the action too large"
       - "must not require immediate completion"
       - "must not promise the action will remove the difficult experience"
       - "must not select an action outside the user's control"
-    if_unclear:
-      - when: "action too broad"
-        reply: "Changing the entire pattern is a large action. What is one first step?"
-      - when: "wants the thought removed before acting - \"I cannot act until I stop thinking they will reject me.\""
-        reply: "You want the thought gone before you act. What could you do while the thought is still present?"
     ask:
-      supportive: "What is one action you can take?"
-      reflective: "What is one action you can take?"
-      direct: "What is one action you can take?"
-  closing:
-    purpose: "Confirm completion in the user's own terms, without claiming the thought or feeling has changed."
-    ready_when: >-
-      The user has identified the situation, noticed what is present, identified the pull,
-      identified what matters, identified a toward response, and chosen one action. The user
-      does not need to remove the original thought, feel differently, resolve uncertainty,
-      change another person, control the outcome, feel certain, complete the action immediately,
-      or agree with MANI.
-    boundaries:
-      - "must not claim the thought or feeling has changed"
-      - "must not summarize the completed framework"
-      - "must not require the outcome to be resolved to be done"
-    ask:
-      supportive: "You chose an action that reflects what matters to you. How is that choice sitting with you?"
-      reflective: "The thought may remain, but it no longer has to make the decision. What changes when you see that choice?"
-      direct: "You identified what matters and the action that supports it. Is that action realistic?"
+      supportive: "What is one thing you could do?"
+      reflective: "What is one thing you could do?"
+      direct: "What is one thing you could do?"
 ---
 
 # ACT Choice Point

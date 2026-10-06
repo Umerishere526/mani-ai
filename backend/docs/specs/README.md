@@ -19,6 +19,7 @@ names someone or hands over a feeling word.
 | `framework-structured-problem-solving.md` | Framework 4 | |
 | `framework-act-choice-point.md` | Framework 5 | |
 | `framework-dbt-stop.md` | Framework 6 | |
+| `client-email-2026-10-06.md` | Lolly's email of 6 October 2026 | Mani may state what the person has established; frameworks adapt, pivot or stop; every ending goes to the somatic check, whose answer is the effectiveness signal. The newest document: it wins where they disagree |
 
 Each framework file follows the source's own numbering: therapeutic purpose, governing rules,
 mirror cadence, tone by style, when appropriate, **what MANI may hear**, what must be understood
@@ -30,9 +31,9 @@ must avoid**.
 
 ## How the code uses these
 
-- **"What MANI may hear"** → the rule-based router's phrase patterns, seeded into
-  `admin.frameworks.activation`. Free: no API call.
-- **"Important Framework Distinctions"** and each file's §9 → the router's tie-breakers.
+- **The selection table, "Important Framework Distinctions" and each file's §9** → the Framework
+  Index in the system prompt, from which the model chooses (spec 0010). Only the grief veto
+  (`never_offer_when_said`) and the urgent phrases are matched in code.
 - **Stage sections (§§11–18)** → `admin.frameworks.stages` jsonb, one entry per phase, with the
   three tone variants at the `ask` leaf only.
 - **"Responses MANI Must Avoid"** → `tests/evals/` negative assertions, which run with no model

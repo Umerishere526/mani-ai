@@ -34,7 +34,8 @@ declare
 begin
   foreach t in array array['threads', 'messages', 'thread_summaries',
                            'thread_technique_state', 'thread_techniques_offered',
-                           'thread_response_styles', 'exercise_completions']
+                           'thread_response_styles', 'exercise_completions',
+                           'framework_outcomes']
   loop
     foreach p in array array['SELECT', 'INSERT', 'UPDATE', 'DELETE']
     loop
@@ -193,6 +194,22 @@ select pg_temp.want('the old two-argument greeting function is gone, not just re
 select pg_temp.want('the backend can clear technique state',
   has_table_privilege('mani_service', 'public.thread_technique_state', 'DELETE'), true);
 
+-- How a person felt after a framework (spec 0010): only the backend writes it, nobody changes it,
+-- the person reads their own, and account deletion can remove it.
+select pg_temp.want('a user cannot write or change their own outcome',
+  has_table_privilege('authenticated', 'public.framework_outcomes', 'INSERT')
+  or has_table_privilege('authenticated', 'public.framework_outcomes', 'UPDATE')
+  or has_table_privilege('authenticated', 'public.framework_outcomes', 'DELETE'), false);
+select pg_temp.want('a user can read outcomes, which RLS limits to their own',
+  has_table_privilege('authenticated', 'public.framework_outcomes', 'SELECT'), true);
+select pg_temp.want('the backend can record an outcome and never change one',
+  has_table_privilege('mani_service', 'public.framework_outcomes', 'INSERT')
+  and not has_table_privilege('mani_service', 'public.framework_outcomes', 'UPDATE'), true);
+select pg_temp.want('account deletion can remove outcomes',
+  has_table_privilege('supabase_auth_admin', 'public.framework_outcomes', 'DELETE')
+  and exists (select 1 from pg_policies where schemaname = 'public'
+               and tablename = 'framework_outcomes' and policyname = 'auth_admin_cascade_delete'), true);
+
 -- Both feed the model: the summary goes into the system prompt, technique state into [ctx].
 select pg_temp.want('a user cannot write their own summary',
   has_table_privilege('authenticated', 'public.thread_summaries', 'INSERT')
@@ -209,6 +226,11 @@ select pg_temp.want('the backend can write summaries and technique state',
   and has_table_privilege('mani_service', 'public.thread_summaries', 'UPDATE')
   and has_table_privilege('mani_service', 'public.thread_technique_state', 'INSERT')
   and has_table_privilege('mani_service', 'public.thread_technique_state', 'UPDATE'), true);
+
+-- A stage takes at most one extra turn; the code enforces it, and the column refuses a count
+-- that would let a conversation loop.
+select pg_temp.want('a framework stage cannot hold more than once, in the database as well',
+  exists (select 1 from pg_constraint where conname = 'technique_state_holds_bounded'), true);
 
 -- Topics are written by the person and pasted into every system prompt.
 select pg_temp.want('profile topics are bounded in the database, not only in the API',

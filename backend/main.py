@@ -47,6 +47,21 @@ def operation_id(route: APIRoute) -> str:
     return route.name
 
 
+def scrub_event(event: dict, _hint: dict) -> dict:
+    """Remove from a Sentry event every field that can carry what somebody typed or what the
+    model replied: the request body, frame locals, and breadcrumbs, which are log lines.
+
+    The init options already stop the SDK collecting the first two; this removes them again
+    should an integration attach them anyway.
+    """
+    (event.get("request") or {}).pop("data", None)
+    for exception in (event.get("exception") or {}).get("values") or []:
+        for frame in (exception.get("stacktrace") or {}).get("frames") or []:
+            frame.pop("vars", None)
+    event.pop("breadcrumbs", None)
+    return event
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await pool.open_pool()
@@ -74,8 +89,13 @@ def create_app() -> FastAPI:
             dsn=settings.sentry_dsn,
             environment=settings.environment,
             # Conversation content is special-category health data and must not leave
-            # the process attached to an error report.
+            # the process attached to an error report. What an event still carries is each
+            # exception's type, message and stack, including any chained cause, and a
+            # third-party exception's message can quote the input it failed on.
             send_default_pii=False,
+            max_request_body_size="never",
+            include_local_variables=False,
+            before_send=scrub_event,
         )
 
     app = FastAPI(
@@ -120,7 +140,7 @@ def create_app() -> FastAPI:
         """
         # Only which field failed and how. The rest of a pydantic error carries the
         # rejected value, which for a too-long message is the whole thing the person
-        # typed. Nothing else in this service logs conversation content.
+        # typed, and a log line is no place for that.
         logger.warning(
             "invalid request: %s",
             [(e.get("type"), e.get("loc")) for e in exc.errors()],
