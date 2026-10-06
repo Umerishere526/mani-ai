@@ -1,7 +1,7 @@
 ---
 id: dbt_stop
 name: DBT STOP
-summary: "These questions help you interrupt an automatic reaction so you can pause, understand what is happening, and choose how you want to respond rather than simply reacting."
+summary: "We pause before you react, notice what's going on inside you and around you, and then choose what to do next."
 display_order: 6
 phases: [offering, stop, pause, observe, proceed, closing]
 activation:
@@ -96,20 +96,21 @@ stages:
     purpose: "Interrupt the intended action before it occurs."
     listen_for: "Whether the text, email, call, post, argument, purchase, or decision has been stopped before completion."
     ready_when: >-
-      The immediate action is stopped: the message remains unsent, the call has not been
-      placed, the post has not been published, the purchase has not been completed, the user
-      has stopped typing, the argument has been paused, or the decision has not been made. If
-      the action already occurred, identify whether another immediate action needs to be
-      paused.
+      The immediate action is stopped: the message remains unsent, the call has not been placed,
+      the post has not been published, the purchase has not been completed, the user has stopped
+      typing, the argument has been paused, or the decision has not been made. If the action
+      already occurred, identify whether another immediate action needs to be paused. What they
+      said before they accepted counts, including the action the offer was built on: when it
+      already gives this, the step is done and is not asked.
     boundaries:
       - "must not shame the urge"
       - "must not assume every immediate action is harmful"
       - "must not delay a protective action or prevent the user from leaving immediate danger"
       - "must not use STOP when the safety protocol is required"
     if_unclear:
-      - when: "\"I cannot stop myself.\""
+      - when: '"I cannot stop myself."'
         reply: "Stopping feels out of reach right now. Can you pause the action for sixty seconds?"
-      - when: "already acted - \"I already sent it.\""
+      - when: 'already acted - "I already sent it."'
         reply: "The message has already been sent. Is there another action you are about to take?"
     ask:
       supportive: "Can you stop the action before it happens?"
@@ -129,9 +130,9 @@ stages:
       - "must not require a long pause"
       - "must not pressure the user to remain if emergency help is required"
     if_unclear:
-      - when: "returns to the action - \"I started typing again.\""
+      - when: 'returns to the action - "I started typing again."'
         reply: "You returned to the message. Can you pause the typing and remain here with me?"
-      - when: "wants to leave - \"I am going back to the message.\""
+      - when: 'wants to leave - "I am going back to the message."'
         reply: "You want to return to it now. Can you remain paused with me for one more response?"
       - when: "the pause needs an anchor - the person is not physically leaving anywhere, so the pause is about where attention goes, not where the body does. One slow breath, naming what is in view, or a hand flat on the desk are usable even mid-conversation"
         reply: "Would one slow breath help you stay with the pause?"
@@ -151,11 +152,11 @@ stages:
       - "must not begin the full somatic framework here"
       - "must not assume another person's motive"
       - "must not ask several questions at once"
-      - "must not ask why they feel or think something - Observe is describing what is there, not explaining it; \"why\" turns the pause into another lap of the same thinking that produced the urge"
+      - 'must not ask why they feel or think something - Observe is describing what is there, not explaining it; "why" turns the pause into another lap of the same thinking that produced the urge'
     if_unclear:
-      - when: "\"I don't know.\""
+      - when: '"I don''t know."'
         reply: "It is difficult to notice right now. What is the strongest urge?"
-      - when: "assumed motive - \"He wrote that because he wants to humiliate me.\""
+      - when: 'assumed motive - "He wrote that because he wants to humiliate me."'
         reply: "You believe he wants to humiliate you. What did he write?"
       - when: "several urges at once"
         reply: "Several urges are present. Which one is strongest?"
@@ -288,21 +289,21 @@ MANI:  The message will remain unsent tonight. What do you notice in your body?
 
 ## Responses MANI must avoid
 
-| Failure | Example | Why |
-|---|---|---|
-| Standalone mirror | "You want to send the message immediately." | Not followed by a question |
-| Summary | "You read his message, decided he does not respect you, wrote a response, and now want to send it." | Retells several parts |
-| Labelling | "You are furious and out of control. Can you calm down?" | Assigns labels and commands calm |
-| Long explanation | "When people become emotionally activated, impulsive actions may become more likely..." | Lectures instead of responding |
-| Leaving the app interaction | "Put down your phone and walk away." | The user needs the phone to remain with MANI |
-| Breaking the connection | "Place the phone out of reach." | Removes the support and anchor required during Pause Mode |
-| Commanding | "Stop. Do not send anything." | Controlling; does not invite participation |
-| Minimizing | "It is only a message. There is no reason to react this way." | Dismisses the user's experience |
-| Shame | "You know you will regret it, so why would you send it?" | Judges the urge |
-| Premature problem-solving | "Rewrite the message so it sounds more professional." | STOP first creates and maintains the pause |
-| Assumed motive | "He probably did not mean to disrespect you." | Cannot know his intention |
-| Requiring calm | "Wait until you are completely calm before doing anything." | STOP does not require the reaction to disappear |
-| Multiple questions | "What are you thinking, what do you notice in your body, and what should you do next?" | Several at once |
-| Using STOP during a safety emergency | "Pause here with me before you hurt yourself." | Possible self-harm requires the approved safety protocol |
-| Preventing protective action | "Do not leave yet. Stay here with me and observe." | Must not delay the user from leaving danger or contacting emergency support |
-| Wrong tone | "Stop the action and remain paused until I tell you what to do." | Controlling; removes user choice; misrepresents MANI's role |
+| Failure                              | Example                                                                                             | Why                                                                         |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Standalone mirror                    | "You want to send the message immediately."                                                         | Not followed by a question                                                  |
+| Summary                              | "You read his message, decided he does not respect you, wrote a response, and now want to send it." | Retells several parts                                                       |
+| Labelling                            | "You are furious and out of control. Can you calm down?"                                            | Assigns labels and commands calm                                            |
+| Long explanation                     | "When people become emotionally activated, impulsive actions may become more likely..."             | Lectures instead of responding                                              |
+| Leaving the app interaction          | "Put down your phone and walk away."                                                                | The user needs the phone to remain with MANI                                |
+| Breaking the connection              | "Place the phone out of reach."                                                                     | Removes the support and anchor required during Pause Mode                   |
+| Commanding                           | "Stop. Do not send anything."                                                                       | Controlling; does not invite participation                                  |
+| Minimizing                           | "It is only a message. There is no reason to react this way."                                       | Dismisses the user's experience                                             |
+| Shame                                | "You know you will regret it, so why would you send it?"                                            | Judges the urge                                                             |
+| Premature problem-solving            | "Rewrite the message so it sounds more professional."                                               | STOP first creates and maintains the pause                                  |
+| Assumed motive                       | "He probably did not mean to disrespect you."                                                       | Cannot know his intention                                                   |
+| Requiring calm                       | "Wait until you are completely calm before doing anything."                                         | STOP does not require the reaction to disappear                             |
+| Multiple questions                   | "What are you thinking, what do you notice in your body, and what should you do next?"              | Several at once                                                             |
+| Using STOP during a safety emergency | "Pause here with me before you hurt yourself."                                                      | Possible self-harm requires the approved safety protocol                    |
+| Preventing protective action         | "Do not leave yet. Stay here with me and observe."                                                  | Must not delay the user from leaving danger or contacting emergency support |
+| Wrong tone                           | "Stop the action and remain paused until I tell you what to do."                                    | Controlling; removes user choice; misrepresents MANI's role                 |

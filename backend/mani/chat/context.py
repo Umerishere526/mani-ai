@@ -6,8 +6,10 @@ from __future__ import annotations
 import re
 
 from mani.chat import repairs
-from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
-from mani.chat.router import Signal, is_confident
+from mani.chat.greeting import (
+    AFTER_FRAMEWORK_QUESTIONS, CHAT_MORE_LABEL, CLARIFICATION_QUESTIONS, STYLE_OPTIONS,
+)
+from mani.chat.offer import Action as OfferAction, Decision
 from mani.chat.safety import normalize
 from mani.db.threads import TurnContext
 from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
@@ -230,6 +232,14 @@ def build(
     framework_starting: bool = False,
     urgent: bool = False,
     their_last: str | None = None,
+    asked_again: bool | None = None,
+    stuck_candidate: bool = False,
+    refusal: str | None = None,
+    explaining: Framework | None = None,
+    answering_practice: bool = False,
+    decision: Decision | None = None,
+    skipped: bool = False,
+    their_question: bool = False,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -240,10 +250,14 @@ def build(
     formats exactly as before.
 
     `framework` is the one already active; its current and next stage go in full. `candidate`
-    is the router's top pick when it is confident enough to be worth more than a bare id and
-    score - its offer line goes in, so the offer draws on authored language rather than being
-    improvised from the Framework Index's one-liner alone. Never both at once: a framework is
-    either running or being considered, not both.
+    is DBT STOP when an action is about to happen (`router.urgent`) - its offer lines go in, so
+    that offer draws on authored language before the model is asked - or, with
+    `stuck_candidate`, the framework for a person who stays stuck, on the turn right after Mani
+    asked "Are you feeling stuck?". Never both at once: a framework is either running or being
+    considered, not both. `refusal` is `offer_refusal` for this turn, told to the model as
+    `offer_allowed`. `explaining` is the framework whose offer they asked to hear more about:
+    its name and what it looks at go in, as they do with `candidate`, so either reply can say
+    what it is called and what you will look at together.
 
     `history` is the same window the caller already loads for the model's own conversation
     view - nothing new is fetched for it. Only Mani's own messages in it become recent_openers;
@@ -336,17 +350,46 @@ def build(
         quoted = ", ".join(f'"{o}"' for o in openers)
         lines.append(f"recent_openers: {quoted}")
 
-    if shortlist and not safety_concern:
-        ranked = ", ".join(f"{s.framework_id} ({s.score:.2f})" for s in shortlist)
-        lines.append(f"framework_shortlist: {ranked}")
-        if (
-            candidate is not None
-            and (is_confident(shortlist) or closest_fit_due(ctx))
-            and cooldown_passed(ctx, urgent=urgent)
-        ):
-            # The client's description is not here: the backend adds it to the offer, and a
-            # model given the text copied it, so offers showed it twice.
-            lines.extend(_stage_lines("offer", candidate, "offering", resolve_style(ctx)))
+    if answering_practice:
+        # Their message is how they feel after the body practice that ends a framework.
+        lines.append("answering_practice: yes")
+    if explaining is not None:
+        lines.append("explain_offer: yes")
+        lines.extend(_named_offer_lines(explaining))
+
+    if decision is not None and not safety_concern:
+        # Code has already decided what this turn does, so the model is told the action rather
+        # than the evidence: a shortlist invites it to choose again. The framework id is never
+        # named outside the offer's own lines, so it cannot be echoed to the person.
+        lines.append(f"action: {decision.action.value}")
+        if decision.action is OfferAction.CLARIFY and decision.separates_as_text:
+            lines.append(f"separates: {decision.separates_as_text}")
+        if decision.action is OfferAction.ASSESS and decision.to_find_out:
+            # What the nearest sets of questions still need to know. The model picks the one
+            # worth asking and the words for it; this is never a list to work through, and
+            # the framework ids it came from are not here, so none can be echoed.
+            lines.append(
+                "to_find_out: " + "; ".join(decision.to_find_out)
+            )
+
+    if skipped:
+        # They passed the question over. The step is already being left, so the reply must not
+        # ask it again in any form; the next step's question is in the steps below.
+        lines.append(
+            "skipped: yes\nstep_note: they are passing this question over. Take it lightly in a "
+            "few words, never ask it again in any form, and go straight on to the next step"
+        )
+
+    if their_question and not safety_concern:
+        # They asked Mani something: answered first, plainly (spec 0011, AC-19).
+        lines.append("their_question: yes")
+
+    if candidate is not None and refusal is None:
+        lines.extend(_named_offer_lines(candidate))
+        lines.extend(_stage_lines("offer", candidate, "offering", resolve_style(ctx)))
+        branch = (candidate.stages.get("offering") or {}).get(STUCK_BRANCH)
+        if stuck_candidate and branch:
+            lines.append(f"offer_when_stuck: {stuck_guidance(branch, _STUCK_CHECK_ANSWERED)}")
 
     if running:
         style = resolve_style(ctx)
@@ -388,8 +431,98 @@ def build(
     return "[ctx]\n" + "\n".join(lines) + "\n[/ctx]\n\n"
 
 
-def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> list[str]:
-    """One stage's full guidance - current or next - resolved to one conversation style.
+def _named_offer_lines(framework: Framework) -> list[str]:
+    """What an offer, or the explanation of one, says the framework is called and looks at."""
+    lines = [f"offer_name: {framework.name}"]
+    if framework.summary:
+        lines.append(f"offer_looks_at: {' '.join(framework.summary.split())}")
+    return lines
+
+
+def _running_lines(
+    framework: Framework,
+    phase: str,
+    style: str,
+    holds: int,
+    *,
+    framework_starting: bool,
+    offer_waiting: bool,
+    rephrase: bool = False,
+    known: dict[str, str] | None = None,
+) -> list[str]:
+    """The framework section of the block. The model judges when a step is done (spec 0010,
+    AC-5), so it sees every step still ahead, each with what makes it done; the body check
+    stages, which the code routes, go as before."""
+    lines: list[str] = []
+    if framework_starting:
+        lines.append("framework_starting: yes")
+    lines.append(f"active_framework: {framework.id}")
+    if phase in SOMATIC_STAGES:
+        lines.extend(_stage_lines("stage", framework, phase, style))
+        index = framework.phase_index(phase)
+        if index + 1 < len(framework.phases):
+            lines.extend(_stage_lines("next_stage", framework, framework.phases[index + 1], style))
+        return lines
+    starting = framework_starting or (offer_waiting and phase == OFFERING)
+    if phase == OFFERING and not starting:
+        # Offered and not yet answered: the offering stage is what the reply is about.
+        return lines + _stage_lines("stage", framework, phase, style)
+    first = framework.phase_index(OFFERING) + 1 if phase == OFFERING else framework.phase_index(phase)
+    check_in = framework.phase_index("somatic_checkin")
+    end = check_in if check_in >= 0 else len(framework.phases)
+    stuck = STUCK_BRANCH in (known or {})
+    for step in framework.phases[first:end]:
+        lines.extend(_stage_lines("step", framework, step, style, stuck=stuck))
+    if starting:
+        lines.append(_START_NOTE if framework_starting else _IF_YES_NOTE)
+        return lines
+    lines.append(f"current_step: {phase}")
+    if rephrase:
+        lines.append("asked_again: yes")
+        lines.append(_REPHRASE_NOTE)
+    elif holds:
+        lines.append("hold_used: yes")
+        lines.append(_HOLD_USED_NOTE)
+    else:
+        lines.append(_STEP_NOTE)
+    return lines
+
+
+def _branch_lines(branches: list[dict], style: str) -> str:
+    """A stage's branches on one line."""
+    return " | ".join(f"if {e['when']}: {repairs.reply_for(e, style)}" for e in branches)
+
+
+# The turn they say yes: straight to the first step not already met, with no opening line
+# (Lolly's review, spec 0011, AC-4). The step the offer was built on is met (AC-5).
+_START_NOTE = (
+    "step_note: they said yes. Ask the first step whose ready_when what they have told you does "
+    "not already meet, and report it as step. The step the offer was built on is already met"
+)
+_IF_YES_NOTE = (
+    "step_note: if they said yes, ask the first step whose ready_when what they have told you "
+    "does not already meet, and report it as step. The step the offer was built on is already met"
+)
+# A turn inside the framework: they have answered current_step.
+_STEP_NOTE = (
+    "step_note: they have answered current_step. If it, or anything they said, meets a step's "
+    "ready_when, that step is done: ask the next step that is not, and report it as step. If it "
+    "does not, make one more attempt at current_step, more simply or another way, reporting it as "
+    "step. If the framework has what it needs, or is no longer helping, end it and report ending"
+)
+_HOLD_USED_NOTE = (
+    "step_note: you have made your one more attempt at current_step, so it is done whatever they "
+    "said. Ask the next step their words do not already meet, or end the framework and report "
+    "ending; never invent what they did not give"
+)
+_REPHRASE_NOTE = (
+    "step_note: they did not understand your last question. Ask it again once in simpler, shorter "
+    "everyday words, as one question, reporting current_step as step"
+)
+
+
+def _stage_lines(prefix: str, framework: Framework, phase: str, style: str, *, stuck: bool = False) -> list[str]:
+    """One stage's guidance, resolved to one conversation style.
 
     Purpose, listening cues, readiness and boundaries are clinical rather than tonal and do
     not vary; `ask` is the one leaf a style changes, so only the resolved style's variant is

@@ -51,13 +51,14 @@ def framework_index(registry: Registry) -> str | None:
         "The frameworks available to offer, and what each one is for. The `[ctx]` block "
         "carries the stage guidance for whichever is running.",
         "",
-        "| Framework | Id | Use it when |",
-        "|---|---|---|",
+        "| Framework | Id | Use it when | What you look at together |",
+        "|---|---|---|---|",
     ]
     for framework in present:
         indication = (framework.activation or {}).get("central_indication", "")
         lines.append(
-            f"| {framework.name} | `{framework.id}` | {' '.join(indication.split())} |"
+            f"| {framework.name} | `{framework.id}` | {' '.join(indication.split())} "
+            f"| {' '.join(framework.summary.split())} |"
         )
 
     known = set(registry.ids)
@@ -80,11 +81,11 @@ def framework_index(registry: Registry) -> str | None:
     if rendered:
         lines += ["", "## Telling them apart", ""] + rendered
 
-    # The client's description of each is added to the offer by the backend, so it is not
-    # listed here: a model given the text copied it, and offers showed it twice.
+    # The person hears the name and what it looks at, in their terms (Lolly's review, spec 0011,
+    # AC-1); the id and the word "framework" stay out.
     lines += [
-        "", "When you offer one, its description is added to your reply for you. You never "
-        "describe the questions or name them: never its name, its id, or the word \"framework\".",
+        "", "When you offer one, say its name and what you look at together in it, in their "
+        "terms: never its id or the word \"framework\".",
     ]
 
     # Only the contraindications, not every not_when line: most of those name a different

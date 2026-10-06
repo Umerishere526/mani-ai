@@ -256,17 +256,18 @@ def test_a_confident_candidate_adds_its_offer_line_resolved_to_style():
     assert "offer_ask: Would you like to work through it?" in block
 
 
-def test_the_model_is_never_handed_the_description_it_must_not_write():
-    """The backend adds the client's description to every offer (muhammad, 2026-09-24). Given
-    the text as well, the model copied it, and offers showed it twice."""
-    confident = framework().model_copy(update={"summary": "These questions help you see it clearly."})
+def test_an_offer_is_told_the_name_and_what_it_looks_at():
+    """Lolly's review (spec 0011, AC-1): the offer says the framework's name and what you look
+    at together, so the model is given both alongside the offer stage."""
+    confident = framework().model_copy(update={"summary": "We look at what happened."})
     block = context.build(
         TurnContext(thread=thread(), profile=None, technique=None),
         shortlist=[Signal("abcde", 2.6, ["she said"], spread=2)],
         candidate=confident,
-    )
-    assert "offer_" in block, "the offer stage itself still reaches the model"
-    assert "These questions help you see it clearly." not in block
+    ).splitlines()
+    assert f"offer_name: {confident.name}" in block
+    assert "offer_looks_at: We look at what happened." in block
+    assert any(line.startswith("offer_purpose: ") for line in block)
 
 
 def test_the_turn_a_framework_starts_says_so():
@@ -310,8 +311,139 @@ def test_an_unconfident_shortlist_carries_no_candidate_content():
     """Below the confidence threshold, the shortlist is ids and scores only - central
     indications for those ids already sit in the static Framework Index."""
     block = context.build(
-        TurnContext(thread=thread(message_count=5), profile=None, technique=None),
-        shortlist=[Signal("abcde", 0.6, ["she said"])],
+        TurnContext(thread=thread(), profile=None, technique=state),
+        framework=walkable(), offer_waiting=True,
+    ).splitlines()
+    assert "offer_waiting: yes" in block
+    assert "step: activate" in block and "step: consequence" in block
+    assert not any(line.startswith("step: somatic") for line in block)
+    assert any(line.startswith("step_note: if they said yes") for line in block)
+
+def walkable() -> Framework:
+    """A framework whose stages each carry every kind of guidance a turn that moves on picks from."""
+    return Framework(
+        id="abcde", name="ABCDE", summary="s", body="b",
+        phases=["offering", "activate", "belief", "consequence", "somatic_checkin", "somatic_practice"],
+        stages={
+            "activate": {
+                "purpose": "Settle the event.", "ready_when": "The event is clear.",
+                "if_unclear": [
+                    {"when": "too broad", "reply": "Which event?", "start_only": True},
+                    {"when": "abuse or threats", "reply": "Safety comes first."},
+                ],
+                "ask": dict.fromkeys(TONES, "What happened?"),
+            },
+            "belief": {
+                "purpose": "Name the belief.", "listen_for": "Their own words.",
+                "ready_when": "One belief is named.", "boundaries": ["no assumed motive"],
+                "if_unclear": [{"when": "several beliefs", "reply": "Which one?"}],
+                "ask": dict.fromkeys(TONES, "What did that mean to you?"),
+            },
+            "consequence": {"purpose": "Name what followed.", "ask": dict.fromkeys(TONES, "What happened next?")},
+            "somatic_checkin": {
+                "purpose": "Conclude, then check in on the body.", "ready_when": "They answered or declined.",
+                "if_unclear": [{"when": "they decline the check in", "reply": "Skip it."}],
+                "ask": dict.fromkeys(TONES, "How is your body now?"),
+            },
+        },
+    )
+
+
+def moving_on(phase, *, holds=0, framework=None, **overrides):
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+        phase=phase, at_message_count=4, holds=holds,
+    )
+    return context.build(
+        TurnContext(thread=thread(), profile=None, technique=state),
+        framework=framework or walkable(), **overrides,
+    ).splitlines()
+
+
+def test_a_turn_inside_the_framework_shows_the_answered_step_and_every_step_after_it():
+    block = moving_on("belief")
+    assert "current_step: belief" in block
+    assert [line for line in block if line.startswith("step: ")] == ["step: belief", "step: consequence"]
+    assert "step_ready_when: One belief is named." in block
+    assert "step_if_unclear: if several beliefs: Which one?" in block
+    assert not any("What happened?" in line for line in block)
+    assert note(block).startswith("step_note: they have answered current_step")
+    assert "one more attempt" in note(block) and "report ending" in note(block)
+
+
+def test_once_the_one_more_attempt_is_used_the_note_says_the_step_is_done():
+    block = moving_on("belief", holds=1)
+    assert "hold_used: yes" in block
+    assert note(block).startswith("step_note: you have made your one more attempt at current_step")
+    assert "never invent" in note(block)
+
+
+def test_a_request_to_hear_the_question_again_asks_it_more_simply_once():
+    block = rephrasing("belief")
+    assert "asked_again: yes" in block
+    assert note(block).startswith("step_note: they did not understand your last question")
+
+def test_the_body_check_stages_are_sent_in_full():
+    block = moving_on("somatic_checkin")
+    assert "stage: somatic_checkin" in block
+    assert "stage_ready_when: They answered or declined." in block
+    assert "stage_if_unclear: if they decline the check in: Skip it." in block
+    assert "stage_ask: How is your body now?" in block
+    assert "next_stage: somatic_practice" in block
+    assert not any(line.startswith("step") for line in block)
+
+
+def test_the_turn_answering_the_practice_says_so():
+    block = context.build(TurnContext(thread=thread(), profile=None, technique=None), answering_practice=True)
+    assert "answering_practice: yes" in block
+    assert "answering_practice" not in context.build(TurnContext(thread=thread(), profile=None, technique=None))
+
+
+def test_a_request_to_hear_more_brings_the_name_and_what_it_looks_at():
+    described = framework().model_copy(update={"summary": "We look at what happened and what you told yourself."})
+    block = context.build(
+        TurnContext(thread=thread().model_copy(update={"conversation_style": SupportStyle("direct")}), profile=None, technique=None),
+        explaining=described,
+    ).splitlines()
+    assert "explain_offer: yes" in block
+    assert f"offer_name: {described.name}" in block
+    assert "offer_looks_at: We look at what happened and what you told yourself." in block
+
+
+def test_the_extra_turn_is_reported_once_it_is_used_and_not_before():
+    assert "hold_used: yes" in moving_on("belief", holds=1)
+    assert not any(line.startswith("hold_used") for line in moving_on("belief"))
+
+
+def note(lines):
+    return next(line for line in lines if line.startswith(("stage_note:", "step_note:")))
+
+
+@pytest.mark.parametrize(
+    "phase,overrides",
+    [
+        ("offering", {"framework_starting": True}),
+        ("offering", {}),
+        ("activate", {"framework_starting": True}),
+        ("somatic_checkin", {}),
+        ("somatic_practice", {}),
+    ],
+)
+def test_every_other_turn_keeps_the_block_it_always_had(phase, overrides):
+    block = moving_on(phase, **overrides)
+    assert not any(line.startswith("answered") for line in block)
+    assert not any("stage_if_earlier_missing" in line for line in block)
+    assert not any(line.startswith("stage_note: they have replied") for line in block)
+
+
+def test_a_safety_pause_shows_no_stage_at_all():
+    block = moving_on("activate", safety_concern=True)
+    assert not any(line.startswith(("answered", "stage", "active_framework")) for line in block)
+
+
+def test_a_candidate_carries_no_offer_lines_when_no_offer_is_allowed():
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
         candidate=framework(),
     )
     assert "framework_shortlist: abcde (0.60)" in block
@@ -660,4 +792,53 @@ def test_after_keep_chatting_the_wait_for_the_meaning_no_longer_applies():
     state = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED, at_message_count=5,
     )
-    assert context.earliest_offer_ok(_on_message(2, technique=state), {"earliest_offer_message": 3})
+    assert "skipped: yes" in block
+    assert "never ask it again in any form" in block
+
+
+@pytest.mark.parametrize("said, asked", [
+    ("Would you rather look at that one thought, or unpack the whole chain?", True),
+    ("Are you looking to take a quick look, or do you want to go deeper?", True),
+    ("What did they say about the report?", False),
+    ("That sounds hard. How has it been affecting you?", False),
+    # The client's own line, which is about staying with a framework, not choosing between two.
+    ("Another issue is coming into this. Do you want to stay with the one we selected?", False),
+])
+def test_the_question_that_tells_two_sets_apart_is_recognised_in_manis_own_words(said, asked):
+    """It is worded freshly every time, so there is no phrase to match: what it always does is
+    offer two possibilities back as a choice."""
+    message = Message(
+        id=uuid.uuid4(), thread_id=THREAD, user_id=USER, role=MessageRole.MANI,
+        content=said, created_at=NOW,
+    )
+    assert context.asked_which_fits([message]) is asked
+
+
+def test_an_assessment_turn_carries_what_is_unknown_never_the_framework_ids():
+    """The model is given what to find out, in the frameworks' own words, so its question
+    moves toward a real fit. The ids it came from never appear: it could echo one."""
+    from mani.chat.offer import Action, Decision
+
+    block = context.build(
+        TurnContext(thread=thread(), profile=None, technique=None),
+        decision=Decision(
+            Action.ASSESS,
+            shortlist=("act_choice_point", "behavioral_activation"),
+            to_find_out=(
+                "what part of the situation they cannot change or control",
+                "what they have stopped doing or are avoiding",
+            ),
+        ),
+    )
+    assert "action: assess" in block
+    assert "what part of the situation they cannot change" in block
+    assert "act_choice_point" not in block
+    assert "behavioral_activation" not in block
+
+
+def test_a_question_of_theirs_is_flagged_so_it_is_answered_first():
+    """Spec 0011, AC-19: their own question is answered before any question back."""
+    ctx = TurnContext(thread=thread(), profile=None, technique=None)
+    assert "their_question: yes" in context.build(ctx, their_question=True).splitlines()
+    assert "their_question" not in context.build(ctx)
+    assert "their_question" not in context.build(ctx, their_question=True, safety_concern=True)

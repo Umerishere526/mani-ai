@@ -392,13 +392,12 @@ def repeated_question(replies: list[str], overlap: float = 0.8) -> list[Finding]
     return findings
 
 
-def says_framework(reply: str, names: list[str]) -> list[Finding]:
-    """The person never hears what a framework is called, or the word itself: to them it is a
-    sequence of questions. `names` are the display names, read from the content, not listed here."""
-    hits = [name for name in names if re.search(rf"\b{re.escape(name)}\b", reply, re.IGNORECASE)]
+def says_framework(reply: str) -> list[Finding]:
+    """The person hears a framework's name, never the word "framework" itself (Lolly's review,
+    spec 0011, AC-1)."""
     if re.search(r"\bframeworks?\b", reply, re.IGNORECASE):
-        hits.append("framework")
-    return [Finding("said a framework", f"{hits}")] if hits else []
+        return [Finding("said a framework", "['framework']")]
+    return []
 
 
 def after_framework_questions_asked(replies: list[str], questions: tuple[str, ...]) -> list[Finding]:

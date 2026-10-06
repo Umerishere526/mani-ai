@@ -106,7 +106,7 @@ def test_no_framework_is_offered_from_inside_a_running_one(registry):
         current_phase="belief",
         framework_running=True,
     )
-    # A stage in the middle of a framework carries no buttons at all.
+    # A stage in the middle of a framework carries no buttons at all (spec 0011, AC-6).
     assert fixed.prompts == []
     assert sum("inside a running framework" in n for n in fixed.notes) == 2
 
@@ -371,7 +371,38 @@ def test_the_offer_buttons_are_try_it_and_keep_chatting(registry):
         ],
     )
     fixed = fix(registry, offer)
-    assert [p.label for p in fixed.prompts] == ["Try it", "Keep chatting"]
+    assert [p.label for p in fixed.prompts] == [ACCEPT_LABEL, EXPLAIN_LABEL, KEEP_TALKING_LABEL]
+    assert [p.technique for p in fixed.prompts] == ["abcde", None, None]
+    assert [bool(p.decline) for p in fixed.prompts] == [False, False, True]
+
+
+def test_after_tell_me_more_the_explanation_stands_alone_named_with_two_choices(registry):
+    """The client: "Tell me more" explains, then gives another chance to begin or keep talking.
+    No question follows the explanation, and it says what the framework is called (spec 0011,
+    AC-2): left out, the name goes first."""
+    explained = reply(
+        text="We look at what happened and what you told yourself. Would you like to try it?",
+        prompts=[SmartPrompt(label="Try it", technique="abcde")],
+    )
+    fixed = fix(registry, explained, explaining=True, current_framework_id="abcde",
+                current_phase="offering")
+    name = registry.get("abcde").name
+    assert fixed.text == f"It's called {name}. We look at what happened and what you told yourself."
+    assert [p.label for p in fixed.prompts] == [ACCEPT_LABEL, KEEP_TALKING_LABEL]
+
+
+def test_an_explanation_keeps_its_two_choices_whatever_it_asks(registry):
+    """A question in the explanation used to send it down the path that drops an offer's buttons,
+    leaving nothing to tap. The question goes instead."""
+    name = registry.get("abcde").name
+    explained = reply(
+        text=f"{name} looks at what happened. What part of it do you want to start with?",
+        prompts=[SmartPrompt(label="Try it", technique="abcde")],
+    )
+    fixed = fix(registry, explained, explaining=True, current_framework_id="abcde",
+                current_phase="offering")
+    assert fixed.text == f"{name} looks at what happened."
+    assert [p.label for p in fixed.prompts] == [ACCEPT_LABEL, KEEP_TALKING_LABEL]
 
 
 def test_an_offer_refused_by_the_cooldown_takes_its_words_with_it(registry):
@@ -505,6 +536,8 @@ def test_the_end_of_a_framework_keeps_its_buttons(registry):
 
 
 def test_a_stage_in_the_middle_of_a_framework_carries_no_buttons(registry):
+    """A stage is a question, not a menu, and a button under every question made the framework
+    read as a form (Lolly's review, spec 0011, AC-6)."""
     mid = reply(text="What did she say?", prompts=[SmartPrompt(label="Not sure")])
     fixed = fix(registry, mid, framework_running=True, current_phase="belief",
                 current_framework_id="abcde")
@@ -521,24 +554,40 @@ OFFER_BUTTONS = [
 ]
 
 
-def test_an_offer_shows_the_clients_description_word_for_word_then_asks():
-    """muhammad, 2026-09-24: every offer shows the client's description of the questions word
-    for word, so the person sees what they would come away with. The backend adds it, so it
-    can never be paraphrased or dropped, then the client's permission question for the style."""
-    part = ("Her silence keeps coming back to you. "
-            "There are some questions we could go through together for this.")
+def test_an_offer_is_manis_line_then_the_clients_question():
+    """Mani's own sentence, naming the framework, then the client's permission question
+    (spec 0011, AC-1)."""
+    part = "Her silence keeps coming back to you. We could use abcde to look at it."
     fixed = fix(Registry([DESCRIBED]), reply(text=part, prompts=OFFER_BUTTONS),
                 conversation_style="supportive")
-    assert fixed.text == (
-        f"{part}\n\n{DESCRIBED.summary}\n\nWould it help to work through it together?"
-    )
-    assert [p.label for p in fixed.prompts] == ["Try it", "Keep chatting"]
+    assert fixed.text == f"{part}\n\nWould you like to try it together?"
+    assert not any("name" in note for note in fixed.notes)
+
+
+def test_an_offer_that_leaves_out_the_name_says_it_before_the_question():
+    """Lolly's review: the offer hid the framework behind "a structured approach". Left out, the
+    name goes after Mani's sentence and before the permission question."""
+    part = "I have a structured approach that can help you look at it."
+    fixed = fix(Registry([DESCRIBED]), reply(text=part, prompts=OFFER_BUTTONS),
+                conversation_style="direct")
+    assert fixed.text == f"{part} It's called ABCDE.\n\nWould you like to try it with me?"
+
+
+@pytest.mark.parametrize("text, name, named", [
+    ("We could use a Thought Reframe here.", "Thought Reframe", True),
+    ("We could use structured problem-solving here.", "Structured Problem-Solving", True),
+    ("We could use structured problem solving here.", "Structured Problem-Solving", True),
+    ("ACT can help with this.", "ACT Choice Point", False),
+    ("A thought you could reframe.", "Thought Reframe", False),
+])
+def test_the_name_counts_only_when_said_in_full(text: str, name: str, named: bool):
+    assert repairs.names_framework(text, name) is named
 
 
 def test_the_models_own_permission_question_gives_way_to_the_clients():
     """Told not to ask, the model sometimes asks anyway. Two permission questions in one reply
     read as a form, so the client's wording is the one that stays."""
-    part = "You keep going over what he said. There are some questions we could go through."
+    part = "You keep going over what he said. ABCDE is some questions we could go through."
     fixed = fix(Registry([DESCRIBED]),
                 reply(text=f"{part} Would you like to try them?", prompts=OFFER_BUTTONS),
                 conversation_style="direct")
@@ -715,3 +764,362 @@ def test_the_acknowledgement_before_a_question_is_the_replys_first_sentence():
     text = "It is okay not to know where. Try bringing gentle attention there. Where is it?"
     assert repairs.first_sentence(text) == "It is okay not to know where."
     assert repairs.first_sentence("No full stop here") == "No full stop here"
+
+
+def answer(registry, step, phase, **overrides):
+    """A turn in a running framework where the person has answered the stage they were on."""
+    return fix(
+        registry, reply(state=TechniqueState(technique="staged", step=step)),
+        framework_running=True, current_framework_id="staged", current_phase=phase, **overrides,
+    )
+
+
+def test_the_reply_after_an_answer_asks_the_next_stage(registry):
+    fixed = answer(registry, "belief", "activate")
+    assert fixed.phase == "belief"
+    assert not fixed.notes
+
+
+def test_a_reply_that_holds_on_the_answered_stage_is_recorded_as_a_hold(registry):
+    fixed = answer(registry, "belief", "belief")
+    assert fixed.phase == "belief"
+    assert fixed.notes == ["held at belief"]
+
+
+def test_a_reply_that_goes_back_is_recorded_one_ahead_of_the_stage_just_answered(registry):
+    fixed = answer(registry, "activate", "belief")
+    assert fixed.phase == "closing"
+    assert fixed.holds == 0
+    assert fixed.notes == ["corrected phase 'activate' to 'closing' (stepped_back)"]
+
+
+def test_a_reply_two_steps_ahead_is_recorded_as_reported(registry):
+    fixed = answer(registry, "closing", "activate")
+    assert fixed.phase == "closing"
+    assert fixed.notes == []
+
+
+def test_the_last_stage_before_the_body_check_moves_to_it(registry):
+    assert answer(registry, "somatic_checkin", "closing").phase == "somatic_checkin"
+
+
+def test_a_stage_the_framework_does_not_have_is_recorded_one_ahead(registry):
+    fixed = answer(registry, "examine", "belief")
+    assert fixed.framework_id == "staged"
+    assert fixed.phase == "closing"
+    assert fixed.notes == ["corrected phase 'examine' to 'closing' (unknown_phase)"]
+
+
+def test_a_reply_with_no_state_still_records_the_next_stage(registry):
+    fixed = fix(
+        registry, reply(), framework_running=True, current_framework_id="staged",
+        current_phase="belief",
+    )
+    assert (fixed.framework_id, fixed.phase, fixed.holds) == ("staged", "closing", 0)
+    assert fixed.notes == ["no state, recorded closing"]
+
+
+def test_a_reply_naming_another_framework_records_the_next_stage_of_the_running_one(registry):
+    fixed = fix(
+        registry, reply(state=TechniqueState(technique="abcde", step="belief")),
+        framework_running=True, current_framework_id="staged", current_phase="belief",
+    )
+    assert (fixed.framework_id, fixed.phase) == ("staged", "closing")
+
+
+def test_the_body_check_steps_as_it_did_before_a_stage_moved_on(registry):
+    stepped_back = answer(registry, "closing", "somatic_checkin")
+    assert stepped_back.phase == "closing"
+    assert not stepped_back.notes
+
+
+def test_the_turn_they_accept_is_not_held_to_the_move_on_rule(registry):
+    fixed = answer(registry, "activate", "offering", accepted_this_turn=True)
+    assert fixed.phase == "activate"
+    assert not fixed.notes
+
+
+def hold(registry, *, holds=0, phase="belief"):
+    """A reply that stays on the stage the person has just answered."""
+    return fix(
+        registry,
+        reply(state=TechniqueState(technique="staged", step=phase)),
+        framework_running=True, current_framework_id="staged", current_phase=phase,
+        current_holds=holds,
+    )
+
+
+def test_a_first_hold_is_counted(registry):
+    fixed = hold(registry)
+    assert (fixed.phase, fixed.holds) == ("belief", 1)
+    assert fixed.notes == ["held at belief"]
+
+
+def test_a_second_counted_hold_records_the_next_stage(registry):
+    fixed = hold(registry, holds=1)
+    assert (fixed.phase, fixed.holds) == ("closing", 0)
+    assert fixed.notes == ["hold limit at belief"]
+
+
+@pytest.mark.parametrize("holds", [0, 1])
+def test_any_move_clears_the_count(registry, holds):
+    moved = fix(
+        registry, reply(state=TechniqueState(technique="staged", step="closing")),
+        framework_running=True, current_framework_id="staged", current_phase="belief",
+        current_holds=holds,
+    )
+    assert (moved.phase, moved.holds) == ("closing", 0)
+    no_state = fix(
+        registry, reply(), framework_running=True, current_framework_id="staged",
+        current_phase="belief", current_holds=holds,
+    )
+    assert (no_state.phase, no_state.holds) == ("closing", 0)
+
+
+def test_a_turn_that_is_not_a_move_on_turn_writes_no_hold(registry):
+    start = fix(
+        registry, reply(state=TechniqueState(technique="staged", step="activate")),
+        framework_running=True, current_framework_id="staged", current_phase="offering",
+        accepted_this_turn=True, current_holds=1,
+    )
+    body_check = fix(
+        registry, reply(state=TechniqueState(technique="staged", step="somatic_checkin")),
+        framework_running=True, current_framework_id="staged", current_phase="somatic_checkin",
+        current_holds=1,
+    )
+    assert start.holds == 0 and body_check.holds == 0
+
+
+SAFETY = "What is happening sounds serious, and staying safe comes first. What would help most?"
+RISK = "<the risk, in a clause>. Contacting the bank is usually the first step. Have you reached them?"
+
+# A stage with every kind of branch: one that protects, one that uses the stage's extra turn,
+# one that asks the same stage again, one whose reply has a placeholder, and one with no fixed
+# words long enough to recognise.
+BRANCHED = Framework(
+    id="branched", name="Branched", summary="s", body="b",
+    phases=["offering", "activate", "belief", "closing", "somatic_checkin", "somatic_practice"],
+    stages={
+        "belief": {"if_unclear": [
+            {"when": "abuse", "reply": SAFETY},
+            {"when": "acting now", "reply": "You returned to the message. Can you pause the typing?", "counted": True},
+            {"when": "too broad", "reply": "Which one matters most to you right now?", "start_only": True},
+            {"when": "open risk", "reply": RISK},
+            {"when": "short", "reply": "<a clause>. Which?"},
+        ]},
+    },
+)
+
+
+@pytest.fixture
+def branched() -> Registry:
+    return Registry([BRANCHED])
+
+
+def say(branched, text, *, step="belief", holds=0, previous=None, running_phase="belief"):
+    state = TechniqueState(technique="branched", step=step) if step else None
+    return fix(
+        branched, reply(text=text, state=state), framework_running=True,
+        current_framework_id="branched", current_phase=running_phase, current_holds=holds,
+        last_mani_text=previous,
+    )
+
+
+@pytest.mark.parametrize("holds", [0, 1])
+def test_a_quoted_safety_branch_is_a_redirect_that_leaves_the_count_alone(branched, holds):
+    fixed = say(branched, SAFETY, holds=holds)
+    assert (fixed.phase, fixed.holds) == ("belief", holds)
+    assert fixed.notes == ["redirect held at belief"]
+
+
+def test_a_rephrase_at_a_stage_that_has_a_safety_branch_is_counted(branched):
+    fixed = say(branched, "Let me put it another way. What did that mean to you?")
+    assert (fixed.phase, fixed.holds) == ("belief", 1)
+    assert fixed.notes == ["held at belief"]
+
+
+@pytest.mark.parametrize("text", [
+    "You returned to the message. Can you pause the typing?",
+    "Which one matters most to you right now?",
+])
+def test_a_branch_that_uses_the_extra_turn_or_asks_again_is_never_a_redirect(branched, text):
+    fixed = say(branched, text)
+    assert (fixed.phase, fixed.holds) == ("belief", 1)
+
+
+def test_a_branch_with_a_placeholder_is_recognised_by_its_fixed_part(branched):
+    fixed = say(branched, "The card is still live. Contacting the bank is usually the first step. Have you reached them?")
+    assert fixed.notes == ["redirect held at belief"]
+
+
+def test_a_branch_with_no_fixed_part_long_enough_cannot_be_recognised(branched):
+    assert say(branched, "Here is a clause. Which?").notes == ["held at belief"]
+
+
+def test_recognising_a_branch_ignores_case_quotes_and_spacing(branched):
+    shouting = SAFETY.upper().replace("IS HAPPENING", "is   happening")
+    assert say(branched, shouting).notes == ["redirect held at belief"]
+
+
+@pytest.mark.parametrize("line", repairs.CLIENT_LINES)
+def test_each_of_the_clients_lines_is_a_redirect_at_any_stage(registry, line):
+    fixed = fix(
+        registry, reply(text=line, state=TechniqueState(technique="staged", step="belief")),
+        framework_running=True, current_framework_id="staged", current_phase="belief",
+    )
+    assert (fixed.phase, fixed.holds, fixed.notes) == ("belief", 0, ["redirect held at belief"])
+
+
+def test_a_reply_that_quotes_a_redirect_holds_even_when_it_reports_the_next_stage_or_none(branched):
+    assert say(branched, SAFETY, step="closing").phase == "belief"
+    assert say(branched, SAFETY, step=None).phase == "belief"
+
+
+def test_a_hold_right_after_mani_quoted_a_redirect_is_a_redirect_too(branched):
+    fixed = say(branched, "I am still here. What would help most?", previous=SAFETY)
+    assert (fixed.phase, fixed.holds) == ("belief", 0)
+    assert fixed.notes == ["redirect held at belief"]
+
+
+def test_a_redirect_in_mani_s_last_message_does_not_turn_a_move_into_a_hold(branched):
+    fixed = say(branched, "What did that mean to you?", step="closing", previous=SAFETY)
+    assert (fixed.phase, fixed.holds, fixed.notes) == ("closing", 0, [])
+
+
+def test_the_turn_they_accept_is_not_read_for_a_redirect(branched):
+    fixed = fix(
+        branched, reply(text=SAFETY, state=TechniqueState(technique="branched", step="activate")),
+        framework_running=True, current_framework_id="branched", current_phase="offering",
+        accepted_this_turn=True,
+    )
+    assert (fixed.phase, fixed.notes) == ("activate", [])
+
+
+def test_the_clients_lines_are_the_words_the_base_prompt_gives_the_model():
+    base = " ".join((pathlib.Path(__file__).parents[2] / "content/prompts/mani_base.md").read_text().split())
+    for line in repairs.CLIENT_LINES:
+        assert line in base
+
+
+def ask_again(branched, text, *, step="closing", holds=0, previous=None):
+    state = TechniqueState(technique="branched", step=step) if step else None
+    return fix(
+        branched, reply(text=text, state=state), framework_running=True,
+        current_framework_id="branched", current_phase="belief", current_holds=holds,
+        last_mani_text=previous, asked_again=True,
+    )
+
+
+@pytest.mark.parametrize("step", ["belief", "closing", None])
+def test_a_request_to_hear_the_question_again_is_a_counted_hold_whatever_the_reply_reported(branched, step):
+    fixed = ask_again(branched, "Let me put it more simply. What did that mean to you?", step=step)
+    assert (fixed.phase, fixed.holds, fixed.notes) == ("belief", 1, ["held at belief"])
+
+
+def test_a_second_request_after_the_extra_turn_is_used_moves_on(branched):
+    fixed = ask_again(branched, "What do you notice?", step="closing", holds=1)
+    assert (fixed.phase, fixed.holds) == ("closing", 0)
+
+
+def test_a_rephrase_that_quotes_a_branch_is_a_redirect_not_a_counted_hold(branched):
+    fixed = ask_again(branched, SAFETY)
+    assert (fixed.phase, fixed.holds, fixed.notes) == ("belief", 0, ["redirect held at belief"])
+
+
+@pytest.mark.parametrize("line", repairs.CLIENT_LINES)
+def test_a_client_line_is_not_a_redirect_on_a_rephrase_turn(branched, line):
+    fixed = ask_again(branched, line)
+    assert (fixed.phase, fixed.holds, fixed.notes) == ("belief", 1, ["held at belief"])
+
+
+def test_a_client_line_in_mani_s_last_message_is_not_evidence_for_a_later_hold(branched):
+    fixed = say(branched, "I am still here. What would help most?", previous=repairs.CLIENT_LINES[1])
+    assert (fixed.phase, fixed.holds, fixed.notes) == ("belief", 1, ["held at belief"])
+
+
+
+
+
+@pytest.mark.parametrize("said", [
+    "skip", "Skip", "  skip  ", "next", "pass",
+    "skip this one", "can we skip this", "next question",
+    "I'd rather not answer that", "I don't want to answer this",
+])
+def test_a_person_passing_a_question_over_is_recognised(said):
+    assert repairs.skips_the_step(said)
+
+
+@pytest.mark.parametrize("said", [
+    "I'll pass on going out tonight",
+    "She skipped the meeting entirely",
+    "I went next door to my neighbour",
+    "He said I should move on from it",
+    "I told her no",
+])
+def test_their_own_words_are_not_mistaken_for_a_skip(said):
+    """"pass" and "skip" inside a sentence are them answering, not passing the question over."""
+    assert not repairs.skips_the_step(said)
+
+
+def test_a_skipped_step_moves_to_the_next_one_whatever_the_reply_reports(registry):
+    """The model may not notice the skip, so the step is advanced in code: nobody is asked the
+    same question again because the reply held it (muhammad, 2026-10-06)."""
+    held = reply(text="Take your time. What did you tell yourself?",
+                 state=TechniqueState(technique="abcde", step="belief"))
+    fixed = fix(registry, held, framework_running=True, current_phase="belief",
+                current_framework_id="abcde", skipped=True)
+    assert fixed.phase == "consequence"
+    assert fixed.ending is None, "skipping one question does not end the framework"
+    assert fixed.holds == 0
+
+
+def test_skipping_the_last_question_ends_the_questions_rather_than_stalling(registry):
+    """There is no next step to move to, so the body check follows, as any other ending does."""
+    held = reply(text="That's alright.", state=TechniqueState(technique="staged", step="closing"))
+    fixed = fix(registry, held, framework_running=True, current_phase="closing",
+                current_framework_id="staged", skipped=True)
+    assert fixed.phase == "somatic_checkin"
+    assert fixed.ending == "resolved"
+
+
+def test_a_skip_is_never_spent_as_the_stages_one_extra_attempt(registry):
+    """A skip and a hold are different things: passing a question over must not use up the
+    attempt a person gets when they did not understand it."""
+    held = reply(text="What did you tell yourself?",
+                 state=TechniqueState(technique="abcde", step="belief"))
+    fixed = fix(registry, held, framework_running=True, current_phase="belief",
+                current_framework_id="abcde", skipped=True, asked_again=True, current_holds=0)
+    assert fixed.phase == "consequence"
+    assert fixed.holds == 0
+
+
+def test_a_conclusion_stated_at_the_last_step_ends_it_without_a_reported_ending(registry):
+    """At the last step Mani states what their words establish and asks nothing (spec 0011,
+    AC-8). The model forgot to report the ending, so a statement with nothing to answer would
+    stall; it is recorded as resolved and the body check follows."""
+    stated = reply(text="So far you know the meetings changed, and your work has not.",
+                   state=TechniqueState(technique="staged", step="closing"))
+    fixed = fix(registry, stated, framework_running=True, current_phase="closing",
+                current_framework_id="staged")
+    assert fixed.phase == "somatic_checkin"
+    assert fixed.ending == "resolved"
+
+
+def test_a_question_at_the_last_step_is_still_its_one_more_attempt(registry):
+    asked = reply(text="What would be a more balanced thought?",
+                  state=TechniqueState(technique="staged", step="closing"))
+    fixed = fix(registry, asked, framework_running=True, current_phase="closing",
+                current_framework_id="staged")
+    assert fixed.phase == "closing"
+    assert fixed.holds == 1
+
+
+def test_answering_their_question_holds_the_step_without_spending_its_attempt(registry):
+    """"Is this normal?" in the middle of the questions is answered first (spec 0011, AC-19).
+    The step waits, and its one more attempt is still there for when they do not understand it."""
+    answered = reply(text="It makes sense to ask, given what she said. What did you tell yourself?",
+                     state=TechniqueState(technique="abcde", step="belief"))
+    fixed = fix(registry, answered, framework_running=True, current_phase="belief",
+                current_framework_id="abcde", their_question=True)
+    assert fixed.phase == "belief"
+    assert fixed.holds == 0

@@ -245,16 +245,54 @@ def _without_clarification(text: str) -> str:
     return text
 
 
-def _without_their_name(text: str, name: str, *, keep_one: bool) -> str:
-    """The reply with their name said to them removed: always as the first word, and every
-    time when it has been used already. With `keep_one`, the first later use stays."""
-    first = re.compile(rf"^{re.escape(name)},\s*(\w)")
-    text = first.sub(lambda m: m.group(1).upper(), text)
-    vocative = re.compile(rf",\s*{re.escape(name)}(?=\s*[.!?,])")
-    matches = list(vocative.finditer(text))
-    for match in reversed(matches[1:] if keep_one else matches):
-        text = text[: match.start()] + text[match.end():]
-    return text
+def ruled_out(reply: Reply, user_texts: list[str], registry: Registry) -> str | None:
+    """The framework a reply offers when what the person has said rules it out: the phrases a
+    framework file lists under `never_offer_when_said` (early grief for Behavioral Activation).
+    A prompt rule alone did not hold, so this is checked in code."""
+    technique = offered(reply, registry)
+    activation = registry.activations.get(technique) if technique else None
+    if activation and router.vetoes(activation, user_texts):
+        return technique
+    return None
+
+
+def offer_buttons(framework_id: str, *, explaining: bool) -> list[SmartPrompt]:
+    """The client's choices under an offer, or the two that follow "Tell me more"."""
+    accept = SmartPrompt(label=ACCEPT_LABEL, technique=framework_id)
+    keep_talking = SmartPrompt(label=KEEP_TALKING_LABEL, decline=True)
+    return [accept, keep_talking] if explaining else [accept, SmartPrompt(label=EXPLAIN_LABEL), keep_talking]
+
+
+def names_framework(text: str, name: str) -> bool:
+    """Whether the text says the framework's full name, ignoring case, a space and a hyphen being
+    the same ("structured problem-solving" names Structured Problem Solving; "ACT" alone does not
+    name ACT Choice Point)."""
+    words = [re.escape(word) for word in re.split(r"[\s-]+", name.strip()) if word]
+    return bool(words) and re.search(
+        r"\b" + r"[\s-]+".join(words) + r"\b", text, re.IGNORECASE
+    ) is not None
+
+
+def _with_the_name(part: str, name: str | None, *, explaining: bool, notes: list[str]) -> str:
+    """An offer and its explanation always say what the framework is called (spec 0011, AC-1,
+    AC-2). Left out by the model, the name goes after an offer's sentence, before the client's
+    permission question, and at the start of an explanation."""
+    if not name or names_framework(part, name):
+        return part
+    notes.append(f"added the framework's name: {name}")
+    sentence = f"It's called {name}."
+    if not part:
+        return sentence
+    return f"{sentence} {part}" if explaining else f"{part} {sentence}"
+
+
+def without_questions(text: str) -> str:
+    """The text with every sentence that ends in a question mark taken out."""
+    lines = [
+        " ".join(s for s in _SENTENCE_END.split(line.strip()) if s and not s.endswith("?"))
+        for line in text.split("\n")
+    ]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
 def with_the_check_in(text: str, script: str) -> str:
@@ -298,10 +336,129 @@ def declines_or_acts(text: str) -> bool:
     return bool(_DECLINES_OR_ACTS.search(text))
 
 
+# An answer to "where do you feel that" is short. A longer message that happens to hold a place
+# word is not one: "I can't go back to that meeting" names no place (spec 0011, AC-11).
+PLACE_ANSWER_MAX_WORDS = 6
+
+
+def place_answer(text: str) -> str | None:
+    """The place a reply to the body question names: a tapped button sends its label, and a typed
+    answer counts when it is short. A place wins over "nothing" ("nothing, just my head")."""
+    if len(text.split()) > PLACE_ANSWER_MAX_WORDS:
+        return None
+    return named_place(text)
+
+
+# Feeling nothing in the body, said as the whole answer. "Nothing helps" is not this.
+_FEELS_NOTHING = re.compile(
+    r"^\W*(nothing( really)?|not anything|no|i feel fine"
+    r"|i (don'?t|do not|can'?t|cannot) (really )?feel anything)\W*$",
+    re.IGNORECASE,
+)
+
+
+def feels_nothing(text: str) -> bool:
+    return bool(_FEELS_NOTHING.search(text))
+
+
+def decline_reply(stage: dict, style: str) -> str | None:
+    """The client's line for someone who does not take up the body check in."""
+    branch = next(
+        (b for b in stage.get("if_unclear") or [] if "declines" in b.get("when", "")), None
+    )
+    return reply_for(branch, style) if branch else None
+
+
+# What a person says to pass a running question over. A step nobody wants to answer is skipped
+# rather than asked again (muhammad, 2026-10-06). No button offers it: under every question it made
+# the framework read as a form (Lolly's review, spec 0011, AC-6).
+_SKIPS_THE_STEP = re.compile(
+    r"^\W*(skip|next|pass)\W*$"
+    r"|\b(skip (this|that|it|this one|this question)|next question"
+    r"|rather not answer|prefer not to answer|don'?t want to answer|do not want to answer"
+    r"|no comment|can we skip)\b"
+    # "move on" is a skip only when it is the whole message: "he said I should move on from
+    # it" is them telling Mani something, not passing the question over.
+    r"|^\W*(can we |let'?s |i want to )?move on\W*$",
+    re.IGNORECASE,
+)
+
+
+def skips_the_step(text: str) -> bool:
+    """Whether the person is passing over the question rather than answering it.
+
+    Only a message that is the skip, or says it plainly: "pass" alone is a skip, "I'll pass on
+    going tonight" is them answering.
+    """
+    return bool(_SKIPS_THE_STEP.search(text))
+
+
 def reply_for(branch: dict, style: str) -> str:
     """A stage branch's reply: one text for every style, or the client's text for this one."""
     reply = branch["reply"]
     return reply[style] if isinstance(reply, dict) else reply
+
+
+# The client's three lines for a person who brings another issue, corrects Mani or wants to stop.
+# mani_base.md gives the model the same words.
+CLIENT_LINES = (
+    "Another issue is coming into this. Do you want to stay with the one we selected?",
+    "I misunderstood what you meant. What would be more accurate?",
+)
+
+# How a framework may end, and how a person may say they feel after the practice (spec 0010).
+ENDINGS = frozenset({"resolved", "pivoted", "stopped"})
+FELT_AFTER = frozenset({"better", "mixed", "unchanged", "worse", "unsure"})
+
+# The answers to the practice that mean it did not help. Mani says so and stops: no question, no
+# further practice, no exercise (Lolly's review, spec 0011, AC-13). Her line, without the "I hear
+# you" her style document lists as a formula.
+NOT_HELPED = frozenset({"unchanged", "worse"})
+NOT_HELPED_LINE = "This didn't help, so I'm going to stop here."
+
+
+def known_value(value: str | None, allowed: frozenset[str]) -> str | None:
+    """A model reported value from a closed set, normalised, or None when it is off the list."""
+    cleaned = (value or "").strip().lower()
+    return cleaned if cleaned in allowed else None
+
+_PLACEHOLDER = re.compile(r"<[^>]*>")
+_SENTENCE_END = re.compile(r"(?<=[.?!])\s")
+MIN_KEY_CHARS = 20
+MAX_KEY_CHARS = 40
+
+
+def _match_key(text: str) -> str | None:
+    """The words of an authored reply that show it was used: its longest fixed part, with any
+    <placeholder> split out, normalised, cut to a whole word at 40 characters. None when no
+    fixed part is 20 characters long, so such a reply cannot be recognised."""
+    longest = max((safety.normalize(part) for part in _PLACEHOLDER.split(text)), key=len)
+    if len(longest) < MIN_KEY_CHARS:
+        return None
+    if len(longest) <= MAX_KEY_CHARS:
+        return longest
+    cut = longest[:MAX_KEY_CHARS]
+    return cut if longest[MAX_KEY_CHARS] == " " else cut.rsplit(" ", 1)[0]
+
+
+def redirect_keys(stage: dict, style: str, *, client_lines: bool = True) -> list[str]:
+    """What a reply carries when it leaves the stage question for a redirect: a branch that
+    protects the person or leaves the framework (not one that asks again, nor one that uses
+    the stage's extra turn), or one of the client's three lines."""
+    keys = [
+        _match_key(reply_for(branch, style))
+        for branch in stage.get("if_unclear") or []
+        if not branch.get("counted") and not branch.get("start_only")
+    ]
+    if client_lines:
+        keys += [safety.normalize(_SENTENCE_END.split(line)[0]) for line in CLIENT_LINES]
+    return [key for key in keys if key]
+
+
+def carries_redirect(stage: dict, text: str | None, style: str, *, client_lines: bool = True) -> bool:
+    """Whether a message uses a redirect of the stage, found anywhere in its words."""
+    said = f" {safety.normalize(text or '')} "
+    return any(f" {key} " in said for key in redirect_keys(stage, style, client_lines=client_lines))
 
 
 def practice_for(stage: dict, place: str, style: str) -> tuple[str, list[str]] | None:
@@ -354,16 +511,93 @@ def _compose_offer(
 ) -> str:
     """Mani's part, the client's description, the client's question: one paragraph each.
 
-    The description is left out when the last reply already showed it, which is the offer
-    made again after they asked what it involves, or when the model wrote it itself.
+
+def _ending_of(framework, stored: str, reported: str | None) -> str:
+    """How a framework that moves to the body check in ended: what the model reported, or, when
+    it reported nothing, resolved from the last question step and pivoted from an earlier one."""
+    if reported:
+        return reported
+    last_question = framework.phases[framework.phase_index(CHECK_IN) - 1]
+    return "resolved" if stored == last_question else "pivoted"
+
+
+def _stage_after_a_reply(
+    registry: Registry,
+    framework_id: str,
+    stored: str,
+    state: TechniqueState | None,
+    stored_holds: int,
+    notes: list[str],
+    *,
+    ending: str | None,
+    redirects: bool,
+    redirected_before: bool,
+    rephrase: bool = False,
+    skipped: bool = False,
+    asks_nothing: bool = False,
+    their_question: bool = False,
+) -> tuple[str, int, str | None]:
+    """The step, hold count and ending to record once the person has replied to `stored`.
+
+    The model judges when a step is done (spec 0010, AC-5): it may report a later step, never an
+    earlier one, and may end the framework, which records the body check in. A reported step
+    equal to `stored` is its one more attempt, counted once per step: a second records the
+    next step. A reply that uses a redirect of the stage (`redirects`), or a hold right after
+    Mani's own redirect (`redirected_before`), holds without counting.
+
+    `skipped` is the person passing the question over. It moves to the next step whatever the
+    reply reports, so a step is never asked again because the model did not notice the skip.
+
+    `asks_nothing` is a reply with no question in it. At the last question step that is the
+    conclusion stated (spec 0011, AC-8), so it ends the framework as resolved even when the model
+    forgot to report an ending: a statement with nothing to answer would otherwise stall there.
+    `their_question` is the person asking Mani something (AC-19): answering it holds the step
+    without spending its one more attempt.
     """
     framework = registry.get(framework_id)
-    description = " ".join(framework.summary.split()) if framework and framework.summary else ""
-    # Exactly once: not again when the last reply showed it, nor when the model wrote it anyway.
-    already = " ".join(f"{last_mani_text or ''} {part}".split())
-    if description and description in already:
-        description = ""
-    return "\n\n".join(p for p in (part, description, PERMISSION_QUESTIONS[style]) if p)
+    following = framework.phases[framework.phase_index(stored) + 1]
+    if ending is not None:
+        notes.append(f"framework ended {ending} at {stored}")
+        return CHECK_IN, 0, ending
+    if skipped:
+        notes.append(f"skipped {stored} at their request")
+        if following == CHECK_IN:
+            # The last question before the body check: skipping it ends the questions rather
+            # than leaving a framework with nothing left to ask.
+            return CHECK_IN, 0, _ending_of(framework, stored, None)
+        return following, 0, None
+    if following == CHECK_IN and asks_nothing and not redirects and not their_question:
+        notes.append(f"a reply asking nothing at {stored}, recorded resolved")
+        return CHECK_IN, 0, "resolved"
+    if redirects:
+        notes.append(f"redirect held at {stored}")
+        return stored, stored_holds, None
+    if rephrase:
+        notes.append(f"held at {stored}")
+        return stored, 1, None
+    if state is None:
+        notes.append(f"no state, recorded {following}")
+        recorded = following
+    else:
+        transition = registry.validate_transition(framework_id, stored, state.step, moving_on=True)
+        recorded = registry.clamp(framework_id, stored, state.step, moving_on=True)
+        if not transition.ok:
+            notes.append(f"corrected phase {state.step!r} to {recorded!r} ({transition.reason})")
+        elif recorded == stored:
+            if redirected_before:
+                notes.append(f"redirect held at {stored}")
+                return stored, stored_holds, None
+            if their_question:
+                notes.append(f"their question held at {stored}")
+                return stored, stored_holds, None
+            if stored_holds == 0:
+                notes.append(f"held at {stored}")
+                return stored, 1, None
+            notes.append(f"hold limit at {stored}")
+            recorded = following
+    if recorded == CHECK_IN:
+        return CHECK_IN, 0, _ending_of(framework, stored, None)
+    return recorded, 0, None
 
 
 def _normalize(name: str) -> str:
@@ -385,10 +619,14 @@ def apply(
     conversation_style: str,
     wants_title: bool,
     last_mani_text: str | None = None,
-    nickname: str | None = None,
-    name_said_before: bool = False,
-    clarification_already_used: bool = False,
-    closest_fit: bool = False,
+    explaining: bool = False,
+    current_holds: int = 0,
+    asked_again: bool = False,
+    current_ending: str | None = None,
+    skipped: bool = False,
+    offer_decided: bool = False,
+    required_offer: str | None = None,
+    their_question: bool = False,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again.
 
@@ -559,7 +797,24 @@ def apply(
         part = _without_permission_question(text)
         if part != text:
             notes.append("replaced the model's permission question with the client's")
-        if "?" in part:
+        if explaining and "?" in part:
+            # "Tell me more" is answered with no question, and keeps its two choices.
+            part = without_questions(part)
+            notes.append("removed a question from the explanation of an offer")
+        name = registry.get(offered_id).name if registry.get(offered_id) else None
+        if "?" in part and offer_decided and required_offer == offered_id:
+            # The offer is this turn's decision, so the model's extra question gives way to it
+            # rather than the other way round: trim the question, keep the offer.
+            trimmed = _LAST_QUESTION.sub("", part).strip()
+            if trimmed:
+                notes.append("trimmed a question from the reply that carries the offer")
+                part = trimmed
+            part = _with_the_name(part, name, explaining=explaining, notes=notes)
+            text = "\n\n".join(
+                p for p in (part, PERMISSION_QUESTIONS[conversation_style]) if p
+            )
+            kept = offer_buttons(offered_id, explaining=explaining)
+        elif "?" in part:
             dropped = [p.label for p in kept if _is_offer_button(p)]
             kept = [p for p in kept if not _is_offer_button(p)]
             notes.append(f"dropped offer buttons under a question that is not the offer: {dropped}")
@@ -567,16 +822,68 @@ def apply(
             without = _BLANK_RUN.sub("\n\n", _OFFER_SENTENCE.sub("", part)).strip()
             text = without or part
         else:
-            text = _compose_offer(part, registry, offered_id, conversation_style, last_mani_text)
+            part = _with_the_name(part, name, explaining=explaining, notes=notes)
+            text = part if explaining else "\n\n".join(
+                p for p in (part, PERMISSION_QUESTIONS[conversation_style]) if p
+            )
+            kept = offer_buttons(offered_id, explaining=explaining)
 
     framework_id: str | None = None
     phase: str | None = None
-    if reply.state is not None:
-        if reply.state.technique not in registry:
-            notes.append(f"ignored state for unknown technique: {reply.state.technique}")
-        elif framework_running and reply.state.technique != current_framework_id:
-            # Every framework shares stage ids like somatic and closing, so the transition
-            # check alone would let a reply record a framework the person never accepted.
+    holds = 0
+    ending = current_ending
+    reported_ending = known_value(reply.ending, ENDINGS)
+    state = reply.state
+    if state is not None and state.technique not in registry:
+        notes.append(f"ignored state for unknown technique: {state.technique}")
+        state = None
+    elif state is not None and framework_running and state.technique != current_framework_id:
+        # Every framework shares stage ids like the body check, so the transition check alone
+        # would let a reply record a framework the person never accepted.
+        notes.append(
+            f"ignored state for {state.technique}, not the running one "
+            f"({current_framework_id})"
+        )
+        state = None
+
+    # The person answered the step they were on, so the reply asks a later step or makes its one
+    # more attempt, never an earlier step. Whatever the reply reports, a step is recorded: a lost
+    # or garbled state must never keep a step on screen.
+    moving_on = (
+        framework_running
+        and not accepted_this_turn
+        and moves_on_after(registry.get(current_framework_id), current_phase)
+    )
+    if moving_on:
+        framework_id = current_framework_id
+        stage = registry.get(framework_id).stages.get(current_phase) or {}
+        # They asked to hear the question again with the extra turn unused: the hold is recorded
+        # here, and a client line is no redirect.
+        rephrase = asked_again and current_holds == 0 and not skipped
+        phase, holds, ending = _stage_after_a_reply(
+            registry, framework_id, current_phase, state, current_holds, notes,
+            ending=reported_ending,
+            redirects=(
+                not skipped
+                and carries_redirect(stage, text, conversation_style, client_lines=not rephrase)
+            ),
+            redirected_before=carries_redirect(
+                stage, last_mani_text, conversation_style, client_lines=False
+            ),
+            rephrase=rephrase,
+            skipped=skipped,
+            asks_nothing="?" not in text,
+            their_question=their_question,
+        )
+    elif state is not None:
+        framework_id = state.technique
+        # Accepting an offer this turn means the phase being left is the offering one,
+        # whatever the stored row still says. The reply asks the first step their words do not
+        # already meet, which may be past the first.
+        previous = "offering" if accepted_this_turn else current_phase
+        transition = registry.validate_transition(framework_id, previous, state.step)
+        phase = registry.clamp(framework_id, previous, state.step)
+        if not transition.ok:
             notes.append(
                 f"ignored state for {reply.state.technique}, not the running one "
                 f"({current_framework_id})"

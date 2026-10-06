@@ -1,9 +1,10 @@
 ---
 id: behavioral_activation
 name: Behavioral Activation
-summary: "These questions help you identify what you have stopped doing and choose one realistic activity you can begin. By the end, you will have a specific, manageable action that helps you start moving forward again."
+summary: "We look at what you've stopped doing, pick one small thing you could do, and decide when you'll do it."
 display_order: 3
-phases: [offering, stopped, matters, choose, manageable, begin, barrier, closing]
+phases:
+  [offering, stopped, matters, choose, manageable, begin, barrier, closing]
 activation:
   central_indication: >-
     The user knows what they could do but cannot get themselves to begin - low mood,
@@ -122,7 +123,10 @@ stages:
   stopped:
     purpose: "Identify the activity, routine, connection, responsibility, or act of care the user has stopped or is avoiding."
     listen_for: "What the user has stopped, delayed, canceled, or avoided."
-    ready_when: "What the user has stopped or is avoiding is named. If several, the user chooses which one."
+    ready_when: >-
+      What the user has stopped or is avoiding is named. If several, the user chooses which one.
+      What they said before they accepted counts, including the thing they stopped doing the offer
+      was built on: when it already gives this, the step is done and is not asked.
     boundaries:
       - "must not decide what the user should restart"
       - "must not label the user as withdrawn or unmotivated"
@@ -130,11 +134,11 @@ stages:
       - "must not ask for a complete list of everything stopped"
       - "must not assume the cause is avoidance before hearing it - flat fatigue with no trigger being avoided, or a symptom crash the day after activity, points away from this framework rather than into it"
     if_unclear:
-      - when: "\"Everything.\""
+      - when: '"Everything."'
         reply: "Everything feels difficult to begin. What is one thing you miss doing?"
       - when: "several activities named"
         reply: "You named several things. Which one matters most today?"
-      - when: "they named a wish but no activity - \"I want to be more productive.\" Do not go on to why it matters"
+      - when: 'they named a wish but no activity - "I want to be more productive." Do not go on to why it matters'
         reply: "What things would you want to do to be more productive?"
       - when: "they report an injury, severe or sudden physical symptoms, intoxication, or a medical condition as the reason"
         reply: "A physical symptom like that comes first, and I would not ask you to push through it. What would be most helpful right now?"
@@ -152,7 +156,7 @@ stages:
       - "must not connect the activity to productivity unless the user does"
       - "must not pressure the user toward an activity they do not value"
     if_unclear:
-      - when: "it does not matter - \"I only think I should do it.\""
+      - when: 'it does not matter - "I only think I should do it."'
         reply: "This action does not matter to you right now. What would matter more?"
     ask:
       supportive: "Why does this matter to you?"
@@ -171,7 +175,7 @@ stages:
     if_unclear:
       - when: "wants to address everything"
         reply: "You want to address everything at once. Which one action would make a beginning?"
-      - when: "asks MANI to pick - \"Pick one for me.\" / \"What should I start with?\""
+      - when: 'asks MANI to pick - "Pick one for me." / "What should I start with?"'
         reply: "<one of the things they named, as a small first step>. Does that work, or would you change it?"
     ask:
       supportive: "Which one do you want to begin with?"
@@ -189,9 +193,9 @@ stages:
       - "must not prescribe exercise or physical activity without considering limitations"
       - "may suggest up to three very small options, and only when the user cannot name one - never a longer list, and the user chooses"
     if_unclear:
-      - when: "still too large - \"I will answer every message tonight.\""
+      - when: 'still too large - "I will answer every message tonight."'
         reply: "Answering every message is a large first action. What smaller part are you confident you can complete?"
-      - when: "cannot identify an action - \"I don't know.\""
+      - when: 'cannot identify an action - "I don''t know."'
         reply: "The first action is not clear yet. Would <one to three very small options that fit what they stopped, such as getting dressed, opening the curtains, or texting someone> feel most manageable?"
     ask:
       supportive: "What is the smallest version you could do?"
@@ -226,7 +230,7 @@ stages:
     if_unclear:
       - when: "cannot identify a barrier"
         reply: "The barrier is not clear yet. What usually happens when you try to begin?"
-      - when: "the action depends on someone else - \"I need my partner to apologize.\""
+      - when: 'the action depends on someone else - "I need my partner to apologize."'
         reply: "The apology depends on your partner. What action is within your control?"
       - when: "the action is unsafe"
         reply: "That action could place you at risk. What is a safer action you can take?"
@@ -330,18 +334,18 @@ MANI:  One sentence feels possible to you. What do you notice in your body now?
 
 ## Responses MANI must avoid
 
-| Failure | Example | Why |
-|---|---|---|
-| Standalone mirror | "You have stopped answering people." | Not followed by a question |
-| Summary | "You stopped answering messages, the number became overwhelming, and now you want to begin with your sister." | Retells several stages |
-| Labelling | "You are depressed, isolated, and unmotivated. What could you do today?" | Assigns labels the user did not use |
-| Long explanation | "When people stop participating in activities during periods of low mood, inactivity can reinforce withdrawal..." | Teaches instead of responding |
-| Commanding | "Get out of bed and take a shower." | MANI chooses the action and commands |
-| Long task list | "Take a shower, get dressed, prepare food, answer your messages, and go outside." | Selects one manageable action, not several |
-| Productivity pressure | "You will feel better once you become productive again." | Promises an outcome, ties progress to productivity |
-| Minimizing | "Sending one message is easy. Why not do it now?" | Dismisses the stated difficulty |
-| Waiting for motivation | "What would make you feel motivated enough to answer everyone?" | The framework exists to act without waiting for motivation |
-| Unsafe activity | "Go outside and exercise even if you feel physically unwell." | Ignores physical limitations and medical concerns |
-| Multiple questions | "What have you stopped doing, why does it matter, and when will you do it?" | Several questions at once |
-| Wrong framework | "What evidence proves that you cannot answer your messages?" | The need is beginning an action, not disputing a belief |
-| Wrong tone | "Pick one task and commit to completing it." | Commanding; may contradict the selected tone |
+| Failure                | Example                                                                                                           | Why                                                        |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Standalone mirror      | "You have stopped answering people."                                                                              | Not followed by a question                                 |
+| Summary                | "You stopped answering messages, the number became overwhelming, and now you want to begin with your sister."     | Retells several stages                                     |
+| Labelling              | "You are depressed, isolated, and unmotivated. What could you do today?"                                          | Assigns labels the user did not use                        |
+| Long explanation       | "When people stop participating in activities during periods of low mood, inactivity can reinforce withdrawal..." | Teaches instead of responding                              |
+| Commanding             | "Get out of bed and take a shower."                                                                               | MANI chooses the action and commands                       |
+| Long task list         | "Take a shower, get dressed, prepare food, answer your messages, and go outside."                                 | Selects one manageable action, not several                 |
+| Productivity pressure  | "You will feel better once you become productive again."                                                          | Promises an outcome, ties progress to productivity         |
+| Minimizing             | "Sending one message is easy. Why not do it now?"                                                                 | Dismisses the stated difficulty                            |
+| Waiting for motivation | "What would make you feel motivated enough to answer everyone?"                                                   | The framework exists to act without waiting for motivation |
+| Unsafe activity        | "Go outside and exercise even if you feel physically unwell."                                                     | Ignores physical limitations and medical concerns          |
+| Multiple questions     | "What have you stopped doing, why does it matter, and when will you do it?"                                       | Several questions at once                                  |
+| Wrong framework        | "What evidence proves that you cannot answer your messages?"                                                      | The need is beginning an action, not disputing a belief    |
+| Wrong tone             | "Pick one task and commit to completing it."                                                                      | Commanding; may contradict the selected tone               |

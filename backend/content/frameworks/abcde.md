@@ -1,7 +1,7 @@
 ---
 id: abcde
 name: ABCDE
-summary: "These questions help you separate what happened from what you told yourself about it, question what may not be serving you, and come away with a clearer and more useful way of seeing the situation."
+summary: "We look at what happened, what you told yourself about it, how that affected you, and what the facts say about it."
 display_order: 1
 phases: [offering, activate, belief, consequence, examine, balanced, closing]
 activation:
@@ -106,7 +106,11 @@ stages:
   activate:
     purpose: "Identify the specific event without adding assumptions, explanations, or motives."
     listen_for: "What occurred, what was said or done, which part matters, and whether the user is describing facts or inferred meaning."
-    ready_when: "What occurred is clear, the specific event the user wants to examine is settled, and it is described as observed rather than assumed. If the event remains unclear, stay in this stage."
+    ready_when: >-
+      What occurred is clear, the specific event the user wants to examine is settled, and it is
+      described as observed rather than assumed. If it is still unclear after one more attempt,
+      never invent it. What they said before they accepted counts, including the event the offer
+      was built on: when it already gives this, the step is done and is not asked.
     boundaries:
       - "must not assume why the event occurred"
       - "must not assign another person's motive"
@@ -114,9 +118,9 @@ stages:
       - "must not treat the user's interpretation as observable fact"
       - "must not require repetition of information already provided"
     if_unclear:
-      - when: "assumed motive - \"My manager embarrassed me because she wants me to fail.\""
+      - when: 'assumed motive - "My manager embarrassed me because she wants me to fail."'
         reply: "You believe she wants you to fail. What did she say or do?"
-      - when: "event too broad - \"Everything went wrong.\""
+      - when: 'event too broad - "Everything went wrong."'
         reply: "Several things went wrong. Which event do you want to examine?"
       - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
         reply: "What happened sounds serious, and I am not going to ask you to see it differently. What would be most helpful to talk through?"
@@ -136,7 +140,7 @@ stages:
       - "must not investigate several beliefs at once"
       - "must not use a feeling word the user did not use"
     if_unclear:
-      - when: "a feeling instead of a belief - \"I felt embarrassed.\""
+      - when: 'a feeling instead of a belief - "I felt embarrassed."'
         reply: "You felt embarrassed. What were you telling yourself at that point?"
       - when: "several beliefs at once"
         reply: "Several thoughts came at once. Which one affected you most?"
@@ -154,7 +158,7 @@ stages:
       - "must not retell the complete event-belief-consequence sequence"
       - "must not assume the event itself had no effect"
     if_unclear:
-      - when: "consequence unclear - \"It affected everything.\""
+      - when: 'consequence unclear - "It affected everything."'
         reply: "It affected everything. What changed first?"
     ask:
       supportive: "It reached into everything for you. What felt most affected?"
@@ -173,9 +177,9 @@ stages:
       - "must not use rhetorical questions to force a conclusion"
       - "must not reinterpret danger or mistreatment"
     if_unclear:
-      - when: "part of the belief is accurate - \"I was not prepared enough.\""
+      - when: 'part of the belief is accurate - "I was not prepared enough."'
         reply: "You were not prepared enough for those questions. Does that prove you are incompetent?"
-      - when: "no contrary evidence comes to mind - \"Nothing challenges it.\""
+      - when: 'no contrary evidence comes to mind - "Nothing challenges it."'
         reply: "Nothing comes to mind yet. Has anything happened that does not fit the belief?"
       - when: "what supports the belief has been said, and what challenges it has not yet been asked"
         reply: "What might challenge the broader belief that <their belief, in their words>?"
@@ -186,7 +190,7 @@ stages:
       reflective: "What supports that belief?"
       direct: "What supports that belief?"
   balanced:
-    purpose: "Develop a believable belief that includes the relevant evidence and remains in the user's language."
+    purpose: "When what they have said supports a balanced belief without a new assumption, state it plainly in their words and no further (what happened, what does not fit the belief, what is still unknown), ask nothing, and end the framework as resolved. Only when stating it would need an inference of your own, ask for a more balanced belief."
     listen_for: "A credible belief that includes the known facts without becoming falsely positive."
     ready_when: "A belief that acknowledges what happened, includes the evidence, avoids a broad judgment unsupported by the facts, sounds believable, and uses language the user accepts."
     boundaries:
@@ -197,31 +201,14 @@ stages:
       - "must not require the user to feel differently"
       - "must not continue changing a belief the user already finds credible"
     if_unclear:
-      - when: "falsely positive - \"I am brilliant, and my manager was completely wrong.\""
+      - when: 'falsely positive - "I am brilliant, and my manager was completely wrong."'
         reply: "That removes the parts you said needed improvement. What belief includes all the evidence?"
       - when: "cannot form a balanced belief"
         reply: "You said the recommendations needed more support, but one presentation does not define your ability. How would you put those together?"
     ask:
-      supportive: "You can recognize the mistake without defining yourself by it. What would feel fairer and still true?"
-      reflective: "The full evidence is different from the original conclusion. What belief holds all of it?"
-      direct: "The original belief is broader than the facts. What do the facts support?"
-  closing:
-    purpose: "Confirm completion in the user's own terms, without declaring that the framework worked."
-    ready_when: >-
-      The user has identified what happened, what they believed it meant, how that belief
-      affected them, what supports and challenges the belief, and a more balanced belief. The
-      user does not have to feel differently, eliminate the original belief, view the event
-      positively, forgive anyone, take immediate action, agree with MANI, or resolve the
-      external situation.
-    boundaries:
-      - "must not require the user to feel differently, forgive anyone, or take action to be done"
-      - "must not summarize the completed framework"
-      - "must not tell the user the framework worked"
-      - "must not say the belief feels fairer unless the user used similar language"
-    ask:
-      supportive: "This belief feels fairer to what happened. How is it sitting with you?"
-      reflective: "The new belief includes the full evidence. What changes when you see it this way?"
-      direct: "This belief is supported by the facts you identified. Does it feel accurate?"
+      supportive: "What would be a more balanced belief?"
+      reflective: "What would be a more balanced belief?"
+      direct: "What would be a more balanced belief?"
 ---
 
 # ABCDE
@@ -294,16 +281,16 @@ MANI:  You can address the missing information instead of avoiding her. What do 
 
 ## Responses MANI must avoid
 
-| Failure | Example | Why |
-|---|---|---|
-| Standalone mirror | "You thought the criticism meant you were incompetent." | Every mirror must be followed by one relevant question |
-| Summary | "Your manager criticized two recommendations, which made you believe you were incompetent and caused you to avoid her." | Retells several parts |
-| Labelling | "You felt ashamed, rejected, and anxious. What did you do next?" | Assigns feelings the user did not name |
-| Long explanation | "People sometimes take criticism as evidence that they are not competent..." | Teaches instead of responding |
-| Premature reassurance | "One presentation does not mean you are incompetent. What else could it mean?" | Gives the conclusion before the user examines the belief |
-| Forced positivity | "You are talented and successful. Why are you being so hard on yourself?" | Introduces unsupported language and judgment |
-| Assumed motive | "Your manager was trying to help you improve. Can you see that?" | MANI cannot know her intention |
-| Clinical label | "You are catastrophizing. What evidence contradicts that distortion?" | Labels the user's thinking |
-| Multiple questions | "What happened, what did you think, how did you feel, and what evidence challenges it?" | Rushes the process |
-| Reframing danger | "Could your partner's threat mean something less serious?" | Must not reinterpret abuse, coercion, or danger |
-| Wrong tone | "Your conclusion is unsupported. What evidence disproves it?" | Harsh, assumes the conclusion, may contradict the selected tone |
+| Failure               | Example                                                                                                                 | Why                                                             |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Standalone mirror     | "You thought the criticism meant you were incompetent."                                                                 | Every mirror must be followed by one relevant question          |
+| Summary               | "Your manager criticized two recommendations, which made you believe you were incompetent and caused you to avoid her." | Retells several parts                                           |
+| Labelling             | "You felt ashamed, rejected, and anxious. What did you do next?"                                                        | Assigns feelings the user did not name                          |
+| Long explanation      | "People sometimes take criticism as evidence that they are not competent..."                                            | Teaches instead of responding                                   |
+| Premature reassurance | "One presentation does not mean you are incompetent. What else could it mean?"                                          | Gives the conclusion before the user examines the belief        |
+| Forced positivity     | "You are talented and successful. Why are you being so hard on yourself?"                                               | Introduces unsupported language and judgment                    |
+| Assumed motive        | "Your manager was trying to help you improve. Can you see that?"                                                        | MANI cannot know her intention                                  |
+| Clinical label        | "You are catastrophizing. What evidence contradicts that distortion?"                                                   | Labels the user's thinking                                      |
+| Multiple questions    | "What happened, what did you think, how did you feel, and what evidence challenges it?"                                 | Rushes the process                                              |
+| Reframing danger      | "Could your partner's threat mean something less serious?"                                                              | Must not reinterpret abuse, coercion, or danger                 |
+| Wrong tone            | "Your conclusion is unsupported. What evidence disproves it?"                                                           | Harsh, assumes the conclusion, may contradict the selected tone |

@@ -93,22 +93,20 @@ def _body_route_step(
     previous_phase: str | None,
     awaiting_place: bool,
 ) -> repairs.Repaired:
-    """The turn after a body question the person has answered: where they feel it, and then
-    the practice for that place. The body is asked about once; the choice of Chat More / Go to
-    Library waits for a practice, unless they decline or already know what they will do.
+    """The turns around the one body question (spec 0011, AC-10, AC-11): where they feel it, then
+    the practice for that place.
 
-    Covers a person who answers the check-in, one who says they do not know where, and one who
-    described their body before the check-in was asked.
+    The reply that ends the questions goes straight to the practice when their answer already
+    named a place; otherwise the check-in block asks where. After that question a place gets its
+    practice, and an answer naming none gets one plainer try with the same buttons. "Nothing", a
+    decline, or a second answer naming no place ends the route with the client's decline line and
+    the two choices, set here rather than left to the model's wording, so nobody is asked a third
+    time or left with nothing to tap.
     """
-    answering = previous_phase == "somatic_checkin" or (
-        previous_phase == "somatic_practice" and awaiting_place
-    )
-    described_early = (
-        previous_phase not in ("somatic_checkin", "somatic_practice")
-        and fixed.phase == "somatic_checkin"
-        and _ASKS_WHAT_NEXT.search(fixed.text) is not None
-    )
-    if not (answering or described_early) or repairs.declines_or_acts(content):
+    first_answer = previous_phase == "somatic_checkin"
+    second_answer = previous_phase == "somatic_practice" and awaiting_place
+    ending_turn = previous_phase not in SOMATIC_STAGES and fixed.phase == "somatic_checkin"
+    if not (first_answer or second_answer or ending_turn):
         return fixed
     stage = stages.get("somatic_practice") or {}
     safety_reply = next(
@@ -117,16 +115,33 @@ def _body_route_step(
     )
     if safety_reply and safety_reply in fixed.text:
         return fixed
-    place = repairs.named_place(content)
-    text, labels = fixed.text, []
+    place = repairs.place_answer(content)
     practice = repairs.practice_for(stage, place, style) if place else None
-    if practice is not None:
+    if ending_turn:
+        if practice is None:
+            # The check-in block asks where.
+            return fixed
+        bridge = repairs.without_questions(fixed.text)
         text, labels = practice
-    elif not repairs.practice_in(stage, text, style):
+        text = "\n\n".join(part for part in (bridge, text) if part)
+    elif practice is not None:
+        text, labels = practice
+    elif repairs.declines_or_acts(content) or repairs.feels_nothing(content) or second_answer:
+        decline = repairs.decline_reply(stages.get("somatic_checkin") or {}, style)
+        return dataclasses.replace(
+            fixed,
+            text=decline or fixed.text,
+            framework_id=framework_id,
+            phase="somatic_practice",
+            prompts=_handoff(),
+        )
+    elif repairs.practice_in(stage, fixed.text, style):
+        text, labels = fixed.text, []
+    else:
         script = (stage.get("ask") or {}).get(style)
         if not script:
             return fixed
-        text = repairs.with_the_check_in(repairs.first_sentence(text), script)
+        text = repairs.with_the_check_in(repairs.first_sentence(fixed.text), script)
         labels = list(repairs.PLACE_LABELS)
     return dataclasses.replace(
         fixed,
@@ -405,13 +420,63 @@ async def send(
             # An imminent action is the one case not worth waiting two exchanges on.
             or urgent
         )
-    ):
-        shortlist = router.shortlist(user_texts, config.registry.activations)
-        # The closest fit is owed now, so the top of the shortlist is offered in the client's own
-        # words even when the router is not confident of it.
-        if shortlist and (router.is_confident(shortlist) or context.closest_fit_due(ctx)):
-            candidate = config.registry.get(shortlist[0].framework_id)
-
+        routing_result = (
+            semantic_router.route(user_texts)
+            if not running_now
+            and assessment.level is safety.Level.NONE
+            and not assessment.blocks_framework
+            and tapped is None
+            and context.classify_reply(content) != "heard"
+            and not answering_a_question
+            else semantic_router.NO_MATCH
+        )
+        vetoed_ids = frozenset(
+            framework_id
+            for framework_id, activation in config.registry.activations.items()
+            if router.vetoes(activation, user_texts)
+        )
+        decision = offer_policy.decide(
+            routing_result,
+            style=context.resolve_style(ctx),
+            their_messages=context.their_messages(history),
+            cooldown_passed=refusal is None,
+            safety_concern=assessment.blocks_framework,
+            their_last=context.classify_reply(content) if not tapped else None,
+            framework_running=running_now,
+            accepted_this_turn=accepted_this_turn,
+            finishing=False,
+            vetoed=vetoed_ids,
+            clarified_already=context.asked_which_fits(history),
+            # Where a conversation that never resolves to a framework goes, from the content:
+            # the file that sets `stuck_offer` (ABCDE).
+            fallback=router.stuck_framework(config.registry.activations),
+        )
+        logger.info(
+            "thread %s routed %s, decided %s (%s)",
+            ctx.thread.id, routing_result.status.value, decision.action.value, decision.why,
+        )
+        if decision.offers and decision.framework_id and refusal is None:
+            candidate = config.registry.get(decision.framework_id)
+        elif decision.separates:
+            decision = dataclasses.replace(
+                decision,
+                separates_as_text=_separates_as_text(config.registry, decision.separates),
+            )
+        elif decision.action is offer_policy.Action.ASSESS:
+            decision = dataclasses.replace(
+                decision,
+                to_find_out=_to_find_out(config.registry, decision.shortlist),
+            )
+    # They asked to hear more about the offer waiting for them: a tap on Tell me more, or a
+    # question typed past it. The explanation then stands alone with two choices.
+    explaining = (
+        config.registry.get(offer.technique)
+        if offer is not None and (
+            (tapped is not None and tapped.label.strip().lower() == EXPLAIN_LABEL.lower())
+            or (deferred and "?" in content)
+        )
+        else None
+    )
     wants_title = (
         ctx.thread.message_count >= TITLE_AFTER_MESSAGES and not ctx.thread.title
     )
@@ -425,12 +490,48 @@ async def send(
     )
     model, parameters, routing = composer.model_settings(config)
 
+    # They are passing the question over rather than answering it. Read before the model is
+    # asked, so the reply is written knowing the step is being left rather than pressed again.
+    skipped = bool(
+        technique is not None
+        and outcome is TechniqueOutcome.ACCEPTED
+        and technique.phase not in SOMATIC_STAGES
+        # Read from the words alone, so a "Skip this one" button already stored on an open
+        # thread still skips when tapped.
+        and repairs.skips_the_step(content)
+    )
+
+    # They asked Mani something, typed: answered first, whether it came past a waiting offer or
+    # in the middle of the questions, where it holds the step without spending its one more
+    # attempt (spec 0011, AC-2, AC-19).
+    their_question = bool(
+        tapped is None
+        and "?" in content
+        # "What do you mean?" asks for the question again, which has its own path.
+        and not context.asks_to_hear_again(content)
+        and (
+            (explaining is not None)
+            or (
+                technique is not None
+                and outcome is TechniqueOutcome.ACCEPTED
+                and technique.phase not in SOMATIC_STAGES
+                and not accepted_this_turn
+                and not skipped
+            )
+        )
+    )
+
     active_framework = config.registry.get(technique.framework_id) if technique else None
     prefix = context.build(
         ctx, shortlist=shortlist, framework=active_framework, candidate=candidate,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
-        framework_starting=accepted_this_turn, urgent=urgent,
-        their_last=context.classify_reply(content),
+        framework_starting=accepted_this_turn, stuck_candidate=stuck_candidate,
+        refusal=refusal, explaining=explaining, decision=decision, skipped=skipped,
+        their_question=their_question,
+        answering_practice=practiced_place is not None,
+        # A tap is a choice among Mani's own buttons, not words to read.
+        their_last=None if tapped else context.classify_reply(content),
+        asked_again=None if tapped else context.asks_to_hear_again(content),
     )
     for_model = (
         f'User tapped the button: "{tapped.label}".'
@@ -604,12 +705,19 @@ async def send(
         wants_title=wants_title,
         # An offer made again after they asked what it involves doesn't repeat the description.
         last_mani_text=next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None),
-        nickname=ctx.profile.nickname if ctx.profile else None,
-        # The greeting says their name by design; the model's own replies count from there.
-        name_said_before=bool(
-            ctx.profile and ctx.profile.nickname
-            and any(ctx.profile.nickname in m.content
-                    for m in [m for m in history if m.role is MessageRole.MANI][1:])
+        explaining=explaining is not None,
+        current_holds=technique.holds if technique else 0,
+        asked_again=False if tapped else context.asks_to_hear_again(content),
+        current_ending=technique.ending if technique else None,
+        skipped=skipped,
+        their_question=their_question,
+        # When code decided the offer it is added or dropped here rather than being the
+        # model's to make: that is the whole point of deciding it in code.
+        offer_decided=decision is not None,
+        required_offer=(
+            decision.framework_id
+            if decision is not None and decision.offers and refusal is None
+            else None
         ),
         clarification_already_used=context.clarification_used(history),
     )
@@ -637,14 +745,18 @@ async def send(
             technique.phase,
             _awaiting_place(history),
         )
-    if fixed.phase == "somatic_checkin" and fixed.framework_id is not None and not _ASKS_WHAT_NEXT.search(fixed.text):
-        # The client's flow (2026-09-24): the body check-in is fixed content, sent word for
-        # word, never reworded. Skipped when they already described their body and this
-        # reply moves straight to the two choices instead of asking again.
+    if fixed.phase == "somatic_checkin" and fixed.framework_id is not None:
+        # The one body question, where they feel it, is fixed content sent word for word after
+        # Mani's bridge, with the place buttons (spec 0011, AC-10). Set before the hand-off
+        # filter below, which keeps them.
         stage = config.registry.get(fixed.framework_id).stages.get("somatic_checkin") or {}
         script = (stage.get("ask") or {}).get(context.resolve_style(ctx))
         if script:
-            fixed = dataclasses.replace(fixed, text=repairs.with_the_check_in(fixed.text, script))
+            fixed = dataclasses.replace(
+                fixed,
+                text=repairs.with_the_check_in(fixed.text, script),
+                prompts=[SmartPrompt(label=label) for label in repairs.PLACE_LABELS],
+            )
     if fixed.notes:
         logger.info("repaired reply on thread %s: %s", ctx.thread.id, "; ".join(fixed.notes))
     if technique is not None and (
@@ -671,6 +783,18 @@ async def send(
         )
         if returning:
             fixed = dataclasses.replace(fixed, text=returning)
+    # It did not help, so Mani says so and stops, with the two choices and no question. When
+    # they asked something of their own, the model's answer stands, its questions taken out.
+    not_helped = (
+        retiring_framework_id is not None
+        and felt_after in repairs.NOT_HELPED
+        and not repairs.comes_back(content)
+    )
+    if not_helped:
+        answered = repairs.without_questions(fixed.text) if "?" in content else ""
+        fixed = dataclasses.replace(
+            fixed, text=answered or repairs.NOT_HELPED_LINE, prompts=_handoff()
+        )
     if (
         retiring_framework_id is not None
         and content.strip().lower() not in _HANDOFF_LABELS
@@ -751,7 +875,9 @@ async def send(
     await threads.apply(conn, ctx.thread.id, user_id, updates)
 
     exercise = None
-    if retiring_framework_id is not None:
+    # Nothing more is handed over when the practice did not help, or when none was given
+    # (spec 0011, AC-14).
+    if retiring_framework_id is not None and practiced_place is not None and not not_helped:
         said = [m.content for m in history if m.role is MessageRole.USER][-2:] + [content]
         exercise = await _offer_exercise(
             conn, retiring_framework_id, config, model, routing, user_id, ctx.thread.id,
