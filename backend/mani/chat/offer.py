@@ -12,17 +12,22 @@ from mani.chat import semantic_router as sr
 # the window has gone on too long (muhammad, 2026-10-05). Direct reaches a framework
 # soonest; Supportive and Reflective earn the room to explore first.
 #
-#   Direct      3-5 exchanges, never past 5
-#   Supportive  7-9, never past 9
-#   Reflective  7-10
+#   Direct      3-5 exchanges
+#   Supportive  5-7
+#   Reflective  6-8
 #
 # `soonest` is the earliest a clear fit may be offered. Only a clear fit is ever offered:
 # a conversation that does not point at one keeps going, because a framework nobody needs
 # is worse than no framework (muhammad, 2026-10-06).
+#
+# These are muhammad's numbers (2026-10-06) and they deviate from the client's styles
+# document, which says "approximately two to four exchanges" for every style. Kept as a
+# deliberate deviation, recorded in PORT-STATUS: the styles differ in how much room they
+# give before structure, which one number for all three cannot express.
 CADENCE: dict[str, tuple[int, int]] = {
     "direct": (3, 5),
-    "supportive": (7, 9),
-    "reflective": (7, 10),
+    "supportive": (5, 7),
+    "reflective": (6, 8),
 }
 DEFAULT_CADENCE = CADENCE["supportive"]
 
@@ -32,6 +37,10 @@ class Action(StrEnum):
     """Stay with them. No offer."""
     ASK = "ask"
     """One question that follows what they said."""
+    ASSESS = "assess"
+    """They have said something real but it does not point anywhere yet ("I am in pain", "I am
+    depressed"). Ask the one thing that would tell these possibilities apart, from what the
+    nearest sets of questions still need to know."""
     CLARIFY = "clarify"
     """Two frameworks are plausible; ask the one thing that separates them."""
     OFFER_FRAMEWORK = "offer_framework"
@@ -53,6 +62,11 @@ class Decision:
     separates_as_text: str | None = None
     """What those two frameworks are each for, in plain words, so the model can ask the one
     question that separates them without ever seeing a framework id it could echo."""
+    to_find_out: tuple[str, ...] = ()
+    """On an ASSESS turn, what the nearest sets of questions still need to know, in the
+    frameworks' own words. The model picks the one worth asking; code never scripts it."""
+    shortlist: tuple[str, ...] = ()
+    """The framework ids `to_find_out` was drawn from. Logged, never sent to the model."""
     why: str = ""
     """One line, logged. Never sent to the model, never shown."""
 
@@ -78,6 +92,7 @@ def decide(
     finishing: bool = False,
     vetoed: frozenset[str] | tuple[str, ...] = (),
     clarified_already: bool = False,
+    fallback: str | None = None,
 ) -> Decision:
     """What this turn should do. Deterministic: the same inputs always give the same action.
 
@@ -111,7 +126,14 @@ def decide(
     top = routing.top
     if top is not None and top.framework_id in set(vetoed):
         # What they have said rules this one out. Demoted here rather than caught downstream,
-        # so the decision and the offer can never disagree.
+        # so the decision and the offer can never disagree. What is left of the shortlist is
+        # still worth asking from, so this becomes an assessment rather than a bare question.
+        left = tuple(c.framework_id for c in routing.nearest if c.framework_id not in set(vetoed))
+        if left:
+            return Decision(
+                Action.ASSESS, shortlist=left,
+                why=f"{top.framework_id} ruled out by what they said",
+            )
         return Decision(Action.ASK, why=f"{top.framework_id} ruled out by what they said")
 
     # 6. An action about to be taken does not wait for the cadence.
@@ -133,11 +155,11 @@ def decide(
         return Decision(Action.OFFER_FRAMEWORK, top.framework_id, why="clear fit")
 
     if routing.status is sr.RouteStatus.AMBIGUOUS and len(routing.candidates) >= 2:
+        # Two real fits, both above the bar. The question that tells them apart is asked once;
+        # after it their answer is the evidence for the leader, since asking again loops - the
+        # answer says which set fits, not what happened, so it barely moves the vectors.
+        #
         if clarified_already:
-            # The separating question has been asked, and their answer rarely moves the
-            # vectors: it says which set fits, not what happened. Asking it again loops, so
-            # the nearest of the two is offered once the cadence allows and the person has
-            # had the room the style gives them. Their answer is the evidence for it.
             if cooldown_passed and their_messages >= soonest:
                 return Decision(
                     Action.OFFER_FRAMEWORK, top.framework_id, why="they answered the clarify"
@@ -150,8 +172,24 @@ def decide(
             why="two plausible fits",
         )
 
-    if routing.status is sr.RouteStatus.WEAK_MATCH and top is not None:
-        return Decision(Action.ASK, top.framework_id, why="weak fit")
+    # Nothing the conversation points at: the "I am in pain", "I'm depressed" turn. They have
+    # said something real that does not name a situation yet, so it is assessed - the nearest
+    # sets say what it might be about, and what they still need to know is what is worth
+    # asking. Never an offer from here: a shortlist is not a fit.
+    if routing.nearest and their_messages < cadence_for(style)[1]:
+        return Decision(
+            Action.ASSESS,
+            shortlist=tuple(c.framework_id for c in routing.nearest),
+            why=f"nothing clear yet, nearest {routing.nearest[0].framework_id}",
+        )
 
-    # Nothing fits. Follow them; a framework is not owed.
+    # Assessed to the top of the style's window and it still will not resolve to a framework.
+    # These go to the fallback rather than to the closest of a shortlist that never separated
+    # (muhammad, 2026-10-06): examining what happened and what they made it mean is the one
+    # set that fits a situation nothing else named. `fallback` is the framework whose file
+    # sets `stuck_offer`, so the choice stays in the content.
+    if fallback is not None and cooldown_passed and fallback not in set(vetoed):
+        return Decision(Action.OFFER_FRAMEWORK, fallback, why="undeterminable, fallback")
+
+    # Nothing to go on and no fallback to reach for. Follow them; a framework is not owed.
     return Decision(Action.ASK, why="no fit")

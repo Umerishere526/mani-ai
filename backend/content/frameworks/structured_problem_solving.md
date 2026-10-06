@@ -19,6 +19,11 @@ activation:
     - "I need to decide between two options and I'm stuck."
     - "I'm behind on everything and I don't know where to begin."
     - "I have to sort this out with my landlord and I don't know what to say."
+    # How people actually open, in a few words. A short opener matched no long
+    # exemplar closely enough to clear the bar, so the framework was never reached.
+    - "I don't know what to do about this problem."
+    - "I don't know where to start."
+    - "Everything is piling up and I can't get on top of it."
   to_find_out:
     - "the practical problem, in one sentence"
     - "whether a decision or an action could change it"

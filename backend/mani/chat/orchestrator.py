@@ -282,6 +282,30 @@ def _separates_as_text(registry: Registry, separates: tuple[str, str]) -> str:
     return " ... or ... ".join(parts)
 
 
+# How many things to put in front of the model on an assessment turn. More than this and the
+# list reads as a questionnaire to work through rather than a choice of what matters most.
+MAX_TO_FIND_OUT = 5
+
+
+def _to_find_out(registry: Registry, shortlist: tuple[str, ...]) -> tuple[str, ...]:
+    """What the nearest sets of questions still need to know, in the frameworks' own words.
+
+    Ordered by the shortlist, so the likeliest framework's needs come first, and de-duplicated
+    across them: several frameworks want the event that set it off, and it is one question.
+    Nothing is scripted here - these are what to find out, not what to say.
+    """
+    seen: set[str] = set()
+    wanted: list[str] = []
+    for framework_id in shortlist:
+        activation = (registry.activations or {}).get(framework_id) or {}
+        for item in activation.get("to_find_out") or []:
+            key = " ".join(item.lower().split())
+            if key not in seen:
+                seen.add(key)
+                wanted.append(" ".join(item.split()))
+    return tuple(wanted[:MAX_TO_FIND_OUT])
+
+
 def _conversation(history: list[Message]) -> list[dict[str, str]]:
     return [
         {
@@ -473,14 +497,25 @@ async def send(
     if settings.semantic_router:
         running_now = technique is not None and outcome is TechniqueOutcome.ACCEPTED
         # "yeah" has no routing signal, and embedding it produces a confident-looking vector
-        # for nothing, so routing is skipped on a tap, a vague reply, and under any concern.
+        # for nothing, so routing is skipped on a tap, a reply asking only to be heard, and
+        # under any concern. A short message is skipped only when it answers a question Mani
+        # asked: "I am depressed" is three words and is the whole reason they are here, and
+        # treating it as an answer left the conversation unroutable (muhammad, 2026-10-06).
+        # Their first message answers nothing: the only question behind it is the greeting's,
+        # which asks how they want to be spoken to, not what is going on. From their second
+        # message on, a short reply is an answer to what Mani just asked and carries no
+        # routing signal of its own.
+        answering_a_question = (
+            context.classify_reply(content) == "short" and context.their_messages(history) > 1
+        )
         routing_result = (
             semantic_router.route(user_texts)
             if not running_now
             and assessment.level is safety.Level.NONE
             and not assessment.blocks_framework
             and tapped is None
-            and context.classify_reply(content) not in ("heard", "short")
+            and context.classify_reply(content) != "heard"
+            and not answering_a_question
             else semantic_router.NO_MATCH
         )
         vetoed_ids = frozenset(
@@ -500,6 +535,9 @@ async def send(
             finishing=False,
             vetoed=vetoed_ids,
             clarified_already=context.asked_which_fits(history),
+            # Where a conversation that never resolves to a framework goes, from the content:
+            # the file that sets `stuck_offer` (ABCDE).
+            fallback=router.stuck_framework(config.registry.activations),
         )
         logger.info(
             "thread %s routed %s, decided %s (%s)",
@@ -511,6 +549,11 @@ async def send(
             decision = dataclasses.replace(
                 decision,
                 separates_as_text=_separates_as_text(config.registry, decision.separates),
+            )
+        elif decision.action is offer_policy.Action.ASSESS:
+            decision = dataclasses.replace(
+                decision,
+                to_find_out=_to_find_out(config.registry, decision.shortlist),
             )
     # They asked to hear more about the offer waiting for them: a tap on Tell me more, or a
     # question typed past it. The explanation then stands alone with two choices.

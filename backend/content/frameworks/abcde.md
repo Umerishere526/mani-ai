@@ -21,6 +21,10 @@ activation:
     - "Something happened and I took it to mean something awful about me."
     - "My colleague questioned my work in the meeting and I've felt useless ever since."
     - "I want to understand why that moment affected me so strongly."
+    # How people actually open, in a few words. A short opener matched no long
+    # exemplar closely enough to clear the bar, so the framework was never reached.
+    - "Something happened and I can't shake it."
+    - "I can't stop replaying what happened."
   to_find_out:
     - "the specific event that set it off"
     - "what they told themselves about it, about them or the other person"

@@ -31,11 +31,11 @@ def test_a_clear_fit_before_the_style_is_ready_asks_instead():
     """Direct offers soonest at 3; Supportive earns the room to explore first."""
     early = decide(routing(), style="supportive", their_messages=3, cooldown_passed=True)
     assert early.action is Action.ASK
-    ready = decide(routing(), style="supportive", their_messages=7, cooldown_passed=True)
+    ready = decide(routing(), style="supportive", their_messages=5, cooldown_passed=True)
     assert ready.action is Action.OFFER_FRAMEWORK
 
 
-@pytest.mark.parametrize("style, soonest", [("direct", 3), ("supportive", 7), ("reflective", 7)])
+@pytest.mark.parametrize("style, soonest", [("direct", 3), ("supportive", 5), ("reflective", 6)])
 def test_each_style_offers_no_earlier_than_its_cadence(style, soonest):
     assert decide(routing(), style=style, their_messages=soonest - 1, cooldown_passed=True).action is Action.ASK
     assert decide(routing(), style=style, their_messages=soonest, cooldown_passed=True).action is Action.OFFER_FRAMEWORK
@@ -200,3 +200,79 @@ def test_the_question_that_separates_two_sets_is_asked_once_not_every_turn():
     )
     assert early.action is Action.ASK
     assert not early.offers
+
+
+def weak_with_shortlist(*ids):
+    """What "I am in pain" produces: nothing clear enough to act on, but a ranked few behind
+    it. Mirrors the real router, which carries `nearest` whatever the status."""
+    near = tuple(sr.Candidate(f, 0.38 - i * 0.02, 0.0) for i, f in enumerate(ids))
+    return sr.Routing(sr.RouteStatus.NO_MATCH, (), nearest=near)
+
+
+def test_something_real_that_points_nowhere_is_assessed_never_offered():
+    """"I am in pain" names no framework. The shortlist says what it might be about, which is
+    what to ask about, and an offer on a shortlist would be guessing (muhammad, 2026-10-06)."""
+    decision = decide(
+        weak_with_shortlist("act_choice_point", "behavioral_activation", "abcde"),
+        style="direct", their_messages=1, cooldown_passed=True,
+    )
+    assert decision.action is Action.ASSESS
+    assert not decision.offers
+    assert decision.framework_id is None, "nothing is chosen on an assessment turn"
+    assert decision.shortlist == ("act_choice_point", "behavioral_activation", "abcde")
+
+
+def test_a_conversation_that_never_names_a_framework_goes_to_the_fallback():
+    """Assessed to the top of the window and still nothing: these lead to ABCDE rather than
+    the closest of a shortlist that never separated (muhammad, 2026-10-06)."""
+    route = weak_with_shortlist("act_choice_point", "behavioral_activation")
+    for n in (1, 3, 4):
+        early = decide(route, style="direct", their_messages=n, cooldown_passed=True, fallback="abcde")
+        assert early.action is Action.ASSESS, f"at {n} messages"
+    landed = decide(route, style="direct", their_messages=5, cooldown_passed=True, fallback="abcde")
+    assert landed.action is Action.OFFER_FRAMEWORK
+    assert landed.framework_id == "abcde"
+
+
+def test_the_fallback_is_refused_when_their_words_rule_it_out():
+    """The grief veto outranks it: a fallback is still an offer."""
+    decision = decide(
+        weak_with_shortlist("abcde"), style="direct", their_messages=9,
+        cooldown_passed=True, fallback="abcde", vetoed=frozenset({"abcde"}),
+    )
+    assert not decision.offers
+
+
+def test_two_real_fits_are_told_apart_rather_than_sent_to_the_fallback():
+    """Ambiguous means two frameworks genuinely fit, so the question that separates them is
+    the answer - not ABCDE, which is only for a conversation that names nothing."""
+    decision = decide(
+        ambiguous("thought_reframe", "abcde"), style="direct", their_messages=12,
+        cooldown_passed=True, fallback="abcde",
+    )
+    assert decision.action is Action.CLARIFY
+
+
+def test_being_heard_still_comes_before_assessing():
+    """Someone who asked only to be listened to is not assessed at them."""
+    decision = decide(
+        weak_with_shortlist("abcde"), style="direct", their_messages=3,
+        cooldown_passed=True, their_last="heard",
+    )
+    assert decision.action is Action.CONTINUE
+
+
+def test_nothing_at_all_to_go_on_just_follows_them():
+    decision = decide(
+        sr.Routing(sr.RouteStatus.NO_MATCH, ()), style="direct", their_messages=3,
+        cooldown_passed=True,
+    )
+    assert decision.action is Action.ASK
+    assert not decision.offers
+
+
+@pytest.mark.parametrize("style, soonest", [("direct", 3), ("supportive", 5), ("reflective", 6)])
+def test_the_styles_reach_a_framework_at_muhammads_cadence(style, soonest):
+    """Direct 3-5, Supportive 5-7, Reflective 6-8 (muhammad, 2026-10-06). A deviation from the
+    client's styles document, which gives every style two to four."""
+    assert cadence_for(style)[0] == soonest

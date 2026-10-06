@@ -18,6 +18,11 @@ activation:
     - "I got a short text and convinced myself they're angry with me."
     - "I made one mistake at work and now I think everyone sees me as careless."
     - "This one thought keeps going round and I can't shake it."
+    # How people actually open, in a few words. A short opener matched no long
+    # exemplar closely enough to clear the bar, so the framework was never reached.
+    - "I can't stop thinking one thing."
+    - "This thought keeps going round."
+    - "I'm sure I've ruined it."
   to_find_out:
     - "the exact thought going round, in their words"
     - "the situation it is attached to"

@@ -19,6 +19,13 @@ activation:
     - "I keep putting it off and doing anything except the thing."
     - "I used to run and see people and now I just lie on the couch after work."
     - "I've ignored everyone's messages for a week and I don't see the point."
+    # How people actually open, in a few words. Without these a short opener matched no
+    # exemplar closely enough to clear the bar, and the framework the overview names for
+    # exactly these words was never reached (spec six-frameworks-overview.md, row 3).
+    - "I am depressed and I've stopped doing things."
+    - "I feel shut down and I'm not doing anything."
+    - "I have no motivation to do anything."
+    - "I've withdrawn from everything."
   to_find_out:
     - "what they have stopped doing or are avoiding"
     - "whether they know what they could do but cannot begin"

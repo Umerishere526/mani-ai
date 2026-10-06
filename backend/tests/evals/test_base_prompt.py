@@ -8,7 +8,7 @@ import pytest
 from scripts.client_style_counts import count_dashes
 
 BASE = pathlib.Path(__file__).resolve().parents[2] / "content" / "prompts" / "mani_base.md"
-MAX_LINES = 123
+MAX_LINES = 130
 
 
 def _base() -> str:

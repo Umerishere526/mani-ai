@@ -19,6 +19,11 @@ activation:
     - "This isn't going to change and I keep fighting it."
     - "I'll probably never get an apology and I don't want it running my life."
     - "I can't make the uncertainty go away but I still have to get through the day."
+    # How people actually open, in a few words. A short opener matched no long
+    # exemplar closely enough to clear the bar, so the framework was never reached.
+    - "I can't change this."
+    - "There's nothing I can do about it."
+    - "I have to live with this somehow."
   to_find_out:
     - "what part of the situation they cannot change or control"
     - "the thought, feeling or urge that stays with them"
