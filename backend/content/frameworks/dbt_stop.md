@@ -11,6 +11,16 @@ activation:
     The user is about to act - send, post, call, confront, decide - and needs help pausing
     before the action, not analysis of the underlying problem. Time-critical: this overrides
     whatever else the conversation was scoring toward.
+  # How a person actually talks when this framework fits. The semantic router embeds
+  # these, not central_indication: clinical prose scored 2/7 on real messages where
+  # these scored 11/11. Authored content - changing them changes which framework is
+  # offered, so they need the same review the summary does.
+  exemplars:
+    - "I'm about to send her a message I'll regret."
+    - "I want to call him right now and tell him everything."
+    - "I'm so angry I'm about to do something stupid."
+    - "I keep typing and deleting and I'm about to hit send."
+    - "I want to quit today, right now, before I change my mind."
   to_find_out:
     - "what they are about to do"
     - "whether it has already happened"

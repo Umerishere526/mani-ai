@@ -11,6 +11,16 @@ activation:
     A specific, practical problem exists and the user does not know what to do next - the
     situation can be influenced through a decision or action, and the user wants a direct
     solution rather than reflection alone.
+  # How a person actually talks when this framework fits. The semantic router embeds
+  # these, not central_indication: clinical prose scored 2/7 on real messages where
+  # these scored 11/11. Authored content - changing them changes which framework is
+  # offered, so they need the same review the summary does.
+  exemplars:
+    - "I have an exam tomorrow and I don't know where to start."
+    - "I have too much to do and no idea what to tackle first."
+    - "I need to decide between two options and I'm stuck."
+    - "I'm behind on everything and I don't know where to begin."
+    - "I have to sort this out with my landlord and I don't know what to say."
   to_find_out:
     - "the practical problem, in one sentence"
     - "whether a decision or an action could change it"

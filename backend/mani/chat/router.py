@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from mani.chat import imminent
 from mani.chat.safety import normalize
 
 # How far back a signal still counts. A person's most recent message is the strongest evidence
@@ -212,8 +213,11 @@ def _fired(rule: Rule, messages: list[str]) -> bool:
 
 
 def urgent(messages: list[str]) -> bool:
-    """Whether the absolute rule fires - an imminent action, which is not worth waiting on."""
-    return any(rule.absolute and _fired(rule, messages) for rule in DISCRIMINATORS)
+    """Whether the absolute rule fires - an imminent action, which is not worth waiting on.
+
+    One source of truth: mani.chat.imminent owns the phrases, because the semantic router
+    needs the same answer without the rest of this module."""
+    return imminent.imminent(messages)
 
 
 def _promote(signals: list[Signal], rule: Rule) -> list[Signal]:

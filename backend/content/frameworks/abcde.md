@@ -14,6 +14,16 @@ activation:
   # A confident offer waits for their third message: the fit depends on what they took the event or
   # the thought to mean, which the first two messages rarely say.
   earliest_offer_message: 3
+  # How a person actually talks when this framework fits. The semantic router embeds
+  # these, not central_indication: clinical prose scored 2/7 on real messages where
+  # these scored 11/11. Authored content - changing them changes which framework is
+  # offered, so they need the same review the summary does.
+  exemplars:
+    - "My manager criticised my work in front of everyone and now I think I'm bad at my job."
+    - "She snapped at me and I decided it means I'm not good enough."
+    - "Something happened and I took it to mean something awful about me."
+    - "My colleague questioned my work in the meeting and I've felt useless ever since."
+    - "I want to understand why that moment affected me so strongly."
   to_find_out:
     - "the specific event that set it off"
     - "what they took it to mean about themselves or the other person"

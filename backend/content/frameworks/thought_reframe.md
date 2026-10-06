@@ -13,6 +13,16 @@ activation:
   # A confident offer waits for their third message: the fit depends on what they took the event or
   # the thought to mean, which the first two messages rarely say.
   earliest_offer_message: 3
+  # How a person actually talks when this framework fits. The semantic router embeds
+  # these, not central_indication: clinical prose scored 2/7 on real messages where
+  # these scored 11/11. Authored content - changing them changes which framework is
+  # offered, so they need the same review the summary does.
+  exemplars:
+    - "My friend hasn't replied and I'm sure she hates me now."
+    - "I keep thinking one thing must be true and I can't see it any other way."
+    - "I got a short text and convinced myself they're angry with me."
+    - "I made one mistake at work and now I think everyone sees me as careless."
+    - "This one thought keeps going round and I can't shake it."
   to_find_out:
     - "the exact thought going round, in their words"
     - "the situation it is attached to"

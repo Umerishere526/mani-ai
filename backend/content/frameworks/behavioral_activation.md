@@ -11,6 +11,16 @@ activation:
     The user knows what they could do but cannot get themselves to begin - low mood,
     discouragement, or withdrawal has interrupted something that matters, and they need help
     selecting and beginning one manageable action, not a thought examined or a decision made.
+  # How a person actually talks when this framework fits. The semantic router embeds
+  # these, not central_indication: clinical prose scored 2/7 on real messages where
+  # these scored 11/11. Authored content - changing them changes which framework is
+  # offered, so they need the same review the summary does.
+  exemplars:
+    - "I've been in bed all day and I've stopped answering anyone."
+    - "I know what I should do but I can't make myself start."
+    - "I keep putting it off and doing anything except the thing."
+    - "I used to run and see people and now I just lie on the couch after work."
+    - "I've ignored everyone's messages for a week and I don't see the point."
   to_find_out:
     - "what they have stopped doing or are avoiding"
     - "whether they know what they could do but cannot begin"

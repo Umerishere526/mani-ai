@@ -14,6 +14,16 @@ activation:
   # A confident offer waits for their third message: the fit depends on what they took the event or
   # the thought to mean, which the first two messages rarely say.
   earliest_offer_message: 3
+  # How a person actually talks when this framework fits. The semantic router embeds
+  # these, not central_indication: clinical prose scored 2/7 on real messages where
+  # these scored 11/11. Authored content - changing them changes which framework is
+  # offered, so they need the same review the summary does.
+  exemplars:
+    - "I can't change the situation and I don't know how to live with it."
+    - "Someone I love is ill and there's nothing I can do about it."
+    - "This isn't going to change and I keep fighting it."
+    - "I'll probably never get an apology and I don't want it running my life."
+    - "I can't make the uncertainty go away but I still have to get through the day."
   to_find_out:
     - "what part of the situation they cannot change or control"
     - "the thought, feeling or urge that stays with them"
