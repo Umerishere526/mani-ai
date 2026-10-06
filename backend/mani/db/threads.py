@@ -303,8 +303,10 @@ async def apply(
             """
             insert into public.thread_technique_state
                 (thread_id, user_id, framework_id, outcome, phase,
-                 at_message_count, library_offered_since, holds, known, ending)
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+                 at_message_count, library_offered_since, holds, known, ending,
+                 phase_since)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10,
+                    (select message_count from public.threads where id = $1))
             on conflict (thread_id) do update set
                 framework_id         = excluded.framework_id,
                 outcome              = excluded.outcome,
@@ -313,7 +315,14 @@ async def apply(
                 library_offered_since = excluded.library_offered_since,
                 holds                = excluded.holds,
                 known                = excluded.known,
-                ending               = excluded.ending
+                ending               = excluded.ending,
+                -- A stage keeps the count it began at until the phase or framework changes.
+                phase_since          = case
+                    when thread_technique_state.phase is not distinct from excluded.phase
+                     and thread_technique_state.framework_id = excluded.framework_id
+                    then thread_technique_state.phase_since
+                    else excluded.phase_since
+                end
             """,
             thread_id, user_id, t.framework_id, t.outcome.value, t.phase,
             t.at_message_count, t.library_offered_since, t.holds, t.known, t.ending,

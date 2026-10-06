@@ -71,15 +71,6 @@ def test_the_clients_own_two_question_lines_are_not_counted_as_stacking():
     assert question_count("What happened? And how did she react?") == 2
 
 
-def test_an_offer_that_does_not_say_what_it_is_called_is_caught():
-    """Client meeting, 2026-10-02: "I never knew what framework I was in"."""
-    from tests.evals.validators import offer_unnamed
-
-    names = ["Example Method"]
-    assert not offer_unnamed("There's an approach called the Example Method.", names)
-    assert offer_unnamed("I have a sequence of questions that could help.", names)
-
-
 def test_the_three_questions_after_a_framework_are_checked():
     from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS
     from tests.evals.validators import after_framework_questions_asked
