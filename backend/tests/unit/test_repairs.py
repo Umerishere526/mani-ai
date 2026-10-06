@@ -108,8 +108,9 @@ def test_no_framework_is_offered_from_inside_a_running_one(registry):
         current_phase="belief",
         framework_running=True,
     )
-    # A stage in the middle of a framework carries no buttons at all.
-    assert fixed.prompts == []
+    # A stage in the middle of a framework carries no buttons of the model's own, only the
+    # way past the question.
+    assert [p.label for p in fixed.prompts] == [repairs.SKIP_LABEL]
     assert sum("inside a running framework" in n for n in fixed.notes) == 2
 
 
@@ -433,11 +434,13 @@ def test_the_end_of_a_framework_keeps_its_buttons(registry):
     assert [p.label for p in fixed.prompts] == ["I tried it", "Not yet", "Feeling better"]
 
 
-def test_a_stage_in_the_middle_of_a_framework_carries_no_buttons(registry):
+def test_a_stage_in_the_middle_of_a_framework_carries_only_the_way_past_it(registry):
+    """The model's own buttons still go: a stage is a question, not a menu. The one button it
+    keeps is the way past the question, so nobody is held on a step (muhammad, 2026-10-06)."""
     mid = reply(text="What did she say?", prompts=[SmartPrompt(label="Not sure")])
     fixed = fix(registry, mid, framework_running=True, current_phase="belief",
                 current_framework_id="abcde")
-    assert fixed.prompts == []
+    assert [p.label for p in fixed.prompts] == [repairs.SKIP_LABEL]
 
 
 DESCRIBED = Framework(
@@ -839,3 +842,56 @@ def test_a_client_line_in_mani_s_last_message_is_not_evidence_for_a_later_hold(b
 
 
 
+
+
+@pytest.mark.parametrize("said", [
+    "skip", "Skip", "  skip  ", "next", "pass",
+    "skip this one", "can we skip this", "next question",
+    "I'd rather not answer that", "I don't want to answer this",
+])
+def test_a_person_passing_a_question_over_is_recognised(said):
+    assert repairs.skips_the_step(said)
+
+
+@pytest.mark.parametrize("said", [
+    "I'll pass on going out tonight",
+    "She skipped the meeting entirely",
+    "I went next door to my neighbour",
+    "He said I should move on from it",
+    "I told her no",
+])
+def test_their_own_words_are_not_mistaken_for_a_skip(said):
+    """"pass" and "skip" inside a sentence are them answering, not passing the question over."""
+    assert not repairs.skips_the_step(said)
+
+
+def test_a_skipped_step_moves_to_the_next_one_whatever_the_reply_reports(registry):
+    """The model may not notice the skip, so the step is advanced in code: nobody is asked the
+    same question again because the reply held it (muhammad, 2026-10-06)."""
+    held = reply(text="Take your time. What did you tell yourself?",
+                 state=TechniqueState(technique="abcde", step="belief"))
+    fixed = fix(registry, held, framework_running=True, current_phase="belief",
+                current_framework_id="abcde", skipped=True)
+    assert fixed.phase == "consequence"
+    assert fixed.ending is None, "skipping one question does not end the framework"
+    assert fixed.holds == 0
+
+
+def test_skipping_the_last_question_ends_the_questions_rather_than_stalling(registry):
+    """There is no next step to move to, so the body check follows, as any other ending does."""
+    held = reply(text="That's alright.", state=TechniqueState(technique="staged", step="closing"))
+    fixed = fix(registry, held, framework_running=True, current_phase="closing",
+                current_framework_id="staged", skipped=True)
+    assert fixed.phase == "somatic_checkin"
+    assert fixed.ending == "resolved"
+
+
+def test_a_skip_is_never_spent_as_the_stages_one_extra_attempt(registry):
+    """A skip and a hold are different things: passing a question over must not use up the
+    attempt a person gets when they did not understand it."""
+    held = reply(text="What did you tell yourself?",
+                 state=TechniqueState(technique="abcde", step="belief"))
+    fixed = fix(registry, held, framework_running=True, current_phase="belief",
+                current_framework_id="abcde", skipped=True, asked_again=True, current_holds=0)
+    assert fixed.phase == "consequence"
+    assert fixed.holds == 0

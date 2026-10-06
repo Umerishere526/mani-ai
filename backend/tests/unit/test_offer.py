@@ -151,11 +151,12 @@ def test_a_weak_fit_asks_rather_than_offering_inside_the_window():
 
 
 @pytest.mark.parametrize("status", [sr.RouteStatus.WEAK_MATCH, sr.RouteStatus.AMBIGUOUS])
-def test_past_the_window_the_closest_fit_is_offered_rather_than_another_question(status):
-    """The cadence exists so the conversation arrives somewhere: past Direct's fifth message,
-    another question is the worse answer."""
+def test_a_fit_that_is_only_the_closest_is_never_offered_however_long_they_talk(status):
+    """Nobody is handed a framework because the conversation has gone on (muhammad,
+    2026-10-06). Only a clear fit is ever offered; everything else keeps talking."""
     route = ambiguous() if status is sr.RouteStatus.AMBIGUOUS else routing(status)
-    assert decide(route, style="direct", their_messages=5, cooldown_passed=True).action is Action.OFFER_FRAMEWORK
+    decision = decide(route, style="direct", their_messages=12, cooldown_passed=True)
+    assert not decision.offers
 
 
 def test_nothing_fitting_is_never_rounded_up_to_the_nearest_framework():
@@ -176,3 +177,26 @@ def test_accepting_starts_the_framework():
 def test_the_same_inputs_always_give_the_same_decision():
     kwargs = dict(style="direct", their_messages=3, cooldown_passed=True)
     assert decide(routing(), **kwargs) == decide(routing(), **kwargs)
+
+
+def test_the_question_that_separates_two_sets_is_asked_once_not_every_turn():
+    """Their answer says which set fits, not what happened, so it rarely moves the vectors:
+    without this the same clarify question is asked every turn forever."""
+    first = decide(ambiguous(), style="direct", their_messages=3, cooldown_passed=True)
+    assert first.action is Action.CLARIFY
+
+    # Their answer is the evidence: the nearest of the two is offered rather than asked about
+    # again, once the style's cadence has given them the room it gives.
+    answered = decide(
+        ambiguous(), style="direct", their_messages=4, cooldown_passed=True,
+        clarified_already=True,
+    )
+    assert answered.action is Action.OFFER_FRAMEWORK
+
+    # Still inside the cadence, it waits rather than offering early.
+    early = decide(
+        ambiguous(), style="direct", their_messages=1, cooldown_passed=True,
+        clarified_already=True,
+    )
+    assert early.action is Action.ASK
+    assert not early.offers

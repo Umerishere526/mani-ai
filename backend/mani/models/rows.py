@@ -100,6 +100,9 @@ class TechniqueState(Row):
     # How the framework ended: resolved, pivoted or stopped; see migration 014. Set on the turn
     # it moves into the body check in and kept until it retires.
     ending: str | None = None
+    # The thread's message count when the current stage began; see migration 017. Lets a stage
+    # that is going nowhere be followed rather than asked again.
+    phase_since: int | None = None
 
 
 class ResponseStyle(Row):

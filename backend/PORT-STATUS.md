@@ -359,3 +359,47 @@ Built, not yet read on the real model. The client's documents are the only conve
 - **Evals:** measure only the client's rules; the feeling vocabulary moved to `scripts/wording.py`.
 
 Deviations from the spec text: the six refusal codes add `another_question` (an offer under a question that is not the offer is still removed); `counted` and `start_only` stay in the framework files because the hold rule still reads them; `body_place` comes from the practice Mani's last reply gave, which is the place they named; "finished" is read from the latest technique row, which no later offer can replace. Open: muhammad's three live conversations in chat-tester (AC-14); the stop line question for Lolly; `/scope` to reconcile rows linking deleted specs.
+
+## 2026-10-06, routing on meaning, and a question a person can pass over
+
+Two changes, one behind a flag and one always on. Both landed with the three checks the
+merge of `fix/improvement-mani` had left failing on `main`: `phase_since` had a column and
+a test but no code, `offer_unnamed` tested the opposite of what the prompt now says, and
+the hardened safety screen caught a message whose eval set exists for messages it misses.
+
+- **The semantic router decides the offer, behind `SEMANTIC_ROUTER` (default off).** On,
+  `semantic_router.route` embeds their last two messages against the frameworks' exemplars
+  and `offer.decide` turns that into one action; `[ctx]` carries `action:` rather than a
+  shortlist, so the model words the offer rather than choosing it. `repairs.apply` adds an
+  offer the model failed to carry and drops one it invented (`offer_decided`,
+  `required_offer`). Off, nothing routes and the model chooses exactly as before, which is
+  what prod runs until the flag is set. Prod's env has no `SEMANTIC_ROUTER`.
+- **No offer is ever forced.** The cadence's `latest` bound is gone: a fit that is only the
+  closest is never offered, however long the conversation runs (muhammad, 2026-10-06). The
+  question that separates two plausible sets is asked once, read back from Mani's own
+  replies; after it their answer is the evidence and the nearer one is offered.
+- **Every running step carries "Skip this one", always on.** `repairs.skips_the_step` reads
+  the same in typed words. The step advances whatever the reply reports, so a question is
+  never asked twice because the model missed the skip; skipping the last question ends the
+  questions into the body check. A skip never spends the stage's one extra attempt.
+- **Replies are shorter.** `mani_base.md` and `response_format.md` ask for something
+  readable at a glance on a phone by someone upset. The base prompt's line cap went 118 to
+  123 for the skip and readability rules.
+
+Measured, not assumed. The router's top pick is right on 5 of the 7 scenarios that declare
+their framework, but four of those sit at margins of 0.01 to 0.11 against `MARGIN = 0.13`,
+so they come back `ambiguous` rather than `match`. Widening `WINDOW` past 2 was tried and
+made it worse: correct offers went 0 to 2 of 10 while false ones went 5 to 12 of 36. **The
+margin gate, not the window, is what to tune next, and it wants more than seven examples.**
+
+Checked live on the real model, both flag states: off, the model offers as it does today;
+on, ask (cooldown), ask (before 3 messages), then an offer with the client's three choices,
+accepted, running. Skip advanced `thought` to `significance` with the framework still
+running. Replies ran 11 to 31 words. `pytest` is 1461 passed, 4 skipped, with the suite now
+pinning `SEMANTIC_ROUTER=false` - it had been reading it from `.env`, so on a machine with
+the flag on every framework test made a real embedding call. The OpenAPI schema is
+byte-identical to `4708550`, so no frontend can break on this.
+
+Open: the margin gate; whether the flag goes on in prod, which is muhammad's call after
+chat-tester; the hosted project needs `supabase db push` and `scripts/seed.py` for any
+change under `supabase/migrations/` or `content/`, since Vercel ships only code.
