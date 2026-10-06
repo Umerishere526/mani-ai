@@ -247,6 +247,13 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# A six-digit code rather than the default link. A link has to redirect somewhere, and the
+# allowed redirect differs per environment (local Streamlit, a deployed tester, the apps);
+# a code works the same everywhere and never lands the person on a dead page.
+[auth.email.template.recovery]
+subject = "Your Mani password reset code"
+content_path = "./supabase/templates/recovery.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true
