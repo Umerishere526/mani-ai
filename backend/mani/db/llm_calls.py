@@ -80,6 +80,16 @@ async def attach_message(
     )
 
 
+async def attach_facts(
+    conn: asyncpg.Connection, call_id: uuid.UUID | str, facts: dict
+) -> None:
+    """Keep what the router read from the call's facts (`router.call_log_record`), so an offer
+    that was or was not made can be traced to the facts behind it."""
+    await conn.execute(
+        "update admin.llm_calls set facts = $2 where id = $1", call_id, facts
+    )
+
+
 async def spend_since(
     conn: asyncpg.Connection, user_id: uuid.UUID | str, hours: int = 24
 ) -> dict:

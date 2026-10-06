@@ -9,7 +9,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 
 ## Epics
 
-- [Conversation](conversation.md): natural replies, the body check, framework offers and framework questions. 26 features: 6 done, 8 in progress, 10 planned, 2 dropped (row 30 is GA).
+- [Conversation](conversation.md): natural replies, the body check, framework offers and framework questions. 27 features: 6 done, 8 in progress, 11 planned, 2 dropped (row 30 is GA).
 - [Safety and privacy](safety.md): danger detection, crisis help, safety mode, private data, permissions. 10 features: 1 done, 9 planned, all GA.
 - [Production readiness](production.md): staying up, limits, monitoring, fallback, automatic checks. 5 features planned, 10 deferred.
 
@@ -58,6 +58,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 39  | Stage questions flagged in the 2026-10-05 chats                                | Natural Mani | planned |
 | 40  | Mani's questions can be answered without stopping to think                     | Natural Mani | in-progress |
 | 41  | A person who stays stuck while Mani is understanding is offered ABCDE          | Natural Mani | in-progress |
+| 42  | Mani follows the client's documents, and our conversation rules that disagree are removed | Natural Mani | planned |
 
 Natural Mani (rows 32, 33, 34, 18, 38, 40, 41, 6, 35, in that order) is the current focus and comes before every slice below it. It overrides parts of ADRs 006, 007, 008, 010 and 011, and row 33's spec records which. Slices 6 and 7 are what has to be true before a limited beta. Slice 9 is what has to be true before an open launch. Slice 8 can run alongside either, as client answers arrive.
 

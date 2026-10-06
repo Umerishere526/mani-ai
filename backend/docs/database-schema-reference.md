@@ -269,6 +269,7 @@ Snapshot taken automatically whenever `admin.prompts` is edited via the admin AP
 | 12 | `outcome` | `admin.llm_call_outcome` (enum) | required | Correctly enum-typed, unlike `purpose`. |
 | 13 | `error_message` | text | optional | |
 | 14 | `created_at` | timestamptz | default `now()` | |
+| 15 | `facts` | jsonb | optional | Migration 013. On a chat call whose facts were read: the fact ids reported, the ones the fit used, the words check's drop notes and the pick (`router.call_log_record`). Ids and notes only, never the person's words, since the row outlives them. Null on redrafts and every other call. |
 
 ### `admin.user_memory`
 Patterns about one person across their conversations, folded in as each finishes (migration 009, ADR-005). Health data: `authenticated` holds nothing on it; only `mani_service` reads and writes it, and RLS scopes that to the caller's own row - the one `admin` table with RLS.

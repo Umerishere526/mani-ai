@@ -551,6 +551,10 @@ async def send(
             "thread %s facts %s pick %s leading %s",
             ctx.thread.id, sorted(fit.facts), fit.pick or "none", fit.leading or "none",
         )
+        await log_facts(
+            call.call_id,
+            router.call_log_record([f.fact for f in reply.facts or []], kept, fit),
+        )
 
     def _why(draft: Reply) -> list[str]:
         return redraft.reasons(
@@ -951,6 +955,21 @@ async def link_call(call_id: uuid.UUID, message_id: uuid.UUID) -> None:
                 )
                 return
             await asyncio.sleep(LINK_RETRY_DELAY_SECONDS)
+
+
+async def log_facts(call_id: uuid.UUID | None, facts: dict) -> None:
+    """Keep on the draft's call row what the router read from its facts. The row was written
+    and committed by client.complete, so no wait is needed; a failure costs a trace, never
+    the reply, so it is logged and swallowed."""
+    from mani.db import pool
+
+    if call_id is None:
+        return
+    try:
+        async with pool.as_admin() as conn:
+            await llm_calls.attach_facts(conn, call_id, facts)
+    except asyncpg.PostgresError:
+        logger.exception("failed to keep the facts of llm call %s", call_id)
 
 
 async def _open_in_style(

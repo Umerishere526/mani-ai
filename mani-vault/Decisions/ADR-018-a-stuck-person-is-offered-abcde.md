@@ -29,7 +29,7 @@ In the October 2026 meeting the client said a person in pain who keeps answering
 
 - A stuck person gets a guided set of questions once they confirm they are stuck.
 - It rests on a spoken instruction that contradicts the client's overview; the client is asked to confirm it in writing.
-- A person whose only stuck answers were one word ("idk") cannot produce a valid quote, so the check can be answered yes with nothing offered.
+- Right after the check, their whole latest message ("yes") is quote enough for `stuck`; a two word minimum dropped exactly that quote in a real chat on 2026-10-06, and the offer with it.
 - ABCDE can be offered to someone whose pain is a medical problem not yet seen to; the safety screen covers emergencies only.
 - Reversal: drop `[stuck]` from `abcde.md` and reseed; the rest is inert without it. Revert the two `mani_base.md` lines.
 

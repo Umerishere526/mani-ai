@@ -1,6 +1,7 @@
 # ABOUTME: Runs whole turns against a live database with a scripted model in place.
 # ABOUTME: The model is faked; every write, policy and transition under test is real.
 
+import dataclasses
 import uuid
 
 import asyncpg
@@ -2073,14 +2074,56 @@ async def test_the_body_route_runs_for_other_exactly_as_for_no_flag_and_not_for_
     assert (phase == "somatic_practice") is practice
 
 
-async def test_a_yes_to_the_stuck_check_is_offered_abcde_which_starts_at_the_stuck_line(alice, model):
+async def test_the_facts_a_draft_reports_are_kept_on_its_call_row_as_ids_never_words(
+    alice, model, monkeypatch
+):
+    """What the router read from the draft's facts is on the cost row, so a missing offer can be
+    traced to a dropped fact. The person's words never reach the row, which outlives them."""
+    from mani.db import pool
+
+    scripted = model(Reply(
+        text="What has today been like?",
+        facts=[Fact(fact="event", words="manager shouted at me"),
+               Fact(fact="painful_thought", words="never said"),
+               Fact(fact="my own label", words="manager shouted at me")],
+    ))
+    async with pool.as_admin() as conn:
+        call_id = await llm_calls.record(
+            conn, purpose=llm_calls.Purpose.CHAT, model="test/model", outcome=llm_calls.Outcome.OK,
+            usage=llm_calls.Usage(), latency_ms=1, user_id=ALICE,
+        )
+    real_call = scripted.__call__
+
+    async def with_real_row(messages, schema, **kwargs):
+        made = await real_call(messages, schema, **kwargs)
+        return dataclasses.replace(made, call_id=call_id)
+
+    monkeypatch.setattr(orchestrator.client, "complete", with_real_row)
+    thread = await after_the_style_tap(await start(alice))
+    await send(alice, thread.id, "my manager shouted at me today")
+
+    async with pool.as_admin() as conn:
+        kept = await conn.fetchval("select facts from admin.llm_calls where id = $1", call_id)
+    assert kept == {
+        "reported": ["event", "painful_thought"], "unknown": 1, "facts": ["event"],
+        "dropped": ["dropped a fact not in their words: painful_thought"],
+        "pick": None, "leading": "abcde", "missing": "meaning", "stuck_route": False,
+    }
+    assert "shouted" not in str(kept) and "my own label" not in str(kept)
+
+
+# The model may quote their earlier stuck words or only the yes itself.
+@pytest.mark.parametrize("stuck_words", ["dont know cant think", "yes"])
+async def test_a_yes_to_the_stuck_check_is_offered_abcde_which_starts_at_the_stuck_line(
+    alice, model, stuck_words
+):
     """covers spec 0009 AC-2, AC-4 and AC-7: after "Are you feeling stuck?" and a yes, ABCDE is
     offered on `stuck` alone, and accepting it passes over "What happened?" with nothing said back."""
     stuck_line = "What goes through your mind when you feel this?"
     scripted = model(
         Reply(text="What has today been like?"),
         Reply(text="That is okay. Are you feeling stuck?"),
-        _offer("abcde", Fact(fact="stuck", words="dont know cant think")),
+        _offer("abcde", Fact(fact="stuck", words=stuck_words)),
         Reply(
             text=f"Okay. I'll guide you through it one step at a time. {stuck_line}",
             state=TechniqueState(technique="abcde", step="belief", accepted=True),

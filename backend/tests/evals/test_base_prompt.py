@@ -68,4 +68,6 @@ def test_the_stock_phrases_are_named_together_and_saying_back_is_not_asked_for()
 
     assert '"I hear you", "I am here with you", "that makes sense", "It sounds like" or "It seems like"' in flat
     assert "say back" not in flat
-    assert "While you are still understanding" in flat
+    # The client's "Mani Standard": a line in fresh words that adds, never their sentence again.
+    assert "say in one short line of your own what you understood" in flat
+    assert "Never hand their sentence back" in flat

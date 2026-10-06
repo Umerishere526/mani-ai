@@ -172,6 +172,30 @@ def test_stuck_is_kept_once_the_check_was_asked_in_any_case_or_punctuation():
     assert kept.present == {"stuck"}
 
 
+def test_a_one_word_yes_to_the_check_just_asked_is_quote_enough_for_stuck():
+    """A real model quotes the yes itself: "Yes" answering "Are you feeling stuck?" on 6 October
+    was dropped as too short, so the offer the check led to was stripped."""
+    mani = ["What thought was in your mind as you woke up?", "Are you feeling stuck?"]
+
+    assert kept_facts([("stuck", "Yes")], STUCK_MESSAGES, mani_messages=mani).present == {"stuck"}
+
+
+@pytest.mark.parametrize(
+    ("words", "mani"),
+    [
+        # The yes answered an earlier message, not the check.
+        ("yes", ["Are you feeling stuck?", "What has today been like?"]),
+        # A short quote that is not their whole latest message.
+        ("know", ["Are you feeling stuck?"]),
+    ],
+)
+def test_a_short_stuck_quote_is_dropped_unless_it_is_the_whole_answer_to_the_check(words, mani):
+    kept = kept_facts([("stuck", words)], STUCK_MESSAGES, mani_messages=mani)
+
+    assert kept.present == frozenset()
+    assert kept.notes == ["dropped a fact not in their words: stuck"]
+
+
 def test_stuck_alone_picks_abcde_on_the_stuck_route_with_nothing_leading():
     result = fit("stuck")
 

@@ -98,6 +98,9 @@ CURRENT_WINDOW = 2
 # One word proves nothing: "me" is in almost every message.
 MIN_QUOTE_WORDS = 2
 
+# An id outside FACTS is the model's own text, so the call log keeps no note naming one.
+_UNKNOWN_NOTE = "dropped an unknown fact"
+
 
 @dataclass(frozen=True)
 class KeptFacts:
@@ -134,23 +137,30 @@ def kept_facts(
 
     `reported` is (fact id, quoted words) pairs from the reply; `messages` are the person's own
     messages, oldest first. This proves the words exist, not that they mean the fact. `stuck`
-    also needs the check among `mani_messages`, Mani's own messages.
+    also needs the check among `mani_messages`, Mani's own messages. Right after the check,
+    their whole latest message ("yes") is quote enough for `stuck`, however short.
     """
     normalized = [normalize(text) for text in messages]
     check_asked = asked_the_check(mani_messages)
+    check_just_asked = asked_the_check(mani_messages[-1:])
     present: set[str] = set()
     notes: list[str] = []
     kept_words: dict[str, str] = {}
     for fact, words in reported:
         if fact not in FACTS:
-            notes.append(f"dropped an unknown fact: {fact}")
+            notes.append(f"{_UNKNOWN_NOTE}: {fact}")
             continue
         if fact == STUCK_FACT and not check_asked:
             notes.append(f"dropped {STUCK_FACT} before the check")
             continue
         quote = normalize(words)
         searched = normalized[-CURRENT_WINDOW:] if fact in CURRENT_FACTS else normalized
-        if len(quote.split()) < MIN_QUOTE_WORDS or not any(_says(quote, t) for t in searched):
+        answers_check = (
+            fact == STUCK_FACT and check_just_asked and bool(quote) and normalized[-1:] == [quote]
+        )
+        if not answers_check and (
+            len(quote.split()) < MIN_QUOTE_WORDS or not any(_says(quote, t) for t in searched)
+        ):
             notes.append(f"dropped a fact not in their words: {fact}")
             continue
         present.add(fact)
@@ -273,3 +283,19 @@ def choose(
     nearest = next(s for s in sets[leading] if len(set(s) & facts) == most)
     missing = next(fact for fact in nearest if fact not in facts)
     return Fit(facts, leading=leading, missing=missing)
+
+
+def call_log_record(reported: Sequence[str], kept: KeptFacts, fit: Fit) -> dict:
+    """What the call log keeps of one draft's facts: ids, the drop notes and what they pointed
+    to. Never the quoted words, and never an id outside FACTS, which is the model's own text."""
+    return {
+        "reported": [fact for fact in reported if fact in FACTS],
+        "unknown": sum(fact not in FACTS for fact in reported),
+        # What the fit was chosen from: the kept facts, plus about_to_act when it was urgent.
+        "facts": sorted(fit.facts),
+        "dropped": [note for note in kept.notes if not note.startswith(_UNKNOWN_NOTE)],
+        "pick": fit.pick,
+        "leading": fit.leading,
+        "missing": fit.missing,
+        "stuck_route": fit.stuck_route,
+    }
