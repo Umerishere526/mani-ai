@@ -453,6 +453,15 @@ def build(
                 "their words; never send it bare"
             )
         asks = _asks_in_stage(ctx)
+        if asks == STAGE_ASKS_BEFORE_MOVING_ON - 1 and not framework_starting:
+            # Asked once already and still not met. Asking the same thing again in other
+            # words is where a framework starts to read as a form (muhammad, 2026-10-05):
+            # follow what they actually said, and let it still serve the stage.
+            lines.append(
+                "stage_note: they have not answered what this stage needs. Do not ask it "
+                "again in other words. Take what they did say, follow it the way a friend "
+                "would, and let that question reach the same thing from where they are"
+            )
         if asks >= STAGE_ASKS_BEFORE_MOVING_ON and not framework_starting:
             lines.append(
                 f"stage_note: you have asked about this stage {asks} times; take what they have "

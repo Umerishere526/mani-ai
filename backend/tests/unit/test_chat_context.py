@@ -757,3 +757,27 @@ def test_a_stage_asked_three_times_is_told_to_move_on(message_count, note):
         framework=running,
     )
     assert ("stage_note: you have asked about this stage" in block) is note
+
+
+@pytest.mark.parametrize("message_count, follow, move_on", [
+    (12, False, False),   # first ask
+    (14, True, False),    # asked once already: follow them rather than rephrase
+    (16, False, True),    # asked twice: take what they gave and move on
+])
+def test_a_stage_that_is_not_landing_follows_them_before_it_moves_on(message_count, follow, move_on):
+    """Asking the same thing again in other words is where a framework reads as a form
+    (muhammad, 2026-10-05). The ask before the pivot follows what they actually said."""
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+        phase="activate", at_message_count=4, phase_since=12,
+    )
+    running = Framework(
+        id="abcde", name="ABCDE", summary="s", body="b", phases=["offering", "activate"],
+        stages={"activate": {"purpose": "p"}},
+    )
+    block = context.build(
+        TurnContext(thread=thread(message_count), profile=None, technique=state),
+        framework=running,
+    )
+    assert ("stage_note: they have not answered what this stage needs" in block) is follow
+    assert ("stage_note: you have asked about this stage" in block) is move_on
