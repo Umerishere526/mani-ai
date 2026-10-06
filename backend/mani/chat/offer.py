@@ -50,6 +50,9 @@ class Decision:
     framework_id: str | None = None
     separates: tuple[str, str] | None = None
     """The two framework ids a CLARIFY question should tell apart. Never shown to the person."""
+    separates_as_text: str | None = None
+    """What those two frameworks are each for, in plain words, so the model can ask the one
+    question that separates them without ever seeing a framework id it could echo."""
     why: str = ""
     """One line, logged. Never sent to the model, never shown."""
 

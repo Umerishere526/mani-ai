@@ -7,6 +7,7 @@ import re
 
 from mani.chat import repairs
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
+from mani.chat.offer import Action as OfferAction, Decision
 from mani.chat.router import Signal, is_confident
 from mani.chat.safety import normalize
 from mani.db.threads import TurnContext
@@ -113,6 +114,12 @@ def clear_cooldown_for(outcome: TechniqueOutcome) -> int:
         if outcome is TechniqueOutcome.ACCEPTED
         else CLEAR_COOLDOWN_AFTER_DECLINE
     )
+
+
+def their_messages(ctx: TurnContext) -> int:
+    """How many messages the person has sent. Public because the offer cadence is counted in
+    their messages, not in turns."""
+    return _their_messages(ctx)
 
 
 def _their_messages(ctx: TurnContext) -> int:
@@ -285,6 +292,7 @@ def build(
     framework_starting: bool = False,
     urgent: bool = False,
     their_last: str | None = None,
+    decision: Decision | None = None,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -388,7 +396,19 @@ def build(
         quoted = ", ".join(f'"{o}"' for o in openers)
         lines.append(f"recent_openers: {quoted}")
 
-    if shortlist and not safety_concern:
+    if decision is not None:
+        # Code has already decided what this turn does, so the model is told the action
+        # rather than the evidence: a shortlist invites it to choose again. The framework id
+        # is never named outside the offer's own lines, so it cannot be echoed to the person.
+        if not safety_concern:
+            lines.append(f"action: {decision.action.value}")
+            if decision.action is OfferAction.CLARIFY and decision.separates_as_text:
+                lines.append(f"separates: {decision.separates_as_text}")
+            if decision.offers and candidate is not None:
+                # The client's description is not here: the backend adds it to the offer, and
+                # a model given the text copied it, so offers showed it twice.
+                lines.extend(_stage_lines("offer", candidate, "offering", resolve_style(ctx)))
+    elif shortlist and not safety_concern:
         ranked = ", ".join(f"{s.framework_id} ({s.score:.2f})" for s in shortlist)
         lines.append(f"framework_shortlist: {ranked}")
         if (
@@ -397,8 +417,6 @@ def build(
             and cooldown_passed(ctx, urgent=urgent)
             and their_last not in HOLDS_THE_QUESTIONS
         ):
-            # The client's description is not here: the backend adds it to the offer, and a
-            # model given the text copied it, so offers showed it twice.
             lines.extend(_stage_lines("offer", candidate, "offering", resolve_style(ctx)))
 
     if running:

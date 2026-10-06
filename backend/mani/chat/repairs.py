@@ -81,6 +81,11 @@ SELF_JUDGMENTS = (
 # The label on an offer of the nearest set of questions when none fits well.
 CLOSEST_FIT_LABEL = "Try the closest fit"
 
+# The two buttons an offer carries. Used when code decides to offer and the model did not
+# carry them itself, so the person always has the same two ways to answer.
+TRY_IT_LABEL = "Try it"
+KEEP_CHATTING_LABEL = "Keep chatting"
+
 # Five: room for a choice in the person's own voice. Past that a label is becoming a sentence.
 MAX_CAPSULE_WORDS = 5
 
@@ -415,6 +420,8 @@ def apply(
     name_said_before: bool = False,
     clarification_already_used: bool = False,
     closest_fit: bool = False,
+    required_offer: str | None = None,
+    offer_decided: bool = False,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again.
 
@@ -586,11 +593,42 @@ def apply(
     # means the offer shares a reply with something else, so its buttons are dropped: the
     # offer can come next turn, and a reply is never left asking two things at once.
     offered_id = next((p.technique for p in kept if p.technique), None)
+
+    if offer_decided:
+        # Code decides whether a framework is offered (ADR pending; mani/chat/offer.py), so
+        # the model's own choice is not consulted here. An offer it failed to carry is added,
+        # and one it invented is removed.
+        if required_offer is not None and offered_id != required_offer:
+            kept = [p for p in kept if not p.technique and not _is_offer_button(p)]
+            framework = registry.get(required_offer)
+            if framework is not None:
+                kept = kept + [
+                    SmartPrompt(label=TRY_IT_LABEL, technique=required_offer),
+                    SmartPrompt(label=KEEP_CHATTING_LABEL, decline=True),
+                ]
+                notes.append(f"added the offer this turn decided on: {required_offer}")
+                offered_id = required_offer
+        elif required_offer is None and offered_id is not None:
+            dropped = [p.label for p in kept if _is_offer_button(p) or p.technique]
+            kept = [p for p in kept if not p.technique and not _is_offer_button(p)]
+            notes.append(f"dropped an offer this turn did not decide on: {dropped}")
+            without = _BLANK_RUN.sub("\n\n", _OFFER_SENTENCE.sub("", text)).strip()
+            text = without or text
+            offered_id = None
+
     if offered_id is not None:
         part = without_permission_question(text)
         if part != text:
             notes.append("replaced the model's permission question with the client's")
-        if "?" in part:
+        if "?" in part and offer_decided and required_offer == offered_id:
+            # The offer is this turn's decision, so the model's extra question gives way to
+            # it rather than the other way round: trim the question, keep the offer.
+            trimmed = _LAST_QUESTION.sub("", part).strip()
+            if trimmed:
+                notes.append("trimmed a question from the reply that carries the offer")
+                part = trimmed
+            text = _compose_offer(part, registry, offered_id, conversation_style, last_mani_text)
+        elif "?" in part:
             dropped = [p.label for p in kept if _is_offer_button(p)]
             kept = [p for p in kept if not _is_offer_button(p)]
             notes.append(f"dropped offer buttons under a question that is not the offer: {dropped}")

@@ -12,7 +12,10 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import context, redraft, repairs, router, safety
+from mani.chat import context, redraft, repairs, router, safety, semantic_router
+# `offer` is a local variable in send() for the offer awaiting an answer, so the module that
+# decides whether to make one is imported under a name that cannot be shadowed by it.
+from mani.chat import offer as offer_policy
 from mani.chat.greeting import (
     CHAT_MORE_LABEL,
     GO_TO_LIBRARY_LABEL,
@@ -262,6 +265,24 @@ def _conversation(history: list[Message]) -> list[dict[str, str]]:
     ]
 
 
+def _separates_as_text(registry, separates: tuple[str, str]) -> str:
+    """What two plausible frameworks are each for, in plain words.
+
+    The model is never given a framework id to ask about - it is given the difference, so the
+    question it asks sounds like a person wondering, not a system narrowing a list.
+    """
+    parts = []
+    for framework_id in separates:
+        framework = registry.get(framework_id)
+        activation = (registry.activations or {}).get(framework_id) or {}
+        central = " ".join((activation.get("central_indication") or "").split())
+        if central:
+            parts.append(central.rstrip("."))
+        elif framework is not None:
+            parts.append(framework.name)
+    return " ... or ... ".join(parts)
+
+
 async def send(
     conn: asyncpg.Connection,
     claims: Claims,
@@ -435,6 +456,50 @@ async def send(
         if shortlist and router.is_confident(shortlist):
             candidate = config.registry.get(shortlist[0].framework_id)
 
+    # Routing on meaning, and the offer decided in code rather than by the model. Behind a
+    # flag until the two have been compared on the same conversations.
+    decision: offer_policy.Decision | None = None
+    if settings.semantic_router:
+        running_now = (
+            technique is not None and technique.outcome is TechniqueOutcome.ACCEPTED
+        )
+        routing = (
+            semantic_router.route(user_texts)
+            if not running_now
+            and assessment.level is safety.Level.NONE
+            and not assessment.blocks_framework
+            and tapped is None
+            and their_last not in ("heard", "vague")
+            else semantic_router.NO_MATCH
+        )
+        vetoed = frozenset(
+            framework_id
+            for framework_id, activation in config.registry.activations.items()
+            if router.vetoes(activation, user_texts)
+        )
+        decision = offer_policy.decide(
+            routing,
+            style=context.resolve_style(ctx),
+            their_messages=context.their_messages(ctx),
+            cooldown_passed=context.cooldown_passed(ctx, urgent=urgent),
+            safety_concern=assessment.blocks_framework,
+            their_last=their_last,
+            framework_running=running_now,
+            accepted_this_turn=tapped is not None and bool(getattr(tapped, "technique", None)),
+            finishing=False,
+            vetoed=vetoed,
+        )
+        logger.info(
+            "thread %s decided %s (%s)", ctx.thread.id, decision.action.value, decision.why
+        )
+        if decision.offers and decision.framework_id:
+            candidate = config.registry.get(decision.framework_id)
+        elif decision.separates:
+            decision = dataclasses.replace(
+                decision,
+                separates_as_text=_separates_as_text(config.registry, decision.separates),
+            )
+
     wants_title = (
         ctx.thread.message_count >= TITLE_AFTER_MESSAGES and not ctx.thread.title
     )
@@ -453,7 +518,7 @@ async def send(
         ctx, shortlist=shortlist, framework=active_framework, candidate=candidate,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
         framework_starting=accepted_this_turn, urgent=urgent,
-        their_last=their_last,
+        their_last=their_last, decision=decision,
     )
     for_model = (
         f'User tapped the button: "{tapped.label}".'
@@ -627,6 +692,10 @@ async def send(
                     for m in [m for m in history if m.role is MessageRole.MANI][1:])
         ),
         clarification_already_used=context.clarification_used(history),
+        # When code decided the offer, it is added or dropped here rather than being the
+        # model's to make: that is the whole point of deciding it in code.
+        offer_decided=decision is not None,
+        required_offer=decision.framework_id if decision is not None and decision.offers else None,
     )
     if assessment.blocks_framework or model_concern:
         # A concern pauses the framework rather than ending it: nothing this reply reports
