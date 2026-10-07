@@ -6,7 +6,7 @@ tags: [journal, prompts, evals, lessons]
 
 # Measure before tuning prompts
 
-Lessons from the chat-quality audit on 2026-09-23. See [[ADR-005-per-person-memory-across-conversations]].
+Lessons from the chat-quality audit on 2026-09-23.
 
 ## One eval run is not a measurement
 
@@ -51,11 +51,3 @@ Integration tests ran against the same local database the evals read, and left 1
 real model name. Cache and latency averages over any window that included a `pytest` run were
 wrong: "53% cached" was really about 60%. Fixed at the fixtures. When reading cost numbers,
 exclude rows with no user if they look synthetic.
-
-## Things muhammad decided (2026-09-23)
-
-- Framework ending: the closing question, then the body check-in.
-- Nickname: allowed sparingly (at most once a conversation, never first word).
-- Crisis in another chat: carry a flag, don't lock.
-- Memory: separate record, fold on new chat plus 24 h idle, admin-visible, used in chat.
-- Unknown library value on a button: send to `home`.

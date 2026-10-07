@@ -6,7 +6,7 @@ tags: [journal, tests, exercises, lessons]
 
 # Seeded content turns dormant code paths live in tests
 
-Lessons from shipping [[library-audio]].
+Lessons from shipping the library audio.
 
 ## The integration tests share the dev database, so seeding changes what they exercise
 
@@ -37,13 +37,3 @@ a LAN address rather than loopback. The fix is an autouse `no_real_exercise_call
 50 MB is the cap **per file**, and total storage is 1 GB (checked on supabase.com, 2026-10-02). muhammad
 read the 50 MB as a total. The audio was compressed anyway (64 kbps mono, approved by a listen test),
 for streaming speed and repo size.
-
-## Not fixed, noted
-
-- `chat-tester/app.py` uses `st.components.v1.html`. Streamlit warns it was due for removal after
-  2026-06-01, and its replacement is `st.iframe`.
-- A second local Supabase stack, `supabase_db_mani-ai` on 54322, and a stray root `supabase/`
-  directory. Both are probably from running `supabase start` at the repo root.
-- `safety.screen` matches raw substrings. "i just want to quit this life" screens as NONE, and "want
-  to die" probably fires on "want to diet" (not yet verified). This is from the pipeline investigation
-  on branch `mani-pipeline-investigation`.

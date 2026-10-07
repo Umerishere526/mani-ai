@@ -52,7 +52,7 @@ Query: `select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid
 | `admin` | `exercises` | The exercise catalog (currently empty — see `PORT-STATUS.md`). |
 | `admin` | `crisis_events` | One row per crisis-flagged turn, for care-team review. |
 | `admin` | `llm_calls` | One row per model call — tokens, latency, cost tracking. |
-| `admin` | `user_memory` | What Mani has learned about one person across conversations - backend and admins only (ADR-005). |
+| `admin` | `user_memory` | What Mani has learned about one person across conversations - backend and admins only. |
 | `public` | `profiles` | Onboarding data — nickname, topics, support style. Auto-created on signup (migration 004). |
 | `public` | `threads` | One conversation. |
 | `public` | `messages` | Every message in every thread, both sides. |
@@ -270,7 +270,7 @@ Snapshot taken automatically whenever `admin.prompts` is edited via the admin AP
 | 14 | `created_at` | timestamptz | default `now()` | |
 
 ### `admin.user_memory`
-Patterns about one person across their conversations, folded in as each finishes (migration 009, ADR-005). Health data: `authenticated` holds nothing on it; only `mani_service` reads and writes it, and RLS scopes that to the caller's own row - the one `admin` table with RLS.
+Patterns about one person across their conversations, folded in as each finishes (migration 009). Health data: `authenticated` holds nothing on it; only `mani_service` reads and writes it, and RLS scopes that to the caller's own row - the one `admin` table with RLS.
 
 | # | Column | Type | Required | Purpose |
 |---|---|---|---|---|

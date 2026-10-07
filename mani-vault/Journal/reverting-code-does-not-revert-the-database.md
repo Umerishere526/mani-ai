@@ -40,5 +40,3 @@ Numbers were also reused across the branches: `011` was both `technique_state_ho
 `technique_outcome_stopped`, `013` both `llm_call_decision` and `llm_call_facts`. Parallel
 branches each picking "the next number" collide, and the merge that resolves it records one
 name against the other's contents.
-
-See [[hosted-and-local-schema-drift]] for the reconciliation, still open.

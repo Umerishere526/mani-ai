@@ -49,7 +49,7 @@ NativeWind v5's documented mechanism for this exact case is `group`/`group-activ
 Grepped every `CardGradient` usage (`home-exercise-card.tsx`, `chat-drawer-nav-section.tsx`, `conversation-style-option.tsx`):
 
 - `home-exercise-card.tsx` uses `active:opacity-90` **directly on the `Pressable`**, not a nested child — safe, unaffected. Opacity on the `Pressable` itself composites its entire subtree (including `CardGradient`) via normal RN opacity, no pseudo-class-on-a-descendant trick needed.
-- `conversation-style-option.tsx` (see [[conversation-style-picker-implementation]]) has no `active:` class at all — it animates press feedback via Reanimated's `onPressIn`/`onPressOut` + `useSharedValue`, a different mechanism entirely, also unaffected.
+- `conversation-style-option.tsx` has no `active:` class at all — it animates press feedback via Reanimated's `onPressIn`/`onPressOut` + `useSharedValue`, a different mechanism entirely, also unaffected.
 - Only `chat-drawer-nav-section.tsx` had the broken pattern, and only because it was mid-edit when the bug was caught.
 
 ## Generalizes
@@ -113,5 +113,4 @@ scanner can see, even though which one applies is decided at runtime).
 
 ## Links
 
-- [[conversation-style-picker-implementation]] — the CardGradient usage that prompted checking this
 - [[mani-mobile-ui-port]] — prior NativeWind/className-on-non-View gotchas (vector icons, react-native-svg) in the same family of risk

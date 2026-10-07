@@ -506,7 +506,7 @@ async def send(
     attempts = 0
     # A draft that names a feeling they never did, offers before it may, offers what they said
     # rules out, or asks nothing gets one more try, told why; a missing question gets a second.
-    # What still fails is corrected by repairs.apply. See ADR-006 and ADR-008.
+    # What still fails is corrected by repairs.apply.
     while why and attempts < 2 and (attempts == 0 or any("asks no question" in w for w in why)):
         logger.info("thread %s redrafting: %s", ctx.thread.id, "; ".join(why))
         again = await client.complete(
