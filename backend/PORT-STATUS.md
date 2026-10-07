@@ -36,7 +36,7 @@ History (how the port went, what was fixed from review, old measurements) is in
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `facts`,
      `style`, then `text`. The order is deliberate. `facts` are ids from the client's selection table, each with
      the person's own words; one counts only when those words are in one of their messages (ADR-014, spec 0005).
-  4a. What they said before accepting is not asked again (ADR-015). The facts kept on the offer turn are stored
+     4a. What they said before accepting is not asked again (ADR-015). The facts kept on the offer turn are stored
      with their words on the technique row (`known`, migration 012). Accepting, by tap or typed yes, skips the
      stages those facts answer (`answered_by` in the framework file; only ABCDE's `activate` and `belief` today),
      and `[ctx]` carries `already_told`. A bare "what?" or "huh" is read as not following, and the rephrase
@@ -106,26 +106,26 @@ History (how the port went, what was fixed from review, old measurements) is in
 
 ## The API
 
-| Method | Path | |
-|---|---|---|
-| GET | `/health`, `/health/ready` | liveness, readiness |
-| GET PUT | `/v1/profile` | onboarding answers |
-| GET POST | `/v1/threads` | list, start (writes the greeting) |
-| POST | `/v1/threads/current` | what to show on opening the app; creates a thread on first call |
-| GET PATCH DELETE | `/v1/threads/{id}` | fetch, set `conversation_style`, soft delete |
-| GET POST | `/v1/threads/{id}/messages` | history (paged), **send a turn** |
-| GET | `/v1/exercises`, `/home`, `/{id}` | catalog with signed audio |
-| GET POST | `/v1/exercises/completions` | a user's completions |
-| GET | `/v1/crisis/resources` | empty until real services exist |
-| DELETE | `/v1/account` | delete the account and its data |
-| GET POST | `/v1/admin/prompts` | portal |
-| GET PATCH | `/v1/admin/prompts/{id}` | patch snapshots the old version first |
-| GET | `/v1/admin/prompts/{id}/versions` | history |
-| POST | `/v1/admin/prompts/cache/invalidate` | publish now |
-| GET POST, PATCH DELETE | `/v1/admin/exercises`, `/{id}` | catalog CRUD |
-| GET | `/v1/admin/crisis-events` | review queue |
-| GET | `/v1/admin/users/{id}/memory` | what is remembered about a person |
-| GET | `/internal/cron/fold-summaries` | idle memory fold, bearer `CRON_SECRET`, no JWT |
+| Method                 | Path                                 |                                                                 |
+| ---------------------- | ------------------------------------ | --------------------------------------------------------------- |
+| GET                    | `/health`, `/health/ready`           | liveness, readiness                                             |
+| GET PUT                | `/v1/profile`                        | onboarding answers                                              |
+| GET POST               | `/v1/threads`                        | list, start (writes the greeting)                               |
+| POST                   | `/v1/threads/current`                | what to show on opening the app; creates a thread on first call |
+| GET PATCH DELETE       | `/v1/threads/{id}`                   | fetch, set `conversation_style`, soft delete                    |
+| GET POST               | `/v1/threads/{id}/messages`          | history (paged), **send a turn**                                |
+| GET                    | `/v1/exercises`, `/home`, `/{id}`    | catalog with signed audio                                       |
+| GET POST               | `/v1/exercises/completions`          | a user's completions                                            |
+| GET                    | `/v1/crisis/resources`               | empty until real services exist                                 |
+| DELETE                 | `/v1/account`                        | delete the account and its data                                 |
+| GET POST               | `/v1/admin/prompts`                  | portal                                                          |
+| GET PATCH              | `/v1/admin/prompts/{id}`             | patch snapshots the old version first                           |
+| GET                    | `/v1/admin/prompts/{id}/versions`    | history                                                         |
+| POST                   | `/v1/admin/prompts/cache/invalidate` | publish now                                                     |
+| GET POST, PATCH DELETE | `/v1/admin/exercises`, `/{id}`       | catalog CRUD                                                    |
+| GET                    | `/v1/admin/crisis-events`            | review queue                                                    |
+| GET                    | `/v1/admin/users/{id}/memory`        | what is remembered about a person                               |
+| GET                    | `/internal/cron/fold-summaries`      | idle memory fold, bearer `CRON_SECRET`, no JWT                  |
 
 ## Decisions in force
 

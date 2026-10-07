@@ -15,58 +15,67 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 
 ## At a glance
 
-| #   | Feature                                                                        | Phase   | Status  |
-| --- | ------------------------------------------------------------------------------ | ------- | ------- |
-| 1   | Somatic check asked once, then moves on                                        | Slice 1 | done    |
-| 2   | Where in the body, with buttons, then the exercise                             | Slice 1 | done    |
-| 3   | Per style wording from the client                                              | Slice 2 | done    |
-| 4   | Returns in waves, then the library offer                                       | Slice 2 | done    |
-| 5   | ABCDE is offered when an event and a belief about it are named                 | Slice 3 | done    |
-| 6   | The offer names the framework, introduces it, and gives three choices          | Natural Mani | planned |
-| 7   | The manager chat is a standing real conversation check                         | Slice 4 | planned |
-| 8   | Mani picks the best framework from the person's situation and steers toward it | Slice 5 | in-progress |
-| 9   | Crisis help a person can use                                                   | Slice 6 | planned |
-| 10  | Danger detection catches real phrasing                                         | Slice 6 | planned |
-| 11  | Safety mode follows the person                                                 | Slice 6 | planned |
-| 12  | Mani stays up when many people chat                                            | Slice 7 | planned |
-| 13  | Private conversations stay private                                             | Slice 7 | planned |
-| 14  | Database permissions match what users should do                                | Slice 7 | planned |
-| 15  | Usage and request limits                                                       | Slice 7 | planned |
-| 16  | Monitoring and alerts                                                          | Slice 7 | planned |
-| 17  | Guide questions match the client's wording                                     | Slice 8 | planned |
-| 18  | A framework stage moves on after one answer                                    | Natural Mani | in-progress |
-| 19  | Body check in follows every framework                                          | Slice 8 | in-progress |
-| 20  | A framework stops when the person asks                                         | Slice 8 | planned |
-| 21  | Hard safety rules enforced in code                                             | Slice 9 | planned |
-| 22  | Reply shape built into Mani's answer format                                    | Slice 9 | dropped |
-| 23  | Backup AI provider and no lost messages                                        | Slice 9 | planned |
-| 24  | Memory and notes kept apart from instructions                                  | Slice 9 | planned |
-| 25  | Admin access guarded and recorded                                              | Slice 9 | planned |
-| 26  | Automatic checks on every change                                               | Slice 9 | planned |
-| 27  | Client rules the app never reads                                               | Slice 8 | planned |
-| 28  | Shared Mani rules agree with the client's document                             | Slice 8 | dropped |
-| 29  | Our additions to the frameworks get client sign off                            | Slice 8 | planned |
-| 30  | DBT STOP follows the client's cadence and never delays help                    | Slice 8 | planned |
-| 31  | Every framework's worked example is a standing check                           | Slice 8 | planned |
-| 32  | The client's style conversations are a standing check                          | Natural Mani | in-progress |
-| 33  | Mani speaks naturally: short, neutral, humble instructions                     | Natural Mani | done |
-| 34  | No dashes in any reply                                                         | Natural Mani | planned |
-| 35  | The model is chosen on real conversations                                      | Natural Mani | in-progress |
-| 36  | A short answer to Mani's safety question is checked                            | Slice 6 | planned |
-| 37  | The model's safety flag does not stall DBT STOP                                | Slice 6 | done |
-| 38  | A request to hear a question again also reads "whats that mean"                | Natural Mani | in-progress |
-| 39  | Stage questions flagged in the 2026-10-05 chats                                | Natural Mani | planned |
-| 40  | Mani's questions can be answered without stopping to think                     | Natural Mani | in-progress |
-| 41  | A person who stays stuck while Mani is understanding is offered ABCDE          | Natural Mani | in-progress |
+| #   | Feature                                                                                   | Phase        | Status      |
+| --- | ----------------------------------------------------------------------------------------- | ------------ | ----------- |
+| 1   | Somatic check asked once, then moves on                                                   | Slice 1      | done        |
+| 2   | Where in the body, with buttons, then the exercise                                        | Slice 1      | done        |
+| 3   | Per style wording from the client                                                         | Slice 2      | done        |
+| 4   | Returns in waves, then the library offer                                                  | Slice 2      | done        |
+| 5   | ABCDE is offered when an event and a belief about it are named                            | Slice 3      | done        |
+| 6   | The offer names the framework, introduces it, and gives three choices                     | Natural Mani | planned     |
+| 7   | The manager chat is a standing real conversation check                                    | Slice 4      | planned     |
+| 8   | Mani picks the best framework from the person's situation and steers toward it            | Slice 5      | in-progress |
+| 9   | Crisis help a person can use                                                              | Slice 6      | planned     |
+| 10  | Danger detection catches real phrasing                                                    | Slice 6      | planned     |
+| 11  | Safety mode follows the person                                                            | Slice 6      | planned     |
+| 12  | Mani stays up when many people chat                                                       | Slice 7      | planned     |
+| 13  | Private conversations stay private                                                        | Slice 7      | planned     |
+| 14  | Database permissions match what users should do                                           | Slice 7      | planned     |
+| 15  | Usage and request limits                                                                  | Slice 7      | planned     |
+| 16  | Monitoring and alerts                                                                     | Slice 7      | planned     |
+| 17  | Guide questions match the client's wording                                                | Slice 8      | planned     |
+| 18  | A framework stage moves on after one answer                                               | Natural Mani | in-progress |
+| 19  | Body check in follows every framework                                                     | Slice 8      | in-progress |
+| 20  | A framework stops when the person asks                                                    | Slice 8      | planned     |
+| 21  | Hard safety rules enforced in code                                                        | Slice 9      | planned     |
+| 22  | Reply shape built into Mani's answer format                                               | Slice 9      | dropped     |
+| 23  | Backup AI provider and no lost messages                                                   | Slice 9      | planned     |
+| 24  | Memory and notes kept apart from instructions                                             | Slice 9      | planned     |
+| 25  | Admin access guarded and recorded                                                         | Slice 9      | planned     |
+| 26  | Automatic checks on every change                                                          | Slice 9      | planned     |
+| 27  | Client rules the app never reads                                                          | Slice 8      | planned     |
+| 28  | Shared Mani rules agree with the client's document                                        | Slice 8      | dropped     |
+| 29  | Our additions to the frameworks get client sign off                                       | Slice 8      | planned     |
+| 30  | DBT STOP follows the client's cadence and never delays help                               | Slice 8      | planned     |
+| 31  | Every framework's worked example is a standing check                                      | Slice 8      | planned     |
+| 32  | The client's style conversations are a standing check                                     | Natural Mani | in-progress |
+| 33  | Mani speaks naturally: short, neutral, humble instructions                                | Natural Mani | done        |
+| 34  | No dashes in any reply                                                                    | Natural Mani | planned     |
+| 35  | The model is chosen on real conversations                                                 | Natural Mani | in-progress |
+| 36  | A short answer to Mani's safety question is checked                                       | Slice 6      | planned     |
+| 37  | The model's safety flag does not stall DBT STOP                                           | Slice 6      | done        |
+| 38  | A request to hear a question again also reads "whats that mean"                           | Natural Mani | in-progress |
+| 39  | Stage questions flagged in the 2026-10-05 chats                                           | Natural Mani | planned     |
+| 40  | Mani's questions can be answered without stopping to think                                | Natural Mani | in-progress |
+| 41  | A person who stays stuck while Mani is understanding is offered ABCDE                     | Natural Mani | in-progress |
 | 42  | Mani follows the client's documents, and our conversation rules that disagree are removed | Natural Mani | in-progress |
-| 43  | The team sees whether conversations helped                                     | Natural Mani | planned |
-| 44  | Mani follows Lolly's review of the meetings chat                               | Natural Mani | in-progress |
+| 43  | The team sees whether conversations helped                                                | Natural Mani | planned     |
+
+| 44 | Mani follows Lolly's review of the meetings chat | Natural Mani | in-progress |
+
+# Natural Mani (rows 44, 32, 33, 34, 18, 38, 40, 41, 6, 35, in that order) is the current focus and comes before every slice below it. It overrides parts of ADRs 006, 007, 008, 010 and 011, and row 33's spec records which. Slices 6 and 7 are what has to be true before a limited beta. Slice 9 is what has to be true before an open launch. Slice 8 can run alongside either, as client answers arrive.
 
 Natural Mani (rows 44, 32, 33, 34, 18, 38, 40, 41, 6, 35, in that order) is the current focus and comes before every slice below it. It overrides parts of ADRs 006, 007, 008, 010 and 011, and row 33's spec records which. Slices 6 and 7 are what has to be true before a limited beta. Slice 9 is what has to be true before an open launch. Slice 8 can run alongside either, as client answers arrive.
+
+> > > > > > > origin
 
 ## Open questions for the client
 
 - In the October 2026 meeting you said someone in pain who stays stuck ("I don't know", "I can't think") should be offered ABCDE (row 41, spec 0009). Your overview lists "stuck" under Behavioral Activation, and ABCDE's own "when not to use" list names an unclear issue. Please confirm the meeting version in writing. On this route ABCDE may also be offered when the pain is in the body.
+  <<<<<<< HEAD
+  =======
+- The style document's offers say "I have a structured approach..." and never name the framework. We plan to say its name and a short introduction (row 6). Please confirm in writing.
+  > > > > > > > origin
 - Inside a framework, Mani will move to the next step after any answer, including "I don't know" (row 18). Some later steps then have less to work with, for example ABCDE's dispute step when no belief was named. Is that the trade you want?
 - The client's example ends "How do you feel now?" and then goes straight to the "comes back" reply. What should happen when the person answers "better" or "still tense"? The current buttons "I tried it / Still tense / Feeling better" are not in the new flow.
 - Panic conversation: the earlier framework asks about the body once already ("What are you noticing in your body right now compared with when we started?"). Does that count as the one body question, so the somatic check should go straight to "where"?

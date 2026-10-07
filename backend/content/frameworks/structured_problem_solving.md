@@ -3,7 +3,18 @@ id: structured_problem_solving
 name: Structured Problem-Solving
 summary: "We look at the problem, what you know for sure, what you want to happen and the options you have, then pick a first step."
 display_order: 4
-phases: [offering, problem, facts, control, outcome, options, compare, select, first_action]
+phases:
+  [
+    offering,
+    problem,
+    facts,
+    control,
+    outcome,
+    options,
+    compare,
+    select,
+    first_action,
+  ]
 activation:
   central_indication: >-
     A specific, practical problem exists and the user does not know what to do next - the
@@ -96,13 +107,13 @@ stages:
       - "must not select the priority without the user"
       - "must not turn an interpretation into a fact"
     if_unclear:
-      - when: "too broad - \"Everything is falling apart.\""
+      - when: 'too broad - "Everything is falling apart."'
         reply: "Several problems are happening at once. Which one requires attention first?"
         start_only: true
       - when: "several combined"
         reply: "The deadline, your coworker, and your manager are separate concerns. Which one do you want to resolve first?"
         start_only: true
-      - when: "framed as unsolvable rather than named - \"There's no way to fix this, I could never figure it out.\""
+      - when: 'framed as unsolvable rather than named - "There''s no way to fix this, I could never figure it out."'
         reply: "It feels unsolvable right now. What is the actual problem underneath that?"
         start_only: true
       - when: "what they describe is abuse, a threat, or emergency danger"
@@ -125,6 +136,10 @@ stages:
       - "must not dismiss a reasonable prediction"
       - "must not require certainty before continuing"
     if_unclear:
+      - when: 'prediction stated as fact - "My manager is going to fire me."'
+        reply: "You expect your manager to fire you. What has she said or done?"
+      - when: "not enough information"
+        reply: "Her view is unknown. What information do you have?"
       - when: "a time critical risk is still open - cards or accounts that can still be used, a deadline about to pass, something that gets worse by the hour"
         reply: "<the risk, in a clause>. Contacting <whoever can stop it, such as the bank or the police> is usually the first step. Have you been able to reach them?"
     ask:
@@ -139,6 +154,11 @@ stages:
       - "must not assign responsibility for another person's behaviour"
       - "must not encourage control over an uncontrollable outcome"
       - "must not treat abuse as a mutual communication problem"
+    if_unclear:
+      - when: 'focuses on another person - "I need my manager to understand."'
+        reply: "Her understanding depends on her response. What can you control in how you communicate?"
+      - when: 'they cannot say what is theirs to do - "I don''t know."'
+        reply: "<two or three things that are plausibly theirs to do, in plain words>. Which of those have you already done?"
     ask:
       supportive: "Which part can you do something about?"
       reflective: "Which part can you do something about?"
@@ -151,6 +171,11 @@ stages:
       - "must not promise the outcome is achievable"
       - "must not define success as receiving a particular response from someone else"
       - "must not pressure the user toward reconciliation, confrontation, forgiveness, or separation"
+    if_unclear:
+      - when: 'outcome too broad - "I want everything fixed."'
+        reply: "You want the entire problem resolved. What would a realistic result from your next response be?"
+      - when: 'they cannot say what they want - "I don''t know."'
+        reply: "I'd say the result you want is <a plain draft of the obvious result for their situation>. Is that right, or is it something else?"
     ask:
       supportive: "What do you want to come out of this?"
       reflective: "What do you want to come out of this?"
@@ -165,6 +190,11 @@ stages:
       - "must not exclude the user from generating options"
       - "must not disguise a recommendation as the user's decision"
       - "must not accept several options that are really one approach worded differently - real breadth is at least two genuinely different approaches, not variations on the same one"
+    if_unclear:
+      - when: 'only one option - "The only thing I can do is quit."'
+        reply: "Quitting is the only option you see right now. What other response could address the immediate problem?"
+      - when: 'asks MANI to decide, or cannot name any option - "Tell me what to do." / "I don''t know." Do not ask for their options again'
+        reply: "You want a direct answer. <Two or three realistic ways to start, in plain words, the most urgent first>. Which one feels most doable?"
     ask:
       supportive: "What could you do about it?"
       reflective: "What could you do about it?"
@@ -177,6 +207,11 @@ stages:
       - "must not exaggerate consequences"
       - "must not make legal, medical, financial, or professional conclusions"
       - "must not push the option MANI prefers"
+    if_unclear:
+      - when: 'only benefits named - "Email is easiest."'
+        reply: "Email is the easiest option for you. What limitation could it have?"
+      - when: 'only risks named - "Every option could go wrong."'
+        reply: "Every option has a possible downside. Which risk is most manageable?"
     ask:
       supportive: "What is good and not so good about each of those?"
       reflective: "What is good and not so good about each of those?"
@@ -201,6 +236,11 @@ stages:
       - "must not make the first action too large"
       - "must not require immediate completion"
       - "must not select an action outside the user's control"
+    if_unclear:
+      - when: "action too large"
+        reply: "Fixing the entire report is a large first action. What is the first manageable part?"
+      - when: 'they cannot name a first action - "I don''t know."'
+        reply: "A small first step could be <one concrete step that follows from what they chose>. Does that feel doable?"
     ask:
       supportive: "What is the first thing you would do?"
       reflective: "What is the first thing you would do?"
@@ -294,18 +334,18 @@ MANI:  You can begin the email now. What do you notice in your body?
 
 ## Responses MANI must avoid
 
-| Failure | Example | Why |
-|---|---|---|
-| Standalone mirror | "You have several deadlines." | Not followed by a question |
-| Summary | "You missed the report deadline, believe your manager will remove you, and need to decide whether to call or email." | Retells several stages |
-| Labelling | "You feel overwhelmed and afraid. What should you do?" | Assigns feelings the user did not name |
-| Long explanation | "Large problems often become easier when they are divided into smaller parts..." | Teaches instead of responding |
-| Premature advice | "You should email your manager immediately." | MANI chooses the response |
-| Assumed motive | "Your manager will appreciate your honesty." | Cannot know how she will respond |
-| False certainty | "If you apologize, everything will be fine." | Promises an outcome |
-| Too many options | "You could email, call, schedule a meeting, ask a coworker, contact HR, finish the report tonight, or request an extension." | Overwhelms and takes over option generation |
-| Multiple questions | "What is the problem, what outcome do you want, and what options do you have?" | Several at once |
-| Treating danger as a solvable disagreement | "What are your options for confronting the person who threatened you?" | Immediate danger requires the safety response |
-| Professional overreach | "The legally correct choice is to refuse the agreement." | Must not make legal conclusions |
-| Wrong framework | "What is the smallest part of the report you can complete?" | The user first needs to decide how to address the missed deadline |
-| Wrong tone | "List your options and choose one." | Commanding; may contradict the selected tone |
+| Failure                                    | Example                                                                                                                      | Why                                                               |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Standalone mirror                          | "You have several deadlines."                                                                                                | Not followed by a question                                        |
+| Summary                                    | "You missed the report deadline, believe your manager will remove you, and need to decide whether to call or email."         | Retells several stages                                            |
+| Labelling                                  | "You feel overwhelmed and afraid. What should you do?"                                                                       | Assigns feelings the user did not name                            |
+| Long explanation                           | "Large problems often become easier when they are divided into smaller parts..."                                             | Teaches instead of responding                                     |
+| Premature advice                           | "You should email your manager immediately."                                                                                 | MANI chooses the response                                         |
+| Assumed motive                             | "Your manager will appreciate your honesty."                                                                                 | Cannot know how she will respond                                  |
+| False certainty                            | "If you apologize, everything will be fine."                                                                                 | Promises an outcome                                               |
+| Too many options                           | "You could email, call, schedule a meeting, ask a coworker, contact HR, finish the report tonight, or request an extension." | Overwhelms and takes over option generation                       |
+| Multiple questions                         | "What is the problem, what outcome do you want, and what options do you have?"                                               | Several at once                                                   |
+| Treating danger as a solvable disagreement | "What are your options for confronting the person who threatened you?"                                                       | Immediate danger requires the safety response                     |
+| Professional overreach                     | "The legally correct choice is to refuse the agreement."                                                                     | Must not make legal conclusions                                   |
+| Wrong framework                            | "What is the smallest part of the report you can complete?"                                                                  | The user first needs to decide how to address the missed deadline |
+| Wrong tone                                 | "List your options and choose one."                                                                                          | Commanding; may contradict the selected tone                      |

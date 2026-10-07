@@ -14,6 +14,7 @@ Spec [0011](../0011-lolly-review-meetings-chat/index.md) replaces this spec's AC
 Linked scope feature: row 42 in [docs/scope/conversation.md](../../scope/conversation.md), "Mani follows the client's documents, and our conversation rules that disagree are removed". Sources, newest first, which win where they clash: Lolly's email of 6 October 2026 (in [rationale.md](rationale.md)), the "Good, Acceptable, Bad Conversations" PDF, the style document ("Directive. Supportive. Reflective."), the six frameworks document. The client's spoken instructions from the meeting count like a document (the stuck route of ADR-018 stays). Out of reach: the safety screen, crisis replies, the model's safety flag, the grief veto, RLS, token checks and rate limits; the per framework content additions of scope row 29.
 
 **User stories**:
+
 - As a person talking to Mani, I want replies that understand what I said and move with me, so that I feel listened to rather than questioned.
 - As a person in a framework, I want Mani to notice when I have already answered a step, and to stop or change course when it is not helping, so that I am not pushed through questions.
 - As the client, I want to know whether a conversation helped, so that I can judge each framework by its effect and not only by whether people finished it.
@@ -52,18 +53,18 @@ Reasoning and options: see [rationale.md](rationale.md).
 
 `public.framework_outcomes` (new, one row per framework ending that got an answer):
 
-| Column | Type | Rule |
-|---|---|---|
-| `id` | uuid | primary key, `gen_random_uuid()` |
-| `user_id` | uuid | not null, FK `auth.users` on delete cascade, indexed |
-| `thread_id` | uuid | not null, FK `public.threads` on delete cascade, indexed |
-| `message_id` | uuid | not null, **unique**, FK `public.messages` on delete cascade (the person's reply that reported it) |
-| `framework_id` | text | not null, FK `admin.frameworks` on delete restrict, indexed |
-| `conversation_style` | text | not null, check in (`direct`, `supportive`, `reflective`) |
-| `ending` | text | not null, check in (`resolved`, `pivoted`, `stopped`) |
-| `body_place` | text | null, check in (`chest`, `head`, `stomach`, `elsewhere`) |
-| `outcome` | text | not null, check in (`better`, `mixed`, `unchanged`, `worse`, `unsure`) |
-| `created_at` | timestamptz | not null, default `now()` |
+| Column               | Type        | Rule                                                                                               |
+| -------------------- | ----------- | -------------------------------------------------------------------------------------------------- |
+| `id`                 | uuid        | primary key, `gen_random_uuid()`                                                                   |
+| `user_id`            | uuid        | not null, FK `auth.users` on delete cascade, indexed                                               |
+| `thread_id`          | uuid        | not null, FK `public.threads` on delete cascade, indexed                                           |
+| `message_id`         | uuid        | not null, **unique**, FK `public.messages` on delete cascade (the person's reply that reported it) |
+| `framework_id`       | text        | not null, FK `admin.frameworks` on delete restrict, indexed                                        |
+| `conversation_style` | text        | not null, check in (`direct`, `supportive`, `reflective`)                                          |
+| `ending`             | text        | not null, check in (`resolved`, `pivoted`, `stopped`)                                              |
+| `body_place`         | text        | null, check in (`chest`, `head`, `stomach`, `elsewhere`)                                           |
+| `outcome`            | text        | not null, check in (`better`, `mixed`, `unchanged`, `worse`, `unsure`)                             |
+| `created_at`         | timestamptz | not null, default `now()`                                                                          |
 
 A second unique key, (`thread_id`, `framework_id`, `ending`), stops two concurrent retries of the same retire turn without a client message id from writing twice (a finished framework is never offered again in the thread, so a real second row for that key cannot occur).
 
@@ -79,41 +80,42 @@ offered → declined (cooldown) | accepted → step … step (forward only, one 
 
 **API surface**: no new endpoint. Changes inside the existing chat turn (`POST /v1/threads/{thread_id}/messages`, `send`):
 
-| What | Change |
-|---|---|
+| What                                      | Change                                                                                                                                                                                                                                                                  |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Model reply schema (`mani/llm/schema.py`) | `facts` removed; top level `ending` (string: `resolved`, `pivoted`, `stopped`, or null) and `felt_after` (string: `better`, `mixed`, `unchanged`, `worse`, `unsure`, or null), normalised in `repairs`; `TechniqueState.step` no longer accepts the `answered` sentinel |
-| Offer buttons in the turn response | **Yes, let's try it** (technique), **Tell me more**, **I want to keep talking** (decline), set by code, replacing **Try it** and **Keep chatting**; the tap matching in `orchestrator` follows the new labels |
-| Outcome reads | none in this spec; the team reads with SQL on the admin connection |
+| Offer buttons in the turn response        | **Yes, let's try it** (technique), **Tell me more**, **I want to keep talking** (decline), set by code, replacing **Try it** and **Keep chatting**; the tap matching in `orchestrator` follows the new labels                                                           |
+| Outcome reads                             | none in this spec; the team reads with SQL on the admin connection                                                                                                                                                                                                      |
 
 **Value sourcing**:
 
-| Action | Value | Source |
-|---|---|---|
-| Offer refusal | first message | the person's own messages in the thread: user messages minus a tapped style label (`selected_prompt` in the style labels), fewer than 2 is their first; `router.urgent(user_texts)` exempts it |
-| Offer refusal | safety concern | `safety.screen(content).blocks_framework`, or a model flag whose kind pauses (`safety.flag_pauses`) |
-| Offer refusal | vetoed | `router.vetoes(activation, user_texts)` on `never_offer_when_said` |
-| Offer refusal | cooling down | `thread_technique_state` declined, fewer than 4 messages since `at_message_count` |
-| Offer refusal | finished | `thread_techniques_offered` joined with an accepted technique state whose phase was cleared, for any framework in this thread |
-| Offer refusal | running | `thread_technique_state` accepted with a phase |
-| `[ctx]` `offer_allowed` | yes or no | `context.offer_refusal` is null |
-| Call log `decision` | offered, refused | the draft's offer button `technique`; the first refusal that applies, else `unknown` for an id the registry does not know |
-| Call log `decision` | step_from, step_to, ending, felt_after | the stored phase before the turn; the phase recorded after repairs; the recorded `ending`; the normalised `felt_after` |
-| Step moved to | next step | `reply.state.step`, a known phase of the running framework, never earlier than the stored one |
-| Extra attempt | counted hold | `reply.state.step` equals the stored phase, `thread_technique_state.holds` (at most 1; a second becomes a move) |
-| Uncounted hold | the client's lines | `repairs.carries_redirect` and `context.asks_to_hear_again`, as today |
-| `ending` | resolved, pivoted, stopped | normalised `reply.ending`; when null on a move to `somatic_checkin`: `resolved` from the last question step, else `pivoted`, with a log note |
-| Stuck start | `known.stuck` | set when they accept the offer made on the turn after "Are you feeling stuck?" (`stuck_offer_candidate`, found by `stuck_offer: true`) |
-| Retire turn | `answering_practice` | the stored phase is `somatic_practice` and the turn retires the framework (`orchestrator.send`, `retire_technique`) |
-| Outcome row | `user_id` | the verified JWT subject |
-| Outcome row | `thread_id` | the path parameter, ownership by RLS |
-| Outcome row | `message_id` | the person's message id from `create_message_pair` on this turn; skipped when it reports `was_duplicate` |
-| Outcome row | `framework_id`, `ending` | `thread_technique_state` before the turn |
-| Outcome row | `conversation_style` | `context.resolve_style(ctx)` (`threads.conversation_style`) |
-| Outcome row | `body_place` | the latest place they tapped (`messages.selected_prompt` in `repairs.PLACE_LABELS`) or named (`repairs.named_place`) since the framework reached `somatic_checkin`, this turn's message included, mapped to `chest`, `head`, `stomach`, `elsewhere`; else null |
-| Outcome row | `outcome` | normalised `reply.felt_after`, written only when not null, on the retire turn, with no safety concern on that turn |
-| Offer explanation (**Tell me more**) | the explanation | the client's per style "Tell me more" text and the framework's stored description, both in `[ctx]`, adapted by the model to their situation |
+| Action                               | Value                                  | Source                                                                                                                                                                                                                                                         |
+| ------------------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Offer refusal                        | first message                          | the person's own messages in the thread: user messages minus a tapped style label (`selected_prompt` in the style labels), fewer than 2 is their first; `router.urgent(user_texts)` exempts it                                                                 |
+| Offer refusal                        | safety concern                         | `safety.screen(content).blocks_framework`, or a model flag whose kind pauses (`safety.flag_pauses`)                                                                                                                                                            |
+| Offer refusal                        | vetoed                                 | `router.vetoes(activation, user_texts)` on `never_offer_when_said`                                                                                                                                                                                             |
+| Offer refusal                        | cooling down                           | `thread_technique_state` declined, fewer than 4 messages since `at_message_count`                                                                                                                                                                              |
+| Offer refusal                        | finished                               | `thread_techniques_offered` joined with an accepted technique state whose phase was cleared, for any framework in this thread                                                                                                                                  |
+| Offer refusal                        | running                                | `thread_technique_state` accepted with a phase                                                                                                                                                                                                                 |
+| `[ctx]` `offer_allowed`              | yes or no                              | `context.offer_refusal` is null                                                                                                                                                                                                                                |
+| Call log `decision`                  | offered, refused                       | the draft's offer button `technique`; the first refusal that applies, else `unknown` for an id the registry does not know                                                                                                                                      |
+| Call log `decision`                  | step_from, step_to, ending, felt_after | the stored phase before the turn; the phase recorded after repairs; the recorded `ending`; the normalised `felt_after`                                                                                                                                         |
+| Step moved to                        | next step                              | `reply.state.step`, a known phase of the running framework, never earlier than the stored one                                                                                                                                                                  |
+| Extra attempt                        | counted hold                           | `reply.state.step` equals the stored phase, `thread_technique_state.holds` (at most 1; a second becomes a move)                                                                                                                                                |
+| Uncounted hold                       | the client's lines                     | `repairs.carries_redirect` and `context.asks_to_hear_again`, as today                                                                                                                                                                                          |
+| `ending`                             | resolved, pivoted, stopped             | normalised `reply.ending`; when null on a move to `somatic_checkin`: `resolved` from the last question step, else `pivoted`, with a log note                                                                                                                   |
+| Stuck start                          | `known.stuck`                          | set when they accept the offer made on the turn after "Are you feeling stuck?" (`stuck_offer_candidate`, found by `stuck_offer: true`)                                                                                                                         |
+| Retire turn                          | `answering_practice`                   | the stored phase is `somatic_practice` and the turn retires the framework (`orchestrator.send`, `retire_technique`)                                                                                                                                            |
+| Outcome row                          | `user_id`                              | the verified JWT subject                                                                                                                                                                                                                                       |
+| Outcome row                          | `thread_id`                            | the path parameter, ownership by RLS                                                                                                                                                                                                                           |
+| Outcome row                          | `message_id`                           | the person's message id from `create_message_pair` on this turn; skipped when it reports `was_duplicate`                                                                                                                                                       |
+| Outcome row                          | `framework_id`, `ending`               | `thread_technique_state` before the turn                                                                                                                                                                                                                       |
+| Outcome row                          | `conversation_style`                   | `context.resolve_style(ctx)` (`threads.conversation_style`)                                                                                                                                                                                                    |
+| Outcome row                          | `body_place`                           | the latest place they tapped (`messages.selected_prompt` in `repairs.PLACE_LABELS`) or named (`repairs.named_place`) since the framework reached `somatic_checkin`, this turn's message included, mapped to `chest`, `head`, `stomach`, `elsewhere`; else null |
+| Outcome row                          | `outcome`                              | normalised `reply.felt_after`, written only when not null, on the retire turn, with no safety concern on that turn                                                                                                                                             |
+| Offer explanation (**Tell me more**) | the explanation                        | the client's per style "Tell me more" text and the framework's stored description, both in `[ctx]`, adapted by the model to their situation                                                                                                                    |
 
 **Key invariants**:
+
 - One call with purpose `chat` per turn; nothing asks for a reply again.
 - An offer is never shown on their first message (urgent excepted), under a safety concern, when vetoed, while a decline cools down, after a framework was finished in the thread, or while one runs.
 - Offer and explanation buttons are set by code, never by the model.
@@ -127,6 +129,7 @@ offered → declined (cooldown) | accepted → step … step (forward only, one 
 **Configuration required**: none.
 
 **Critical test scenarios**:
+
 - Happy path: a scripted conversation reaches an offer chosen by the model, shows three buttons, **Tell me more** returns the explanation with two buttons, the person accepts, the model skips a step already answered, ends the framework, the check in line follows Mani's bridge, the person says "a bit better but still tight" after the practice, and one outcome row with `mixed` is stored, verifies **AC-3**, **AC-4**, **AC-5**, **AC-6**, **AC-8**.
 - Refusals: an offer on the first message (and one after an untapped style), under a screen concern, after "my dog died" for Behavioral Activation, one turn after a decline, and after a finished framework each lose their buttons with one `chat` call, and the call log records the reason; "about to send it" on the first message still gets DBT STOP, verifies **AC-3**, **AC-9**, **AC-10**.
 - Steps: a hold is a step equal to the stored one; a second hold on it is recorded as a move; a backward step is refused; `ending: stopped` on any step records `somatic_checkin`; `ending` survives the move to `somatic_practice`, verifies **AC-5**, **AC-6**.
@@ -139,6 +142,7 @@ offered → declined (cooldown) | accepted → step … step (forward only, one 
 Tracer Bullet: the first slice runs one whole conversation on the new rules before the rest is widened, so the smaller checkpoint Lolly asked for can happen after slice 2.
 
 **Slice 1: the conversation up to the offer, on the client's rules**
+
 1. Rewrite `mani_base.md` and `response_format.md` to the kept rules and Lolly's synthesis principle, keeping the base body (after the frontmatter) within `MAX_LINES` in `tests/evals/test_base_prompt.py`; update that test, satisfies **AC-1**, **AC-2**
 2. Remove `facts` from the reply schema, the router's fact, fit and tie code (`kept_facts`, `choose`, `call_log_record`), `fits_when` and `earliest_offer_message` from the framework files and `scripts/seed.py`, and the composer's fit and "offer only from message N" sections; add `stuck_offer: true` to `abcde.md`; keep the selection table, distinctions and `to_find_out` guidance; reseed, satisfies **AC-3**
 3. Delete `redraft.py` and the second call, moving `offered` and `ruled_out` to `repairs`; write `context.offer_refusal` with its six codes and the `offer_allowed` line, replacing `cooldown_passed` and `earliest_offer_ok`; keep the urgent and stuck `[ctx]` lines, satisfies **AC-3**, **AC-9**
@@ -146,18 +150,11 @@ Tracer Bullet: the first slice runs one whole conversation on the new rules befo
 5. Rewrite migration 013 to `decision` and write it on every chat call; switch `scripts/eval_replies.py` to that log line, satisfies **AC-10**
 6. Remove the tone repairs; rewrite the integration tests these slices change (`@tap:Keep chatting` and `@accept|Try it` in `eval_conversations.yaml`, `PERMISSION_QUESTIONS` in `client_style_counts.py`), satisfies **AC-9**, **AC-11**
 
-**Slice 2: steps and the move into the somatic check**
-7. Model judged steps: forward moves allowed, backward refused, a hold is the same step, one counted attempt per step, the client's lines as uncounted holds; remove the told, passed over and stuck stage machinery, the dropped stage fields and their notes; every remaining step in `[ctx]`; `known` reduced to `{"stuck": true}`; rewrite the "stay in this stage" `ready_when` lines and reseed, satisfies **AC-5**
-8. Migration adding `thread_technique_state.ending`, carried in `threads.apply`; top level `ending` in the reply schema; every ending forced to `somatic_checkin`; the bridge plus the client's line; the stop line out of `CLIENT_LINES`; `somatic.md` check in rules rewritten and reseeded, satisfies **AC-6**
+**Slice 2: steps and the move into the somatic check** 7. Model judged steps: forward moves allowed, backward refused, a hold is the same step, one counted attempt per step, the client's lines as uncounted holds; remove the told, passed over and stuck stage machinery, the dropped stage fields and their notes; every remaining step in `[ctx]`; `known` reduced to `{"stuck": true}`; rewrite the "stay in this stage" `ready_when` lines and reseed, satisfies **AC-5** 8. Migration adding `thread_technique_state.ending`, carried in `threads.apply`; top level `ending` in the reply schema; every ending forced to `somatic_checkin`; the bridge plus the client's line; the stop line out of `CLIENT_LINES`; `somatic.md` check in rules rewritten and reseeded, satisfies **AC-6**
 
-**Slice 3: after the somatic check, and the outcome**
-9. The `answering_practice` line on the retire turn and Mani's response to what they report, keeping the waves reply and the body route, satisfies **AC-7**
-10. Migration for `public.framework_outcomes` with both unique keys, RLS, grants (including `supabase_auth_admin` delete) and the SQL assertions; top level `felt_after`, normalised; the row written in the turn's transaction with `on conflict do nothing`, skipped on a duplicate or a concern; the missing outcome log note; cascade test, satisfies **AC-8**
+**Slice 3: after the somatic check, and the outcome** 9. The `answering_practice` line on the retire turn and Mani's response to what they report, keeping the waves reply and the body route, satisfies **AC-7** 10. Migration for `public.framework_outcomes` with both unique keys, RLS, grants (including `supabase_auth_admin` delete) and the SQL assertions; top level `felt_after`, normalised; the row written in the turn's transaction with `on conflict do nothing`, skipped on a duplicate or a concern; the missing outcome log note; cascade test, satisfies **AC-8**
 
-**Slice 4: checks and records**
-11. Evals and style counts reduced to the client's rules; delete or rewrite the tests of removed behaviour (`test_framework_fit`, `test_stuck_route`, `test_stage_walk`, `test_techniques`, `test_eval_stage_findings`, `test_question_findings`, `test_authored_questions` and the redraft cases in `test_turn`); a test counting `chat` calls per turn; full `pytest` and `test_db.sh --local` green, satisfies **AC-9**, **AC-11**, **AC-13**
-12. Delete the ten ADRs and specs 0002 to 0009, write ADR-019, transcribe Lolly's email, update PORT-STATUS, `.claude/BACKEND.md` and the schema reference, satisfies **AC-12**
-13. muhammad's three live conversations, read against the nine points with the `decision` column, journal note, satisfies **AC-14**
+**Slice 4: checks and records** 11. Evals and style counts reduced to the client's rules; delete or rewrite the tests of removed behaviour (`test_framework_fit`, `test_stuck_route`, `test_stage_walk`, `test_techniques`, `test_eval_stage_findings`, `test_question_findings`, `test_authored_questions` and the redraft cases in `test_turn`); a test counting `chat` calls per turn; full `pytest` and `test_db.sh --local` green, satisfies **AC-9**, **AC-11**, **AC-13** 12. Delete the ten ADRs and specs 0002 to 0009, write ADR-019, transcribe Lolly's email, update PORT-STATUS, `.claude/BACKEND.md` and the schema reference, satisfies **AC-12** 13. muhammad's three live conversations, read against the nine points with the `decision` column, journal note, satisfies **AC-14**
 
 ## Migration plan
 
@@ -169,12 +166,14 @@ Tracer Bullet: the first slice runs one whole conversation on the new rules befo
 ## Consequences
 
 **Positive**:
+
 - The rules Mani follows match what the client wrote, in one place, and the client's own example replies are no longer against the rules.
 - A turn is one model call again, so replies are faster and cheaper.
 - About a hundred rules and their tests leave the codebase.
 - Effectiveness becomes measurable per framework and style.
 
 **Negative / tradeoffs**:
+
 - Nothing in code catches a wrong or early framework choice any more; a bad pick is seen only in the evals and the checkpoint. The current model (Gemini 3.8 Flash, `reasoning_effort: low`) carries more of the weight.
 - A step the model wrongly judges complete is skipped for good, since steps never move back.
 - Synthesis can slide into a conclusion the person did not reach; only the prompt holds that line.
@@ -183,6 +182,7 @@ Tracer Bullet: the first slice runs one whole conversation on the new rules befo
 - The web and mobile apps, still on placeholder data, will need the new button labels when they connect.
 
 **Neutral**:
+
 - The router keeps only the vetoes, the urgent phrases and the stuck check; `router.kept_facts`, including today's fix for a one word "yes", goes with the facts. `thread_technique_state.known` stays for the stuck flag only.
 - The client's Supportive permission question follows the style document's panic example ("Would you like to try it together?"); its overthinking example uses "Would it help to work through what happened together...", which today's constant was based on.
 - Scope rows that link the deleted specs (rows 8, 18, 19, 32, 33, 35, 40, 41 and safety row for 0004) lose those links.

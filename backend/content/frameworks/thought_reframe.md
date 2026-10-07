@@ -3,7 +3,16 @@ id: thought_reframe
 name: Thought Reframe
 summary: "We look at the thought you're having, what supports it, what doesn't, and whether there's a more accurate way to see the situation."
 display_order: 2
-phases: [offering, thought, significance, facts_for, facts_against, alternative, reframe]
+phases:
+  [
+    offering,
+    thought,
+    significance,
+    facts_for,
+    facts_against,
+    alternative,
+    reframe,
+  ]
 activation:
   central_indication: >-
     One specific painful thought or interpretation is intensifying distress, and the user wants
@@ -93,15 +102,15 @@ stages:
       - "must not combine several thoughts"
       - "must not rewrite the thought in clinical language"
       - "must not call it irrational or distorted"
-      - "must not settle for a global self-judgment with no moment attached - \"I'm worthless\" is a standing belief about who they are, not a thought about what just happened, and light reframing does not move something that size. Find the moment it is attached to right now"
+      - 'must not settle for a global self-judgment with no moment attached - "I''m worthless" is a standing belief about who they are, not a thought about what just happened, and light reframing does not move something that size. Find the moment it is attached to right now'
     if_unclear:
       - when: "several thoughts appear"
         reply: "Several thoughts are connected here. Which one do you want to examine?"
         start_only: true
-      - when: "no clear thought - \"I don't know.\""
+      - when: 'no clear thought - "I don''t know."'
         reply: "The thought is difficult to identify. What keeps repeating in your mind?"
         start_only: true
-      - when: "identity-level rather than moment-level - \"I'm just a failure.\""
+      - when: 'identity-level rather than moment-level - "I''m just a failure."'
         reply: "That's about who you are, not just today. What happened that brought it up?"
         start_only: true
       - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
@@ -118,6 +127,9 @@ stages:
       - "must not tell the user why the thought is painful"
       - "must not introduce history the user has not mentioned"
       - "must not expand the brief framework into a deeper investigation"
+    if_unclear:
+      - when: 'a feeling word instead - "Rejected."'
+        reply: "You used the word 'rejected.' What thought is connected to it?"
     ask:
       supportive: "What makes that thought hard for you?"
       reflective: "What makes that thought hard for you?"
@@ -134,7 +146,9 @@ stages:
       - "must not use rhetorical questions to push a conclusion"
       - "must not open by asking what challenges the thought - ask what supports it first. Leading with counter-evidence reads as debate before the person has finished laying out their own case, and the disconfirming question belongs after, not instead of, that"
     if_unclear:
-      - when: "the thought is supported by an established fact - \"She told me she does not want the friendship.\""
+      - when: 'no contrary information - "Nothing challenges it."'
+        reply: "Nothing comes to mind yet. What remains unknown about why she has not answered?"
+      - when: 'the thought is supported by an established fact - "She told me she does not want the friendship."'
         reply: "She directly ended the friendship. What thought about yourself or your future do you want help examining?"
     ask:
       supportive: "What makes you think that is true?"
@@ -163,6 +177,9 @@ stages:
       - "must not minimize a legitimate concern"
       - "must not reinterpret danger or mistreatment"
       - "must not choose the alternative for the user"
+    if_unclear:
+      - when: 'no alternative offered - "There is no other explanation."'
+        reply: "This explanation feels certain to you. What part do you know for a fact?"
     ask:
       supportive: "What's one other reason this could be happening?"
       reflective: "What's one other reason this could be happening?"
@@ -178,9 +195,10 @@ stages:
       - "must not continue revising a thought the user already finds credible"
       - "if the user says the reframe does not feel true, must not argue it"
     if_unclear:
-      - when: "they say they do not know what would be fair, or cannot put it into words"
-        reply: "That is fine. What is one thing about this that you do know is true?"
-        counted: true
+      - when: 'falsely positive - "She definitely cares, and everything is fine."'
+        reply: "You do not know that everything is fine. What thought stays closer to what you know?"
+      - when: 'it does not feel true yet - "I don''t really believe that."'
+        reply: "It isn't there yet. What would need to change in it to make it feel truer?"
     ask:
       supportive: "What would be a more balanced thought?"
       reflective: "What would be a more balanced thought?"
@@ -262,17 +280,17 @@ MANI:  You can wait without deciding what her silence means. What do you notice 
 
 ## Responses MANI must avoid
 
-| Failure | Example | Why |
-|---|---|---|
-| Standalone mirror | "You believe she does not care." | Not followed by a question |
-| Summary | "Your friend did not answer, so you decided she does not care, but then you remembered that she helped you yesterday." | Retells the conversation |
-| Assigned feeling | "You feel abandoned and insecure. What evidence supports that?" | Assigns feelings the user did not name |
-| Long explanation | "People sometimes interpret delayed responses as evidence that they are not valued..." | Teaches instead of responding |
-| Multiple questions | "What is the thought, why does it hurt, and what evidence challenges it?" | Rushes the process |
-| Immediate contradiction | "That does not mean she does not care. What else could it mean?" | Reaches the conclusion for the user |
-| Unsupported reassurance | "She probably cares and is simply busy. Can you believe that?" | Invents an explanation |
-| Clinical labelling | "You are catastrophizing and mind-reading. What is a more rational thought?" | Labels the user's thinking |
-| Forced positivity | "People care about you, and everything will be fine. Can you focus on that?" | Not grounded in the user's evidence |
-| Reframing an established fact | "Maybe she did not really mean it when she said she wanted to end the friendship." | Questions a fact because it is painful |
-| Reframing danger | "Could your partner's threat mean something less serious?" | Must not reinterpret danger, abuse, or coercion |
-| Wrong tone | after the user selects support: "The evidence is insufficient. Identify a more accurate conclusion." | Abrupt; does not follow the selected tone |
+| Failure                       | Example                                                                                                                | Why                                             |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Standalone mirror             | "You believe she does not care."                                                                                       | Not followed by a question                      |
+| Summary                       | "Your friend did not answer, so you decided she does not care, but then you remembered that she helped you yesterday." | Retells the conversation                        |
+| Assigned feeling              | "You feel abandoned and insecure. What evidence supports that?"                                                        | Assigns feelings the user did not name          |
+| Long explanation              | "People sometimes interpret delayed responses as evidence that they are not valued..."                                 | Teaches instead of responding                   |
+| Multiple questions            | "What is the thought, why does it hurt, and what evidence challenges it?"                                              | Rushes the process                              |
+| Immediate contradiction       | "That does not mean she does not care. What else could it mean?"                                                       | Reaches the conclusion for the user             |
+| Unsupported reassurance       | "She probably cares and is simply busy. Can you believe that?"                                                         | Invents an explanation                          |
+| Clinical labelling            | "You are catastrophizing and mind-reading. What is a more rational thought?"                                           | Labels the user's thinking                      |
+| Forced positivity             | "People care about you, and everything will be fine. Can you focus on that?"                                           | Not grounded in the user's evidence             |
+| Reframing an established fact | "Maybe she did not really mean it when she said she wanted to end the friendship."                                     | Questions a fact because it is painful          |
+| Reframing danger              | "Could your partner's threat mean something less serious?"                                                             | Must not reinterpret danger, abuse, or coercion |
+| Wrong tone                    | after the user selects support: "The evidence is insufficient. Identify a more accurate conclusion."                   | Abrupt; does not follow the selected tone       |

@@ -1018,6 +1018,9 @@ async def test_buttons_are_returned_only_on_manis_newest_message(alice, model):
     assert offer.prompts == [], "an answered offer must not stay tappable"
     # A running step carries no buttons (spec 0011, AC-6), and no older message keeps any.
     assert [m.id for m in rendered if m.prompts] == []
+    # Only the newest message carries buttons, and on a running step that is the way past it.
+    assert [m.id for m in rendered if m.prompts] == [live]
+    assert [p.label for p in newest.prompts] == [repairs.SKIP_LABEL]
     # What the person chose stays in the record even once the offer is gone.
     assert [m.selected_prompt for m in rendered if m.selected_prompt] == [
         "Yes, let's try it"

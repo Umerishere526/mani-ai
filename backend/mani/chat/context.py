@@ -430,6 +430,9 @@ def build(
     if explaining is not None:
         lines.append("explain_offer: yes")
         lines.extend(_named_offer_lines(explaining))
+        lines.append(f"explain_offer: {EXPLANATIONS[resolve_style(ctx)]}")
+        if explaining.summary:
+            lines.append(f"offer_looks_at: {' '.join(explaining.summary.split())}")
 
     if decision is not None and not safety_concern:
         # Code has already decided what this turn does, so the model is told the action rather
