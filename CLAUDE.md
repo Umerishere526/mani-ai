@@ -18,7 +18,7 @@ Per-app context — read the relevant one before working in that directory:
 
 Coding standards live in `.claude/skills/` — `nextjs-best-practices` for `web/`, `expo-react-native` for `mobile/`, `supabase-postgres` for database work.
 
-`mani-vault/` is an Obsidian vault holding project thinking: ADRs (with an index), Claude's journal, reference pointers and the archived planning history. It is notes only — no code. Start at `mani-vault/Home.md`.
+`mani-vault/Journal/` is Claude's journal: lessons from bugs and gotchas already paid for. It is notes only — no code.
 
 **Where each kind of fact lives** — one home each, everything else links:
 
@@ -26,10 +26,9 @@ Coding standards live in `.claude/skills/` — `nextjs-best-practices` for `web/
 |---|---|
 | Stack facts, commands, layout, rules | this file and `.claude/*.md` (the only copy) |
 | What the backend does today, what is open | `backend/PORT-STATUS.md` |
-| Why we decided something | `mani-vault/Decisions/` (index: `_Index.md`) |
+| Decisions in force | `backend/PORT-STATUS.md`, "Decisions in force" |
 | Lessons and failed approaches | `mani-vault/Journal/` |
 | The client's specifications | `backend/docs/specs/` |
-| History, kept as evidence not instructions | `mani-vault/Programme/` |
 
 ## Golden rules
 
@@ -175,11 +174,11 @@ YOU MUST follow this debugging framework for ANY technical issue:
 
 ## Learning and Memory Management
 
-Notes live in the Obsidian vault at `./mani-vault/`. See `mani-vault/Home.md` for its layout.
+Notes live in `./mani-vault/Journal/`.
 
 - YOU MUST regularly write Markdown notes under ./mani-vault/Journal/ to capture technical insights, failed approaches, and muhammad's preferences. Use .md files and meaningful filenames — `nativewind-v5-no-config.md`, not `notes-3.md`.
 - Before starting complex tasks, search the .md files in ./mani-vault/Journal/ for relevant past experiences and lessons learned.
-- Document architectural decisions and their outcomes as numbered ADRs in ./mani-vault/Decisions/, using `mani-vault/Templates/Decision.md`. Once an ADR is accepted, don't edit it — write a new one that supersedes it.
+- Record each decision as one line under "Decisions in force" in `backend/PORT-STATUS.md`, in the same change as the work. When a decision changes, edit its line in place rather than adding a second one; the reasoning goes in the commit message.
 - Track patterns in user feedback to improve collaboration over time by updating the appropriate ./mani-vault/Journal/ entry.
 - When you notice something that should be fixed but is unrelated to your current task, record it in a new or existing .md note under ./mani-vault/Journal/ rather than fixing it immediately.
 - Link notes to each other with `[[wikilinks]]`. Do NOT copy stack facts from `.claude/` into the vault — link to them, or they drift.

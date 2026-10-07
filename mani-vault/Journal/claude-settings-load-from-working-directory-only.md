@@ -52,8 +52,3 @@ surface that. Docs are cheap to check; confident recall about tooling is not tru
   scope by content rather than by directory.
 - Any claim about Claude Code's own behavior — settings, hooks, skills, plugins, MCP.
   Verify with the `claude-code-guide` agent first.
-
-## Links
-
-- [[Mobile]]
-- [[ADR-001-project-knowledge-lives-in-two-places]]

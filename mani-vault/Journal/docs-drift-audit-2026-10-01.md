@@ -8,7 +8,7 @@ tags: [journal, documentation, lessons]
 
 Four read only audits compared every project document with the code on 2026-10-01 (CLAUDE.md and
 `.claude/`, `backend/PORT-STATUS.md`, `backend/docs/` and the chat tester README, and this vault). They
-found about thirty stale statements. The rule that came out of it is [[ADR-009-where-knowledge-lives]].
+found about thirty stale statements. The rule that came out of it is the "Where each kind of fact lives" table in the root `CLAUDE.md`.
 
 ## What went wrong, in order of how much it could mislead a decision
 

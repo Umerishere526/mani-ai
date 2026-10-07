@@ -1,11 +1,8 @@
 # Port status
 
 What the backend does today and what is still open. Stack notes: `.claude/BACKEND.md`. Database rules:
-`.claude/SUPABASE.md`. Why it is built this way: `mani-vault/Decisions/_Index.md`. **Update this file in
+`.claude/SUPABASE.md`. **Update this file in
 the same change as the work.**
-
-History (how the port went, what was fixed from review, old measurements) is in
-`mani-vault/Journal/port-history-2026-09.md`. It is accurate as of the end of the port, not as of today.
 
 ## Status, 2026-10-01
 
@@ -54,7 +51,7 @@ History (how the port went, what was fixed from review, old measurements) is in
      `heading_toward`, `offer_fit`, then `text`. The order is deliberate.
   5. `redraft.py` may ask once more (twice for a missing question): a feeling the person never named, an
      offer before it is allowed or one their words rule out, an offer that is due and missing, no
-     question, or the last reply's question asked again. ADR-006, ADR-007, ADR-008, ADR-011.
+     question, or the last reply's question asked again.
   6. `repairs.py` corrects what remains, in code: script leakage, buttons, an early offer, an unnamed feeling.
   7. Crisis, the reply, the framework state and the summary are written together.
 - **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): six, each reviewed against the
@@ -67,7 +64,7 @@ History (how the port went, what was fixed from review, old measurements) is in
   now?". The framework is not retired, and Chat More / Go to Library do not appear, until a practice has been
   given (or they decline, or say what they will do). "It comes back" gets the client's waves reply for the
   style.
-- **Memory** (ADR-005): per person, folded from earlier chats by `mani/memory.py`; idle threads fold through
+- **Memory**: per person, folded from earlier chats by `mani/memory.py`; idle threads fold through
   `scripts/fold_idle_threads.py` or `GET /internal/cron/fold-summaries` behind `CRON_SECRET`.
 - **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). A completing framework picks one
   exercise from the whole active catalog with one bound tool call (`mani/llm/tools.py`): the framework's own
@@ -103,14 +100,12 @@ History (how the port went, what was fixed from review, old measurements) is in
 
 ## Decisions in force
 
-The record is `mani-vault/Decisions/_Index.md`. In short:
-
-- **A turn is one model call, or more when a draft is redrafted** (ADR-002, 006, 008). The one scoped extra
+- **A turn is one model call, or more when a draft is redrafted**. The one scoped extra
   call is the exercise pick at the end of a framework. `test_a_turn_costs_exactly_one_provider_call` still
   holds for a draft that needs no redraft.
-- **Offers follow Mani's confidence** (ADR-007). Every reply before an offer asks one question (ADR-008).
-- **Memory is per person** (ADR-005).
-- Settled without an ADR yet, listed at the foot of the index: OpenRouter only, asyncpg not PostgREST, the
+- **Offers follow Mani's confidence**. Every reply before an offer asks one question.
+- **Memory is per person**.
+- Also settled: OpenRouter only, asyncpg not PostgREST, the
   `public` and `admin` split, the `mani_service` role, three security definer write functions, the
   deterministic safety screen as the only thing that locks a thread, in process routing, no streaming.
 
@@ -148,18 +143,18 @@ Ordered by what breaks first.
 ## Open decisions for muhammad
 
 - Crisis resources, `PROTOCOLS` and `CLARIFICATION` wording (point 3 above).
-- Tell the client about ADR-007, which replaced their offer cadence, and have them read about five real
+- Tell the client that offers now follow Mani's confidence, with the nearest fit due by the fourth message, which replaced their offer cadence, and have them read about five real
   Supportive and Reflective transcripts.
-- Tell the client about ADR-011: when a person asks Mani to pick, it offers one small draft step to accept
+- Tell the client: when a person asks Mani to pick, it offers one small draft step to accept
   or change, which the Behavioral Activation specification's "must not choose the activity" does not allow
   as written.
-- Tell the client about ADR-010: after Try it Mani no longer asks the first stage's question when the person
+- Tell the client: after Try it Mani no longer asks the first stage's question when the person
   has already said it, and a person who cannot say what to do is offered up to three options at the first
   "I don't know". Both depart from the literal Structured Problem Solving example.
 - Panic with no action in sight: the overview sends it to DBT STOP, the STOP specification is written around an
   action about to be taken. The client's call.
 - Whether a crisis turn should hand off to an exercise. Left out on purpose; do not add it as a missing branch.
-- Whether a person should see or erase their memory short of deleting the account (ADR-005).
+- Whether a person should see or erase their memory short of deleting the account.
 - The three styles still differ little in length and question rate. Schema field order was the lever that worked
   for openers; more prose rules did not.
 - Revisit the grief veto (Behavioral Activation after loss words) with real transcripts.
@@ -207,13 +202,13 @@ change to prompts, framework content or the offer rules, and compare with these.
 
 - Reached an offer: 36 of 36 conversations (grief had been 1 of 9). First offers at message 2 to 4.
 - Redrafts: 7% of replies across scenarios, 17 to 19% on the hardest chat (a colleague, an embarrassing
-  meeting). ADR-006 sets about 10% as the line to watch on real traffic.
-- Lost wallet chat (panic), three runs: the confirmation question after Try it went from 9 of 9 to 0 of 6
-  (ADR-010); the bank step comes in the first or second reply. Three options at the first "I don't know" is
+  meeting). About 10% is the line to watch on real traffic.
+- Lost wallet chat (panic), three runs: the confirmation question after Try it went from 9 of 9 to 0 of 6;
+  the bank step comes in the first or second reply. Three options at the first "I don't know" is
   still the minority.
 - Behavioral Activation chat (comparing with others online), three runs: the first question after Try it asked
   for what they had stopped doing, a request to pick got one draft step in 4 of 6, and two of three runs
-  reached the body check (ADR-011). One wallet start in five still asked for the problem again.
+  reached the body check. One wallet start in five still asked for the problem again.
 - Replies with no question before an offer: 1 of 39 on that chat (from 8 of 47).
 - Wrong framework offered early: Direct chose ACT or a plan for a colleague chat that wants ABCDE, until offers
   for ABCDE, Thought Reframe and ACT were made to wait for the third message (Direct then chose ABCDE 3 of 3).

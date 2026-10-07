@@ -88,5 +88,4 @@ carefully as suggested defects — a correct diagnosis does not certify the pres
 
 ## Links
 
-- [[Backend]]
 - [[claude-settings-load-from-working-directory-only]]

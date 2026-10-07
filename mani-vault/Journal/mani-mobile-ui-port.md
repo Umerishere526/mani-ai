@@ -40,8 +40,7 @@ the source (colors, typography, spacing, radii, shadows, transitions as TS
 objects). Ported the palette into `mobile/src/global.css`'s `@theme` block
 (Tailwind v4 CSS-first tokens NativeWind resolves natively) plus a TS mirror
 at `mobile/src/lib/tokens.ts` for the handful of cases that take a raw color
-value instead of a className (gradients, SVG, animated interpolation). Full
-reasoning in [[ADR-003-mobile-design-token-architecture]].
+value instead of a className (gradients, SVG, animated interpolation).
 
 Deliberately did not carry over the source's spacing scale — its 4px-based
 scale is numerically identical to Tailwind's built-in default, so redeclaring
@@ -424,7 +423,6 @@ proves nothing about whether it has ever actually run.
 
 ## Links
 
-- [[ADR-003-mobile-design-token-architecture]]
 - Stage 1 (foundation: tokens, fonts, icons, assets, responsive hooks),
   Stage 2 (11 shared primitives), and Stage 3 (chat/crisis/settings
   composite components + AppHeader + DrawerProvider, later moved to be
@@ -509,7 +507,7 @@ defending the first static read of the code.
 
 ## Follow-on: conversation style picker built on top of ChatScreen/useChatSimulation
 
-[[conversation-style-picker-implementation]] adds the Directive/Supportive/
+The conversation style picker adds the Directive/Supportive/
 Reflective greeting step to `chat.tsx`/`useChatSimulation`, both introduced
 in Stage 4 above. Same environment limitation applies (no simulator to
 visually verify against), and the same "extract before hitting the line cap"

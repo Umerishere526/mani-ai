@@ -30,16 +30,11 @@ Five open tickets turned out to be partly done and moved to Week 2, and one open
 - **Match tickets by acceptance criteria, not by title.** MYM-25's title says rate limiting, and
   what landed is a daily cap that is off by default. MYM-113 asked for new tables, and the work landed as
   `jsonb` on `admin.frameworks`. Record the gap in a comment either way.
-- muhammad's placement rule: work done goes to Week 2 of the 30 Day Plan, **except** work that
-  actually happened in Week 1, which goes to Week 1.
 
 ## Applies to
 
-Any future reconciliation, and every commit: ticket it when it lands. Regenerate
-[[AUDIT-TICKET-MAP]] from Linear afterwards rather than editing it by hand.
+Any future reconciliation, and every commit: ticket it when it lands.
 
 ## Links
 
-- [[AUDIT-TICKET-MAP]]
 - [[measure-before-tuning-prompts]]
-- [[framework-endings-and-ignored-offers]]
