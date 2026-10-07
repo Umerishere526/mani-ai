@@ -196,17 +196,6 @@ def test_every_shipped_framework_says_what_it_needs_to_find_out():
         assert len(found) >= 3, f"{path.name} needs at least three things to find out"
 
 
-def test_the_reply_commits_to_a_lean_before_it_writes_the_text():
-    """Structured output is generated in schema order, so a lean declared after the text could
-    only describe a reply already written."""
-    from mani.llm.schema import Reply
-
-    fields = list(Reply.model_fields)
-    assert fields.index("heading_toward") < fields.index("text")
-    assert fields.index("style") < fields.index("heading_toward")
-    assert fields.index("heading_toward") < fields.index("offer_fit") < fields.index("text")
-
-
 def test_what_is_remembered_across_chats_reaches_the_prompt_after_the_static_layers(config):
     """After the per-user context, never before the static layers: the cached prefix has to
     stay byte-identical for everyone."""
@@ -229,18 +218,18 @@ def test_an_empty_memory_adds_nothing(config):
     assert "user_memory" not in [name for name, _ in built.layers]
 
 
-def test_the_index_never_names_it_to_the_person_nor_hands_over_its_description():
-    """The client: never tell the person the framework's name. Its description is added to the
-    offer by the backend, so the index keeps it from the model, which copied it otherwise."""
+def test_the_index_gives_each_name_and_what_it_looks_at_but_never_its_id_to_say():
+    """Lolly's review (spec 0011, AC-1): the offer names the framework and says what it looks at.
+    Hosted runs with the router off, so the index is where the model learns both."""
     helps = Framework(
         id="abcde", name="ABCDE", body="b", phases=["offering"],
         summary="This framework helps you separate what happened from what you told yourself about it.",
         activation={"central_indication": "a specific event"},
     )
     index = composer.framework_index(Registry([helps]))
-    assert "separate what happened from what you told yourself about it" not in index
-    assert 'never its name, its id, or the word "framework"' in index
-    assert "its description is added to your reply for you" in index
+    assert "| ABCDE | `abcde` | a specific event | This framework helps you separate what happened" in index
+    assert "say its name and what you look at together in it" in index
+    assert 'never its id or the word "framework"' in index
 
 
 def test_the_current_issue_stays_visible_even_without_a_prose_summary_yet():
@@ -253,18 +242,34 @@ def test_the_current_issue_stays_visible_even_without_a_prose_summary_yet():
     assert "Freezing before a talk." in layer
 
 
-def test_the_index_marks_the_frameworks_whose_offer_waits_for_their_third_message():
-    waits = Framework(
+def test_the_index_lists_what_each_framework_needs_to_know_and_no_offer_message_number():
+    """The client's two to four exchanges are a range, not a count (spec 0010, AC-3), so the
+    index names what each needs and never a message to wait for."""
+    abcde = Framework(
         id="abcde", name="ABCDE", summary="s", body="b", phases=["offering"],
-        activation={"central_indication": "x", "to_find_out": ["the event", "what it meant"],
-                    "earliest_offer_message": 3},
+        activation={"central_indication": "x", "to_find_out": ["the event", "what it meant"]},
     )
-    immediate = Framework(
-        id="structured_problem_solving", name="Structured Problem-Solving", summary="s", body="b",
-        phases=["offering"],
-        activation={"central_indication": "y", "to_find_out": ["the problem", "whether it can change"]},
-    )
-    index = composer.framework_index(Registry([waits, immediate]))
-    assert "- **ABCDE**: the event; what it meant (offer it only from their message 3" in index
-    assert "- **Structured Problem-Solving**: the problem; whether it can change" in index
-    assert "whether it can change (offer it only" not in index
+    index = composer.framework_index(Registry([abcde]))
+    assert "- **ABCDE**: the event; what it meant" in index
+    assert "offer it only from" not in index and "What makes each fit" not in index
+
+
+def test_no_prompt_names_a_field_the_reply_no_longer_has():
+    from scripts.seed import PROMPTS_DIR
+
+    for path in sorted(PROMPTS_DIR.glob("*.md")):
+        text = path.read_text()
+        for removed in ("heading_toward", "offer_fit", "framework_shortlist"):
+            assert removed not in text, f"{path.name} names {removed}"
+
+
+def test_nothing_the_model_reads_offers_a_nearest_fit_or_says_an_offer_is_due():
+    """covers spec 0005 AC-16: only a full fit is offered, and nothing pushes an offer."""
+    from scripts.seed import FRAMEWORKS_DIR, PROMPTS_DIR, parse_framework
+
+    shipped = [Framework.model_validate(parse_framework(p)) for p in sorted(FRAMEWORKS_DIR.glob("*.md"))]
+    texts = {p.name: p.read_text() for p in sorted(PROMPTS_DIR.glob("*.md"))}
+    texts["framework_index"] = composer.framework_index(Registry(shipped))
+    for name, text in texts.items():
+        for pushed in ("closest_fit", "closest fit", "nearest", "an offer is due", "offer is due"):
+            assert pushed not in text.lower(), f"{name} says {pushed}"

@@ -1,25 +1,47 @@
 ---
 id: abcde
 name: ABCDE
-summary: "These questions help you separate what happened from what you told yourself about it, question what may not be serving you, and come away with a clearer and more useful way of seeing the situation."
+summary: "We look at what happened, what you told yourself about it, how that affected you, and what the facts say about it."
 display_order: 1
-phases: [offering, activate, belief, consequence, examine, balanced, closing]
+phases:
+  [
+    offering,
+    activate,
+    belief,
+    consequence,
+    evidence_for,
+    evidence_against,
+    balanced,
+  ]
 activation:
   central_indication: >-
     A specific event triggered a belief that is now producing an emotional or behavioural
     consequence, and the user wants deeper reflection and understanding rather than a quick
     reframe.
-  # A confident offer waits for their third message: the fit depends on what they took the event or
-  # the thought to mean, which the first two messages rarely say.
-  earliest_offer_message: 3
+  # Offered on the turn after a yes to "Are you feeling stuck?" (the client's October meeting).
+  stuck_offer: true
+  # How a person actually talks when this framework fits. The semantic router embeds
+  # these, not central_indication: clinical prose scored 2/7 on real messages where
+  # these scored 11/11. Authored content - changing them changes which framework is
+  # offered, so they need the same review the summary does.
+  exemplars:
+    - "My manager criticised my work in front of everyone and now I think I'm bad at my job."
+    - "She snapped at me and I decided it means I'm not good enough."
+    - "Something happened and I took it to mean something awful about me."
+    - "My colleague questioned my work in the meeting and I've felt useless ever since."
+    - "I want to understand why that moment affected me so strongly."
+    # How people actually open, in a few words. A short opener matched no long
+    # exemplar closely enough to clear the bar, so the framework was never reached.
+    - "Something happened and I can't shake it."
+    - "I can't stop replaying what happened."
   to_find_out:
     - "the specific event that set it off"
-    - "what they took it to mean about themselves or the other person"
-    - "how believing that has affected what they felt, did or avoided"
+    - "what they told themselves about it, about them or the other person"
+    - "how thinking that changed what they felt or did"
     - "whether they want to look at the whole sequence in depth, not one quick thought"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # router reads never_offer_when_said and stuck_offer.
   appropriate_when:
     - "A specific event occurred"
     - "The user formed a belief about what the event means"
@@ -28,6 +50,8 @@ activation:
     - "The user wants a deeper process rather than a quick reframe"
     - "The issue has been clearly identified"
     - "The user has agreed to try a framework"
+  # Kept as the specification wrote it. Spec 0009 still offers this to a person who stays stuck
+  # with no event named, once they say yes to "Are you feeling stuck?" (the client's meeting).
   not_when:
     - "The user wants to continue chatting without a framework"
     - "The issue has not been clearly identified"
@@ -40,42 +64,6 @@ activation:
     - "A safety concern requires the approved safety protocol"
   contraindications:
     - "The person describes abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger - examining what it means must never turn into questioning whether it was real or as serious as it felt, and Mani must not reinterpret the behaviour as harmless"
-  # Short fragments, not the full example sentences from the spec. router.py matches these as
-  # whole words against what the person actually typed - a real message practically never
-  # contains a whole authored sentence verbatim, but it very often contains the three or four
-  # words that carry the pattern ("so i must be", "proves i will never"). Confidence now also
-  # requires corroboration (two fragments, or one repeated) before a framework is offered, so
-  # shortening these to raise recall no longer trades away precision the way it would have
-  # before that gate existed.
-  strong_signals:
-    - "so i must be"
-    - "must mean i am"
-  signals:
-    - "this proves i"
-    - "proves i will never"
-    - "everyone must think i am"
-    - "i always ruin everything"
-    - "i will always be alone"
-    - "i know i will fail again"
-    - "nothing will ever improve"
-    - "has no respect for me"
-    - "because nobody likes me"
-    - "terrible at my job"
-    - "because i do not matter"
-    - "i failed once"
-    - "wants me to fail"
-    - "want me to fail"
-    - "wanted me to fail"
-    - "embarrassed me"
-    - "embarassed me"
-    - "humiliated me"
-  redirects:
-    - signal: "Nobody cares about me, and I want a quick way to look at that thought."
-      instead: thought_reframe
-    - signal: "I know what happened, but I need to decide what to do."
-      instead: structured_problem_solving
-    - signal: "I cannot control what happened, but I do not want it directing my choices."
-      instead: act_choice_point
   distinctions:
     thought_reframe: >-
       Reframe when one painful thought is identified, a brief process is wanted, and the goal
@@ -103,10 +91,22 @@ stages:
       supportive: "This one event has come to mean something much larger about you. Would it help to look at it together?"
       reflective: "You believe this event says something important about you. Would it help to look at what happened, what you believe it means, and how that belief is affecting you?"
       direct: "You want to determine whether this conclusion fits what happened. Would you like to work through it?"
+    # Mani's part of the offer for someone who said yes to "Are you feeling stuck?" and named no
+    # event (spec 0009). The description and the permission question are added by the code.
+    stuck:
+      purpose: "Say in one plain sentence that it is hard to put into words right now, then that there are some questions you could go through together, one step at a time."
+      boundaries:
+        - "must not name a feeling they did not name"
+        - 'must not say "stuck" back to them'
   activate:
+    # The router fact that, once the person has said it, answers this stage.
     purpose: "Identify the specific event without adding assumptions, explanations, or motives."
     listen_for: "What occurred, what was said or done, which part matters, and whether the user is describing facts or inferred meaning."
-    ready_when: "What occurred is clear, the specific event the user wants to examine is settled, and it is described as observed rather than assumed. If the event remains unclear, stay in this stage."
+    ready_when: >-
+      What occurred is clear, the specific event the user wants to examine is settled, and it is
+      described as observed rather than assumed. If it is still unclear after one more attempt,
+      never invent it. What they said before they accepted counts, including the event the offer
+      was built on: when it already gives this, the step is done and is not asked.
     boundaries:
       - "must not assume why the event occurred"
       - "must not assign another person's motive"
@@ -114,10 +114,11 @@ stages:
       - "must not treat the user's interpretation as observable fact"
       - "must not require repetition of information already provided"
     if_unclear:
-      - when: "assumed motive - \"My manager embarrassed me because she wants me to fail.\""
+      - when: 'assumed motive - "My manager embarrassed me because she wants me to fail."'
         reply: "You believe she wants you to fail. What did she say or do?"
-      - when: "event too broad - \"Everything went wrong.\""
+      - when: 'event too broad - "Everything went wrong."'
         reply: "Several things went wrong. Which event do you want to examine?"
+        start_only: true
       - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
         reply: "What happened sounds serious, and I am not going to ask you to see it differently. What would be most helpful to talk through?"
     ask:
@@ -127,7 +128,6 @@ stages:
   belief:
     purpose: "Identify what the user believes the event means."
     listen_for: "The conclusion, prediction, expectation, or judgment the user attached to the event."
-    ready_when: "One central belief identified in the user's own language. If several beliefs appear, ask which one affected the user most."
     boundaries:
       - "must not select the belief for the user"
       - "must not assign a feeling"
@@ -136,34 +136,40 @@ stages:
       - "must not investigate several beliefs at once"
       - "must not use a feeling word the user did not use"
     if_unclear:
-      - when: "a feeling instead of a belief - \"I felt embarrassed.\""
+      - when: 'a feeling instead of a belief - "I felt embarrassed."'
         reply: "You felt embarrassed. What were you telling yourself at that point?"
       - when: "several beliefs at once"
         reply: "Several thoughts came at once. Which one affected you most?"
     ask:
-      supportive: "What did that come to mean for you?"
-      reflective: "What did that come to mean for you?"
-      direct: "What did that come to mean for you?"
+      supportive: "What did you tell yourself about it?"
+      reflective: "What did you tell yourself about it?"
+      direct: "What did you tell yourself about it?"
+    # The first question for someone offered this because they were stuck, with no event named:
+    # "What happened?" is passed over (spec 0009).
+    stuck:
+      purpose: "Find what goes through their mind when they feel this, when they have named no event."
+      ask:
+        supportive: "What goes through your mind when you feel this?"
+        reflective: "What goes through your mind when you feel this?"
+        direct: "What goes through your mind when you feel this?"
   consequence:
     purpose: "Identify how believing that affected what the user felt, did, avoided, or wanted to do."
     listen_for: "What changed in emotions, behaviour, avoidance, or intended response after believing the thought."
-    ready_when: "A consequence the user identified themselves - something felt, did, avoided, or wanted to do. Do not introduce a consequence the user did not name."
     boundaries:
       - "must not name a consequence the user did not identify"
       - "must not tell the user how the belief must have affected them"
       - "must not retell the complete event-belief-consequence sequence"
       - "must not assume the event itself had no effect"
     if_unclear:
-      - when: "consequence unclear - \"It affected everything.\""
+      - when: 'consequence unclear - "It affected everything."'
         reply: "It affected everything. What changed first?"
     ask:
-      supportive: "It reached into everything for you. What felt most affected?"
-      reflective: "You noticed it affecting everything. Where did you see the effect most?"
-      direct: "It affected everything. What changed first?"
-  examine:
-    purpose: "Determine whether the belief is fully supported, partly supported, incomplete, assumed, or broader than the facts."
-    listen_for: "What supports the belief, what challenges it, what may be accurate, what may be assumed, what remains uncertain."
-    ready_when: "In this order: first what supports the belief, then what challenges it, then what the full evidence suggests. The user has considered what may be accurate, what may be broader than the facts, and what remains uncertain. The user does not have to disprove the belief. Stay on the current step until the user has answered it."
+      supportive: "How has thinking that affected you?"
+      reflective: "How has thinking that affected you?"
+      direct: "How has thinking that affected you?"
+  evidence_for:
+    purpose: "Establish what supports the belief and what may be accurate in it."
+    listen_for: "What supports the belief, and what may be accurate in it."
     boundaries:
       - "must not argue with the user"
       - "must not decide the belief is false"
@@ -173,22 +179,36 @@ stages:
       - "must not use rhetorical questions to force a conclusion"
       - "must not reinterpret danger or mistreatment"
     if_unclear:
-      - when: "part of the belief is accurate - \"I was not prepared enough.\""
+      - when: 'part of the belief is accurate - "I was not prepared enough."'
         reply: "You were not prepared enough for those questions. Does that prove you are incompetent?"
-      - when: "no contrary evidence comes to mind - \"Nothing challenges it.\""
+      - when: 'no contrary evidence comes to mind - "Nothing challenges it."'
         reply: "Nothing comes to mind yet. Has anything happened that does not fit the belief?"
       - when: "what supports the belief has been said, and what challenges it has not yet been asked"
         reply: "What might challenge the broader belief that <their belief, in their words>?"
       - when: "the user has named evidence that challenges the belief (use the line for the selected tone)"
         reply: "supportive: She has also trusted you with important work. How does that affect the original belief? | reflective: That evidence does not fully fit the original belief. What does it suggest instead? | direct: That evidence challenges the original belief. What conclusion do the full facts support?"
     ask:
-      supportive: "What supports that belief?"
-      reflective: "What supports that belief?"
-      direct: "What supports that belief?"
+      supportive: "What makes you think that is true?"
+      reflective: "What makes you think that is true?"
+      direct: "What makes you think that is true?"
+  evidence_against:
+    purpose: "Determine whether the belief is incomplete, assumed, or broader than the facts."
+    listen_for: "What challenges the belief, what may be assumed, what remains uncertain."
+    boundaries:
+      - "must not argue with the user"
+      - "must not decide the belief is false"
+      - "must not ignore evidence supporting it"
+      - "must not invent contrary evidence"
+      - "must not assume another person's intention"
+      - "must not use rhetorical questions to force a conclusion"
+      - "must not reinterpret danger or mistreatment"
+    ask:
+      supportive: "Is there anything you know that doesn't match that thought?"
+      reflective: "Is there anything you know that doesn't match that thought?"
+      direct: "Is there anything you know that doesn't match that thought?"
   balanced:
-    purpose: "Develop a believable belief that includes the relevant evidence and remains in the user's language."
+    purpose: "When what they have said supports a balanced belief without a new assumption, state it plainly in their words and no further (what happened, what does not fit the belief, what is still unknown), ask nothing, and end the framework as resolved. Only when stating it would need an inference of your own, ask for a more balanced belief."
     listen_for: "A credible belief that includes the known facts without becoming falsely positive."
-    ready_when: "A belief that acknowledges what happened, includes the evidence, avoids a broad judgment unsupported by the facts, sounds believable, and uses language the user accepts."
     boundaries:
       - "must not force positive language"
       - "must not write a belief that does not sound like the user"
@@ -197,31 +217,14 @@ stages:
       - "must not require the user to feel differently"
       - "must not continue changing a belief the user already finds credible"
     if_unclear:
-      - when: "falsely positive - \"I am brilliant, and my manager was completely wrong.\""
+      - when: 'falsely positive - "I am brilliant, and my manager was completely wrong."'
         reply: "That removes the parts you said needed improvement. What belief includes all the evidence?"
       - when: "cannot form a balanced belief"
         reply: "You said the recommendations needed more support, but one presentation does not define your ability. How would you put those together?"
     ask:
-      supportive: "You can recognize the mistake without defining yourself by it. What would feel fairer and still true?"
-      reflective: "The full evidence is different from the original conclusion. What belief holds all of it?"
-      direct: "The original belief is broader than the facts. What do the facts support?"
-  closing:
-    purpose: "Confirm completion in the user's own terms, without declaring that the framework worked."
-    ready_when: >-
-      The user has identified what happened, what they believed it meant, how that belief
-      affected them, what supports and challenges the belief, and a more balanced belief. The
-      user does not have to feel differently, eliminate the original belief, view the event
-      positively, forgive anyone, take immediate action, agree with MANI, or resolve the
-      external situation.
-    boundaries:
-      - "must not require the user to feel differently, forgive anyone, or take action to be done"
-      - "must not summarize the completed framework"
-      - "must not tell the user the framework worked"
-      - "must not say the belief feels fairer unless the user used similar language"
-    ask:
-      supportive: "This belief feels fairer to what happened. How is it sitting with you?"
-      reflective: "The new belief includes the full evidence. What changes when you see it this way?"
-      direct: "This belief is supported by the facts you identified. Does it feel accurate?"
+      supportive: "What would be a more balanced belief?"
+      reflective: "What would be a more balanced belief?"
+      direct: "What would be a more balanced belief?"
 ---
 
 # ABCDE
@@ -294,16 +297,16 @@ MANI:  You can address the missing information instead of avoiding her. What do 
 
 ## Responses MANI must avoid
 
-| Failure | Example | Why |
-|---|---|---|
-| Standalone mirror | "You thought the criticism meant you were incompetent." | Every mirror must be followed by one relevant question |
-| Summary | "Your manager criticized two recommendations, which made you believe you were incompetent and caused you to avoid her." | Retells several parts |
-| Labelling | "You felt ashamed, rejected, and anxious. What did you do next?" | Assigns feelings the user did not name |
-| Long explanation | "People sometimes take criticism as evidence that they are not competent..." | Teaches instead of responding |
-| Premature reassurance | "One presentation does not mean you are incompetent. What else could it mean?" | Gives the conclusion before the user examines the belief |
-| Forced positivity | "You are talented and successful. Why are you being so hard on yourself?" | Introduces unsupported language and judgment |
-| Assumed motive | "Your manager was trying to help you improve. Can you see that?" | MANI cannot know her intention |
-| Clinical label | "You are catastrophizing. What evidence contradicts that distortion?" | Labels the user's thinking |
-| Multiple questions | "What happened, what did you think, how did you feel, and what evidence challenges it?" | Rushes the process |
-| Reframing danger | "Could your partner's threat mean something less serious?" | Must not reinterpret abuse, coercion, or danger |
-| Wrong tone | "Your conclusion is unsupported. What evidence disproves it?" | Harsh, assumes the conclusion, may contradict the selected tone |
+| Failure               | Example                                                                                                                 | Why                                                             |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Standalone mirror     | "You thought the criticism meant you were incompetent."                                                                 | Every mirror must be followed by one relevant question          |
+| Summary               | "Your manager criticized two recommendations, which made you believe you were incompetent and caused you to avoid her." | Retells several parts                                           |
+| Labelling             | "You felt ashamed, rejected, and anxious. What did you do next?"                                                        | Assigns feelings the user did not name                          |
+| Long explanation      | "People sometimes take criticism as evidence that they are not competent..."                                            | Teaches instead of responding                                   |
+| Premature reassurance | "One presentation does not mean you are incompetent. What else could it mean?"                                          | Gives the conclusion before the user examines the belief        |
+| Forced positivity     | "You are talented and successful. Why are you being so hard on yourself?"                                               | Introduces unsupported language and judgment                    |
+| Assumed motive        | "Your manager was trying to help you improve. Can you see that?"                                                        | MANI cannot know her intention                                  |
+| Clinical label        | "You are catastrophizing. What evidence contradicts that distortion?"                                                   | Labels the user's thinking                                      |
+| Multiple questions    | "What happened, what did you think, how did you feel, and what evidence challenges it?"                                 | Rushes the process                                              |
+| Reframing danger      | "Could your partner's threat mean something less serious?"                                                              | Must not reinterpret abuse, coercion, or danger                 |
+| Wrong tone            | "Your conclusion is unsupported. What evidence disproves it?"                                                           | Harsh, assumes the conclusion, may contradict the selected tone |

@@ -6,15 +6,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-# The capsule vocabulary lives beside the code that enforces it, so the eval and the runtime
-# cannot drift into disagreeing about which words are which.
-from mani.chat.repairs import (
-    FEELING_WORDS,
-    MAX_CAPSULE_WORDS,
-    SELF_JUDGMENTS,
-    WORD,
-    words,
-)
+# The feeling and button vocabulary is shared with the style counts, so the two cannot drift
+# into disagreeing about which words are which.
+from scripts.wording import FEELING_WORDS, MAX_CAPSULE_WORDS, SELF_JUDGMENTS, WORD, words
 
 # Clinical vocabulary. The specifications forbid naming the user's thinking, in every
 # framework: "MANI does not use clinical language with the user."
@@ -39,14 +33,6 @@ ASSUMED_MOTIVE = (
     "he probably", "she probably", "they probably", "he didn't mean", "he did not mean",
     "she didn't mean", "she did not mean", "they didn't mean", "they did not mean",
     "was trying to help", "were trying to help", "did not intend", "didn't intend",
-)
-
-# Scale and weight the person did not put there themselves. This one is already a rule in
-# response_format.md's own constraints, which is why it belongs in the same set.
-ADDED_SCALE = (
-    "a lot", "so much", "weighing on you", "that is tough", "that's tough",
-    "that is hard", "that's hard", "so exhausting", "must be so", "such a big",
-    "really significant", "so heavy", "overwhelming", "burden",
 )
 
 # A question start, not any occurrence of the word: the specification's own bad example
@@ -189,13 +175,10 @@ def check_capsules(labels: list[str], user_message: str) -> list[Finding]:
     return findings
 
 
-def check(reply: str, user_message: str, *, in_framework: bool = False) -> list[Finding]:
-    """Every rule this reply broke. Empty means it passed.
-
-    `in_framework` turns on the rules that only apply once a framework is running: inside
-    one, every mirror must carry a question and exactly one question is allowed. Outside
-    one, `mani_base` explicitly permits a reply with no question at all.
-    """
+def check(reply: str, user_message: str) -> list[Finding]:
+    """Every rule this reply broke. Empty means it passed. A reply with no question is never a
+    fault: the style document asks Mani to mirror selectively, and Lolly lets it state what the
+    person has established and move on (spec 0010)."""
     findings: list[Finding] = []
 
     introduced = introduced_feelings(reply, user_message)
@@ -211,13 +194,6 @@ def check(reply: str, user_message: str, *, in_framework: bool = False) -> list[
         if hits:
             findings.append(Finding(rule, f"{hits}"))
 
-    # Scale gets the same treatment as feeling words: the rule is "if they did not describe
-    # the scale, neither do you", so a phrase the person used first is theirs to mirror.
-    said = user_message.lower()
-    added = [p for p in _hits(reply, ADDED_SCALE) if p not in said]
-    if added:
-        findings.append(Finding("added scale", f"{added}"))
-
     questions = question_count(reply)
     interrogatives = len(_INTERROGATIVE.findall(reply))
     if questions > 1:
@@ -228,9 +204,6 @@ def check(reply: str, user_message: str, *, in_framework: bool = False) -> list[
         findings.append(
             Finding("multiple questions", f"{interrogatives} questions under one '?'")
         )
-
-    if in_framework and questions == 0:
-        findings.append(Finding("standalone mirror", "no question, inside a framework"))
 
     word_count = len(reply.split())
     if word_count > MAX_WORDS:
@@ -262,68 +235,6 @@ def style_findings(reply: str, style: str) -> list[Finding]:
     if style == "reflective" and "i hear you" in lowered:
         findings.append(Finding("off-style", "a Reflective reply used \"I hear you\""))
     return findings
-
-
-_INVITES = re.compile(r"\b(tell me|say more|walk me through)\b", re.IGNORECASE)
-
-
-def unasked_before_offer(replies: list[tuple[str, bool]]) -> list[Finding]:
-    """Replies that ask nothing while Mani is still understanding the issue.
-
-    The client's cadence spends the first two to four exchanges asking, checking and
-    confirming. `replies` pairs each reply with whether it offered a framework; every reply up
-    to and including the first offer must carry a question - the offer's own being its
-    permission question.
-    """
-    findings: list[Finding] = []
-    for text, offered in replies:
-        # An invitation asks too: the client's own "Tell me what is happening right now."
-        if "?" not in text and not _INVITES.search(text):
-            findings.append(Finding("stalled", f"no question before an offer: {text[:60]!r}"))
-        if offered:
-            break
-    return findings
-
-
-# Words too common to show a reply is about the person's own situation.
-_COMMON_WORDS = frozenset((
-    "that this with from have been were what when your about they them then than into just "
-    "like some also very much more most only over such even need want know feel felt think "
-    "said told tell here there would could should these those which while where being does "
-    "doing done make made take took each other their whose really something thing things "
-    "right still back going come comes goes first next step steps help helps sure okay "
-    "exact certain problem resolve focus ready begin start started"
-).split())
-
-
-def _content_words(text: str) -> set[str]:
-    return {w for w in re.findall(r"[a-z]{4,}", text.lower()) if w not in _COMMON_WORDS}
-
-
-def names_their_situation(reply: str, said: str) -> list[Finding]:
-    """A question asked inside a framework must be about what the person told Mani, so it
-    shares at least one of their own content words. "What is the exact problem you want to
-    resolve?" sent to someone who has just described an exam shares none: it could be sent to
-    anyone, and tells them Mani has not kept the conversation."""
-    if _content_words(reply) & _content_words(said):
-        return []
-    return [Finding("generic", f"framework question shares nothing they said: {reply[:70]!r}")]
-
-
-_CONFIRMS = re.compile(
-    r"\b(is that|is this)\b[^?]*\b(problem|issue|thing|one)\b[^?]*\b(want|need)\b[^?]*\bresolve\b"
-    r"|to make sure i have (it|this) right"
-    r"|do i have (it|this) right",
-    re.IGNORECASE,
-)
-
-
-def asks_to_confirm(reply: str) -> list[Finding]:
-    """Inside a framework, asking the person to confirm what they have just told Mani. Someone
-    panicking over a lost wallet was asked "is that the problem you want to resolve?"; of course it is."""
-    if _CONFIRMS.search(reply):
-        return [Finding("confirms", f"asked them to confirm what they said: {reply[:80]!r}")]
-    return []
 
 
 HANDOFF_BUTTONS = ("chat more", "go to library")
@@ -381,6 +292,22 @@ def _last_question_words(reply: str) -> set[str]:
     return set(re.findall(r"[a-z']+", questions[-1].lower())) if questions else set()
 
 
+# Openings that wrap the question in a restatement, which the client's PDF marks as a grammar
+# fault ("Since you are holding it that way now, what are you noticing?"). "When", "with" and "as"
+# are left out: they often open a fine question ("When you try to stop, what happens?").
+_LEAD_CLAUSE = re.compile(r"^(since|given|now that|looking at|knowing|considering)\b")
+
+
+def question_findings(reply: str) -> list[Finding]:
+    """Questions that open on a clause restating what came before, which the client marks as
+    hard to read. Length, wording and choices are the client's own to use (spec 0010)."""
+    return [
+        Finding("lead clause", question[:80])
+        for question in (q.strip() for q in _QUESTION.findall(reply.lower().replace("\u2019", "'")))
+        if _LEAD_CLAUSE.search(question)
+    ]
+
+
 def repeated_question(replies: list[str], overlap: float = 0.8) -> list[Finding]:
     """The same question asked in consecutive replies - how a stalled stage looks to the
     person. Compared by word overlap, so a light rewording still counts as the same question."""
@@ -392,13 +319,12 @@ def repeated_question(replies: list[str], overlap: float = 0.8) -> list[Finding]
     return findings
 
 
-def says_framework(reply: str, names: list[str]) -> list[Finding]:
-    """The person never hears what a framework is called, or the word itself: to them it is a
-    sequence of questions. `names` are the display names, read from the content, not listed here."""
-    hits = [name for name in names if re.search(rf"\b{re.escape(name)}\b", reply, re.IGNORECASE)]
+def says_framework(reply: str) -> list[Finding]:
+    """The person hears a framework's name, never the word "framework" itself (Lolly's review,
+    spec 0011, AC-1)."""
     if re.search(r"\bframeworks?\b", reply, re.IGNORECASE):
-        hits.append("framework")
-    return [Finding("said a framework", f"{hits}")] if hits else []
+        return [Finding("said a framework", "['framework']")]
+    return []
 
 
 def after_framework_questions_asked(replies: list[str], questions: tuple[str, ...]) -> list[Finding]:

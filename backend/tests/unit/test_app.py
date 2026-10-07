@@ -4,10 +4,12 @@
 import logging
 
 import pytest
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
 
+from mani.config import get_settings
 from mani.errors import ErrorCategory, ServiceError
 from main import create_app
 
@@ -139,3 +141,45 @@ def test_internal_message_is_not_sent_to_the_client(client):
     response = client.get("/leak")
     assert response.status_code == 500
     assert "secret" not in response.text
+
+
+@pytest.fixture
+def sentry_options(monkeypatch):
+    """The options create_app() initialises Sentry with, given a DSN. The client and the cached
+    settings are torn down afterwards so no other test runs with Sentry live."""
+    monkeypatch.setenv("SENTRY_DSN", "https://key@o0.ingest.sentry.io/0")
+    get_settings.cache_clear()
+    create_app()
+    try:
+        yield sentry_sdk.get_client().options
+    finally:
+        sentry_sdk.get_client().close()
+        sentry_sdk.get_global_scope().set_client(None)
+        get_settings.cache_clear()
+
+
+def test_sentry_collects_no_request_body_and_no_local_variables(sentry_options):
+    """sentry-sdk attaches JSON bodies and frame locals by default. Here either one is the
+    person's message."""
+    assert sentry_options["send_default_pii"] is False
+    assert sentry_options["max_request_body_size"] == "never"
+    assert sentry_options["include_local_variables"] is False
+
+
+def test_an_error_report_is_scrubbed_of_content_before_it_is_sent(sentry_options):
+    disclosure = "I have been having thoughts about hurting myself"
+    event = {
+        "request": {"url": "http://testserver/v1/threads/x/messages", "data": {"content": disclosure}},
+        "exception": {"values": [{
+            "type": "ServiceError",
+            "stacktrace": {"frames": [{"function": "send", "vars": {"content": disclosure}}]},
+        }]},
+        "breadcrumbs": {"values": [{"category": "mani", "message": f"noted: {disclosure}"}]},
+    }
+
+    sent = sentry_options["before_send"](event, {})
+
+    assert disclosure not in str(sent)
+    # Still diagnostic: where it failed, and what failed.
+    assert sent["request"]["url"].endswith("/messages")
+    assert sent["exception"]["values"][0]["stacktrace"]["frames"][0]["function"] == "send"

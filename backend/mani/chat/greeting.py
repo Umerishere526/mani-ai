@@ -1,5 +1,5 @@
 # ABOUTME: Mani's fixed, client-authored lines: the greeting, the style choice, each style's
-# ABOUTME: opener, and the offer explanation. Written here rather than generated, so they cost nothing.
+# ABOUTME: opener, and the offer's buttons. Written here rather than generated, so they cost nothing.
 
 DEFAULT_NAME = "there"
 
@@ -29,16 +29,21 @@ def greeting(nickname: str | None, returning: bool) -> str:
     return f"{hello} {STYLE_QUESTION}"
 
 
-# Buttons asking what an offer involves. An offer carries two, Try it and Keep chatting
-# (muhammad, 2026-09-24), and repairs drops one of these the model still adds, since the offer's
-# own words say how the questions would help.
-TELL_ME_ABOUT_THIS_LABEL = "Tell me about this"
-EXPLAIN_LABELS = {TELL_ME_ABOUT_THIS_LABEL.lower(), "tell me more"}
+# An offer's three choices, and the two that follow "Tell me more", exactly as the client's style
+# document writes them (docs/specs/conversational-styles.md, "Framework entry"). Set by code,
+# never by the model.
+ACCEPT_LABEL = "Yes, let's try it"
+EXPLAIN_LABEL = "Tell me more"
+KEEP_TALKING_LABEL = "I want to keep talking"
 
 # The two choices every framework ends on - the client's cadence: "Framework completes ->
 # Somatic check-in -> Chat More OR Go to Library".
 CHAT_MORE_LABEL = "Chat More"
 GO_TO_LIBRARY_LABEL = "Go to Library"
+
+# The specification's answer when they stop part way through a framework: no pressure to
+# finish, and the two choices a framework ends on.
+STOPPED_REPLY = "You want to stop here. Would you like to continue chatting?"
 
 # Asked in this order, one per reply, once a framework has finished and the person carries on
 # with the same issue - the client's "three forward-moving reflective questions".

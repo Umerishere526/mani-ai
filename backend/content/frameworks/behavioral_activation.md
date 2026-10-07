@@ -1,21 +1,38 @@
 ---
 id: behavioral_activation
 name: Behavioral Activation
-summary: "These questions help you identify what you have stopped doing and choose one realistic activity you can begin. By the end, you will have a specific, manageable action that helps you start moving forward again."
+summary: "We look at what you've stopped doing, pick one small thing you could do, and decide when you'll do it."
 display_order: 3
-phases: [offering, stopped, matters, choose, manageable, begin, barrier, closing]
+phases: [offering, stopped, matters, choose, manageable, begin, barrier]
 activation:
   central_indication: >-
     The user knows what they could do but cannot get themselves to begin - low mood,
     discouragement, or withdrawal has interrupted something that matters, and they need help
     selecting and beginning one manageable action, not a thought examined or a decision made.
+  # How a person actually talks when this framework fits. The semantic router embeds
+  # these, not central_indication: clinical prose scored 2/7 on real messages where
+  # these scored 11/11. Authored content - changing them changes which framework is
+  # offered, so they need the same review the summary does.
+  exemplars:
+    - "I've been in bed all day and I've stopped answering anyone."
+    - "I know what I should do but I can't make myself start."
+    - "I keep putting it off and doing anything except the thing."
+    - "I used to run and see people and now I just lie on the couch after work."
+    - "I've ignored everyone's messages for a week and I don't see the point."
+    # How people actually open, in a few words. Without these a short opener matched no
+    # exemplar closely enough to clear the bar, and the framework the overview names for
+    # exactly these words was never reached (spec six-frameworks-overview.md, row 3).
+    - "I am depressed and I've stopped doing things."
+    - "I feel shut down and I'm not doing anything."
+    - "I have no motivation to do anything."
+    - "I've withdrawn from everything."
   to_find_out:
     - "what they have stopped doing or are avoiding"
     - "whether they know what they could do but cannot begin"
     - "what gets in the way of beginning"
     - "whether anything physical or medical explains it, or whether this is early grief (then not this)"
-  # Said anywhere in the conversation, an offer of this framework is redrafted and then dropped:
-  # early grief is not the avoidance it treats. Whole phrases, matched as the signals are.
+  # Said anywhere in the conversation, an offer of this framework is removed by the code:
+  # early grief is not the avoidance it treats. Whole phrases, matched as whole words.
   never_offer_when_said:
     - "died"
     - "passed away"
@@ -29,7 +46,7 @@ activation:
     - "grief"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # router reads never_offer_when_said and stuck_offer.
   appropriate_when:
     - "The user knows something they want or need to do"
     - "The user is having difficulty beginning"
@@ -55,39 +72,6 @@ activation:
     - "Fatigue with no identifiable avoidance pattern behind it - nothing they used to do and stopped, no trigger they are avoiding - which points to an undiagnosed medical cause (thyroid, anaemia, sleep, medication) rather than a Behavioral Activation case"
     - "The person cannot complete basic care, or their inactivity looks like an impairment that needs professional evaluation - activity planning is not the response, and they must never be told to push through a limitation"
     - "Acute grief in the period right after a loss - the withdrawal Behavioral Activation treats is avoidance of reminders and of life going on, not the ordinary work of mourning itself"
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "but i cannot start"
-    - "but i cannot begin"
-    - "in bed all day"
-    - "stopped answering"
-    - "keep avoiding the task"
-    # The open fragment, so "cannot make myself start", "begin", "get up" and "do anything"
-    # all match. The two specific forms it replaces left the commonest phrasing routing nowhere.
-    - "cannot make myself"
-  signals:
-    - "stopped cooking"
-    - "not been getting dressed"
-    - "stopped going outside"
-    - "kept up with anything"
-    - "no structure anymore"
-    - "ignored everyone's messages"
-    - "keep canceling plans"
-    - "speak to anyone"
-    - "stopped calling my family"
-    - "when i feel ready"
-    - "waiting to want to"
-    - "i have no motivation"
-    - "i will start tomorrow"
-  redirects:
-    - signal: "I do not know what I should do."
-      instead: structured_problem_solving
-    - signal: "I know what to do, but I am certain I will fail."
-      instead: thought_reframe
-    - signal: "I am about to send an angry message."
-      instead: dbt_stop
-    - signal: "I cannot change the situation, but I need to decide how to respond."
-      instead: act_choice_point
   distinctions:
     structured_problem_solving: >-
       Behavioral Activation when the user generally knows what they could do, beginning is the
@@ -122,7 +106,10 @@ stages:
   stopped:
     purpose: "Identify the activity, routine, connection, responsibility, or act of care the user has stopped or is avoiding."
     listen_for: "What the user has stopped, delayed, canceled, or avoided."
-    ready_when: "What the user has stopped or is avoiding is named. If several, the user chooses which one."
+    ready_when: >-
+      What the user has stopped or is avoiding is named. If several, the user chooses which one.
+      What they said before they accepted counts, including the thing they stopped doing the offer
+      was built on: when it already gives this, the step is done and is not asked.
     boundaries:
       - "must not decide what the user should restart"
       - "must not label the user as withdrawn or unmotivated"
@@ -130,12 +117,15 @@ stages:
       - "must not ask for a complete list of everything stopped"
       - "must not assume the cause is avoidance before hearing it - flat fatigue with no trigger being avoided, or a symptom crash the day after activity, points away from this framework rather than into it"
     if_unclear:
-      - when: "\"Everything.\""
+      - when: '"Everything."'
         reply: "Everything feels difficult to begin. What is one thing you miss doing?"
+        start_only: true
       - when: "several activities named"
         reply: "You named several things. Which one matters most today?"
-      - when: "they named a wish but no activity - \"I want to be more productive.\" Do not go on to why it matters"
+        start_only: true
+      - when: 'they named a wish but no activity - "I want to be more productive." Do not go on to why it matters'
         reply: "What things would you want to do to be more productive?"
+        start_only: true
       - when: "they report an injury, severe or sudden physical symptoms, intoxication, or a medical condition as the reason"
         reply: "A physical symptom like that comes first, and I would not ask you to push through it. What would be most helpful right now?"
     ask:
@@ -145,14 +135,13 @@ stages:
   matters:
     purpose: "Establish why returning to this activity matters to the user."
     listen_for: "The user's reason for wanting to return to the activity."
-    ready_when: "Why the activity matters is clear. MANI does not assign a reason."
     boundaries:
       - "must not tell the user why the activity should matter"
       - "must not use guilt"
       - "must not connect the activity to productivity unless the user does"
       - "must not pressure the user toward an activity they do not value"
     if_unclear:
-      - when: "it does not matter - \"I only think I should do it.\""
+      - when: 'it does not matter - "I only think I should do it."'
         reply: "This action does not matter to you right now. What would matter more?"
     ask:
       supportive: "Why does this matter to you?"
@@ -161,7 +150,6 @@ stages:
   choose:
     purpose: "Select one activity rather than attempting everything."
     listen_for: "The single activity the user wants to address first."
-    ready_when: "One activity is selected. The framework does not become a list of tasks."
     boundaries:
       - "must not choose the activity for them - but when they ask you to pick, offer one of the things they named, as a small first step, for them to accept or change"
       - "must not create a long task list"
@@ -171,7 +159,7 @@ stages:
     if_unclear:
       - when: "wants to address everything"
         reply: "You want to address everything at once. Which one action would make a beginning?"
-      - when: "asks MANI to pick - \"Pick one for me.\" / \"What should I start with?\""
+      - when: 'asks MANI to pick - "Pick one for me." / "What should I start with?"'
         reply: "<one of the things they named, as a small first step>. Does that work, or would you change it?"
     ask:
       supportive: "Which one do you want to begin with?"
@@ -180,7 +168,6 @@ stages:
   manageable:
     purpose: "Reduce the activity until it fits the user's present capacity."
     listen_for: "A limited action the user believes is possible within current capacity."
-    ready_when: "The activity is specific, limited, within the user's control, safe, and realistic within current capacity - the real test is whether they could do it today feeling exactly as they do now, not whether they expect to feel more able later. If the answer to that is no, shrink the action again rather than proceeding."
     boundaries:
       - "must not make the action larger"
       - "must not dismiss a small action as insufficient"
@@ -189,27 +176,23 @@ stages:
       - "must not prescribe exercise or physical activity without considering limitations"
       - "may suggest up to three very small options, and only when the user cannot name one - never a longer list, and the user chooses"
     if_unclear:
-      - when: "still too large - \"I will answer every message tonight.\""
+      - when: 'still too large - "I will answer every message tonight."'
         reply: "Answering every message is a large first action. What smaller part are you confident you can complete?"
-      - when: "cannot identify an action - \"I don't know.\""
+      - when: 'cannot identify an action - "I don''t know."'
         reply: "The first action is not clear yet. Would <one to three very small options that fit what they stopped, such as getting dressed, opening the curtains, or texting someone> feel most manageable?"
     ask:
-      supportive: "What is the smallest version you could do?"
-      reflective: "What is the smallest version you could do?"
-      direct: "What is the smallest version you could do?"
+      supportive: "What is the smallest way you could start?"
+      reflective: "What is the smallest way you could start?"
+      direct: "What is the smallest way you could start?"
   begin:
     purpose: "Turn the activity into a specific action rather than a general intention."
     listen_for: "A specific time, cue, place, or starting condition."
-    ready_when: "When or how they will begin is named. A specific time is useful but not required - a cue may be sufficient."
     boundaries:
       - "must not force an exact time"
       - "must not create an elaborate schedule"
       - "must not require reminders the user does not want"
       - "must not turn the process into productivity management"
       - "must not ask whether they feel ready or feel up to it - the plan is meant to hold even when mood does not cooperate, and asking makes feeling ready the precondition it was designed not to need"
-    if_unclear:
-      - when: "cannot choose a time"
-        reply: "A set time does not work for you. What could remind you to begin?"
     ask:
       supportive: "When will you do it?"
       reflective: "When will you do it?"
@@ -217,7 +200,6 @@ stages:
   barrier:
     purpose: "Identify what may prevent action and what the user can do if it appears."
     listen_for: "A likely obstacle and a response the user considers realistic."
-    ready_when: "The most likely barrier and a manageable response are named. No detailed contingency plan is required."
     boundaries:
       - "must not list every possible obstacle"
       - "must not assume why the user may not act"
@@ -226,31 +208,14 @@ stages:
     if_unclear:
       - when: "cannot identify a barrier"
         reply: "The barrier is not clear yet. What usually happens when you try to begin?"
-      - when: "the action depends on someone else - \"I need my partner to apologize.\""
+      - when: 'the action depends on someone else - "I need my partner to apologize."'
         reply: "The apology depends on your partner. What action is within your control?"
       - when: "the action is unsafe"
         reply: "That action could place you at risk. What is a safer action you can take?"
     ask:
-      supportive: "What could prevent you from beginning?"
-      reflective: "What could prevent you from beginning?"
-      direct: "What could prevent you from beginning?"
-  closing:
-    purpose: "Confirm completion in the user's own terms, without promising the plan will work or that the user will feel better."
-    ready_when: >-
-      The user has identified what they stopped or avoided, why it matters, selected one
-      activity, reduced it to a manageable action, identified when or how to begin, and
-      identified a likely barrier and a response. The user does not need to complete the action
-      during the conversation, select several activities, report a change in mood, feel
-      motivated, promise a result, create a long-term plan, or guarantee nothing will interfere.
-    boundaries:
-      - "must not promise the plan will work or that the user will feel better"
-      - "must not summarize the completed framework"
-      - "must not require the user to feel motivated to be done"
-      - "must not say the action feels manageable unless the user used similar language"
-    ask:
-      supportive: "You chose one action that feels manageable today. How is that sitting with you?"
-      reflective: "You chose one action without waiting for motivation. What changes when you approach it this way?"
-      direct: "You have one action, a starting point, and a response to the barrier. Is the plan realistic?"
+      supportive: "What might get in the way?"
+      reflective: "What might get in the way?"
+      direct: "What might get in the way?"
 ---
 
 # Behavioral Activation
@@ -330,18 +295,18 @@ MANI:  One sentence feels possible to you. What do you notice in your body now?
 
 ## Responses MANI must avoid
 
-| Failure | Example | Why |
-|---|---|---|
-| Standalone mirror | "You have stopped answering people." | Not followed by a question |
-| Summary | "You stopped answering messages, the number became overwhelming, and now you want to begin with your sister." | Retells several stages |
-| Labelling | "You are depressed, isolated, and unmotivated. What could you do today?" | Assigns labels the user did not use |
-| Long explanation | "When people stop participating in activities during periods of low mood, inactivity can reinforce withdrawal..." | Teaches instead of responding |
-| Commanding | "Get out of bed and take a shower." | MANI chooses the action and commands |
-| Long task list | "Take a shower, get dressed, prepare food, answer your messages, and go outside." | Selects one manageable action, not several |
-| Productivity pressure | "You will feel better once you become productive again." | Promises an outcome, ties progress to productivity |
-| Minimizing | "Sending one message is easy. Why not do it now?" | Dismisses the stated difficulty |
-| Waiting for motivation | "What would make you feel motivated enough to answer everyone?" | The framework exists to act without waiting for motivation |
-| Unsafe activity | "Go outside and exercise even if you feel physically unwell." | Ignores physical limitations and medical concerns |
-| Multiple questions | "What have you stopped doing, why does it matter, and when will you do it?" | Several questions at once |
-| Wrong framework | "What evidence proves that you cannot answer your messages?" | The need is beginning an action, not disputing a belief |
-| Wrong tone | "Pick one task and commit to completing it." | Commanding; may contradict the selected tone |
+| Failure                | Example                                                                                                           | Why                                                        |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Standalone mirror      | "You have stopped answering people."                                                                              | Not followed by a question                                 |
+| Summary                | "You stopped answering messages, the number became overwhelming, and now you want to begin with your sister."     | Retells several stages                                     |
+| Labelling              | "You are depressed, isolated, and unmotivated. What could you do today?"                                          | Assigns labels the user did not use                        |
+| Long explanation       | "When people stop participating in activities during periods of low mood, inactivity can reinforce withdrawal..." | Teaches instead of responding                              |
+| Commanding             | "Get out of bed and take a shower."                                                                               | MANI chooses the action and commands                       |
+| Long task list         | "Take a shower, get dressed, prepare food, answer your messages, and go outside."                                 | Selects one manageable action, not several                 |
+| Productivity pressure  | "You will feel better once you become productive again."                                                          | Promises an outcome, ties progress to productivity         |
+| Minimizing             | "Sending one message is easy. Why not do it now?"                                                                 | Dismisses the stated difficulty                            |
+| Waiting for motivation | "What would make you feel motivated enough to answer everyone?"                                                   | The framework exists to act without waiting for motivation |
+| Unsafe activity        | "Go outside and exercise even if you feel physically unwell."                                                     | Ignores physical limitations and medical concerns          |
+| Multiple questions     | "What have you stopped doing, why does it matter, and when will you do it?"                                       | Several questions at once                                  |
+| Wrong framework        | "What evidence proves that you cannot answer your messages?"                                                      | The need is beginning an action, not disputing a belief    |
+| Wrong tone             | "Pick one task and commit to completing it."                                                                      | Commanding; may contradict the selected tone               |
