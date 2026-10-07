@@ -67,8 +67,12 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 60.0
 
     # Used when a prompt row names no model of its own.
-    default_chat_model: str = "google/gemini-3.1-flash-lite"
-    default_summary_model: str = "openai/gpt-oss-120b"
+    default_chat_model: str = "openai/gpt-6-luna"
+    default_summary_model: str = "openai/gpt-6-luna"
+
+    # How hard a reasoning model thinks before it answers. Sent only to models that read
+    # it; the rest reject the key. Costs reasoning tokens on every turn at the output rate.
+    reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"] = "high"
 
     # Speech-to-text goes through OpenRouter too, via its separate /audio/transcriptions
     # endpoint - same key, same base_url, same bill as chat. Not a second provider.
@@ -84,9 +88,13 @@ class Settings(BaseSettings):
     # provider applies. Defaults carried from the previous system's provider row; a
     # prompt row's `routing` column overrides them when it needs to.
     openrouter_provider_order: list[str] = Field(
-        default_factory=lambda: ["google-ai-studio"]
+        default_factory=lambda: ["azure", "openai"]
     )
-    openrouter_allow_fallbacks: bool = False
+    # A turn that cannot reach Azure goes to OpenAI rather than failing. data_collection
+    # stays "deny" on the fallback, so training use is refused there too, but the request
+    # is processed by a different company - which is a data protection question, not only
+    # an availability one.
+    openrouter_allow_fallbacks: bool = True
 
     def routing(self, overrides: dict | None = None) -> dict:
         """OpenRouter `provider` options for a call, with per-prompt overrides applied."""

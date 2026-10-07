@@ -4,10 +4,10 @@ name: memory_fold
 type: system
 description: Fold a finished conversation into what Mani knows about the person across conversations
 provider: openrouter
-model_id: google/gemini-3.1-flash-lite
+model_id: openai/gpt-6-luna
 model_parameters:
-  temperature: 0
   maxTokens: 800
+  reasoning_effort: high
 ---
 
 # Task

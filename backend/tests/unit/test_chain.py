@@ -96,3 +96,72 @@ def test_reply_asks_for_its_reasoning_and_style_before_its_text():
     fields = list(Reply.model_json_schema()["properties"])
     assert fields.index("reasoning") < fields.index("text")
     assert fields.index("style") < fields.index("text")
+
+
+def test_a_reasoning_model_is_not_sent_a_temperature():
+    """gpt-6-luna has no `temperature` in its supported parameters on any provider, and
+    names its output budget `max_completion_tokens`. Sending either wrong one is a 400 on
+    every call, so the request shape follows the model."""
+    chain._model.cache_clear()
+    chain.build(
+        Reply, model="openai/gpt-6-luna", temperature=0.7,
+        max_tokens=2048, routing=None, settings=settings(),
+    )
+    sent = chain._model("sk-test-not-a-real-key", "https://openrouter.ai/api/v1",
+                        60.0, "openai/gpt-6-luna", 0.7, 2048, "{}")._default_params
+    assert "temperature" not in sent
+    assert sent["max_completion_tokens"] == 2048
+    assert sent.get("max_tokens") is None
+
+
+def test_an_ordinary_chat_model_still_gets_its_sampling_parameters():
+    """The guard is on reasoning models only; everything else keeps the old request shape."""
+    sent = chain._model("sk-test-not-a-real-key", "https://openrouter.ai/api/v1",
+                        60.0, "google/gemini-3.1-flash-lite", 0.7, 2048, "{}")._default_params
+    assert sent["temperature"] == 0.7
+    assert sent["max_completion_tokens"] == 2048
+
+
+def test_the_reasoning_effort_rides_with_a_reasoning_model_only():
+    """A model that does not read a reasoning effort rejects the key."""
+    s = settings()
+    assert chain._reasoning("openai/gpt-6-luna", s) == {"reasoning": {"effort": "high"}}
+    assert chain._reasoning("google/gemini-3.1-flash-lite", s) == {}
+
+
+def test_a_prompt_row_can_name_its_own_reasoning_effort():
+    """The prompt rows carry `reasoning_effort`; without this it is read and dropped, and the
+    stored value silently means nothing."""
+    s = settings()
+    assert chain._reasoning("openai/gpt-6-luna", s, "low") == {"reasoning": {"effort": "low"}}
+    # Named on a model that cannot read it, it is still not sent.
+    assert chain._reasoning("google/gemini-3.1-flash-lite", s, "low") == {}
+
+
+def test_a_prompt_without_an_effort_falls_back_to_the_configured_one():
+    assert chain._reasoning("openai/gpt-6-luna", settings(), None) == {
+        "reasoning": {"effort": "high"}
+    }
+
+
+def test_the_effort_reaches_the_request_body():
+    """The guard is only worth anything if the value lands in what is actually sent."""
+    import json
+
+    captured = {}
+    real = chain._model
+
+    def spy(api_key, base_url, timeout, model, temperature, max_tokens, extra_body):
+        captured["extra_body"] = json.loads(extra_body)
+        return real(api_key, base_url, timeout, model, temperature, max_tokens, extra_body)
+
+    chain._model = spy
+    try:
+        chain.build(
+            Reply, model="openai/gpt-6-luna", temperature=0.7, max_tokens=2048,
+            routing=None, settings=settings(), reasoning_effort="low",
+        )
+    finally:
+        chain._model = real
+
+    assert captured["extra_body"]["reasoning"] == {"effort": "low"}

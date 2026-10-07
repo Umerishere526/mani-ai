@@ -26,6 +26,29 @@ from mani.db import llm_calls
 # conversation transcripts, which are special-category health data.
 
 
+# Reasoning models reject the sampling parameters an ordinary chat model takes. They fix
+# their own sampling and read a reasoning effort instead, and Azure names the output budget
+# `max_completion_tokens` rather than `max_tokens`. Sending the wrong one is a 400 on every
+# call, so the shape of the request follows the model rather than the call site.
+REASONING_MODEL_PREFIXES = ("openai/gpt-6", "openai/gpt-5", "openai/o1", "openai/o3")
+
+
+def is_reasoning_model(model: str) -> bool:
+    return model.startswith(REASONING_MODEL_PREFIXES)
+
+
+def _reasoning(model: str, settings: Settings, effort: str | None = None) -> dict[str, Any]:
+    """How hard the model thinks before it answers, for the models that read it.
+
+    A model that does not take a reasoning effort rejects the key, so it is sent only to
+    the ones that do. A prompt row names its own effort when the work it does deserves a
+    different one; otherwise the configured default stands for all of them.
+    """
+    if not is_reasoning_model(model):
+        return {}
+    return {"reasoning": {"effort": effort or settings.reasoning_effort}}
+
+
 @lru_cache
 def _model(
     api_key: str,
@@ -41,17 +64,21 @@ def _model(
     Cached because building it parses the schema and constructs an HTTP client; the arguments
     are primitives so the cache key is stable. `extra_body` arrives as JSON for that reason.
     """
+    sampling: dict[str, Any] = (
+        {"max_completion_tokens": max_tokens}
+        if is_reasoning_model(model)
+        else {"temperature": temperature, "max_tokens": max_tokens}
+    )
     return ChatOpenAI(
         model=model,
         base_url=base_url,
         api_key=api_key,
         timeout=timeout,
-        temperature=temperature,
-        max_tokens=max_tokens,
         # The SDK's own retries multiply the bill and the latency of a turn that is already
         # slow. One attempt; a retry is a decision the caller makes with its own budget.
         max_retries=0,
         extra_body=json.loads(extra_body),
+        **sampling,
     )
 
 
@@ -63,6 +90,7 @@ def build(
     max_tokens: int,
     routing: dict[str, Any] | None,
     settings: Settings,
+    reasoning_effort: str | None = None,
 ) -> Runnable:
     """A runnable that takes chat messages and returns raw, parsed and parsing_error.
 
@@ -75,6 +103,7 @@ def build(
         # Without this OpenRouter omits the cached-token count, which is the only way to tell
         # whether prompt caching is actually happening.
         "usage": {"include": True},
+        **_reasoning(model, settings, reasoning_effort),
     }
     chat = _model(
         settings.openrouter_api_key,
@@ -96,6 +125,7 @@ def build_tool_choice(
     max_tokens: int,
     routing: dict[str, Any] | None,
     settings: Settings,
+    reasoning_effort: str | None = None,
 ) -> Runnable:
     """A runnable bound to exactly one tool, forced - real tool-calling, not structured
     output. `with_structured_output` and `bind_tools` are two different invocation modes
@@ -109,6 +139,7 @@ def build_tool_choice(
     extra_body = {
         "provider": settings.routing(routing),
         "usage": {"include": True},
+        **_reasoning(model, settings, reasoning_effort),
     }
     chat = _model(
         settings.openrouter_api_key,

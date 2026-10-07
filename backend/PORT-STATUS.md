@@ -15,7 +15,16 @@ History (how the port went, what was fixed from review, old measurements) is in
 - Database: 10 migrations, 15 tables (8 `public`, 7 `admin`), 6 frameworks and 5 prompts seeded.
   `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
   private `exercises` bucket (`scripts/seed_exercises.py`). A hosted project does not exist yet.
-- Models: `google/gemini-3.1-flash-lite` for chat and `openai/gpt-oss-120b` for summaries (`mani/config.py`).
+- Models: `openai/gpt-6-luna` for chat and for summaries (`mani/config.py`), routed Azure first with
+  OpenAI as the fallback. It is a reasoning model: it takes no `temperature` on any provider and reads
+  `reasoning_effort` instead, so `mani/llm/chain.py` sends the sampling parameters an ordinary
+  chat model takes only to models that accept them. A prompt row names its own effort in
+  `model_parameters.reasoning_effort` and `mani/config.py` holds the default for the calls that have
+  no row of their own; `mani_base`, `summarization` and `memory_fold` are all on `high`. Effort is
+  billed: measured against Azure, `high` spent 26 reasoning tokens where `low` spent 0, about three
+  times the cost of the same call. The fallback keeps `data_collection: deny`, so
+  training use stays refused, but a turn that cannot reach Azure is processed by a different company -
+  a data protection question that is open, not settled.
 - Web and mobile do not call this API yet; they run on placeholder data.
 
 ## What the service does
@@ -146,6 +155,20 @@ Ordered by what breaks first.
 - Revisit the grief veto (Behavioral Activation after loss words) with real transcripts.
 
 ## Open engineering
+
+- **The hosted database is seven migrations ahead of this code.** `main` was reverted to `1473a0c`,
+  which ships migrations 001-010, but hosted still has 011-017 applied from the reverted branches:
+  `holds`, `known`, `ending` and `phase_since` on `thread_technique_state`, `decision` on
+  `admin.llm_calls`, the `public.framework_outcomes` table, and `'stopped'` on the
+  `technique_outcome` enum. Hosted holds live data in them - 2 `framework_outcomes` rows, 55
+  `llm_calls.decision` rows - so a rollback destroys data. `016` cannot be undone at all: Postgres
+  has no `drop value` for an enum, so retiring it means recreating the type or writing a new
+  migration forward. Local was reset to 001-010 on 2026-10-07; hosted was not. The two are not the
+  same schema, and nothing reconciles them yet.
+- **Migration numbers were reused across the reverted branches.** `011` was both
+  `technique_state_holds` and `technique_outcome_stopped`; `013` was both `llm_call_decision` and
+  `llm_call_facts`. Reviving any of those branches collides again.
+
 
 - **Body route, from the client's 2026-10-02 flow.** Still the client's to confirm: Chat More / Go to Library
   keep their labels, where the new document says "take me to the library" / "want to keep chatting"; the

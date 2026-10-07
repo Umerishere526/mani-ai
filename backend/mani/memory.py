@@ -94,6 +94,7 @@ async def fold_one(
         purpose=llm_calls.Purpose.MEMORY_FOLD,
         temperature=prompt.model_parameters.get("temperature", 0),
         max_tokens=prompt.model_parameters.get("maxTokens", 800),
+        reasoning_effort=prompt.model_parameters.get("reasoning_effort"),
         routing=prompt.routing,
         user_id=user_id,
         thread_id=thread_id,

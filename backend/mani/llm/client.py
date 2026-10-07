@@ -168,6 +168,7 @@ async def complete[T: BaseModel](
     purpose: llm_calls.Purpose,
     temperature: float = DEFAULT_TEMPERATURE,
     max_tokens: int = DEFAULT_MAX_TOKENS,
+    reasoning_effort: str | None = None,
     routing: dict[str, Any] | None = None,
     user_id: uuid.UUID | str | None = None,
     thread_id: uuid.UUID | str | None = None,
@@ -194,6 +195,7 @@ async def complete[T: BaseModel](
         model=model,
         temperature=temperature,
         max_tokens=max_tokens,
+        reasoning_effort=reasoning_effort,
         routing=routing,
         settings=settings,
     )

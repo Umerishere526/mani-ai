@@ -126,9 +126,17 @@ def test_cors_origins_still_accepts_a_json_array_from_the_environment(monkeypatc
 
 def test_routing_pins_the_upstream_provider_by_default():
     # Unpinned, OpenRouter may send a conversation to any provider serving the model.
+    # Azure is preferred and OpenAI catches an Azure outage; a turn reaches no one else.
     routing = build().routing()
-    assert routing["order"] == ["google-ai-studio"]
-    assert routing["allow_fallbacks"] is False
+    assert routing["order"] == ["azure", "openai"]
+    assert routing["data_collection"] == "deny"
+
+
+def test_a_fallback_never_loosens_the_data_policy():
+    """The fallback exists so an Azure outage does not take chat down. It must not become a
+    route to a provider that may train on the conversation."""
+    routing = build().routing()
+    assert routing["allow_fallbacks"] is True
     assert routing["data_collection"] == "deny"
 
 

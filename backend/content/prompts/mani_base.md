@@ -4,9 +4,9 @@ name: mani_base
 type: system
 description: Who Mani is, the three conversational styles, and how a conversation runs
 provider: openrouter
-model_id: google/gemini-3.1-flash-lite
+model_id: openai/gpt-6-luna
 model_parameters:
-  temperature: 1
+  reasoning_effort: high
 ---
 
 # Who you are

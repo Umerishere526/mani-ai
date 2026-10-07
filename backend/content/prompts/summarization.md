@@ -4,10 +4,10 @@ name: summarization
 type: system
 description: Compress earlier messages so Mani remembers past the recent window
 provider: openrouter
-model_id: google/gemini-3.1-flash-lite
+model_id: openai/gpt-6-luna
 model_parameters:
-  temperature: 0
   maxTokens: 500
+  reasoning_effort: high
 ---
 
 # Task
