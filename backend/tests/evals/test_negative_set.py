@@ -194,14 +194,15 @@ def test_presence_may_be_said_in_any_style_while_openers_still_vary():
 
 def test_every_style_value_the_schema_allows_is_taught():
     """The schema asks the model to declare the shape it used. Any value it can return and was
-    never taught is one it will either avoid entirely or use without meaning. Shapes are
-    taught in a table, so each is pinned to the row that defines it."""
+    never taught is one it will either avoid entirely or use without meaning, and a shape taught
+    but not in the schema is one it can never report. Shapes are taught under `reply_shapes`."""
+    import yaml
+
     from mani.llm.schema import SHAPES
+    from scripts.seed import parse_prompt
 
-    base = (PROMPTS_DIR / "mani_base.md").read_text().lower()
-
-    for name in SHAPES:
-        assert f"| {name} |" in base, f"schema allows shape {name!r}, prompt never teaches it"
+    taught = yaml.safe_load(parse_prompt(PROMPTS_DIR / "mani_base.md")["content"])["reply_shapes"]
+    assert set(taught) == set(SHAPES)
 
 
 def test_a_capsule_that_judges_the_person_is_caught():

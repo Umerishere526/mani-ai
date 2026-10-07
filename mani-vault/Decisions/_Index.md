@@ -21,6 +21,7 @@ other knowledge lives: [[ADR-009-where-knowledge-lives]].
 | 009 | [[ADR-009-where-knowledge-lives]] | accepted | supersedes 001 | `CLAUDE.md`, this vault |
 | 010 | [[ADR-010-a-person-in-panic-is-guided-not-quizzed]] | accepted | adds to 007 and 008; amended by 011 | `context.build`, `repairs.apply`, `structured_problem_solving.md` |
 | 011 | [[ADR-011-first-stage-by-its-own-test-and-one-draft-when-asked-to-pick]] | accepted | amends 010 and 006 | `context.build`, `redraft.repeats`, `behavioral_activation.md` |
+| 012 | [[ADR-012-prompts-are-structured-rules-and-frameworks-carry-their-own]] | accepted | | `content/prompts/mani_base.md`, `content/prompts/response_format.md` |
 
 ## In force, recorded elsewhere, no ADR yet
 

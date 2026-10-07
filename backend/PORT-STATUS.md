@@ -25,6 +25,16 @@ History (how the port went, what was fixed from review, old measurements) is in
   times the cost of the same call. The fallback keeps `data_collection: deny`, so
   training use stays refused, but a turn that cannot reach Azure is processed by a different company -
   a data protection question that is open, not settled.
+- Every call to OpenRouter carries the same provider order, data policy and reasoning effort, from
+  `chain.request_body`. The voice translation in `mani/stt.py` calls the SDK directly and used to send
+  none of them, so a transcript went to whichever provider OpenRouter chose; it now uses the same body.
+  It is still not recorded in `admin.llm_calls`, which has no purpose for it.
+- A reasoning model's output budget covers its thinking and its reply together. Every caller sizes
+  `max_tokens` for the reply alone, so `chain.sampling` adds `REASONING_ALLOWANCE_TOKENS` (8,192) on top.
+  Without it, at effort high, 4 of 61 chat calls ran out of tokens while thinking and the turn failed
+  (2026-10-07). Measured at high: 12.6 s for an average turn, 41 s for the longest.
+- `mani_base.md` and `response_format.md` are YAML rules rather than prose (ADR-012): about 10,600 tokens
+  became 4,850. The Framework Index and the per-framework rules are not restructured yet.
 - Web and mobile do not call this API yet; they run on placeholder data.
 
 ## What the service does
