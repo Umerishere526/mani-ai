@@ -7,7 +7,7 @@ import re
 
 from mani.chat import repairs
 from mani.chat.greeting import (
-    AFTER_FRAMEWORK_QUESTIONS, CHAT_MORE_LABEL, CLARIFICATION_QUESTIONS, EXPLANATIONS, STYLE_OPTIONS,
+    AFTER_FRAMEWORK_QUESTIONS, CHAT_MORE_LABEL, CLARIFICATION_QUESTIONS, STYLE_OPTIONS,
 )
 from mani.chat.offer import Action as OfferAction, Decision
 from mani.chat.safety import normalize

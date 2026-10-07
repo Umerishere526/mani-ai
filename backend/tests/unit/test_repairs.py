@@ -455,7 +455,7 @@ def test_a_stage_in_the_middle_of_a_framework_carries_no_buttons(registry):
     mid = reply(text="What did she say?", prompts=[SmartPrompt(label="Not sure")])
     fixed = fix(registry, mid, framework_running=True, current_phase="belief",
                 current_framework_id="abcde")
-    assert [p.label for p in fixed.prompts] == [repairs.SKIP_LABEL]
+    assert fixed.prompts == []
 
 
 DESCRIBED = Framework(

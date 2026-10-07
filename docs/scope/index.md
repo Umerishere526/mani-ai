@@ -61,12 +61,11 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 42  | Mani follows the client's documents, and our conversation rules that disagree are removed | Natural Mani | in-progress |
 | 43  | The team sees whether conversations helped                                                | Natural Mani | planned     |
 
-<<<<<<< HEAD
 | 44 | Mani follows Lolly's review of the meetings chat | Natural Mani | in-progress |
 
 # Natural Mani (rows 44, 32, 33, 34, 18, 38, 40, 41, 6, 35, in that order) is the current focus and comes before every slice below it. It overrides parts of ADRs 006, 007, 008, 010 and 011, and row 33's spec records which. Slices 6 and 7 are what has to be true before a limited beta. Slice 9 is what has to be true before an open launch. Slice 8 can run alongside either, as client answers arrive.
 
-Natural Mani (rows 32, 33, 34, 18, 38, 40, 41, 6, 35, in that order) is the current focus and comes before every slice below it. It overrides parts of ADRs 006, 007, 008, 010 and 011, and row 33's spec records which. Slices 6 and 7 are what has to be true before a limited beta. Slice 9 is what has to be true before an open launch. Slice 8 can run alongside either, as client answers arrive.
+Natural Mani (rows 44, 32, 33, 34, 18, 38, 40, 41, 6, 35, in that order) is the current focus and comes before every slice below it. It overrides parts of ADRs 006, 007, 008, 010 and 011, and row 33's spec records which. Slices 6 and 7 are what has to be true before a limited beta. Slice 9 is what has to be true before an open launch. Slice 8 can run alongside either, as client answers arrive.
 
 > > > > > > > origin
 

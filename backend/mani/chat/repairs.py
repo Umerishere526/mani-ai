@@ -744,11 +744,6 @@ def apply(
         notes.append(f"dropped buttons outside an offer or a framework's end: {[p.label for p in kept]}")
         kept = []
 
-    if framework_running and (phase or current_phase) not in ENDING_STAGES and not kept:
-        # A running question always carries a way past it, so nobody is held on a step they do
-        # not want to answer. Not on the body stages: those already end the framework.
-        kept = [SmartPrompt(label=SKIP_LABEL)]
-
     title = clean_title(reply.title) if wants_title else None
 
     # Case and spacing are normalized before the check because a model reading a table of

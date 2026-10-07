@@ -1,7 +1,7 @@
 ---
 id: behavioral_activation
 name: Behavioral Activation
-summary: "These questions help you pick one small thing to start with and when to do it."
+summary: "We look at what you've stopped doing, pick one small thing you could do, and decide when you'll do it."
 display_order: 3
 phases: [offering, stopped, matters, choose, manageable, begin, barrier]
 activation:

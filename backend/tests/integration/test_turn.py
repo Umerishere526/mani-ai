@@ -1403,8 +1403,6 @@ async def test_the_body_is_asked_about_once_then_where_then_the_practice(alice, 
     model(
         Reply(text="You were able to stay with the pause. How has it been?",
               state=TechniqueState(technique="abcde", step="somatic_checkin")),
-        Reply(text="It feels a little better. What are you noticing in your body right now?",
-              state=TechniqueState(technique="abcde", step="somatic_checkin")),
         Reply(text="It is not always easy to say where. Is it your chest or your shoulders?",
               state=TechniqueState(technique="abcde", step="somatic_practice")),
         Reply(text="Chest, I see.", state=TechniqueState(technique="abcde", step="somatic_practice")),
