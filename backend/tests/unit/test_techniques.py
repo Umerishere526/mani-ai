@@ -3,7 +3,7 @@
 
 import pytest
 
-from mani.chat.techniques import OFFERING, Registry, Verdict, moves_on_after
+from mani.chat.techniques import OFFERING, Registry, Verdict
 from mani.models.rows import Framework
 
 REFRAMING = Framework(
@@ -21,21 +21,9 @@ STOP = Framework(
 )
 
 
-# Ends the way every seeded framework does: the body check follows the last stage.
-BODY_CHECKED = Framework(
-    id="staged", name="Staged", summary="s", body="b",
-    phases=["offering", "activate", "belief", "closing", "somatic_checkin", "somatic_practice"],
-)
-
-
 @pytest.fixture
 def registry() -> Registry:
     return Registry([REFRAMING, ABCDE, STOP])
-
-
-@pytest.fixture
-def body_checked() -> Registry:
-    return Registry([BODY_CHECKED])
 
 
 def test_the_opening_move_is_offering(registry):
@@ -55,10 +43,12 @@ def test_stepping_back_is_allowed(registry):
     assert registry.validate_transition("thought_reframing", "explore", "surface").ok
 
 
-def test_moving_past_steps_already_answered_is_allowed(registry):
-    """The model judges when a step is done, so it may move forward past steps the person has
-    already answered (spec 0010, AC-5)."""
-    assert registry.validate_transition("thought_reframing", "offering", "explore").ok
+def test_jumping_ahead_is_refused_and_names_what_was_skipped(registry):
+    t = registry.validate_transition("thought_reframing", "offering", "explore")
+    assert not t.ok
+    assert t.verdict is Verdict.SKIPPED_PHASES
+    assert t.skipped == ["surface", "externalize"]
+    assert t.expected_next == "surface"
 
 
 def test_starting_mid_technique_is_refused(registry):
@@ -97,9 +87,8 @@ def test_phases_belong_to_their_own_framework(registry):
 
 
 def test_clamp_corrects_instead_of_discarding_the_turn(registry):
-    # A framework that has not started is corrected to its offering, not another paid call;
-    # a step forward past answered ones is kept.
-    assert registry.clamp("thought_reframing", "offering", "explore") == "explore"
+    # A skip is worth a corrected field, not another paid model call.
+    assert registry.clamp("thought_reframing", "offering", "explore") == "surface"
     assert registry.clamp("thought_reframing", None, "explore") == OFFERING
     assert registry.clamp("thought_reframing", "offering", "surface") == "surface"
 
@@ -133,56 +122,3 @@ def test_nothing_unrecognised_ever_counts_as_finished(registry):
     assert not registry.is_final("abcde", "made_up")
     assert not registry.is_final("abcde", None)
     assert not registry.is_final(None, "ground")
-
-
-@pytest.mark.parametrize(
-    "phase,moves_on",
-    [
-        (None, False),
-        ("offering", False),
-        ("activate", True),
-        ("belief", True),
-        ("closing", True),
-        ("somatic_checkin", False),
-        ("somatic_practice", False),
-        ("a_stage_since_renamed", False),
-    ],
-)
-def test_a_reply_is_answered_by_the_next_stage_from_the_first_stage_to_the_last_before_the_body_check(
-    phase, moves_on
-):
-    assert moves_on_after(BODY_CHECKED, phase) is moves_on
-
-
-def test_nothing_moves_on_in_a_framework_that_is_not_there():
-    assert not moves_on_after(None, "belief")
-
-
-def test_a_turn_that_moves_on_may_hold_or_go_forward_one_stage(body_checked):
-    assert body_checked.validate_transition("staged", "belief", "belief", moving_on=True).ok
-    assert body_checked.validate_transition("staged", "belief", "closing", moving_on=True).ok
-
-
-def test_a_turn_that_moves_on_never_asks_a_stage_again(body_checked):
-    went_back = body_checked.validate_transition("staged", "belief", "activate", moving_on=True)
-    assert went_back.verdict is Verdict.STEPPED_BACK
-    assert went_back.expected_next == "closing"
-    assert body_checked.clamp("staged", "belief", "activate", moving_on=True) == "closing"
-    assert body_checked.clamp("staged", "belief", OFFERING, moving_on=True) == "closing"
-
-
-def test_a_turn_that_moves_on_records_the_next_stage_for_one_the_framework_does_not_have(body_checked):
-    unknown = body_checked.validate_transition("staged", "belief", "examine", moving_on=True)
-    assert unknown.verdict is Verdict.UNKNOWN_PHASE
-    assert body_checked.clamp("staged", "belief", "examine", moving_on=True) == "closing"
-    assert body_checked.clamp("staged", "belief", "examine") is None
-
-
-def test_a_turn_that_moves_on_may_pass_a_stage_but_never_past_the_body_check_in(body_checked):
-    assert body_checked.clamp("staged", "activate", "closing", moving_on=True) == "closing"
-    assert body_checked.validate_transition("staged", "activate", "somatic_checkin", moving_on=True).ok
-    past = body_checked.validate_transition("staged", "belief", "somatic_practice", moving_on=True)
-    assert past.verdict is Verdict.PAST_THE_CHECK_IN
-    assert body_checked.clamp("staged", "belief", "somatic_practice", moving_on=True) == "somatic_checkin"
-    # The practice after the check in belongs to the body route.
-    assert body_checked.validate_transition("staged", "somatic_checkin", "somatic_practice").ok

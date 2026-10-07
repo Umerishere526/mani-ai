@@ -26,8 +26,3 @@ if not ENV_FILE.exists():
     }
     for key, value in FALLBACK.items():
         os.environ.setdefault(key, value)
-
-# The semantic router is a per-deployment flag, so a suite that inherited it from .env tested
-# whatever the machine happened to be set to - and on a machine with it on, every framework
-# test made a real embedding call. The tests that are about the router turn it on themselves.
-os.environ["SEMANTIC_ROUTER"] = "false"

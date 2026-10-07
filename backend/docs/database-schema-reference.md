@@ -46,7 +46,7 @@ Query: `select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid
 
 | Schema | Table | What it holds |
 |---|---|---|
-| `admin` | `frameworks` | The six conversational frameworks (ABCDE, DBT STOP, etc.) — content, stage data, the grief veto phrases and the stuck flag. |
+| `admin` | `frameworks` | The six conversational frameworks (ABCDE, DBT STOP, etc.) — content, stage data, router phrase lists. |
 | `admin` | `prompts` | The live system prompt layers (`mani_base`, `response_format`, etc.), one row per named prompt. |
 | `admin` | `prompt_versions` | Snapshot of a prompt's content every time it's edited, for audit/rollback. |
 | `admin` | `exercises` | The exercise catalog (currently empty — see `PORT-STATUS.md`). |
@@ -58,7 +58,6 @@ Query: `select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid
 | `public` | `messages` | Every message in every thread, both sides. |
 | `public` | `thread_technique_state` | Which framework is active in a thread, and its current phase. |
 | `public` | `thread_techniques_offered` | Frequency-limiting: which frameworks have already been offered in a thread. |
-| `public` | `framework_outcomes` | How the person felt after the practice that ends a framework (migration 015). |
 | `public` | `thread_response_styles` | The model's self-reported response shape/voice per reply — anti-repetition signal. |
 | `public` | `thread_summaries` | The rolling summary of a long thread, refreshed every 20 messages (the history window). Written by the backend only (migration 007). |
 | `public` | `exercise_completions` | Whether a user found a completed exercise helpful. |
@@ -128,9 +127,6 @@ One row per thread — the currently (or most recently) active framework.
 | 6 | `at_message_count` | integer | required | Thread's `message_count` when this state was last written — the cooldown clock. |
 | 7 | `library_offered_since` | boolean | default `false` | Whether the library follow-up has been offered since acceptance. |
 | 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
-| 9 | `holds` | smallint | default `0`, 0–1 (CHECK) | Extra attempts the stored step has used: 1 after the model's one more attempt at a step (or DBT STOP's acting hold), back to 0 on every move; a second attempt records the next step (spec 0010). Written with the step by `mani_service` only (migration 011). |
-| 10 | `known` | jsonb | default `{}` | Only `{"stuck": "yes"}`, for a framework offered after a yes to "Are you feeling stuck?", so its stuck questions are shown once it runs (migration 012, spec 0010). |
-| 11 | `ending` | text | optional, CHECK `resolved`/`pivoted`/`stopped` | How the framework ended, set on the turn it moves into the body check in and kept until it retires; read by the outcome row (migration 014). |
 
 ### `public.thread_techniques_offered`
 Frequency-limiting log — every framework ever offered in a thread.
@@ -176,24 +172,6 @@ Append-only log of the model's self-reported style per reply.
 | 4 | `helpful` | boolean | optional | User's own feedback. |
 | 5 | `completed_at` | timestamptz | default `now()` | |
 
-### `public.framework_outcomes`
-How the person said they felt after the body practice that ends a framework, the client's effectiveness signal (migration 015, spec 0010). Health data: RLS from creation, `authenticated` holds SELECT only (its own rows), only `mani_service` inserts, nothing updates, and account deletion removes rows through `supabase_auth_admin`.
-
-| # | Column | Type | Required | Purpose |
-|---|---|---|---|---|
-| 1 | `id` | uuid | **PK**, default `gen_random_uuid()` | |
-| 2 | `user_id` | uuid | FK→`auth.users` cascade, indexed | |
-| 3 | `thread_id` | uuid | FK→`threads` cascade | |
-| 4 | `message_id` | uuid | FK→`messages` cascade, **unique** | The person's reply that reported it, so a retried turn writes nothing twice. |
-| 5 | `framework_id` | text | FK→`admin.frameworks(id)` RESTRICT, indexed | |
-| 6 | `conversation_style` | text | CHECK `direct`/`supportive`/`reflective` | |
-| 7 | `ending` | text | CHECK `resolved`/`pivoted`/`stopped` | |
-| 8 | `body_place` | text | optional, CHECK `chest`/`head`/`stomach`/`elsewhere` | Where the practice was given for. |
-| 9 | `outcome` | text | CHECK `better`/`mixed`/`unchanged`/`worse`/`unsure` | |
-| 10 | `created_at` | timestamptz | default `now()` | |
-
-Also unique on (`thread_id`, `framework_id`, `ending`): a finished framework is never offered again in its thread, so a second row there is a concurrent retry.
-
 ### `admin.frameworks`
 | # | Column | Type | Required | Purpose |
 |---|---|---|---|---|
@@ -208,7 +186,7 @@ Also unique on (`thread_id`, `framework_id`, `ending`): a finished framework is 
 | 9 | `created_at` | timestamptz | default `now()` | |
 | 10 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
 | 11 | `stages` | jsonb | default `'{}'`, must be a JSON object (CHECK) | Per-phase content: purpose, listen_for, ready_when, boundaries, `ask.{style}`. |
-| 12 | `activation` | jsonb | default `'{}'`, must be a JSON object (CHECK) | `fits_when` (the fact sets `mani/chat/router.py` chooses with), `never_offer_when_said`, and what the prompt reads (`central_indication`, `to_find_out`, `distinctions`, `contraindications`). |
+| 12 | `activation` | jsonb | default `'{}'`, must be a JSON object (CHECK) | `strong_signals`/`signals`/`distinctions` — what `mani/chat/router.py` actually reads. |
 
 ### `admin.prompts`
 | # | Column | Type | Required | Purpose |
@@ -290,7 +268,6 @@ Snapshot taken automatically whenever `admin.prompts` is edited via the admin AP
 | 12 | `outcome` | `admin.llm_call_outcome` (enum) | required | Correctly enum-typed, unlike `purpose`. |
 | 13 | `error_message` | text | optional | |
 | 14 | `created_at` | timestamptz | default `now()` | |
-| 15 | `decision` | jsonb | optional | Migration 013. On a chat call: the framework offered, why its offer was removed (`first_message`, `safety_concern`, `vetoed`, `cooling_down`, `finished`, `running`, `unknown`, `another_question`), the step moved from and to, how a framework ended and how they felt (`orchestrator.turn_decision`). Ids and codes only, never the person's words, since the row outlives them. |
 
 ### `admin.user_memory`
 Patterns about one person across their conversations, folded in as each finishes (migration 009, ADR-005). Health data: `authenticated` holds nothing on it; only `mani_service` reads and writes it, and RLS scopes that to the caller's own row - the one `admin` table with RLS.

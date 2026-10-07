@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -80,8 +81,8 @@ class TechniqueState(BaseModel):
     )
     step: str = Field(
         description=(
-            "The step you ask in this reply, from the steps in [ctx]: the next one their words do "
-            "not already meet, or the same step for your one more attempt at it. Never an earlier one."
+            "The current stage id you are executing, from framework_stages in [ctx]. "
+            "Stages must follow that list's order - you cannot skip one."
         )
     )
     accepted: bool | None = Field(
@@ -100,31 +101,7 @@ class TechniqueState(BaseModel):
 class Crisis(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    reason: str = Field(
-        default="",
-        description="Brief description of the crisis signal. Never read back to anyone.",
-    )
-    category: str | None = Field(
-        default=None,
-        description=(
-            "What kind of concern, one of: suicide, self_harm, harm_to_other, cannot_stay_safe, "
-            "abuse_or_violence, overdose, medical_emergency, loss_of_contact_with_reality, other. "
-            "Use other only for something you thought about that is not danger."
-        ),
-    )
-
-    @field_validator("reason", mode="before")
-    @classmethod
-    def _no_reason_is_empty(cls, value: object) -> object:
-        """A flag with a null reason is still a flag; reading it as empty keeps the reply."""
-        return "" if value is None else value
-
-    @field_validator("category", mode="before")
-    @classmethod
-    def _only_text_names_a_kind(cls, value: object) -> object:
-        """A number or a list there is no kind. Reading it as none keeps the reply, and a flag
-        with no kind is treated as a real concern."""
-        return value if isinstance(value, str) else None
+    reason: str = Field(description="Brief description of the crisis signal")
 
 
 class Style(BaseModel):
@@ -157,34 +134,34 @@ class Reply(BaseModel):
             "repeat; the opening words may not."
         ),
     )
+    heading_toward: str | None = Field(
+        default=None,
+        description=(
+            "Choose before writing text: the id from the Framework Index that this "
+            "conversation is most likely heading toward, or null when nothing has pointed "
+            "anywhere yet. It decides which missing thing your question reaches for. Not "
+            "shown to the user."
+        ),
+    )
+    offer_fit: Literal["clear", "closest"] | None = Field(
+        default=None,
+        description=(
+            "Only when this reply offers a set of questions: \"clear\" when you are confident "
+            "it fits what they have told you, \"closest\" when nothing fits well and it is the "
+            "nearest. Null when you are not offering. Choose before writing text."
+        ),
+    )
     text: str = Field(description="Your conversational response to the user. Required.")
-    # Plain strings for the same reason as the closed sets above: repairs reads them, and an
-    # unknown value is dropped rather than costing the turn.
-    ending: str | None = Field(
-        default=None,
-        description=(
-            "Only on the reply that ends a running framework, moving to the body check in: "
-            "\"resolved\" when it has what it needs, \"pivoted\" when it stopped helping or a step "
-            "could not be answered after one more attempt, \"stopped\" when they asked to stop. "
-            "Null otherwise."
-        ),
-    )
-    felt_after: str | None = Field(
-        default=None,
-        description=(
-            "Only with answering_practice in [ctx]: how they say they feel after the practice, one "
-            "of \"better\", \"mixed\", \"unchanged\", \"worse\", \"unsure\". Null when they did "
-            "not say, and on every other turn."
-        ),
-    )
-
     prompts: list[SmartPrompt] | None = Field(
         default=None,
         description=(
-            "Buttons under the reply. When you offer a set of questions, give one button with "
-            "\"technique\" set to its id: the labels of an offer are set for you. Include "
-            "\"library\" ONLY on a button that opens the library. Otherwise buttons only where "
-            "a stage gives them; set to null when none are given."
+            "Tappable button options if your response ends with a question that has "
+            "2-3 clear choices. Each prompt has a \"label\" field (required). "
+            "ONLY include \"technique\" field when INITIALLY ASKING if user wants to try "
+            "a technique. Include \"library\" ONLY on a button that opens the library. "
+            "Labels should be in USER voice (\"Try it\", "
+            "\"Keep chatting\"). Set to null if no buttons are appropriate "
+            "(e.g., open-ended questions). Two or three, never more."
         ),
     )
     title: str | None = Field(
@@ -198,20 +175,16 @@ class Reply(BaseModel):
     crisis: Crisis | None = Field(
         default=None,
         description=(
-            "Set when something in their message made you stop and think about whether they, or "
-            "someone else, may be in danger: suicidal thoughts, an intent to self-harm, a wish to "
-            "die, an intent to hurt another person, violence or control done to them, a medical "
-            "emergency happening now, a possible overdose. Name the kind in category. If it was "
-            "danger, choose that kind. When it is unclear, choose the kind that fits, not other. "
-            "If you thought about it and it is not danger (an urge to act on a message, a heated "
-            "moment that made you stop and think), choose other; frustration that did not is no flag. A threat or a wish to hurt a person is "
-            "harm_to_other, even when it is angry or vague, never other. Do NOT set it for ordinary sadness or frustration, "
-            "hopelessness or exhaustion (\"I can not do this anymore\"), physical pain or injury "
-            "(\"I broke my arm\", \"I fell and hurt myself\"), or an ambiguous \"I need help\". For a "
-            "physical injury, ask whether they have been able to get it seen to and how it is "
-            "affecting them, then support the emotional side. For anything else ambiguous, ask "
-            "one gentle question to learn whether they are in danger or hurting emotionally "
-            "first. Set to null when there is no safety concern."
+            "Set when the person shows a genuine safety concern - suicidal thoughts, an intent "
+            "to self-harm, or a wish to die. This does NOT cut off the conversation; it flags "
+            "the moment so the framework pauses and the reply stays with them. Do NOT set it "
+            "for ordinary sadness or frustration, hopelessness or exhaustion (\"I can not do "
+            "this anymore\"), physical pain or injury (\"I broke my arm\", \"I fell and hurt "
+            "myself\"), or an ambiguous \"I need help\". For a physical injury, ask whether they "
+            "have been able to get it seen to and how it is affecting them, then support the "
+            "emotional side. For anything else ambiguous, ask one gentle question to learn "
+            "whether they are in danger or hurting emotionally first. Set to null when there is "
+            "no safety concern."
         ),
     )
     state: TechniqueState | None = Field(

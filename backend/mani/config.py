@@ -124,12 +124,6 @@ class Settings(BaseSettings):
     # Includes the model's technique reasoning in responses, for conversation testing.
     ai_debug_mode: bool = False
 
-    # Routes on meaning (mani/chat/semantic_router.py) and decides the offer in code
-    # (mani/chat/offer.py) rather than phrase matching and the model's own offer_fit. Off
-    # until the two have been compared on the same conversations: it changes when a
-    # framework is offered, which is the thing most worth measuring before it ships.
-    semantic_router: bool = False
-
     # Compared against the Authorization header Vercel Cron sends automatically when this
     # is set as the CRON_SECRET env var on the project. Empty means the endpoint refuses
     # every request - there is no host where an unset secret should mean "open".

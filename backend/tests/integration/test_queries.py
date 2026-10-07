@@ -198,24 +198,6 @@ async def test_offering_the_same_technique_twice_stores_it_once(alice):
     assert ctx.techniques_offered == ["abcde"]
 
 
-async def test_a_stage_remembers_when_it_began_until_the_phase_changes(alice):
-    """How long a stage has run is what lets Mani move on from one that goes nowhere."""
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
-
-    async def land(phase):
-        await messages.create_pair(alice, thread.id, "user", "mani")
-        await threads.set_technique_outcome(
-            alice, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase=phase,
-        )
-        return (await threads.load_turn_context(alice, thread.id, ALICE)).technique
-
-    began = (await land("belief")).phase_since
-    assert (await land("belief")).phase_since == began
-    moved = await land("consequence")
-    assert moved.phase_since == began + 4  # two more turns, two messages each
-
-
 async def test_a_turn_keeps_its_halves_in_order(alice):
     """now() is fixed per transaction, so both halves of a pair would share a timestamp
     and their order would be undefined. The previous project shipped that, hit it, and

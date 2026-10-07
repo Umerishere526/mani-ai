@@ -12,7 +12,6 @@ import streamlit.components.v1 as components
 
 import client as mani
 from library import render_library
-import session_store
 from login import render_login
 
 # Off wherever this flag is unset - a deployed, client-facing instance - so there is no
@@ -46,13 +45,8 @@ def reset_thread_state(thread: dict, messages: list[dict]) -> None:
 # ---------------------------------------------------------------------------
 
 if "email" not in st.session_state:
-    # A reload opens a new connection, so st.session_state is empty even though the person
-    # signed in a moment ago. Put their session back before showing a login screen they
-    # have already been through - losing a conversation to a stray refresh is the worst
-    # moment for it, because the reason people refresh is that a reply is taking too long.
-    if not session_store.restore():
-        render_login()
-        st.stop()
+    render_login()
+    st.stop()
 
 # A browser tab keeps its session across edits to client.py, so it can hold an instance of the
 # class as it was before the edit, without the methods added since. Same sign-in, current class.
@@ -64,7 +58,6 @@ with st.sidebar:
     st.caption(f"backend: {mani.API_BASE_URL}")
     st.caption(f"signed in: {st.session_state.email}")
     if st.button("Sign out", use_container_width=True):
-        session_store.end()
         st.session_state.clear()
         st.rerun()
 
@@ -223,9 +216,9 @@ st.markdown(
            stable named CSS variables in this version (checked: only emotion's
            auto-hashed ones are), so this must match .streamlit/config.toml's
            secondaryBackgroundColor by hand if that value ever changes. */
-        background: #EEF3F0;
-        border: 1px solid rgba(31, 122, 90, 0.25);
-        box-shadow: 0 8px 24px rgba(28, 38, 33, 0.10);
+        background: #122A1E;
+        border: 1px solid rgba(47, 158, 92, 0.35);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(47, 158, 92, 0.12);
     }
     .st-key-composer_bar div[data-testid="stForm"] {
         border: none;
@@ -348,19 +341,16 @@ else:
 
         field_key = f"draft_{st.session_state.composer_cycle}"
         with composer_col:
-            with st.form("composer", border=False, enter_to_submit=False):
+            with st.form("composer", border=False):
                 field_col, button_col = st.columns([5, 1])
                 with field_col:
-                    # A text area so a long message wraps and the field grows, instead of
-                    # scrolling sideways. height="content" (Streamlit >=1.64) grows it with
-                    # the text rather than fixing it at one size.
                     st.text_area(
                         "Message",
                         value=st.session_state.draft,
                         key=field_key,
                         placeholder="Type, or tap 🎤 and edit before sending…",
                         label_visibility="collapsed",
-                        height="content",
+                        height=68,
                     )
                 with button_col:
                     submitted = st.form_submit_button(
@@ -376,37 +366,6 @@ else:
             st.session_state.draft = ""
             st.session_state.composer_cycle += 1
             st.rerun()
-
-    # A text_area takes plain Enter as a new line, so sending on Enter (Shift+Enter for a
-    # real line break) is wired up by hand: this intercepts Enter in the composer's textarea
-    # and clicks Send, rather than switching to st.chat_input, which has no way to seed the
-    # field from a voice transcript the way this one does.
-    components.html(
-        """
-        <script>
-        function wireComposerEnter() {
-            const doc = window.parent.document;
-            const bar = doc.querySelector(".st-key-composer_bar");
-            if (!bar) return;
-            const textarea = bar.querySelector("textarea");
-            const button = [...bar.querySelectorAll("button")]
-                .find(b => b.innerText.includes("Send"));
-            if (!textarea || !button || textarea.dataset.enterWired) return;
-            textarea.dataset.enterWired = "1";
-            textarea.addEventListener("keydown", (event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    button.click();
-                }
-            });
-        }
-        wireComposerEnter();
-        new MutationObserver(wireComposerEnter)
-            .observe(window.parent.document.body, {childList: true, subtree: true});
-        </script>
-        """,
-        height=0,
-    )
 
 # ---------------------------------------------------------------------------
 # Dev inspector - direct reads, not API calls. This is the point of the tool: seeing the
