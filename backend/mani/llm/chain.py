@@ -26,34 +26,13 @@ from mani.db import llm_calls
 # conversation transcripts, which are special-category health data.
 
 
-# The reasoning effort a prompt row may ask for. It is sent as OpenRouter's `reasoning` in the
-# request body, never through LangChain's own `reasoning` or `reasoning_effort` arguments, which
-# switch the call to a different OpenAI API.
-REASONING_EFFORTS = ("low", "medium", "high")
-
-
-def request_body(
-    routing: dict[str, Any] | None, reasoning_effort: str | None, settings: Settings
-) -> dict[str, Any]:
-    """What goes in the request beside the messages: provider routing, usage, reasoning."""
-    body: dict[str, Any] = {
-        "provider": settings.routing(routing),
-        # Without this OpenRouter omits the cached-token count, which is the only way to tell
-        # whether prompt caching is actually happening.
-        "usage": {"include": True},
-    }
-    if reasoning_effort:
-        body["reasoning"] = {"effort": reasoning_effort}
-    return body
-
-
 @lru_cache
 def _model(
     api_key: str,
     base_url: str,
     timeout: float,
     model: str,
-    temperature: float | None,
+    temperature: float,
     max_tokens: int,
     extra_body: str,
 ) -> ChatOpenAI:
@@ -80,11 +59,10 @@ def build(
     schema: type[BaseModel],
     *,
     model: str,
-    temperature: float | None,
+    temperature: float,
     max_tokens: int,
     routing: dict[str, Any] | None,
     settings: Settings,
-    reasoning_effort: str | None = None,
 ) -> Runnable:
     """A runnable that takes chat messages and returns raw, parsed and parsing_error.
 
@@ -92,6 +70,12 @@ def build(
     makes the token accounting possible - and turns a malformed reply into a value rather than
     an exception, so the caller can decide what a schema failure is worth.
     """
+    extra_body = {
+        "provider": settings.routing(routing),
+        # Without this OpenRouter omits the cached-token count, which is the only way to tell
+        # whether prompt caching is actually happening.
+        "usage": {"include": True},
+    }
     chat = _model(
         settings.openrouter_api_key,
         settings.openrouter_base_url,
@@ -99,7 +83,7 @@ def build(
         model,
         temperature,
         max_tokens,
-        json.dumps(request_body(routing, reasoning_effort, settings), sort_keys=True),
+        json.dumps(extra_body, sort_keys=True),
     )
     return chat.with_structured_output(schema, method="json_schema", include_raw=True)
 
@@ -108,11 +92,10 @@ def build_tool_choice(
     tool: type[BaseModel],
     *,
     model: str,
-    temperature: float | None,
+    temperature: float,
     max_tokens: int,
     routing: dict[str, Any] | None,
     settings: Settings,
-    reasoning_effort: str | None = None,
 ) -> Runnable:
     """A runnable bound to exactly one tool, forced - real tool-calling, not structured
     output. `with_structured_output` and `bind_tools` are two different invocation modes
@@ -123,6 +106,10 @@ def build_tool_choice(
     Returns the model's raw `AIMessage` - `bind_tools` has no `include_raw`/`parsed` split
     of its own, so the caller reads `.tool_calls` directly.
     """
+    extra_body = {
+        "provider": settings.routing(routing),
+        "usage": {"include": True},
+    }
     chat = _model(
         settings.openrouter_api_key,
         settings.openrouter_base_url,
@@ -130,7 +117,7 @@ def build_tool_choice(
         model,
         temperature,
         max_tokens,
-        json.dumps(request_body(routing, reasoning_effort, settings), sort_keys=True),
+        json.dumps(extra_body, sort_keys=True),
     )
     return chat.bind_tools([tool], tool_choice=tool.__name__)
 

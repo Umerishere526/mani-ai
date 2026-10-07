@@ -118,41 +118,12 @@
 # A question is not what every moment needs. These turns are the ones where asking another
 # would be the failure, so they are the only place the question-free shapes can be observed.
 - name: disclosure_no_question_needed
+  heard: true
   turns:
     - "nobody in my family knows about any of this"
     - "please don't give me a technique right now, I just need to get it out"
     - "I keep replaying the argument and I still can't see where it went wrong"
     - "that's all I wanted to say"
-
-# The persona audit's correction ladder (docs/persona-audit-2026-10.md §8): each turn tells Mani
-# it got something wrong, or how it is talking. Every one should change what Mani does next.
-- name: correction_ladder
-  turns:
-    - "my sister didn't invite me to her birthday dinner"
-    - "I already told you, she didn't invite me"
-    - "that's not really the issue, it's that everyone else was there"
-    - "you're not listening"
-    - "stop asking me so many questions"
-    - "just tell me what you think"
-
-# Low-information replies, one after another (persona audit §8): each should get a light opening
-# from what came before, never a stall and never the same question again.
-- name: short_answers
-  turns:
-    - "hi"
-    - "not great"
-    - "idk"
-    - "yeah"
-    - "kind of"
-
-# Venting held until they turn to help (persona audit §8): no questions while they ask only to be
-# heard, then an offer once they ask for one.
-- name: venting_then_ready
-  turns:
-    - "I just need to vent for a bit, I don't want advice"
-    - "my flatmate keeps leaving dishes everywhere and I'm sick of being the one who cleans up"
-    - "and when I said something she laughed it off like I was being dramatic"
-    - "okay, I think I'm ready to figure out what to actually say to her"
 
 # The client's own worked scenarios (docs/specs/conversational-styles.md), user turns verbatim.
 # Their MANI lines are the target: compare side by side with --verbose.
@@ -177,89 +148,15 @@
     - "I don't know where to start."
     - "Mostly the deadline. It's on Friday and I haven't begun."
 
-# Inside a framework: each starts with the framework accepted at its first stage, so the first
-# message answers that stage. The replies mix a real answer, "I don't know", "yes", "sure", a
-# question of their own, a request to hear a question again (twice in a row, so the second one
-# must be moved past) and, where the stage asks for a choice, a request to suggest something.
-# Every stage should be asked once, a hold should be one of the legitimate ones, and the run
-# should reach the body check.
+# Inside a framework: starts with ABCDE accepted, then answers its stages the way a person would.
 - name: framework_abcde_stages
   start_in: {framework: abcde, phase: activate}
-  expect_framework: true
   turns:
     - "My manager criticized my presentation in front of the whole team."
-    - "That I'm bad at my job."
-    - "Why does it matter what I believe?"
-    - "I don't know"
-    - "I don't get it"
-    - "I still don't get it"
-    - "yes"
-    - "sure"
-- name: framework_thought_reframe_stages
-  start_in: {framework: thought_reframe, phase: thought}
-  expect_framework: true
-  turns:
-    - "I keep thinking she ignored my message because she is done with me."
-    - "It would mean I'm not worth keeping around."
-    - "I don't know"
-    - "I don't get it"
-    - "I still don't get it"
-    - "Is that a fair thing to think?"
-    - "yes"
-    - "sure"
-- name: framework_behavioral_activation_stages
-  start_in: {framework: behavioral_activation, phase: stopped}
-  expect_framework: true
-  turns:
-    - "I stopped cooking and going to the gym."
-    - "I don't know"
-    - "Suggest something"
-    - "yes"
-    - "Tonight after work, I guess."
-    - "I don't get it"
-    - "I still don't get it"
-    - "Is it normal to lose motivation like this?"
-    - "sure"
-- name: framework_structured_problem_solving_stages
-  start_in: {framework: structured_problem_solving, phase: problem}
-  expect_framework: true
-  turns:
-    - "My deadline is Friday and I haven't started the report."
-    - "I know it is due Friday and my manager has not offered more time."
-    - "I don't know"
-    - "I don't get it"
-    - "I still don't get it"
-    - "I could ask for more time or work this weekend."
-    - "Does it matter which one I pick first?"
-    - "Suggest something"
-    - "yes"
-    - "Start the outline tonight."
-    - "sure"
-- name: framework_act_choice_point_stages
-  start_in: {framework: act_choice_point, phase: situation}
-  expect_framework: true
-  turns:
-    - "I can't control whether my parents approve of my decision."
-    - "I don't know"
-    - "I don't get it"
-    - "I still don't get it"
-    - "Being honest with them."
-    - "yes"
-    - "Tell them on Sunday."
-    - "Will that be enough?"
-    - "sure"
-- name: framework_dbt_stop_stages
-  start_in: {framework: dbt_stop, phase: stop}
-  expect_framework: true
-  turns:
-    - "I haven't sent it yet."
-    - "I started typing again."
-    - "yes"
-    - "I don't get it"
-    - "I still don't get it"
-    - "I don't know"
-    - "Why does waiting help?"
-    - "sure"
+    - "She said two of my recommendations didn't have enough support."
+    - "That I'm bad at my job and everyone saw it."
+    - "I stopped talking for the rest of the meeting and avoided her after."
+    - "Well, she also asked me to lead the next project, so maybe not everyone thinks that."
 
 # ---------------------------------------------------------------------------
 # Demo rehearsal: whole journeys, improvised openings, and a returning person.
@@ -396,12 +293,12 @@
     - "@tap:Chat More"
     - "Thanks."
 
-# Saying "I want to keep talking" to an offer, carrying on, and being offered something again once it fits.
+# Saying "Keep chatting" to an offer, carrying on, and being offered something again once it fits.
 - name: decline_then_reoffer
   turns:
     - "My manager criticized my presentation in front of the whole team."
     - "She said two of my recommendations didn't have enough support, and now I keep thinking I'm bad at my job."
-    - "@tap:I want to keep talking"
+    - "@tap:Keep chatting"
     - "I just keep replaying her words."
     - "It's been going round in my head all day."
     - "I really can't shake the feeling I'm not good enough at this job."
@@ -411,7 +308,7 @@
 # is asked once; "yes" and "idk" lead to where, with its buttons, and the exercise comes before
 # any Chat More / Go to Library choice.
 - name: panic_somatic_once
-  start_in: {framework: dbt_stop, phase: proceed}
+  start_in: {framework: dbt_stop, phase: closing}
   turns:
     - "it is better i guess"
     - "not a 100% but it feels a little better i guess"
@@ -420,82 +317,3 @@
     - "idk"
     - "Chest"
     - "I feel calmer for a second, then it comes back"
-
-# Spec 0005 (row 8): the chats the phrase router got wrong on 2026-10-05, and the manager chat from
-# spec 0001. Turns verbatim. Expected: the stress chat asks what happened and offers nothing by its
-# fourth message; the panic chat offers DBT STOP; the manager chat offers ABCDE.
-- name: stress_nothing_named_yet
-  turns:
-    - "i feel emotionally stressed"
-    - "work pressure, parents pressure, society pressure"
-    - "yes"
-    - "i suggest at all of them."
-- name: panic_attack_grounding
-  turns:
-    - "I feel like I might have a panic attack."
-    - "yea i see my laptop in front of me"
-    - "it looks very shiny and clean"
-    - "a coffee mug, my vape.."
-- name: manager_embarrassed_me
-  turns:
-    - "I'm very upset. My manager embarrassed me today because he wants me to fail."
-    - "EVERYTHING WENT WRONG"
-    - "I felt really embarrassed."
-    - "He does it all the time in front of everyone"
-
-# muhammad's own chat, 2026-10-05, Direct: the event and what it meant to them were said before
-# the offer, and they did not follow three of the framework's questions ("what?"). After the
-# accept nothing already said is asked again, and a "what?" gets the same question, simpler.
-- name: idiot_concert_direct
-  turns:
-    - "i feel like i idiot"
-    - "sometimes i make decision that i know that i shouldn't take but i still make that decision."
-    - "I went to a concert and the very next day i had an exam. i wish hadn't went to the concert and studied for the exam"
-    - "yes"
-    - "@accept|Try it"
-    - "what?"
-    - "i bomb the exam and i'm sure i'll fail"
-    - "cause i make stupid decisions"
-    - "i don't know"
-    - "i feel like i should be smart enough to make smart choices myself but when the moment comes i always make the bad decision"
-    - "i feel my head is spining"
-    - "good i think"
-
-# The earlier Mani's chat the team lead picked questions from (journal
-# questions-easy-to-answer-old-mani-chat-2026-10-05). The questions Mani asks are judged: short,
-# plain, no either/or after "i cant decide", and "Are you feeling stuck?" at most once. The turns are
-# scripted, so later ones may read oddly against what Mani actually asked. After the check this
-# person is offered ABCDE (spec 0009).
-- name: depressed_alone
-  expect_offer: abcde
-  turns:
-    - "i am depressed"
-    - "i dont know i am alone and cant think straight"
-    - "i dont know cant think of anything just alone and confused"
-    - "no one to talk to"
-    - "Feeling confused"
-    - "Let's try it"
-    - "what does confusion usually mean , i dont know what the answer should be"
-    - "my feels restless and many thoughts come up"
-    - "Not sure yet"
-    - "i cant decide"
-    - "but i m not comfortable with this feeling"
-    - "Different way"
-
-# Spec 0009: pain in the body, two stuck answers of two words or more, a yes to "Are you feeling
-# stuck?", the offer accepted by typing, then short answers to the ABCDE steps. The pain must not
-# hold this offer back, and the first framework question is "What goes through your mind when you
-# feel this?".
-- name: stuck_body_pain
-  expect_offer: abcde
-  turns:
-    - "my back has been hurting for weeks and i feel awful"
-    - "i dont know, i just cant think properly"
-    - "i really dont know what to say"
-    - "yes"
-    - "Let's try it"
-    - "that i will never get better"
-    - "i stay in bed more"
-    - "it has been weeks"
-    - "the doctor said it will heal"
-    - "maybe it will get better slowly"

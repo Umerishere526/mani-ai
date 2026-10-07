@@ -12,40 +12,13 @@ from mani.models.rows import Framework
 # on it to tell "nothing started" apart from "started at the beginning".
 OFFERING = "offering"
 
-# The two stages every framework ends on. The body check owns the turns from the first of them.
-SOMATIC_STAGES = frozenset({"somatic_checkin", "somatic_practice"})
-
-
-def moves_on_after(framework: Framework | None, phase: str | None) -> bool:
-    """Whether a reply to `phase` is answered by asking the stage after it.
-
-    True from the first stage after the offering up to the stage before the body check. The
-    offering's own turn (accepting it), the body check and a phase the framework does not know
-    are left to the turn rules that apply there.
-    """
-    if framework is None or not framework.knows_phase(phase) or phase in SOMATIC_STAGES:
-        return False
-    offering = framework.phase_index(OFFERING)
-    return 0 <= offering < framework.phase_index(phase) < len(framework.phases) - 1
-
-
-# The branch a stage carries for a person offered the framework because they were stuck, and the
-# key in `known` that marks such a start.
-STUCK_BRANCH = "stuck"
-
-
-def _phase_after(framework: Framework, phase: str | None) -> str | None:
-    index = framework.phase_index(phase)
-    return framework.phases[index + 1] if 0 <= index < len(framework.phases) - 1 else None
-
 
 class Verdict(StrEnum):
     OK = "ok"
     UNKNOWN_FRAMEWORK = "unknown_framework"
     UNKNOWN_PHASE = "unknown_phase"
+    SKIPPED_PHASES = "skipped_phases"
     MISSING_OFFERING = "missing_offering"
-    STEPPED_BACK = "stepped_back"
-    PAST_THE_CHECK_IN = "past_the_check_in"
 
 
 @dataclass(frozen=True)
@@ -60,6 +33,8 @@ class Transition:
 
     @property
     def reason(self) -> str:
+        if self.verdict is Verdict.SKIPPED_PHASES:
+            return f"skipped {', '.join(self.skipped)}"
         return self.verdict.value
 
 
@@ -109,17 +84,8 @@ class Registry:
         framework_id: str | None,
         current_phase: str | None,
         next_phase: str | None,
-        *,
-        moving_on: bool = False,
     ) -> Transition:
         """Whether a technique may move from current_phase to next_phase.
-
-        The model judges when a step is done, so it may move forward past steps the person has
-        already answered (spec 0010, AC-5), but only as far as the body check in: the practice
-        after it belongs to the body route. Staying on a phase is allowed. Stepping back is
-        allowed too, except on a turn that moves on (`moves_on_after`): the person has answered
-        current_phase, so going back to it or earlier asks it again. There a step back, and a
-        phase the framework does not have, are corrected to the phase after current_phase.
 
         The implementation this replaces returned *valid* for an unrecognised framework
         or an unrecognised phase, so one hallucinated identifier silently switched the
@@ -132,20 +98,12 @@ class Registry:
             return Transition(Verdict.UNKNOWN_FRAMEWORK)
 
         if not framework.knows_phase(next_phase):
-            return Transition(
-                Verdict.UNKNOWN_PHASE,
-                expected_next=_phase_after(framework, current_phase) if moving_on else None,
-            )
+            return Transition(Verdict.UNKNOWN_PHASE)
 
         # A phase we do not recognise is treated as nothing having started, which makes
         # the only legal move the opening one.
         current_index = framework.phase_index(current_phase)
         next_index = framework.phase_index(next_phase)
-
-        if moving_on and next_index < current_index:
-            return Transition(
-                Verdict.STEPPED_BACK, expected_next=_phase_after(framework, current_phase)
-            )
 
         if next_index <= current_index:
             # Holding on a phase, or stepping back, is a legitimate conversational move.
@@ -158,9 +116,12 @@ class Registry:
                 expected_next=OFFERING,
             )
 
-        check_in = framework.phase_index("somatic_checkin")
-        if 0 <= check_in < next_index and current_index < check_in:
-            return Transition(Verdict.PAST_THE_CHECK_IN, expected_next="somatic_checkin")
+        if next_index - current_index > 1:
+            return Transition(
+                Verdict.SKIPPED_PHASES,
+                skipped=framework.phases[current_index + 1 : next_index],
+                expected_next=framework.phases[current_index + 1],
+            )
 
         return Transition(Verdict.OK)
 
@@ -169,8 +130,6 @@ class Registry:
         framework_id: str | None,
         current_phase: str | None,
         next_phase: str | None,
-        *,
-        moving_on: bool = False,
     ) -> str | None:
         """The phase to actually record, correcting a bad one instead of regenerating.
 
@@ -178,9 +137,7 @@ class Registry:
         own header - so a skip is worth correcting in code rather than paying for
         another model call, which is what it cost before.
         """
-        transition = self.validate_transition(
-            framework_id, current_phase, next_phase, moving_on=moving_on
-        )
+        transition = self.validate_transition(framework_id, current_phase, next_phase)
         if transition.ok:
             return next_phase
         # Unknown framework or phase leaves nothing trustworthy to record.

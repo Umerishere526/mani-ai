@@ -1,46 +1,25 @@
 ---
 id: thought_reframe
 name: Thought Reframe
-summary: "We look at the thought you're having, what supports it, what doesn't, and whether there's a more accurate way to see the situation."
+summary: "These questions help you examine a troubling thought and consider a more balanced perspective. By the end, you will be able to see the situation differently."
 display_order: 2
-phases:
-  [
-    offering,
-    thought,
-    significance,
-    facts_for,
-    facts_against,
-    alternative,
-    reframe,
-  ]
+phases: [offering, thought, significance, facts, alternative, reframe, closing]
 activation:
   central_indication: >-
     One specific painful thought or interpretation is intensifying distress, and the user wants
     a brief shift in perspective rather than a deep event-by-event examination.
-  # How a person actually talks when this framework fits. The semantic router embeds
-  # these, not central_indication: clinical prose scored 2/7 on real messages where
-  # these scored 11/11. Authored content - changing them changes which framework is
-  # offered, so they need the same review the summary does.
-  exemplars:
-    - "My friend hasn't replied and I'm sure she hates me now."
-    - "I keep thinking one thing must be true and I can't see it any other way."
-    - "I got a short text and convinced myself they're angry with me."
-    - "I made one mistake at work and now I think everyone sees me as careless."
-    - "This one thought keeps going round and I can't shake it."
-    # How people actually open, in a few words. A short opener matched no long
-    # exemplar closely enough to clear the bar, so the framework was never reached.
-    - "I can't stop thinking one thing."
-    - "This thought keeps going round."
-    - "I'm sure I've ruined it."
+  # A confident offer waits for their third message: the fit depends on what they took the event or
+  # the thought to mean, which the first two messages rarely say.
+  earliest_offer_message: 3
   to_find_out:
     - "the exact thought going round, in their words"
     - "the situation it is attached to"
-    - "what makes that thought hard for them"
+    - "why that thought hurts"
     - "whether they want a brief look rather than a deep one"
     - "whether it could be tested against facts (a loss or a settled fact is not a thought to test)"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads never_offer_when_said and stuck_offer.
+  # router reads strong_signals and signals.
   appropriate_when:
     - "One specific thought is intensifying the user's difficulty"
     - "The thought contains an assumption, prediction, or broad conclusion"
@@ -64,6 +43,37 @@ activation:
     - "The thought keeps returning as a repeated request to check whether it is true, especially about harm, contamination, or identity - in OCD this checking is the compulsion, and answering it again only feeds the loop it is trying to escape"
     - "The person describes abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger - examining the thought must never turn into questioning whether it was real or as serious as it felt, and Mani must not reinterpret the behaviour as harmless"
     - "The painful statement is itself an established fact - a relationship ended, a person said they want to end the friendship - the fact is not reframed, only a related thought about themselves or their future"
+  # Short fragments, not full example sentences - see abcde.md's activation block for why.
+  strong_signals:
+    - "nobody cares about me"
+    - "did not answer because"
+    - "going to fail"
+    - "do not like me"
+  signals:
+    - "why else would he"
+    - "why else would she"
+    - "only one explanation"
+    - "already know how this will end"
+    - "point of trying"
+    - "i am a failure"
+    - "she hates me"
+    - "he hates me"
+    - "it is hopeless"
+    - "i ruined everything"
+    - "this proves i"
+    - "proves i will never"
+    - "everyone must think i am"
+    - "i know i do not matter"
+    - "know if that is accurate"
+    - "certain i will fail"
+    - "will think i am"
+  redirects:
+    - signal: "I keep thinking I am incompetent, and I want to understand why one criticism affected me so strongly."
+      instead: abcde
+    - signal: "I know the thought may never go away, but I do not want it making my decisions."
+      instead: act_choice_point
+    - signal: "I know what I need to do, but I cannot make myself begin."
+      instead: behavioral_activation
   distinctions:
     abcde: >-
       Reframe when one thought is already clear, a shorter process is wanted, and the full
@@ -94,49 +104,49 @@ stages:
     purpose: "Isolate one specific thought in the user's own language."
     listen_for: "One specific assumption, conclusion, prediction, or belief in the user's language."
     ready_when: >-
-      One specific thought identified, in their words. What they said before they accepted counts,
-      including the thought the offer was built on: when that thought is clear, the step is done
-      without asking them to confirm it. If several appear, ask which one to examine.
+      One specific thought identified. If several appear, ask which one to examine. Once you have
+      mirrored it back, anything other than a no confirms it: an elaboration, a detail about when
+      it came up, or a yes all mean move on to its significance. Never ask for that confirmation
+      a second time.
     boundaries:
       - "must not select the thought for the user"
       - "must not combine several thoughts"
       - "must not rewrite the thought in clinical language"
       - "must not call it irrational or distorted"
-      - 'must not settle for a global self-judgment with no moment attached - "I''m worthless" is a standing belief about who they are, not a thought about what just happened, and light reframing does not move something that size. Find the moment it is attached to right now'
+      - "must not settle for a global self-judgment with no moment attached - \"I'm worthless\" is a standing belief about who they are, not a thought about what just happened, and light reframing does not move something that size. Find the moment it is attached to right now"
     if_unclear:
       - when: "several thoughts appear"
         reply: "Several thoughts are connected here. Which one do you want to examine?"
-        start_only: true
-      - when: 'no clear thought - "I don''t know."'
+      - when: "no clear thought - \"I don't know.\""
         reply: "The thought is difficult to identify. What keeps repeating in your mind?"
-        start_only: true
-      - when: 'identity-level rather than moment-level - "I''m just a failure."'
+      - when: "identity-level rather than moment-level - \"I'm just a failure.\""
         reply: "That's about who you are, not just today. What happened that brought it up?"
-        start_only: true
       - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
         reply: "What happened sounds serious, and I am not going to ask you to see it differently. What would be most helpful to talk through?"
     ask:
-      supportive: "Is that the thought you want to look at together?"
-      reflective: "Is that the thought you want to look at?"
-      direct: "Is that the thought you want to look at?"
+      supportive: "This is the thought that keeps returning. Is this the one you want to look at together?"
+      reflective: "Is that the thought you want to examine?"
+      direct: "Is that the thought you want to test?"
   significance:
     purpose: "Understand what makes the thought matter, without labelling their experience."
     listen_for: "Why the thought matters and what the user believes it says about themselves, another person, or the future."
+    ready_when: "Why the thought matters is clear. MANI does not assign the meaning."
     boundaries:
       - "must not assign feelings"
       - "must not tell the user why the thought is painful"
       - "must not introduce history the user has not mentioned"
       - "must not expand the brief framework into a deeper investigation"
     if_unclear:
-      - when: 'a feeling word instead - "Rejected."'
+      - when: "a feeling word instead - \"Rejected.\""
         reply: "You used the word 'rejected.' What thought is connected to it?"
     ask:
-      supportive: "What makes that thought hard for you?"
-      reflective: "What makes that thought hard for you?"
-      direct: "What makes that thought hard for you?"
-  facts_for:
-    purpose: "Establish what the user knows supports the thought."
-    listen_for: "What supports the thought, and what is known rather than assumed."
+      supportive: "What makes that thought difficult for you?"
+      reflective: "What gives it that meaning?"
+      direct: "What is that conclusion based on?"
+  facts:
+    purpose: "Separate what the user knows from what they assume or predict."
+    listen_for: "What supports the thought, what does not, what is assumed, what remains unknown."
+    ready_when: "In this order: first what supports the thought, then what does not, then what remains unknown. The user does not have to disprove the thought. Stay on the current step until the user has answered it."
     boundaries:
       - "must not argue"
       - "must not decide the thought is false"
@@ -146,31 +156,20 @@ stages:
       - "must not use rhetorical questions to push a conclusion"
       - "must not open by asking what challenges the thought - ask what supports it first. Leading with counter-evidence reads as debate before the person has finished laying out their own case, and the disconfirming question belongs after, not instead of, that"
     if_unclear:
-      - when: 'no contrary information - "Nothing challenges it."'
+      - when: "no contrary information - \"Nothing challenges it.\""
         reply: "Nothing comes to mind yet. What remains unknown about why she has not answered?"
-      - when: 'the thought is supported by an established fact - "She told me she does not want the friendship."'
+      - when: "the thought is supported by an established fact - \"She told me she does not want the friendship.\""
         reply: "She directly ended the friendship. What thought about yourself or your future do you want help examining?"
+      - when: "what supports the thought has been said, and what does not support it has not yet been asked (use the line for the selected tone)"
+        reply: "supportive: She usually responds sooner. What else do you know about the situation? | reflective: Her late response supports part of your concern. What does not support the full conclusion? | direct: Her response is late. What facts do not fit that conclusion?"
     ask:
-      supportive: "What makes you think that is true?"
-      reflective: "What makes you think that is true?"
-      direct: "What makes you think that is true?"
-  facts_against:
-    purpose: "Find what does not support the thought, what is assumed or predicted, and what remains unknown."
-    listen_for: "What does not support the thought, what is assumed, what remains unknown."
-    boundaries:
-      - "must not argue"
-      - "must not decide the thought is false"
-      - "must not ignore supporting evidence"
-      - "must not invent contrary evidence"
-      - "must not assume another person's intentions"
-      - "must not use rhetorical questions to push a conclusion"
-    ask:
-      supportive: "Is there anything that makes you think it might not be true?"
-      reflective: "Is there anything that makes you think it might not be true?"
-      direct: "Is there anything that makes you think it might not be true?"
+      supportive: "What supports that thought?"
+      reflective: "What supports that thought?"
+      direct: "What supports that thought?"
   alternative:
     purpose: "Help the user recognize the original interpretation may not be the only possibility."
     listen_for: "At least one credible possibility that does not deny known facts."
+    ready_when: "At least one credible alternative is named, or the user acknowledges the original interpretation is not certain."
     boundaries:
       - "must not force a positive explanation"
       - "must not replace one unsupported certainty with another"
@@ -178,31 +177,53 @@ stages:
       - "must not reinterpret danger or mistreatment"
       - "must not choose the alternative for the user"
     if_unclear:
-      - when: 'no alternative offered - "There is no other explanation."'
+      - when: "no alternative offered - \"There is no other explanation.\""
         reply: "This explanation feels certain to you. What part do you know for a fact?"
     ask:
-      supportive: "What's one other reason this could be happening?"
-      reflective: "What's one other reason this could be happening?"
-      direct: "What's one other reason this could be happening?"
+      supportive: "You do not know the reason yet. What else might be possible?"
+      reflective: "The silence allows more than one interpretation. What is another possibility?"
+      direct: "The facts do not confirm the reason. What is another explanation?"
   reframe:
-    purpose: "When what they have said supports a balanced conclusion without a new assumption, state it plainly in their words and no further (what they know, what does not fit the thought, what is still unknown), ask nothing, and end the framework as resolved. Only when stating it would need an inference of your own, ask for a more balanced thought."
+    purpose: "Develop a brief, balanced thought grounded in the facts the user identified."
     listen_for: "A thought the user considers accurate, balanced, and believable."
+    ready_when: >-
+      A thought that includes the known facts, does not replace one unsupported certainty with
+      another, and uses language the user accepts. The real gate is not whether it sounds
+      balanced to read - it is whether the user actually believes it. Their own words settle
+      that: "yes", "that feels fairer", "that's closer" mean it is done. Check once, plainly,
+      if they have not said; never ask for a number.
     boundaries:
       - "must not write a polished reframe that does not sound like the user"
       - "must not require positive language"
       - "must not claim the new thought is true with certainty"
       - "must not require the user to feel differently"
       - "must not continue revising a thought the user already finds credible"
-      - "if the user says the reframe does not feel true, must not argue it"
+      - "if the user says the reframe does not feel true, must not argue it - weaken or adjust the reframe itself until it is credible to them, the same way the balanced belief was built"
     if_unclear:
-      - when: 'falsely positive - "She definitely cares, and everything is fine."'
+      - when: "falsely positive - \"She definitely cares, and everything is fine.\""
         reply: "You do not know that everything is fine. What thought stays closer to what you know?"
-      - when: 'it does not feel true yet - "I don''t really believe that."'
+      - when: "it does not feel true yet - \"I don't really believe that.\""
         reply: "It isn't there yet. What would need to change in it to make it feel truer?"
     ask:
-      supportive: "What would be a more balanced thought?"
-      reflective: "What would be a more balanced thought?"
-      direct: "What would be a more balanced thought?"
+      supportive: "What thought would be fairer to what you know?"
+      reflective: "The original thought treats one explanation as certain. What belief includes the uncertainty?"
+      direct: "The reason remains unknown. What conclusion do the facts support?"
+  closing:
+    purpose: "Confirm completion in the user's own terms, without declaring that the framework worked."
+    ready_when: >-
+      The user has identified one specific thought, identified what makes it significant,
+      examined what supports and does not support it, considered another credible
+      interpretation, and created a balanced and believable thought. The user does not need to
+      eliminate the original thought, adopt a positive thought, feel differently, resolve the
+      external situation, take immediate action, or agree with MANI's interpretation.
+    boundaries:
+      - "must not require the user to eliminate the original thought or feel differently to be done"
+      - "must not summarize the completed framework"
+      - "must not tell the user the framework worked"
+    ask:
+      supportive: "How is that thought sitting with you?"
+      reflective: "The new thought includes what you know and what remains unknown. What changes when you see it this way?"
+      direct: "The new thought fits the available facts. Does it feel accurate?"
 ---
 
 # Thought Reframe
@@ -280,17 +301,17 @@ MANI:  You can wait without deciding what her silence means. What do you notice 
 
 ## Responses MANI must avoid
 
-| Failure                       | Example                                                                                                                | Why                                             |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Standalone mirror             | "You believe she does not care."                                                                                       | Not followed by a question                      |
-| Summary                       | "Your friend did not answer, so you decided she does not care, but then you remembered that she helped you yesterday." | Retells the conversation                        |
-| Assigned feeling              | "You feel abandoned and insecure. What evidence supports that?"                                                        | Assigns feelings the user did not name          |
-| Long explanation              | "People sometimes interpret delayed responses as evidence that they are not valued..."                                 | Teaches instead of responding                   |
-| Multiple questions            | "What is the thought, why does it hurt, and what evidence challenges it?"                                              | Rushes the process                              |
-| Immediate contradiction       | "That does not mean she does not care. What else could it mean?"                                                       | Reaches the conclusion for the user             |
-| Unsupported reassurance       | "She probably cares and is simply busy. Can you believe that?"                                                         | Invents an explanation                          |
-| Clinical labelling            | "You are catastrophizing and mind-reading. What is a more rational thought?"                                           | Labels the user's thinking                      |
-| Forced positivity             | "People care about you, and everything will be fine. Can you focus on that?"                                           | Not grounded in the user's evidence             |
-| Reframing an established fact | "Maybe she did not really mean it when she said she wanted to end the friendship."                                     | Questions a fact because it is painful          |
-| Reframing danger              | "Could your partner's threat mean something less serious?"                                                             | Must not reinterpret danger, abuse, or coercion |
-| Wrong tone                    | after the user selects support: "The evidence is insufficient. Identify a more accurate conclusion."                   | Abrupt; does not follow the selected tone       |
+| Failure | Example | Why |
+|---|---|---|
+| Standalone mirror | "You believe she does not care." | Not followed by a question |
+| Summary | "Your friend did not answer, so you decided she does not care, but then you remembered that she helped you yesterday." | Retells the conversation |
+| Assigned feeling | "You feel abandoned and insecure. What evidence supports that?" | Assigns feelings the user did not name |
+| Long explanation | "People sometimes interpret delayed responses as evidence that they are not valued..." | Teaches instead of responding |
+| Multiple questions | "What is the thought, why does it hurt, and what evidence challenges it?" | Rushes the process |
+| Immediate contradiction | "That does not mean she does not care. What else could it mean?" | Reaches the conclusion for the user |
+| Unsupported reassurance | "She probably cares and is simply busy. Can you believe that?" | Invents an explanation |
+| Clinical labelling | "You are catastrophizing and mind-reading. What is a more rational thought?" | Labels the user's thinking |
+| Forced positivity | "People care about you, and everything will be fine. Can you focus on that?" | Not grounded in the user's evidence |
+| Reframing an established fact | "Maybe she did not really mean it when she said she wanted to end the friendship." | Questions a fact because it is painful |
+| Reframing danger | "Could your partner's threat mean something less serious?" | Must not reinterpret danger, abuse, or coercion |
+| Wrong tone | after the user selects support: "The evidence is insufficient. Identify a more accurate conclusion." | Abrupt; does not follow the selected tone |

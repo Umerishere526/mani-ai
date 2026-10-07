@@ -60,16 +60,9 @@ async def test_deleting_the_auth_user_takes_every_owned_row_with_it(admin_conn):
         "insert into public.threads (id, user_id, title) values ($1, $2, $3)",
         thread_id, USER, "a thread that should not survive",
     )
-    message_id = await admin_conn.fetchval(
-        "insert into public.messages (thread_id, user_id, role, content) values ($1, $2, 'user', $3) "
-        "returning id",
-        thread_id, USER, "should not survive either",
-    )
-    # How they felt after a framework is health data about them, and goes with them.
     await admin_conn.execute(
-        "insert into public.framework_outcomes (user_id, thread_id, message_id, framework_id, "
-        "conversation_style, ending, outcome) values ($1, $2, $3, 'abcde', 'direct', 'resolved', 'better')",
-        USER, thread_id, message_id,
+        "insert into public.messages (thread_id, user_id, role, content) values ($1, $2, 'user', $3)",
+        thread_id, USER, "should not survive either",
     )
 
     # What was remembered about them across conversations is theirs too, and goes with them.
@@ -91,7 +84,4 @@ async def test_deleting_the_auth_user_takes_every_owned_row_with_it(admin_conn):
     ) == 0
     assert await admin_conn.fetchval(
         "select count(*) from admin.user_memory where user_id = $1", USER
-    ) == 0
-    assert await admin_conn.fetchval(
-        "select count(*) from public.framework_outcomes where user_id = $1", USER
     ) == 0

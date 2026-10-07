@@ -1,7 +1,7 @@
 # 0001. ABCDE offered when an event and a belief about it are named
 
 **Date**: 2026-10-02
-**Status**: Superseded by [0005](0005-framework-fit-from-stated-facts/index.md)
+**Status**: In Progress
 
 ## Summary
 

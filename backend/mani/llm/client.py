@@ -23,8 +23,6 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_MAX_TOKENS = 2048
-# The room the exercise pick has for its one tool call, unless the prompt row names more.
-DEFAULT_EXERCISE_MAX_TOKENS = 200
 
 # One retry, shared by a malformed reply and a provider that is briefly down. Without it
 # either loses the person's typed message entirely - complete() is called before the turn
@@ -65,19 +63,11 @@ def _usage_of(exc: BaseException) -> llm_calls.Usage:
     )
 
 
-def _failure_name(failure: object) -> str:
-    """What failed, by kind and status only. A parsing error quotes the reply it could not
-    parse, and a provider error can carry the request it refused; either can hold the person's
-    words, and this text is logged and kept on the llm_calls row."""
-    status = getattr(failure, "status_code", None)
-    return type(failure).__name__ + (f" {status}" if status else "")
-
-
 def _as_service_error(exc: Exception) -> tuple[ServiceError, llm_calls.Outcome]:
     if isinstance(exc, openai.RateLimitError):
         return (
             ServiceError(
-                f"provider rate limited: {_failure_name(exc)}",
+                f"provider rate limited: {exc}",
                 ErrorCategory.RATE_LIMITED,
                 retryable=True,
                 user_message="Mani is busy right now. Please try again in a moment.",
@@ -87,7 +77,7 @@ def _as_service_error(exc: Exception) -> tuple[ServiceError, llm_calls.Outcome]:
     if isinstance(exc, openai.APITimeoutError):
         return (
             ServiceError(
-                f"provider timed out: {_failure_name(exc)}",
+                f"provider timed out: {exc}",
                 ErrorCategory.LLM_TIMEOUT,
                 retryable=True,
                 user_message="Mani took too long to answer. Please try again.",
@@ -97,7 +87,7 @@ def _as_service_error(exc: Exception) -> tuple[ServiceError, llm_calls.Outcome]:
     if isinstance(exc, ValidationError):
         return (
             ServiceError(
-                f"model returned a reply that does not fit the schema: {_failure_name(exc)}",
+                f"model returned a reply that does not fit the schema: {exc}",
                 ErrorCategory.LLM_UNAVAILABLE,
                 retryable=True,
                 user_message="Mani had trouble responding. Please try again.",
@@ -106,7 +96,7 @@ def _as_service_error(exc: Exception) -> tuple[ServiceError, llm_calls.Outcome]:
         )
     return (
         ServiceError(
-            f"provider call failed: {_failure_name(exc)}",
+            f"provider call failed: {exc}",
             ErrorCategory.LLM_UNAVAILABLE,
             retryable=True,
             user_message="Mani had trouble responding. Please try again.",
@@ -176,9 +166,8 @@ async def complete[T: BaseModel](
     *,
     model: str,
     purpose: llm_calls.Purpose,
-    temperature: float | None = DEFAULT_TEMPERATURE,
+    temperature: float = DEFAULT_TEMPERATURE,
     max_tokens: int = DEFAULT_MAX_TOKENS,
-    reasoning_effort: str | None = None,
     routing: dict[str, Any] | None = None,
     user_id: uuid.UUID | str | None = None,
     thread_id: uuid.UUID | str | None = None,
@@ -205,7 +194,6 @@ async def complete[T: BaseModel](
         model=model,
         temperature=temperature,
         max_tokens=max_tokens,
-        reasoning_effort=reasoning_effort,
         routing=routing,
         settings=settings,
     )
@@ -232,7 +220,7 @@ async def complete[T: BaseModel](
                     purpose=purpose, model=model, outcome=llm_calls.Outcome.PROVIDER_ERROR,
                     usage=llm_calls.Usage(), latency_ms=int((time.perf_counter() - started) * 1000),
                     user_id=user_id, thread_id=thread_id, prompt_version_id=prompt_version_id,
-                    error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}, retrying: {_failure_name(exc)}",
+                    error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}, retrying: {exc}",
                 )
                 await asyncio.sleep(TRANSIENT_RETRY_DELAY_SECONDS)
                 continue
@@ -254,17 +242,16 @@ async def complete[T: BaseModel](
             # rather than being silently absorbed into whichever attempt finally works -
             # both a retried success and an exhausted retry are fully accounted for.
             latency_ms = int((time.perf_counter() - started) * 1000)
-            what_failed = _failure_name(failure) if failure is not None else "empty"
             await _record(
                 purpose=purpose, model=model, outcome=llm_calls.Outcome.SCHEMA_INVALID,
                 usage=usage, latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
                 prompt_version_id=prompt_version_id,
-                error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}: {what_failed}",
+                error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}: {failure or 'empty'}",
             )
             if attempt == MAX_SCHEMA_ATTEMPTS:
                 raise ServiceError(
                     f"model returned no parseable reply after {MAX_SCHEMA_ATTEMPTS} "
-                    f"attempts: {what_failed}",
+                    f"attempts: {failure or 'empty'}",
                     ErrorCategory.LLM_UNAVAILABLE,
                     retryable=True,
                     user_message="Mani had trouble responding. Please try again.",
@@ -280,7 +267,7 @@ async def complete[T: BaseModel](
         await _record(
             purpose=purpose, model=model, outcome=outcome, usage=usage,
             latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-            prompt_version_id=prompt_version_id, error_message=_failure_name(exc),
+            prompt_version_id=prompt_version_id, error_message=str(exc),
         )
         raise error from exc
 
@@ -303,9 +290,8 @@ async def choose_exercise(
     purpose: llm_calls.Purpose,
     said: Sequence[str] = (),
     current_issue: str | None = None,
-    temperature: float | None = DEFAULT_TEMPERATURE,
-    max_tokens: int = DEFAULT_EXERCISE_MAX_TOKENS,
-    reasoning_effort: str | None = None,
+    temperature: float = DEFAULT_TEMPERATURE,
+    max_tokens: int = 200,
     routing: dict[str, Any] | None = None,
     user_id: uuid.UUID | str | None = None,
     thread_id: uuid.UUID | str | None = None,
@@ -329,7 +315,7 @@ async def choose_exercise(
 
     runnable = chain.build_tool_choice(
         tools.StartExercise, model=model, temperature=temperature, max_tokens=max_tokens,
-        reasoning_effort=reasoning_effort, routing=routing, settings=settings,
+        routing=routing, settings=settings,
     )
 
     listing = "\n".join(
@@ -362,13 +348,13 @@ async def choose_exercise(
     try:
         message = await runnable.ainvoke(messages)
     except Exception as exc:
-        logger.warning("exercise selection call failed: %s", _failure_name(exc))
+        logger.warning("exercise selection call failed: %s", exc)
         latency_ms = int((time.perf_counter() - started) * 1000)
         _, outcome = _as_service_error(exc)
         await _record(
             purpose=purpose, model=model, outcome=outcome, usage=usage,
             latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-            prompt_version_id=prompt_version_id, error_message=_failure_name(exc),
+            prompt_version_id=prompt_version_id, error_message=str(exc),
         )
         return None
 

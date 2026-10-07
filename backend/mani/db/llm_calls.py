@@ -80,16 +80,6 @@ async def attach_message(
     )
 
 
-async def attach_decision(
-    conn: asyncpg.Connection, call_id: uuid.UUID | str, decision: dict
-) -> None:
-    """Keep a chat turn's decisions on its call row (`orchestrator.turn_decision`), so an offer
-    made or refused, or a step moved, can be traced afterwards."""
-    await conn.execute(
-        "update admin.llm_calls set decision = $2 where id = $1", call_id, decision
-    )
-
-
 async def spend_since(
     conn: asyncpg.Connection, user_id: uuid.UUID | str, hours: int = 24
 ) -> dict:
