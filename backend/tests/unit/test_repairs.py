@@ -961,3 +961,26 @@ def test_answering_their_question_holds_the_step_without_spending_its_attempt(re
                 current_framework_id="abcde", their_question=True)
     assert fixed.phase == "belief"
     assert fixed.holds == 0
+
+
+@pytest.mark.parametrize("said, place", [
+    ("Chest", "Chest"),
+    ("in my chest", "Chest"),
+    ("nothing, just my head", "Head"),
+    ("I just can't go back to that meeting again", None),
+    ("?", None),
+])
+def test_a_place_is_a_tap_or_a_short_answer(said: str, place: str | None):
+    """A longer message that holds a place word is not an answer to "where" (spec 0011, AC-11)."""
+    assert repairs.place_answer(said) == place
+
+
+@pytest.mark.parametrize("said, nothing", [
+    ("nothing", True),
+    ("Nothing really.", True),
+    ("I don't feel anything", True),
+    ("nothing helps", False),
+    ("nothing changed in my chest", False),
+])
+def test_feeling_nothing_is_the_whole_answer(said: str, nothing: bool):
+    assert repairs.feels_nothing(said) is nothing

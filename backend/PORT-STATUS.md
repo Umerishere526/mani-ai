@@ -458,7 +458,7 @@ Lolly reviewed one Direct Thought Reframe chat line by line (`backend/docs/specs
 - **One body question.** The ending asks where they feel it, with the place buttons, never "what do you notice" first; a place already named goes straight to its practice; no place gets one plainer try; "nothing", a decline or no place twice gets the decline line and the two choices, set in code. The twelve practices lost their claims about bodies and their filler.
 - **It did not help, so Mani stops.** A `worse` or `unchanged` answer to the practice gets "This didn't help, so I'm going to stop here." with Chat More and Go to Library, no question and no exercise; the outcome row is still written. No exercise follows a body route that gave no practice either.
 
-No schema change; the OpenAPI schema is byte identical to `main`. `pytest` 1519 passed, 4 skipped, integration running. Content changed, so hosted needs `scripts/seed.py` after deploy. Open: muhammad's Direct replay of her conversation in chat-tester (spec 0011, AC-17); telling Lolly which rejected lines were her own documents.
+No schema change; the OpenAPI schema is byte identical to `main`. `pytest` 1529 passed, 4 skipped, integration running. Content changed, so hosted needs `scripts/seed.py` after deploy. Open: muhammad's Direct replay of her conversation in chat-tester (spec 0011, AC-17); telling Lolly which rejected lines were her own documents.
 
 ## 2026-10-06, main model moved to GPT-6 Luna
 
