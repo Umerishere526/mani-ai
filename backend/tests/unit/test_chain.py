@@ -110,7 +110,7 @@ def test_a_reasoning_model_is_not_sent_a_temperature():
     sent = chain._model("sk-test-not-a-real-key", "https://openrouter.ai/api/v1",
                         60.0, "openai/gpt-6-luna", 0.7, 2048, "{}")._default_params
     assert "temperature" not in sent
-    assert sent["max_completion_tokens"] == 2048
+    assert sent["max_completion_tokens"] >= 2048
     assert sent.get("max_tokens") is None
 
 
@@ -165,3 +165,31 @@ def test_the_effort_reaches_the_request_body():
         chain._model = real
 
     assert captured["extra_body"]["reasoning"] == {"effort": "low"}
+
+
+def test_every_prompt_on_a_reasoning_model_says_how_hard_to_think():
+    """Left out, the model falls back to its own default effort and nobody chose it. Every
+    authored prompt that names a reasoning model carries one the configuration accepts."""
+    import typing
+
+    from scripts.seed import PROMPTS_DIR, SOMATIC_FILE, parse_prompt
+
+    allowed = set(typing.get_args(Settings.model_fields["reasoning_effort"].annotation))
+    for path in sorted(PROMPTS_DIR.glob("*.md")):
+        if path == SOMATIC_FILE:
+            continue
+        prompt = parse_prompt(path)
+        if prompt["model_id"] and chain.is_reasoning_model(prompt["model_id"]):
+            effort = prompt["model_parameters"].get("reasoning_effort")
+            assert effort in allowed, f"{path.name} sets reasoning_effort {effort!r}"
+
+
+def test_thinking_never_eats_the_budget_the_reply_was_given():
+    """On a reasoning model the output budget covers the thinking and the reply together. On
+    2026-10-07 a chat turn at effort high thought for 1,955 of its 2,048 tokens, the reply was
+    cut off, and the turn failed. Every caller sizes its budget for the reply alone - 200 for the
+    exercise pick, 500 for a summary - so the thinking needs room of its own on top."""
+    longest_thinking_seen = 1955
+    for reply_budget in (200, 500, 800, 2048):
+        sent = chain.sampling("openai/gpt-6-luna", 0.7, reply_budget)["max_completion_tokens"]
+        assert sent - longest_thinking_seen >= reply_budget

@@ -9,6 +9,7 @@ import openai
 
 from mani.config import Settings, get_settings
 from mani.errors import ErrorCategory, ServiceError
+from mani.llm import chain
 
 logger = logging.getLogger(__name__)
 
@@ -63,15 +64,18 @@ async def _translate_to_english(text: str, settings: Settings) -> str:
     input entirely over a translation hiccup - a non-English reply beats none."""
     if not text:
         return text
+    model = settings.default_chat_model
     try:
         response = await _http(settings).chat.completions.create(
-            model=settings.default_chat_model,
-            temperature=0,
-            max_tokens=500,
+            model=model,
             messages=[
                 {"role": "system", "content": _TRANSLATE_SYSTEM_PROMPT},
                 {"role": "user", "content": text},
             ],
+            # What they said is health data: the same providers, data policy and effort as
+            # every chat call, not whatever OpenRouter would pick for an unrouted request.
+            extra_body=chain.request_body(model, settings),
+            **chain.sampling(model, 0, 500),
         )
         translated = response.choices[0].message.content
         return translated.strip() if translated else text

@@ -102,6 +102,23 @@ async def _remove_users(user_ids: list[str]) -> None:
     if not user_ids:
         return
     async with pool.as_admin() as conn:
+        # Read before they go: the run's own cost, latency and failure rate, which is what a
+        # prompt change is compared on alongside the findings.
+        cost = await conn.fetch(
+            "select purpose, outcome, count(*) calls, round(avg(input_tokens)) avg_in, "
+            "round(avg(output_tokens)) avg_out, max(output_tokens) max_out, "
+            "round(avg(latency_ms) / 1000.0, 1) avg_s, round(max(latency_ms) / 1000.0, 1) max_s, "
+            "round(100.0 * sum(cached_input_tokens) / nullif(sum(input_tokens), 0)) pct_cached "
+            "from admin.llm_calls where user_id = any($1::uuid[]) group by 1, 2 order by 1, 2",
+            user_ids,
+        )
+        print("\npurpose         outcome          calls  avg in  avg out  max out  avg s  max s  cached")
+        for r in cost:
+            print(
+                f"{r['purpose']:<15} {r['outcome']:<15} {r['calls']:>6} {r['avg_in']:>7} "
+                f"{r['avg_out']:>8} {r['max_out']:>8} {r['avg_s']:>6} {r['max_s']:>6} "
+                f"{r['pct_cached'] or 0:>6}%"
+            )
         await conn.execute("delete from admin.llm_calls where user_id = any($1::uuid[])", user_ids)
         await conn.execute("delete from auth.users where id = any($1::uuid[])", user_ids)
 
