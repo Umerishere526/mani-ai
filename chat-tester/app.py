@@ -231,6 +231,24 @@ st.markdown(
         border: none;
         padding: 0;
     }
+    /* The field sits flush in the card: no outline of its own, focused or not, and no
+       "Press ⌘+Enter to submit form" hint, since Enter sends (wired up below). */
+    .st-key-composer_bar [data-testid="stTextAreaRootElement"] {
+        border: none;
+    }
+    .st-key-composer_bar [data-testid="InputInstructions"] {
+        display: none;
+    }
+    /* WhatsApp-style: one line tall until the text wraps or Shift+Enter adds a line,
+       then it grows up to a cap and scrolls inside. Streamlit renders the field with
+       rows=3 and a 68px minimum, which is what made an empty field look like a box;
+       field-sizing sizes it to its text instead. A browser without field-sizing keeps
+       the three-row box and still works. */
+    .st-key-composer_bar textarea {
+        field-sizing: content;
+        min-height: 0;
+        max-height: 10rem;
+    }
     /* Room at the bottom of the message feed so the last bubble never sits under
        the floating composer. */
     .block-container {
