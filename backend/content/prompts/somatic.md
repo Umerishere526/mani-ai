@@ -1,7 +1,7 @@
 ---
 id: somatic
 name: somatic
-description: Shared somatic route. seed.py appends these two stages to every framework's phases and stages (after `closing`). Not a prompt row, not a composer layer.
+description: Shared somatic route. seed.py appends these two stages to every framework's phases and stages (after the last stage). Not a prompt row, not a composer layer.
 ---
 
 # Somatic route (seed-merge source)
@@ -83,6 +83,6 @@ stages:
           reflective: "I hear you noticing it calm for a moment and then come back. That's a common pattern with panic. You don't have to manage it on your own. I have a whole library of tools that help with panic attacks, anytime and anywhere."
     ask:
       supportive: "Where are you feeling that most right now?"
-      reflective: "Where does that sit in your body right now?"
+      reflective: "Where do you feel that in your body?"
       direct: "Where do you feel that most right now?"
 ```

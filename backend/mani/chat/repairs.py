@@ -4,12 +4,12 @@
 from __future__ import annotations
 
 import re
-from difflib import SequenceMatcher
 from dataclasses import dataclass, field
 
-from mani.chat.greeting import CLARIFICATION_QUESTIONS, EXPLAIN_LABELS
-from mani.chat.techniques import Registry
-from mani.llm.schema import SHAPES, LibrarySection, Reply, SmartPrompt, Style
+from mani.chat import router, safety
+from mani.chat.greeting import ACCEPT_LABEL, EXPLAIN_LABEL, KEEP_TALKING_LABEL
+from mani.chat.techniques import Registry, moves_on_after
+from mani.llm.schema import SHAPES, LibrarySection, Reply, SmartPrompt, Style, TechniqueState
 
 MAX_PROMPTS = 3
 MAX_TITLE_LENGTH = 100
@@ -28,62 +28,6 @@ SCRIPT_LEAKAGE = [
 
 _BLANK_RUN = re.compile(r"\n{3,}")
 
-# The reference also refused the words "broken", "weak" and "heavy" anywhere in a reply.
-# That is dropped: the same prompt instructs Mani to mirror the user's own words back, so
-# a person saying "I feel broken" made a correct, caring reply unsendable - and the cost
-# of the collision was an entire extra generation.
-#
-# The lists below are the corrected version of that idea, and they apply to capsule labels
-# rather than to prose. A label is the one thing in a reply the person may send back as
-# their own words, so dropping a bad one is a safe correction where rewriting a sentence
-# would not be. The mirroring collision is handled by exempting anything the person said.
-
-# The feeling words the specifications are strict about: a reply may use one only if the
-# person used it first. "MANI never introduces a feeling word the user did not use."
-FEELING_WORDS = frozenset(
-    {
-        "abandoned", "afraid", "angry", "anxious", "ashamed", "betrayed", "broken",
-        "crushed", "defeated", "dejected", "depressed", "desperate", "devastated",
-        "disappointed", "distressed", "embarrassed", "exhausted", "fearful", "frustrated",
-        "furious", "guilty", "helpless", "hopeless", "humiliated", "hurt", "insecure",
-        "isolated", "lonely", "lost", "miserable", "overwhelmed", "panicked", "rejected",
-        "resentful", "sad", "scared", "stressed", "terrified", "trapped", "unloved",
-        "unwanted", "upset", "worried", "worthless",
-        "empty", "heartbroken", "heavy", "numb", "painful", "scary",
-        # The adjectival forms, which describe the situation rather than the person and are
-        # the shape a capsule label usually takes: "It's frustrating", "It's exhausting".
-        "depressing", "devastating", "draining", "embarrassing", "exhausting",
-        "frustrating", "humiliating", "isolating", "overwhelming", "terrifying",
-        "upsetting", "worrying",
-        # Forms and neighbours that slipped through when the list was a fixed few dozen:
-        # "That sounds incredibly stressful" named a feeling the person never did.
-        "anxiety", "nervous", "nervousness", "tense", "tension", "worry", "worries",
-        "stress", "stressful", "stressing", "dread", "dreading", "dreaded", "fear", "fears",
-        "frightened", "frightening", "panic", "panicking", "overwhelm", "sadness", "unhappy",
-        "anger", "annoyed", "annoying", "irritated", "irritating", "bitter", "jealous",
-        "envious", "guilt", "shame", "shameful", "embarrassment", "humiliation", "loneliness",
-        "isolation", "hopelessness", "despair", "despairing", "depression", "misery",
-        "devastation", "grief", "grieving", "sorrow", "discouraged", "disheartened",
-        "drained", "burnout", "burnt", "hollow", "confused", "confusing", "distress",
-        "relieved", "relief", "calm", "happy", "happiness", "joy", "joyful", "excited",
-        "proud", "grateful", "ecstatic", "thrilled", "terrible", "awful", "dreadful",
-    }
-)
-
-# Judgments a person may hold about themselves but must never be handed as a button to press.
-# Observed live: a reply offered "I'm overthinking it" as a capsule.
-SELF_JUDGMENTS = (
-    "overthinking", "over thinking", "being dramatic", "too sensitive", "overreacting",
-    "over reacting", "being silly", "being stupid", "my fault", "i'm weak", "i am weak",
-    "i'm broken", "i am broken", "not enough", "being needy", "being difficult",
-)
-
-# The label on an offer of the nearest set of questions when none fits well.
-CLOSEST_FIT_LABEL = "Try the closest fit"
-
-# Five: room for a choice in the person's own voice. Past that a label is becoming a sentence.
-MAX_CAPSULE_WORDS = 5
-
 # Where a reply may carry buttons besides an offer: the body check-in and the practice that ends
 # a framework. Everywhere else a button reads as a menu instead of a conversation (client,
 # 2026-09-24). The greeting's style buttons and Chat More / Go to Library are written by the
@@ -95,10 +39,10 @@ ENDING_STAGES = frozenset({"somatic_checkin", "somatic_practice", "grounding"})
 _LIBRARY_SECTIONS = {section.value.lower(): section.value for section in LibrarySection}
 
 # The permission question an offer asks, in each style - the client's own wording
-# (docs/specs/conversational-styles.md), shortened only where it named one scenario.
+# (docs/specs/conversational-styles.md, the panic examples).
 PERMISSION_QUESTIONS = {
     "direct": "Would you like to try it with me?",
-    "supportive": "Would it help to work through it together?",
+    "supportive": "Would you like to try it together?",
     "reflective": "Would you like to try it?",
 }
 
@@ -113,7 +57,7 @@ _OFFER_WORDS = re.compile(
 # questions"), or the permission question after them. Offers are worded fresh each time.
 _OFFER_SENTENCE = re.compile(
     r"(?:^|(?<=[.!?])|(?<=\n))[ \t]*[^.!?\n]*"
-    r"(?:(?:sequence|set|series) of questions|\b(?:a few|some) questions\b"
+    r"(?:(?:sequence|set|series) of questions|\b(?:a few|some) questions\b|structured approach"
     r"|would (?:you like|it help) to (?:try|work through|look at|go through)"
     r"|shall we (?:try|go through|look at))"
     r"[^.!?\n]*[.!?]?",
@@ -122,78 +66,6 @@ _OFFER_SENTENCE = re.compile(
 
 # The question a reply ends on, if it ends on one.
 _LAST_QUESTION = re.compile(r"(?:^|(?<=[.!?])[ \t]+|(?<=\n))([^.!?\n]*\?)\s*$")
-
-WORD = re.compile(r"[a-z']+")
-
-
-def words(text: str) -> set[str]:
-    return set(WORD.findall(text.lower()))
-
-
-_SUFFIXES = ("iness", "ness", "ment", "ied", "ful", "ing", "ed", "ion", "ly", "y")
-
-
-def _stem(word: str) -> str:
-    """A rough root, so a feeling word and its plain forms count as one: lonely and loneliness,
-    stressed and stress, overwhelmed and overwhelming. Never merges two different feelings."""
-    for _ in range(2):
-        for suffix in _SUFFIXES:
-            if word.endswith(suffix) and len(word) - len(suffix) >= 3:
-                word = word[: -len(suffix)] + ("y" if suffix in ("iness", "ied") else "")
-                break
-    return word
-
-
-def introduced_feelings(text: str, said: str) -> list[str]:
-    """Feeling words in `text` that the person has not used. "MANI never introduces a feeling
-    word the user did not use": their own word, or a plain form of it, may come back; a
-    different feeling may not."""
-    theirs = {_stem(w) for w in words(said)}
-    return sorted(
-        w for w in words(text) & FEELING_WORDS
-        if _stem(w) not in theirs and not _misspelt_by_them(w, theirs)
-    )
-
-
-def _skeleton(stem: str) -> str:
-    """The consonants of a root with repeats collapsed: "emberess" and "embarrass" are both "mbrs"."""
-    return re.sub(r"(.)\1+", r"\1", re.sub(r"[aeiou]", "", stem))
-
-
-def _misspelt_by_them(word: str, theirs: set[str]) -> bool:
-    """Whether they wrote this feeling word badly ("emberessed" for "embarrassed"): a reply that
-    spells it right has not introduced it. Long words only, and close, so one feeling is never
-    taken for another (sad and mad, lonely and lovely stay different; across the word list only
-    burnout and burnt share a skeleton, and they are one feeling)."""
-    stem = _stem(word)
-    if len(stem) < 5:
-        return False
-    skeleton = _skeleton(stem)
-    return any(
-        len(other) >= 5
-        and (
-            SequenceMatcher(None, stem, other).ratio() >= 0.8
-            or (len(skeleton) >= 4 and other[0] == stem[0] and _skeleton(other) == skeleton)
-        )
-        for other in theirs
-    )
-
-
-_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
-
-
-def without_feeling_sentences(text: str, unwanted: list[str]) -> str | None:
-    """`text` with every sentence that names an unwanted feeling dropped, or None when that
-    would leave nothing to answer with: the question has to survive, so a reply whose only
-    question is in the offending sentence is left alone for the caller to handle."""
-    sentences = _SENTENCE_BREAK.split(text.strip())
-    kept = [s for s in sentences if not (words(s) & set(unwanted))]
-    if not kept or len(kept) == len(sentences):
-        return None
-    if "?" in text and not any("?" in s for s in kept):
-        return None
-    return " ".join(kept)
-
 
 def strip_script_leakage(text: str) -> tuple[str, list[str]]:
     """Remove leaked script metadata. Returns the cleaned text and what was removed."""
@@ -231,18 +103,25 @@ class Repaired:
     style: Style | None = None
     # What was corrected, for the log and for a metric on how often the model needs it.
     notes: list[str] = field(default_factory=list)
+    # Extra turns the recorded stage has used: 1 after a counted hold, 0 after any move.
+    holds: int = 0
+    # How the framework ended, on the turn it moves into the body check in.
+    ending: str | None = None
 
 
 def _is_offer_button(prompt: SmartPrompt) -> bool:
-    return bool(prompt.technique or prompt.decline or prompt.label.strip().lower() in EXPLAIN_LABELS)
+    return bool(
+        prompt.technique or prompt.decline or prompt.label.strip().lower() == EXPLAIN_LABEL.lower()
+    )
 
 
-def _without_clarification(text: str) -> str:
-    """The reply without a repeated ask of the client's fixed clarifying question."""
-    match = _LAST_QUESTION.search(text)
-    if match and match.group(1).strip().lower().rstrip("?") + "?" in CLARIFICATION_QUESTIONS:
-        return text[: match.start(1)].rstrip()
-    return text
+def offered(reply: Reply, registry: Registry) -> str | None:
+    """The framework a reply offers, if it carries an offer button for one that exists. An id the
+    registry does not know is refused in apply, not here."""
+    return next(
+        (p.technique for p in reply.prompts or [] if p.technique and registry.get(p.technique)),
+        None,
+    )
 
 
 def ruled_out(reply: Reply, user_texts: list[str], registry: Registry) -> str | None:
@@ -297,11 +176,11 @@ def without_questions(text: str) -> str:
 
 def with_the_check_in(text: str, script: str) -> str:
     """The body check-in, sent word for word. The client's flow (2026-09-24) treats it as
-    fixed content: Mani's reflection stays, its own version of the question does not."""
+    fixed content: Mani's reflection stays, and no question of its own does, so the check-in
+    is the one question the person is asked."""
     if script in text:
         return text
-    match = _LAST_QUESTION.search(text)
-    reflection = text[: match.start(1)].rstrip() if match else text.rstrip()
+    reflection = without_questions(text)
     return f"{reflection}\n\n{script}" if reflection else script
 
 
@@ -489,6 +368,20 @@ def first_sentence(text: str) -> str:
     return match.group(1) if match else text
 
 
+# Where a practice was given, as the outcome table names it (spec 0010).
+BODY_PLACES = {"Chest": "chest", "Head": "head", "Stomach": "stomach", "Somewhere else": "elsewhere"}
+
+
+def practice_place(stage: dict, text: str | None, style: str) -> str | None:
+    """The place whose practice a message gave, as the outcome table names it, or None when it
+    gave no practice."""
+    for label, place in BODY_PLACES.items():
+        practice = practice_for(stage, label, style)
+        if practice and text and practice[0][:30] in text:
+            return place
+    return None
+
+
 def practice_in(stage: dict, text: str, style: str) -> bool:
     """Whether a reply already gives one of the client's practices, found by its opening words."""
     return any(
@@ -506,10 +399,7 @@ def _without_permission_question(text: str) -> str:
     return text
 
 
-def _compose_offer(
-    part: str, registry: Registry, framework_id: str, style: str, last_mani_text: str | None
-) -> str:
-    """Mani's part, the client's description, the client's question: one paragraph each.
+CHECK_IN = "somatic_checkin"
 
 
 def _ending_of(framework, stored: str, reported: str | None) -> str:
@@ -608,14 +498,13 @@ def apply(
     reply: Reply,
     registry: Registry,
     *,
-    said: str,
     already_offered: list[str],
     current_framework_id: str | None,
     current_phase: str | None,
     selected_label: str | None,
     accepted_this_turn: bool,
     framework_running: bool,
-    cooldown_passed: bool,
+    offer_allowed: bool,
     conversation_style: str,
     wants_title: bool,
     last_mani_text: str | None = None,
@@ -639,38 +528,6 @@ def apply(
     text, leaked = strip_script_leakage(reply.text.strip())
     if leaked:
         notes.append(f"stripped script metadata: {', '.join(leaked)}")
-
-    if clarification_already_used:
-        # The client's one-time check, backstopped in code: [ctx] already told the model not
-        # to ask again, this is what makes "never twice" true regardless.
-        stripped = _without_clarification(text)
-        if stripped != text:
-            notes.append("removed a repeated one-time clarification")
-            text = stripped
-
-    if nickname:
-        # Their name at most once in a conversation, never as the first word: observed in two
-        # replies out of three. Only the name said to them is removed, never the sentence.
-        named = _without_their_name(text, nickname, keep_one=not name_said_before)
-        if named != text:
-            notes.append("removed their name, already used or said first")
-            text = named
-
-
-    theirs = words(said)
-    # The orchestrator asks the model once more when a draft names a feeling the person did
-    # not. What reaches here after that is trimmed: the offending sentence goes when the
-    # question survives, so the person never reads "that sounds stressful" they did not say.
-    introduced_in_text = introduced_feelings(text, said)
-    if introduced_in_text:
-        notes.append(
-            f"reply text introduced a feeling word the user did not establish: "
-            f"{', '.join(introduced_in_text)}"
-        )
-        trimmed = without_feeling_sentences(text, introduced_in_text)
-        if trimmed is not None:
-            notes.append("dropped a sentence that named a feeling they had not")
-            text = trimmed
 
     offered = {_normalize(name) for name in already_offered}
     # While a framework is only being *offered*, the capsule naming it is the offer itself,
@@ -696,24 +553,6 @@ def apply(
         if selected and key == selected:
             # Offering back the button the user just pressed reads as not listening.
             notes.append(f"dropped the button the user just tapped: {label}")
-            continue
-        if key in EXPLAIN_LABELS and any(p.technique for p in reply.prompts or []):
-            # An offer has two buttons, Try it and Keep chatting (muhammad, 2026-09-24): the
-            # offer's own words already say how the questions would help.
-            notes.append(f"dropped an explain button from an offer: {label}")
-            continue
-        # A label may not name a feeling they did not name, judge them, or run long enough
-        # to be a sentence. Dropping the button is the whole correction: rewriting one would
-        # put different words in their mouth rather than none.
-        introduced = sorted(words(label) & FEELING_WORDS - theirs)
-        if introduced:
-            notes.append(f"dropped a button naming a feeling they did not use: {label}")
-            continue
-        if any(phrase in key for phrase in SELF_JUDGMENTS):
-            notes.append(f"dropped a button that judges them: {label}")
-            continue
-        if len(label.split()) > MAX_CAPSULE_WORDS:
-            notes.append(f"dropped a button that runs long: {label}")
             continue
         if prompt.library is not None:
             # A button pointing nowhere is worse than no button: it navigates the person
@@ -747,10 +586,8 @@ def apply(
                 and current_framework_id is not None
                 and _normalize(prompt.technique) == _normalize(current_framework_id)
             )
-            if not cooldown_passed and not pending_offer:
-                notes.append(
-                    f"dropped a technique offered before the cooldown passed: {prompt.technique}"
-                )
+            if not offer_allowed and not pending_offer:
+                notes.append(f"dropped a technique offered when no offer is allowed: {prompt.technique}")
                 continue
             # A model-supplied identifier is untrusted until it matches the registry.
             if prompt.technique not in registry:
@@ -760,16 +597,10 @@ def apply(
                 notes.append(f"dropped an already-offered technique: {prompt.technique}")
                 continue
 
-        if prompt.technique is not None and closest_fit:
-            # An offer of the nearest fit says so on the button, so the person chooses it knowing
-            # it is not a perfect match; Keep chatting beside it is the other way out.
-            prompt = prompt.model_copy(update={"label": CLOSEST_FIT_LABEL})
-            key = CLOSEST_FIT_LABEL.lower()
-
         seen_labels.add(key)
         kept.append(prompt)
 
-    # Tell me about this and Keep chatting answer an offer, and so does the question asking it.
+    # The explain and keep talking buttons answer an offer, and so does the question asking it.
     # Once the offer's own button is gone they answer nothing, so they go with it - the words
     # only when something is left to send.
     if any(p.technique for p in reply.prompts or []) and not any(p.technique for p in kept):
@@ -786,13 +617,29 @@ def apply(
         notes.append(f"trimmed {len(kept)} buttons to {MAX_PROMPTS}")
         kept = kept[:MAX_PROMPTS]
 
-    # An offer is built here, not by the model (muhammad, 2026-09-24): Mani's own part, then
-    # the client's description of the questions word for word, so the person sees what they
-    # would come away with, then the client's permission question for the style. A question
-    # of the model's own asking that permission gives way to the client's. Any other question
-    # means the offer shares a reply with something else, so its buttons are dropped: the
-    # offer can come next turn, and a reply is never left asking two things at once.
+    # An offer is built here, not by the model: Mani's own part, then the client's permission
+    # question for the style, with the client's three choices (spec 0010, AC-4). After "Tell me
+    # more" the explanation stands alone with the two choices left. A question of the model's own
+    # asking permission gives way to the client's. Any other question means the offer shares a
+    # reply with something else, so it is dropped: the offer can come next turn, and a reply is
+    # never left asking two things at once.
     offered_id = next((p.technique for p in kept if p.technique), None)
+
+    if offer_decided:
+        # Code decided whether a framework is offered (mani/chat/offer.py), so the model's own
+        # choice is not consulted: an offer it failed to carry is added, one it invented goes.
+        if required_offer is not None and offered_id != required_offer and registry.get(required_offer):
+            kept = [p for p in kept if not p.technique and not _is_offer_button(p)]
+            kept = kept + offer_buttons(required_offer, explaining=explaining)
+            notes.append(f"added the offer this turn decided on: {required_offer}")
+            offered_id = required_offer
+        elif required_offer is None and offered_id is not None:
+            dropped = [p.label for p in kept if _is_offer_button(p) or p.technique]
+            kept = [p for p in kept if not p.technique and not _is_offer_button(p)]
+            notes.append(f"dropped an offer this turn did not decide on: {dropped}")
+            text = _BLANK_RUN.sub("\n\n", _OFFER_SENTENCE.sub("", text)).strip() or text
+            offered_id = None
+
     if offered_id is not None:
         part = _without_permission_question(text)
         if part != text:
@@ -885,36 +732,22 @@ def apply(
         phase = registry.clamp(framework_id, previous, state.step)
         if not transition.ok:
             notes.append(
-                f"ignored state for {reply.state.technique}, not the running one "
-                f"({current_framework_id})"
+                f"corrected phase {state.step!r} to {phase!r} ({transition.reason})"
             )
-        else:
-            framework_id = reply.state.technique
-            # Accepting an offer this turn means the phase being left is the offering one,
-            # whatever the stored row still says. What they told Mani before accepting
-            # answers the first stage, so the reply may already be asking the second.
-            previous = current_phase
-            if accepted_this_turn:
-                known = registry.get(framework_id)
-                phases = known.phases if known else []
-                first = phases.index("offering") + 1 if "offering" in phases else -1
-                previous = phases[first] if 0 < first < len(phases) else "offering"
-            transition = registry.validate_transition(
-                framework_id, previous, reply.state.step
-            )
-            phase = registry.clamp(framework_id, previous, reply.state.step)
-            if not transition.ok:
-                notes.append(
-                    f"corrected phase {reply.state.step!r} to {phase!r} "
-                    f"({transition.reason})"
-                )
-            if phase is None:
-                framework_id = None
+        if phase is None:
+            framework_id = None
+        elif phase == CHECK_IN and previous != CHECK_IN and framework_running:
+            ending = reported_ending or "pivoted"
 
     at_the_end = framework_running and (phase or current_phase) in ENDING_STAGES
     if kept and not at_the_end and not any(p.technique for p in kept):
         notes.append(f"dropped buttons outside an offer or a framework's end: {[p.label for p in kept]}")
         kept = []
+
+    if framework_running and (phase or current_phase) not in ENDING_STAGES and not kept:
+        # A running question always carries a way past it, so nobody is held on a step they do
+        # not want to answer. Not on the body stages: those already end the framework.
+        kept = [SmartPrompt(label=SKIP_LABEL)]
 
     title = clean_title(reply.title) if wants_title else None
 
@@ -938,4 +771,6 @@ def apply(
         phase=phase,
         style=style,
         notes=notes,
+        holds=holds,
+        ending=ending,
     )

@@ -104,11 +104,6 @@ def framework_index(registry: Registry) -> str | None:
     # prefix with the rest of the index.
     to_find_out = [
         f"- **{framework.name}**: {'; '.join(items)}"
-        + (
-            f" (offer it only from their message {earliest}: it depends on what they took it to mean)"
-            if (earliest := (framework.activation or {}).get("earliest_offer_message"))
-            else ""
-        )
         for framework in present
         for items in [(framework.activation or {}).get("to_find_out") or []]
         if items
@@ -116,9 +111,8 @@ def framework_index(registry: Registry) -> str | None:
     if to_find_out:
         lines += [
             "", "## Finding the fit", "",
-            "From their first message, work out which of these they are heading toward, and let "
-            "your questions reach for what is still missing for it - in their words, about their "
-            "feeling, never as a checklist:", "",
+            "What each one needs to know before it is the right offer. Let your questions reach "
+            "for what is still missing, in their words, never as a checklist:", "",
         ] + to_find_out
 
     return "\n".join(lines)
@@ -191,9 +185,9 @@ def techniques_used(offered: list[str]) -> str | None:
         "## Techniques Already Offered\n"
         "These have already been offered in this conversation:\n"
         f"{listed}\n\n"
-        "One they said no to may be offered again once `cooldown_passed: yes`, if it still "
-        "fits best - or a different one, if what they have said since has changed what fits. "
-        "One they have just finished may not be offered again."
+        "One they said no to may be offered again once `offer_allowed: yes`, if it still "
+        "fits best, or a different one, if what they have said since has changed what fits. "
+        "Once one is finished, nothing more is offered in this conversation."
     )
 
 

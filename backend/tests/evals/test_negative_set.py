@@ -8,7 +8,7 @@ import re
 
 import pytest
 
-from mani.chat import repairs
+from scripts import wording
 from tests.evals import validators
 
 CONTENT_DIR = pathlib.Path(__file__).resolve().parents[2] / "content"
@@ -61,11 +61,6 @@ FORBIDDEN = [
         "I have stopped answering people.",
     ),
     (
-        "added scale",
-        "That is a lot to deal with. What have you stopped doing?",
-        "I have been in bed all day.",
-    ),
-    (
         "assumed motive",
         "He probably did not mean to disrespect you. What do you want to do?",
         "I wrote a message telling him exactly what I think.",
@@ -114,25 +109,20 @@ PERMITTED = [
 
 @pytest.mark.parametrize("rule, reply, user_message", FORBIDDEN)
 def test_a_forbidden_response_is_caught(rule: str, reply: str, user_message: str):
-    findings = validators.check(reply, user_message, in_framework=True)
+    findings = validators.check(reply, user_message)
     assert rule in {f.rule for f in findings}, f"{rule} not caught in: {reply!r} -> {findings}"
 
 
 @pytest.mark.parametrize("reply, user_message", PERMITTED)
 def test_a_correct_response_is_not_flagged(reply: str, user_message: str):
-    findings = validators.check(reply, user_message, in_framework=True)
+    findings = validators.check(reply, user_message)
     assert findings == [], f"false positive on a specification example: {findings}"
 
 
-def test_a_standalone_mirror_is_caught_only_inside_a_framework():
-    """`mani_base` explicitly allows a reply with no question outside a framework -
-    "presence only" is one of its six shapes. Inside one, every mirror carries a question."""
-    mirror = "You stopped speaking and avoided her."
-
-    assert "standalone mirror" in {
-        f.rule for f in validators.check(mirror, "I avoided her.", in_framework=True)
-    }
-    assert validators.check(mirror, "I avoided her.", in_framework=False) == []
+def test_a_reply_with_no_question_is_never_a_fault():
+    """The style document asks Mani to mirror selectively, and Lolly lets it state what the
+    person has established and move on (spec 0010), so a statement alone is not flagged."""
+    assert validators.check("You stopped speaking and avoided her.", "I avoided her.") == []
 
 
 def test_a_lead_in_clause_is_not_counted_as_a_second_question():
@@ -142,7 +132,7 @@ def test_a_lead_in_clause_is_not_counted_as_a_second_question():
         "When you think about the people who messaged you, what is the most prominent "
         "thought that comes to mind?"
     )
-    assert validators.check(reply, "", in_framework=True) == []
+    assert validators.check(reply, "") == []
 
 
 def test_a_comma_separated_stack_of_questions_is_still_caught():
@@ -152,7 +142,7 @@ def test_a_comma_separated_stack_of_questions_is_still_caught():
         "What happened, what did you think, how did you feel, and what evidence "
         "challenges it?"
     )
-    findings = validators.check(reply, "My manager criticized my presentation.", in_framework=True)
+    findings = validators.check(reply, "My manager criticized my presentation.")
     assert "multiple questions" in {f.rule for f in findings}
 
 
@@ -160,7 +150,7 @@ def test_a_long_explanation_is_caught():
     lecture = " ".join(
         ["People sometimes take criticism as evidence that they are not competent."] * 12
     )
-    assert "long explanation" in {f.rule for f in validators.check(lecture, "", in_framework=True)}
+    assert "long explanation" in {f.rule for f in validators.check(lecture, "")}
 
 
 def test_consecutive_replies_that_open_the_same_way_are_caught():
@@ -182,26 +172,22 @@ def test_replies_that_start_differently_are_left_alone():
     ]) == []
 
 
-def test_presence_may_be_said_in_any_style_while_openers_still_vary():
-    """muhammad, 2026-09-24: presence may be said in any style when the moment calls for it.
-    What stays forbidden is opening the same way twice, the failure that once had all three
-    styles opening with "I'm here." """
-    base = (PROMPTS_DIR / "mani_base.md").read_text()
+def test_openers_still_vary():
+    """Opening the same way twice is what once had all three styles opening with "I'm here.";
+    the style document asks for language that varies naturally."""
     response_format = (PROMPTS_DIR / "response_format.md").read_text()
-    assert "say it simply, in any style" in base
     assert "Do not open your new reply the same way." in " ".join(response_format.split())
 
 
-def test_every_style_value_the_schema_allows_is_taught():
-    """The schema asks the model to declare the shape it used. Any value it can return and was
-    never taught is one it will either avoid entirely or use without meaning. Shapes are
-    taught in a table, so each is pinned to the row that defines it."""
-    from mani.llm.schema import SHAPES
+def test_every_style_value_the_schema_allows_is_named_in_its_description():
+    """The schema asks the model to declare the shape it used. The instructions no longer teach
+    the shapes, so the description is the only place the model learns the values it may return."""
+    from mani.llm.schema import SHAPES, Style
 
-    base = (PROMPTS_DIR / "mani_base.md").read_text().lower()
+    description = Style.model_fields["shape"].description
 
     for name in SHAPES:
-        assert f"| {name} |" in base, f"schema allows shape {name!r}, prompt never teaches it"
+        assert name in description, f"schema allows shape {name!r}, its description never names it"
 
 
 def test_a_capsule_that_judges_the_person_is_caught():
@@ -266,7 +252,7 @@ def _asks():
 def test_a_stage_ask_carries_nothing_from_a_worked_example(where, text):
     assert not _EXAMPLE_PEOPLE.search(text), f"{where} names someone: {text}"
     assert not _AUTHOR_NOTE.search(text), f"{where} carries an author note: {text}"
-    feelings = sorted(repairs.words(text) & repairs.FEELING_WORDS)
+    feelings = sorted(wording.words(text) & wording.FEELING_WORDS)
     assert not feelings, f"{where} hands them a feeling they may not have named: {feelings}"
 
 
@@ -277,9 +263,9 @@ def test_a_stage_ask_poses_one_question(where, text):
     assert text.count("?") == 1, f"{where} asks {text.count('?')} questions: {text}"
 
 
-def test_staying_on_a_stage_is_not_told_to_repeat_the_same_wording():
+def test_an_answered_stage_is_not_asked_again():
     """Observed live (2026-09-24): ABCDE's activate stage asked for 'the literal words your
     manager used' three times in a row, near-verbatim, while the person kept answering with
-    something else. The prompt now says explicitly not to do that."""
-    base = (PROMPTS_DIR / "mani_base.md").read_text()
-    assert "never ask twice for the same thing the same way" in base
+    something else. The instructions say a step is asked once, with one more attempt at most."""
+    response_format = " ".join((PROMPTS_DIR / "response_format.md").read_text().split())
+    assert "a step you have asked is not asked again, except once more for your one more attempt" in response_format

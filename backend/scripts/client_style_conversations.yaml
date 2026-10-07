@@ -1,0 +1,75 @@
+# ABOUTME: The client's four style conversations, with the person's lines for each of the three styles.
+# ABOUTME: Taken from "directive, reflective, supportive .docx"; Mani's lines are never scripted.
+
+# Sent when the script runs out of the client's lines before the offer has come, so the check
+# can show how late the offer is rather than stop at the length of the client's example.
+no_answer_line: "I don't really know."
+extra_turns: 4
+
+# The style keys are the app's names; the client's document calls `direct` "Directive".
+conversations:
+  - name: panic
+    turns:
+      direct:
+        - "I feel like I might have a panic attack."
+        - "My chest feels tight, my thoughts are racing, and I feel like I'm losing control."
+        - "Yes."
+      supportive:
+        - "I feel like I might have a panic attack."
+        - "My chest feels tight, my thoughts are racing, and I feel like I'm losing control."
+        - "Yes."
+      reflective:
+        - "I feel like I might have a panic attack."
+        - "My chest feels tight, my thoughts are racing, and I feel like I'm losing control."
+        - "The feeling that I'm losing control."
+
+  - name: overthinking_a_friends_text
+    turns:
+      direct:
+        - "I'm upset."
+        - "My best friend sent me a text and now I think she hates me."
+        - "She was really short with me and ended the conversation. Now I keep replaying it and wondering what I did wrong."
+        - "Yes. I can't stop thinking about it."
+      supportive:
+        - "I'm upset."
+        - "My best friend sent me a text and now I think she hates me."
+        - "She was really short with me and ended the conversation. Now I keep replaying it and wondering what I did wrong."
+        - "Yes."
+      reflective:
+        - "I'm upset."
+        - "My best friend sent me a text and now I think she hates me."
+        - "She was really short with me and ended the conversation. Now I keep replaying it and wondering what I did wrong."
+        - "That maybe I did something and she doesn't want to be friends anymore."
+
+  - name: compulsive_scrolling
+    turns:
+      direct:
+        - "I cannot stop scrolling, but I need to."
+        - "I tell myself I'm going to put my phone down, but then I keep scrolling. I can lose an hour without even realizing it."
+        - "I don't even know. I just keep checking one more thing."
+        - "Yes. Exactly."
+      supportive:
+        - "I cannot stop scrolling, but I need to."
+        - "I tell myself I'm going to put my phone down, but then I keep scrolling. I can lose an hour without even realizing it."
+        - "I get annoyed with myself, but then I keep doing it anyway."
+        - "Yes. That's exactly it."
+      reflective:
+        - "I cannot stop scrolling, but I need to."
+        - "I tell myself I'm going to put my phone down, but then I keep scrolling. I can lose an hour without even realizing it."
+        - "I think I tell myself one more video or one more post, and then I just keep going."
+        - "I don't really know. It feels automatic."
+
+  - name: stress_before_a_deadline
+    turns:
+      direct:
+        - "I'm stressed. I'm trying to balance work, family, and everything else, and I have a deadline coming up."
+        - "The deadline. I need to finish a presentation by Friday, but my kids need me, work keeps piling up, and I can't seem to focus."
+        - "I keep jumping from one thing to another."
+      supportive:
+        - "I'm stressed. I'm trying to balance work, family, and everything else, and I have a deadline coming up."
+        - "The deadline. I need to finish a presentation by Friday, but my kids need me, work keeps piling up, and I can't seem to focus."
+        - "Yes. I think that would help."
+      reflective:
+        - "I'm stressed. I'm trying to balance work, family, and everything else, and I have a deadline coming up."
+        - "The deadline. I need to finish a presentation by Friday, but my kids need me, work keeps piling up, and I can't seem to focus."
+        - "I start thinking about everything else I should be doing, and then I jump to something else."
