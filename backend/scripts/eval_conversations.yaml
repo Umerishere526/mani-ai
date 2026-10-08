@@ -24,8 +24,8 @@
 
 # Steering: from the first message the questions should be heading toward a set of questions,
 # so that an offer can come as soon as the client's cadence allows. Turns from real chats.
-# An offer also waits for the shortlist: Mani may offer only a set the router found signs of,
-# so a conversation whose words match no phrase list gets no offer, however clear the fit.
+# An offer waits for the person's second message and for the model to judge that a set fits,
+# whatever words they used.
 - name: grief_dog_steering
   turns:
     - "I'm sad that my dog died and i am feeling too lonely"

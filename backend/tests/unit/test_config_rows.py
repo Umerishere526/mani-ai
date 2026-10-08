@@ -81,10 +81,7 @@ TUNING_REFUSED = {
     "max_entry_chars 501": lambda b: b["memory"].update(max_entry_chars=501),
     "a count written as a string": lambda b: b["offers"].update(clear_offer_after="2"),
     "a count written as a boolean": lambda b: b["offers"].update(clear_offer_after=True),
-    "increasing recency weights": lambda b: b["router"].update(recency_weights=[0.5, 1.0]),
-    "no recency weights": lambda b: b["router"].update(recency_weights=[]),
-    "a recency weight above 1": lambda b: b["router"].update(recency_weights=[1.5]),
-    "a weight of zero": lambda b: b["router"].update(strong_weight=0),
+    "a router block left in the row": lambda b: b.update(router={"router_min_exchanges": 2}),
     "an unknown default style": lambda b: b["offers"].update(default_style="neutral"),
 }
 
@@ -92,11 +89,6 @@ TUNING_REFUSED = {
 @pytest.mark.parametrize("change", TUNING_REFUSED.values(), ids=TUNING_REFUSED)
 def test_a_tuning_row_with_a_bad_number_is_refused(change):
     assert content_problem("tuning", edited("tuning", change))
-
-
-def test_the_weights_may_be_whole_numbers():
-    content = edited("tuning", lambda b: b["router"].update(strong_weight=2, recency_weights=[1, 0.5]))
-    assert content_problem("tuning", content) is None
 
 
 def test_a_prompt_directory_with_no_replies_file_stops_the_seed(tmp_path):

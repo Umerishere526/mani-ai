@@ -4,58 +4,11 @@ name: DBT STOP
 summary: "These questions help you interrupt an automatic reaction so you can pause, understand what is happening, and choose how you want to respond rather than simply reacting."
 display_order: 6
 phases: [offering, stop, pause, observe, proceed, closing]
-activation:
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "about to send a message"
-    - "already wrote the email"
-    - "call her right now"
-    - "about to post everything"
-    - "keep typing and deleting"
-    - "about to lose it"
-    - "confront her right now"
-    - "quitting today"
-    - "ending the relationship right now"
-  signals:
-    - "tell him exactly what i think"
-    - "something that will hurt him"
-    - "if she says one more thing"
-    - "canceling everything"
-    - "this purchase even though"
-    - "will regret it"
-    - "will make things worse"
-    - "react this way"
-    - "need help stopping myself"
-    - "cannot think before i respond"
-  # The router's distinction rules, preferring this framework. A rule with no `over` is the
-  # urgency rule: an imminent regrettable action puts this framework first whatever else scored.
-  distinctions:
-    - name: an action is imminent
-      priority: 1
-      phrases:
-        - "about to send"
-        - "about to post"
-        - "about to call"
-        - "about to say something"
-        - "about to quit"
-        - "about to make this purchase"
-        - "about to lose it"
-        - "want to send it"
-        - "before i send"
-        - "have not sent it"
-        - "already wrote the email"
-        - "i am quitting today"
-        - "ending the relationship right now"
-        - "need to confront her right now"
-        - "want to call her right now"
-        - "keep typing and deleting"
-        - "help stopping myself"
-      over: []
 ---
 Starts when: you have learned what they are about to do, that it has not happened yet, and that it can safely wait a moment, with no one at risk.
 Sounds like: "I am about to send a message", "I am about to lose it", "I will tell them exactly what I think", "I will regret it", typing and deleting.
 Skip when: it has already happened and nothing more is about to, the action protects them, they can already choose a response (act_choice_point), or a plan is needed (structured_problem_solving).
-Stages: stop (the action not taken yet) > pause (staying here, not going back to it) > observe (what is happening now, in their words, not why) > proceed (what they choose to do next) > closing (how it sits now)
+Stages: stop (the action not taken yet) | pause (staying here, not going back to it) > observe (what is happening now, in their words, not why) > proceed (what they choose to do next) > closing (how it sits now)
 Ends when: they have paused the action and chosen their next step on purpose; it need not be the right one, and they need not be settled.
 Offer: name what they are about to do, in their words, then ask if they want to pause it together for a moment first.
 Never: use this in place of the safety protocol, for suicide, self harm, harm to anyone, an overdose or danger, or keep them here when they need emergency help.

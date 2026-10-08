@@ -2,7 +2,7 @@
 id: 10000000-0000-0000-0000-000000000016
 name: tuning
 type: system
-description: The numbers that shape a conversation, covering offer timing, router weights, windows and memory limits. Never sent to a model.
+description: The numbers that shape a conversation, covering offer timing, windows and memory limits. Never sent to a model.
 ---
 
 offers:
@@ -16,23 +16,6 @@ offers:
   # The style used when neither the conversation nor the profile has chosen one yet. The
   # conversation's own style, set per thread, wins over the profile's onboarding answer.
   default_style: supportive
-router:
-  # The router narrows once there is enough to narrow from. Below this, one or two messages is
-  # not a pattern - it is the start of a conversation.
-  router_min_exchanges: 2
-  # How much a sign counts by how far back it was said, newest message first. A person's most
-  # recent message is the strongest evidence of what they need now; four messages ago is
-  # context, not a request. Older messages keep the last weight rather than dropping out: the
-  # shortlist is the set Mani may offer from, so a sign stays on it while its message is in the
-  # history window. Never increasing.
-  recency_weights: [1.0, 0.6, 0.3, 0.15]
-  # A phrase from the framework's own strong signals is worth more than one from its broader
-  # signals list, because the specification wrote it to be discriminating.
-  strong_weight: 2.0
-  signal_weight: 1.0
-  # A framework promoted by a distinction but with no phrase match of its own still needs a
-  # score, or it sorts below frameworks that matched one incidental phrase.
-  promoted_floor: 1.5
 windows:
   # Messages of history the model sees. It is also how many new messages accumulate before the
   # rolling summary refreshes: any larger number leaves messages that have scrolled out of the

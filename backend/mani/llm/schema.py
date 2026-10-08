@@ -40,12 +40,22 @@ class SmartPrompt(BaseModel):
         return value
 
 
+# One stage of the running framework and what the reply knows of it. Typed loosely, like Style: a
+# status off the list costs this entry in guards.py, never the turn.
+class StageReport(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    stage: str
+    status: str
+
+
 class TechniqueState(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     technique: str
     step: str
     accepted: bool | None = None
+    stages: list[StageReport] | None = None
 
 
 class Crisis(BaseModel):

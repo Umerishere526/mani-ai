@@ -10,10 +10,6 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, St
 from mani.models.rows import SupportStyle
 from mani.prompts.yaml_row import parse_yaml_row
 
-# `Strict` for the floats too: an integer weight is fine, a boolean or a string is not.
-Weight = Annotated[float, Field(strict=True, gt=0, le=10)]
-RecencyWeight = Annotated[float, Field(strict=True, gt=0, le=1)]
-
 
 def _count(low: int, high: int):
     return Annotated[StrictInt, Field(ge=low, le=high)]
@@ -25,12 +21,6 @@ def _a_style(name: str) -> str:
     return name
 
 
-def _never_increasing(weights: list[float]) -> list[float]:
-    if any(later > earlier for earlier, later in zip(weights, weights[1:])):
-        raise ValueError("must not increase")
-    return weights
-
-
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -40,16 +30,6 @@ class OfferTuning(_Strict):
     clear_cooldown_after_decline: _count(0, 200)
     cooldown_after_complete: _count(0, 200)
     default_style: Annotated[StrictStr, AfterValidator(_a_style)]
-
-
-class RouterTuning(_Strict):
-    router_min_exchanges: _count(1, 20)
-    recency_weights: Annotated[
-        list[RecencyWeight], Field(min_length=1), AfterValidator(_never_increasing)
-    ]
-    strong_weight: Weight
-    signal_weight: Weight
-    promoted_floor: Weight
 
 
 class WindowTuning(_Strict):
@@ -69,7 +49,6 @@ class MemoryTuning(_Strict):
 
 class Tuning(_Strict):
     offers: OfferTuning
-    router: RouterTuning
     windows: WindowTuning
     memory: MemoryTuning
 

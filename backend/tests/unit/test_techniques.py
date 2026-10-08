@@ -4,7 +4,7 @@
 import pytest
 
 from mani.chat.techniques import ENDING_PHASES, OFFERING, Registry, Verdict
-from mani.models.rows import Framework
+from mani.models.rows import Framework, LedgerEntry, StageStatus
 
 REFRAMING = Framework(
     id="thought_reframing", name="Thought Reframing", summary="s", body="b",
@@ -136,19 +136,62 @@ def test_a_framework_seeded_without_the_ending_phases_cannot_be_ended_early(endi
     assert not ending_registry.ending_open("thought_reframing", "ground")
 
 
-def test_a_rule_a_portal_edit_broke_is_dropped_with_an_error_and_the_rest_still_route(caplog):
-    """The portal skips the seed's checks, so the registry keeps a turn running without the rule."""
-    def rule(name: str, priority: int) -> dict:
-        return {"name": name, "priority": priority, "phrases": ["p"], "over": ["abcde"]}
-
-    stop = STOP.model_copy(update={"activation": {"distinctions": [
-        rule("later", 3), rule("broken", 0), rule("earlier", 2),
-    ]}})
+def test_a_veto_list_a_portal_edit_broke_is_ignored_with_one_error_naming_no_phrase(caplog):
+    """The portal skips the seed's checks: a blank phrase would rule a framework out by a space."""
+    broken = ABCDE.model_copy(update={"activation": {"never_offer_when_said": ["died", " "]}})
+    kept = STOP.model_copy(update={"activation": {"never_offer_when_said": ["funeral"]}})
+    text = REFRAMING.model_copy(update={"activation": {"never_offer_when_said": "died"}})
     with caplog.at_level("ERROR", logger="mani.chat.techniques"):
-        registry = Registry([ABCDE, stop])
+        registry = Registry([broken, kept, text, STOP.model_copy(update={"id": "none", "activation": {}})])
 
-    assert [r.name for r in registry.distinctions] == ["earlier", "later"]
-    assert [r.prefer for r in registry.distinctions] == ["dbt_stop", "dbt_stop"]
+    assert registry.vetoes == {"dbt_stop": ["funeral"]}
     assert [rec.getMessage() for rec in caplog.records] == [
-        "framework distinction dropped: dbt_stop: broken: priority must be a positive whole number"
+        "framework abcde: never_offer_when_said is not a list of non empty strings, ignored",
+        "framework thought_reframing: never_offer_when_said is not a list of non empty strings, ignored",
     ]
+
+
+# Shaped as the seed writes ABCDE: its own stages, `closing` as the last own phase, then the ending.
+SEEDED_ABCDE = Framework(
+    id="abcde", name="ABCDE", summary="s", body="b",
+    phases=["offering", "activate", "belief", "consequence", "examine", "balanced", "closing", *ENDING_PHASES],
+)
+
+
+def entry(status: StageStatus, turns: int = 0) -> LedgerEntry:
+    return LedgerEntry(status=status, turns=turns)
+
+
+def test_the_ledger_tracks_the_stages_between_the_offer_and_the_last_own_phase():
+    registry = Registry([SEEDED_ABCDE])
+    assert registry.ledger_stages("abcde") == ["activate", "belief", "consequence", "examine", "balanced"]
+    assert registry.ledger_stages("somatic_breathing") == []
+    assert registry.ledger_stages(None) == []
+
+
+def test_a_framework_seeded_without_the_ending_ends_its_own_stages_on_its_last_phase(registry):
+    assert registry.ledger_stages("dbt_stop") == ["stop", "step_back", "observe"]
+    assert registry.stage_from_ledger("dbt_stop", {}) == "stop"
+    done = {s: entry(StageStatus.KNOWN) for s in ("stop", "step_back", "observe")}
+    assert registry.stage_from_ledger("dbt_stop", done) == "proceed"
+
+
+def test_the_stage_asked_is_the_first_one_not_known():
+    registry = Registry([SEEDED_ABCDE])
+    known = entry(StageStatus.KNOWN)
+    assert registry.stage_from_ledger("abcde", {}) == "activate"
+    assert registry.stage_from_ledger("abcde", {"activate": known, "belief": known, "consequence": known}) == "examine"
+    # A stage with nothing yet, or only part, is still the one to ask, whatever follows it.
+    assert registry.stage_from_ledger("abcde", {"activate": known, "belief": entry(StageStatus.PARTIAL), "consequence": known}) == "belief"
+    assert registry.stage_from_ledger("abcde", {"belief": known}) == "activate"
+
+
+def test_every_stage_known_or_passed_is_the_last_own_phase():
+    registry = Registry([SEEDED_ABCDE])
+    ledger = {s: entry(StageStatus.KNOWN) for s in registry.ledger_stages("abcde")}
+    ledger["examine"] = entry(StageStatus.PASSED, turns=4)
+    assert registry.stage_from_ledger("abcde", ledger) == "closing"
+
+
+def test_an_unknown_framework_has_no_stage_to_ask(registry):
+    assert registry.stage_from_ledger("somatic_breathing", {}) is None

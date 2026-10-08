@@ -48,7 +48,7 @@ Query: `select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid
 
 | Schema | Table | What it holds |
 |---|---|---|
-| `admin` | `frameworks` | The six conversational frameworks (ABCDE, DBT STOP, etc.) — content, stage data, router phrase lists. |
+| `admin` | `frameworks` | The six conversational frameworks (ABCDE, DBT STOP, etc.) — content, stage data, the grief veto's phrases. |
 | `admin` | `prompts` | The live system prompt layers (`mani_base`, `response_format`, etc.), one row per named prompt. |
 | `admin` | `prompt_versions` | Snapshot of a prompt's content every time it's edited, for audit/rollback. |
 | `admin` | `exercises` | The exercise catalog (currently empty — see `PORT-STATUS.md`). |
@@ -182,14 +182,14 @@ Append-only log of the model's self-reported style per reply.
 | 2 | `name` | text | required | Display name. |
 | 3 | `summary` | text | required | One-line description. |
 | 4 | `body` | text | required | **Written, never read** — see §6. |
-| 5 | `activation_conditions` | text | default `''` | **Written, never read for routing** — superseded by column 12. |
+| 5 | `activation_conditions` | text | default `''` | **Written, never read** — the Starts when line is in `body`. |
 | 6 | `phases` | text[] | required, non-empty, `phases[1]='offering'` (CHECK) | Ordered stage ids. |
 | 7 | `display_order` | integer | default `0` | |
 | 8 | `is_active` | boolean | default `true` | |
 | 9 | `created_at` | timestamptz | default `now()` | |
 | 10 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
 | 11 | `stages` | jsonb | default `'{}'`, must be a JSON object (CHECK) | Per-phase content: purpose, listen_for, ready_when, boundaries, `ask.{style}`. |
-| 12 | `activation` | jsonb | default `'{}'`, must be a JSON object (CHECK) | `strong_signals`/`signals`/`distinctions` — what `mani/chat/router.py` actually reads. |
+| 12 | `activation` | jsonb | default `'{}'`, must be a JSON object (CHECK) | At most one key, `never_offer_when_said`: the phrases that rule a framework out, read by `mani/chat/vetoes.py` through `Registry.vetoes`. |
 
 ### `admin.prompts`
 | # | Column | Type | Required | Purpose |
@@ -342,7 +342,7 @@ If either side of one of these pairs is ever changed, the other must change with
 
 ### Written but never read — not a hardcoding problem, but adjacent
 
-`admin.frameworks.body` and `.activation_conditions` are written by `scripts/seed.py` on every seed run and read by nothing (`mani/chat/router.py` reads the `activation` jsonb column instead, per migration 002's own comment). Not incorrect, just a standing cost — every seed writes text nothing will ever load.
+`admin.frameworks.body` and `.activation_conditions` are written by `scripts/seed.py` on every seed run and read by nothing (`mani/chat/vetoes.py` reads the `never_offer_when_said` key of the `activation` jsonb column instead). Not incorrect, just a standing cost — every seed writes text nothing will ever load.
 
 ## How to regenerate this document
 

@@ -7,8 +7,7 @@ import logging
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from mani.chat.router import Rule, distinction_rules
-from mani.models.rows import Framework
+from mani.models.rows import Framework, LedgerEntry, StageStatus
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +19,23 @@ OFFERING = "offering"
 # The seed appends them after each framework's own phases; what Mani says in them is the
 # mani_base prompt's `ending` section.
 ENDING_PHASES = ("somatic_checkin", "somatic_practice")
+
+
+def last_own_phase(framework: Framework) -> str | None:
+    """The phase a framework ends its own questions on, where Mani asks how they feel: the one
+    before the ending phases, or the last one for a framework seeded without them."""
+    phases = framework.phases
+    end = phases.index(ENDING_PHASES[0]) if ENDING_PHASES[0] in phases else len(phases)
+    return phases[end - 1] if end > 0 else None
+
+
+def ledger_stages_of(framework: Framework) -> list[str]:
+    """The stages the ledger tracks, in order: after the offer and before the last own phase."""
+    phases = framework.phases
+    start = phases.index(OFFERING) + 1 if OFFERING in phases else 0
+    last = last_own_phase(framework)
+    end = phases.index(last) if last in phases else start
+    return phases[start:end]
 
 
 class Verdict(StrEnum):
@@ -57,13 +73,24 @@ class Registry:
 
     def __init__(self, frameworks: list[Framework]) -> None:
         self._by_id = {f.id: f for f in frameworks}
-        # Built once per load. The seed refuses a broken rule, but a portal edit skips the seed,
-        # so a rule that breaks one here is logged and dropped and the rest still route.
-        self._distinctions, problems = distinction_rules(
-            {f.id: (f.activation or {}).get("distinctions", []) for f in frameworks}
-        )
-        for problem in problems:
-            logger.error("framework distinction dropped: %s", problem)
+        # Read once per load. The seed refuses a broken list, but a portal edit skips the seed,
+        # so a list that is not made of real phrases is ignored whole and logged by framework id
+        # only: one stray letter must not rule a framework out, and a phrase is never logged.
+        self._vetoes: dict[str, list[str]] = {}
+        for framework in frameworks:
+            phrases = (framework.activation or {}).get("never_offer_when_said")
+            if phrases is None:
+                continue
+            if not isinstance(phrases, list) or not all(
+                isinstance(phrase, str) and phrase.strip() for phrase in phrases
+            ):
+                logger.error(
+                    "framework %s: never_offer_when_said is not a list of non empty strings, ignored",
+                    framework.id,
+                )
+                continue
+            if phrases:
+                self._vetoes[framework.id] = phrases
 
     def __contains__(self, framework_id: object) -> bool:
         return framework_id in self._by_id
@@ -76,14 +103,9 @@ class Registry:
         return list(self._by_id)
 
     @property
-    def activations(self) -> dict[str, dict]:
-        """Every framework's routing data, keyed by id - the router's whole input."""
-        return {fid: f.activation for fid, f in self._by_id.items()}
-
-    @property
-    def distinctions(self) -> list[Rule]:
-        """The routing rules every framework's distinctions make, ordered by priority."""
-        return self._distinctions
+    def vetoes(self) -> dict[str, list[str]]:
+        """The phrases that rule a framework out, keyed by id, for the frameworks that have any."""
+        return self._vetoes
 
     def get(self, framework_id: str | None) -> Framework | None:
         return self._by_id.get(framework_id) if framework_id else None
@@ -99,6 +121,25 @@ class Registry:
         if framework is None or phase is None or ENDING_PHASES[0] not in framework.phases:
             return False
         return framework.phase_index(phase) >= framework.phases.index(ENDING_PHASES[0]) - 1
+
+    def ledger_stages(self, framework_id: str | None) -> list[str]:
+        """The stages a framework's ledger tracks, empty for a framework not in the registry."""
+        framework = self.get(framework_id)
+        return ledger_stages_of(framework) if framework else []
+
+    def stage_from_ledger(
+        self, framework_id: str | None, ledger: dict[str, LedgerEntry]
+    ) -> str | None:
+        """The stage Mani asks: the first one not yet known or passed, in the framework's order,
+        or its last own phase when every stage is. A stage with no entry is missing."""
+        framework = self.get(framework_id)
+        if framework is None:
+            return None
+        for stage in ledger_stages_of(framework):
+            entry = ledger.get(stage)
+            if entry is None or entry.status not in (StageStatus.KNOWN, StageStatus.PASSED):
+                return stage
+        return last_own_phase(framework)
 
     def validate_transition(
         self,

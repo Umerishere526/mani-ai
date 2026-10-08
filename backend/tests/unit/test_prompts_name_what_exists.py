@@ -20,8 +20,8 @@ REMOVED = (
     "Use it when", "Telling them apart", "Never offer one when", "Finding the fit",
     "offer_ask", "offer_purpose", "offer_lines", "model question", "stage_note", "closest_fit",
     "offer_fit", "stage_purpose", "stage_listen_for", "stage_ready_when", "stage_boundaries",
-    "stage_if_unclear", "stage_ask",
-    "their_last", "clarification_available", "after_framework_question",
+    "stage_if_unclear", "stage_ask", "next_stage",
+    "their_last", "clarification_available", "after_framework_question", "framework_shortlist",
 )
 
 

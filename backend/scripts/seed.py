@@ -12,7 +12,6 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from mani.chat.router import distinction_problem, distinction_rules  # noqa: E402
 from mani.chat.techniques import ENDING_PHASES  # noqa: E402
 from mani.config import get_settings  # noqa: E402
 from mani.prompts.calls import CALL_PROMPTS, effort_problem  # noqa: E402
@@ -93,10 +92,11 @@ FRAMEWORK_LABELS = (
     "Starts when", "Sounds like", "Skip when", "Stages", "Ends when", "Offer", "Never", "Never",
 )
 MAX_LINE = 220
+STAGES_DIVIDER = " | "
 MAX_STAGES_LINE = 320
-# Everything else in the frontmatter is data only code reads: the phase machine and the router.
+# Everything else in the frontmatter is data only code reads: the phase machine and the veto.
 FRAMEWORK_KEYS = {"id", "name", "summary", "display_order", "phases", "activation"}
-ACTIVATION_KEYS = {"strong_signals", "signals", "redirects", "never_offer_when_said", "distinctions"}
+ACTIVATION_KEYS = {"never_offer_when_said"}
 _STAGE = re.compile(r"(\S+) \((.+)\)")
 
 
@@ -116,7 +116,19 @@ def _framework_lines(name: str, body: str, phases: list[str]) -> list[str]:
         if len(line) > cap:
             raise ValueError(f"{name}: the {label} line is {len(line)} characters, over {cap}")
 
-    stages = lines[FRAMEWORK_LABELS.index("Stages")].removeprefix("Stages: ").split(" > ")
+    stages_line = lines[FRAMEWORK_LABELS.index("Stages")].removeprefix("Stages: ")
+    # The | marks where the stages Mani learns from what they already said end and the ones they
+    # work through together begin. The model reads it; no code does.
+    if stages_line.count(STAGES_DIVIDER) != 1:
+        raise ValueError(
+            f"{name}: the Stages line needs exactly one '{STAGES_DIVIDER.strip()}', between the stages "
+            f"they have usually told already and the ones they work through, not "
+            f"{stages_line.count(STAGES_DIVIDER)}"
+        )
+    told, worked = stages_line.split(STAGES_DIVIDER)
+    if not told.strip() or not worked.strip():
+        raise ValueError(f"{name}: the Stages line has no stage on one side of the '{STAGES_DIVIDER.strip()}'")
+    stages = told.split(" > ") + worked.split(" > ")
     named = []
     for stage in stages:
         match = _STAGE.fullmatch(stage)
@@ -134,7 +146,7 @@ def _framework_lines(name: str, body: str, phases: list[str]) -> list[str]:
 
 
 def parse_framework(path: pathlib.Path) -> dict:
-    """Split a framework file into its YAML frontmatter (the router and phase data) and body.
+    """Split a framework file into its YAML frontmatter (the veto and phase data) and body.
 
     Reuses the same frontmatter/body split as a prompt file - only the fields differ. The
     file's own `id` names the framework; the previous version wrote it by hand alongside
@@ -154,12 +166,9 @@ def parse_framework(path: pathlib.Path) -> dict:
     activation = meta.get("activation") or {}
     if extra := sorted(set(activation) - ACTIVATION_KEYS):
         raise ValueError(f"{path.name}: activation keys not allowed: {', '.join(extra)}")
-    distinctions = activation.get("distinctions", [])
-    if not isinstance(distinctions, list):
-        raise ValueError(f"{path.name}: activation distinctions is not a list")
-    for entry in distinctions:
-        if problem := distinction_problem(entry):
-            raise ValueError(f"{path.name}: {problem}")
+    vetoes = activation.get("never_offer_when_said", [])
+    if not isinstance(vetoes, list) or not all(isinstance(p, str) and p.strip() for p in vetoes):
+        raise ValueError(f"{path.name}: never_offer_when_said must be a list of non empty strings")
     lines = _framework_lines(path.name, body, meta["phases"])
     return {
         "id": meta["id"],
@@ -179,19 +188,6 @@ def parse_framework(path: pathlib.Path) -> dict:
     }
 
 
-def check_distinctions(frameworks: list[dict]) -> None:
-    """Refuse distinctions that only make sense across files: a priority used twice, an `over`
-    naming an unknown framework or its own, or more than one rule with an empty `over`.
-
-    The router's own builder decides, so the seed refuses exactly what the registry would drop.
-    """
-    _, problems = distinction_rules(
-        {f["id"]: f["activation"].get("distinctions", []) for f in frameworks}
-    )
-    if problems:
-        raise ValueError("; ".join(problems))
-
-
 async def seed() -> None:
     settings = get_settings()
     # Checked before connecting, so a refused prompt file stops the run with nothing opened.
@@ -205,7 +201,6 @@ async def seed() -> None:
 
             # Every file is checked before any is written, so a refusal leaves nothing half seeded.
             frameworks = [parse_framework(path) for path in framework_files]
-            check_distinctions(frameworks)
             for framework in frameworks:
                 await conn.execute(
                     """

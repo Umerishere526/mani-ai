@@ -6,10 +6,16 @@ from __future__ import annotations
 import re
 
 from mani.chat.greeting import CHAT_MORE_LABEL
-from mani.chat.router import Signal
-from mani.chat.techniques import OFFERING
+from mani.chat.techniques import OFFERING, ledger_stages_of
 from mani.db.threads import TurnContext
-from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
+from mani.models.rows import (
+    Framework,
+    LedgerEntry,
+    Message,
+    MessageRole,
+    StageStatus,
+    TechniqueOutcome,
+)
 from mani.prompts.composer import tried_line
 from mani.prompts.replies import Replies
 from mani.prompts.tuning import Tuning
@@ -26,8 +32,8 @@ CTX_KEYS = frozenset({
     "clarification_lines", "question_focus", "offer_waiting",
     "after_framework_questions", "cooldown_passed", "since_last", "this_thread",
     "library_pending", "current_phase", "history", "recent_styles", "recent_openers",
-    "ruled_out", "framework_shortlist", "framework_starting", "active_framework",
-    "framework_stages", "stage", "next_stage",
+    "ruled_out", "framework_starting", "active_framework",
+    "framework_stages", "stage", "stage_ledger",
 })
 
 
@@ -42,6 +48,14 @@ def _opener(text: str, words: int) -> str:
     """The first couple of words of a reply, lowercased - enough to name a repeated opening
     without exposing the reply itself in [ctx]."""
     return " ".join(text.split()[:words]).lower()
+
+def _ledger_value(stages: list[str], ledger: dict[str, LedgerEntry]) -> str:
+    """Every ledger stage in order with its status, a stage the ledger has no entry for as missing."""
+    return ", ".join(
+        f"{stage} {ledger[stage].status if stage in ledger else StageStatus.MISSING}"
+        for stage in stages
+    )
+
 
 _CTX_BLOCK = re.compile(r"^\[ctx\].*?\[/ctx\]\s*", re.DOTALL)
 
@@ -96,12 +110,11 @@ def _their_messages(ctx: TurnContext) -> int:
     return (ctx.thread.message_count - OPENING_MESSAGES) // 2 + 1
 
 
-def cooldown_passed(ctx: TurnContext, tuning: Tuning, *, urgent: bool = False) -> bool:
+def cooldown_passed(ctx: TurnContext, tuning: Tuning) -> bool:
     """Whether an offer may be made yet: [ctx] tells the model, which keeps to it."""
     technique = ctx.technique
     if technique is None:
-        # An action about to be taken is the one case not worth waiting the rounds out.
-        return urgent or _their_messages(ctx) >= tuning.offers.clear_offer_after
+        return _their_messages(ctx) >= tuning.offers.clear_offer_after
     return ctx.thread.message_count - technique.at_message_count >= clear_cooldown_for(
         technique.outcome, tuning
     )
@@ -123,13 +136,11 @@ def resolve_style(ctx: TurnContext, default_style: str) -> str:
 def build(
     ctx: TurnContext,
     *,
-    shortlist: list[Signal] | None = None,
     framework: Framework | None = None,
     history: list[Message] | None = None,
     safety_concern: bool = False,
     offer_waiting: bool = False,
     framework_starting: bool = False,
-    urgent: bool = False,
     ruled_out: list[str] | None = None,
     replies: Replies,
     tuning: Tuning,
@@ -137,22 +148,21 @@ def build(
     """Format the metadata header for this turn.
 
     Every value is read from the composed turn snapshot, so the block describes what the
-    database holds rather than what an in-memory copy was mutated to mid-request. `shortlist`,
-    `framework` and `history` are what the router, the framework content and the caller's own
-    history add - all optional, so a turn with none of them still formats exactly as before.
+    database holds rather than what an in-memory copy was mutated to mid-request. `framework` and
+    `history` are what the framework content and the caller's own history add - both optional, so a
+    turn with neither still formats exactly as before.
 
-    `framework` is the one already active; its current and next stage go in by id, since the
-    model reads what each stage asks from the framework's Stages line in the index, and what
-    the ending stages ask from the mani_base prompt's `ending` section. `shortlist` is every
-    framework the router found signs of, ranked; its ids are the only sets the model may offer
-    from.
+    `framework` is the one already active; its current stage goes in by id, with what is known of
+    each stage before the last, since the model reads what each stage asks from the framework's
+    Stages line in the index, and what the ending stages ask from the mani_base prompt's `ending`
+    section.
 
     `history` is the same window the caller already loads for the model's own conversation
     view - nothing new is fetched for it. Only Mani's own messages in it become recent_openers;
     the person's messages are read here but never surfaced back to the model as an "opener".
 
     `ruled_out` is the frameworks what they have said rules out. It is told to the model while no
-    framework runs, and the caller has already taken them off `shortlist`.
+    framework runs.
     """
     technique = ctx.technique
     style = resolve_style(ctx, tuning.offers.default_style)
@@ -195,7 +205,7 @@ def build(
         lines.append(_line("after_framework_questions", questions))
 
     # The offer's timing is told to the model, which keeps to it.
-    passed = cooldown_passed(ctx, tuning, urgent=urgent)
+    passed = cooldown_passed(ctx, tuning)
     lines.append(_line("cooldown_passed", "yes" if passed else "no"))
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
@@ -232,10 +242,6 @@ def build(
 
     if ruled_out and not running and not safety_concern:
         lines.append(_line("ruled_out", ", ".join(ruled_out)))
-    if shortlist and not safety_concern:
-        # Ids only, in ranked order: the model sees which sets the router found signs of and
-        # which most, never a strength to read as a verdict.
-        lines.append(_line("framework_shortlist", ", ".join(s.framework_id for s in shortlist)))
 
     if running:
         if framework_starting:
@@ -247,11 +253,16 @@ def build(
         phase = technique.phase
         index = framework.phase_index(phase)
         if framework_starting and phase == OFFERING and index + 1 < len(framework.phases):
-            index += 1
-            phase = framework.phases[index]
+            # The ledger is empty on the turn they say yes: the first stage is the one to judge.
+            phase = framework.phases[index + 1]
+        stages = ledger_stages_of(framework)
+        # What is known of each stage is told while the questions run and while an offer waits to be
+        # answered; from the last own phase on it is frozen and no longer asked.
+        if phase in stages or (
+            technique.phase == OFFERING
+            and (offer_waiting or framework_starting or technique.outcome is TechniqueOutcome.ACCEPTED)
+        ):
+            lines.append(_line("stage_ledger", _ledger_value(stages, technique.stage_ledger)))
         lines.append(_line("stage", phase))
-        # An offer still open has no next stage: offer_waiting says how to take what they typed.
-        if phase != OFFERING and 0 <= index < len(framework.phases) - 1:
-            lines.append(_line("next_stage", framework.phases[index + 1]))
 
     return "[ctx]\n" + "\n".join(lines) + "\n[/ctx]\n\n"

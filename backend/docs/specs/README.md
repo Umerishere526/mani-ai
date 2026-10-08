@@ -28,9 +28,10 @@ must avoid**.
 
 ## How the code uses these
 
-- **"What MANI may hear"** → the rule-based router's phrase patterns, seeded into
-  `admin.frameworks.activation`. Free: no API call.
-- **"Important Framework Distinctions"** and each file's §9 → the router's tie-breakers.
+- **"What MANI may hear"** → each framework's Starts when, Sounds like and Skip when lines, which the
+  model reads; the one phrase list in code is the grief veto, `never_offer_when_said`, seeded into
+  `admin.frameworks.activation`.
+- **"Important Framework Distinctions"** and each file's §9 → the Skip when lines, which the model reads.
 - **Stage sections (§§11–18)** → `admin.frameworks.stages` jsonb, one entry per phase, with the
   three tone variants at the `ask` leaf only.
 - **"Responses MANI Must Avoid"** → `tests/evals/` negative assertions, which run with no model

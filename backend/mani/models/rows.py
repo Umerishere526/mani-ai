@@ -41,6 +41,16 @@ class TechniqueOutcome(StrEnum):
     DECLINED = "declined"
 
 
+class StageStatus(StrEnum):
+    """What is known of one stage of a running framework. `passed` is written only by the code,
+    when a stage was asked as many times as the cap allows without being answered."""
+
+    MISSING = "missing"
+    PARTIAL = "partial"
+    KNOWN = "known"
+    PASSED = "passed"
+
+
 class SupportStyle(StrEnum):
     SUPPORTIVE = "supportive"
     REFLECTIVE = "reflective"
@@ -83,6 +93,15 @@ class Message(Row):
     created_at: dt.datetime
 
 
+class LedgerEntry(BaseModel):
+    """One stage's line in a ledger: its status and how many turns it has been asked for."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    status: StageStatus
+    turns: int = Field(default=0, ge=0)
+
+
 class TechniqueState(Row):
     """The live technique on a thread. Absent means no technique in progress."""
 
@@ -95,6 +114,9 @@ class TechniqueState(Row):
     # The thread's message count when the framework entered its ending, so the turn cap can
     # count from it. Null outside the ending.
     ending_from: int | None = None
+    # What is known of each stage of the framework, by stage id. Ids, statuses and counts only,
+    # never a word anyone said. A stage with no entry is missing.
+    stage_ledger: dict[str, LedgerEntry] = Field(default_factory=dict)
 
 
 class ResponseStyle(Row):
@@ -132,10 +154,10 @@ class Framework(Row):
     activation_conditions: str = ""
     phases: list[str]
     display_order: int = 0
-    # The router's input (weighted phrase lists, redirects, and the phrases that rule a framework
-    # out). `stages` is empty for every framework, since `body` holds its eight lines and the
-    # mani_base prompt the ending's rules; it is read only by the admin side until the column is
-    # dropped. activation_conditions holds the Starts when line and is read by nothing.
+    # Holds at most `never_offer_when_said`, the phrases that rule a framework out. `stages` is
+    # empty for every framework, since `body` holds its eight lines and the mani_base prompt the
+    # ending's rules; it is read only by the admin side until the column is dropped.
+    # activation_conditions holds the Starts when line and is read by nothing.
     activation: dict[str, Any] = Field(default_factory=dict)
     stages: dict[str, Any] = Field(default_factory=dict)
 

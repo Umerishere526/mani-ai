@@ -8,14 +8,15 @@ import pytest
 
 from mani.chat import context
 from mani.chat.orchestrator import find_tapped_prompt, pending_offer
-from mani.chat.router import Signal
 from mani.db.threads import TurnContext
 from mani.models.rows import (
     Framework,
+    LedgerEntry,
     Message,
     MessageRole,
     Profile,
     ResponseStyle,
+    StageStatus,
     SupportStyle,
     TechniqueOutcome,
     TechniqueState,
@@ -267,25 +268,13 @@ def running_on(phase: str, **options) -> list[str]:
     ).splitlines()
 
 
-def test_the_shortlist_names_every_candidate_by_id_in_ranked_order_and_never_a_score():
-    block = build(
-        TurnContext(thread=thread(), profile=None, technique=None),
-        shortlist=[
-            Signal("behavioral_activation", 2.6, ["cannot make myself begin"]),
-            Signal("abcde", 0.15, ["embarrassed me"]),
-            Signal("dbt_stop", 1.5, [], promoted_by="an action is imminent"),
-        ],
-    ).splitlines()
-    assert "framework_shortlist: behavioral_activation, abcde, dbt_stop" in block
-
-
-def test_no_offer_line_and_no_closest_fit_whatever_the_shortlist_holds():
-    """Mani offers only a set on the shortlist that it judges fits; nothing names one for it."""
-    block = build(
-        TurnContext(thread=thread(message_count=10), profile=None, technique=None),
-        shortlist=[Signal("abcde", 2.6, ["she said", "so i must be"])],
-    ).splitlines()
-    assert not [line for line in block if line.startswith(("offer:", "closest_fit"))]
+@pytest.mark.parametrize("person_message", [2, 4, 9])
+def test_no_line_names_a_set_to_offer_on_any_turn(person_message):
+    """The model judges fit from the Framework Index; nothing in [ctx] names one for it."""
+    block = build(_on_message(person_message)).splitlines()
+    assert not [
+        line for line in block if line.startswith(("offer:", "closest_fit", "framework_shortlist"))
+    ]
 
 
 def test_the_turn_a_framework_starts_says_so():
@@ -303,11 +292,11 @@ def test_the_turn_a_framework_starts_says_so():
 TONES = ("direct", "supportive", "reflective")
 
 
-def test_the_turn_a_framework_starts_names_the_first_stage_and_the_second():
+def test_the_turn_a_framework_starts_names_the_first_stage_and_every_stage_still_to_learn():
     """Observed: on Try it, Mani asked "what is the exact problem you want to resolve?" of someone
     who had described it. On the yes turn the first working stage and the one after it are named,
-    with framework_starting, whose rule in response_format.md says to judge whether what they said
-    already answers the first."""
+    with framework_starting, whose rule in response_format.md says to judge every stage against what
+    they said before the offer."""
     state = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
         phase="offering", at_message_count=8,
@@ -315,7 +304,8 @@ def test_the_turn_a_framework_starts_names_the_first_stage_and_the_second():
     ctx = TurnContext(thread=thread(), profile=None, technique=state)
     starting = build(ctx, framework=framework(), framework_starting=True).splitlines()
     assert "stage: activate" in starting
-    assert "next_stage: belief" in starting
+    assert "stage_ledger: activate missing, belief missing" in starting
+    assert not any(line.startswith("next_stage") for line in starting)
     assert "stage: offering" not in starting
     assert "framework_starting: yes" in starting
     assert not any(line.startswith("stage_note") for line in starting)
@@ -326,31 +316,43 @@ def test_a_frameworks_own_stage_goes_by_id_and_the_model_asks_it_in_its_own_word
     assert "active_framework: abcde" in block
     assert "framework_stages: offering, activate, belief, closing, somatic_checkin, somatic_practice" in block
     assert "stage: activate" in block
-    assert "next_stage: belief" in block
-    assert not any(line.startswith(("stage_", "next_stage_")) for line in block)
+    assert "stage_ledger: activate missing, belief missing" in block
+    assert not any(line.startswith(("next_stage", "stage_purpose", "stage_ask")) for line in block)
 
 
-@pytest.mark.parametrize(
-    ("phase", "next_stage"),
-    [("closing", "somatic_checkin"), ("somatic_checkin", "somatic_practice")],
-)
-def test_the_ending_stages_go_by_id_like_any_other_and_carry_no_block(phase, next_stage):
+def test_what_is_known_of_each_stage_is_told_in_order_and_an_absent_stage_is_missing():
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+        phase="belief", at_message_count=4,
+        stage_ledger={"belief": LedgerEntry(status=StageStatus.PARTIAL, turns=1)},
+    )
+    block = build(TurnContext(thread=thread(), profile=None, technique=state), framework=framework())
+    assert "stage_ledger: activate missing, belief partial" in block.splitlines()
+    assert "stage: belief" in block.splitlines()
+
+
+@pytest.mark.parametrize("phase", ["closing", "somatic_checkin", "somatic_practice"])
+def test_from_the_last_own_phase_on_the_stage_is_named_and_the_ledger_is_not_told(phase):
     block = running_on(phase)
     assert f"stage: {phase}" in block
-    assert f"next_stage: {next_stage}" in block
-    assert not any(line.startswith(("stage_", "next_stage_")) for line in block)
+    assert not any(line.startswith(("stage_ledger", "next_stage")) for line in block)
 
 
-def test_an_offer_still_open_shows_only_the_offering_stage():
+def test_an_offer_waiting_for_a_typed_answer_names_the_offering_stage_and_every_stage_to_learn():
     block = running_on("offering", offer_waiting=True)
     assert "stage: offering" in block
-    assert not any(line.startswith(("next_stage", "stage_")) for line in block)
-
-
-def test_the_last_stage_has_no_next_stage():
-    block = running_on("somatic_practice")
-    assert "active_framework: abcde" in block
+    assert "stage_ledger: activate missing, belief missing" in block
     assert not any(line.startswith("next_stage") for line in block)
+
+
+def test_an_offer_nobody_is_answering_names_no_ledger():
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
+        phase="offering", at_message_count=8,
+    )
+    block = build(TurnContext(thread=thread(), profile=None, technique=state), framework=framework())
+    assert "stage: offering" in block.splitlines()
+    assert not any(line.startswith("stage_ledger") for line in block.splitlines())
 
 
 def test_the_conversations_own_style_wins_over_the_profile_default():
@@ -541,15 +543,6 @@ def test_the_context_tells_the_model_the_truth_about_the_first_offer():
     assert "cooldown_passed: yes" in build(_on_message(2))
 
 
-@pytest.mark.parametrize("person_message", [4, 5, 9])
-def test_with_no_shortlist_nothing_is_owed_at_the_fourth_message_or_later(person_message):
-    """There is no nearest fit: a thread whose words matched no phrase is offered nothing."""
-    block = build(_on_message(person_message), shortlist=[]).splitlines()
-    assert not [
-        line for line in block if line.startswith(("offer:", "closest_fit", "framework_shortlist"))
-    ]
-
-
 def test_after_keep_chatting_an_offer_may_return_after_two_more_exchanges():
     state = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED,
@@ -599,13 +592,6 @@ def test_what_the_person_said_rules_out_is_told_to_the_model_while_nothing_runs(
     assert "ruled_out" not in nothing_ruled_out
 
 
-def test_a_ruled_out_framework_is_told_even_when_no_shortlist_is_shown():
-    block = build(
-        TurnContext(thread=thread(), profile=None, technique=None),
-        shortlist=[], ruled_out=["behavioral_activation"],
-    )
-    assert "ruled_out: behavioral_activation" in block.splitlines()
-    assert "framework_shortlist" not in block
 
 
 def test_nothing_is_ruled_out_while_a_framework_runs_or_on_a_safety_concern():

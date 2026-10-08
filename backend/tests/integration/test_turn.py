@@ -16,8 +16,9 @@ from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import chain, client
-from mani.llm.schema import Crisis, Reply, SmartPrompt, Style, TechniqueState
-from mani.models.rows import TechniqueOutcome
+from mani.llm.schema import Crisis, Reply, SmartPrompt, StageReport, Style, TechniqueState
+from mani.models import rows
+from mani.models.rows import LedgerEntry, StageStatus, TechniqueOutcome
 from tests.integration.cleanup import remove_test_users
 from tests.seeded import seeded_replies, seeded_tuning
 
@@ -303,9 +304,8 @@ async def test_a_tapped_button_reaches_the_model_as_its_label_under_a_key(alice,
     assert scripted.last_messages[-1]["content"].endswith("[/ctx]\n\ntapped: Keep chatting")
 
 
-async def test_what_they_said_rules_out_is_told_not_offered_by_the_router(alice, model):
-    """Behavioral Activation tops the shortlist for these words, and early grief rules it out: the
-    model is told so, and the shortlist and the offer line never name it."""
+async def test_what_they_said_rules_out_is_told_and_nothing_else_names_it(alice, model):
+    """Early grief rules Behavioral Activation out: the model is told so, and no other line names it."""
     scripted = model(Reply(text="What is it like at home without him?"))
     thread = await start(alice)
     await past_the_opening(thread)
@@ -365,75 +365,26 @@ async def _supportive(thread):
         )
 
 
-async def test_words_that_match_no_phrase_get_no_offer_guidance_at_any_message(alice, model):
-    """There is no nearest fit: with nothing on the shortlist, nothing is offerable."""
-    scripted = model(Reply(text="What is that like?"))
+async def test_a_plain_sentence_is_offerable_at_the_second_message_and_logged_by_id_only(
+    alice, model, caplog
+):
+    """covers: AC-1, AC-8 - no phrase from any list is in these words, and the offer is stored and
+    logged all the same, by id and one flag, never a word of what was said."""
+    scripted = model(Reply(text="What has that been like?"), _offer("behavioral_activation"))
     thread = await start(alice)
     await _supportive(thread)
-    for message in (
-        "i miss him and the flat is quiet", "it happened at work", "it is hard to explain",
-        "i just feel off", "the weather was grey",
-    ):
-        await send(alice, thread.id, message)
-        sent = scripted.last_messages[-1]["content"].splitlines()
-        assert not [
-            line for line in sent
-            if line.startswith(("framework_shortlist", "offer:", "closest_fit"))
-        ], message
-    assert scripted.calls == 5
-
-
-async def test_a_sign_from_the_first_message_is_still_offerable_at_the_sixth(alice, model):
-    """covers: AC-1, AC-2 - the first message's phrases still count once four more have passed,
-    so the set they point to stays on the shortlist; nothing names it for the offer."""
-    scripted = model(Reply(text="What was happening just then?"))
-    thread = await start(alice)
-    await _supportive(thread)
-    for message in (
-        "I'm very upset. My manager embarrassed me today because he wants me to fail.",
-        "EVERYTHING WENT WRONG",
-        "I felt really embarrassed.",
-        "it happened at work",
-        "it is hard to explain",
-        "i just feel off",
-    ):
-        await send(alice, thread.id, message)
-
-    sent = scripted.last_messages[-1]["content"].splitlines()
-    assert "framework_shortlist: abcde" in sent
-    assert not [line for line in sent if line.startswith(("offer:", "closest_fit"))]
-
-
-async def test_every_framework_with_a_sign_is_listed_by_id_except_one_ruled_out(alice, model):
-    scripted = model(Reply(text="That is a lot at once. What feels most pressing?"))
-    thread = await start(alice)
-    await send(
-        alice, thread.id,
-        "since my dog died nobody cares about me, so i must be a bad friend, i keep canceling "
-        "plans, i cannot change what happened, i do not know what to do, and i keep typing and "
-        "deleting",
-    )
-
-    sent = scripted.last_messages[-1]["content"].splitlines()
-    assert "framework_shortlist: dbt_stop, act_choice_point, abcde, structured_problem_solving, thought_reframe" in sent
-    assert "ruled_out: behavioral_activation" in sent
-
-
-async def test_an_offer_off_the_shortlist_goes_out_and_is_logged_by_id_only(alice, model, caplog):
-    """The rule is told, not enforced: the button stands, and the log shows it was off the list."""
-    model(_offer("act_choice_point"))
-    thread = await start(alice)
-    await past_the_opening(thread)
+    await send(alice, thread.id, "I've been avoiding my friends because I've been overwhelmed")
+    first = scripted.last_messages[-1]["content"].splitlines()
     with caplog.at_level("INFO", logger="mani.chat.orchestrator"):
-        turn = await send(alice, thread.id, "i miss him and the flat is quiet")
+        turn = await send(alice, thread.id, "and I feel guilty about ignoring them")
+    second = scripted.last_messages[-1]["content"].splitlines()
 
-    assert [p.technique for p in turn.prompts if p.technique] == ["act_choice_point"]
+    assert "cooldown_passed: yes" in second
+    assert not [line for line in first + second if line.startswith("framework_shortlist")]
+    assert [p.technique for p in turn.prompts if p.technique] == ["behavioral_activation"]
     offers = [r.getMessage() for r in caplog.records if r.getMessage().startswith("offer on thread")]
-    assert offers == [
-        f"offer on thread {thread.id}: act_choice_point on_shortlist: no shortlist: none "
-        "cooldown_passed: yes"
-    ]
-    assert "flat is quiet" not in caplog.text
+    assert offers == [f"offer on thread {thread.id}: behavioral_activation cooldown_passed: yes"]
+    assert "avoiding my friends" not in caplog.text
 
 
 async def test_the_turn_is_stored_and_the_thread_state_follows_it(alice, model):
@@ -582,14 +533,25 @@ async def test_a_library_button_from_the_model_does_not_silence_the_library_offe
     assert "library_pending: yes" in scripted.last_messages[-1]["content"].splitlines()
 
 
-async def _land_on(alice, thread_id, phase) -> None:
+ABCDE_STAGES = ["activate", "belief", "consequence", "examine", "balanced"]
+
+
+def _known_before(phase: str) -> dict[str, LedgerEntry]:
+    """The ledger a thread on `phase` holds: every ABCDE stage before it known, and all of them from
+    the last own phase on, so the stored stage is the one the ledger gives."""
+    before = ABCDE_STAGES[: ABCDE_STAGES.index(phase)] if phase in ABCDE_STAGES else ABCDE_STAGES
+    return {stage: LedgerEntry(status=StageStatus.KNOWN) for stage in before}
+
+
+async def _land_on(alice, thread_id, phase, stage_ledger=None) -> None:
     from mani.db import pool
 
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
-            conn, thread_id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
+        await threads.apply(conn, thread_id, ALICE, threads.ThreadUpdates(technique=rows.TechniqueState(
+            thread_id=thread_id, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase=phase,
-        )
+            stage_ledger=_known_before(phase) if stage_ledger is None else stage_ledger,
+        )))
 
 
 async def _retire_abcde_on(alice, thread_id) -> None:
@@ -915,23 +877,6 @@ async def test_the_safety_screen_locks_a_thread_with_no_provider_call(alice, mod
     assert event["reason"] == "safety screen: suicide"
 
 
-async def test_the_router_shortlist_reaches_the_prompt_without_a_second_call(alice, model):
-    """The router runs in process; it must narrow the field without paying for it."""
-    scripted = model(
-        Reply(text="How is that affecting your days?"),
-        Reply(text="What would it look like to take one step?"),
-        Reply(text="What keeps that feeling from arriving?"),
-    )
-    thread = await start(alice)
-    await send(alice, thread.id, "I have stopped answering people for a week now.")
-    await send(alice, thread.id, "I know what I need to do, I just cannot make myself begin.")
-    await send(alice, thread.id, "I keep waiting to want to do something, but it never comes.")
-
-    assert scripted.calls == 3
-    final_prompt = scripted.last_messages[-1]["content"]
-    assert "framework_shortlist: behavioral_activation" in final_prompt
-
-
 async def test_a_framework_completing_on_a_crisis_turn_is_still_retired(alice, model):
     """A crisis turn makes no model call, so no `ending` can come: a framework in its ending is
     retired here or never, and the thread locks one way, so nothing would correct it later."""
@@ -1186,23 +1131,6 @@ async def test_a_finished_framework_no_longer_counts_as_running(alice, model):
     assert [p.technique for p in turn.prompts] == ["thought_reframe"]
 
 
-async def test_the_router_runs_again_after_a_declined_offer(alice, model):
-    scripted = model(Reply(text="What has that been like?"))
-    from mani.db import pool
-
-    thread = await start(alice)
-    async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
-            conn, thread.id, ALICE, "abcde", TechniqueOutcome.DECLINED,
-            at_message_count=2, phase=None,
-        )
-    await send(alice, thread.id, "I have stopped answering people for a week now.")
-    await send(alice, thread.id, "I know what I need to do, I just cannot make myself begin.")
-    await send(alice, thread.id, "I keep waiting to want to do something, but it never comes.")
-
-    assert "framework_shortlist: behavioral_activation" in scripted.last_messages[-1]["content"]
-
-
 async def test_tapping_decline_records_it_even_when_the_model_reports_no_state(alice, model):
     """After a decline there is no technique to report, so state: null is the model doing
     what the schema asks. The decline is the button's meaning, not the model's to confirm."""
@@ -1240,16 +1168,16 @@ async def test_an_empty_reply_fails_cleanly_and_stores_nothing(alice, model):
     assert [m.role for m in await _history(alice, thread.id)] == ["mani"]  # the greeting only
 
 
-async def test_an_imminent_action_is_offerable_on_the_first_message(alice, model):
-    """The two-exchange wait exists so a framework is not offered on a first hint. STOP is
-    the case where waiting is the failure: the message may be sent before a third turn."""
+async def test_an_imminent_action_waits_for_the_second_message_like_any_set(alice, model):
+    """DBT STOP has no urgent case: a first message about an action about to be taken gets the same
+    cooldown as every other, so nothing is offerable on it."""
     scripted = model(Reply(text="Before you send it, can we pause for a moment?"))
     thread = await start(alice)
-    await send(alice, thread.id, "I am about to send it")
+    await send(alice, thread.id, "I am about to send a message I will regret")
 
     sent = scripted.last_messages[-1]["content"].splitlines()
-    assert "framework_shortlist: dbt_stop" in sent
-    assert "cooldown_passed: yes" in sent
+    assert "cooldown_passed: no" in sent
+    assert not [line for line in sent if line.startswith("framework_shortlist")]
 
 
 async def test_a_new_chat_asks_how_the_person_wants_to_be_spoken_to(alice):
@@ -1393,7 +1321,7 @@ async def _state_row(thread_id) -> asyncpg.Record:
 
     async with pool.as_admin() as conn:
         return await conn.fetchrow(
-            "select phase, outcome, ending_from, library_offered_since "
+            "select phase, outcome, ending_from, library_offered_since, stage_ledger "
             "from public.thread_technique_state where thread_id = $1",
             thread_id,
         )
@@ -1656,9 +1584,9 @@ async def test_an_offer_they_typed_past_is_flagged_then_closed(alice, model):
 
     sent = scripted.last_messages[-1]["content"]
     assert "offer_waiting: yes" in sent
-    # The offer is still open, so the offering stage is named and nothing else about a stage.
+    # The offer is still open, so the offering stage is named, with every stage still to learn.
     assert "stage: offering" in sent.splitlines()
-    assert not any(line.startswith(("stage_", "next_stage")) for line in sent.splitlines())
+    assert not any(line.startswith("next_stage") for line in sent.splitlines())
     async with pool.as_user(alice) as conn:
         ctx = await threads.load_turn_context(conn, thread.id, ALICE, STYLE_WINDOW)
     assert ctx.technique.outcome is TechniqueOutcome.DECLINED
@@ -1722,3 +1650,229 @@ async def test_a_declined_framework_can_be_offered_again_after_a_few_replies(ali
 
     again = await send(alice, thread.id, "maybe I do want to look at it")
     assert [p.technique for p in again.prompts if p.technique] == ["abcde"]
+
+
+# The stage ledger: what the reply reports of each stage decides the stage Mani asks next.
+
+OFFER_TO_TRY = Reply(
+    text="I have a sequence of questions that could help. Would you like to try it?",
+    prompts=[SmartPrompt(label="Try it", technique="abcde"),
+             SmartPrompt(label="Tell me about this"),
+             SmartPrompt(label="Keep chatting", decline=True)],
+    state=TechniqueState(technique="abcde", step="offering"),
+)
+
+
+def _stages(**statuses: str) -> list[StageReport]:
+    return [StageReport(stage=stage, status=status) for stage, status in statuses.items()]
+
+
+def _abcde_state(step: str, accepted: bool | None = None, **statuses: str) -> TechniqueState:
+    return TechniqueState(technique="abcde", step=step, accepted=accepted, stages=_stages(**statuses))
+
+
+def _ledger(row) -> dict[str, tuple[str, int]]:
+    return {stage: (entry["status"], entry["turns"]) for stage, entry in row["stage_ledger"].items()}
+
+
+async def _checked_notes(caplog) -> str:
+    return " ".join(r.getMessage() for r in caplog.records if "checked reply" in r.getMessage())
+
+
+async def test_tapping_try_it_after_the_story_was_told_lands_on_the_first_stage_not_yet_known(
+    alice, model, caplog
+):
+    """The event, what it meant and how it affected them were told before the offer, so the
+    questions start at examine, whatever step the reply names."""
+    model(
+        OFFER_TO_TRY,
+        Reply(text="You were criticised and it made you feel small. What supports that belief?",
+              state=_abcde_state("activate", activate="known", belief="known", consequence="known")),
+    )
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "my manager criticised me and I felt small and avoided everyone")
+    caplog.set_level(logging.INFO)
+    await send(alice, thread.id, "Try it")
+
+    row = await _state_row(thread.id)
+    assert (row["outcome"], row["phase"]) == ("accepted", "examine")
+    assert _ledger(row) == {
+        "activate": ("known", 0), "belief": ("known", 0), "consequence": ("known", 0),
+    }
+    assert "the reported step differs from the stage the ledger gives" not in await _checked_notes(caplog)
+
+
+async def test_a_partly_told_stage_is_the_one_asked_with_the_ones_before_it_known(alice, model):
+    model(
+        OFFER_TO_TRY,
+        Reply(text="What did it come to mean to you?",
+              state=_abcde_state("activate", activate="known", belief="partial")),
+    )
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "my manager criticised me in front of everyone")
+    await send(alice, thread.id, "Try it")
+
+    row = await _state_row(thread.id)
+    assert row["phase"] == "belief"
+    assert _ledger(row) == {"activate": ("known", 0), "belief": ("partial", 0)}
+
+
+async def test_saying_yes_in_words_lands_on_the_same_stage_as_a_tap(alice, model):
+    scripted = model(
+        OFFER_TO_TRY,
+        Reply(text="You were criticised and felt small. What supports that belief?",
+              state=_abcde_state("activate", accepted=True,
+                                 activate="known", belief="known", consequence="known")),
+    )
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "my manager criticised me and I felt small and avoided everyone")
+    await send(alice, thread.id, "yeah let's do it")
+
+    sent = scripted.last_messages[-1]["content"].splitlines()
+    assert "offer_waiting: yes" in sent
+    assert "stage_ledger: activate missing, belief missing, consequence missing, examine missing, balanced missing" in sent
+    row = await _state_row(thread.id)
+    assert (row["outcome"], row["phase"]) == ("accepted", "examine")
+
+
+async def test_a_framework_asked_for_again_after_a_decline_starts_from_an_empty_ledger(alice, model):
+    model(
+        OFFER_TO_TRY,
+        Reply(text="You keep replaying it. Which part stays with you?"),
+        Reply(text="Okay. What happened?",
+              state=_abcde_state("activate", accepted=True, activate="partial")),
+    )
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "my manager criticised me in front of everyone")
+    await send(alice, thread.id, "I keep replaying it")
+    await send(alice, thread.id, "actually I'd like some help looking at it")
+
+    row = await _state_row(thread.id)
+    assert (row["outcome"], row["phase"]) == ("accepted", "activate")
+    assert _ledger(row) == {"activate": ("partial", 0)}
+
+
+async def test_an_offer_and_a_decline_store_an_empty_ledger_whatever_the_reply_reports(alice, model):
+    model(
+        Reply(**{**OFFER_TO_TRY.model_dump(), "state": _abcde_state("offering", activate="known")}),
+        Reply(text="Sure, we can just talk."),
+    )
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "I keep spiralling")
+    assert _ledger(await _state_row(thread.id)) == {}
+
+    await send(alice, thread.id, "Keep chatting")
+    row = await _state_row(thread.id)
+    assert (row["outcome"], row["phase"], _ledger(row)) == ("declined", None, {})
+
+
+async def test_asking_about_the_offer_stores_no_ledger_and_keeps_it_open(alice, model):
+    model(
+        OFFER_TO_TRY,
+        Reply(**{**OFFER_TO_TRY.model_dump(), "state": _abcde_state("offering", activate="known")}),
+    )
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "I keep spiralling")
+    await send(alice, thread.id, "what would that involve?")
+
+    row = await _state_row(thread.id)
+    assert (row["outcome"], row["phase"], _ledger(row)) == ("offered", "offering", {})
+
+
+async def test_the_stage_follows_the_ledger_not_the_step_and_a_correction_reopens_a_stage(
+    alice, model, caplog
+):
+    """A reply jumping ahead by step records nothing of it. One that reports an earlier stage
+    as only partly known, because they took back what they said, moves the stage back."""
+    model(
+        Reply(text="What supports that belief?", state=_abcde_state("balanced", examine="missing")),
+        Reply(text="Let's go back to what it meant. What did it come to mean?",
+              state=_abcde_state("examine", belief="partial")),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "examine")
+    caplog.set_level(logging.INFO)
+
+    await send(alice, thread.id, "I am not sure")
+    row = await _state_row(thread.id)
+    assert row["phase"] == "examine"
+    assert "the reported step differs from the stage the ledger gives" in await _checked_notes(caplog)
+
+    caplog.clear()
+    await send(alice, thread.id, "actually it did not mean that")
+    row = await _state_row(thread.id)
+    assert row["phase"] == "belief"
+    assert _ledger(row)["belief"] == ("partial", 0)
+    assert "moved the stage back: belief" in await _checked_notes(caplog)
+
+
+async def test_a_stage_the_code_passed_stays_passed_whatever_the_reply_reports(alice, model):
+    model(Reply(text="What did it come to mean?", state=_abcde_state("belief", belief="missing")))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "consequence", {
+        "activate": LedgerEntry(status=StageStatus.KNOWN),
+        "belief": LedgerEntry(status=StageStatus.PASSED, turns=4),
+    })
+
+    await send(alice, thread.id, "I do not know")
+
+    row = await _state_row(thread.id)
+    assert row["phase"] == "consequence"
+    assert _ledger(row)["belief"] == ("passed", 4)
+
+
+async def test_a_reply_naming_another_framework_is_ignored_and_the_stage_is_held(alice, model, caplog):
+    model(Reply(text="What supports it?", state=TechniqueState(
+        technique="dbt_stop", step="stop", stages=_stages(stop="known"),
+    )))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "examine")
+    caplog.set_level(logging.INFO)
+
+    await send(alice, thread.id, "I am not sure")
+
+    row = await _state_row(thread.id)
+    assert (row["outcome"], row["phase"]) == ("accepted", "examine")
+    assert set(_ledger(row)) == {"activate", "belief", "consequence"}
+    assert "ignored state: not the running framework" in await _checked_notes(caplog)
+
+
+async def test_a_running_turn_with_no_state_holds_the_stage(alice, model, caplog):
+    model(Reply(text="Tell me more."))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "consequence")
+    caplog.set_level(logging.INFO)
+
+    await send(alice, thread.id, "it was hard")
+
+    row = await _state_row(thread.id)
+    assert (row["outcome"], row["phase"]) == ("accepted", "consequence")
+    assert "no stages reported on a running turn" in await _checked_notes(caplog)
+
+
+async def test_a_reply_that_completes_the_ledger_moves_to_closing_and_drops_its_buttons(alice, model):
+    model(Reply(
+        text="That is a fairer way to see it. How does it sit now?",
+        prompts=[SmartPrompt(label="Chat more")],
+        state=_abcde_state("balanced", balanced="known"),
+    ))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "balanced")
+
+    turn = await send(alice, thread.id, "maybe I did my best")
+
+    assert turn.prompts == []
+    assert (await _state_row(thread.id))["phase"] == "closing"
+
+
+async def test_from_closing_on_the_reported_stages_and_steps_before_it_change_nothing(alice, model):
+    model(Reply(text="What did it mean?", state=_abcde_state("belief", belief="missing")))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "closing")
+
+    await send(alice, thread.id, "hm")
+
+    row = await _state_row(thread.id)
+    assert row["phase"] == "closing"
+    assert set(_ledger(row)) == set(ABCDE_STAGES)
+    assert {status for status, _ in _ledger(row).values()} == {"known"}

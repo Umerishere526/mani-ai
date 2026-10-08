@@ -22,13 +22,15 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 7 | Body check in in the lean format | Slice 2 | in-progress |
 | 8 | Model facing text out of Python | Slice 3 | in-progress |
 | 9 | Reply text and numbers out of Python | Slice 3 | in-progress |
-| 10 | Crisis decided by the model | Slice 4 | planned |
-| 11 | Thinking level and prompt tuning from measurements | Slice 5 | planned |
+| 12 | Stages skip what the chat already told | Slice 4 | in-progress |
+| 13 | Frameworks offered when the chat fits | Slice 4 | in-progress |
+| 10 | Crisis decided by the model | Slice 5 | planned |
+| 11 | Thinking level and prompt tuning from measurements | Slice 6 | planned |
 
 ## Already built
 
 ### A. Chat turn pipeline · existing
-One turn: safety screen, router shortlist, system prompt (base, framework index, response format), `[ctx]` block, one model call, integrity guards. code in backend/mani/chat/, backend/mani/prompts/, backend/mani/llm/
+One turn: safety screen, grief veto, system prompt (base, framework index, response format), `[ctx]` block, one model call, integrity guards. code in backend/mani/chat/, backend/mani/prompts/, backend/mani/llm/
 
 ### B. Six frameworks and the body check in · existing
 ABCDE, Thought Reframe, Structured Problem Solving, ACT Choice Point, Behavioral Activation and DBT STOP, each 300 to 390 lines, plus the body check in merged into every framework at seed time. code in backend/content/, backend/scripts/seed.py
@@ -108,7 +110,7 @@ Spec [0006](../specs/0006-one-model-call-no-repairs/index.md) · code in backend
 
 ### 6. The other five frameworks in 8 lines · dropped
 Merged into feature 4 (spec 0005): all six convert in one change. Originally: convert Thought Reframe, Structured Problem Solving, ACT Choice Point, Behavioral Activation and DBT STOP to the format from feature 4, including how each is told apart from its neighbours.
-**Done when:** each is about 8 lines, a real conversation reaches each one's offer and end, and the router picks the right one for the client's example lines.
+**Done when:** each is about 8 lines, a real conversation reaches each one's offer and end, and the model picks the right one for the client's example lines.
 - [ ] Build it: `/develop other five frameworks in 8 lines`
 
 ### 7. Body check in in the lean format · in-progress
@@ -130,7 +132,7 @@ Spec [0009](../specs/0009-body-check-in-lean-format/index.md) · code in backend
 ### 8. Model facing text out of Python · in-progress
 The instruction text Python adds to the prompt (index headings, `stage_note`, memory and summary wrappers, schema field descriptions, the exercise picker prompt, phrase lists naming framework ids) moves into seeded content, so changing it never needs a code change. Also removes the closest fit offer: Mani offers only a set on the router's shortlist that it judges fits.
 **Done when:** no sentence the model reads is written in backend/mani/, and changing any of them needs only a reseed.
-Spec: [0007](../specs/0007-model-text-out-of-python/index.md) · code in backend/mani/chat/context.py, backend/mani/prompts/, backend/mani/llm/schema.py, backend/mani/chat/router.py, backend/content/, backend/supabase/migrations/019_reply_shape_not_pinned.sql
+Spec: [0007](../specs/0007-model-text-out-of-python/index.md) · code in backend/mani/chat/context.py, backend/mani/prompts/, backend/mani/llm/schema.py, backend/mani/chat/vetoes.py, backend/content/, backend/supabase/migrations/019_reply_shape_not_pinned.sql
 - [x] Design it (spec): `/architect model facing text out of python`
 - [x] Build it: `/develop model facing text out of python` (needs spec 0004 AC-6 built first)
   - [x] `[ctx]` and the layers as keys and headings, the stage rules and layer meanings in `response_format.md`, both contract tests (AC-1, AC-2, AC-5, AC-12)
@@ -142,7 +144,7 @@ Spec: [0007](../specs/0007-model-text-out-of-python/index.md) · code in backend
 - [ ] Test it: `/test model facing text out of python`
 
 ### 9. Reply text and numbers out of Python · in-progress
-Text sent straight to the person (greeting, style question and buttons, openers, clarification lines, after framework questions) moves into a seeded `replies` row, and the conversation numbers (offer timing, cooldowns, router weights, history, style and memory windows) into a seeded `tuning` row, both checked on every write. A second commit deletes the phrase lists behind `their_last` and lets the model track the clarification and after framework lines. The body ending's labels stay for feature 7, and the crisis reply for feature 10.
+Text sent straight to the person (greeting, style question and buttons, openers, clarification lines, after framework questions) moves into a seeded `replies` row, and the conversation numbers (offer timing, cooldowns, windows, history, style and memory windows) into a seeded `tuning` row, both checked on every write. A second commit deletes the phrase lists behind `their_last` and lets the model track the clarification and after framework lines. The body ending's labels stay for feature 7, and the crisis reply for feature 10.
 **Done when:** no line Mani sends without the model and no conversation number is a Python constant, each can change with a reseed, and a broken edit is refused when written.
 Spec: [0008](../specs/0008-reply-text-numbers-out-python/index.md) · code in backend/content/prompts/, backend/mani/prompts/, backend/mani/chat/, backend/mani/memory.py, backend/mani/db/config_tables.py
 - [x] Design it (spec): `/architect reply text and numbers out of python`
@@ -154,14 +156,41 @@ Spec: [0008](../specs/0008-reply-text-numbers-out-python/index.md) · code in ba
 - [ ] Verify it: `/check verify reply text and numbers out of python`
 - [ ] Test it: `/test reply text and numbers out of python`
 
-## Slice 4: Crisis
+## Slice 4: Frameworks follow the chat
+
+### 12. Stages skip what the chat already told · in-progress
+A framework's stages are what Mani needs to learn, not steps to walk in order. In the same one call, the model reports each stage of the running framework as known, partial or missing (status only, none of their words); the code stores that ledger and sets the stage to the first one not known. An intake stage (the event, the belief, the problem) skips when the chat already answered it; a work stage (examine, balanced, choose, first action) counts as known only in the person's own words in this conversation. The ending opens once all are known. Today the one stage clamp in `techniques.py` and the "never skip a stage" rule send Mani back to stages already answered, though each Starts when line requires those answers before the offer.
+**Done when:** on acceptance the reply skips every stage the chat already answered (the ABCDE example starts at the right stage), a partial stage gets only its missing part, no stage already answered is asked again, no framework holds the thread past the cap from any stage, and the evals show no question for a stage already known.
+Spec: [0010](../specs/0010-stages-skip-what-chat-told/index.md) · code in backend/mani/chat/, backend/mani/llm/schema.py, backend/mani/models/rows.py, backend/mani/db/threads.py, backend/content/, backend/scripts/, backend/supabase/migrations/
+- [x] Design it (spec): `/architect stages skip what the chat already told` (decided 2026-10-08: the stage ledger approach and the work stage rule)
+- [ ] Build it: `/develop stages skip what the chat already told`
+  - [x] Tracer: migration 021, the ledger in the guard, the running turn branch on every accepting path, `[ctx]` `stage_ledger`, the ` | ` in all six Stages lines, prompt drafts reviewed by muhammad, reseed (AC-1, AC-2, AC-3, AC-5, AC-9, AC-10, AC-11). Built 2026-10-08, full `pytest` green (755 passed); wording accepted by muhammad, reseed skipped by muhammad's call, so the database held the old prompts and Stages lines until the reseed for spec 0011 on 2026-10-08
+  - [ ] Counting and backstops: `stage_turn_cap` 4 in `tuning`, `passed`, `stage_last_try`, hold and count, concern turns, frozen from `closing`, ending cap from `closing` (AC-4, AC-6, AC-7, AC-8, AC-12, AC-14)
+  - [ ] Evals: `expect_stage` and scenarios, real runs only with muhammad's yes (AC-13, AC-14)
+  - [ ] Close out: PORT-STATUS, schema reference, journal, full `pytest` (AC-15)
+- [ ] Verify it: `/check verify stages skip what the chat already told`
+- [ ] Test it: `/test stages skip what the chat already told`
+
+### 13. Frameworks offered when the chat fits · in-progress
+Mani offers a set from what the person means, not from an exact phrase. Today "I've been avoiding my friends because I've been overwhelmed, and I feel guilty about ignoring them" gets an empty shortlist, so Mani can offer nothing. The model judges fit from the Framework Index it already reads; the phrase router, its distinction rules, the shortlist line and the urgent DBT STOP case go, and only the grief veto and the cooldown stay in code.
+**Done when:** a plain sentence with no phrase from any list, such as the avoiding friends line, can be offered a fitting set at the person's second message; the grief veto still keeps Behavioral Activation from someone who has lost a person; and the router's phrase lists, scoring and distinction rules no longer exist. Whether the model picks well on plain phrasing is measured under feature 11, not here.
+Spec: [0011](../specs/0011-offers-follow-the-chat/index.md) · code in backend/mani/chat/, backend/scripts/seed.py, backend/mani/prompts/tuning.py, backend/content/
+- [x] Design it (spec): `/architect frameworks offered when the chat fits` (decided 2026-10-08: the model judges, the router is cut to the veto, urgency dropped, scripted tests only)
+- [x] Build it: `/develop frameworks offered when the chat fits` (built on spec 0010's staged tracer, by muhammad's call)
+  - [x] Tracer: no shortlist and no urgent case, `framework_shortlist` out of `[ctx]`, the offer log, prompt drafts reviewed by muhammad, scripted tests (AC-1, AC-5, AC-7, AC-8). Built 2026-10-08; wording accepted by muhammad as the spec drafted it
+  - [x] Remove the scoring: `router.py` to `vetoes.py`, the veto checked once per load in `Registry`, framework files, seed and `tuning` row, the tests that reach them (AC-2, AC-3, AC-4, AC-6). Built 2026-10-08, reseeded locally, full `pytest` green (666 passed, 4 skipped)
+  - [x] Close out: PORT-STATUS, schema reference, docs, journal, reseed after muhammad's yes on the wording, full `pytest` (AC-9). Journal: offers-follow-the-chat-build-2026-10-08
+- [ ] Verify it: `/check verify frameworks offered when the chat fits`
+- [ ] Test it: `/test frameworks offered when the chat fits`
+
+## Slice 5: Crisis
 
 ### 10. Crisis decided by the model · needs a decision · GA
 Remove the keyword crisis and concern screen. The model's own `crisis` field becomes the only detector. The thread lock and the crisis reply still follow when it fires. This is the riskiest change in the scope, so it comes last and carries the highest rigour.
 **Done when:** safety.py's phrase lists are gone, every crisis eval scenario (direct, indirect, misspelt, mixed with other topics) locks the thread and sends the crisis reply, and no ordinary conversation triggers it.
 - [ ] Design it (spec): `/architect crisis decided by the model`
 
-## Slice 5: Keep improving
+## Slice 6: Keep improving
 
 ### 11. Thinking level and prompt tuning from measurements · needs a decision
 Use the baseline from feature 1 to choose the thinking level per call and to compare each prompt change, three runs before and three after, so the prompts keep improving as models get faster.

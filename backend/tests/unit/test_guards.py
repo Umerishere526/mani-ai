@@ -5,8 +5,8 @@ import pytest
 
 from mani.chat import guards
 from mani.chat.techniques import Registry
-from mani.llm.schema import Reply, SmartPrompt, Style, TechniqueState
-from mani.models.rows import Framework
+from mani.llm.schema import Reply, SmartPrompt, StageReport, Style, TechniqueState
+from mani.models.rows import Framework, StageStatus
 
 REFRAMING = Framework(
     id="thought_reframing", name="Thought Reframing", summary="s", body="b",
@@ -20,6 +20,12 @@ ABCDE = Framework(
 WITH_ENDING = Framework(
     id="abcde", name="ABCDE", summary="s", body="b",
     phases=["offering", "activate", "closing", "somatic_checkin", "somatic_practice"],
+)
+
+# Shaped as the seed writes a framework: its own stages, `closing` as the last own phase, then the ending.
+STAGED = Framework(
+    id="abcde", name="ABCDE", summary="s", body="b",
+    phases=["offering", "activate", "belief", "consequence", "closing", "somatic_checkin", "somatic_practice"],
 )
 
 OFFER = [
@@ -41,6 +47,11 @@ def registry() -> Registry:
 @pytest.fixture
 def ending_registry() -> Registry:
     return Registry([WITH_ENDING])
+
+
+@pytest.fixture
+def staged_registry() -> Registry:
+    return Registry([STAGED])
 
 
 def reply(**overrides) -> Reply:
@@ -169,28 +180,46 @@ def test_a_library_section_the_model_cased_differently_is_kept_and_corrected(reg
     assert checked.notes == []
 
 
-def test_the_reply_that_starts_a_framework_may_ask_the_second_stage(registry):
-    """What they said before accepting answers the first stage, so the reply asks the second."""
+def test_the_reply_that_accepts_an_offer_records_no_phase_because_the_ledger_decides(staged_registry):
+    """What they said before accepting may answer several stages; the code reads which from the
+    reported stages, so whatever step the reply names is not recorded."""
     running = {"accepted_this_turn": True, "framework_running": True,
                "current_framework_id": "abcde", "current_phase": "offering"}
-    second = reply(state=TechniqueState(technique="abcde", step="belief"))
-    assert check(registry, second, **running).phase == "belief"
-
     third = reply(state=TechniqueState(technique="abcde", step="consequence"))
-    assert check(registry, third, **running).phase == "belief"
+    checked = check(staged_registry, third, **running)
+    assert checked.framework_id == "abcde"
+    assert checked.phase is None
+    assert checked.notes == []
 
 
-def test_a_skipped_phase_is_corrected_rather_than_regenerated(registry):
-    jumped = reply(state=TechniqueState(technique="thought_reframing", step="land"))
-    checked = check(registry, jumped, current_framework_id="thought_reframing",
-                    current_phase="offering")
-    assert checked.phase == "surface"
-    assert checked.notes == ["corrected the reported stage: skipped surface, externalize, explore"]
+def test_a_step_before_the_last_own_phase_records_nothing_and_is_not_corrected(staged_registry):
+    running = {"framework_running": True, "current_framework_id": "abcde", "current_phase": "activate"}
+    jumped = reply(state=TechniqueState(technique="abcde", step="consequence"))
+    checked = check(staged_registry, jumped, **running)
+    assert (checked.framework_id, checked.phase, checked.notes) == ("abcde", None, [])
 
 
-def test_a_technique_appearing_mid_flow_is_pulled_back_to_offering(registry):
+def test_a_skipped_ending_phase_is_corrected_rather_than_regenerated(staged_registry):
+    jumped = reply(state=TechniqueState(technique="abcde", step="somatic_practice"))
+    checked = check(staged_registry, jumped, framework_running=True,
+                    current_framework_id="abcde", current_phase="closing")
+    assert checked.phase == "somatic_checkin"
+    assert checked.notes == ["corrected the reported stage: skipped somatic_checkin"]
+
+
+@pytest.mark.parametrize("step", ["belief", "offering", "vibing"])
+def test_from_the_last_own_phase_on_a_step_before_it_holds_the_stored_phase(staged_registry, step):
+    stepped_back = reply(state=TechniqueState(technique="abcde", step=step))
+    checked = check(staged_registry, stepped_back, framework_running=True,
+                    current_framework_id="abcde", current_phase="somatic_checkin")
+    assert checked.phase == "somatic_checkin"
+    assert checked.framework_id == "abcde"
+
+
+def test_a_technique_appearing_mid_flow_records_no_phase_and_keeps_the_framework(staged_registry):
     straight_in = reply(state=TechniqueState(technique="abcde", step="belief"))
-    assert check(registry, straight_in).phase == "offering"
+    checked = check(staged_registry, straight_in)
+    assert (checked.framework_id, checked.phase) == ("abcde", None)
 
 
 def test_state_for_an_unknown_technique_is_ignored(registry):
@@ -318,3 +347,73 @@ def test_a_kept_ending_drops_a_technique_button_because_the_turn_retires(ending_
     assert checked.ending is guards.Ending.CHOICE
     assert [p.label for p in checked.prompts] == ["Tell me about this"]
     assert "dropped a technique button: this turn declines or retires an offer" in checked.notes
+
+
+def stages(*pairs: tuple[str, str]) -> TechniqueState:
+    return TechniqueState(
+        technique="abcde", step="activate",
+        stages=[StageReport(stage=stage, status=status) for stage, status in pairs],
+    )
+
+
+RUNNING = {"framework_running": True, "current_framework_id": "abcde", "current_phase": "activate"}
+
+
+def test_reported_stages_are_kept_by_id_with_their_status(staged_registry):
+    checked = check(staged_registry, reply(state=stages(
+        ("activate", "known"), ("belief", "partial"), ("consequence", "missing"),
+    )), **RUNNING)
+    assert checked.stages == {
+        "activate": StageStatus.KNOWN, "belief": StageStatus.PARTIAL, "consequence": StageStatus.MISSING,
+    }
+    assert checked.notes == []
+
+
+def test_a_status_is_normalised_like_a_response_shape(staged_registry):
+    checked = check(staged_registry, reply(state=stages(("activate", " Known "))), **RUNNING)
+    assert checked.stages == {"activate": StageStatus.KNOWN}
+
+
+def test_a_stage_listed_twice_takes_its_last_entry(staged_registry):
+    checked = check(staged_registry, reply(state=stages(
+        ("belief", "known"), ("belief", "missing"),
+    )), **RUNNING)
+    assert checked.stages == {"belief": StageStatus.MISSING}
+
+
+@pytest.mark.parametrize(
+    ("entry", "reason"),
+    [
+        (("closing", "known"), "not a stage of the framework"),
+        (("offering", "known"), "not a stage of the framework"),
+        (("somatic_checkin", "known"), "not a stage of the framework"),
+        (("invented", "known"), "not a stage of the framework"),
+        (("belief", "passed"), "status not on the list"),
+        (("belief", "Done"), "status not on the list"),
+    ],
+)
+def test_a_stage_report_that_cannot_be_stored_costs_the_entry_and_leaves_a_note_with_only_the_reason(
+    staged_registry, entry, reason
+):
+    checked = check(staged_registry, reply(state=stages(("activate", "known"), entry)), **RUNNING)
+    assert checked.stages == {"activate": StageStatus.KNOWN}
+    assert checked.notes == [f"dropped a stage report: {reason}"]
+
+
+def test_no_reported_stages_is_none_not_empty(staged_registry):
+    checked = check(staged_registry, reply(state=TechniqueState(technique="abcde", step="activate")), **RUNNING)
+    assert checked.stages is None
+
+
+def test_stages_in_a_state_that_is_ignored_are_dropped_with_it():
+    registry = Registry([STAGED, REFRAMING])
+    other = reply(state=TechniqueState(
+        technique="thought_reframing", step="surface",
+        stages=[StageReport(stage="surface", status="known")],
+    ))
+    assert check(registry, other, **RUNNING).stages is None
+    unknown = reply(state=TechniqueState(
+        technique="somatic_release", step="offering",
+        stages=[StageReport(stage="activate", status="known")],
+    ))
+    assert check(registry, unknown, **RUNNING).stages is None

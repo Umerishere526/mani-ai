@@ -56,11 +56,10 @@ the same change as the work.**
   1. The deterministic safety screen (`safety.py`) runs before anything else. An explicit statement locks
      the thread with no model call. An indirect one (including passive ideation and "pills in my hand")
      is a concern: it suspends frameworks and offers without locking.
-  2. The router (`router.py`) shortlists every framework their messages show signs of, ranked, with the
-     distinction rules from each framework file (`activation.distinctions`) reordering them. A message older
-     than the recency weights (`tuning`) keeps the last one, so a sign stays while its message is in the history
-     window. The shortlist is the set Mani may offer from, sent as ids only. A framework their words rule
-     out (`never_offer_when_said`) is taken off it and named in `[ctx]` as `ruled_out`.
+  2. The grief veto (`vetoes.py`) rules a framework out when their words say it does not fit: a phrase of its
+     `never_offer_when_said`, said as whole words anywhere in the context window, names it in `[ctx]` as
+     `ruled_out`. Nothing else in code decides which set may be offered; the model judges that from the
+     Framework Index (spec 0011).
   3. `context.py` builds the `[ctx]` block: style, offer timing, the stage in progress, and the lines Mani
      may say word for word (`clarification_lines` while nothing runs, `after_framework_questions` after a
      framework ended), as keys from `CTX_KEYS` and values only. The code does not label what the person
@@ -73,9 +72,9 @@ the same change as the work.**
      words are not edited.
   6. Crisis, the reply, the framework state and the summary are written together.
 - **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): six, each reviewed against the
-  client's specification. An offer may come from the person's second message, of a set on the shortlist
-  once Mani has learned what its Starts when line names. There is no nearest fit: a conversation whose words
-  match no phrase list is offered nothing. The seed appends `somatic_checkin` and `somatic_practice`
+  client's specification. An offer may come from the person's second message, of any set the model judges
+  fits, once Mani has learned what its Starts when line names. There is no nearest fit and no urgent case:
+  DBT STOP waits for the second message like the others. The seed appends `somatic_checkin` and `somatic_practice`
   (`techniques.ENDING_PHASES`) to every framework's phases.
   The ending is rules in `mani_base.md`'s `ending` section (spec 0009): on the last own stage Mani asks
   how they feel, offers a short body check, guides it one step per reply with steps it picks, and asks
@@ -130,22 +129,23 @@ the same change as the work.**
 - **The reply goes out as the model wrote it.** Code after the call only guards what is stored or sent to the
   app (`mani/chat/guards.py`: unknown ids, stage order, library sections, buttons that would overwrite a
   decline or a retirement, an `ending` set outside the ending). Offer timing is told in
-  `[ctx]`, not enforced, and the grief veto is told as `ruled_out` and keeps the framework off the shortlist.
+  `[ctx]`, not enforced, and the grief veto is told as `ruled_out`.
 - **The ending is ended by the model's `ending` field, and the code never reads words to drive it** (spec
   0009). `choice` and `keep_talking` retire the framework; Chat More / Go to Library are written by the
   code on `choice` only; no code edits the reply or matches a message or reply to decide buttons, state or
   retirement. A 12 message cap (`tuning` `ending_turn_cap`, `ending_from`) is the backstop. Held by
   `test_turn.py`'s ending tests and `test_guards.py`.
-- **Mani offers only a set on `framework_shortlist`, once it has learned what its Starts when line names,
-  and only when `cooldown_passed: yes`** (spec 0007). The rule is told in `mani_base.md` and
-  `response_format.md`, never enforced after the call; each offer is logged with `on_shortlist` and
-  `cooldown_passed`. There is no closest fit. Every reply before an offer asks one question.
+- **The model judges which set fits, from the Framework Index; code only vetoes** (spec 0011).
+  Mani offers a set once it has learned what its Starts when line names and only when
+  `cooldown_passed: yes`, never one `ruled_out` names. The rule is told in `mani_base.md` and
+  `response_format.md`, never enforced after the call; each offer is logged by id with `cooldown_passed`.
+  There is no closest fit and no phrase list for what fits. Every reply before an offer asks one question.
 - **No sentence the model reads is written in `backend/mani/`** (spec 0007). Python sends keys
   (`context.CTX_KEYS`), headings (`composer.LAYER_HEADINGS`) and data, the prompts explain them, and
   `tests/unit/test_prompt_contract.py` ties the two in both directions. The reply schemas carry no
   descriptions; field meanings live in `response_format.md` `fields` and in each call's prompt. The reply
   shapes live only in `mani_base.md` `reply_shapes` (`Config.reply_shapes`; migration 019 dropped the
-  database check), and the router's distinction rules in each framework file's `activation.distinctions`.
+  database check), and the grief veto's phrases in `behavioral_activation.md`'s `activation.never_offer_when_said`.
 - **The lines Mani sends without the model live in the `replies` row, and the numbers that shape a
   conversation in the `tuning` row** (spec 0008). Both are required rows of `admin.prompts`, never sent to
   a model, with no default in code. `content_problem` in `mani/prompts/checks.py` checks them at seed, on
@@ -156,7 +156,7 @@ the same change as the work.**
 - **Memory is per person**.
 - Also settled: OpenRouter only, asyncpg not PostgREST, the
   `public` and `admin` split, the `mani_service` role, three security definer write functions, the
-  deterministic safety screen as the only thing that locks a thread, in process routing, no streaming.
+  deterministic safety screen as the only thing that locks a thread, no streaming.
 - **The base prompt is short rules the model reasons from, not scripts.** No word lists and no example
   conversations. The only lines the model says word for word are the clarification lines and the after
   framework questions, sent in `[ctx]` from the `replies` row, and the model tracks which it has already
@@ -202,9 +202,9 @@ Ordered by what breaks first.
 ## Open decisions for muhammad
 
 - Crisis resources, `PROTOCOLS` and `CLARIFICATION` wording (point 3 above).
-- Tell the client that Mani now offers only a set the router found signs of, so someone whose words match no
-  phrase list is never offered one, which replaced their offer cadence, and have them read about five real
-  Supportive and Reflective transcripts.
+- Tell the client that Mani no longer matches phrases to decide what to offer, so a plain sentence can be
+  offered a fitting set, and that DBT STOP waits for the second message like the others; have them read
+  about five real Supportive and Reflective transcripts.
 - Tell the client: when a person asks Mani to pick, it offers one small draft step to accept
   or change, which the Behavioral Activation specification's "must not choose the activity" does not allow
   as written.
@@ -242,10 +242,14 @@ Ordered by what breaks first.
 - **Spec 0007 deploys in order: migration 019, then the seed, then the code.** Deployed before the seed, the
   model gets no field descriptions and no stage rules until it runs. Hosted waits on the 011 to 017
   reconciliation above like the rest. The portal skips the seed's checks, so a `mani_base` edit that breaks
-  `reply_shapes` drops every shape and a broken distinction is dropped, both only visible in the logs.
-- **Offers under the shortlist gate are unmeasured.** Spec 0007 shipped on unit and contract tests, with no
-  real run. Measure offers per conversation, offers off the shortlist and offers before the cooldown under
-  feature 11, and grow the phrase lists from conversations where an offer fitted but never came.
+  `reply_shapes` drops every shape and a broken `never_offer_when_said` is ignored, both only visible in the logs.
+- **Spec 0011 deploys the other way round: the seed, then the code.** The `tuning` row loses its `router`
+  block and `Tuning` refuses unknown keys, so new code on the old row fails on its first load, and old code
+  on the new row fails when its cached snapshot next expires (300 seconds in production). Hosted waits on
+  the 011 to 017 reconciliation above like the rest.
+- **Offers on plain phrasing are unmeasured.** Specs 0007 and 0011 shipped on unit and contract tests, with
+  no real run. Measure offers per conversation, offers where a Skip when line applied and offers before the
+  cooldown under feature 11, with muhammad's yes for each real run.
 - **Migration numbers were reused across the reverted branches.** `011` was both
   `technique_state_holds` and `technique_outcome_stopped`; `013` was both `llm_call_decision` and
   `llm_call_facts`. Reviving any of those branches collides again.

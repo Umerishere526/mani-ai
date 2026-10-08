@@ -11,9 +11,9 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import context, guards, router, safety
+from mani.chat import context, guards, ledger, safety, vetoes
 from mani.chat.greeting import CHAT_MORE_LABEL, GO_TO_LIBRARY_LABEL, greeting, style_options
-from mani.chat.techniques import ENDING_PHASES
+from mani.chat.techniques import ENDING_PHASES, OFFERING
 from mani.config import get_settings
 from mani.db import (
     exercises as exercises_db,
@@ -253,7 +253,7 @@ async def send(
     # From here on `technique` means the framework that is live on this turn: offered and
     # awaiting an answer, or accepted and mid-way. A row that is finished (phase cleared) or
     # declined stays in the snapshot, because [ctx] measures the cooldown from it - but it
-    # is not running, so it must not strip technique buttons or keep the router switched off.
+    # is not running, so it must not strip technique buttons.
     if technique is not None and (
         technique.phase is None
         or technique.outcome not in (TechniqueOutcome.OFFERED, TechniqueOutcome.ACCEPTED)
@@ -265,10 +265,14 @@ async def send(
     offered_now = list(ctx.techniques_offered)
     outcome = technique.outcome if technique else None
     accepted_this_turn = False
+    # The framework the person said yes to this turn, which is the stored row's unless they tapped
+    # another one.
+    accepted_framework = technique.framework_id if technique else None
 
     if tapped and tapped.technique and tapped.technique in config.registry:
         outcome = TechniqueOutcome.ACCEPTED
         accepted_this_turn = True
+        accepted_framework = tapped.technique
         offered_now.append(tapped.technique)
     elif (
         tapped
@@ -285,7 +289,7 @@ async def send(
 
     # The deterministic screen runs on every turn, before the model is asked anything. It
     # costs nothing and cannot be skipped for budget reasons. Crisis short-circuits the model
-    # call entirely; concern only suppresses the router below, so the model still answers.
+    # call entirely; concern only holds back a framework, so the model still answers.
     assessment = safety.screen(content)
     if assessment.level is safety.Level.CRISIS:
         if (
@@ -304,40 +308,13 @@ async def send(
             updates=updates,
         )
 
-    # Read by the router and the grief veto below: everything they have said in the context
-    # window rather than only this turn.
+    # Read by the grief veto below: everything they have said in the context window rather than
+    # only this turn.
     user_texts = [m.content for m in history if m.role is MessageRole.USER] + [content]
 
     # What they said rules a framework out (early grief for Behavioral Activation). Told to the
-    # model in [ctx] and kept off the shortlist, so it is never offerable.
-    ruled_out = [
-        framework_id
-        for framework_id, activation in config.registry.activations.items()
-        if router.vetoes(activation, user_texts)
-    ]
-
-    # The router narrows the field it is not the caller's job to decide; the model still
-    # confirms whatever it offers, and guards.check still validates that choice against the
-    # registry. No model call, so a false or missing shortlist costs relevance, never safety.
-    shortlist: list[router.Signal] = []
-    urgent = router.urgent(user_texts, config.registry.distinctions)
-    if (
-        technique is None
-        and assessment.level is safety.Level.NONE
-        and (
-            ctx.thread.message_count // 2 >= tuning.router.router_min_exchanges
-            # An imminent action is the one case not worth waiting two exchanges on.
-            or urgent
-        )
-    ):
-        shortlist = [
-            signal
-            for signal in router.shortlist(
-                user_texts, config.registry.activations, config.registry.distinctions,
-                tuning.router,
-            )
-            if signal.framework_id not in ruled_out
-        ]
+    # model in [ctx], so it is never offered.
+    ruled_out = vetoes.ruled_out(config.registry.vetoes, user_texts)
 
     wants_title = (
         ctx.thread.message_count >= tuning.windows.title_after_messages and not ctx.thread.title
@@ -354,9 +331,9 @@ async def send(
 
     active_framework = config.registry.get(technique.framework_id) if technique else None
     prefix = context.build(
-        ctx, shortlist=shortlist, framework=active_framework,
+        ctx, framework=active_framework,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
-        framework_starting=accepted_this_turn, urgent=urgent, ruled_out=ruled_out,
+        framework_starting=accepted_this_turn, ruled_out=ruled_out,
         replies=config.replies, tuning=tuning,
     )
     for_model = (
@@ -419,6 +396,7 @@ async def send(
             outcome = TechniqueOutcome.ACCEPTED
             accepted_this_turn = True
             if offer.technique and offer.technique in config.registry:
+                accepted_framework = offer.technique
                 offered_now.append(offer.technique)
         else:
             # Carrying on past the offer is Keep chatting (muhammad, 2026-09-24), held here
@@ -440,6 +418,7 @@ async def send(
         technique = ctx.technique
         outcome = TechniqueOutcome.ACCEPTED
         accepted_this_turn = True
+        accepted_framework = technique.framework_id
         offered_now.append(technique.framework_id)
 
     checked = guards.check(
@@ -464,7 +443,8 @@ async def send(
             and config.registry.ending_open(technique.framework_id, technique.phase)
         ),
     )
-    if assessment.blocks_framework or model_concern:
+    concerned = assessment.blocks_framework or model_concern
+    if concerned:
         # A concern pauses the framework rather than ending it: nothing this reply reports
         # about a stage or an ending is applied, and it may not open a new one. The stored
         # state is left exactly as it was, so the framework resumes from there once the
@@ -477,6 +457,15 @@ async def send(
             ending=None,
             prompts=guards.without_offer(checked.prompts),
             notes=checked.notes + (["dropped the offer: a safety concern"] if paused else []),
+        )
+    running_state: TechniqueState | None = None
+    if outcome is TechniqueOutcome.ACCEPTED and not concerned:
+        running_state, checked = _running_state(
+            config.registry, ctx, reply, checked, technique,
+            framework_id=accepted_framework if accepted_this_turn else (
+                technique.framework_id if technique else None
+            ),
+            accepted_this_turn=accepted_this_turn, count_after=ctx.thread.message_count + 2,
         )
     retiring = capped or checked.ending is not None
     if retiring or any(
@@ -493,15 +482,12 @@ async def send(
                 checked, prompts=[], notes=checked.notes + ["dropped the buttons: the ending"]
             )
     if technique is None:
-        # The offer rule is told, not enforced, so this is how an offer off the shortlist or
-        # before the cooldown shows up: ids and flags only, never a word of what was said.
-        listed = [s.framework_id for s in shortlist]
-        passed = "yes" if context.cooldown_passed(ctx, tuning, urgent=urgent) else "no"
+        # The offer rule is told, not enforced, so this is how an offer before the cooldown shows
+        # up: ids and a flag only, never a word of what was said.
+        passed = "yes" if context.cooldown_passed(ctx, tuning) else "no"
         for offered in dict.fromkeys(p.technique for p in checked.prompts if p.technique):
             logger.info(
-                "offer on thread %s: %s on_shortlist: %s shortlist: %s cooldown_passed: %s",
-                ctx.thread.id, offered, "yes" if offered in listed else "no",
-                ", ".join(listed) or "none", passed,
+                "offer on thread %s: %s cooldown_passed: %s", ctx.thread.id, offered, passed,
             )
     if checked.notes:
         logger.info("checked reply on thread %s: %s", ctx.thread.id, "; ".join(checked.notes))
@@ -547,6 +533,11 @@ async def send(
             at_message_count=count_after,
         )
         updates.offer_frameworks.append(new_offer.technique)
+    elif running_state is not None:
+        updates.retire_technique = False
+        updates.technique = running_state
+        if accepted_this_turn:
+            updates.offer_frameworks.append(running_state.framework_id)
     elif (decided := _decided_framework(checked.framework_id, outcome, technique)) is not None:
         updates.retire_technique = False
         # Carried from the stored row, never moved forward and never cleared by a step back,
@@ -558,7 +549,9 @@ async def send(
             thread_id=ctx.thread.id,
             framework_id=decided,
             outcome=outcome,
-            phase=None if outcome is TechniqueOutcome.DECLINED else checked.phase,
+            # An offer they have not answered stays on the offering phase; the code, not the model's
+            # step, decides every stage after it.
+            phase=None if outcome is TechniqueOutcome.DECLINED else checked.phase or OFFERING,
             at_message_count=(
                 technique.at_message_count
                 if technique and outcome is not TechniqueOutcome.DECLINED
@@ -615,6 +608,65 @@ async def send(
         exercise=exercise,
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
     )
+
+
+def _running_state(
+    registry,
+    ctx: threads.TurnContext,
+    reply: Reply,
+    checked: guards.Checked,
+    technique: TechniqueState | None,
+    *,
+    framework_id: str | None,
+    accepted_this_turn: bool,
+    count_after: int,
+) -> tuple[TechniqueState | None, guards.Checked]:
+    """The row a turn writes while a framework runs, and the checked reply with the phase it records.
+
+    Before the framework's last own phase the stage comes from the ledger: what the reply reports of
+    each stage over what was stored, and the stage asked is the first not known. On the turn they say
+    yes the ledger starts empty, so the reply judges every stage against all they said before the
+    offer. From the last own phase on the ledger is as stored and the reported step moves through the
+    ending. None when the framework is not one the registry holds.
+    """
+    if framework_id is None or framework_id not in registry:
+        return None, checked
+    stored_phase = technique.phase if technique else None
+    accepting = accepted_this_turn or stored_phase == OFFERING
+    notes = list(checked.notes)
+    stored = technique.stage_ledger if technique else {}
+
+    if not accepting and registry.ending_open(framework_id, stored_phase):
+        stage_ledger = stored
+        phase = checked.phase or stored_phase
+    else:
+        stage_ledger = ledger.with_reported(
+            {} if accepting else ledger.stored_stages(registry, framework_id, stored),
+            checked.stages, notes,
+        )
+        phase = registry.stage_from_ledger(framework_id, stage_ledger)
+        if checked.stages is None:
+            notes.append("no stages reported on a running turn")
+        step = reply.state.step if reply.state and checked.framework_id else None
+        if not accepting and step in registry.ledger_stages(framework_id) and step != phase:
+            notes.append("the reported step differs from the stage the ledger gives")
+
+    # Carried from the stored row, never moved forward and never cleared by a step back, so the
+    # cap cannot be reset by stepping between the last own phase and the ending.
+    ending_from = technique.ending_from if technique else None
+    if ending_from is None and phase in ENDING_PHASES:
+        ending_from = count_after
+    state = TechniqueState(
+        thread_id=ctx.thread.id,
+        framework_id=framework_id,
+        outcome=TechniqueOutcome.ACCEPTED,
+        phase=phase,
+        at_message_count=technique.at_message_count if technique else count_after,
+        library_offered_since=False,
+        ending_from=ending_from,
+        stage_ledger=stage_ledger,
+    )
+    return state, dataclasses.replace(checked, phase=phase, notes=notes)
 
 
 async def _offer_exercise(
