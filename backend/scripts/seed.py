@@ -12,6 +12,7 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
+from mani.chat.router import distinction_problem, distinction_rules  # noqa: E402
 from mani.config import get_settings  # noqa: E402
 from mani.prompts.cache import parse_reply_shapes  # noqa: E402
 from mani.prompts.calls import CALL_PROMPTS, effort_problem  # noqa: E402
@@ -100,7 +101,7 @@ MAX_LINE = 220
 MAX_STAGES_LINE = 320
 # Everything else in the frontmatter is data only code reads: the phase machine and the router.
 FRAMEWORK_KEYS = {"id", "name", "summary", "display_order", "phases", "activation"}
-ACTIVATION_KEYS = {"strong_signals", "signals", "redirects", "never_offer_when_said"}
+ACTIVATION_KEYS = {"strong_signals", "signals", "redirects", "never_offer_when_said", "distinctions"}
 _STAGE = re.compile(r"(\S+) \((.+)\)")
 
 
@@ -158,6 +159,12 @@ def parse_framework(path: pathlib.Path) -> dict:
     activation = meta.get("activation") or {}
     if extra := sorted(set(activation) - ACTIVATION_KEYS):
         raise ValueError(f"{path.name}: activation keys not allowed: {', '.join(extra)}")
+    distinctions = activation.get("distinctions", [])
+    if not isinstance(distinctions, list):
+        raise ValueError(f"{path.name}: activation distinctions is not a list")
+    for entry in distinctions:
+        if problem := distinction_problem(entry):
+            raise ValueError(f"{path.name}: {problem}")
     lines = _framework_lines(path.name, body, meta["phases"])
     return {
         "id": meta["id"],
@@ -172,6 +179,19 @@ def parse_framework(path: pathlib.Path) -> dict:
         # A framework's own stages carry no block: the seed adds only the somatic ones.
         "stages": {},
     }
+
+
+def check_distinctions(frameworks: list[dict]) -> None:
+    """Refuse distinctions that only make sense across files: a priority used twice, an `over`
+    naming an unknown framework or its own, or more than one rule with an empty `over`.
+
+    The router's own builder decides, so the seed refuses exactly what the registry would drop.
+    """
+    _, problems = distinction_rules(
+        {f["id"]: f["activation"].get("distinctions", []) for f in frameworks}
+    )
+    if problems:
+        raise ValueError("; ".join(problems))
 
 
 async def seed() -> None:
@@ -190,6 +210,7 @@ async def seed() -> None:
 
             # Every file is checked before any is written, so a refusal leaves nothing half seeded.
             frameworks = [parse_framework(path) for path in framework_files]
+            check_distinctions(frameworks)
             for framework in frameworks:
                 # Append the shared somatic route after each framework's own phases. The files
                 # end at `closing`, and this is rebuilt from the file every run, so appending is

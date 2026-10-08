@@ -47,6 +47,18 @@ activation:
       instead: act_choice_point
     - signal: "I am about to send a message I will regret."
       instead: dbt_stop
+  # The router's distinction rules, preferring this framework over the ones in `over`.
+  distinctions:
+    - name: does not know what to do
+      priority: 4
+      phrases:
+        - "do not know what to do"
+        - "do not know where to begin"
+        - "do not know which option"
+        - "do not even know where to begin"
+        - "need to make a decision"
+        - "keep changing my mind"
+      over: [behavioral_activation]
 ---
 Starts when: you have learned the one practical problem, that a decision or action could change it, and that they do not know what to do, rather than knowing and not starting.
 Sounds like: "I do not know what to do", "I need to make a decision", "every choice has a downside", "I do not know where to start", too many things at once.

@@ -27,6 +27,30 @@ activation:
     - "react this way"
     - "need help stopping myself"
     - "cannot think before i respond"
+  # The router's distinction rules, preferring this framework. A rule with no `over` is the
+  # urgency rule: an imminent regrettable action puts this framework first whatever else scored.
+  distinctions:
+    - name: an action is imminent
+      priority: 1
+      phrases:
+        - "about to send"
+        - "about to post"
+        - "about to call"
+        - "about to say something"
+        - "about to quit"
+        - "about to make this purchase"
+        - "about to lose it"
+        - "want to send it"
+        - "before i send"
+        - "have not sent it"
+        - "already wrote the email"
+        - "i am quitting today"
+        - "ending the relationship right now"
+        - "need to confront her right now"
+        - "want to call her right now"
+        - "keep typing and deleting"
+        - "help stopping myself"
+      over: []
 ---
 Starts when: you have learned what they are about to do, that it has not happened yet, and that it can safely wait a moment, with no one at risk.
 Sounds like: "I am about to send a message", "I am about to lose it", "I will tell them exactly what I think", "I will regret it", typing and deleting.

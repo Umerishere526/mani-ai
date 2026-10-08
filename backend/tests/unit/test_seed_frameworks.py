@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.seed import FRAMEWORKS_DIR, parse_framework
+from scripts.seed import FRAMEWORKS_DIR, check_distinctions, parse_framework
 
 FRONTMATTER = """---
 id: abcde
@@ -105,3 +105,51 @@ def test_every_shipped_framework_is_eight_lines_with_only_code_data_beside_them(
     assert len(files) == 6
     for path in files:
         assert len(parse_framework(path)["body"].split("\n")) == 8, path.name
+
+
+RULE = '  distinctions:\n    - {name: a rule, priority: 1, phrases: ["so i must be"], over: []}\n'
+
+
+@pytest.mark.parametrize(
+    ("rule", "reason"),
+    [
+        (RULE.replace("over: []", "over: [], prefer: abcde"), "distinction keys not allowed: prefer"),
+        (RULE.replace('["so i must be"]', "[]"), "a rule: phrases must be a non empty list"),
+        (RULE.replace('["so i must be"]', '["so i must be", ""]'), "a rule: phrases must be a non empty list"),
+        (RULE.replace("priority: 1", "priority: 0"), "a rule: priority must be a positive whole number"),
+        (RULE.replace("priority: 1", "priority: 1.5"), "a rule: priority must be a positive whole number"),
+        (RULE.replace("over: []", "over: [], standalone: maybe"), "a rule: standalone must be true or false"),
+    ],
+)
+def test_a_distinction_that_cannot_be_a_rule_is_refused_with_the_file(tmp_path, rule, reason):
+    frontmatter = FRONTMATTER.replace("\n---\n", "\n" + rule.rstrip("\n") + "\n---\n")
+    with pytest.raises(ValueError, match=f"abcde.md: {reason}"):
+        parse_framework(write(tmp_path, frontmatter=frontmatter))
+
+
+def _framework(fid: str, *distinctions: dict) -> dict:
+    return {"id": fid, "activation": {"distinctions": list(distinctions)}}
+
+
+def _rule(priority: int, over: list[str], name: str = "r") -> dict:
+    return {"name": name, "priority": priority, "phrases": ["p"], "over": over}
+
+
+@pytest.mark.parametrize(
+    ("frameworks", "reason"),
+    [
+        ([_framework("abcde", _rule(1, ["dbt_stop"]), _rule(1, ["dbt_stop"], "s")), _framework("dbt_stop")],
+         "abcde: s: priority 1 is used twice"),
+        ([_framework("abcde", _rule(1, ["nowhere"]))], "abcde: r: over names nowhere, which is unknown or its own"),
+        ([_framework("abcde", _rule(1, ["abcde"]))], "abcde: r: over names abcde, which is unknown or its own"),
+        ([_framework("abcde", _rule(1, [])), _framework("dbt_stop", _rule(2, [], "s"))],
+         "dbt_stop: s: a second rule with an empty over"),
+    ],
+)
+def test_distinctions_that_clash_across_files_are_refused_before_anything_is_written(frameworks, reason):
+    with pytest.raises(ValueError, match=reason):
+        check_distinctions(frameworks)
+
+
+def test_the_shipped_distinctions_are_accepted():
+    check_distinctions([parse_framework(path) for path in sorted(FRAMEWORKS_DIR.glob("*.md"))])

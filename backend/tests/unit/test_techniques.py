@@ -122,3 +122,21 @@ def test_nothing_unrecognised_ever_counts_as_finished(registry):
     assert not registry.is_final("abcde", "made_up")
     assert not registry.is_final("abcde", None)
     assert not registry.is_final(None, "ground")
+
+
+def test_a_rule_a_portal_edit_broke_is_dropped_with_an_error_and_the_rest_still_route(caplog):
+    """The portal skips the seed's checks, so the registry keeps a turn running without the rule."""
+    def rule(name: str, priority: int) -> dict:
+        return {"name": name, "priority": priority, "phrases": ["p"], "over": ["abcde"]}
+
+    stop = STOP.model_copy(update={"activation": {"distinctions": [
+        rule("later", 3), rule("broken", 0), rule("earlier", 2),
+    ]}})
+    with caplog.at_level("ERROR", logger="mani.chat.techniques"):
+        registry = Registry([ABCDE, stop])
+
+    assert [r.name for r in registry.distinctions] == ["earlier", "later"]
+    assert [r.prefer for r in registry.distinctions] == ["dbt_stop", "dbt_stop"]
+    assert [rec.getMessage() for rec in caplog.records] == [
+        "framework distinction dropped: dbt_stop: broken: priority must be a positive whole number"
+    ]

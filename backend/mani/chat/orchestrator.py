@@ -399,7 +399,7 @@ async def send(
     # registry. No model call, so a false or missing shortlist costs relevance, never safety.
     shortlist: list[router.Signal] = []
     candidate = None
-    urgent = router.urgent(user_texts)
+    urgent = router.urgent(user_texts, config.registry.distinctions)
     if (
         technique is None
         and assessment.level is safety.Level.NONE
@@ -411,7 +411,9 @@ async def send(
     ):
         shortlist = [
             signal
-            for signal in router.shortlist(user_texts, config.registry.activations)
+            for signal in router.shortlist(
+                user_texts, config.registry.activations, config.registry.distinctions
+            )
             if signal.framework_id not in ruled_out
         ]
         # The closest fit is owed now, so the top of the shortlist is offered even when the

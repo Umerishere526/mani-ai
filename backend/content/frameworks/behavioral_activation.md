@@ -51,6 +51,22 @@ activation:
       instead: dbt_stop
     - signal: "I cannot change the situation, but I need to decide how to respond."
       instead: act_choice_point
+  # The router's distinction rules, preferring this framework over the ones in `over`. Not
+  # standalone: "cannot begin" is also "cannot begin to tell you", so it only reorders.
+  distinctions:
+    - name: knows what to do but cannot begin
+      priority: 3
+      phrases:
+        - "know what to do but"
+        - "know what i need to do but"
+        - "cannot make myself"
+        - "cannot get myself to begin"
+        - "cannot start"
+        - "cannot begin"
+        - "difficulty beginning"
+        - "no motivation"
+        - "when i feel ready"
+      over: [structured_problem_solving]
 ---
 Starts when: you have learned what they have stopped or avoid doing, that they know what they could do but cannot begin, and what gets in the way, with no physical cause or recent death behind it.
 Sounds like: "but I cannot start", "in bed all day", "I stopped answering", "I cannot make myself", "waiting to feel ready", plans cancelled and days without structure.

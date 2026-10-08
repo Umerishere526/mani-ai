@@ -3,10 +3,14 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from mani.chat.router import Rule, distinction_rules
 from mani.models.rows import Framework
+
+logger = logging.getLogger(__name__)
 
 # Every framework opens by offering itself. The schema enforces it; the machine relies
 # on it to tell "nothing started" apart from "started at the beginning".
@@ -48,6 +52,13 @@ class Registry:
 
     def __init__(self, frameworks: list[Framework]) -> None:
         self._by_id = {f.id: f for f in frameworks}
+        # Built once per load. The seed refuses a broken rule, but a portal edit skips the seed,
+        # so a rule that breaks one here is logged and dropped and the rest still route.
+        self._distinctions, problems = distinction_rules(
+            {f.id: (f.activation or {}).get("distinctions", []) for f in frameworks}
+        )
+        for problem in problems:
+            logger.error("framework distinction dropped: %s", problem)
 
     def __contains__(self, framework_id: object) -> bool:
         return framework_id in self._by_id
@@ -63,6 +74,11 @@ class Registry:
     def activations(self) -> dict[str, dict]:
         """Every framework's routing data, keyed by id - the router's whole input."""
         return {fid: f.activation for fid, f in self._by_id.items()}
+
+    @property
+    def distinctions(self) -> list[Rule]:
+        """The routing rules every framework's distinctions make, ordered by priority."""
+        return self._distinctions
 
     def get(self, framework_id: str | None) -> Framework | None:
         return self._by_id.get(framework_id) if framework_id else None

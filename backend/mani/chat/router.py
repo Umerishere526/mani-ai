@@ -30,7 +30,7 @@ CONFIDENT_MARGIN = 1.0
 # question before it names a framework.
 MIN_CORROBORATION = 2
 
-# A framework promoted by a discriminator but with no phrase match of its own still needs a
+# A framework promoted by a distinction but with no phrase match of its own still needs a
 # score, or it sorts below frameworks that matched one incidental phrase.
 PROMOTED_FLOOR = 1.5
 
@@ -85,80 +85,81 @@ class Rule:
         return not self.over
 
 
-# Ordered. Taken from "Important Framework Distinctions" and each framework's own section 9.
-# ponytail: five named clinical rules, in code rather than data. A seventh framework needing its
-# own distinction is a code change - move these into admin.frameworks.activation if that happens
-# more than once.
-DISCRIMINATORS: tuple[Rule, ...] = (
-    Rule(
-        name="an action is imminent",
-        phrases=(
-            "about to send", "about to post", "about to call", "about to say something",
-            "about to quit", "about to make this purchase", "about to lose it",
-            "want to send it", "before i send", "have not sent it", "already wrote the email",
-            "i am quitting today", "ending the relationship right now",
-            "need to confront her right now", "want to call her right now",
-            "keep typing and deleting", "help stopping myself",
-        ),
-        prefer="dbt_stop",
-    ),
-    Rule(
-        name="the outcome cannot be controlled",
-        phrases=(
-            "cannot control", "can not control", "cannot change what happened",
-            "cannot make them", "cannot make my family", "may never receive an apology",
-            "cannot make the uncertainty go away", "nothing i can do to change",
-            "do not want it deciding how i act", "do not want this fear making my decisions",
-        ),
-        prefer="act_choice_point",
-        over=("thought_reframe", "abcde", "structured_problem_solving"),
-        standalone=True,
-    ),
-    Rule(
-        name="knows what to do but cannot begin",
-        phrases=(
-            "know what to do but", "know what i need to do but", "cannot make myself",
-            "cannot get myself to begin", "cannot start", "cannot begin",
-            "difficulty beginning", "no motivation", "when i feel ready",
-        ),
-        prefer="behavioral_activation",
-        over=("structured_problem_solving",),
-    ),
-    Rule(
-        name="does not know what to do",
-        phrases=(
-            "do not know what to do", "do not know where to begin",
-            "do not know which option", "do not even know where to begin",
-            "need to make a decision", "keep changing my mind",
-        ),
-        prefer="structured_problem_solving",
-        over=("behavioral_activation",),
-    ),
-    Rule(
-        name="a specific event triggered the belief",
-        phrases=(
-            # Not "she said" or "my manager": mentioning a person is not an activating
-            # event, and those lifted ABCDE in nearly any conversation that had one in it.
-            "criticized", "criticised", "in front of the team", "what happened was",
-            "after that i", "so i must be", "which proves", "it proved",
-        ),
-        prefer="abcde",
-        over=("thought_reframe",),
-    ),
-    Rule(
-        # Both specifications claim the same events (an unanswered message, a mistake); what
-        # separates the deeper framework is the person asking to understand, so the ask
-        # alone is enough to offer it.
-        name="asks to understand why it affected them",
-        phrases=(
-            "want to understand why", "affected me so strongly", "affected me so much",
-            "why it hit me so hard",
-        ),
-        prefer="abcde",
-        over=("thought_reframe",),
-        standalone=True,
-    ),
-)
+# The fields of one distinction in a framework file's `activation.distinctions`. The framework
+# that holds it is the one the rule prefers.
+DISTINCTION_KEYS = frozenset({"name", "priority", "phrases", "over", "standalone"})
+
+
+def distinction_problem(entry: object) -> str | None:
+    """Why one distinction entry, on its own, cannot be a rule, or None when it can."""
+    if not isinstance(entry, dict):
+        return "a distinction is not a map"
+    if extra := sorted(set(entry) - DISTINCTION_KEYS):
+        return f"distinction keys not allowed: {', '.join(map(str, extra))}"
+    name = entry.get("name")
+    if not isinstance(name, str) or not name.strip():
+        return "a distinction has no name"
+    phrases = entry.get("phrases")
+    if not isinstance(phrases, list) or not phrases or not all(
+        isinstance(p, str) and p.strip() for p in phrases
+    ):
+        return f"{name}: phrases must be a non empty list of non empty strings"
+    priority = entry.get("priority")
+    if isinstance(priority, bool) or not isinstance(priority, int) or priority < 1:
+        return f"{name}: priority must be a positive whole number"
+    over = entry.get("over", [])
+    if not isinstance(over, list) or not all(isinstance(fid, str) for fid in over):
+        return f"{name}: over must be a list of framework ids"
+    if not isinstance(entry.get("standalone", False), bool):
+        return f"{name}: standalone must be true or false"
+    return None
+
+
+def distinction_rules(distinctions: dict[str, list]) -> tuple[list[Rule], list[str]]:
+    """The rules every framework's distinctions make, ordered by priority, and why any were left out.
+
+    `distinctions` maps a framework id to its `activation.distinctions` list. A rule is left out
+    when it is malformed, names an unknown framework or its own in `over`, reuses a priority
+    already taken, or is a second rule with an empty `over`. The seed refuses on any reason; the
+    registry logs them and keeps the rest, so a portal edit that skipped the seed still routes.
+    """
+    problems: list[str] = []
+    entries: list[tuple[int, Rule]] = []
+    for framework_id, listed in distinctions.items():
+        if not isinstance(listed, list):
+            problems.append(f"{framework_id}: distinctions is not a list")
+            continue
+        for entry in listed:
+            if problem := distinction_problem(entry):
+                problems.append(f"{framework_id}: {problem}")
+                continue
+            over = tuple(entry.get("over", []))
+            if bad := [fid for fid in over if fid == framework_id or fid not in distinctions]:
+                problems.append(
+                    f"{framework_id}: {entry['name']}: over names {', '.join(bad)}, "
+                    "which is unknown or its own"
+                )
+                continue
+            entries.append((entry["priority"], Rule(
+                name=entry["name"],
+                phrases=tuple(entry["phrases"]),
+                prefer=framework_id,
+                over=over,
+                standalone=entry.get("standalone", False),
+            )))
+
+    rules: list[Rule] = []
+    taken: set[int] = set()
+    for priority, rule in sorted(entries, key=lambda e: e[0]):
+        if priority in taken:
+            problems.append(f"{rule.prefer}: {rule.name}: priority {priority} is used twice")
+            continue
+        if rule.absolute and any(r.absolute for r in rules):
+            problems.append(f"{rule.prefer}: {rule.name}: a second rule with an empty over")
+            continue
+        taken.add(priority)
+        rules.append(rule)
+    return rules, problems
 
 
 def _score_one(activation: dict, messages: list[str]) -> tuple[float, list[str], int]:
@@ -205,14 +206,14 @@ def vetoes(activation: dict, messages: list[str]) -> list[str]:
 
 
 def _fired(rule: Rule, messages: list[str]) -> bool:
-    """Whether a discriminator's phrases appear in the two most recent user messages."""
+    """Whether a distinction's phrases appear in the two most recent user messages."""
     recent = [normalize(t) for t in messages[-2:]]
     return any(_says(normalize(phrase), text) for text in recent for phrase in rule.phrases)
 
 
-def urgent(messages: list[str]) -> bool:
+def urgent(messages: list[str], rules: list[Rule]) -> bool:
     """Whether the absolute rule fires - an imminent action, which is not worth waiting on."""
-    return any(rule.absolute and _fired(rule, messages) for rule in DISCRIMINATORS)
+    return any(rule.absolute and _fired(rule, messages) for rule in rules)
 
 
 def _promote(signals: list[Signal], rule: Rule) -> list[Signal]:
@@ -267,6 +268,7 @@ def _promote(signals: list[Signal], rule: Rule) -> list[Signal]:
 def shortlist(
     messages: list[str],
     activations: dict[str, dict],
+    rules: list[Rule],
     *,
     limit: int = DEFAULT_LIMIT,
 ) -> list[Signal]:
@@ -277,7 +279,8 @@ def shortlist(
     identifier in the database.
 
     `messages` are the person's own messages, oldest first. `activations` maps a framework id to
-    its `admin.frameworks.activation` payload, so adding a framework stays a content change.
+    its `admin.frameworks.activation` payload, and `rules` are the distinctions those payloads
+    carry, ordered by priority, so adding a framework stays a content change.
     """
     if not messages or not activations:
         return []
@@ -290,11 +293,11 @@ def shortlist(
     ]
     scored.sort(key=lambda s: (-s.score, s.framework_id))
 
-    # DISCRIMINATORS is ordered by priority, so a later rule must not undo an earlier one.
+    # The rules are ordered by priority, so a later rule must not undo an earlier one.
     # Without this, a person who says "I do not know where to begin" and then "I know what to
     # do but cannot make myself start" is routed by whichever rule happens to run last.
     settled: set[str] = set()
-    for rule in DISCRIMINATORS:
+    for rule in rules:
         if rule.prefer not in activations or not _fired(rule, messages):
             continue
         if any(framework_id in settled for framework_id in rule.over):

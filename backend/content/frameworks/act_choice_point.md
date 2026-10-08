@@ -37,6 +37,23 @@ activation:
       instead: structured_problem_solving
     - signal: "I know what I want to do, but I cannot begin."
       instead: behavioral_activation
+  # The router's distinction rules, preferring this framework over the ones in `over`.
+  distinctions:
+    - name: the outcome cannot be controlled
+      priority: 2
+      phrases:
+        - "cannot control"
+        - "can not control"
+        - "cannot change what happened"
+        - "cannot make them"
+        - "cannot make my family"
+        - "may never receive an apology"
+        - "cannot make the uncertainty go away"
+        - "nothing i can do to change"
+        - "do not want it deciding how i act"
+        - "do not want this fear making my decisions"
+      over: [thought_reframe, abcde, structured_problem_solving]
+      standalone: true
 ---
 Starts when: you have learned what they cannot change, the thought or feeling that stays, what it pulls them toward, and that they want to choose how to respond, not to solve or disprove it.
 Sounds like: "I cannot change what happened", "I cannot make them", "this thought may never go away", "I do not want it making my decisions".

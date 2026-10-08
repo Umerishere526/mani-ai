@@ -41,6 +41,34 @@ activation:
       instead: structured_problem_solving
     - signal: "I cannot control what happened, but I do not want it directing my choices."
       instead: act_choice_point
+  # The router's distinction rules, preferring this framework over the ones in `over`.
+  distinctions:
+    - name: a specific event triggered the belief
+      priority: 5
+      # Not "she said" or "my manager": mentioning a person is not an activating event, and
+      # those lifted ABCDE in nearly any conversation that had one in it.
+      phrases:
+        - "criticized"
+        - "criticised"
+        - "in front of the team"
+        - "what happened was"
+        - "after that i"
+        - "so i must be"
+        - "which proves"
+        - "it proved"
+      over: [thought_reframe]
+    # Both specifications claim the same events (an unanswered message, a mistake); what
+    # separates the deeper framework is the person asking to understand, so the ask alone is
+    # enough to offer it.
+    - name: asks to understand why it affected them
+      priority: 6
+      phrases:
+        - "want to understand why"
+        - "affected me so strongly"
+        - "affected me so much"
+        - "why it hit me so hard"
+      over: [thought_reframe]
+      standalone: true
 ---
 Starts when: you have learned the event that set it off, what it came to mean about them, and how believing that shapes what they feel or do, and they want to look at it in depth.
 Sounds like: "so I must be", "this proves I", "everyone must think I am", one setback read as a verdict on who they are.
