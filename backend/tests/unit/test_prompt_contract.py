@@ -5,9 +5,13 @@ from __future__ import annotations
 
 import re
 
+import pytest
 import yaml
+from langchain_core.utils.function_calling import convert_to_openai_function
+from pydantic import BaseModel
 
 from mani.chat.context import CTX_KEYS
+from mani.llm import schema, tools
 from mani.prompts.composer import LAYER_HEADINGS
 from scripts.seed import PROMPTS_DIR, parse_prompt
 
@@ -39,3 +43,41 @@ def test_every_layer_heading_the_code_writes_is_explained_in_the_prompt_and_no_o
     """The `layers` section is keyed by each heading's title, and only the code writes them."""
     written = {heading.lstrip("# ") for heading in LAYER_HEADINGS.values()}
     assert set(_section("layers")) == written
+
+
+def _descriptions(node: object) -> list[str]:
+    if isinstance(node, dict):
+        found = [node["description"]] if isinstance(node.get("description"), str) else []
+        return found + [d for value in node.values() for d in _descriptions(value)]
+    if isinstance(node, list):
+        return [d for value in node for d in _descriptions(value)]
+    return []
+
+
+@pytest.mark.parametrize(
+    "model", [schema.Reply, schema.Extraction, schema.Memory, tools.StartExercise],
+    ids=lambda m: m.__name__,
+)
+def test_the_schemas_sent_to_the_model_carry_no_description(model: type[BaseModel]):
+    """A field's meaning lives once, in its call's prompt. LangChain always writes a top level
+    `description` key on the function, empty when the class has no docstring, so an empty one
+    is the only kind allowed."""
+    assert _descriptions(model.model_json_schema()) == []
+    assert [d for d in _descriptions(convert_to_openai_function(model)) if d] == []
+
+
+def test_every_reply_field_and_library_section_is_explained_in_the_prompt():
+    fields = _section("fields")
+    assert set(schema.Reply.model_fields) <= set(fields)
+    nested = {
+        "prompts": schema.SmartPrompt, "state": schema.TechniqueState,
+        "crisis": schema.Crisis, "style": schema.Style,
+    }
+    unnamed = [
+        f"{parent}.{name}"
+        for parent, model in nested.items()
+        for name in model.model_fields
+        if not _named(name, fields[parent])
+    ]
+    assert unnamed == []
+    assert [s.value for s in schema.LibrarySection if not _named(s.value, fields["prompts"])] == []

@@ -24,12 +24,14 @@ spoken to. It is never read to them and never quoted.
 
 # What to record
 
-- **themes** — what they keep coming back to.
-- **low_times** — when they feel low, and the reason *they* gave.
-- **better_times** — when they feel better, and what was going on.
+- **themes** — what they keep coming back to, in their words, as short phrases.
+- **low_times** — when they feel low, and the reason *they* gave: "feels low most Sunday
+  evenings, because of work on Monday".
+- **better_times** — when they feel better, and what was going on, as they described it.
 - **what_helps** — ways of coping they said helped, including any framework they tried.
 - **what_doesnt** — what they said did not help, or asked not to do.
-- **how_they_talk** — how they like the conversation to go, from how they responded.
+- **how_they_talk** — how they like the conversation to go, from how they responded: "prefers
+  short replies", "usually declines exercises".
 
 Keep each entry to one short line. At most six entries per list; when a list is full, keep
 the ones that recur and drop the ones mentioned once.

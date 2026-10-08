@@ -23,4 +23,3 @@ def test_the_model_is_never_asked_for_a_mirroring_voice():
     turn, never the same twice, forced the rotation the prompt no longer asks for."""
     style = Reply.model_json_schema()["$defs"]["Style"]
     assert set(style["properties"]) == {"shape"}
-    assert "voice" not in Reply.model_fields["style"].description

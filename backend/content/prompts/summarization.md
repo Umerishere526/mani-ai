@@ -17,7 +17,7 @@ You are given `## Existing Summary`, the conversation's summary so far as `curre
 last updated. Existing Summary is absent when there is none yet. Fold the new messages into the
 summary and return the merged result.
 
-# The current issue
+# The current issue (`current_issue`)
 
 One line, in plain terms: what the person is actually working through right now. This is the
 one thing that must never get lost as a conversation runs long — say what they came with, or
@@ -33,7 +33,7 @@ something else, say the new thing.
 - Not: "thought_reframe" (a technique name). Not: "feeling anxious" (a feeling with nothing it
   is about).
 
-# The summary
+# The summary (`summary`)
 
 Two to four sentences, third person — "The user is dealing with…". Carry forward what still
 matters and drop what has been superseded; this replaces the previous summary rather than
@@ -48,10 +48,12 @@ Include what would change how the next reply lands:
 
 Leave out Mani's own replies verbatim, minor back-and-forth, and anything already captured.
 
-# The techniques
+# The techniques (`techniques_tried`)
 
 Separately, list any framework or coping technique that was discussed or practised, and
-whether it seemed to help. This list may be empty. Use the framework's id where you know it.
+whether it seemed to help. This list may be empty. For each, `name` is the technique, using the
+framework's id where you know it ("deep breathing", "abcde"), `helpful` whether it seemed to
+help, and `context` a brief note on when or how it was used, or null.
 
 # Boundaries
 
