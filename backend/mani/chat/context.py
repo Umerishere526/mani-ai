@@ -7,26 +7,18 @@ import re
 
 from mani.chat import ending
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
-from mani.chat.router import Signal, is_confident
+from mani.chat.router import Signal
 from mani.chat.safety import normalize
 from mani.chat.techniques import OFFERING
 from mani.db.threads import TurnContext
 from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
 from mani.prompts.composer import tried_line
 
-# How many messages must pass before a technique may be offered again.
-# After "Keep chatting", three of Mani's replies before it may check again - the same
-# framework or a different one, whichever fits now (muhammad, 2026-09-24).
-COOLDOWN_AFTER_DECLINE = 6
-
-# A confident offer may come from the person's second message, in any style: it was four rounds
-# for Supportive and Reflective until Mani's own confidence was made the signal (muhammad,
-# 2026-10-01). When it has not offered by their fourth message the closest fit is due: it offers
-# that, with Keep chatting beside it. Counted in the person's own messages.
+# An offer may come from the person's second message, in any style: it was four rounds for
+# Supportive and Reflective until Mani's own judgement was made the signal (muhammad,
+# 2026-10-01). Counted in the person's own messages.
 CLEAR_OFFER_AFTER = 2
-CLOSEST_FIT_AFTER = 4
-# After "Keep chatting" a confident offer may come back after two more exchanges; the closest
-# fit waits the full COOLDOWN_AFTER_DECLINE.
+# After "Keep chatting" an offer may come back after two more exchanges.
 CLEAR_COOLDOWN_AFTER_DECLINE = 4
 # The greeting, the style they tapped, and that style's opener.
 OPENING_MESSAGES = 3
@@ -51,9 +43,9 @@ RECENT_OPENERS_WINDOW = 3
 CTX_KEYS = frozenset({
     "conversation_style", "safety", "recent_crisis", "conversation_phase",
     "clarification_available", "question_focus", "their_last", "offer_waiting",
-    "after_framework_question", "cooldown_passed", "closest_fit", "since_last", "this_thread",
+    "after_framework_question", "cooldown_passed", "since_last", "this_thread",
     "library_pending", "current_phase", "history", "recent_styles", "recent_openers",
-    "ruled_out", "framework_shortlist", "offer", "framework_starting", "active_framework",
+    "ruled_out", "framework_shortlist", "framework_starting", "active_framework",
     "framework_stages",
     "stage", "stage_purpose", "stage_listen_for", "stage_ready_when", "stage_boundaries",
     "stage_if_unclear", "stage_ask",
@@ -121,14 +113,6 @@ def _after_framework_question(history: list[Message]) -> str | None:
     return next((q for q in AFTER_FRAMEWORK_QUESTIONS if q.lower().rstrip("?") not in since), None)
 
 
-def cooldown_for(outcome: TechniqueOutcome) -> int:
-    return (
-        COOLDOWN_AFTER_COMPLETE
-        if outcome is TechniqueOutcome.ACCEPTED
-        else COOLDOWN_AFTER_DECLINE
-    )
-
-
 def clear_cooldown_for(outcome: TechniqueOutcome) -> int:
     return (
         COOLDOWN_AFTER_COMPLETE
@@ -154,7 +138,7 @@ def clarification_used(history: list[Message] | None) -> bool:
 
 
 def cooldown_passed(ctx: TurnContext, *, urgent: bool = False) -> bool:
-    """Whether a confident offer may be made yet: [ctx] tells the model, which keeps to it."""
+    """Whether an offer may be made yet: [ctx] tells the model, which keeps to it."""
     technique = ctx.technique
     if technique is None:
         # An action about to be taken is the one case not worth waiting the rounds out.
@@ -162,21 +146,6 @@ def cooldown_passed(ctx: TurnContext, *, urgent: bool = False) -> bool:
     return ctx.thread.message_count - technique.at_message_count >= clear_cooldown_for(
         technique.outcome
     )
-
-
-def closest_fit_ok(ctx: TurnContext, *, urgent: bool = False) -> bool:
-    """Whether the closest fit may be offered when nothing fits well."""
-    technique = ctx.technique
-    if technique is None:
-        return urgent or _their_messages(ctx) >= CLOSEST_FIT_AFTER
-    return ctx.thread.message_count - technique.at_message_count >= cooldown_for(
-        technique.outcome
-    )
-
-
-def closest_fit_due(ctx: TurnContext) -> bool:
-    """The first offer has not come by their fourth message: the closest fit is owed now."""
-    return ctx.technique is None and _their_messages(ctx) >= CLOSEST_FIT_AFTER
 
 
 # What a person says when they have given almost nothing, and when they are telling Mani it
@@ -234,7 +203,6 @@ def build(
     *,
     shortlist: list[Signal] | None = None,
     framework: Framework | None = None,
-    candidate: Framework | None = None,
     history: list[Message] | None = None,
     safety_concern: bool = False,
     offer_waiting: bool = False,
@@ -247,23 +215,20 @@ def build(
 
     Every value is read from the composed turn snapshot, so the block describes what the
     database holds rather than what an in-memory copy was mutated to mid-request. `shortlist`,
-    `framework`, `candidate` and `recent_mani_replies` are what the router, the framework
-    content and the caller's own history add - all optional, so a turn with none of them still
-    formats exactly as before.
+    `framework` and `history` are what the router, the framework content and the caller's own
+    history add - all optional, so a turn with none of them still formats exactly as before.
 
     `framework` is the one already active; its current and next stage go in by id, since the
     model reads what each stage asks from the framework's Stages line in the index. Only the
-    somatic stages carry a block, and theirs go in full. `candidate` is the router's top pick
-    when it is confident enough to be worth more than a bare id and score - its id goes in as
-    `offer:`, and the model reads that framework's Offer line in the index. Never both at once:
-    a framework is either running or being considered, not both.
+    somatic stages carry a block, and theirs go in full. `shortlist` is every framework the
+    router found signs of, ranked; its ids are the only sets the model may offer from.
 
     `history` is the same window the caller already loads for the model's own conversation
     view - nothing new is fetched for it. Only Mani's own messages in it become recent_openers;
     the person's messages are read here but never surfaced back to the model as an "opener".
 
     `ruled_out` is the frameworks what they have said rules out. It is told to the model while no
-    framework runs, and the caller has already taken them off `shortlist` and `candidate`.
+    framework runs, and the caller has already taken them off `shortlist`.
     """
     technique = ctx.technique
     # Named first because the model writes every stage question in it and a somatic stage's ask
@@ -312,11 +277,6 @@ def build(
 
     # The offer's timing is told to the model, which keeps to it.
     lines.append(_line("cooldown_passed", "yes" if cooldown_passed(ctx, urgent=urgent) else "no"))
-    if not safety_concern and not running:
-        if closest_fit_due(ctx):
-            lines.append(_line("closest_fit", "due"))
-        elif closest_fit_ok(ctx, urgent=urgent):
-            lines.append(_line("closest_fit", "ok"))
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
         lines.append(_line("since_last", since_last))
@@ -350,16 +310,9 @@ def build(
     if ruled_out and not running and not safety_concern:
         lines.append(_line("ruled_out", ", ".join(ruled_out)))
     if shortlist and not safety_concern:
-        ranked = ", ".join(f"{s.framework_id} ({s.score:.2f})" for s in shortlist)
-        lines.append(_line("framework_shortlist", ranked))
-        if (
-            candidate is not None
-            and (is_confident(shortlist) or closest_fit_due(ctx))
-            and cooldown_passed(ctx, urgent=urgent)
-        ):
-            # The offer's words come from this framework's Description and Offer lines in the
-            # index; only its id is named here.
-            lines.append(_line("offer", candidate.id))
+        # Ids only, in ranked order: the model sees which sets the router found signs of and
+        # which most, never a strength to read as a verdict.
+        lines.append(_line("framework_shortlist", ", ".join(s.framework_id for s in shortlist)))
 
     if running:
         style = resolve_style(ctx)

@@ -7,9 +7,10 @@ from dataclasses import dataclass, field
 
 from mani.chat.safety import normalize
 
-# How far back a signal still counts. A person's most recent message is the strongest evidence
-# of what they need now; four messages ago is context, not a request. Four reaches back to
-# their first message at the moment the closest fit falls due (CLOSEST_FIT_AFTER in context.py).
+# How much a sign counts by how far back it was said. A person's most recent message is the
+# strongest evidence of what they need now; four messages ago is context, not a request. Older
+# messages keep the last weight rather than dropping out: the shortlist is the set Mani may
+# offer from, so a sign stays on it while its message is in the history window.
 RECENCY_WEIGHTS = (1.0, 0.6, 0.3, 0.15)
 
 # A phrase from the framework's own "central indication" is worth more than a phrase from its
@@ -17,24 +18,9 @@ RECENCY_WEIGHTS = (1.0, 0.6, 0.3, 0.15)
 STRONG_WEIGHT = 2.0
 SIGNAL_WEIGHT = 1.0
 
-# Below this, the shortlist is a suggestion rather than a finding, and the prompt carries
-# several one-line indications instead of one framework's full offer guidance.
-CONFIDENT_SCORE = 2.0
-CONFIDENT_MARGIN = 1.0
-
-# A single phrase, said once, is not the same as an understood situation - it could be an
-# offhand line the person moves past a moment later. Confidence requires the match to be
-# corroborated: either it recurs across more than one of their recent messages, or more than
-# one distinct phrase backs it within the messages seen. One message, one passing phrase, is
-# not clarity yet - it is a first hint, and the model still owes the person a clarifying
-# question before it names a framework.
-MIN_CORROBORATION = 2
-
 # A framework promoted by a distinction but with no phrase match of its own still needs a
 # score, or it sorts below frameworks that matched one incidental phrase.
 PROMOTED_FLOOR = 1.5
-
-DEFAULT_LIMIT = 3
 
 
 def _says(phrase: str, normalized: str) -> bool:
@@ -52,13 +38,6 @@ class Signal:
     score: float
     matched: list[str] = field(default_factory=list)
     promoted_by: str | None = None
-    spread: int = 0
-    """How many distinct recent messages contributed a match - the corroboration count."""
-    time_critical: bool = False
-    """Promoted by a rule with no `over` list - the specification's own case for treating an
-    imminent, regrettable action as urgent rather than something to wait out for a second
-    mention. Corroboration exists to stop a passing phrase being read as clarity; here waiting
-    is the wrong failure mode, so it is what the exemption is for, not a gap in it."""
 
 
 @dataclass(frozen=True)
@@ -162,36 +141,26 @@ def distinction_rules(distinctions: dict[str, list]) -> tuple[list[Rule], list[s
     return rules, problems
 
 
-def _score_one(activation: dict, messages: list[str]) -> tuple[float, list[str], int]:
-    """Recency-weighted score for a single framework against recent user messages.
-
-    Also returns the spread: how many distinct messages contributed at least one match, which
-    is what tells a single well-matched line apart from a pattern corroborated over time.
-    """
+def _score_one(activation: dict, messages: list[str]) -> tuple[float, list[str]]:
+    """Recency-weighted score for a single framework against the person's messages."""
     strong = [normalize(p) for p in activation.get("strong_signals", [])]
     signals = [normalize(p) for p in activation.get("signals", [])]
 
     total = 0.0
     matched: list[str] = []
-    contributing_distances: set[int] = set()
     # messages arrive oldest first, as recent_for_context returns them.
     for distance, text in enumerate(reversed(messages)):
-        if distance >= len(RECENCY_WEIGHTS):
-            break
-        recency = RECENCY_WEIGHTS[distance]
+        recency = RECENCY_WEIGHTS[min(distance, len(RECENCY_WEIGHTS) - 1)]
         normalized = normalize(text)
         for phrase, weight in [(p, STRONG_WEIGHT) for p in strong] + [
             (p, SIGNAL_WEIGHT) for p in signals
         ]:
-            if not _says(phrase, normalized):
-                continue
-            # Said again in an older message: no second score, but it is corroboration.
-            contributing_distances.add(distance)
-            if phrase not in matched:
+            # Said again in an older message: no second score.
+            if _says(phrase, normalized) and phrase not in matched:
                 total += weight * recency
                 matched.append(phrase)
 
-    return total, matched, len(contributing_distances)
+    return total, matched
 
 
 def vetoes(activation: dict, messages: list[str]) -> list[str]:
@@ -227,11 +196,8 @@ def _promote(signals: list[Signal], rule: Rule) -> list[Signal]:
         beaten = [i for i, s in enumerate(ordered) if s.framework_id in rule.over]
         if not beaten and index is None and rule.standalone:
             # Nothing it outranks and nothing scored for it, but the rule's own phrase is
-            # evidence enough to put it on the shortlist, as a suggestion: the floor sits
-            # below the confidence bar, so this never carries the full offer guidance.
-            candidate = Signal(
-                rule.prefer, PROMOTED_FLOOR, [], promoted_by=rule.name, spread=0,
-            )
+            # evidence enough to put it on the shortlist.
+            candidate = Signal(rule.prefer, PROMOTED_FLOOR, [], promoted_by=rule.name)
             position = next(
                 (i for i, s in enumerate(ordered) if s.score < PROMOTED_FLOOR), len(ordered)
             )
@@ -244,21 +210,13 @@ def _promote(signals: list[Signal], rule: Rule) -> list[Signal]:
             return ordered
 
     if index is None:
-        promoted = Signal(
-            rule.prefer, PROMOTED_FLOOR, [],
-            promoted_by=rule.name, spread=0, time_critical=rule.absolute,
-        )
+        promoted = Signal(rule.prefer, PROMOTED_FLOOR, [], promoted_by=rule.name)
     else:
         existing = ordered.pop(index)
         if index < target:
             target -= 1
         promoted = Signal(
-            existing.framework_id,
-            existing.score,
-            existing.matched,
-            promoted_by=rule.name,
-            spread=existing.spread,
-            time_critical=rule.absolute,
+            existing.framework_id, existing.score, existing.matched, promoted_by=rule.name
         )
 
     ordered.insert(target, promoted)
@@ -269,14 +227,12 @@ def shortlist(
     messages: list[str],
     activations: dict[str, dict],
     rules: list[Rule],
-    *,
-    limit: int = DEFAULT_LIMIT,
 ) -> list[Signal]:
-    """Rank the frameworks worth offering, most likely first.
+    """Rank every framework the person's words show signs of, most likely first, uncut.
 
-    This narrows; it does not decide. The model chooses from the shortlist and `guards.check`
-    checks that choice against the registry - so a wrong shortlist costs relevance, never a bad
-    identifier in the database.
+    This narrows; it does not decide. The model may offer only a set on the shortlist, and only
+    when it judges it fits; `guards.check` checks the id against the registry - so a wrong
+    shortlist costs relevance, never a bad identifier in the database.
 
     `messages` are the person's own messages, oldest first. `activations` maps a framework id to
     its `admin.frameworks.activation` payload, and `rules` are the distinctions those payloads
@@ -286,9 +242,9 @@ def shortlist(
         return []
 
     scored = [
-        Signal(framework_id, score, matched, spread=spread)
+        Signal(framework_id, score, matched)
         for framework_id, activation in activations.items()
-        for score, matched, spread in [_score_one(activation, messages)]
+        for score, matched in [_score_one(activation, messages)]
         if score > 0
     ]
     scored.sort(key=lambda s: (-s.score, s.framework_id))
@@ -305,42 +261,5 @@ def shortlist(
         scored = _promote(scored, rule)
         settled.add(rule.prefer)
 
-    return scored[:limit]
+    return scored
 
-
-def is_confident(signals: list[Signal]) -> bool:
-    """Whether the top candidate is clear enough to carry its full offer guidance.
-
-    When it is not, the prompt ships two or three one-line indications instead and lets the
-    model choose. Either way it never ships all six.
-
-    Score and margin say the top candidate is a strong, unambiguous match. They do not say the
-    situation has actually been established rather than mentioned once in passing - a single
-    strong-signal phrase in one message clears both on its own. Corroboration closes that gap:
-    either the same framework's phrases showed up in more than one recent message, or more than
-    one distinct phrase backed it, before the offer guidance goes out. Below that, the shortlist
-    still reaches the prompt as a suggestion, but the model is left to ask rather than offer.
-
-    A time-critical signal skips all of it - the rule's own phrase is the evidence. Corroboration exists to stop a single passing
-    phrase from being read as an established situation - a reasonable thing to want when the
-    cost of waiting is one more clarifying question. DBT STOP's imminent-action rule is the one
-    case where the cost of waiting is the opposite: the action it exists to pause may already
-    be sent by the time a second mention would arrive.
-    """
-    if not signals:
-        return False
-    top = signals[0]
-    # The imminent-action rule's own phrase is the evidence. Holding it to the score bar left
-    # STOP, promoted with no phrase of its own, below it for good.
-    if top.time_critical:
-        return True
-    if top.score < CONFIDENT_SCORE:
-        return False
-    if top.spread < 2 and len(top.matched) < MIN_CORROBORATION:
-        return False
-    # A distinction rule already chose between the leaders. Measuring the margin against
-    # the framework it outranked would refuse every pick it made.
-    if top.promoted_by:
-        return True
-    runner_up = max((s.score for s in signals[1:]), default=0.0)
-    return top.score - runner_up >= CONFIDENT_MARGIN

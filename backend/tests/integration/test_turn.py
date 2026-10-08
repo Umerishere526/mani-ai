@@ -217,7 +217,7 @@ GRIEF_OFFER = Reply(
          Reply(text="What is the hardest part of the evenings?", heading_toward="act_choice_point"), True),
     ],
     ids=["a feeling never named", "no question", "an offer too early", "an offer the words rule out",
-         "no offer when the closest fit is due"],
+         "no offer after several messages"],
 )
 async def test_a_draft_that_used_to_be_asked_for_again_is_stored_as_written_after_one_call(
     alice, model, message, draft, opened
@@ -276,26 +276,25 @@ async def test_what_they_said_rules_out_is_told_not_offered_by_the_router(alice,
     assert not [line for line in sent if "behavioral_activation" in line and line != "ruled_out: behavioral_activation"]
 
 
-def _offer(technique: str, fit: str | None) -> Reply:
+def _offer(technique: str) -> Reply:
     return Reply(
         text="There are some questions we could go through together. Would you like to try it?",
         prompts=[SmartPrompt(label="Try it", technique=technique),
                  SmartPrompt(label="Keep chatting", decline=True)],
         state=TechniqueState(technique=technique, step="offering"),
-        offer_fit=fit,
     )
 
 
 @pytest.mark.parametrize("technique", ["structured_problem_solving", "abcde"])
-async def test_a_confident_offer_is_made_on_the_second_message_in_any_style(alice, model, technique):
-    """muhammad, 2026-10-01: if Mani is confident it should offer, not wait out the old four. No
-    framework waits for a later message either: ABCDE's offer stands on the second, undrafted."""
+async def test_an_offer_is_made_on_the_second_message_in_any_style(alice, model, technique):
+    """muhammad, 2026-10-01: once Mani can tell what fits it should offer, not wait out the old
+    four. No framework waits for a later message either: ABCDE's offer stands on the second."""
     from mani.db import pool
     from mani.models.rows import SupportStyle
 
     scripted = model(
         Reply(text="What is the hardest part of it?", heading_toward=technique),
-        _offer(technique, "clear"),
+        _offer(technique),
     )
     thread = await start(alice)
     async with pool.as_admin() as conn:
@@ -313,56 +312,88 @@ async def test_a_confident_offer_is_made_on_the_second_message_in_any_style(alic
     assert [p.label for p in turn.prompts] == ["Try it", "Keep chatting"]
 
 
-async def test_the_closest_fit_is_owed_by_the_fourth_message_and_the_model_words_its_button(alice, model):
-    scripted = model(
-        Reply(
-            text="Nothing fits well, but there are some questions we could go through together.",
-            prompts=[SmartPrompt(label="Let's try that", technique="act_choice_point"),
-                     SmartPrompt(label="Keep chatting", decline=True)],
-            state=TechniqueState(technique="act_choice_point", step="offering"),
-            offer_fit="closest",
-        ),
-    )
-    thread = await start(alice)
-    await past_the_opening(thread)
-    turn = await send(alice, thread.id, "i miss him and the flat is quiet")
-
-    assert scripted.calls == 1
-    assert "closest_fit: due" in scripted.last_messages[-1]["content"].splitlines()
-    assert [p.label for p in turn.prompts] == ["Let's try that", "Keep chatting"]
-    assert [p.technique for p in turn.prompts if p.technique] == ["act_choice_point"]
-
-
-async def test_a_motive_they_believe_in_reaches_the_closest_fit_with_the_deeper_framework_offer(
-    alice, model
-):
-    """covers: AC-1, AC-2, AC-3 - the first message's phrases are still counted on the fourth
-    message, and the closest fit then names ABCDE for the offer although the router is not
-    confident of it."""
+async def _supportive(thread):
+    """The style tap and its opener, which the real greeting flow adds before their first message."""
     from mani.db import pool
     from mani.models.rows import SupportStyle
 
-    scripted = model(*[Reply(text="What was happening just then?")] * 4)
-    thread = await start(alice)
     async with pool.as_admin() as conn:
-        # The style tap and its opener, which the real greeting flow adds before their first message.
         await conn.execute(
             "update public.threads set conversation_style = $2, message_count = message_count + 2 "
             "where id = $1",
             thread.id, SupportStyle.SUPPORTIVE.value,
         )
+
+
+async def test_words_that_match_no_phrase_get_no_offer_guidance_at_any_message(alice, model):
+    """There is no nearest fit: with nothing on the shortlist, nothing is offerable."""
+    scripted = model(Reply(text="What is that like?"))
+    thread = await start(alice)
+    await _supportive(thread)
+    for message in (
+        "i miss him and the flat is quiet", "it happened at work", "it is hard to explain",
+        "i just feel off", "the weather was grey",
+    ):
+        await send(alice, thread.id, message)
+        sent = scripted.last_messages[-1]["content"].splitlines()
+        assert not [
+            line for line in sent
+            if line.startswith(("framework_shortlist", "offer:", "closest_fit"))
+        ], message
+    assert scripted.calls == 5
+
+
+async def test_a_sign_from_the_first_message_is_still_offerable_at_the_sixth(alice, model):
+    """covers: AC-1, AC-2 - the first message's phrases still count once four more have passed,
+    so the set they point to stays on the shortlist; nothing names it for the offer."""
+    scripted = model(Reply(text="What was happening just then?"))
+    thread = await start(alice)
+    await _supportive(thread)
     for message in (
         "I'm very upset. My manager embarrassed me today because he wants me to fail.",
         "EVERYTHING WENT WRONG",
         "I felt really embarrassed.",
-        "He does it all the time in front of everyone",
+        "it happened at work",
+        "it is hard to explain",
+        "i just feel off",
     ):
         await send(alice, thread.id, message)
 
-    final_prompt = scripted.last_messages[-1]["content"]
-    assert "framework_shortlist: abcde" in final_prompt
-    assert "closest_fit: due" in final_prompt
-    assert "offer: abcde" in final_prompt
+    sent = scripted.last_messages[-1]["content"].splitlines()
+    assert "framework_shortlist: abcde" in sent
+    assert not [line for line in sent if line.startswith(("offer:", "closest_fit"))]
+
+
+async def test_every_framework_with_a_sign_is_listed_by_id_except_one_ruled_out(alice, model):
+    scripted = model(Reply(text="That is a lot at once. What feels most pressing?"))
+    thread = await start(alice)
+    await send(
+        alice, thread.id,
+        "since my dog died nobody cares about me, so i must be a bad friend, i keep canceling "
+        "plans, i cannot change what happened, i do not know what to do, and i keep typing and "
+        "deleting",
+    )
+
+    sent = scripted.last_messages[-1]["content"].splitlines()
+    assert "framework_shortlist: dbt_stop, act_choice_point, abcde, structured_problem_solving, thought_reframe" in sent
+    assert "ruled_out: behavioral_activation" in sent
+
+
+async def test_an_offer_off_the_shortlist_goes_out_and_is_logged_by_id_only(alice, model, caplog):
+    """The rule is told, not enforced: the button stands, and the log shows it was off the list."""
+    model(_offer("act_choice_point"))
+    thread = await start(alice)
+    await past_the_opening(thread)
+    with caplog.at_level("INFO", logger="mani.chat.orchestrator"):
+        turn = await send(alice, thread.id, "i miss him and the flat is quiet")
+
+    assert [p.technique for p in turn.prompts if p.technique] == ["act_choice_point"]
+    offers = [r.getMessage() for r in caplog.records if r.getMessage().startswith("offer on thread")]
+    assert offers == [
+        f"offer on thread {thread.id}: act_choice_point on_shortlist: no shortlist: none "
+        "cooldown_passed: yes"
+    ]
+    assert "flat is quiet" not in caplog.text
 
 
 async def test_the_turn_is_stored_and_the_thread_state_follows_it(alice, model):
@@ -1166,16 +1197,16 @@ async def test_an_empty_reply_fails_cleanly_and_stores_nothing(alice, model):
     assert [m.role for m in await _history(alice, thread.id)] == ["mani"]  # the greeting only
 
 
-async def test_an_imminent_action_reaches_the_offer_on_the_first_message(alice, model):
+async def test_an_imminent_action_is_offerable_on_the_first_message(alice, model):
     """The two-exchange wait exists so a framework is not offered on a first hint. STOP is
     the case where waiting is the failure: the message may be sent before a third turn."""
     scripted = model(Reply(text="Before you send it, can we pause for a moment?"))
     thread = await start(alice)
-    await send(alice, thread.id, "I am furious and I am about to send a message I will regret")
+    await send(alice, thread.id, "I am about to send it")
 
-    sent = scripted.last_messages[-1]["content"]
+    sent = scripted.last_messages[-1]["content"].splitlines()
     assert "framework_shortlist: dbt_stop" in sent
-    assert "offer: dbt_stop" in sent
+    assert "cooldown_passed: yes" in sent
 
 
 async def test_a_new_chat_asks_how_the_person_wants_to_be_spoken_to(alice):

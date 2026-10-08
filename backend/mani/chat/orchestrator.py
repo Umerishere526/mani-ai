@@ -387,7 +387,7 @@ async def send(
     user_texts = [m.content for m in history if m.role is MessageRole.USER] + [content]
 
     # What they said rules a framework out (early grief for Behavioral Activation). Told to the
-    # model in [ctx] and kept off the shortlist, so it is never the offer candidate.
+    # model in [ctx] and kept off the shortlist, so it is never offerable.
     ruled_out = [
         framework_id
         for framework_id, activation in config.registry.activations.items()
@@ -398,7 +398,6 @@ async def send(
     # confirms whatever it offers, and guards.check still validates that choice against the
     # registry. No model call, so a false or missing shortlist costs relevance, never safety.
     shortlist: list[router.Signal] = []
-    candidate = None
     urgent = router.urgent(user_texts, config.registry.distinctions)
     if (
         technique is None
@@ -416,10 +415,6 @@ async def send(
             )
             if signal.framework_id not in ruled_out
         ]
-        # The closest fit is owed now, so the top of the shortlist is offered even when the
-        # router is not confident of it.
-        if shortlist and (router.is_confident(shortlist) or context.closest_fit_due(ctx)):
-            candidate = config.registry.get(shortlist[0].framework_id)
 
     wants_title = (
         ctx.thread.message_count >= TITLE_AFTER_MESSAGES and not ctx.thread.title
@@ -436,7 +431,7 @@ async def send(
 
     active_framework = config.registry.get(technique.framework_id) if technique else None
     prefix = context.build(
-        ctx, shortlist=shortlist, framework=active_framework, candidate=candidate,
+        ctx, shortlist=shortlist, framework=active_framework,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
         framework_starting=accepted_this_turn, urgent=urgent,
         their_last=context.classify_reply(content), ruled_out=ruled_out,
@@ -571,6 +566,17 @@ async def send(
         script = (stage.get("ask") or {}).get(context.resolve_style(ctx))
         if script:
             checked = dataclasses.replace(checked, text=ending.with_the_check_in(checked.text, script))
+    if technique is None:
+        # The offer rule is told, not enforced, so this is how an offer off the shortlist or
+        # before the cooldown shows up: ids and flags only, never a word of what was said.
+        listed = [s.framework_id for s in shortlist]
+        passed = "yes" if context.cooldown_passed(ctx, urgent=urgent) else "no"
+        for offered in dict.fromkeys(p.technique for p in checked.prompts if p.technique):
+            logger.info(
+                "offer on thread %s: %s on_shortlist: %s shortlist: %s cooldown_passed: %s",
+                ctx.thread.id, offered, "yes" if offered in listed else "no",
+                ", ".join(listed) or "none", passed,
+            )
     if checked.notes:
         logger.info("checked reply on thread %s: %s", ctx.thread.id, "; ".join(checked.notes))
     # Set only where the orchestrator itself writes the two choices, so a library button the

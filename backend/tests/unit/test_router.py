@@ -3,7 +3,7 @@
 
 import pytest
 
-from mani.chat.router import RECENCY_WEIGHTS, Signal, distinction_rules, is_confident, shortlist
+from mani.chat.router import RECENCY_WEIGHTS, distinction_rules, shortlist, urgent
 from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
 # The shipped activation data, parsed by the seeder itself - the same structures that reach
@@ -103,11 +103,9 @@ def test_a_specific_event_prefers_the_deeper_framework():
 )
 def test_the_thought_reframe_examples_are_not_taken_by_the_deeper_framework(message):
     """Both specifications claim an unanswered message or an exclusion; without a wish for depth
-    it is the quick reframe: ABCDE is never the confident pick, and Thought Reframe stays on
-    the shortlist for the model to choose."""
+    it is the quick reframe, so Thought Reframe stays on the shortlist for the model to choose."""
     ranked = shortlist([message], ACTIVATIONS, RULES)
     assert "thought_reframe" in [s.framework_id for s in ranked]
-    assert not (ranked[0].framework_id == "abcde" and is_confident(ranked))
 
 
 def test_asking_to_understand_why_an_event_hit_so_hard_prefers_the_deeper_framework():
@@ -133,22 +131,14 @@ def test_the_act_choice_point_examples_route_to_it(message):
 
 
 def test_asking_to_understand_why_is_enough_to_offer_the_deeper_framework():
-    """The depth cue stands alone, as a suggestion: nothing else need have scored, and one cue
-    is never confident."""
+    """The depth cue stands alone: nothing else need have scored for it to be offerable."""
     ranked = shortlist(["I want to understand why that comment affected me so much"], ACTIVATIONS, RULES)
     assert [s.framework_id for s in ranked] == ["abcde"]
-    assert not is_confident(ranked)
 
 
 def test_a_loose_event_phrase_does_not_put_the_deeper_framework_on_the_shortlist():
     """Only rules with a specific phrase may offer a framework nothing else scored."""
     assert top(["The meeting was fine, and after that I went home"]) is None
-
-
-def test_cannot_stop_thinking_alone_is_never_a_confident_choice_point():
-    """It is also how a person says they are stuck on a thought that evidence could examine."""
-    ranked = shortlist(["I cannot stop thinking I am incompetent"], ACTIVATIONS, RULES)
-    assert not is_confident(ranked)
 
 
 def _redirects():
@@ -186,11 +176,11 @@ def test_each_redirect_example_routes_to_the_framework_it_names(framework_id, in
         "I need help stopping myself",
     ],
 )
-def test_the_imminent_action_examples_are_a_confident_stop(message):
+def test_the_imminent_action_examples_put_stop_first_and_are_urgent(message):
     """The specification's own imminent actions: time critical, so one mention is enough."""
     ranked = shortlist([message], ACTIVATIONS, RULES)
     assert ranked[0].framework_id == "dbt_stop"
-    assert is_confident(ranked)
+    assert urgent([message], RULES)
 
 
 @pytest.mark.parametrize(
@@ -201,11 +191,11 @@ def test_the_imminent_action_examples_are_a_confident_stop(message):
         "I know I will regret it",
     ],
 )
-def test_an_urge_with_no_sign_the_action_is_imminent_is_only_a_suggestion(message):
-    """Planning to say something is not about to say it; the model asks before offering a pause."""
+def test_an_urge_with_no_sign_the_action_is_imminent_is_not_urgent(message):
+    """Planning to say something is not about to say it: STOP leads, but the usual wait holds."""
     ranked = shortlist([message], ACTIVATIONS, RULES)
     assert ranked[0].framework_id == "dbt_stop"
-    assert not is_confident(ranked)
+    assert not urgent([message], RULES)
 
 
 # ---------------------------------------------------------------------------
@@ -229,55 +219,26 @@ def test_nothing_recognisable_returns_nothing():
     assert shortlist(["nobody cares about me"], {}, RULES) == []
 
 
-def test_the_shortlist_is_bounded():
-    """The whole point is never shipping all six frameworks' content in one prompt."""
+def test_every_framework_with_a_sign_is_listed_and_none_is_cut():
+    """The shortlist is the set Mani may offer from, so a framework the person's words point to
+    is never dropped for ranking fourth."""
     messages = [
-        "nobody cares about me and I am a failure, everything is a mess, "
+        "nobody cares about me and I am a failure, I keep canceling plans, "
         "I cannot make myself start, I cannot change what happened, "
-        "and I am about to send a message"
+        "I do not know what to do, and I am about to send a message"
     ]
-    assert len(shortlist(messages, ACTIVATIONS, RULES)) <= 3
-    assert len(shortlist(messages, ACTIVATIONS, RULES, limit=2)) == 2
+    ranked = [s.framework_id for s in shortlist(messages, ACTIVATIONS, RULES)]
+    assert ranked[0] == "dbt_stop"
+    assert len(ranked) > 3
+    assert len(ranked) == len(set(ranked))
 
 
-def test_confidence_decides_how_much_content_the_prompt_carries():
-    assert not is_confident([])
-    # One incidental phrase is a suggestion, not a finding.
-    weak = shortlist(["I keep canceling plans"], ACTIVATIONS, RULES)
-    assert weak and not is_confident(weak)
-
-
-def test_a_strong_phrase_said_once_is_not_yet_confident():
-    """A central-indication phrase clears the score and margin on its own, but a single mention
-    could be a passing line rather than an established situation. Confidence needs it said more
-    than once - across messages, or twice within one - before the model gets the full offer."""
-    single_mention = shortlist(["I cannot make myself start anything"], ACTIVATIONS, RULES)
-    assert single_mention[0].score >= 2.0
-    assert not is_confident(single_mention)
-
-
-def test_corroboration_across_two_messages_is_confident():
-    corroborated = shortlist(
-        ["I keep avoiding the task", "I cannot make myself start anything"], ACTIVATIONS, RULES
-    )
-    assert is_confident(corroborated)
-
-
-def test_corroboration_within_one_message_is_confident():
-    corroborated = shortlist(
-        ["I cannot make myself start, and I have stopped cooking too"], ACTIVATIONS, RULES
-    )
-    assert is_confident(corroborated)
-
-
-def test_an_imminent_action_is_confident_on_one_mention():
+def test_an_imminent_action_is_first_on_one_mention():
     """DBT STOP exists because waiting costs something - the message it would pause may
-    already be sent by the time a second mention arrives. Corroboration is right to ask for
-    patience everywhere else, but not here."""
-    urgent = shortlist(["I am about to send a message I may regret"], ACTIVATIONS, RULES)
-    assert urgent[0].framework_id == "dbt_stop"
-    assert urgent[0].time_critical
-    assert is_confident(urgent)
+    already be sent by the time a second mention arrives."""
+    ranked = shortlist(["I am about to send a message I may regret"], ACTIVATIONS, RULES)
+    assert ranked[0].framework_id == "dbt_stop"
+    assert ranked[0].promoted_by == "an action is imminent"
 
 
 def test_a_framework_absent_from_the_registry_is_never_returned():
@@ -303,47 +264,23 @@ def test_an_idiom_does_not_read_as_an_imminent_action():
 
 
 # ---------------------------------------------------------------------------
-# Corroboration counts a phrase said again
+# A phrase said again scores once, and a rule's pick needs no phrase of its own
 # ---------------------------------------------------------------------------
 
 
-def test_the_same_phrase_in_two_messages_is_corroboration():
-    """The corroboration rule's own comment: "either it recurs across more than one of their
-    recent messages". The same words twice is exactly that."""
+def test_the_same_phrase_in_two_messages_scores_once():
     ranked = shortlist(
         ["I cannot make myself start anything", "honestly I cannot make myself start anything"],
         ACTIVATIONS, RULES,
     )
     assert ranked[0].framework_id == "behavioral_activation"
-    assert ranked[0].spread == 2
-    assert is_confident(ranked)
+    assert len(ranked[0].matched) == len(set(ranked[0].matched))
 
 
-# ---------------------------------------------------------------------------
-# A rule-based pick can still be confident
-# ---------------------------------------------------------------------------
-
-
-def test_an_imminent_action_is_confident_even_when_its_own_phrases_did_not_match():
-    """The rule's phrase is the evidence. STOP promoted with no match of its own used to sit
-    at the promotion floor, below the confident score, so the urgent offer never went out."""
-    urgent = shortlist(["I am about to quit my job over this"], ACTIVATIONS, RULES)
-    assert urgent[0].framework_id == "dbt_stop"
-    assert is_confident(urgent)
-
-
-def test_a_promoted_framework_is_not_refused_for_the_margin_its_promotion_created():
-    """A distinction rule decides between the leaders; measuring the margin afterwards
-    against the framework it just outranked made every such pick unconfident. Its own
-    evidence still has to clear the score and corroboration bars."""
-    promoted = Signal("act_choice_point", 2.4, ["cannot control", "keeps directing"],
-                      promoted_by="the outcome cannot be controlled", spread=2)
-    outranked = Signal("thought_reframe", 3.0, ["nobody cares about me"], spread=1)
-    assert is_confident([promoted, outranked])
-
-    thin = Signal("act_choice_point", 1.2, ["cannot control"],
-                  promoted_by="the outcome cannot be controlled", spread=1)
-    assert not is_confident([thin, outranked])
+def test_an_imminent_action_leads_even_when_its_own_phrases_did_not_match():
+    ranked = shortlist(["I am about to quit my job over this"], ACTIVATIONS, RULES)
+    assert ranked[0].framework_id == "dbt_stop"
+    assert ranked[0].matched == []
 
 
 # ---------------------------------------------------------------------------
@@ -383,15 +320,16 @@ def test_an_assumed_motive_after_an_event_is_taken_by_the_deeper_framework(count
     assert top(MANAGER_CHAT[:count]) == "abcde"
 
 
-def test_the_opening_message_still_counts_when_the_closest_fit_falls_due():
-    # covers: AC-2, AC-6
-    from mani.chat.context import CLOSEST_FIT_AFTER
+def test_a_sign_from_the_opening_message_is_still_on_the_shortlist_at_their_sixth():
+    """A message older than the four recency weights keeps the last one rather than dropping
+    out, so a sign stays offerable while its message is in the history window."""
+    ranked = shortlist([MANAGER_CHAT[0], "x", "y", "z", "w", "v"], ACTIVATIONS, RULES)
+    assert [s.framework_id for s in ranked] == ["abcde"]
+    assert ranked[0].matched == ["wants me to fail", "embarrassed me"]
+    assert ranked[0].score == pytest.approx(2 * RECENCY_WEIGHTS[-1])
 
-    assert top([*MANAGER_CHAT, "he does it all the time"]) == "abcde"
-    assert len(RECENCY_WEIGHTS) >= CLOSEST_FIT_AFTER
 
-
-def test_a_neighbours_own_phrase_can_outrank_it_at_the_closest_fit():
+def test_a_neighbours_own_phrase_can_outrank_it_later_in_the_conversation():
     # covers: AC-2
     ranked = shortlist(
         [*MANAGER_CHAT, "I do not know what to do"], ACTIVATIONS, RULES
@@ -399,29 +337,9 @@ def test_a_neighbours_own_phrase_can_outrank_it_at_the_closest_fit():
     assert ranked[0].framework_id == "structured_problem_solving"
 
 
-def test_a_phrase_from_the_opening_message_repeated_four_messages_on_corroborates():
+def test_a_phrase_from_the_opening_message_repeated_four_messages_on_keeps_it_first():
     # covers: AC-7
     ranked = shortlist(
         ["he wants me to fail", "x", "y", "he wants me to fail"], ACTIVATIONS, RULES
     )
     assert ranked[0].framework_id == "abcde"
-    assert ranked[0].spread == 2
-
-
-def test_a_runner_up_remembered_from_the_opening_message_can_lower_the_leaders_margin():
-    """The fourth weight reaches the opening message for every framework, not only the leader:
-    a runner up that also matched there gains 0.15 per phrase, which can take a confident
-    leader below the margin. Accepted - the shortlist then stays a suggestion, as it does
-    whenever two frameworks are close."""
-    activations = {
-        "leader": {"strong_signals": ["alpha one"], "signals": ["alpha two"]},
-        "rival": {"signals": ["rival one", "rival two", "rival three"]},
-    }
-    closing = "alpha one alpha two rival one rival two"
-
-    last_three = shortlist(["x", "x", "x", closing], activations, [])
-    assert is_confident(last_three)
-
-    with_opening = shortlist(["rival three", "x", "x", closing], activations, [])
-    assert [s.framework_id for s in with_opening] == ["leader", "rival"]
-    assert not is_confident(with_opening)

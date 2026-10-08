@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -78,7 +77,6 @@ class Reply(BaseModel):
     reasoning: str | None = None
     style: Style | None = None
     heading_toward: str | None = None
-    offer_fit: Literal["clear", "closest"] | None = None
     text: str
     prompts: list[SmartPrompt] | None = None
     title: str | None = None

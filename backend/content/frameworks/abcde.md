@@ -8,10 +8,9 @@ activation:
   # Short fragments, not the full example sentences from the spec. router.py matches these as
   # whole words against what the person actually typed - a real message practically never
   # contains a whole authored sentence verbatim, but it very often contains the three or four
-  # words that carry the pattern ("so i must be", "proves i will never"). Confidence now also
-  # requires corroboration (two fragments, or one repeated) before a framework is offered, so
-  # shortening these to raise recall no longer trades away precision the way it would have
-  # before that gate existed.
+  # words that carry the pattern ("so i must be", "proves i will never"). One match puts the
+  # framework on the shortlist Mani may offer from, so a shorter fragment buys recall at the
+  # cost of precision, and the model's reading of the Starts when line is the remaining guard.
   strong_signals:
     - "so i must be"
     - "must mean i am"

@@ -96,7 +96,7 @@ def test_a_finished_framework_waits_longer_than_a_declined_one():
     """45 messages against 20. The longer wait was unreachable while completion deleted
     the row it is measured from."""
     started_at = 10
-    long_enough_for_a_decline = thread(started_at + context.COOLDOWN_AFTER_DECLINE)
+    long_enough_for_a_decline = thread(started_at + context.CLEAR_COOLDOWN_AFTER_DECLINE)
     finished = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
         phase=None, at_message_count=started_at,
@@ -248,37 +248,25 @@ def running_on(phase: str, **build) -> list[str]:
 STAGE_BLOCK_LINES = ("purpose", "listen_for", "ready_when", "boundaries", "if_unclear", "ask")
 
 
-def test_the_router_shortlist_is_a_ranked_annotation_not_a_decision():
+def test_the_shortlist_names_every_candidate_by_id_in_ranked_order_and_never_a_score():
     block = context.build(
         TurnContext(thread=thread(), profile=None, technique=None),
-        shortlist=[Signal("behavioral_activation", 2.6, ["cannot make myself begin"])],
-    )
-    assert "framework_shortlist: behavioral_activation (2.60)" in block
-
-
-def test_a_confident_candidate_is_named_for_the_offer_by_id_alone():
-    """How to offer it is the framework's Offer line in the cached index, so [ctx] names it."""
-    profile = Profile(user_id=USER, support_style="direct")
-    block = context.build(
-        TurnContext(thread=thread(), profile=profile, technique=None),
-        shortlist=[Signal("abcde", 2.6, ["she said"], spread=2)],
-        candidate=framework(),
+        shortlist=[
+            Signal("behavioral_activation", 2.6, ["cannot make myself begin"]),
+            Signal("abcde", 0.15, ["embarrassed me"]),
+            Signal("dbt_stop", 1.5, [], promoted_by="an action is imminent"),
+        ],
     ).splitlines()
-    assert "offer: abcde" in block
-    assert not any(line.startswith("offer_") for line in block)
+    assert "framework_shortlist: behavioral_activation, abcde, dbt_stop" in block
 
 
-def test_the_context_names_the_offer_and_leaves_its_description_to_the_index():
-    """The client's description is one line of the cached Framework Index, so [ctx] names the
-    framework by id and does not repeat the text on every turn."""
-    confident = framework().model_copy(update={"summary": "These questions help you see it clearly."})
+def test_no_offer_line_and_no_closest_fit_whatever_the_shortlist_holds():
+    """Mani offers only a set on the shortlist that it judges fits; nothing names one for it."""
     block = context.build(
-        TurnContext(thread=thread(), profile=None, technique=None),
-        shortlist=[Signal("abcde", 2.6, ["she said"], spread=2)],
-        candidate=confident,
-    )
-    assert "offer: abcde" in block
-    assert "These questions help you see it clearly." not in block
+        TurnContext(thread=thread(message_count=10), profile=None, technique=None),
+        shortlist=[Signal("abcde", 2.6, ["she said", "so i must be"])],
+    ).splitlines()
+    assert not [line for line in block if line.startswith(("offer:", "closest_fit"))]
 
 
 def test_the_turn_a_framework_starts_says_so():
@@ -312,33 +300,6 @@ def test_the_turn_a_framework_starts_names_the_first_stage_and_the_second():
     assert "stage: offering" not in starting
     assert "framework_starting: yes" in starting
     assert not any(line.startswith("stage_note") for line in starting)
-
-
-def test_an_unconfident_shortlist_carries_no_candidate_content():
-    """Below the confidence threshold, the shortlist is ids and scores only - central
-    indications for those ids already sit in the static Framework Index."""
-    block = context.build(
-        TurnContext(thread=thread(message_count=5), profile=None, technique=None),
-        shortlist=[Signal("abcde", 0.6, ["she said"])],
-        candidate=framework(),
-    )
-    assert "framework_shortlist: abcde (0.60)" in block
-    assert "offer:" not in block
-
-
-def test_the_closest_fit_carries_its_offer_line_even_when_the_router_is_not_confident():
-    # covers: AC-3
-    block = context.build(
-        TurnContext(
-            thread=thread(message_count=10),
-            profile=Profile(user_id=USER, support_style="direct"),
-            technique=None,
-        ),
-        shortlist=[Signal("abcde", 0.45, ["embarrassed me"])],
-        candidate=framework(),
-    )
-    assert "closest_fit: due" in block
-    assert "offer: abcde" in block
 
 
 def test_a_frameworks_own_stage_goes_by_id_and_the_model_asks_it_in_its_own_words():
@@ -537,19 +498,13 @@ def test_once_all_three_are_asked_there_is_no_after_framework_question():
     assert "after_framework_question" not in block
 
 
-def test_a_declined_offer_may_come_back_after_three_replies():
-    """muhammad, 2026-09-24: after "I want to keep talking", check again after a few more
-    messages - the same framework or a different one, whichever fits now."""
-    assert context.COOLDOWN_AFTER_DECLINE == 6
-
-
 def _on_message(person_message: int, technique=None):
     # The greeting, the style they tapped, its opener, then one pair per message.
     return TurnContext(thread=thread(3 + 2 * (person_message - 1)), profile=None, technique=technique)
 
 
 @pytest.mark.parametrize("style", ["direct", "supportive", "reflective"])
-def test_a_confident_offer_may_come_from_the_second_message_in_any_style(style):
+def test_an_offer_may_come_from_the_second_message_in_any_style(style):
     """Mani's own confidence is the signal (muhammad, 2026-10-01); it was four rounds for
     Supportive and Reflective. Supportive offered on the first message about a panic attack, so
     the floor stays at two."""
@@ -559,30 +514,30 @@ def test_a_confident_offer_may_come_from_the_second_message_in_any_style(style):
     assert context.cooldown_passed(TurnContext(thread=chosen, profile=None, technique=None))
 
 
-def test_the_closest_fit_is_due_by_the_fourth_message_and_not_before():
-    assert not context.closest_fit_ok(_on_message(3))
-    assert context.closest_fit_ok(_on_message(4))
-    assert context.closest_fit_due(_on_message(4))
-    assert not context.closest_fit_due(_on_message(3))
-
-
 def test_the_context_tells_the_model_the_truth_about_the_first_offer():
     """It said `cooldown_passed: yes` on every first message, whatever the count."""
     assert "cooldown_passed: no" in context.build(_on_message(1))
-    second = context.build(_on_message(2))
-    assert "cooldown_passed: yes" in second and "closest_fit" not in second
-    assert "closest_fit: due" in context.build(_on_message(4))
+    assert "cooldown_passed: yes" in context.build(_on_message(2))
 
 
-def test_after_keep_chatting_a_confident_offer_returns_sooner_than_the_closest_fit():
+@pytest.mark.parametrize("person_message", [4, 5, 9])
+def test_with_no_shortlist_nothing_is_owed_at_the_fourth_message_or_later(person_message):
+    """There is no nearest fit: a thread whose words matched no phrase is offered nothing."""
+    block = context.build(_on_message(person_message), shortlist=[]).splitlines()
+    assert not [
+        line for line in block if line.startswith(("offer:", "closest_fit", "framework_shortlist"))
+    ]
+
+
+def test_after_keep_chatting_an_offer_may_return_after_two_more_exchanges():
     state = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED,
         at_message_count=10,
     )
+    after_one = TurnContext(thread=thread(12), profile=None, technique=state)
     after_two = TurnContext(thread=thread(14), profile=None, technique=state)
-    after_three = TurnContext(thread=thread(16), profile=None, technique=state)
-    assert context.cooldown_passed(after_two) and not context.closest_fit_ok(after_two)
-    assert context.closest_fit_ok(after_three)
+    assert not context.cooldown_passed(after_one)
+    assert context.cooldown_passed(after_two)
 
 
 def test_the_one_time_clarification_is_offered_only_before_it_has_been_used():
