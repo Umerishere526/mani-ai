@@ -84,7 +84,7 @@ async def fold_one(
                 "role": "user",
                 "content": (
                     f"## Known so far\n{existing.model_dump_json(indent=1)}\n\n"
-                    f"## The conversation that just finished\n{_transcript(new_messages)}"
+                    f"## Conversation\n{_transcript(new_messages)}"
                 ),
             },
         ],

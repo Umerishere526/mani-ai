@@ -12,9 +12,10 @@ model_parameters:
 
 # Task
 
-You are given what is already known about a person from their earlier conversations, and a
-conversation of theirs that has just finished. Return the updated memory: everything that
-still holds, with what this conversation adds folded in. This replaces the previous memory,
+You are given `## Known so far`, what is already known about a person from their earlier
+conversations, as JSON, and `## Conversation`, a conversation of theirs that has just finished.
+Return the updated memory: everything that still holds, with what this conversation adds folded
+in. This replaces the previous memory,
 so leave out anything the new conversation shows is no longer true.
 
 The memory is read by a supportive listener at the start of every later conversation, to

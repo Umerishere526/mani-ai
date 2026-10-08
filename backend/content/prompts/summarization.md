@@ -12,8 +12,10 @@ model_parameters:
 
 # Task
 
-You are given a conversation's existing summary and the messages written since it was last
-updated. Fold the new messages into the summary and return the merged result.
+You are given `## Existing Summary`, the conversation's summary so far as `current_issue`,
+`summary` and `techniques_tried` lines, and `## New Messages`, the messages written since it was
+last updated. Existing Summary is absent when there is none yet. Fold the new messages into the
+summary and return the merged result.
 
 # The current issue
 

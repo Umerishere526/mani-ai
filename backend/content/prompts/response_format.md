@@ -49,6 +49,7 @@ reply:
 buttons:
   - Only under an offer, and at the end of the questions where the stage gives them. Never in ordinary conversation. Chat More and Go to Library are added for you.
   - A label is one to five words in their voice, never a feeling or a judgment they did not use.
+  - A message that is tapped, then a colon and a label, means they tapped that button rather than typing.
 
 library:
   - Only after the questions end, or when they are finishing the conversation. Describe what they would find in their own words, never a category name.

@@ -357,8 +357,8 @@ async def choose_exercise(
         }
     ]
     # The person's own words go in a user message, never the system one: data, not orders.
-    context = ([f"What this conversation is about: {current_issue}"] if current_issue else []) + [
-        f"They said: {line}" for line in said
+    context = ([f"current_issue: {current_issue}"] if current_issue else []) + [
+        f"said: {line}" for line in said
     ]
     if context:
         messages.append({"role": "user", "content": "\n".join(context)})

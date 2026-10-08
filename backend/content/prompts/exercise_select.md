@@ -12,3 +12,5 @@ model_parameters:
 ---
 
 The person just completed the framework named under Framework. Call start_exercise with the id of the exercise under Exercises that best fits what they just worked through.
+
+When there is a user message, its current_issue line is what the conversation is about, and each said line is one of their recent messages.

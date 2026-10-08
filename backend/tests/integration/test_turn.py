@@ -244,6 +244,25 @@ async def test_the_question_asked_last_turn_is_asked_again_when_the_model_writes
     assert turn.content == asked.text
 
 
+async def test_a_tapped_button_reaches_the_model_as_its_label_under_a_key(alice, model):
+    """response_format.md `buttons` says what `tapped:` means, so the code sends no sentence."""
+    scripted = model(
+        Reply(
+            text="There are some questions we could go through together. Would you like to try it?",
+            prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                     SmartPrompt(label="Keep chatting", decline=True)],
+            state=TechniqueState(technique="abcde", step="offering"),
+        ),
+        Reply(text="Of course. What is on your mind?"),
+    )
+    thread = await start(alice)
+    await past_the_opening(thread)
+    await send(alice, thread.id, "my manager embarrassed me in front of everyone")
+    await send(alice, thread.id, "Keep chatting")
+
+    assert scripted.last_messages[-1]["content"].endswith("[/ctx]\n\ntapped: Keep chatting")
+
+
 async def test_what_they_said_rules_out_is_told_not_offered_by_the_router(alice, model):
     """Behavioral Activation tops the shortlist for these words, and early grief rules it out: the
     model is told so, and the shortlist and the offer line never name it."""

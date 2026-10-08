@@ -440,7 +440,7 @@ async def send(
         their_last=context.classify_reply(content), ruled_out=ruled_out,
     )
     for_model = (
-        f'User tapped the button: "{tapped.label}".'
+        f"tapped: {tapped.label}"
         if tapped
         else context.disarm(content)
     )

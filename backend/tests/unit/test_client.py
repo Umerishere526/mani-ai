@@ -209,8 +209,8 @@ async def test_the_pick_sees_the_whole_entry_and_what_the_person_said(monkeypatc
     sent = "\n".join(m["content"] for m in runnable.sent)
     assert "Breathing" in sent and "Burnout" in sent
     assert "Visualization" in sent and "Boundaries" in sent
-    assert "work has drained me for months" in sent
-    assert "exhaustion from an unrelenting job" in sent
+    assert "said: work has drained me for months\nsaid: that helped, thanks" in sent
+    assert "current_issue: exhaustion from an unrelenting job" in sent
 
 
 async def test_the_rows_instruction_leads_and_the_list_follows_beneath_it(monkeypatch, recorded):

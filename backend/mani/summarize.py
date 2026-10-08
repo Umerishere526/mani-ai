@@ -29,17 +29,21 @@ def transcript(messages: list[Message]) -> str:
     )
 
 
-def existing_context(summary: ThreadSummary | None) -> str:
-    if summary is None:
-        return "No existing summary."
-    parts = []
-    if summary.current_issue:
-        parts.append(f"Current issue: {summary.current_issue}")
-    if summary.summary:
-        parts.append(f"Previous summary: {summary.summary}")
-    if summary.techniques_tried:
-        parts.append(f"Techniques tried: {tried_line(summary.techniques_tried)}")
-    return "\n".join(parts) if parts else "No existing summary."
+def request(existing: ThreadSummary | None, new_messages: list[Message]) -> str:
+    """The summary call's user message: headings and keyed lines, which summarization.md names.
+
+    `## Existing Summary` is left out when there is none yet, or when all its fields are empty.
+    """
+    lines = []
+    if existing is not None:
+        if existing.current_issue:
+            lines.append(f"current_issue: {existing.current_issue}")
+        if existing.summary:
+            lines.append(f"summary: {existing.summary}")
+        if existing.techniques_tried:
+            lines.append(f"techniques_tried: {tried_line(existing.techniques_tried)}")
+    sections = ["## Existing Summary\n" + "\n".join(lines)] if lines else []
+    return "\n\n".join(sections + [f"## New Messages\n{transcript(new_messages)}"])
 
 
 async def _since_checkpoint(
@@ -99,15 +103,7 @@ async def update(
     call = await client.complete(
         [
             {"role": "system", "content": prompt.content},
-            {
-                "role": "user",
-                "content": (
-                    f"## Existing Summary\n{existing_context(existing)}\n\n"
-                    f"## New Messages\n{transcript(new_messages)}\n\n"
-                    "Extract updated information from these messages and merge with the "
-                    "existing summary."
-                ),
-            },
+            {"role": "user", "content": request(existing, new_messages)},
         ],
         Extraction,
         model=prompt.model_id or settings.default_summary_model,

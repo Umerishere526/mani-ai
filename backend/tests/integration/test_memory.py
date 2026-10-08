@@ -146,7 +146,7 @@ async def test_a_conversation_that_continues_is_folded_again_from_where_it_stopp
 
     sent = fake.folds[-1][-1]["content"]
     assert "walking the dog" in sent
-    assert "Sunday evenings because of work" not in sent.split("just finished")[1]
+    assert "Sunday evenings because of work" not in sent.split("## Conversation")[1]
 
 
 async def test_the_idle_job_leaves_a_conversation_that_is_still_going(bea, scripted):
