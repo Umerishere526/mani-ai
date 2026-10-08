@@ -12,8 +12,9 @@ model_parameters:
 
 # Task
 
-You are given `## Known so far`, what is already known about a person from their earlier
-conversations, as JSON, and `## Conversation`, a conversation of theirs that has just finished.
+You are given `max_entries`, the most entries one list may hold, `## Known so far`, what is
+already known about a person from their earlier conversations, as JSON, and `## Conversation`, a
+conversation of theirs that has just finished.
 Return the updated memory: everything that still holds, with what this conversation adds folded
 in. This replaces the previous memory,
 so leave out anything the new conversation shows is no longer true.
@@ -33,8 +34,8 @@ spoken to. It is never read to them and never quoted.
 - **how_they_talk** — how they like the conversation to go, from how they responded: "prefers
   short replies", "usually declines exercises".
 
-Keep each entry to one short line. At most six entries per list; when a list is full, keep
-the ones that recur and drop the ones mentioned once.
+Keep each entry to one short line. At most `max_entries` entries per list; when a list is full,
+keep the ones that recur and drop the ones mentioned once.
 
 # Boundaries
 

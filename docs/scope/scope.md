@@ -19,9 +19,9 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 4 | Framework in 8 lines, all six | Slice 1 | in-progress |
 | 5 | One model call, no redraft or repairs | Slice 1 | in-progress |
 | 6 | The other five frameworks in 8 lines | Slice 2 | dropped |
-| 7 | Body check in in the lean format | Slice 2 | planned |
+| 7 | Body check in in the lean format | Slice 2 | in-progress |
 | 8 | Model facing text out of Python | Slice 3 | in-progress |
-| 9 | Reply text and numbers out of Python | Slice 3 | planned |
+| 9 | Reply text and numbers out of Python | Slice 3 | in-progress |
 | 10 | Crisis decided by the model | Slice 4 | planned |
 | 11 | Thinking level and prompt tuning from measurements | Slice 5 | planned |
 
@@ -111,10 +111,19 @@ Merged into feature 4 (spec 0005): all six convert in one change. Originally: co
 **Done when:** each is about 8 lines, a real conversation reaches each one's offer and end, and the router picks the right one for the client's example lines.
 - [ ] Build it: `/develop other five frameworks in 8 lines`
 
-### 7. Body check in in the lean format · needs a decision
+### 7. Body check in in the lean format · in-progress
 The ending (completion question, body check in, exercise, Chat More or Go to Library) as short rules the model follows, not verbatim text enforced in code, and no code that matches words inside the content.
-**Done when:** every framework ends with the body check in, the four places get a fitting exercise, no code reads `when` text, and the client's flow holds in all three styles.
-- [ ] Design it (spec): `/architect body check in lean format`
+**Done when:** every framework ends by asking how they feel and offering the body check, guided one step per turn; the model's `ending` field alone retires the framework (Chat More / Go to Library and the card on `choice`, nothing on `keep_talking`), with a 12 turn cap as backstop; and no code edits the reply or reads words to drive the ending.
+Spec [0009](../specs/0009-body-check-in-lean-format/index.md) · code in backend/content/prompts/mani_base.md, backend/content/prompts/response_format.md, backend/mani/chat/orchestrator.py, backend/mani/chat/guards.py, backend/mani/chat/context.py, backend/mani/chat/techniques.py, backend/mani/llm/schema.py, backend/mani/models/rows.py, backend/mani/db/threads.py, backend/scripts/seed.py, backend/supabase/migrations/020_technique_ending_from.sql, backend/tests/integration/test_turn.py, backend/tests/evals/validators.py
+- [x] Design it (spec): `/architect body check in lean format`
+- [ ] Build it: `/develop body check in lean format` (before spec 0008)
+  - [x] Tracer, `choice` end to end: seed and `[ctx]` without stage blocks, the `ending` field and guard, the old body route and `ending.py` deleted (AC-2 to AC-6, AC-8, AC-11)
+  - [x] `keep_talking`, the safety concern pause and the crisis retire (AC-5, AC-7, AC-12)
+  - [x] Migration 020, `ending_from` and the 12 turn cap (AC-9, AC-10)
+  - [x] Evals, `REMOVED` and docs: `missing_handoff`, `panic_somatic_once`, PORT-STATUS, the specs README and the schema reference (AC-13)
+  - [ ] muhammad reviews the `ending` wording in `mani_base.md`, then reseed and the full `pytest` with the database up (AC-1, AC-13)
+- [ ] Verify it: `/check verify body check in lean format`
+- [ ] Test it: `/test body check in lean format`
 
 ## Slice 3: Nothing hardcoded
 
@@ -132,10 +141,18 @@ Spec: [0007](../specs/0007-model-text-out-of-python/index.md) · code in backend
 - [ ] Verify it: `/check verify model facing text out of python`
 - [ ] Test it: `/test model facing text out of python`
 
-### 9. Reply text and numbers out of Python · needs a decision
-Text sent straight to the person (greeting, style question, openers, after framework questions, button labels, crisis reply) and the timing numbers (cooldowns, offer windows, router weights, summary threshold) move into seeded content or config.
-**Done when:** no user facing sentence or behaviour number is a Python constant, and each can change with a reseed or config change.
-- [ ] Design it (spec): `/architect reply text and numbers out of python`
+### 9. Reply text and numbers out of Python · in-progress
+Text sent straight to the person (greeting, style question and buttons, openers, clarification lines, after framework questions) moves into a seeded `replies` row, and the conversation numbers (offer timing, cooldowns, router weights, history, style and memory windows) into a seeded `tuning` row, both checked on every write. A second commit deletes the phrase lists behind `their_last` and lets the model track the clarification and after framework lines. The body ending's labels stay for feature 7, and the crisis reply for feature 10.
+**Done when:** no line Mani sends without the model and no conversation number is a Python constant, each can change with a reseed, and a broken edit is refused when written.
+Spec: [0008](../specs/0008-reply-text-numbers-out-python/index.md) · code in backend/content/prompts/, backend/mani/prompts/, backend/mani/chat/, backend/mani/memory.py, backend/mani/db/config_tables.py
+- [x] Design it (spec): `/architect reply text and numbers out of python`
+- [x] Build it: `/develop reply text and numbers out of python`
+  - [x] Commit 1: `replies` row, the shared check, required rows refused at seed and admin writes, greeting, buttons and openers from content (AC-1, AC-3, AC-4, AC-5, AC-7, AC-8)
+  - [x] Commit 1: `tuning` row and every number moved, including the cron backstop and the idle fold, with PORT-STATUS (AC-2, AC-3, AC-6, AC-7, AC-8, AC-15)
+  - [x] Commit 2: phrase lists and `their_last` gone, `clarification_lines` and `after_framework_questions` tracked by the model, `EXPLAIN_LABELS` gone, `max_entries` in the fold message (AC-9 to AC-13)
+  - [x] Commit 2: `REMOVED` and `REMOVED_NAMES`, full `pytest` with the database up, PORT-STATUS lines edited (AC-14, AC-15)
+- [ ] Verify it: `/check verify reply text and numbers out of python`
+- [ ] Test it: `/test reply text and numbers out of python`
 
 ## Slice 4: Crisis
 
@@ -150,6 +167,14 @@ Remove the keyword crisis and concern screen. The model's own `crisis` field bec
 Use the baseline from feature 1 to choose the thinking level per call and to compare each prompt change, three runs before and three after, so the prompts keep improving as models get faster.
 **Done when:** each call's level is backed by numbers recorded in PORT-STATUS.md, and the tuning loop is a documented command anyone can run again.
 - [ ] Design it (spec): `/architect thinking level and prompt tuning`
+
+## Deferred
+- Drop the unused `threads.vague_streak` column in its own migration (from spec 0008).
+- Delete mobile's `stylePrompt` once mobile renders the greeting from the API (from spec 0008).
+- Map API error categories to dictionary text in both frontends, instead of `ServiceError.user_message` (from spec 0008).
+- Move `CHAT_MORE_LABEL` and `GO_TO_LIBRARY_LABEL` into the `replies` row once spec 0008 builds it (from spec 0009).
+- Drop the unused `admin.frameworks.stages` column in its own migration (from spec 0009).
+- Tell the client the ending now offers the body check and lets Mani choose the steps (from spec 0009).
 
 ## Open questions
 - Should call rows also require `model_id`, so `DEFAULT_CHAT_MODEL` and `DEFAULT_SUMMARY_MODEL` go away? Left out of spec 0004 by choice (from spec 0004).

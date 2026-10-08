@@ -8,41 +8,23 @@ import logging
 import time
 from dataclasses import dataclass
 
-import yaml
-
 from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.db import config_tables, pool
 from mani.errors import ErrorCategory, ServiceError
 from mani.models.rows import Prompt
 from mani.prompts.calls import CALL_PROMPTS
+from mani.prompts.checks import REQUIRED_PROMPTS, parse_reply_shapes
+from mani.prompts.replies import Replies, parse_replies
+from mani.prompts.tuning import Tuning, parse_tuning
 
 logger = logging.getLogger(__name__)
-
-# The layers a turn cannot be composed without. The implementation this replaces pushed
-# each layer only `if (prompt)`, so a prompt renamed or deactivated in the portal simply
-# vanished from the system prompt and Mani quietly changed personality.
-# Two authored layers. The framework catalogue between them is generated from the registry
-# rather than stored as a prompt, so it is not listed here and cannot go missing.
-REQUIRED_PROMPTS = ("mani_base", "response_format")
 
 # Used by particular paths rather than every turn, but still misconfiguration if absent: every
 # model call's own row, and the title layer.
 EXPECTED_PROMPTS = tuple(
     dict.fromkeys(REQUIRED_PROMPTS + ("title_generation",) + tuple(sorted(CALL_PROMPTS)))
 )
-
-
-def parse_reply_shapes(content: str) -> frozenset[str]:
-    """The reply shapes the mani_base prompt teaches: the keys of its `reply_shapes` map,
-    trimmed and lowercased. Raises ValueError when the content has no such map, or none to read."""
-    try:
-        shapes = (yaml.safe_load(content) or {}).get("reply_shapes")
-    except (yaml.YAMLError, AttributeError) as exc:
-        raise ValueError(f"mani_base does not parse as a YAML map: {exc}") from exc
-    if not isinstance(shapes, dict) or not shapes:
-        raise ValueError("mani_base has no non empty reply_shapes map")
-    return frozenset(str(name).strip().lower() for name in shapes)
 
 
 def _reply_shapes(content: str) -> frozenset[str]:
@@ -57,6 +39,19 @@ def _reply_shapes(content: str) -> frozenset[str]:
         return frozenset()
 
 
+def _parsed(by_name: dict[str, Prompt], name: str, parse):
+    """A required row parsed, or CONFIG_ERROR: a broken row fails the turn the way a missing one
+    does, and is never taken for a transient failure that keeps the previous snapshot."""
+    try:
+        return parse(by_name[name].content)
+    except ValueError as problem:
+        raise ServiceError(
+            f"prompt {name!r} is unusable: {problem}",
+            ErrorCategory.CONFIG_ERROR,
+            user_message="Mani is not available right now.",
+        ) from problem
+
+
 @dataclass(frozen=True)
 class Config:
     """An immutable snapshot of everything configurable a turn reads."""
@@ -64,6 +59,10 @@ class Config:
     prompts: dict[str, Prompt]
     registry: Registry
     loaded_at: float
+    # What the code sends without the model and the numbers it counts by: required rows,
+    # parsed once per load, with no default here.
+    replies: Replies
+    tuning: Tuning
     # The shapes a reply may report, parsed once per load from the mani_base row.
     reply_shapes: frozenset[str] = frozenset()
 
@@ -110,6 +109,8 @@ async def _read() -> Config:
         prompts=by_name,
         registry=Registry(frameworks),
         loaded_at=time.monotonic(),
+        replies=_parsed(by_name, "replies", parse_replies),
+        tuning=_parsed(by_name, "tuning", parse_tuning),
         reply_shapes=_reply_shapes(by_name["mani_base"].content),
     )
 

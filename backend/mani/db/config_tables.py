@@ -9,6 +9,7 @@ import asyncpg
 from mani.errors import ErrorCategory, ServiceError
 from mani.models.rows import Framework, Prompt
 from mani.prompts.calls import CALL_PROMPTS, effort_problem
+from mani.prompts.checks import REQUIRED_PROMPTS, content_problem
 
 # A closed set, so nothing a request body names can reach a column that is not editable -
 # `version`, `created_by` and the timestamps among them.
@@ -83,6 +84,19 @@ def _check_callable(prompt: Prompt) -> None:
         raise _refuse(problem)
 
 
+def _check_required(prompt: Prompt) -> None:
+    """Refuse a written row whose content the application could not run on, or that a turn
+    cannot go without and is now inactive.
+
+    Run beside `_check_callable`, on the same row in the same transaction, so a refusal stores
+    nothing, not even the version snapshot.
+    """
+    if problem := content_problem(prompt.name, prompt.content):
+        raise _refuse(problem)
+    if prompt.name in REQUIRED_PROMPTS and not prompt.is_active:
+        raise _refuse(f"{prompt.name} is required and cannot be set inactive")
+
+
 async def create_prompt(
     conn: asyncpg.Connection,
     *,
@@ -107,6 +121,7 @@ async def create_prompt(
     )
     prompt = Prompt.model_validate(dict(row))
     _check_callable(prompt)
+    _check_required(prompt)
     return prompt
 
 
@@ -127,8 +142,11 @@ async def update_prompt(
     current = await get_prompt_by_id(conn, prompt_id)
     if current is None:
         return None
-    if current.name in CALL_PROMPTS and changes.get("name", current.name) != current.name:
-        raise _refuse(f"{current.name} is a model call and cannot be renamed")
+    if changes.get("name", current.name) != current.name:
+        if current.name in CALL_PROMPTS:
+            raise _refuse(f"{current.name} is a model call and cannot be renamed")
+        if current.name in REQUIRED_PROMPTS:
+            raise _refuse(f"{current.name} is required and cannot be renamed")
 
     await conn.execute(
         """
@@ -158,6 +176,7 @@ async def update_prompt(
     )
     prompt = Prompt.from_record(row)
     _check_callable(prompt)
+    _check_required(prompt)
     return prompt
 
 

@@ -37,7 +37,7 @@ must avoid**.
   call.
 - **Worked examples (§23)** and the styles doc's scenarios → the routing and
   style-differentiation eval sets.
-- **Rules repeated across all six** → `content/prompts/mani_base.md` (conversation rules and tone) and, for the body check-in and practice after a framework, `content/prompts/somatic.md`, which `scripts/seed.py` appends to every framework's stages.
+- **Rules repeated across all six** → `content/prompts/mani_base.md` (conversation rules and tone) and, for the body check after a framework, its `ending` section, with `scripts/seed.py` appending the two ending phases to every framework (spec 0009 replaced the fixed check in and practices with rules the model follows).
 
 ## Not in these documents
 

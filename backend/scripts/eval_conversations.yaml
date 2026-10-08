@@ -365,16 +365,14 @@
     - "I really can't shake the feeling I'm not good enough at this job."
     - "Honestly I think I'd like some help looking at it."
 
-# muhammad's chat, 2026-10-02: a panic conversation reaching the body check. The body question
-# is asked once; "yes" and "idk" lead to where, with its buttons, and the exercise comes before
-# any Chat More / Go to Library choice.
+# A panic conversation reaching the body check from the last stage: Mani asks how they feel,
+# offers the body check, guides it one step per turn, and asks again how they feel.
 - name: panic_somatic_once
   start_in: {framework: dbt_stop, phase: closing}
   turns:
     - "it is better i guess"
-    - "not a 100% but it feels a little better i guess"
     - "yes"
-    - "yes"
-    - "idk"
-    - "Chest"
+    - "ok"
+    - "I can see my desk, a lamp and the window"
     - "I feel calmer for a second, then it comes back"
+    - "still not great honestly"

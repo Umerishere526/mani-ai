@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from mani.chat.techniques import ENDING_PHASES
 from tests.evals.vocabulary import (
     FEELING_WORDS,
     MAX_CAPSULE_WORDS,
@@ -328,23 +329,24 @@ HANDOFF_BUTTONS = ("chat more", "go to library")
 
 
 def missing_handoff(turns: list[tuple[str | None, list[str]]], messages: list[str] | None = None) -> list[Finding]:
-    """The reply that closes a framework must offer Chat More and Go to Library.
+    """The reply that moves a framework from its ending to retired carries both handoff buttons
+    or neither.
 
-    `turns` pairs the framework phase after each reply with that reply's button labels. The
-    closing reply is the one after the body check-in: the phase goes from `somatic` to cleared.
-    `messages` are what the person sent; if they had already chosen one of the two, the
-    closing reply rightly carries neither.
+    `turns` pairs the framework phase after each reply with that reply's button labels. Both
+    buttons are what a `choice` ending shows; neither is what `keep_talking` shows. One alone
+    is a fault. `messages` are what the person sent; if they had already chosen one of the two,
+    the closing reply rightly carries neither.
     """
     findings: list[Finding] = []
     sent = messages or [""] * len(turns)
     for index, ((before, _), (after, buttons)) in enumerate(zip(turns, turns[1:], strict=False), 1):
         if sent[index].strip().lower() in HANDOFF_BUTTONS:
             continue
-        if before == "somatic" and after is None:
+        if before in ENDING_PHASES and after is None:
             have = {b.strip().lower() for b in buttons}
-            missing = [b for b in HANDOFF_BUTTONS if b not in have]
-            if missing:
-                findings.append(Finding("no hand-off", f"framework ended without {missing}"))
+            shown = [b for b in HANDOFF_BUTTONS if b in have]
+            if len(shown) == 1:
+                findings.append(Finding("no hand-off", f"framework ended with only {shown}"))
     return findings
 
 
@@ -399,9 +401,10 @@ def says_framework(reply: str, names: list[str]) -> list[Finding]:
     return [Finding("said a framework", f"{hits}")] if hits else []
 
 
-def after_framework_questions_asked(replies: list[str], questions: tuple[str, ...]) -> list[Finding]:
+def after_framework_questions_asked(replies: list[str], questions: list[str]) -> list[Finding]:
     """Once a framework has ended and they carried on, each of the client's three questions
-    should come up in the replies that follow. `questions` come from the code, not listed here."""
+    should come up in the replies that follow. `questions` come from the `replies` row's file,
+    not listed here."""
     said = " ".join(r.lower() for r in replies)
     missing = [q for q in questions if q.lower().rstrip("?") not in said]
     return [Finding("after framework", f"not asked: {missing}")] if missing else []

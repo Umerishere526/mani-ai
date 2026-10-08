@@ -11,8 +11,8 @@ import pytest
 from mani.errors import ErrorCategory, ServiceError
 from mani.models.rows import Prompt
 from mani.prompts import cache
-from mani.prompts.cache import parse_reply_shapes
 from mani.prompts.calls import CALL_PROMPTS, EFFORTS, effort_for, effort_problem
+from mani.prompts.checks import parse_reply_shapes
 from scripts import seed
 
 

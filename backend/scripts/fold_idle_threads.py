@@ -15,6 +15,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from mani import memory  # noqa: E402
 from mani.auth.jwt import Claims  # noqa: E402
 from mani.db import memory as memory_db, pool  # noqa: E402
+from mani.prompts import cache  # noqa: E402
 
 
 async def main() -> int:
@@ -24,8 +25,10 @@ async def main() -> int:
     logging.basicConfig(level=logging.INFO)
 
     await pool.open_pool()
-    idle_before = dt.datetime.now(dt.UTC) - memory.IDLE_AFTER
     try:
+        # How long a conversation has to be quiet before it counts as finished.
+        idle_after = dt.timedelta(hours=(await cache.load()).tuning.memory.idle_after_hours)
+        idle_before = dt.datetime.now(dt.UTC) - idle_after
         # Finding who has a quiet thread is cross-user, so it is the one admin read. The
         # folds themselves run as each person, so RLS scopes every write exactly as it does
         # when their own New chat triggers one. Two runners at once is safe: a thread being

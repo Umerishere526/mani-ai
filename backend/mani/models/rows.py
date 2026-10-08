@@ -92,6 +92,9 @@ class TechniqueState(Row):
     phase: str | None = None
     at_message_count: int
     library_offered_since: bool = False
+    # The thread's message count when the framework entered its ending, so the turn cap can
+    # count from it. Null outside the ending.
+    ending_from: int | None = None
 
 
 class ResponseStyle(Row):
@@ -130,9 +133,9 @@ class Framework(Row):
     phases: list[str]
     display_order: int = 0
     # The router's input (weighted phrase lists, redirects, and the phrases that rule a framework
-    # out) and the somatic stages' blocks (purpose, listening cues, readiness, boundaries, the
-    # styled `ask`); a framework's own stages carry none, since `body` holds its eight lines.
-    # activation_conditions holds the Starts when line and is read by nothing.
+    # out). `stages` is empty for every framework, since `body` holds its eight lines and the
+    # mani_base prompt the ending's rules; it is read only by the admin side until the column is
+    # dropped. activation_conditions holds the Starts when line and is read by nothing.
     activation: dict[str, Any] = Field(default_factory=dict)
     stages: dict[str, Any] = Field(default_factory=dict)
 

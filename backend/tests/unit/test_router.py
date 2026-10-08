@@ -3,8 +3,18 @@
 
 import pytest
 
-from mani.chat.router import RECENCY_WEIGHTS, distinction_rules, shortlist, urgent
+from mani.chat import router
+from mani.chat.router import distinction_rules, urgent
 from scripts.seed import FRAMEWORKS_DIR, parse_framework
+from tests.seeded import seeded_tuning
+
+# The seeded router numbers, so the rankings below are the ones the deployed content produces.
+WEIGHTS = seeded_tuning().router
+
+
+def shortlist(messages, activations, rules, weights=WEIGHTS):
+    return router.shortlist(messages, activations, rules, weights)
+
 
 # The shipped activation data, parsed by the seeder itself - the same structures that reach
 # admin.frameworks and then Registry.activations at runtime. A hand-written copy used to
@@ -326,7 +336,14 @@ def test_a_sign_from_the_opening_message_is_still_on_the_shortlist_at_their_sixt
     ranked = shortlist([MANAGER_CHAT[0], "x", "y", "z", "w", "v"], ACTIVATIONS, RULES)
     assert [s.framework_id for s in ranked] == ["abcde"]
     assert ranked[0].matched == ["wants me to fail", "embarrassed me"]
-    assert ranked[0].score == pytest.approx(2 * RECENCY_WEIGHTS[-1])
+    assert ranked[0].score == pytest.approx(2 * WEIGHTS.recency_weights[-1])
+
+
+def test_the_recency_weights_come_from_the_tuning():
+    """With a single weight of 1.0 an old message counts as much as the newest."""
+    flat = WEIGHTS.model_copy(update={"recency_weights": [1.0]})
+    ranked = shortlist([MANAGER_CHAT[0], "x", "y", "z", "w", "v"], ACTIVATIONS, RULES, flat)
+    assert ranked[0].score == pytest.approx(2.0)
 
 
 def test_a_neighbours_own_phrase_can_outrank_it_later_in_the_conversation():

@@ -19,6 +19,13 @@ from mani.llm import chain, client
 from mani.llm.schema import Crisis, Reply, SmartPrompt, Style, TechniqueState
 from mani.models.rows import TechniqueOutcome
 from tests.integration.cleanup import remove_test_users
+from tests.seeded import seeded_replies, seeded_tuning
+
+# The seeded numbers and lines, which a test overrides one key at a time.
+REPLIES = seeded_replies()
+TUNING = seeded_tuning()
+STYLE_WINDOW = TUNING.windows.style_window
+CONTEXT_WINDOW = TUNING.windows.context_window
 
 ALICE = uuid.UUID("a0000000-0000-4000-8000-0000000000d1")
 # The real exercise pick, kept before the autouse fixture below replaces it in every test.
@@ -164,15 +171,48 @@ async def test_a_turn_makes_one_chat_call_and_does_not_retry_a_malformed_reply(a
     assert scripted.last_kwargs["retry_malformed"] is False
 
 
+@pytest.fixture
+def tuned(monkeypatch):
+    """Runs turns on the seeded config with some tuning keys replaced:
+    `await tuned(windows={"context_window": 4})`."""
+
+    async def install(**groups):
+        config = await orchestrator.cache.load()
+        changed = dataclasses.replace(config, tuning=seeded_tuning(**groups))
+
+        async def load():
+            return changed
+
+        monkeypatch.setattr(orchestrator.cache, "load", load)
+
+    return install
+
+
+async def test_the_history_the_model_sees_and_the_summary_trigger_follow_the_tuned_window(
+    alice, model, tuned
+):
+    await tuned(windows={"context_window": 4})
+    scripted = model(Reply(text="What happened next?"))
+    thread = await start(alice)
+
+    first = await send(alice, thread.id, "I had a hard day")
+    second = await send(alice, thread.id, "My manager shouted at me")
+    third = await send(alice, thread.id, "I did not know what to say")
+
+    # The system prompt, the last four stored messages, and this turn's message.
+    assert len(scripted.last_messages) == 1 + 4 + 1
+    # The greeting and two exchanges have 5 messages after the second turn, and nothing is summarized.
+    assert (first.needs_summary, second.needs_summary, third.needs_summary) == (False, True, True)
+
+
 async def test_the_model_replies_out_with_only_its_unstorable_parts_taken_out(alice, model):
-    """Leaked script text, a stage jumped to, a repeated label and an unknown technique id: the
-    words go out as written, and only the technique button and the offer it answered go."""
+    """Leaked script text, a stage jumped to and an unknown technique id: the words go out as
+    written, and only the technique button goes."""
     written = "Here you go. What happened?\n\n**Mani:** breathe\n\n(Include prompts: yes/no)"
     scripted = model(
         Reply(
             text=written,
             prompts=[
-                SmartPrompt(label="Tell me more"),
                 SmartPrompt(label="Tell me more"),
                 SmartPrompt(label="Try it", technique="made_up_technique"),
                 SmartPrompt(label="Later"),
@@ -186,7 +226,7 @@ async def test_the_model_replies_out_with_only_its_unstorable_parts_taken_out(al
 
     assert scripted.calls == 1
     assert turn.content == written
-    assert [p.label for p in turn.prompts] == ["Later"]
+    assert [p.label for p in turn.prompts] == ["Tell me more", "Later"]
 
 
 # Drafts that break a rule the prompt states: each is stored as the model wrote it, after one call.
@@ -414,7 +454,7 @@ async def test_the_turn_is_stored_and_the_thread_state_follows_it(alice, model):
     await send(alice, thread.id, "everything feels like too much")
 
     async with pool.as_user(alice) as conn:
-        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE, STYLE_WINDOW)
 
     assert ctx.technique.framework_id == "abcde"
     assert ctx.technique.outcome is TechniqueOutcome.OFFERED
@@ -442,7 +482,7 @@ async def test_tapping_the_offer_records_acceptance(alice, model):
     await send(alice, thread.id, "Yes, let's try it")
 
     async with pool.as_user(alice) as conn:
-        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE, STYLE_WINDOW)
 
     assert ctx.technique.outcome is TechniqueOutcome.ACCEPTED
     assert ctx.technique.phase == "activate"
@@ -457,7 +497,7 @@ async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, m
     the user's message and Mani's reply go down with it. The row has to survive, because
     at_message_count is what the next turn's cooldown is measured from.
     """
-    model(Reply(text="How has the rest of the week been?"))
+    model(Reply(text="How has the rest of the week been?", ending="choice"))
     from mani.db import pool
 
     thread = await start(alice)
@@ -472,16 +512,20 @@ async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, m
     turn = await send(alice, thread.id, "that helped, thanks")
 
     assert turn.content == "How has the rest of the week been?"
+    assert [(p.label, p.library) for p in turn.prompts] == [
+        ("Chat More", None), ("Go to Library", "home"),
+    ]
 
     async with pool.as_user(alice) as conn:
-        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE, STYLE_WINDOW)
 
     # Retired, not deleted: the framework is finished but the thread remembers running it.
     assert ctx.technique is not None
     assert ctx.technique.phase is None
     assert ctx.technique.outcome is TechniqueOutcome.ACCEPTED
     assert ctx.technique.at_message_count == 2
-    assert "cooldown_passed: no" in context.build(ctx)
+    assert ctx.technique.ending_from is None
+    assert "cooldown_passed: no" in context.build(ctx, replies=REPLIES, tuning=TUNING)
     assert [m.role for m in (await _history(alice, thread.id))][-2:] == ["user", "mani"]
 
 
@@ -489,28 +533,24 @@ async def test_an_offer_button_on_the_turn_that_retires_a_framework_cannot_cance
     alice, model
 ):
     """The offer's OFFERED row would be written over the retirement, so the finished framework
-    would be running again. They have already chosen Chat More, so no choices are written, and
-    the model's offer goes with the Keep chatting that answers it."""
+    would be running again. The model's offer goes, and the two choices are the only buttons."""
     model(Reply(
         text="That is a good place to stop. Want to try another?",
         prompts=[SmartPrompt(label="Try it", technique="thought_reframe"),
                  SmartPrompt(label="Keep chatting", decline=True)],
-        state=TechniqueState(technique="thought_reframe", step="offering"),
+        state=TechniqueState(technique="abcde", step="somatic_practice"),
+        ending="choice",
     ))
     from mani.db import pool
 
     thread = await start(alice)
-    async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
-            conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="somatic_practice",
-        )
+    await _land_on(alice, thread.id, "somatic_practice")
 
-    turn = await send(alice, thread.id, "Chat More")
+    turn = await send(alice, thread.id, "that helped, thanks")
 
-    assert turn.prompts == []
+    assert [p.label for p in turn.prompts] == ["Chat More", "Go to Library"]
     async with pool.as_user(alice) as conn:
-        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE, STYLE_WINDOW)
     assert (ctx.technique.framework_id, ctx.technique.phase) == ("abcde", None)
     assert ctx.technique.outcome is TechniqueOutcome.ACCEPTED
 
@@ -542,15 +582,19 @@ async def test_a_library_button_from_the_model_does_not_silence_the_library_offe
     assert "library_pending: yes" in scripted.last_messages[-1]["content"].splitlines()
 
 
-async def _retire_abcde_on(alice, thread_id) -> None:
-    """Land a thread on ABCDE's final phase, so the next turn is the completing one."""
+async def _land_on(alice, thread_id, phase) -> None:
     from mani.db import pool
 
     async with pool.as_user(alice) as conn:
         await threads.set_technique_outcome(
             conn, thread_id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="somatic_practice",
+            at_message_count=2, phase=phase,
         )
+
+
+async def _retire_abcde_on(alice, thread_id) -> None:
+    """Land a thread on ABCDE's last ending phase, so a reply that sets `ending` completes it."""
+    await _land_on(alice, thread_id, "somatic_practice")
 
 
 @pytest.fixture
@@ -616,7 +660,7 @@ async def test_a_completing_framework_with_an_empty_catalog_still_costs_one_call
 ):
     """With nothing in the catalog the hand-off's second call never happens, and a
     completing turn costs exactly what every other turn costs."""
-    scripted = model(Reply(text="How has the rest of the week been?"))
+    scripted = model(Reply(text="How has the rest of the week been?", ending="choice"))
     chooser = ScriptedChooser()
     monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
 
@@ -635,7 +679,7 @@ async def test_a_completing_framework_hands_off_to_its_exercise(
 ):
     """With something in the catalog for that framework, the turn spends a second call -
     a bound tool call - and the reply carries the exercise it chose."""
-    scripted = model(Reply(text="How has the rest of the week been?"))
+    scripted = model(Reply(text="How has the rest of the week been?", ending="choice"))
     chooser = ScriptedChooser()
     monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
 
@@ -657,7 +701,7 @@ async def test_the_hand_off_chooses_from_the_whole_catalog_for_this_conversation
 ):
     """Every active exercise is a candidate, the framework's own listed first, and the
     chooser sees what the person just said - so a library exercise can win on fit."""
-    model(Reply(text="How has the rest of the week been?"))
+    model(Reply(text="How has the rest of the week been?", ending="choice"))
     chooser = ScriptedChooser(chosen=str(library_exercise))
     monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
 
@@ -709,7 +753,7 @@ async def test_an_exercise_row_with_no_level_offers_the_first_candidate_without_
 ):
     """The reply is already built when the pick runs, so a broken exercise_select row costs
     the pick and not the turn, and nothing is sent at a level nobody chose."""
-    model(Reply(text="How has the rest of the week been?"))
+    model(Reply(text="How has the rest of the week been?", ending="choice"))
     chooser = ScriptedChooser()
     monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
     await serve_with_row(monkeypatch, "exercise_select", model_parameters={"maxTokens": 200})
@@ -775,7 +819,7 @@ async def test_the_exercise_pick_sends_what_its_own_row_names(
     monkeypatch.setattr(chain, "_model", spy)
     monkeypatch.setattr(get_settings(), "openrouter_api_key", "sk-test-not-a-real-key")
     monkeypatch.setattr(orchestrator.client, "choose_exercise", REAL_CHOOSE_EXERCISE)
-    model(Reply(text="How has the rest of the week been?"))
+    model(Reply(text="How has the rest of the week been?", ending="choice"))
 
     thread = await start(alice)
     await _retire_abcde_on(alice, thread.id)
@@ -816,7 +860,7 @@ async def test_asking_about_an_offer_leaves_it_open(alice, model):
     await send(alice, thread.id, "what would that involve?")
 
     async with pool.as_user(alice) as conn:
-        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE, STYLE_WINDOW)
 
     assert ctx.technique.outcome is TechniqueOutcome.OFFERED
 
@@ -889,9 +933,8 @@ async def test_the_router_shortlist_reaches_the_prompt_without_a_second_call(ali
 
 
 async def test_a_framework_completing_on_a_crisis_turn_is_still_retired(alice, model):
-    """A crisis turn is still a turn. It used to return before the end-of-turn write, so a
-    framework that finished on the same message stayed mid-flight forever - and the thread
-    locks one way, so nothing would ever correct it."""
+    """A crisis turn makes no model call, so no `ending` can come: a framework in its ending is
+    retired here or never, and the thread locks one way, so nothing would correct it later."""
     from mani.db import pool
 
     thread = await start(alice)
@@ -986,7 +1029,7 @@ async def test_starting_a_chat_twice_reuses_the_untouched_thread(alice):
     assert created_first is True and created_second is False
 
     async with pool.as_user(alice) as conn:
-        history = await messages_db.recent_for_context(conn, first.id, ALICE)
+        history = await messages_db.recent_for_context(conn, first.id, ALICE, CONTEXT_WINDOW)
     assert len(history) == 1, "a reused thread must not get a second greeting"
 
 
@@ -1021,7 +1064,7 @@ async def test_buttons_are_returned_only_on_manis_newest_message(alice, model):
     await send(alice, thread.id, "Yes, let's try it")
 
     async with pool.as_user(alice) as conn:
-        history = await messages_db.recent_for_context(conn, thread.id, ALICE)
+        history = await messages_db.recent_for_context(conn, thread.id, ALICE, CONTEXT_WINDOW)
         live = await messages_db.latest_mani_id(conn, thread.id, ALICE)
 
     rendered = to_messages(history, live)
@@ -1064,7 +1107,7 @@ async def _history(claims: Claims, thread_id):
     from mani.db import pool
 
     async with pool.as_user(claims) as conn:
-        return await messages_db.recent_for_context(conn, thread_id, ALICE)
+        return await messages_db.recent_for_context(conn, thread_id, ALICE, CONTEXT_WINDOW)
 
 
 async def test_a_concern_pauses_a_running_framework_for_that_turn(alice, model):
@@ -1096,7 +1139,7 @@ async def test_a_concern_pauses_a_running_framework_for_that_turn(alice, model):
     assert not any(p.technique for p in turn.prompts)
 
     async with pool.as_user(alice) as conn:
-        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE, STYLE_WINDOW)
     assert ctx.technique.phase == "belief"
 
 
@@ -1136,7 +1179,7 @@ async def test_a_finished_framework_no_longer_counts_as_running(alice, model):
             # Finished long enough ago that the cooldown has passed: what this checks is that
             # the finished row no longer blocks offers, not the cooldown itself.
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=-context.COOLDOWN_AFTER_COMPLETE, phase=None,
+            at_message_count=-TUNING.offers.cooldown_after_complete, phase=None,
         )
 
     turn = await send(alice, thread.id, "something else happened today")
@@ -1179,9 +1222,9 @@ async def test_tapping_decline_records_it_even_when_the_model_reports_no_state(a
     await send(alice, thread.id, "Not right now")
 
     async with pool.as_user(alice) as conn:
-        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE, STYLE_WINDOW)
     assert ctx.technique.outcome is TechniqueOutcome.DECLINED
-    assert "active_framework" not in context.build(ctx)
+    assert "active_framework" not in context.build(ctx, replies=REPLIES, tuning=TUNING)
 
 
 async def test_an_empty_reply_fails_cleanly_and_stores_nothing(alice, model):
@@ -1229,7 +1272,7 @@ async def test_choosing_a_style_sets_it_and_opens_in_it_with_no_model_call(alice
     assert turn.prompts == []
     assert scripted.calls == 0
     async with pool.as_user(alice) as conn:
-        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE, STYLE_WINDOW)
     assert ctx.thread.conversation_style.value == "reflective"
 
     await send(alice, thread.id, "I keep going over an argument with my sister")
@@ -1345,148 +1388,221 @@ async def test_a_crisis_is_still_answered_past_the_daily_limit(alice, model, mon
     assert turn.crisis_detected
 
 
-async def test_finishing_a_framework_always_offers_chat_more_and_the_library(alice, model):
-    """The client's cadence ends every framework on the same two choices. Left to the model
-    they came back mislabeled ("Something else"), or not at all, on the reply that ends it."""
-    model(Reply(text="Your shoulders feel looser. Does that feel right? What would you like next?",
-                prompts=[SmartPrompt(label="Something else")]))
+async def _state_row(thread_id) -> asyncpg.Record:
     from mani.db import pool
 
-    thread = await start(alice)
-    async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
-            conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="somatic_practice",
+    async with pool.as_admin() as conn:
+        return await conn.fetchrow(
+            "select phase, outcome, ending_from, library_offered_since "
+            "from public.thread_technique_state where thread_id = $1",
+            thread_id,
         )
+
+
+async def _set_counts(thread_id, *, message_count: int, ending_from: int) -> None:
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set message_count = $2 where id = $1", thread_id, message_count
+        )
+        await conn.execute(
+            "update public.thread_technique_state set ending_from = $2 where thread_id = $1",
+            thread_id, ending_from,
+        )
+
+
+def _ending(text: str, ending: str | None, step: str = "somatic_practice", **kwargs) -> Reply:
+    return Reply(
+        text=text, ending=ending, state=TechniqueState(technique="abcde", step=step), **kwargs
+    )
+
+
+async def test_a_choice_ends_the_framework_with_the_two_buttons_and_an_exercise(
+    alice, model, monkeypatch, abcde_exercise
+):
+    """The model's own buttons never reach the person: the ending's two choices are written by
+    the code, the state the same reply reports (a hold on somatic_practice) cannot write the
+    framework back over its retirement, and the card is picked."""
+    chooser = ScriptedChooser()
+    monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
+    scripted = model(
+        _ending("It is good you feel steadier. What would you like next?", "choice",
+                prompts=[SmartPrompt(label="Something else")]),
+        Reply(text="What is on your mind now?"),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "somatic_practice")
 
     turn = await send(alice, thread.id, "my shoulders feel a bit looser")
-    assert [(p.label, p.library) for p in turn.prompts] == [
-        ("Chat More", None), ("Go to Library", "home"),
-    ]
-
-
-async def test_the_body_check_in_waits_for_their_answer_before_the_two_choices(alice, model):
-    """The client's order: ask about the body, mirror what they notice, then Chat More / Go to
-    Library. Observed: the model put both on the check-in question, and they came again on the
-    reply after it."""
-    model(Reply(text="What are you noticing in your body now, compared with when we started?",
-                prompts=[SmartPrompt(label="Chat More"),
-                         SmartPrompt(label="Go to Library", library="home")],
-                state=TechniqueState(technique="abcde", step="somatic_checkin")))
-    from mani.db import pool
-
-    thread = await start(alice)
-    async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
-            conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="closing",
-        )
-
-    turn = await send(alice, thread.id, "yes, that fits what happened")
-    assert turn.prompts == []
-
-
-async def _land_on(alice, thread_id, phase) -> None:
-    from mani.db import pool
-
-    async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
-            conn, thread_id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase=phase,
-        )
-
-
-PLACES = ["Chest", "Head", "Stomach", "Somewhere else"]
-
-
-async def test_a_body_they_already_described_is_asked_where_not_handed_off(alice, model):
-    """muhammad, 2026-10-02: "a bit lighter in my chest" reached Chat More / Go to Library with no
-    practice at all, and tapping Chat More asked about the body again. A body described before
-    the check-in is answered with where they feel it."""
-    model(
-        Reply(text="You feel a bit lighter. What would you like to do next?",
-              state=TechniqueState(technique="abcde", step="somatic_checkin")),
-        Reply(text="Your chest feels lighter. What would you like to do next?",
-              state=TechniqueState(technique="abcde", step="somatic_checkin")),
-    )
-    thread = await start(alice)
-    await _land_on(alice, thread.id, "closing")
-
-    turn = await send(alice, thread.id, "a bit lighter")
-    assert turn.content.startswith("You feel a bit lighter.")
-    assert turn.content.endswith("Where are you feeling that most right now?")
-    assert [p.label for p in turn.prompts] == PLACES
-
-    named = await send(alice, thread.id, "in my chest")
-    assert "Place one hand on your chest." in named.content
-
-
-async def test_the_body_is_asked_about_once_then_where_then_the_practice(alice, model):
-    """muhammad, 2026-10-02: "yes" to the body check-in got the same question back, and "idk"
-    ended the chat on Chat More. Yes leads to where; idk leads to where again, with its buttons;
-    a place leads to its practice; and the two choices come only after the practice."""
-    model(
-        Reply(text="You were able to stay with the pause. How has it been?",
-              state=TechniqueState(technique="abcde", step="somatic_checkin")),
-        Reply(text="It feels a little better. Would you like to notice what is happening in your body?",
-              state=TechniqueState(technique="abcde", step="somatic_checkin")),
-        Reply(text="It is not always easy to say where. Is it your chest or your shoulders?",
-              state=TechniqueState(technique="abcde", step="somatic_practice")),
-        Reply(text="Chest, I see.", state=TechniqueState(technique="abcde", step="somatic_practice")),
-        Reply(text="Panic comes in waves. Would you like the library?"),
-    )
-    thread = await start(alice)
-    await _land_on(alice, thread.id, "closing")
-
-    checked_in = await send(alice, thread.id, "not a 100% but a little better")
-    assert checked_in.content.endswith("Would you like to notice what is happening in your body?")
-
-    said_yes = await send(alice, thread.id, "yes")
-    assert said_yes.content.count("notice what is happening in your body") == 0
-    assert said_yes.content.endswith("Where are you feeling that most right now?")
-    assert [p.label for p in said_yes.prompts] == PLACES
-
-    unsure = await send(alice, thread.id, "idk")
-    assert unsure.content.endswith("Where are you feeling that most right now?")
-    assert [p.label for p in unsure.prompts] == PLACES
-
-    named = await send(alice, thread.id, "Chest")
-    assert "Place one hand on your chest." in named.content
-    assert named.prompts == []
-
-    after = await send(alice, thread.id, "I feel calmer for a second, then it comes back")
-    assert [(p.label, p.library) for p in after.prompts] == [
-        ("Chat More", None), ("Go to Library", "home"),
-    ]
-
-
-async def test_declining_the_body_check_goes_to_the_two_choices(alice, model):
-    model(Reply(text="You would rather not check in. Would you like to keep chatting or go to the Library?",
-                state=TechniqueState(technique="abcde", step="somatic_checkin")))
-    thread = await start(alice)
-    await _land_on(alice, thread.id, "closing")
-
-    turn = await send(alice, thread.id, "not now")
 
     assert [(p.label, p.library) for p in turn.prompts] == [
         ("Chat More", None), ("Go to Library", "home"),
     ]
+    assert chooser.calls == 1
+    assert turn.exercise is not None
+    row = await _state_row(thread.id)
+    assert (row["phase"], row["ending_from"], row["library_offered_since"]) == (None, None, True)
+
+    await send(alice, thread.id, "Chat More")
+    sent = scripted.last_messages[-1]["content"].splitlines()
+    assert "library_pending: yes" not in sent
+    assert "conversation_phase: talking" in sent
 
 
-async def test_a_choice_already_made_is_not_offered_again(alice, model):
-    """If they have already said Chat More, the ending reply just carries on talking."""
-    model(Reply(text="We can keep talking. What's on your mind now?"))
+@pytest.mark.parametrize("phase", ["somatic_practice", "somatic_checkin"])
+async def test_keep_talking_ends_the_framework_with_no_buttons_and_no_exercise(
+    alice, model, monkeypatch, abcde_exercise, phase
+):
+    """Someone who still feels bad, or declined the check feeling bad, is not handed a menu."""
+    chooser = ScriptedChooser()
+    monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
+    scripted = model(
+        _ending("I am here. What is it that is still sitting with you?", "keep_talking", step=phase,
+                prompts=[SmartPrompt(label="Chat More")]),
+        Reply(text="Tell me more."),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, phase)
+
+    turn = await send(alice, thread.id, "still not great honestly")
+
+    assert turn.prompts == []
+    assert turn.exercise is None
+    assert chooser.calls == 0
+    row = await _state_row(thread.id)
+    assert (row["phase"], row["ending_from"], row["library_offered_since"]) == (None, None, True)
+
+    await send(alice, thread.id, "it is my sister")
+    sent = scripted.last_messages[-1]["content"].splitlines()
+    assert "conversation_phase: talking" in sent
+    assert "library_pending: yes" not in sent
+    assert not any(line.startswith("active_framework") for line in sent)
+
+
+async def test_a_declined_body_check_that_feels_fine_can_end_from_the_offer_stage(alice, model):
+    model(_ending("Okay, that is fine.", "choice", step="somatic_checkin"))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "somatic_checkin")
+
+    turn = await send(alice, thread.id, "no thanks, I feel fine")
+
+    assert [p.label for p in turn.prompts] == ["Chat More", "Go to Library"]
+    assert (await _state_row(thread.id))["phase"] is None
+
+
+async def test_an_ending_the_model_sets_before_the_ending_is_open_changes_nothing(alice, model):
+    model(Reply(text="What happened next?", ending="choice",
+                state=TechniqueState(technique="abcde", step="belief")))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "belief")
+
+    turn = await send(alice, thread.id, "she ignored my message")
+
+    assert turn.prompts == []
+    assert (await _state_row(thread.id))["phase"] == "belief"
+
+
+async def test_a_reply_that_offers_the_body_check_is_not_also_the_end(alice, model):
+    model(_ending("Would you like a short body check?", "choice", step="somatic_checkin"))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "closing")
+
+    turn = await send(alice, thread.id, "yes, it feels a bit lighter")
+
+    assert turn.prompts == []
+    row = await _state_row(thread.id)
+    assert row["phase"] == "somatic_checkin"
+    assert row["outcome"] == TechniqueOutcome.ACCEPTED
+
+
+@pytest.mark.parametrize("phase", ["closing", "somatic_checkin", "somatic_practice"])
+async def test_the_model_sends_no_buttons_of_its_own_during_the_ending(alice, model, phase):
+    model(_ending("Breathe in slowly. What do you notice?", None, step=phase,
+                  prompts=[SmartPrompt(label="Chest"), SmartPrompt(label="Go to Library", library="home")]))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, phase)
+
+    turn = await send(alice, thread.id, "okay")
+
+    assert turn.prompts == []
+
+
+async def test_a_safety_concern_pauses_the_ending_instead_of_ending_it(alice, model):
+    model(_ending("I am here with you. Tell me more about that.", "choice",
+                  prompts=[SmartPrompt(label="Go to Library", library="home")]))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "somatic_practice")
+
+    turn = await send(alice, thread.id, "I don\u2019t want to be here anymore")
+
+    assert turn.crisis_detected is False
+    assert turn.prompts == []
+    row = await _state_row(thread.id)
+    assert (row["phase"], row["outcome"]) == ("somatic_practice", TechniqueOutcome.ACCEPTED)
+
+
+async def test_the_ending_starts_counting_once_and_a_step_back_cannot_restart_it(alice, model):
     from mani.db import pool
 
+    model(
+        _ending("Would you like a short body check?", None, step="somatic_checkin"),
+        _ending("Breathe in for four. What do you notice?", None, step="somatic_practice"),
+        _ending("Let us go back to how you feel. How is it now?", None, step="closing"),
+        _ending("Glad it eased.", "choice", step="closing"),
+    )
     thread = await start(alice)
-    async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
-            conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="somatic_practice",
-        )
+    await _land_on(alice, thread.id, "closing")
 
-    turn = await send(alice, thread.id, "Chat More")
+    await send(alice, thread.id, "yes, a bit lighter")
+    first = await _state_row(thread.id)
+    async with pool.as_user(alice) as conn:
+        count = (await threads.get(conn, thread.id, ALICE)).message_count
+    assert first["ending_from"] == count
+
+    await send(alice, thread.id, "yes please")
+    assert (await _state_row(thread.id))["ending_from"] == first["ending_from"]
+    await send(alice, thread.id, "I can see a lamp")
+    stepped_back = await _state_row(thread.id)
+    assert (stepped_back["phase"], stepped_back["ending_from"]) == ("closing", first["ending_from"])
+
+    await send(alice, thread.id, "better now")
+    assert (await _state_row(thread.id))["ending_from"] is None
+
+
+async def test_a_framework_the_model_never_ends_retires_at_the_turn_cap_before_the_call(
+    alice, model, monkeypatch, abcde_exercise
+):
+    chooser = ScriptedChooser()
+    monkeypatch.setattr(orchestrator.client, "choose_exercise", chooser)
+    scripted = model(_ending("Breathe in. What do you notice?", None,
+                             prompts=[SmartPrompt(label="Chest")]))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "somatic_practice")
+    await _set_counts(thread.id, message_count=30, ending_from=30 - 2 * TUNING.windows.ending_turn_cap)
+
+    turn = await send(alice, thread.id, "I do not know")
+
+    sent = scripted.last_messages[-1]["content"].splitlines()
+    assert not any(line.startswith("active_framework") for line in sent)
     assert turn.prompts == []
+    assert turn.exercise is None
+    assert chooser.calls == 0
+    row = await _state_row(thread.id)
+    assert (row["phase"], row["ending_from"], row["library_offered_since"]) == (None, None, True)
+
+
+async def test_one_turn_short_of_the_cap_the_ending_carries_on(alice, model):
+    scripted = model(_ending("Breathe in. What do you notice?", None))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "somatic_practice")
+    await _set_counts(thread.id, message_count=30, ending_from=30 - 2 * (TUNING.windows.ending_turn_cap - 1))
+
+    await send(alice, thread.id, "I do not know")
+
+    sent = scripted.last_messages[-1]["content"].splitlines()
+    assert "active_framework: abcde" in sent
+    assert (await _state_row(thread.id))["phase"] == "somatic_practice"
 
 
 async def test_carrying_on_past_an_offer_is_keep_chatting(alice, model):
@@ -1512,10 +1628,12 @@ async def test_carrying_on_past_an_offer_is_keep_chatting(alice, model):
     await send(alice, thread.id, "my manager criticized me in front of everyone")
     turn = await send(alice, thread.id, "every time I try to start I pick the phone back up")
 
-    assert turn.prompts == []
+    # Its Try it and Keep chatting went with the decline; a Tell me about this answers nothing in
+    # particular and stays.
+    assert [p.label for p in turn.prompts] == ["Tell me about this"]
     assert turn.content == offered_again.text
     async with pool.as_user(alice) as conn:
-        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE, STYLE_WINDOW)
     assert ctx.technique.outcome is TechniqueOutcome.DECLINED
 
 
@@ -1542,7 +1660,7 @@ async def test_an_offer_they_typed_past_is_flagged_then_closed(alice, model):
     assert "stage: offering" in sent.splitlines()
     assert not any(line.startswith(("stage_", "next_stage")) for line in sent.splitlines())
     async with pool.as_user(alice) as conn:
-        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE, STYLE_WINDOW)
     assert ctx.technique.outcome is TechniqueOutcome.DECLINED
 
 
@@ -1571,7 +1689,7 @@ async def test_asking_for_a_declined_framework_themselves_starts_it(alice, model
     await send(alice, thread.id, "actually I'd like some help looking at it")
 
     async with pool.as_user(alice) as conn:
-        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE, STYLE_WINDOW)
     assert (ctx.technique.framework_id, ctx.technique.outcome, ctx.technique.phase) == (
         "abcde", TechniqueOutcome.ACCEPTED, "activate",
     )
@@ -1604,24 +1722,3 @@ async def test_a_declined_framework_can_be_offered_again_after_a_few_replies(ali
 
     again = await send(alice, thread.id, "maybe I do want to look at it")
     assert [p.technique for p in again.prompts if p.technique] == ["abcde"]
-
-
-async def test_the_body_check_in_is_sent_from_the_script_not_reworded(alice, model):
-    """The client: the somatic flow follows the supplied script exactly (2026-09-24)."""
-    model(
-        Reply(
-            text="How does your body feel after all that?",
-            state=TechniqueState(technique="abcde", step="somatic_checkin"),
-        ),
-    )
-    from mani.db import pool
-
-    thread = await start(alice)
-    async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
-            conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="closing",
-        )
-
-    turn = await send(alice, thread.id, "yes, that fits what happened")
-    assert turn.content.endswith("Would you like to notice what is happening in your body?")

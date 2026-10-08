@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 # on it to tell "nothing started" apart from "started at the beginning".
 OFFERING = "offering"
 
+# The body ending every framework closes with: the offer of the body check, then its steps.
+# The seed appends them after each framework's own phases; what Mani says in them is the
+# mani_base prompt's `ending` section.
+ENDING_PHASES = ("somatic_checkin", "somatic_practice")
+
 
 class Verdict(StrEnum):
     OK = "ok"
@@ -83,17 +88,17 @@ class Registry:
     def get(self, framework_id: str | None) -> Framework | None:
         return self._by_id.get(framework_id) if framework_id else None
 
-    def is_final(self, framework_id: str | None, phase: str | None) -> bool:
-        """Whether this phase is the last one in the framework's sequence.
+    def ending_open(self, framework_id: str | None, phase: str | None) -> bool:
+        """Whether the framework is far enough along that a reply may end it: on its last own
+        phase, where Mani asks how they feel, or on one of the ending phases after it.
 
-        Completion is a position, not a name. Comparing against a literal phase id can
-        only ever recognise the frameworks that happen to end on it, and makes any phase
-        appended after it unreachable.
+        False for a framework whose phases carry no ending, such as one seeded before the
+        ending was appended, so nothing can end it early.
         """
         framework = self.get(framework_id)
-        if framework is None or phase is None:
+        if framework is None or phase is None or ENDING_PHASES[0] not in framework.phases:
             return False
-        return bool(framework.phases) and framework.phases[-1] == phase
+        return framework.phase_index(phase) >= framework.phases.index(ENDING_PHASES[0]) - 1
 
     def validate_transition(
         self,

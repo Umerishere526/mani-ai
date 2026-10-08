@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import pytest
 
+from mani.chat.techniques import ENDING_PHASES
 from scripts.seed import FRAMEWORKS_DIR, check_distinctions, parse_framework
 
 FRONTMATTER = """---
@@ -47,6 +48,13 @@ def test_eight_labelled_lines_seed_as_the_body_and_starts_when_as_the_activation
     assert parsed["activation_conditions"] == LINES[0].removeprefix("Starts when: ")
     assert parsed["stages"] == {}
     assert parsed["phases"][0] == "offering"
+
+
+def test_the_body_ending_follows_the_files_own_phases_in_every_shipped_framework():
+    for path in sorted(FRAMEWORKS_DIR.glob("*.md")):
+        parsed = parse_framework(path)
+        assert parsed["phases"][-3:] == ["closing", *ENDING_PHASES], path.name
+        assert parsed["stages"] == {}, path.name
 
 
 def _replaced(index, line):

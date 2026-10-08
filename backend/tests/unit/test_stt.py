@@ -13,6 +13,7 @@ from mani.llm import chain
 from mani.models.rows import Prompt
 from mani.prompts.cache import Config
 from scripts.seed import PROMPTS_DIR, parse_prompt
+from tests.seeded import seeded_replies, seeded_tuning
 
 SAID = "Hola, estoy cansado."
 
@@ -57,7 +58,7 @@ def install(monkeypatch, *rows: Prompt) -> FakeCompletions:
     ))
     config = Config(
         prompts={row.name: row for row in rows}, registry=Registry([]),
-        loaded_at=time.monotonic(),
+        loaded_at=time.monotonic(), replies=seeded_replies(), tuning=seeded_tuning(),
     )
 
     async def load() -> Config:

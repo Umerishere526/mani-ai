@@ -4,12 +4,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import StrEnum
 
-from mani.chat.greeting import EXPLAIN_LABELS
 from mani.chat.techniques import Registry
 from mani.llm.schema import LibrarySection, Reply, SmartPrompt, Style
 
 MAX_TITLE_LENGTH = 100
+
+
+class Ending(StrEnum):
+    """How a reply ends a framework, as response_format.md's `fields.ending` names them."""
+
+    CHOICE = "choice"
+    KEEP_TALKING = "keep_talking"
 
 # Keyed lowercase so a model's casing does not matter; valued at the canonical casing so
 # whatever reaches the client to navigate on is always exactly what LibrarySection defines.
@@ -36,17 +43,17 @@ class Checked:
     framework_id: str | None
     phase: str | None
     style: Style | None = None
+    ending: Ending | None = None
     # Which guards fired, for the log and for a measure of how often the model slips on structure.
     notes: list[str] = field(default_factory=list)
 
 
 def _is_offer_button(prompt: SmartPrompt) -> bool:
-    return bool(prompt.technique or prompt.decline or prompt.label.strip().lower() in EXPLAIN_LABELS)
+    return bool(prompt.technique or prompt.decline)
 
 
 def without_offer(prompts: list[SmartPrompt]) -> list[SmartPrompt]:
-    """The buttons with the offer taken out: its Try it, and the Keep chatting and Tell me about
-    this that only answer it."""
+    """The buttons with the offer taken out: its Try it, and the Keep chatting that only answers it."""
     return [p for p in prompts if not _is_offer_button(p)]
 
 
@@ -62,18 +69,65 @@ def check(
     retiring: bool,
     wants_title: bool,
     shapes: frozenset[str],
+    ending_open: bool = False,
 ) -> Checked:
     """The reply as the model wrote it, with only what cannot be stored or shown taken out.
 
     Text is the model's own, trimmed. A button is dropped when it has no label, offers a
     framework the registry does not hold, or would open an offer where one cannot stand: while
-    a framework runs, on the turn they said no, or on the turn a finished framework retires,
-    where the offer's row would overwrite the decline or the retirement. An offer left without
-    its Try it takes its Keep chatting and Tell me about this with it. A model reported stage
-    is clamped to the order the framework runs in. A reported shape is kept only when it is one
-    of `shapes`, the ones the mani_base prompt teaches.
+    a framework runs, on the turn they said no, or on the turn a framework retires, where the
+    offer's row would overwrite the decline or the retirement. An offer left without its Try it
+    takes its Keep chatting with it. A model reported stage is clamped to
+    the order the framework runs in. A reported shape is kept only when it is one of `shapes`,
+    the ones the mani_base prompt teaches. A reported ending is kept only while `ending_open`,
+    when it is one of Ending, and when the reply does not also move the stage forward, since a
+    reply that offers the body check or starts its steps is not the end.
     """
     notes: list[str] = []
+
+    framework_id: str | None = None
+    phase: str | None = None
+    if reply.state is not None:
+        if reply.state.technique not in registry:
+            notes.append("ignored state: technique not in the registry")
+        elif framework_running and reply.state.technique != current_framework_id:
+            # Every framework shares stage ids like somatic_checkin and closing, so the
+            # transition check alone would let a reply record a framework the person never
+            # accepted.
+            notes.append("ignored state: not the running framework")
+        else:
+            framework_id = reply.state.technique
+            # Accepting an offer this turn means the phase being left is the offering one,
+            # whatever the stored row still says. What they told Mani before accepting
+            # answers the first stage, so the reply may already be asking the second.
+            previous = current_phase
+            if accepted_this_turn:
+                known = registry.get(framework_id)
+                phases = known.phases if known else []
+                first = phases.index("offering") + 1 if "offering" in phases else -1
+                previous = phases[first] if 0 < first < len(phases) else "offering"
+            transition = registry.validate_transition(
+                framework_id, previous, reply.state.step
+            )
+            phase = registry.clamp(framework_id, previous, reply.state.step)
+            if not transition.ok:
+                notes.append(f"corrected the reported stage: {transition.reason}")
+            if phase is None:
+                framework_id = None
+
+    ending: Ending | None = None
+    if reply.ending is not None:
+        reported = reply.ending.strip().lower()
+        running = registry.get(current_framework_id)
+        if not ending_open or running is None:
+            notes.append("ignored ending: the ending is not open")
+        elif reported not in Ending:
+            notes.append("ignored ending: not one of the endings")
+        elif phase is not None and running.phase_index(phase) > running.phase_index(current_phase):
+            notes.append("ignored ending: the reply moves the stage forward")
+        else:
+            ending = Ending(reported)
+    retiring = retiring or ending is not None
 
     kept: list[SmartPrompt] = []
     for prompt in reply.prompts or []:
@@ -109,42 +163,13 @@ def check(
                 prompt = prompt.model_copy(update={"library": canonical_library})
         kept.append(prompt)
 
-    # Tell me about this and Keep chatting answer an offer. Once the offer's own button is
-    # gone they answer nothing, so they go with it.
+    # Keep chatting answers an offer. Once the offer's own button is gone it answers nothing, so
+    # it goes with it.
     if any(p.technique for p in reply.prompts or []) and not any(p.technique for p in kept):
         remaining = without_offer(kept)
         if len(remaining) != len(kept):
             notes.append("dropped the offer's other buttons: its technique button was dropped")
             kept = remaining
-
-    framework_id: str | None = None
-    phase: str | None = None
-    if reply.state is not None:
-        if reply.state.technique not in registry:
-            notes.append("ignored state: technique not in the registry")
-        elif framework_running and reply.state.technique != current_framework_id:
-            # Every framework shares stage ids like somatic and closing, so the transition
-            # check alone would let a reply record a framework the person never accepted.
-            notes.append("ignored state: not the running framework")
-        else:
-            framework_id = reply.state.technique
-            # Accepting an offer this turn means the phase being left is the offering one,
-            # whatever the stored row still says. What they told Mani before accepting
-            # answers the first stage, so the reply may already be asking the second.
-            previous = current_phase
-            if accepted_this_turn:
-                known = registry.get(framework_id)
-                phases = known.phases if known else []
-                first = phases.index("offering") + 1 if "offering" in phases else -1
-                previous = phases[first] if 0 < first < len(phases) else "offering"
-            transition = registry.validate_transition(
-                framework_id, previous, reply.state.step
-            )
-            phase = registry.clamp(framework_id, previous, reply.state.step)
-            if not transition.ok:
-                notes.append(f"corrected the reported stage: {transition.reason}")
-            if phase is None:
-                framework_id = None
 
     title = clean_title(reply.title) if wants_title else None
 
@@ -167,5 +192,6 @@ def check(
         framework_id=framework_id,
         phase=phase,
         style=style,
+        ending=ending,
         notes=notes,
     )

@@ -1,4 +1,4 @@
-# ABOUTME: Checks a portal edit cannot leave a model call's prompt row without a thinking level.
+# ABOUTME: Checks a portal edit cannot leave a model call without a thinking level, or a required row broken.
 # ABOUTME: Runs the real admin writes against the live database; every write is rolled back.
 
 import pytest
@@ -103,5 +103,54 @@ async def test_edits_that_keep_a_call_usable_pass(pool):
         kept = await config_tables.update_prompt(conn, memory_fold, {"content": "Fold it."})
         assert kept.model_parameters["reasoning_effort"] == "high"
         await config_tables.update_prompt(conn, layer, {"model_parameters": {}})
+
+    await passes(pool, edit)
+
+
+@pytest.mark.parametrize(("name", "changes"), [
+    ("tuning", {"content": "windows: {context_window: 3}"}),
+    ("replies", {"content": "greeting: {new: 'Hi {nickname}'}"}),
+    ("mani_base", {"content": "identity: [no shapes here]"}),
+    ("response_format", {"is_active": False}),
+    ("replies", {"is_active": False}),
+    ("replies", {"name": "replies_parked"}),
+    ("tuning", {"name": "tuning_parked"}),
+])
+async def test_an_edit_that_would_break_a_required_row_is_refused_with_nothing_saved(
+    pool, name, changes
+):
+    """A turn cannot run without these rows, so a typo or a toggle in the portal is refused when
+    written, and the version snapshot goes back with it."""
+    row = await row_id(pool, name)
+    before = await versions_of(pool, row)
+
+    await refused(pool, lambda conn: config_tables.update_prompt(conn, row, changes))
+
+    assert await versions_of(pool, row) == before
+    async with pool.as_admin() as conn:
+        stored = await config_tables.get_prompt_by_id(conn, row)
+    assert (stored.name, stored.is_active) == (name, True)
+
+
+async def test_a_refusal_for_a_bad_number_names_the_key_and_not_the_value(pool):
+    row = await row_id(pool, "tuning")
+
+    problem = await refused(
+        pool,
+        lambda conn: config_tables.update_prompt(conn, row, {"content": "windows: {context_window: 987654}"}),
+    )
+
+    assert "windows" in problem.user_message
+    assert "987654" not in problem.user_message
+
+
+async def test_an_edit_that_keeps_a_required_row_usable_passes(pool):
+    row = await row_id(pool, "tuning")
+
+    async def edit(conn):
+        current = await config_tables.get_prompt_by_id(conn, row)
+        changed = current.content.replace("context_window: 20", "context_window: 30")
+        kept = await config_tables.update_prompt(conn, row, {"content": changed})
+        assert "context_window: 30" in kept.content
 
     await passes(pool, edit)

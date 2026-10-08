@@ -194,7 +194,7 @@ def test_every_shape_the_base_prompt_teaches_is_one_the_guard_keeps():
     from mani.chat import guards
     from mani.chat.techniques import Registry
     from mani.llm.schema import Reply, Style
-    from mani.prompts.cache import parse_reply_shapes
+    from mani.prompts.checks import parse_reply_shapes
     from scripts.seed import parse_prompt
 
     content = parse_prompt(PROMPTS_DIR / "mani_base.md")["content"]

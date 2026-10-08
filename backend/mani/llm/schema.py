@@ -82,6 +82,9 @@ class Reply(BaseModel):
     title: str | None = None
     crisis: Crisis | None = None
     state: TechniqueState | None = None
+    # A closed set named in the prompt and checked in guards.py, typed loosely for the same
+    # reason as Style: an off list value costs this field, never the turn.
+    ending: str | None = None
     # There is no clinical_note field. The model was asked for three or four sentences of
     # clinical formulation on every turn, for a care team that has nowhere to read it: it
     # reached no column, no log, and no screen. Paying output tokens for a formulation about

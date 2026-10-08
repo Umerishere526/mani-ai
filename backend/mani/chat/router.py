@@ -6,21 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from mani.chat.safety import normalize
-
-# How much a sign counts by how far back it was said. A person's most recent message is the
-# strongest evidence of what they need now; four messages ago is context, not a request. Older
-# messages keep the last weight rather than dropping out: the shortlist is the set Mani may
-# offer from, so a sign stays on it while its message is in the history window.
-RECENCY_WEIGHTS = (1.0, 0.6, 0.3, 0.15)
-
-# A phrase from the framework's own "central indication" is worth more than a phrase from its
-# broader "what MANI may hear" list, because the specification wrote it to be discriminating.
-STRONG_WEIGHT = 2.0
-SIGNAL_WEIGHT = 1.0
-
-# A framework promoted by a distinction but with no phrase match of its own still needs a
-# score, or it sorts below frameworks that matched one incidental phrase.
-PROMOTED_FLOOR = 1.5
+from mani.prompts.tuning import RouterTuning
 
 
 def _says(phrase: str, normalized: str) -> bool:
@@ -141,7 +127,9 @@ def distinction_rules(distinctions: dict[str, list]) -> tuple[list[Rule], list[s
     return rules, problems
 
 
-def _score_one(activation: dict, messages: list[str]) -> tuple[float, list[str]]:
+def _score_one(
+    activation: dict, messages: list[str], weights: RouterTuning
+) -> tuple[float, list[str]]:
     """Recency-weighted score for a single framework against the person's messages."""
     strong = [normalize(p) for p in activation.get("strong_signals", [])]
     signals = [normalize(p) for p in activation.get("signals", [])]
@@ -150,10 +138,10 @@ def _score_one(activation: dict, messages: list[str]) -> tuple[float, list[str]]
     matched: list[str] = []
     # messages arrive oldest first, as recent_for_context returns them.
     for distance, text in enumerate(reversed(messages)):
-        recency = RECENCY_WEIGHTS[min(distance, len(RECENCY_WEIGHTS) - 1)]
+        recency = weights.recency_weights[min(distance, len(weights.recency_weights) - 1)]
         normalized = normalize(text)
-        for phrase, weight in [(p, STRONG_WEIGHT) for p in strong] + [
-            (p, SIGNAL_WEIGHT) for p in signals
+        for phrase, weight in [(p, weights.strong_weight) for p in strong] + [
+            (p, weights.signal_weight) for p in signals
         ]:
             # Said again in an older message: no second score.
             if _says(phrase, normalized) and phrase not in matched:
@@ -185,7 +173,7 @@ def urgent(messages: list[str], rules: list[Rule]) -> bool:
     return any(rule.absolute and _fired(rule, messages) for rule in rules)
 
 
-def _promote(signals: list[Signal], rule: Rule) -> list[Signal]:
+def _promote(signals: list[Signal], rule: Rule, floor: float) -> list[Signal]:
     """Move the rule's preferred framework ahead of the ones it outranks."""
     ordered = list(signals)
     index = next((i for i, s in enumerate(ordered) if s.framework_id == rule.prefer), None)
@@ -197,9 +185,9 @@ def _promote(signals: list[Signal], rule: Rule) -> list[Signal]:
         if not beaten and index is None and rule.standalone:
             # Nothing it outranks and nothing scored for it, but the rule's own phrase is
             # evidence enough to put it on the shortlist.
-            candidate = Signal(rule.prefer, PROMOTED_FLOOR, [], promoted_by=rule.name)
+            candidate = Signal(rule.prefer, floor, [], promoted_by=rule.name)
             position = next(
-                (i for i, s in enumerate(ordered) if s.score < PROMOTED_FLOOR), len(ordered)
+                (i for i, s in enumerate(ordered) if s.score < floor), len(ordered)
             )
             ordered.insert(position, candidate)
             return ordered
@@ -210,7 +198,7 @@ def _promote(signals: list[Signal], rule: Rule) -> list[Signal]:
             return ordered
 
     if index is None:
-        promoted = Signal(rule.prefer, PROMOTED_FLOOR, [], promoted_by=rule.name)
+        promoted = Signal(rule.prefer, floor, [], promoted_by=rule.name)
     else:
         existing = ordered.pop(index)
         if index < target:
@@ -227,6 +215,7 @@ def shortlist(
     messages: list[str],
     activations: dict[str, dict],
     rules: list[Rule],
+    weights: RouterTuning,
 ) -> list[Signal]:
     """Rank every framework the person's words show signs of, most likely first, uncut.
 
@@ -244,7 +233,7 @@ def shortlist(
     scored = [
         Signal(framework_id, score, matched)
         for framework_id, activation in activations.items()
-        for score, matched in [_score_one(activation, messages)]
+        for score, matched in [_score_one(activation, messages, weights)]
         if score > 0
     ]
     scored.sort(key=lambda s: (-s.score, s.framework_id))
@@ -258,7 +247,7 @@ def shortlist(
             continue
         if any(framework_id in settled for framework_id in rule.over):
             continue
-        scored = _promote(scored, rule)
+        scored = _promote(scored, rule, weights.promoted_floor)
         settled.add(rule.prefer)
 
     return scored

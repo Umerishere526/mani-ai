@@ -16,8 +16,6 @@ COLUMNS = (
 )
 
 DEFAULT_PAGE = 50
-# How much raw history the model sees. Matches the previous system's window.
-CONTEXT_WINDOW = 20
 
 
 @dataclass(frozen=True)
@@ -62,7 +60,7 @@ async def recent_for_context(
     conn: asyncpg.Connection,
     thread_id: uuid.UUID | str,
     user_id: uuid.UUID | str,
-    limit: int = CONTEXT_WINDOW,
+    limit: int,
 ) -> list[Message]:
     """The tail of a thread, oldest first, for the model's view of the conversation.
 

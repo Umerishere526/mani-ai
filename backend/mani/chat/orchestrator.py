@@ -5,21 +5,15 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-import re
 import uuid
 from dataclasses import dataclass, field
 
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import context, ending, guards, router, safety
-from mani.chat.greeting import (
-    CHAT_MORE_LABEL,
-    GO_TO_LIBRARY_LABEL,
-    OPENERS,
-    STYLE_OPTIONS,
-    greeting,
-)
+from mani.chat import context, guards, router, safety
+from mani.chat.greeting import CHAT_MORE_LABEL, GO_TO_LIBRARY_LABEL, greeting, style_options
+from mani.chat.techniques import ENDING_PHASES
 from mani.config import get_settings
 from mani.db import (
     exercises as exercises_db,
@@ -43,30 +37,9 @@ from mani.models.rows import (
     Thread,
 )
 from mani.prompts import cache, calls, composer
+from mani.prompts.replies import Replies
 
 logger = logging.getLogger(__name__)
-
-# Title generation is asked for once the thread has a real exchange behind it. The
-# reference tested `message_count == 3` exactly, so a single crisis turn - which writes
-# one message rather than two - moved the count past 3 and the thread was never titled.
-TITLE_AFTER_MESSAGES = 3
-
-# How many new messages accumulate before the rolling summary is refreshed. Tied to the
-# history window rather than set beside it: any value above the window leaves messages that
-# have scrolled out of the history the model sees and are not yet in the summary either.
-SUMMARY_THRESHOLD = messages_db.CONTEXT_WINDOW
-
-# The router narrows once there is enough to narrow from. Below this, one or two messages
-# is not a pattern - it is the start of a conversation.
-ROUTER_MIN_EXCHANGES = 2
-
-_HANDOFF_LABELS = {CHAT_MORE_LABEL.lower(), GO_TO_LIBRARY_LABEL.lower()}
-
-# The client's two questions that end a framework: what next once the check-in is answered,
-# and the same choice when they decline it.
-_ASKS_WHAT_NEXT = re.compile(
-    r"what would you like to do (next|now)|keep chatting or go to the library", re.IGNORECASE
-)
 
 
 def _handoff() -> list[SmartPrompt]:
@@ -74,75 +47,6 @@ def _handoff() -> list[SmartPrompt]:
         SmartPrompt(label=CHAT_MORE_LABEL),
         SmartPrompt(label=GO_TO_LIBRARY_LABEL, library=LibrarySection.HOME.value),
     ]
-
-
-def _awaiting_place(history: list[Message]) -> bool:
-    """Whether Mani's last reply asked where in the body they feel it, and it is unanswered."""
-    last = next((m for m in reversed(history) if m.role is MessageRole.MANI), None)
-    return bool(last and any(
-        str(o.get("label", "")) == ending.PLACE_LABELS[0] for o in (last.prompt_options or [])
-    ))
-
-
-def _body_route_step(
-    checked: guards.Checked,
-    framework_id: str,
-    stages: dict,
-    style: str,
-    content: str,
-    previous_phase: str | None,
-    awaiting_place: bool,
-) -> guards.Checked:
-    """The turn after a body question the person has answered: where they feel it, and then
-    the practice for that place. The body is asked about once; the choice of Chat More / Go to
-    Library waits for a practice, unless they decline or already know what they will do.
-
-    Covers a person who answers the check-in, one who says they do not know where, and one who
-    described their body before the check-in was asked.
-    """
-    answering = previous_phase == "somatic_checkin" or (
-        previous_phase == "somatic_practice" and awaiting_place
-    )
-    described_early = (
-        previous_phase not in ("somatic_checkin", "somatic_practice")
-        and checked.phase == "somatic_checkin"
-        and _ASKS_WHAT_NEXT.search(checked.text) is not None
-    )
-    if not (answering or described_early) or ending.declines_or_acts(content):
-        return checked
-    stage = stages.get("somatic_practice") or {}
-    safety_reply = next(
-        (ending.reply_for(b, style) for b in stage.get("if_unclear") or [] if "pain" in b.get("when", "")),
-        None,
-    )
-    if safety_reply and safety_reply in checked.text:
-        return checked
-    place = ending.named_place(content)
-    text, labels = checked.text, []
-    practice = ending.practice_for(stage, place, style) if place else None
-    if practice is not None:
-        text, labels = practice
-    elif not ending.practice_in(stage, text, style):
-        script = (stage.get("ask") or {}).get(style)
-        if not script:
-            return checked
-        text = ending.with_the_check_in(ending.first_sentence(text), script)
-        labels = list(ending.PLACE_LABELS)
-    return dataclasses.replace(
-        checked,
-        text=text,
-        framework_id=framework_id,
-        phase="somatic_practice",
-        prompts=[SmartPrompt(label=label) for label in labels],
-    )
-
-
-def _offered_handoff(history: list[Message]) -> bool:
-    """Whether Mani's last reply already put the two choices in front of them."""
-    last = next((m for m in reversed(history) if m.role is MessageRole.MANI), None)
-    return bool(last and any(
-        str(o.get("label", "")).lower() in _HANDOFF_LABELS for o in (last.prompt_options or [])
-    ))
 
 
 @dataclass(frozen=True)
@@ -161,8 +65,8 @@ class Turn:
     llm_call_id: uuid.UUID | None = None
     # Present only when AI_DEBUG_MODE is on; never sent to an ordinary client.
     reasoning: str | None = None
-    # Set only on the turn a framework completes, and only when the catalog has a
-    # matching exercise. A row model, not the wire shape - the router builds ExerciseOut
+    # Set only on the turn a framework's ending closes with a choice, and only when the
+    # catalog has a matching exercise. A row model, not the wire shape - the router builds ExerciseOut
     # (and signs the audio URL) when it serializes this.
     exercise: Exercise | None = None
 
@@ -294,7 +198,10 @@ async def send(
                 was_duplicate=True,
             )
 
-    ctx = await threads.load_turn_context(conn, thread_id, user_id)
+    # Before anything else about the turn, so a broken `replies` or `tuning` row is reported first.
+    config = await cache.load()
+    tuning = config.tuning
+    ctx = await threads.load_turn_context(conn, thread_id, user_id, tuning.windows.style_window)
     if ctx is None:
         raise ServiceError(
             f"thread {thread_id} not found for user {user_id}",
@@ -309,31 +216,38 @@ async def send(
             user_message="This conversation is paused. Please reach out for support.",
         )
 
-    config = await cache.load()
-    history = await messages_db.recent_for_context(conn, thread_id, user_id)
+    history = await messages_db.recent_for_context(
+        conn, thread_id, user_id, tuning.windows.context_window
+    )
     updates = threads.ThreadUpdates()
 
     style = chosen_style(history, content)
     if style is not None:
-        return await _open_in_style(conn, ctx, content, style, client_message_id)
+        return await _open_in_style(conn, ctx, content, style, config.replies, client_message_id)
 
     technique = ctx.technique
-    # A technique that reached its last phase and was accepted is finished. The row is
-    # retired rather than removed, and the snapshot keeps it with its phase cleared, so
-    # this turn's [ctx] reports the cooldown the completion just started instead of
-    # reporting that nothing has ever run.
-    retiring_framework_id: str | None = None
-    if (
+    # An ending the model has not closed by the cap is finished here, before the call, so this
+    # turn's [ctx] shows nothing running. The row is retired rather than removed, and the
+    # snapshot keeps it with its phase cleared, so this turn's [ctx] reports the cooldown the
+    # completion just started instead of reporting that nothing has ever run. No Library offer
+    # is owed after it, so the snapshot says that too.
+    capped = (
         technique is not None
         and technique.outcome is TechniqueOutcome.ACCEPTED
-        and config.registry.is_final(technique.framework_id, technique.phase)
-        and not _awaiting_place(history)
-    ):
-        retiring_framework_id = technique.framework_id
-        updates.retire_technique = True
-        ctx = dataclasses.replace(
-            ctx, technique=technique.model_copy(update={"phase": None})
+        and technique.phase in ENDING_PHASES
+        and technique.ending_from is not None
+        and (ctx.thread.message_count - technique.ending_from) // 2
+        >= tuning.windows.ending_turn_cap
+    )
+    if capped:
+        logger.info(
+            "thread %s retired its framework at the ending cap of %d turns",
+            ctx.thread.id, tuning.windows.ending_turn_cap,
         )
+        updates.retire_technique = True
+        ctx = dataclasses.replace(ctx, technique=technique.model_copy(update={
+            "phase": None, "ending_from": None, "library_offered_since": True,
+        }))
         technique = None
 
     # From here on `technique` means the framework that is live on this turn: offered and
@@ -374,6 +288,14 @@ async def send(
     # call entirely; concern only suppresses the router below, so the model still answers.
     assessment = safety.screen(content)
     if assessment.level is safety.Level.CRISIS:
+        if (
+            technique is not None
+            and technique.outcome is TechniqueOutcome.ACCEPTED
+            and config.registry.ending_open(technique.framework_id, technique.phase)
+        ):
+            # No model call means no `ending`, and the thread is about to lock one way, so a
+            # framework in its ending is ended here or never.
+            updates.retire_technique = True
         return await _handle_crisis(
             conn, ctx, content,
             reason=f"safety screen: {assessment.category.value if assessment.category else 'unspecified'}",
@@ -403,7 +325,7 @@ async def send(
         technique is None
         and assessment.level is safety.Level.NONE
         and (
-            ctx.thread.message_count // 2 >= ROUTER_MIN_EXCHANGES
+            ctx.thread.message_count // 2 >= tuning.router.router_min_exchanges
             # An imminent action is the one case not worth waiting two exchanges on.
             or urgent
         )
@@ -411,13 +333,14 @@ async def send(
         shortlist = [
             signal
             for signal in router.shortlist(
-                user_texts, config.registry.activations, config.registry.distinctions
+                user_texts, config.registry.activations, config.registry.distinctions,
+                tuning.router,
             )
             if signal.framework_id not in ruled_out
         ]
 
     wants_title = (
-        ctx.thread.message_count >= TITLE_AFTER_MESSAGES and not ctx.thread.title
+        ctx.thread.message_count >= tuning.windows.title_after_messages and not ctx.thread.title
     )
     system = composer.compose(
         config,
@@ -433,8 +356,8 @@ async def send(
     prefix = context.build(
         ctx, shortlist=shortlist, framework=active_framework,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
-        framework_starting=accepted_this_turn, urgent=urgent,
-        their_last=context.classify_reply(content), ruled_out=ruled_out,
+        framework_starting=accepted_this_turn, urgent=urgent, ruled_out=ruled_out,
+        replies=config.replies, tuning=tuning,
     )
     for_model = (
         f"tapped: {tapped.label}"
@@ -532,45 +455,48 @@ async def send(
         accepted_this_turn=accepted_this_turn,
         framework_running=outcome is TechniqueOutcome.ACCEPTED,
         declined=outcome is TechniqueOutcome.DECLINED,
-        retiring=retiring_framework_id is not None,
+        retiring=capped,
         wants_title=wants_title,
         shapes=config.reply_shapes,
+        ending_open=(
+            technique is not None
+            and outcome is TechniqueOutcome.ACCEPTED
+            and config.registry.ending_open(technique.framework_id, technique.phase)
+        ),
     )
     if assessment.blocks_framework or model_concern:
         # A concern pauses the framework rather than ending it: nothing this reply reports
-        # about a stage is applied, and it may not open a new one. The stored state is left
-        # exactly as it was, so the framework resumes from there once the concern has passed.
+        # about a stage or an ending is applied, and it may not open a new one. The stored
+        # state is left exactly as it was, so the framework resumes from there once the
+        # concern has passed.
         paused = any(p.technique for p in checked.prompts)
         checked = dataclasses.replace(
             checked,
             framework_id=None,
             phase=None,
+            ending=None,
             prompts=guards.without_offer(checked.prompts),
             notes=checked.notes + (["dropped the offer: a safety concern"] if paused else []),
         )
-    if technique is not None and not (assessment.blocks_framework or model_concern):
-        checked = _body_route_step(
-            checked,
-            technique.framework_id,
-            config.registry.get(technique.framework_id).stages,
-            context.resolve_style(ctx),
-            content,
-            technique.phase,
-            _awaiting_place(history),
+    retiring = capped or checked.ending is not None
+    if retiring or any(
+        config.registry.ending_open(framework_id, phase)
+        for framework_id, phase in (
+            (technique.framework_id if technique else None, technique.phase if technique else None),
+            (checked.framework_id, checked.phase),
         )
-    if checked.phase == "somatic_checkin" and checked.framework_id is not None and not _ASKS_WHAT_NEXT.search(checked.text):
-        # The client's flow (2026-09-24): the body check-in is fixed content, sent word for
-        # word, never reworded. Skipped when they already described their body and this
-        # reply moves straight to the two choices instead of asking again.
-        stage = config.registry.get(checked.framework_id).stages.get("somatic_checkin") or {}
-        script = (stage.get("ask") or {}).get(context.resolve_style(ctx))
-        if script:
-            checked = dataclasses.replace(checked, text=ending.with_the_check_in(checked.text, script))
+    ):
+        # The ending carries no buttons from the model; the two choices below are written by
+        # the code, and only on a kept `choice`.
+        if checked.prompts:
+            checked = dataclasses.replace(
+                checked, prompts=[], notes=checked.notes + ["dropped the buttons: the ending"]
+            )
     if technique is None:
         # The offer rule is told, not enforced, so this is how an offer off the shortlist or
         # before the cooldown shows up: ids and flags only, never a word of what was said.
         listed = [s.framework_id for s in shortlist]
-        passed = "yes" if context.cooldown_passed(ctx, urgent=urgent) else "no"
+        passed = "yes" if context.cooldown_passed(ctx, tuning, urgent=urgent) else "no"
         for offered in dict.fromkeys(p.technique for p in checked.prompts if p.technique):
             logger.info(
                 "offer on thread %s: %s on_shortlist: %s shortlist: %s cooldown_passed: %s",
@@ -579,43 +505,10 @@ async def send(
             )
     if checked.notes:
         logger.info("checked reply on thread %s: %s", ctx.thread.id, "; ".join(checked.notes))
-    # Set only where the orchestrator itself writes the two choices, so a library button the
-    # model sent can never silence library_pending.
-    handed_off = False
-    if technique is not None and (
-        config.registry.is_final(technique.framework_id, checked.phase)
-        or checked.phase == "somatic_checkin"
-    ):
-        # The two somatic stages carry buttons by one rule: a reply that has moved to the two
-        # choices - the practice done, or the check-in skipped or declined - shows Chat More /
-        # Go to Library; the check-in question and the practice itself keep their own prompts and
-        # never a leaked hand-off.
-        without_handoff = [
-            p for p in checked.prompts
-            if p.library is None and p.label.strip().lower() not in _HANDOFF_LABELS
-        ]
-        handed_off = _ASKS_WHAT_NEXT.search(checked.text) is not None
-        checked = dataclasses.replace(
-            checked, prompts=_handoff() if handed_off else without_handoff
-        )
-    if retiring_framework_id is not None and ending.comes_back(content):
-        # The client's words for a feeling that returns after the practice, sent as written.
-        returning = ending.returning_reply(
-            config.registry.get(retiring_framework_id).stages.get("somatic_practice") or {},
-            context.resolve_style(ctx),
-        )
-        if returning:
-            checked = dataclasses.replace(checked, text=returning)
-    if (
-        retiring_framework_id is not None
-        and content.strip().lower() not in _HANDOFF_LABELS
-        and not _offered_handoff(history)
-    ):
-        # The reply that ends a framework offers the client's two choices, always and
-        # exactly. Left to the model they came back mislabeled or missing. Skipped when
-        # they have already chosen one, or were just offered both.
+    if checked.ending is guards.Ending.CHOICE:
+        # The two choices are written here and only here, so a library button the model sent
+        # can never silence library_pending.
         checked = dataclasses.replace(checked, prompts=_handoff())
-        handed_off = True
     if not checked.text:
         # Nothing to say. Refused here as retryable, rather than by the
         # messages_content_not_empty constraint as an opaque 500.
@@ -640,7 +533,11 @@ async def send(
     count_after = ctx.thread.message_count + 2
     new_offer = next((p for p in checked.prompts if p.technique), None)
 
-    if new_offer is not None:
+    if retiring:
+        # Retirement wins over every branch below: the state a reply reports, or an offer's
+        # row, would be written over it and the framework would be running again.
+        updates.retire_technique = True
+    elif new_offer is not None:
         updates.retire_technique = False
         updates.technique = TechniqueState(
             thread_id=ctx.thread.id,
@@ -652,6 +549,11 @@ async def send(
         updates.offer_frameworks.append(new_offer.technique)
     elif (decided := _decided_framework(checked.framework_id, outcome, technique)) is not None:
         updates.retire_technique = False
+        # Carried from the stored row, never moved forward and never cleared by a step back,
+        # so the cap cannot be reset by stepping between the last own phase and the ending.
+        ending_from = technique.ending_from if technique else None
+        if ending_from is None and checked.phase in ENDING_PHASES:
+            ending_from = count_after
         updates.technique = TechniqueState(
             thread_id=ctx.thread.id,
             framework_id=decided,
@@ -663,6 +565,7 @@ async def send(
                 else count_after
             ),
             library_offered_since=False,
+            ending_from=None if outcome is TechniqueOutcome.DECLINED else ending_from,
         )
         if accepted_this_turn:
             updates.offer_frameworks.append(decided)
@@ -676,7 +579,8 @@ async def send(
         )
         updates.offer_frameworks.append(tapped.technique)
 
-    if handed_off:
+    if retiring:
+        # No Library offer is owed once the ending is over, whether or not it was offered.
         updates.library_offered = True
     if checked.style is not None:
         updates.style = ResponseStyle(shape=checked.style.shape)
@@ -686,10 +590,10 @@ async def send(
     await threads.apply(conn, ctx.thread.id, user_id, updates)
 
     exercise = None
-    if retiring_framework_id is not None:
+    if checked.ending is guards.Ending.CHOICE:
         said = [m.content for m in history if m.role is MessageRole.USER][-2:] + [content]
         exercise = await _offer_exercise(
-            conn, retiring_framework_id, config, user_id, ctx.thread.id,
+            conn, technique.framework_id, config, user_id, ctx.thread.id,
             said=said, current_issue=ctx.summary.current_issue if ctx.summary else None,
         )
 
@@ -706,7 +610,7 @@ async def send(
         # Both sides of the comparison are thread message counts. The reference compared
         # a thread count against a running total of summarized messages, so the trigger
         # fired on two different units and drifted further apart with every summary.
-        needs_summary=count_after - summarized >= SUMMARY_THRESHOLD,
+        needs_summary=count_after - summarized >= tuning.windows.context_window,
         llm_call_id=call.call_id,
         exercise=exercise,
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
@@ -815,6 +719,7 @@ async def _open_in_style(
     ctx: threads.TurnContext,
     content: str,
     style: SupportStyle,
+    replies: Replies,
     client_message_id: uuid.UUID | str | None,
 ) -> Turn:
     """Record the chosen style and answer with that style's opening question.
@@ -822,7 +727,7 @@ async def _open_in_style(
     The client spec gives the opener word for word, so there is nothing to generate: no
     model call, and the style holds for the rest of the conversation from this turn on.
     """
-    reply = OPENERS[style.value]
+    reply = replies.openers[style.value]
     pair = await messages_db.create_pair(
         conn, ctx.thread.id, content, reply,
         selected_prompt=content.strip(), client_message_id=client_message_id,
@@ -873,9 +778,9 @@ async def _handle_crisis(
     )
     await threads.mark_crisis(conn, ctx.thread.id, reason, pair.user_message_id)
     # A crisis turn is still a turn: whatever it already decided has to land. Today that is
-    # a framework that completed on this very turn - without this the row keeps its phase
-    # with outcome 'accepted', so the database claims a technique is still mid-flight on a
-    # thread nobody can return to.
+    # a framework in its ending, retired by `send` because no model call means no `ending` -
+    # without this the row keeps its phase with outcome 'accepted', so the database claims a
+    # technique is still mid-flight on a thread nobody can return to.
     await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
 
     return Turn(
@@ -900,11 +805,12 @@ async def start_thread(
     """
     thread, created = await threads.create_or_reuse(conn, claims.user_id, title)
     if created:
+        replies = (await cache.load()).replies
         profile = await profiles.get(conn, claims.user_id)
         returning = await _has_earlier_thread(conn, claims.user_id, thread.id)
         await messages_db.create_greeting(
-            conn, thread.id, greeting(profile.nickname if profile else None, returning),
-            prompt_options=STYLE_OPTIONS,
+            conn, thread.id, greeting(replies, profile.nickname if profile else None, returning),
+            prompt_options=style_options(replies),
         )
     return thread, created
 

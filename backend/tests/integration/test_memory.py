@@ -11,8 +11,10 @@ from mani.chat import orchestrator
 from mani.db import llm_calls, threads
 from mani.llm import client
 from mani.llm.schema import Memory, Reply
-from tests.integration.test_turn import claims_for, reachable
+from tests.integration.test_turn import CONTEXT_WINDOW, TUNING, claims_for, reachable
 from tests.integration.cleanup import remove_test_users
+
+IDLE_AFTER = dt.timedelta(hours=TUNING.memory.idle_after_hours)
 
 BEA = uuid.UUID("a0000000-0000-4000-8000-0000000000d2")
 
@@ -128,9 +130,18 @@ async def test_the_new_chat_itself_is_never_folded_and_carries_no_old_messages(b
     from mani.db import messages as messages_db, pool
 
     async with pool.as_user(bea) as conn:
-        history = await messages_db.recent_for_context(conn, second.id, bea.user_id)
+        history = await messages_db.recent_for_context(conn, second.id, bea.user_id, CONTEXT_WINDOW)
     assert all("Sunday" not in m.content for m in history)
     assert await _folded_at(second.id) is None
+
+
+async def test_the_fold_is_told_how_many_entries_a_list_may_hold(bea, scripted):
+    fake = scripted()
+    await _chat(bea, "I always feel low on Sunday evenings because of work")
+    await memory.fold_finished(bea)
+
+    sent = fake.folds[-1][-1]["content"]
+    assert sent.startswith(f"max_entries: {TUNING.memory.max_entries}\n\n## Known so far")
 
 
 async def test_a_conversation_that_continues_is_folded_again_from_where_it_stopped(bea, scripted):
@@ -153,7 +164,7 @@ async def test_the_idle_job_leaves_a_conversation_that_is_still_going(bea, scrip
     scripted()
     await _chat(bea, "I always feel low on Sunday evenings because of work")
 
-    idle_before = dt.datetime.now(dt.UTC) - memory.IDLE_AFTER
+    idle_before = dt.datetime.now(dt.UTC) - IDLE_AFTER
     assert await memory.fold_finished(bea, idle_before=idle_before) == 0
 
 
@@ -201,7 +212,7 @@ async def test_the_idle_job_finds_a_quiet_conversation_and_not_a_live_one(bea, s
             "update public.threads set last_message_at = now() - interval '2 days' where id = $1",
             quiet.id,
         )
-        idle_before = dt.datetime.now(dt.UTC) - memory.IDLE_AFTER
+        idle_before = dt.datetime.now(dt.UTC) - IDLE_AFTER
         # The local database also holds eval and chat-tester users, so a fixed batch size could
         # leave BEA outside an unordered page. Ask for everyone.
         everyone = await conn.fetchval("select count(*) from auth.users")

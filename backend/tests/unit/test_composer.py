@@ -13,6 +13,7 @@ from mani.llm.schema import Memory
 from mani.models.rows import Framework, Profile, TechniqueTried, ThreadSummary
 from mani.prompts import composer
 from mani.prompts.cache import Config
+from tests.seeded import seeded_replies, seeded_tuning
 
 USER = uuid.UUID("a0000000-0000-4000-8000-00000000000a")
 THREAD = uuid.UUID("b0000000-0000-4000-8000-00000000000b")
@@ -36,6 +37,8 @@ def config() -> Config:
         prompts={p.name: p for p in named},
         registry=Registry([]),
         loaded_at=time.monotonic(),
+        replies=seeded_replies(),
+        tuning=seeded_tuning(),
     )
 
 
@@ -111,6 +114,8 @@ def test_the_generated_index_reaches_the_composed_prompt(config):
         prompts=config.prompts,
         registry=Registry([framework("abcde", "ABCDE")]),
         loaded_at=time.monotonic(),
+        replies=config.replies,
+        tuning=config.tuning,
     )
     built = composer.compose(with_frameworks, None)
 
@@ -140,6 +145,8 @@ def test_a_missing_required_layer_is_refused_not_dropped(config):
         prompts={k: v for k, v in config.prompts.items() if k != "response_format"},
         registry=config.registry,
         loaded_at=config.loaded_at,
+        replies=config.replies,
+        tuning=config.tuning,
     )
     with pytest.raises(ServiceError):
         composer.compose(without_format, None)
@@ -239,6 +246,7 @@ def test_the_debug_layer_is_its_own_row_and_only_in_debug_mode(config, monkeypat
     with_debug = Config(
         prompts=config.prompts | {"debug": prompt("debug", "# Debug\nSAY WHY")},
         registry=config.registry, loaded_at=config.loaded_at,
+        replies=config.replies, tuning=config.tuning,
     )
     assert "debug" not in [name for name, _ in composer.compose(with_debug, None).layers]
 

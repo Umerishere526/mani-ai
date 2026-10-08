@@ -5,36 +5,17 @@ from __future__ import annotations
 
 import re
 
-from mani.chat import ending
-from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
+from mani.chat.greeting import CHAT_MORE_LABEL
 from mani.chat.router import Signal
-from mani.chat.safety import normalize
 from mani.chat.techniques import OFFERING
 from mani.db.threads import TurnContext
 from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
 from mani.prompts.composer import tried_line
+from mani.prompts.replies import Replies
+from mani.prompts.tuning import Tuning
 
-# An offer may come from the person's second message, in any style: it was four rounds for
-# Supportive and Reflective until Mani's own judgement was made the signal (muhammad,
-# 2026-10-01). Counted in the person's own messages.
-CLEAR_OFFER_AFTER = 2
-# After "Keep chatting" an offer may come back after two more exchanges.
-CLEAR_COOLDOWN_AFTER_DECLINE = 4
 # The greeting, the style they tapped, and that style's opener.
 OPENING_MESSAGES = 3
-COOLDOWN_AFTER_COMPLETE = 45
-
-# The default when neither the conversation nor the profile has chosen a style yet.
-# `conversation_style` is set per-thread by PATCH /v1/threads/{id} and wins over
-# profile.support_style, which holds the onboarding answer.
-DEFAULT_STYLE = "supportive"
-
-# How many of a reply's own leading words count as its "opener" for repetition purposes.
-# Matches the threshold the eval harness already uses to call two openers the same one.
-RECENT_OPENERS_WORDS = 2
-# How many of Mani's own past replies to surface. Small on purpose: this is a nudge against
-# an immediate repeat, not a transcript.
-RECENT_OPENERS_WINDOW = 3
 
 
 # Every key a [ctx] line may carry. Each one's meaning is said once, in response_format.md's `ctx`
@@ -42,15 +23,11 @@ RECENT_OPENERS_WINDOW = 3
 # values and never a sentence of instruction.
 CTX_KEYS = frozenset({
     "conversation_style", "safety", "recent_crisis", "conversation_phase",
-    "clarification_available", "question_focus", "their_last", "offer_waiting",
-    "after_framework_question", "cooldown_passed", "since_last", "this_thread",
+    "clarification_lines", "question_focus", "offer_waiting",
+    "after_framework_questions", "cooldown_passed", "since_last", "this_thread",
     "library_pending", "current_phase", "history", "recent_styles", "recent_openers",
     "ruled_out", "framework_shortlist", "framework_starting", "active_framework",
-    "framework_stages",
-    "stage", "stage_purpose", "stage_listen_for", "stage_ready_when", "stage_boundaries",
-    "stage_if_unclear", "stage_ask",
-    "next_stage", "next_stage_purpose", "next_stage_listen_for", "next_stage_ready_when",
-    "next_stage_boundaries", "next_stage_if_unclear", "next_stage_ask",
+    "framework_stages", "stage", "next_stage",
 })
 
 
@@ -61,10 +38,10 @@ def _line(key: str, value: object) -> str:
     return f"{key}: {value}"
 
 
-def _opener(text: str) -> str:
+def _opener(text: str, words: int) -> str:
     """The first couple of words of a reply, lowercased - enough to name a repeated opening
     without exposing the reply itself in [ctx]."""
-    return " ".join(text.split()[:RECENT_OPENERS_WORDS]).lower()
+    return " ".join(text.split()[:words]).lower()
 
 _CTX_BLOCK = re.compile(r"^\[ctx\].*?\[/ctx\]\s*", re.DOTALL)
 
@@ -92,32 +69,25 @@ def disarm(text: str) -> str:
     return _CTX_MARKER.sub(lambda m: f"({m.group(1)}ctx)", text)
 
 
-def _after_framework_question(history: list[Message]) -> str | None:
-    """The next of the client's three questions, once a framework has ended.
+def _chat_more_offered(history: list[Message]) -> bool:
+    """Whether a framework has ended in the history window: a reply of Mani's offered Chat More.
 
-    A framework ends on the reply that offers Chat More. The questions asked since, that reply
-    included, are read from Mani's own replies, so they come in order and none twice. Once that
-    reply has scrolled out of the history window the conversation has moved on, and none are
-    offered.
+    A framework ends on the reply that offers it. Once that reply has scrolled out of the history
+    window the conversation has moved on, and the questions that follow it are no longer offered.
     """
-    mani = [m for m in history if m.role is MessageRole.MANI]
-    ended = next(
-        (i for i in range(len(mani) - 1, -1, -1)
-         if any(str(o.get("label", "")).lower() == CHAT_MORE_LABEL.lower()
-                for o in (mani[i].prompt_options or []))),
-        None,
+    return any(
+        str(option.get("label", "")).lower() == CHAT_MORE_LABEL.lower()
+        for message in history
+        if message.role is MessageRole.MANI
+        for option in message.prompt_options or []
     )
-    if ended is None:
-        return None
-    since = " ".join(m.content.lower() for m in mani[ended:])
-    return next((q for q in AFTER_FRAMEWORK_QUESTIONS if q.lower().rstrip("?") not in since), None)
 
 
-def clear_cooldown_for(outcome: TechniqueOutcome) -> int:
+def clear_cooldown_for(outcome: TechniqueOutcome, tuning: Tuning) -> int:
     return (
-        COOLDOWN_AFTER_COMPLETE
+        tuning.offers.cooldown_after_complete
         if outcome is TechniqueOutcome.ACCEPTED
-        else CLEAR_COOLDOWN_AFTER_DECLINE
+        else tuning.offers.clear_cooldown_after_decline
     )
 
 
@@ -126,67 +96,19 @@ def _their_messages(ctx: TurnContext) -> int:
     return (ctx.thread.message_count - OPENING_MESSAGES) // 2 + 1
 
 
-def clarification_used(history: list[Message] | None) -> bool:
-    """Whether Mani has already asked the client's one-time clarifying question in this
-    conversation. Read from history rather than a stored flag, so it holds even if a process
-    restart drops anything else about how the turn was built."""
-    return any(
-        m.role is MessageRole.MANI
-        and any(q in m.content.lower() for q in CLARIFICATION_QUESTIONS)
-        for m in (history or [])
-    )
-
-
-def cooldown_passed(ctx: TurnContext, *, urgent: bool = False) -> bool:
+def cooldown_passed(ctx: TurnContext, tuning: Tuning, *, urgent: bool = False) -> bool:
     """Whether an offer may be made yet: [ctx] tells the model, which keeps to it."""
     technique = ctx.technique
     if technique is None:
         # An action about to be taken is the one case not worth waiting the rounds out.
-        return urgent or _their_messages(ctx) >= CLEAR_OFFER_AFTER
+        return urgent or _their_messages(ctx) >= tuning.offers.clear_offer_after
     return ctx.thread.message_count - technique.at_message_count >= clear_cooldown_for(
-        technique.outcome
+        technique.outcome, tuning
     )
 
 
-# What a person says when they have given almost nothing, and when they are telling Mani it
-# missed something they already said. Whole messages / phrases, after normalising, so a vague
-# word inside a real sentence ("yeah, my manager shouted") is not mistaken for either.
-_VAGUE_REPLIES = frozenset({
-    "yeah", "yea", "yup", "yep", "ok", "okay", "maybe", "hmm", "hm", "sure", "i guess",
-    "idk", "dunno", "i do not know", "do not know", "i am not sure", "not sure", "no idea",
-    "kind of", "sort of", "kinda", "i suppose",
-})
-_HEARD_PHRASES = (
-    "just need to get it out", "just want to get it out", "just need to vent", "just want to vent",
-    "just want to talk", "just need to talk", "just listen", "dont want advice", "do not want advice",
-    "not looking for advice", "dont ask me", "do not ask me", "no questions",
-    "dont give me a technique", "do not give me a technique", "dont want a technique",
-    "do not want a technique", "dont want to do an exercise", "do not want to do an exercise",
-)
-_CORRECTION_PHRASES = (
-    "just told you", "i told you", "already told you", "i already told", "i just said",
-    "already said", "i said that", "like i said", "as i said", "you asked that",
-    "you already asked", "i just answered", "i answered",
-)
-
-
-def classify_reply(text: str) -> str | None:
-    """`vague` for a reply that says almost nothing, `correction` for one that says Mani missed
-    what they had already said, `heard` for one that asks only to be listened to, otherwise None. A deterministic read, so the model is told rather
-    than left to notice."""
-    normalized = normalize(text)
-    if any(phrase in normalized for phrase in _HEARD_PHRASES):
-        return "heard"
-    if any(phrase in normalized for phrase in _CORRECTION_PHRASES):
-        return "correction"
-    if normalized in _VAGUE_REPLIES:
-        return "vague"
-    return None
-
-
-def resolve_style(ctx: TurnContext) -> str:
-    """The conversation style this turn: named in [ctx], and the variant of a somatic stage's
-    `ask` that is sent.
+def resolve_style(ctx: TurnContext, default_style: str) -> str:
+    """The conversation style this turn, named in [ctx].
 
     The conversation's own choice wins over the profile's, which is the point of having
     both: onboarding sets a default, and a thread may differ from it without changing it.
@@ -195,7 +117,7 @@ def resolve_style(ctx: TurnContext) -> str:
         return ctx.thread.conversation_style.value
     if ctx.profile and ctx.profile.support_style:
         return ctx.profile.support_style.value
-    return DEFAULT_STYLE
+    return default_style
 
 
 def build(
@@ -208,8 +130,9 @@ def build(
     offer_waiting: bool = False,
     framework_starting: bool = False,
     urgent: bool = False,
-    their_last: str | None = None,
     ruled_out: list[str] | None = None,
+    replies: Replies,
+    tuning: Tuning,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -219,9 +142,10 @@ def build(
     history add - all optional, so a turn with none of them still formats exactly as before.
 
     `framework` is the one already active; its current and next stage go in by id, since the
-    model reads what each stage asks from the framework's Stages line in the index. Only the
-    somatic stages carry a block, and theirs go in full. `shortlist` is every framework the
-    router found signs of, ranked; its ids are the only sets the model may offer from.
+    model reads what each stage asks from the framework's Stages line in the index, and what
+    the ending stages ask from the mani_base prompt's `ending` section. `shortlist` is every
+    framework the router found signs of, ranked; its ids are the only sets the model may offer
+    from.
 
     `history` is the same window the caller already loads for the model's own conversation
     view - nothing new is fetched for it. Only Mani's own messages in it become recent_openers;
@@ -231,10 +155,11 @@ def build(
     framework runs, and the caller has already taken them off `shortlist`.
     """
     technique = ctx.technique
-    # Named first because the model writes every stage question in it and a somatic stage's ask
-    # is resolved from it, and named `conversation_style` rather than `style` because `recent_styles` three lines down means
+    style = resolve_style(ctx, tuning.offers.default_style)
+    # Named first because the model writes every stage question in it, and named
+    # `conversation_style` rather than `style` because `recent_styles` three lines down means
     # the response shape, which is a different thing entirely.
-    lines: list[str] = [_line("conversation_style", resolve_style(ctx))]
+    lines: list[str] = [_line("conversation_style", style)]
     if safety_concern:
         # The deterministic screen heard something that may be a risk. The framework waits:
         # no stage question to relay, no offer to make, until the person is safe to go on.
@@ -255,28 +180,23 @@ def build(
     else:
         phase = "talking"
     lines.append(_line("conversation_phase", phase))
-    if not running and not clarification_used(history):
-        lines.append(_line("clarification_available", "yes"))
+    if not running:
+        lines.append(_line("clarification_lines", " | ".join(replies.clarification_lines)))
     if not running:
         # What the question is about while no stage decides it (muhammad, 2026-09-24): said
         # here, next to the message, because the style rule in the long prompt alone did not hold.
-        focus = "feeling_then_way_through" if resolve_style(ctx) == "direct" else "feelings"
+        focus = "feeling_then_way_through" if style == "direct" else "feelings"
         lines.append(_line("question_focus", focus))
-    if their_last and not offer_waiting and not safety_concern and (
-        not running or their_last == "correction"
-    ):
-        # A vague reply is not flagged while the questions run: each stage already says what to
-        # do with one. A correction is, because no stage says to take what they already told you.
-        lines.append(_line("their_last", their_last))
     if offer_waiting:
         # Mani's last reply was an offer, and they typed rather than tapped.
         lines.append(_line("offer_waiting", "yes"))
-    question = None if safety_concern else _after_framework_question(history or [])
-    if question:
-        lines.append(_line("after_framework_question", question))
+    if not safety_concern and _chat_more_offered(history or []):
+        questions = " | ".join(replies.after_framework_questions)
+        lines.append(_line("after_framework_questions", questions))
 
     # The offer's timing is told to the model, which keeps to it.
-    lines.append(_line("cooldown_passed", "yes" if cooldown_passed(ctx, urgent=urgent) else "no"))
+    passed = cooldown_passed(ctx, tuning, urgent=urgent)
+    lines.append(_line("cooldown_passed", "yes" if passed else "no"))
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
         lines.append(_line("since_last", since_last))
@@ -300,8 +220,11 @@ def build(
     # literal words a reply opened with - two replies can vary in shape while still starting
     # the same way, which is what "recent_styles" alone cannot catch.
     mani_replies = [m.content for m in (history or []) if m.role is MessageRole.MANI]
+    windows = tuning.windows
     openers = [
-        _opener(text) for text in mani_replies[-RECENT_OPENERS_WINDOW:] if text.strip()
+        _opener(text, windows.recent_openers_words)
+        for text in mani_replies[-windows.recent_openers_window:]
+        if text.strip()
     ]
     if openers:
         quoted = ", ".join(f'"{o}"' for o in openers)
@@ -315,7 +238,6 @@ def build(
         lines.append(_line("framework_shortlist", ", ".join(s.framework_id for s in shortlist)))
 
     if running:
-        style = resolve_style(ctx)
         if framework_starting:
             # They have just said yes. What they told Mani before this counts toward the first
             # stage; response_format.md says how to use it.
@@ -327,35 +249,9 @@ def build(
         if framework_starting and phase == OFFERING and index + 1 < len(framework.phases):
             index += 1
             phase = framework.phases[index]
-        lines.extend(_stage_lines("stage", framework, phase, style))
+        lines.append(_line("stage", phase))
         # An offer still open has no next stage: offer_waiting says how to take what they typed.
         if phase != OFFERING and 0 <= index < len(framework.phases) - 1:
-            lines.extend(_stage_lines("next_stage", framework, framework.phases[index + 1], style))
+            lines.append(_line("next_stage", framework.phases[index + 1]))
 
     return "[ctx]\n" + "\n".join(lines) + "\n[/ctx]\n\n"
-
-
-def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> list[str]:
-    """One stage - current or next - as its id, and in full when it carries a block.
-
-    Only the somatic stages do. Purpose, listening cues, readiness and boundaries are clinical
-    rather than tonal and do not vary; `ask` is the one leaf a style changes, so only the
-    resolved style's variant is sent rather than all three.
-    """
-    lines = [_line(prefix, phase)]
-    stage = framework.stages.get(phase)
-    if not stage:
-        return lines
-
-    for field in ("purpose", "listen_for", "ready_when"):
-        if stage.get(field):
-            lines.append(_line(f"{prefix}_{field}", stage[field]))
-    if stage.get("boundaries"):
-        lines.append(_line(f"{prefix}_boundaries", "; ".join(stage["boundaries"])))
-    if stage.get("if_unclear"):
-        rendered = " | ".join(f"if {e['when']}: {ending.reply_for(e, style)}" for e in stage["if_unclear"])
-        lines.append(_line(f"{prefix}_if_unclear", rendered))
-    ask = (stage.get("ask") or {}).get(style)
-    if ask:
-        lines.append(_line(f"{prefix}_ask", ask))
-    return lines

@@ -3,7 +3,7 @@
 
 import pytest
 
-from mani.chat.techniques import OFFERING, Registry, Verdict
+from mani.chat.techniques import ENDING_PHASES, OFFERING, Registry, Verdict
 from mani.models.rows import Framework
 
 REFRAMING = Framework(
@@ -105,23 +105,35 @@ def test_registry_membership_is_the_closed_set(registry):
     assert len(registry) == 3
 
 
-def test_the_last_phase_is_what_finishes_a_framework(registry):
-    assert registry.is_final("thought_reframing", "ground")
-    assert not registry.is_final("thought_reframing", "land")
+WITH_ENDING = Framework(
+    id="abcde", name="ABCDE", summary="s", body="b",
+    phases=["offering", "activate", "closing", *ENDING_PHASES],
+)
 
 
-def test_completion_is_a_position_not_a_phase_name(registry):
-    """Matching a literal phase id recognises only the frameworks that happen to end on
-    it, and makes any phase appended after it unreachable."""
-    assert registry.is_final("dbt_stop", "proceed")
-    assert not registry.is_final("dbt_stop", "ground")
+@pytest.fixture
+def ending_registry() -> Registry:
+    return Registry([WITH_ENDING, REFRAMING])
 
 
-def test_nothing_unrecognised_ever_counts_as_finished(registry):
-    assert not registry.is_final("made_up", "ground")
-    assert not registry.is_final("abcde", "made_up")
-    assert not registry.is_final("abcde", None)
-    assert not registry.is_final(None, "ground")
+@pytest.mark.parametrize("phase", ["closing", "somatic_checkin", "somatic_practice"])
+def test_the_ending_opens_on_the_last_own_phase_and_stays_open_through_the_ending(ending_registry, phase):
+    assert ending_registry.ending_open("abcde", phase)
+
+
+@pytest.mark.parametrize("phase", ["offering", "activate", "made_up", None])
+def test_a_phase_before_the_ending_cannot_end_the_framework(ending_registry, phase):
+    assert not ending_registry.ending_open("abcde", phase)
+
+
+def test_an_unknown_framework_has_no_ending_to_open(ending_registry):
+    assert not ending_registry.ending_open("made_up", "closing")
+    assert not ending_registry.ending_open(None, "closing")
+
+
+def test_a_framework_seeded_without_the_ending_phases_cannot_be_ended_early(ending_registry):
+    """A database not yet reseeded: its last phase is not an ending, so nothing opens."""
+    assert not ending_registry.ending_open("thought_reframing", "ground")
 
 
 def test_a_rule_a_portal_edit_broke_is_dropped_with_an_error_and_the_rest_still_route(caplog):

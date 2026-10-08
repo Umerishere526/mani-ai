@@ -20,7 +20,6 @@ import yaml
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani import memory  # noqa: E402
-from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS  # noqa: E402
 from mani.auth.jwt import Claims  # noqa: E402
 from mani.chat import orchestrator  # noqa: E402
 from mani.config import get_settings  # noqa: E402
@@ -29,7 +28,12 @@ from mani.llm import chain  # noqa: E402
 from mani.models.rows import SupportStyle, TechniqueOutcome  # noqa: E402
 from mani.prompts import cache as prompt_cache, calls, composer  # noqa: E402
 from scripts import baseline  # noqa: E402
-from scripts.seed import FRAMEWORKS_DIR, parse_framework  # noqa: E402
+from scripts.seed import (  # noqa: E402
+    FRAMEWORKS_DIR,
+    load_replies,
+    load_tuning,
+    parse_framework,
+)
 from tests.evals import validators  # noqa: E402
 
 SCENARIOS = pathlib.Path(__file__).with_name("eval_conversations.yaml")
@@ -180,13 +184,15 @@ async def _open_chat(claims: Claims, style: SupportStyle):
     async with pool.as_user(claims) as conn:
         thread, _ = await orchestrator.start_thread(conn, claims)
     async with pool.as_user(claims) as conn:
-        await orchestrator.send(conn, claims, thread.id, style.value.capitalize())
+        await orchestrator.send(conn, claims, thread.id, load_replies().style_labels[style.value])
     return thread
 
 
 async def _framework_after(claims: Claims, thread_id) -> tuple[str, str, str | None] | None:
     async with pool.as_user(claims) as conn:
-        ctx = await threads.load_turn_context(conn, thread_id, claims.user_id)
+        ctx = await threads.load_turn_context(
+            conn, thread_id, claims.user_id, load_tuning().windows.style_window
+        )
     technique = ctx.technique if ctx else None
     if technique is None:
         return None
@@ -330,7 +336,7 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
         if tapped is not None:
             findings += validators.after_framework_questions_asked(
                 # From the reply to Chat More itself, which asks the first of the three.
-                [e.reply for e in exchanges[tapped:]], AFTER_FRAMEWORK_QUESTIONS
+                [e.reply for e in exchanges[tapped:]], load_replies().after_framework_questions
             )
     if scenario.get("expect_framework"):
         reached = [e.framework[2] for e in exchanges if e.framework and e.framework[1] == "accepted"]

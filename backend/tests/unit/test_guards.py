@@ -17,6 +17,11 @@ ABCDE = Framework(
     phases=["offering", "activate", "belief", "consequence", "dispute", "effect", "ground"],
 )
 
+WITH_ENDING = Framework(
+    id="abcde", name="ABCDE", summary="s", body="b",
+    phases=["offering", "activate", "closing", "somatic_checkin", "somatic_practice"],
+)
+
 OFFER = [
     SmartPrompt(label="Try it", technique="abcde"),
     SmartPrompt(label="Tell me about this"),
@@ -31,6 +36,11 @@ SHAPES = frozenset({"warmth lead", "mirror and ask", "presence only"})
 @pytest.fixture
 def registry() -> Registry:
     return Registry([REFRAMING, ABCDE])
+
+
+@pytest.fixture
+def ending_registry() -> Registry:
+    return Registry([WITH_ENDING])
 
 
 def reply(**overrides) -> Reply:
@@ -81,9 +91,10 @@ def test_a_button_with_no_label_is_dropped(registry):
     assert checked.notes == ["dropped a button: empty label"]
 
 
-def test_an_invented_technique_id_is_refused_and_takes_the_offers_other_buttons_with_it(registry):
+def test_an_invented_technique_id_is_refused_and_takes_the_keep_chatting_with_it(registry):
     """A model-supplied identifier is untrusted until the registry recognises it, and Keep
-    chatting and Tell me about this answer an offer that is no longer there."""
+    chatting answers an offer that is no longer there. A Tell me about this answers nothing in
+    particular, so it stays."""
     invented = reply(prompts=[
         SmartPrompt(label="Try it", technique="box_breathing"),
         SmartPrompt(label="Tell me about this"),
@@ -91,7 +102,7 @@ def test_an_invented_technique_id_is_refused_and_takes_the_offers_other_buttons_
         SmartPrompt(label="Go to Library", library="home"),
     ])
     checked = check(registry, invented)
-    assert [p.label for p in checked.prompts] == ["Go to Library"]
+    assert [p.label for p in checked.prompts] == ["Tell me about this", "Go to Library"]
     assert "box_breathing" not in " ".join(checked.notes)
 
 
@@ -120,17 +131,18 @@ def test_no_framework_is_offered_from_inside_a_running_one(registry):
 
 @pytest.mark.parametrize("turn", [{"declined": True}, {"retiring": True}])
 def test_an_offer_cannot_stand_on_a_turn_that_records_a_decline_or_a_retirement(registry, turn):
-    """Storing the offer would overwrite the decline or cancel the retirement this turn writes."""
+    """Storing the offer would overwrite the decline or cancel the retirement this turn writes. Its
+    Try it and Keep chatting go; a Tell me about this answers nothing in particular and stays."""
     offered_again = reply(prompts=OFFER)
     checked = check(registry, offered_again, **turn)
-    assert checked.prompts == []
+    assert [p.label for p in checked.prompts] == ["Tell me about this"]
     assert checked.text == "Thank you for telling me."
 
 
 def test_a_library_button_survives_a_turn_that_drops_the_offer(registry):
     mixed = reply(prompts=[*OFFER, SmartPrompt(label="Go to Library", library="home")])
     checked = check(registry, mixed, declined=True)
-    assert [p.label for p in checked.prompts] == ["Go to Library"]
+    assert [p.label for p in checked.prompts] == ["Tell me about this", "Go to Library"]
 
 
 def test_a_button_to_a_library_section_that_does_not_exist_lands_on_the_library_home(registry):
@@ -237,3 +249,72 @@ def test_with_no_shapes_taught_every_shape_is_dropped_and_the_reply_still_stands
     assert checked.style is None
     assert checked.text == "Thank you for telling me."
     assert checked.notes == ["dropped the response shape: not on the list"]
+
+
+def ending_check(registry, model_reply, phase="somatic_practice", **overrides):
+    """A turn on an accepted framework, stored on `phase`, whose ending is open."""
+    return check(
+        registry, model_reply, current_framework_id="abcde", current_phase=phase,
+        framework_running=True, ending_open=True, **overrides,
+    )
+
+
+@pytest.mark.parametrize(
+    ("written", "kept"),
+    [("choice", guards.Ending.CHOICE), (" Keep_Talking ", guards.Ending.KEEP_TALKING)],
+)
+@pytest.mark.parametrize("phase", ["closing", "somatic_checkin", "somatic_practice"])
+def test_an_ending_is_kept_while_the_ending_is_open_whatever_its_casing(
+    ending_registry, written, kept, phase
+):
+    checked = ending_check(ending_registry, reply(ending=written), phase=phase)
+    assert checked.ending is kept
+    assert checked.notes == []
+
+
+def test_an_ending_off_the_list_is_dropped_with_a_note(ending_registry):
+    checked = ending_check(ending_registry, reply(ending="done"))
+    assert checked.ending is None
+    assert checked.notes == ["ignored ending: not one of the endings"]
+
+
+def test_an_ending_before_the_ending_is_open_is_dropped_with_a_note(ending_registry):
+    checked = check(
+        ending_registry, reply(ending="choice"), current_framework_id="abcde",
+        current_phase="activate", framework_running=True, ending_open=False,
+    )
+    assert checked.ending is None
+    assert checked.notes == ["ignored ending: the ending is not open"]
+
+
+def test_an_ending_with_no_framework_running_is_dropped(ending_registry):
+    checked = check(ending_registry, reply(ending="choice"), ending_open=True)
+    assert checked.ending is None
+
+
+def test_a_reply_that_moves_the_stage_forward_is_not_also_the_end(ending_registry):
+    """Offering the body check, or starting its steps, is the reply before the ending."""
+    moved = reply(ending="choice", state=TechniqueState(technique="abcde", step="somatic_checkin"))
+    checked = ending_check(ending_registry, moved, phase="closing")
+    assert checked.ending is None
+    assert checked.phase == "somatic_checkin"
+    assert checked.notes == ["ignored ending: the reply moves the stage forward"]
+
+
+def test_a_reply_that_holds_or_steps_back_may_end(ending_registry):
+    held = reply(ending="keep_talking", state=TechniqueState(technique="abcde", step="somatic_checkin"))
+    assert ending_check(ending_registry, held, phase="somatic_checkin").ending is guards.Ending.KEEP_TALKING
+    back = reply(ending="choice", state=TechniqueState(technique="abcde", step="closing"))
+    assert ending_check(ending_registry, back, phase="somatic_practice").ending is guards.Ending.CHOICE
+
+
+def test_a_kept_ending_drops_a_technique_button_because_the_turn_retires(ending_registry):
+    """Not running, so the running guard cannot be what drops it: only the retiring one can."""
+    offer = reply(ending="choice", prompts=OFFER)
+    checked = check(
+        ending_registry, offer, current_framework_id="abcde", current_phase="somatic_practice",
+        framework_running=False, ending_open=True,
+    )
+    assert checked.ending is guards.Ending.CHOICE
+    assert [p.label for p in checked.prompts] == ["Tell me about this"]
+    assert "dropped a technique button: this turn declines or retires an offer" in checked.notes

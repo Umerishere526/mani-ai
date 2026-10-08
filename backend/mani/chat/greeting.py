@@ -1,53 +1,23 @@
-# ABOUTME: Mani's fixed, client-authored lines: the greeting, the style choice, each style's
-# ABOUTME: opener, and the offer explanation. Written here rather than generated, so they cost nothing.
+# ABOUTME: Builds the conversation's opening line and its style buttons from the `replies` row,
+# ABOUTME: and names the two choices a framework's ending hands over.
 
-DEFAULT_NAME = "there"
-
-# Wording from the client spec, docs/specs/conversational-styles.md "Conversation opening":
-# every conversation starts by asking how the person wants to be spoken to.
-STYLE_QUESTION = "How would you like me to speak with you today?"
-
-# The greeting's buttons. `style` is read back by the backend when one is tapped; the client
-# only ever sends the label, exactly as it does for every other button.
-STYLE_OPTIONS = [
-    {"label": "Direct", "style": "direct"},
-    {"label": "Supportive", "style": "supportive"},
-    {"label": "Reflective", "style": "reflective"},
-]
-
-# What Mani says once a style is chosen - fixed wording from the same spec.
-OPENERS = {
-    "direct": "How can I help you today?",
-    "supportive": "How can I support you today?",
-    "reflective": "What's on your mind today?",
-}
+from mani.prompts.replies import Replies
 
 
-def greeting(nickname: str | None, returning: bool) -> str:
-    name = nickname or DEFAULT_NAME
-    hello = f"Hi {name}, good to see you again." if returning else f"Hi {name}. It's MANI."
-    return f"{hello} {STYLE_QUESTION}"
+def greeting(replies: Replies, nickname: str | None, returning: bool) -> str:
+    text = replies.greeting.returning if returning else replies.greeting.new
+    name = nickname or replies.greeting.default_name
+    return f"{text.format(name=name)} {replies.style_question}"
 
 
-# Buttons asking what an offer involves. An offer carries two, Try it and Keep chatting
-# (muhammad, 2026-09-24). These two answer an offer, so guards drops them when the offer's own
-# button is dropped.
-TELL_ME_ABOUT_THIS_LABEL = "Tell me about this"
-EXPLAIN_LABELS = {TELL_ME_ABOUT_THIS_LABEL.lower(), "tell me more"}
+def style_options(replies: Replies) -> list[dict[str, str]]:
+    """The greeting's buttons, in the order `style_labels` lists them. `style` is read back by
+    the backend when one is tapped; the client only ever sends the label, exactly as it does for
+    every other button."""
+    return [{"label": label, "style": style} for style, label in replies.style_labels.items()]
+
 
 # The two choices every framework ends on - the client's cadence: "Framework completes ->
 # Somatic check-in -> Chat More OR Go to Library".
 CHAT_MORE_LABEL = "Chat More"
 GO_TO_LIBRARY_LABEL = "Go to Library"
-
-# Asked in this order, one per reply, once a framework has finished and the person carries on
-# with the same issue - the client's "three forward-moving reflective questions".
-AFTER_FRAMEWORK_QUESTIONS = (
-    "What feels most important about this now?",
-    "What do you think you need to do differently from here?",
-    "How could you take one small step toward that?",
-)
-
-# The client's own check, asked at most once per conversation when several things have come
-# up and it is unclear which matters most (muhammad, 2026-09-24: "never a new loop").
-CLARIFICATION_QUESTIONS = ("do i have this right?", "what would you like us to focus on today?")

@@ -17,16 +17,9 @@ from mani.llm import client
 from mani.llm.schema import Memory
 from mani.models.rows import Message, MessageRole
 from mani.prompts import cache, calls
+from mani.prompts.tuning import MemoryTuning
 
 logger = logging.getLogger(__name__)
-
-# The memory is pasted into the system prompt of every later chat, so it is bounded here
-# whatever the model returns: a runaway list is a cost multiplier and an injection channel.
-MAX_ENTRIES = 6
-MAX_ENTRY_CHARS = 160
-
-# How long a conversation has to be quiet before the idle job treats it as finished.
-IDLE_AFTER = dt.timedelta(hours=24)
 
 # Each fold advances the thread to the last message it read, so the loop below ends on its
 # own. This bounds it anyway: a fault in that condition would otherwise pay for a model
@@ -34,12 +27,14 @@ IDLE_AFTER = dt.timedelta(hours=24)
 MAX_FOLDS_PER_RUN = 20
 
 
-def bounded(memory: Memory) -> Memory:
+def bounded(memory: Memory, limits: MemoryTuning) -> Memory:
+    """The memory is pasted into the system prompt of every later chat, so it is bounded here
+    whatever the model returns: a runaway list is a cost multiplier and an injection channel."""
     return Memory.model_validate(
         {
-            field: [entry.strip()[:MAX_ENTRY_CHARS] for entry in entries if entry.strip()][
-                :MAX_ENTRIES
-            ]
+            field: [
+                entry.strip()[:limits.max_entry_chars] for entry in entries if entry.strip()
+            ][:limits.max_entries]
             for field, entries in memory.model_dump().items()
         }
     )
@@ -83,6 +78,7 @@ async def fold_one(
             {
                 "role": "user",
                 "content": (
+                    f"max_entries: {config.tuning.memory.max_entries}\n\n"
                     f"## Known so far\n{existing.model_dump_json(indent=1)}\n\n"
                     f"## Conversation\n{_transcript(new_messages)}"
                 ),
@@ -98,7 +94,7 @@ async def fold_one(
         user_id=user_id,
         thread_id=thread_id,
     )
-    await memory_db.save(conn, user_id, bounded(call.value))
+    await memory_db.save(conn, user_id, bounded(call.value, config.tuning.memory))
     await memory_db.mark_folded_through(conn, thread_id, new_messages[-1].created_at)
     return True
 

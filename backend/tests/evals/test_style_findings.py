@@ -39,13 +39,16 @@ def test_an_invitation_to_say_more_counts_as_asking():
     assert not unasked_before_offer([("I'm sorry you're feeling this way. Tell me what is happening right now.", False)])
 
 
-def test_a_framework_that_ends_without_its_hand_off_buttons_is_caught():
+def test_a_framework_that_ends_with_one_hand_off_button_is_caught():
     from tests.evals.validators import missing_handoff
 
-    ok = [("closing", []), ("somatic", []), (None, ["Chat More", "Go to Library"])]
-    assert missing_handoff(ok) == []
-    bare = [("somatic", []), (None, ["Tell me more"])]
-    assert missing_handoff(bare)
+    both = [("closing", []), ("somatic_practice", []), (None, ["Chat More", "Go to Library"])]
+    assert missing_handoff(both) == []
+    neither = [("somatic_checkin", []), (None, [])]
+    assert missing_handoff(neither) == []
+    one = [("somatic_practice", []), (None, ["Go to Library"])]
+    assert missing_handoff(one)
+    assert missing_handoff([("somatic_checkin", []), (None, ["Tell me more"])]) == []
 
 
 def test_a_second_chat_that_cites_the_first_is_caught():
@@ -75,7 +78,9 @@ def test_a_question_asked_again_is_caught_even_reworded_slightly():
 def test_no_hand_off_is_needed_once_they_have_chosen():
     from tests.evals.validators import missing_handoff
 
-    assert missing_handoff([("somatic", []), (None, [])], ["my chest feels lighter", "Chat More"]) == []
+    assert missing_handoff(
+        [("somatic_practice", []), (None, ["Go to Library"])], ["my chest feels lighter", "Chat More"]
+    ) == []
 
 
 def test_the_clients_own_two_question_lines_are_not_counted_as_stacking():
@@ -96,20 +101,21 @@ def test_saying_what_a_framework_is_called_or_the_word_itself_is_caught():
 
 
 def test_the_three_questions_after_a_framework_are_checked():
-    from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS
+    from scripts.seed import load_replies
     from tests.evals.validators import after_framework_questions_asked
 
-    assert after_framework_questions_asked(list(AFTER_FRAMEWORK_QUESTIONS), AFTER_FRAMEWORK_QUESTIONS) == []
-    assert after_framework_questions_asked(["What else?"], AFTER_FRAMEWORK_QUESTIONS)
+    questions = load_replies().after_framework_questions
+    assert after_framework_questions_asked(questions, questions) == []
+    assert after_framework_questions_asked(["What else?"], questions)
 
 
 def test_the_reply_to_chat_more_counts_toward_the_three_questions():
     """The first of the three is asked in the very reply to Chat More; the eval skipped it."""
-    from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS
     from mani.models.rows import SupportStyle
     from scripts.eval_replies import Exchange, _score
+    from scripts.seed import load_replies
 
-    first, second, third = AFTER_FRAMEWORK_QUESTIONS
+    first, second, third = load_replies().after_framework_questions
     exchanges = [
         Exchange(message="Chat More", reply=f"You'd like to keep talking. {first}"),
         Exchange(message="I still think about it.", reply=f"It's still with you. {second}"),

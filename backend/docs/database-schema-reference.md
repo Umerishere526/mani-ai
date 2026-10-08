@@ -129,6 +129,7 @@ One row per thread — the currently (or most recently) active framework.
 | 6 | `at_message_count` | integer | required | Thread's `message_count` when this state was last written — the cooldown clock. |
 | 7 | `library_offered_since` | boolean | default `false` | Whether the library follow-up has been offered since acceptance. |
 | 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
+| 9 | `ending_from` | integer | optional, `check (ending_from >= 0)` | Thread's `message_count` when the framework entered its ending, read by the turn cap; `null` outside the ending and cleared when the framework retires (migration 020). Not the `ending` column hosted still carries from the reverted migrations: that one is a different column with a different meaning. |
 
 ### `public.thread_techniques_offered`
 Frequency-limiting log — every framework ever offered in a thread.
@@ -196,12 +197,12 @@ Append-only log of the model's self-reported style per reply.
 | 1 | `id` | uuid | **PK**, default `gen_random_uuid()` | |
 | 2 | `name` | text | required, **UNIQUE** | e.g. `mani_base`, `response_format`. |
 | 3 | `description` | text | default `''` | |
-| 4 | `content` | text | required | The live prompt text (seeded from `content/prompts/*.md`). |
+| 4 | `content` | text | required | The live prompt text (seeded from `content/prompts/*.md`). Two rows are YAML read by code and never sent to a model: `replies` (the greeting, the style buttons, the openers, the clarification lines, the after framework questions) and `tuning` (offer timing, router weights, windows, memory limits). `mani/prompts/checks.py` `content_problem` refuses a broken `mani_base`, `replies` or `tuning` at seed and on every admin write, and the cache load fails with `CONFIG_ERROR`. |
 | 5 | `version` | integer | default `1`, `> 0` (CHECK) | |
 | 6 | `model_id` | text | optional | Overrides the default model for this prompt. |
 | 7 | `model_parameters` | jsonb | default `'{}'` | e.g. `temperature`, `maxTokens`. A model call's row (`mani/prompts/calls.py` `CALL_PROMPTS`) must hold `reasoning_effort`; the seed and the admin writes refuse it otherwise. |
 | 8 | `routing` | jsonb | default `'{}'` | OpenRouter provider routing overrides. |
-| 9 | `is_active` | boolean | default `true` | |
+| 9 | `is_active` | boolean | default `true` | `mani_base`, `response_format`, `replies` and `tuning` (`REQUIRED_PROMPTS`) cannot be set inactive or renamed through the admin writes. |
 | 10 | `created_by` | uuid | FK→`auth.users` SET NULL | |
 | 11 | `updated_by` | uuid | FK→`auth.users` SET NULL | |
 | 12 | `created_at` | timestamptz | default `now()` | |

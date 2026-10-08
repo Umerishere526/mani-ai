@@ -23,10 +23,23 @@ from mani.models.rows import (
     ThreadSummary,
     Thread,
 )
+from tests.seeded import seeded_replies, seeded_tuning
 
 USER = uuid.UUID("a0000000-0000-4000-8000-00000000000a")
 THREAD = uuid.UUID("b0000000-0000-4000-8000-00000000000b")
 NOW = dt.datetime(2026, 1, 1, tzinfo=dt.UTC)
+
+# The seeded lines and numbers, which a test overrides one key at a time with `seeded_tuning(...)`.
+REPLIES = seeded_replies()
+TUNING = seeded_tuning()
+
+
+def build(ctx, *, tuning=TUNING, **kwargs) -> str:
+    return context.build(ctx, replies=REPLIES, tuning=tuning, **kwargs)
+
+
+def cooldown_passed(ctx, *, tuning=TUNING, **kwargs) -> bool:
+    return context.cooldown_passed(ctx, tuning, **kwargs)
 
 
 def thread(message_count: int = 10) -> Thread:
@@ -51,7 +64,7 @@ def user(content: str) -> Message:
 
 
 def test_a_thread_with_no_technique_says_the_cooldown_has_passed():
-    block = context.build(TurnContext(thread=thread(), profile=None, technique=None))
+    block = build(TurnContext(thread=thread(), profile=None, technique=None))
     assert "cooldown_passed: yes" in block
     assert "since_last" not in block
 
@@ -61,7 +74,7 @@ def test_a_recent_decline_holds_the_cooldown_closed():
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED,
         at_message_count=8,
     )
-    block = context.build(TurnContext(thread=thread(10), profile=None, technique=state))
+    block = build(TurnContext(thread=thread(10), profile=None, technique=state))
     assert "cooldown_passed: no" in block
     assert "since_last: 2" in block
     assert "this_thread: abcde (declined)" in block
@@ -72,7 +85,7 @@ def test_an_accepted_technique_waits_for_the_library_offer():
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
         phase="ground", at_message_count=4, library_offered_since=False,
     )
-    block = context.build(TurnContext(thread=thread(60), profile=None, technique=state))
+    block = build(TurnContext(thread=thread(60), profile=None, technique=state))
     assert "library_pending: yes" in block
     assert "current_phase: ground" in block
 
@@ -84,7 +97,7 @@ def test_a_retired_technique_still_holds_the_cooldown_closed():
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
         phase=None, at_message_count=8,
     )
-    block = context.build(TurnContext(thread=thread(10), profile=None, technique=state))
+    block = build(TurnContext(thread=thread(10), profile=None, technique=state))
     assert "cooldown_passed: no" in block
     assert "since_last: 2" in block
     assert "this_thread: abcde (accepted)" in block
@@ -96,25 +109,47 @@ def test_a_finished_framework_waits_longer_than_a_declined_one():
     """45 messages against 20. The longer wait was unreachable while completion deleted
     the row it is measured from."""
     started_at = 10
-    long_enough_for_a_decline = thread(started_at + context.CLEAR_COOLDOWN_AFTER_DECLINE)
+    long_enough_for_a_decline = thread(started_at + TUNING.offers.clear_cooldown_after_decline)
     finished = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
         phase=None, at_message_count=started_at,
     )
     declined = finished.model_copy(update={"outcome": TechniqueOutcome.DECLINED})
 
-    assert "cooldown_passed: no" in context.build(
+    assert "cooldown_passed: no" in build(
         TurnContext(thread=long_enough_for_a_decline, profile=None, technique=finished)
     )
-    assert "cooldown_passed: yes" in context.build(
+    assert "cooldown_passed: yes" in build(
         TurnContext(thread=long_enough_for_a_decline, profile=None, technique=declined)
     )
+
+
+def test_the_wait_after_a_completed_framework_is_the_tuned_number_of_messages():
+    finished = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+        phase=None, at_message_count=10,
+    )
+    three_later = TurnContext(thread=thread(13), profile=None, technique=finished)
+
+    assert not cooldown_passed(three_later)
+    assert cooldown_passed(three_later, tuning=seeded_tuning(offers={"cooldown_after_complete": 3}))
+
+
+def test_the_opener_words_and_window_are_the_tuned_ones():
+    history = [mani("One thing you said stood out."), mani("Two things came up for you.")]
+    tuned = seeded_tuning(windows={"recent_openers_words": 1, "recent_openers_window": 1})
+
+    block = build(
+        TurnContext(thread=thread(), profile=None, technique=None), history=history, tuning=tuned
+    )
+
+    assert 'recent_openers: "two"' in block
 
 
 def test_recent_styles_are_listed_by_shape_so_a_reply_can_avoid_repeating_one():
     """Rows stored before the voice field went still carry one; the model is shown shapes only,
     since it is no longer asked to rotate voices (muhammad, 2026-09-24)."""
-    block = context.build(
+    block = build(
         TurnContext(
             thread=thread(), profile=None, technique=None,
             recent_styles=[
@@ -132,7 +167,7 @@ def test_recent_openers_are_extracted_from_manis_own_replies():
         user("She said two recommendations weren't supported."),
         mani("That sounds like a hard moment to sit with."),
     ]
-    block = context.build(
+    block = build(
         TurnContext(thread=thread(), profile=None, technique=None), history=history
     )
     assert 'recent_openers: "your manager", "that sounds"' in block
@@ -145,7 +180,7 @@ def test_recent_openers_list_is_bounded():
         mani("Three moments felt different."),
         mani("Four steps got you here."),
     ]
-    block = context.build(
+    block = build(
         TurnContext(thread=thread(), profile=None, technique=None), history=history
     )
     assert '"one thing"' not in block
@@ -162,7 +197,7 @@ def test_recent_openers_carry_no_user_text():
         mani("Tell me what happened next."),
         user("I keep thinking I'll freeze halfway through"),
     ]
-    block = context.build(
+    block = build(
         TurnContext(thread=thread(), profile=None, technique=None), history=history
     )
     assert '"tell me"' in block
@@ -171,11 +206,11 @@ def test_recent_openers_carry_no_user_text():
 
 
 def test_no_recent_replies_means_no_recent_openers_line():
-    block = context.build(TurnContext(thread=thread(), profile=None, technique=None))
+    block = build(TurnContext(thread=thread(), profile=None, technique=None))
     assert "recent_openers" not in block
 
     only_user_messages = [user("I have a presentation tomorrow")]
-    block = context.build(
+    block = build(
         TurnContext(thread=thread(), profile=None, technique=None),
         history=only_user_messages,
     )
@@ -184,7 +219,7 @@ def test_no_recent_replies_means_no_recent_openers_line():
 
 def test_a_context_block_can_be_stripped_back_out():
     """Messages written by the previous system carry one; nothing written here does."""
-    stored = context.build(TurnContext(thread=thread(), profile=None, technique=None))
+    stored = build(TurnContext(thread=thread(), profile=None, technique=None))
     assert context.strip(stored + "I had a hard day") == "I had a hard day"
 
 
@@ -213,43 +248,27 @@ def test_typed_text_is_not_mistaken_for_a_tap():
 
 
 def framework() -> Framework:
-    """Shaped as the seed writes it: a framework's own stages are ids only, and the two somatic
-    stages appended after closing carry their blocks."""
+    """Shaped as the seed writes it: the framework's own phases, then the two ending phases,
+    and no stage blocks at all."""
     return Framework(
         id="abcde", name="ABCDE", summary="s", body="b",
         phases=["offering", "activate", "belief", "closing", "somatic_checkin", "somatic_practice"],
-        stages={
-            "somatic_checkin": {
-                "purpose": "Check in with the body after the framework.",
-                "ask": {
-                    "direct": "What do you notice in your body now?",
-                    "supportive": "Would you like to notice what is happening in your body?",
-                },
-            },
-            "somatic_practice": {
-                "purpose": "One short grounding practice for where they feel it.",
-                "ask": {"direct": "Where do you feel that most right now?"},
-            },
-        },
     )
 
 
-def running_on(phase: str, **build) -> list[str]:
+def running_on(phase: str, **options) -> list[str]:
     state = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
         phase=phase, at_message_count=4,
     )
     profile = Profile(user_id=USER, support_style="direct")
-    return context.build(
-        TurnContext(thread=thread(), profile=profile, technique=state), framework=framework(), **build
+    return build(
+        TurnContext(thread=thread(), profile=profile, technique=state), framework=framework(), **options
     ).splitlines()
 
 
-STAGE_BLOCK_LINES = ("purpose", "listen_for", "ready_when", "boundaries", "if_unclear", "ask")
-
-
 def test_the_shortlist_names_every_candidate_by_id_in_ranked_order_and_never_a_score():
-    block = context.build(
+    block = build(
         TurnContext(thread=thread(), profile=None, technique=None),
         shortlist=[
             Signal("behavioral_activation", 2.6, ["cannot make myself begin"]),
@@ -262,7 +281,7 @@ def test_the_shortlist_names_every_candidate_by_id_in_ranked_order_and_never_a_s
 
 def test_no_offer_line_and_no_closest_fit_whatever_the_shortlist_holds():
     """Mani offers only a set on the shortlist that it judges fits; nothing names one for it."""
-    block = context.build(
+    block = build(
         TurnContext(thread=thread(message_count=10), profile=None, technique=None),
         shortlist=[Signal("abcde", 2.6, ["she said", "so i must be"])],
     ).splitlines()
@@ -277,8 +296,8 @@ def test_the_turn_a_framework_starts_says_so():
         phase="offering", at_message_count=8,
     )
     ctx = TurnContext(thread=thread(), profile=None, technique=offered)
-    assert "framework_starting: yes" in context.build(ctx, framework=framework(), framework_starting=True)
-    assert "framework_starting" not in context.build(ctx, framework=framework())
+    assert "framework_starting: yes" in build(ctx, framework=framework(), framework_starting=True)
+    assert "framework_starting" not in build(ctx, framework=framework())
 
 
 TONES = ("direct", "supportive", "reflective")
@@ -294,7 +313,7 @@ def test_the_turn_a_framework_starts_names_the_first_stage_and_the_second():
         phase="offering", at_message_count=8,
     )
     ctx = TurnContext(thread=thread(), profile=None, technique=state)
-    starting = context.build(ctx, framework=framework(), framework_starting=True).splitlines()
+    starting = build(ctx, framework=framework(), framework_starting=True).splitlines()
     assert "stage: activate" in starting
     assert "next_stage: belief" in starting
     assert "stage: offering" not in starting
@@ -308,28 +327,18 @@ def test_a_frameworks_own_stage_goes_by_id_and_the_model_asks_it_in_its_own_word
     assert "framework_stages: offering, activate, belief, closing, somatic_checkin, somatic_practice" in block
     assert "stage: activate" in block
     assert "next_stage: belief" in block
-    assert not any(line.startswith("stage_note") for line in block)
-    assert not any(
-        line.startswith(f"{prefix}_{field}:")
-        for line in block for prefix in ("stage", "next_stage") for field in STAGE_BLOCK_LINES
-    )
+    assert not any(line.startswith(("stage_", "next_stage_")) for line in block)
 
 
-def test_on_closing_the_body_check_in_is_sent_in_full_as_the_next_stage():
-    block = running_on("closing")
-    assert "stage: closing" in block
-    assert "next_stage: somatic_checkin" in block
-    assert "next_stage_purpose: Check in with the body after the framework." in block
-    assert "next_stage_ask: What do you notice in your body now?" in block
-    assert not any(line.startswith("stage_purpose:") for line in block)
-
-
-def test_a_somatic_stage_keeps_its_block_and_its_fixed_words():
-    block = running_on("somatic_checkin")
-    assert "stage_purpose: Check in with the body after the framework." in block
-    assert "stage_ask: What do you notice in your body now?" in block
-    assert "next_stage_ask: Where do you feel that most right now?" in block
-    assert not any(line.startswith("stage_note") for line in block)
+@pytest.mark.parametrize(
+    ("phase", "next_stage"),
+    [("closing", "somatic_checkin"), ("somatic_checkin", "somatic_practice")],
+)
+def test_the_ending_stages_go_by_id_like_any_other_and_carry_no_block(phase, next_stage):
+    block = running_on(phase)
+    assert f"stage: {phase}" in block
+    assert f"next_stage: {next_stage}" in block
+    assert not any(line.startswith(("stage_", "next_stage_")) for line in block)
 
 
 def test_an_offer_still_open_shows_only_the_offering_stage():
@@ -355,7 +364,7 @@ def test_the_conversations_own_style_wins_over_the_profile_default():
         id=THREAD, user_id=USER, message_count=10, created_at=NOW, last_message_at=NOW,
         conversation_style="direct",
     )
-    block = context.build(
+    block = build(
         TurnContext(
             thread=chose_direct,
             profile=Profile(user_id=USER, support_style="supportive"),
@@ -363,7 +372,6 @@ def test_the_conversations_own_style_wins_over_the_profile_default():
         ),
         framework=framework(),
     )
-    assert "stage_ask: What do you notice in your body now?" in block
     assert "conversation_style: direct" in block
 
 
@@ -375,7 +383,7 @@ def test_the_style_in_force_is_named_even_with_no_framework_running():
         id=THREAD, user_id=USER, message_count=10, created_at=NOW, last_message_at=NOW,
         conversation_style="direct",
     )
-    block = context.build(
+    block = build(
         TurnContext(
             thread=chose_direct,
             profile=Profile(user_id=USER, support_style="supportive"),
@@ -385,15 +393,23 @@ def test_the_style_in_force_is_named_even_with_no_framework_running():
     assert "conversation_style: direct" in block
 
 
+def test_the_default_style_is_the_tuned_one():
+    tuned = seeded_tuning(offers={"default_style": "reflective"})
+
+    block = build(TurnContext(thread=thread(), profile=None, technique=None), tuning=tuned)
+
+    assert "conversation_style: reflective" in block
+
+
 def test_style_falls_back_to_supportive_with_no_profile_or_choice():
     state = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
         phase="somatic_checkin", at_message_count=4,
     )
-    block = context.build(
+    block = build(
         TurnContext(thread=thread(), profile=None, technique=state), framework=framework(),
     )
-    assert "stage_ask: Would you like to notice what is happening in your body?" in block
+    assert "conversation_style: supportive" in block
 
 
 def test_recent_openers_survive_a_summary_naming_techniques():
@@ -406,7 +422,7 @@ def test_recent_openers_survive_a_summary_naming_techniques():
         thread_id=THREAD, user_id=USER,
         techniques_tried=[TechniqueTried(name="ABCDE", helpful=True)],
     )
-    block = context.build(
+    block = build(
         TurnContext(thread=thread(), profile=None, technique=None, summary=summary),
         history=[mani("Your manager gave you that feedback while the team watched.")],
     )
@@ -433,12 +449,12 @@ def test_the_block_says_which_phase_of_the_conversation_this_is():
     there ends on a question. Said in [ctx], next to the message, because a rule in the long
     prompt alone did not hold."""
     fresh = TurnContext(thread=thread(), profile=None, technique=None)
-    assert "conversation_phase: understanding" in context.build(fresh)
+    assert "conversation_phase: understanding" in build(fresh)
 
     after_offer = TurnContext(
         thread=thread(), profile=None, technique=None, techniques_offered=["abcde"]
     )
-    assert "conversation_phase: talking" in context.build(after_offer)
+    assert "conversation_phase: talking" in build(after_offer)
 
 
 
@@ -453,7 +469,7 @@ def test_every_style_focuses_the_question_on_how_the_person_feels():
     ):
         chosen = thread().model_copy(update={"conversation_style": SupportStyle(style)})
         ctx = TurnContext(thread=chosen, profile=None, technique=None)
-        assert f"question_focus: {focus}" in context.build(ctx)
+        assert f"question_focus: {focus}" in build(ctx)
 
 
 def _finished_framework_history(*later: str) -> list:
@@ -466,36 +482,41 @@ def _finished_framework_history(*later: str) -> list:
     ]
 
 
-def test_after_a_framework_the_next_of_the_clients_three_questions_is_offered():
+def test_after_a_framework_all_three_questions_are_sent_in_order():
     ctx = TurnContext(thread=thread(), profile=None, technique=None, techniques_offered=["abcde"])
-    block = context.build(ctx, history=_finished_framework_history())
-    assert "after_framework_question: What feels most important about this now?" in block
+    expected = (
+        "after_framework_questions: What feels most important about this now? | "
+        "What do you think you need to do differently from here? | "
+        "How could you take one small step toward that?"
+    )
 
-    block = context.build(ctx, history=_finished_framework_history(
-        "You're still thinking about it. What feels most important about this now?"))
-    assert "after_framework_question: What do you think you need to do differently from here?" in block
-
-
-def test_a_question_asked_on_the_reply_carrying_chat_more_counts_as_asked():
-    """Observed: the reply that ended the framework also asked the first question, and the
-    next reply asked it again."""
-    ctx = TurnContext(thread=thread(), profile=None, technique=None, techniques_offered=["abcde"])
-    history = [
-        mani("The meeting is still on your mind. What feels most important about this now?",
-             options=[{"label": "Chat More"}, {"label": "Go to Library", "library": "home"}]),
-        user("I want to stop letting one comment decide how I feel."),
-    ]
-    block = context.build(ctx, history=history)
-    assert "after_framework_question: What do you think you need to do differently from here?" in block
-
-
-def test_once_all_three_are_asked_there_is_no_after_framework_question():
-    ctx = TurnContext(thread=thread(), profile=None, technique=None, techniques_offered=["abcde"])
-    block = context.build(ctx, history=_finished_framework_history(
+    assert expected in build(ctx, history=_finished_framework_history()).splitlines()
+    # The model tracks which it has asked: the line stays while the reply that offered Chat More is
+    # in the window, whatever has been asked since.
+    asked = build(ctx, history=_finished_framework_history(
         "What feels most important about this now?",
         "What do you think you need to do differently from here?",
-        "How could you take one small step toward that?"))
-    assert "after_framework_question" not in block
+    ))
+    assert expected in asked.splitlines()
+
+
+def test_the_questions_are_not_sent_before_a_framework_has_ended_or_during_a_safety_concern():
+    ctx = TurnContext(thread=thread(), profile=None, technique=None, techniques_offered=["abcde"])
+
+    assert "after_framework_questions" not in build(ctx, history=[mani("What happened then?")])
+    assert "after_framework_questions" not in build(
+        ctx, history=_finished_framework_history(), safety_concern=True
+    )
+
+
+def test_the_questions_are_the_ones_the_replies_row_holds():
+    ctx = TurnContext(thread=thread(), profile=None, technique=None, techniques_offered=["abcde"])
+    reworded = context.build(
+        ctx, history=_finished_framework_history(), tuning=TUNING,
+        replies=seeded_replies(after_framework_questions=["One?", "Two?"]),
+    )
+
+    assert "after_framework_questions: One? | Two?" in reworded.splitlines()
 
 
 def _on_message(person_message: int, technique=None):
@@ -509,21 +530,21 @@ def test_an_offer_may_come_from_the_second_message_in_any_style(style):
     Supportive and Reflective. Supportive offered on the first message about a panic attack, so
     the floor stays at two."""
     chosen = thread(3).model_copy(update={"conversation_style": SupportStyle(style)})
-    assert not context.cooldown_passed(TurnContext(thread=chosen, profile=None, technique=None))
+    assert not cooldown_passed(TurnContext(thread=chosen, profile=None, technique=None))
     chosen = thread(5).model_copy(update={"conversation_style": SupportStyle(style)})
-    assert context.cooldown_passed(TurnContext(thread=chosen, profile=None, technique=None))
+    assert cooldown_passed(TurnContext(thread=chosen, profile=None, technique=None))
 
 
 def test_the_context_tells_the_model_the_truth_about_the_first_offer():
     """It said `cooldown_passed: yes` on every first message, whatever the count."""
-    assert "cooldown_passed: no" in context.build(_on_message(1))
-    assert "cooldown_passed: yes" in context.build(_on_message(2))
+    assert "cooldown_passed: no" in build(_on_message(1))
+    assert "cooldown_passed: yes" in build(_on_message(2))
 
 
 @pytest.mark.parametrize("person_message", [4, 5, 9])
 def test_with_no_shortlist_nothing_is_owed_at_the_fourth_message_or_later(person_message):
     """There is no nearest fit: a thread whose words matched no phrase is offered nothing."""
-    block = context.build(_on_message(person_message), shortlist=[]).splitlines()
+    block = build(_on_message(person_message), shortlist=[]).splitlines()
     assert not [
         line for line in block if line.startswith(("offer:", "closest_fit", "framework_shortlist"))
     ]
@@ -536,87 +557,50 @@ def test_after_keep_chatting_an_offer_may_return_after_two_more_exchanges():
     )
     after_one = TurnContext(thread=thread(12), profile=None, technique=state)
     after_two = TurnContext(thread=thread(14), profile=None, technique=state)
-    assert not context.cooldown_passed(after_one)
-    assert context.cooldown_passed(after_two)
+    assert not cooldown_passed(after_one)
+    assert cooldown_passed(after_two)
 
 
-def test_the_one_time_clarification_is_offered_only_before_it_has_been_used():
+def test_the_clarification_lines_are_sent_while_nothing_is_running_even_after_one_was_asked():
     """The client: check once, 'Do I have this right?' or 'What would you like us to focus on
-    today?'. Never twice. Detected from Mani's own history, not a stored flag, so it holds
-    even across a process restart."""
-    not_yet = context.build(
-        TurnContext(thread=thread(), profile=None, technique=None),
-        history=[mani("What happened after that?")],
+    today?'. The model tracks whether it already asked, from its own history in the window."""
+    both = (
+        "clarification_lines: Do I have this right? | What would you like us to focus on today?"
     )
-    assert "clarification_available: yes" in not_yet
+    ctx = TurnContext(thread=thread(), profile=None, technique=None)
 
-    already_asked = context.build(
-        TurnContext(thread=thread(), profile=None, technique=None),
-        history=[mani("Do I have this right?"), user("Yes."), mani("What happened then?")],
-    )
-    assert "clarification_available" not in already_asked
-
-
-@pytest.mark.parametrize("text", ["yeah", "Yup.", "idk", "I don't know", "ok", "not sure", "I guess"])
-def test_a_reply_that_says_almost_nothing_is_vague(text):
-    assert context.classify_reply(text) == "vague"
+    assert both in build(ctx, history=[mani("What happened after that?")]).splitlines()
+    assert both in build(
+        ctx, history=[mani("Do I have this right?"), user("Yes."), mani("What happened then?")]
+    ).splitlines()
 
 
-@pytest.mark.parametrize("text", ["just told you the pain", "I already said that", "Like I said, work"])
-def test_a_reply_saying_mani_missed_what_was_said_is_a_correction(text):
-    assert context.classify_reply(text) == "correction"
-
-
-@pytest.mark.parametrize("text", [
-    "I just need to get it out", "please don't give me a technique right now", "I just want to vent",
-])
-def test_asking_only_to_be_listened_to_is_flagged_so_no_question_is_forced(text):
-    assert context.classify_reply(text) == "heard"
-
-
-@pytest.mark.parametrize("text", ["yeah my manager shouted at me", "I said no to him", "I don't know why he left"])
-def test_a_vague_word_inside_a_real_sentence_is_neither(text):
-    assert context.classify_reply(text) is None
-
-
-def test_the_last_reply_kind_reaches_the_context_only_when_no_questions_are_running():
-    block = context.build(
-        TurnContext(thread=thread(), profile=None, technique=None), their_last="correction"
-    )
-    assert "their_last: correction" in block
-
+def test_the_clarification_lines_are_not_sent_while_a_framework_runs():
     state = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
         phase="activate", at_message_count=2,
     )
     running = Framework(id="abcde", name="ABCDE", summary="s", body="b", phases=["offering", "activate"])
-    inside = context.build(
-        TurnContext(thread=thread(), profile=None, technique=state),
-        framework=running, their_last="vague",
-    )
-    assert "their_last" not in inside
-    assert "stage: activate" in inside.splitlines()
 
-    told_you = context.build(
-        TurnContext(thread=thread(), profile=None, technique=state),
-        framework=running, their_last="correction",
-    )
-    assert "their_last: correction" in told_you
+    inside = build(TurnContext(thread=thread(), profile=None, technique=state), framework=running)
+
+    assert "clarification_lines" not in inside
+    assert "stage: activate" in inside.splitlines()
 
 
 def test_what_the_person_said_rules_out_is_told_to_the_model_while_nothing_runs():
-    ruled = context.build(
+    ruled = build(
         TurnContext(thread=thread(), profile=None, technique=None),
         ruled_out=["behavioral_activation", "thought_reframe"],
     )
     assert "ruled_out: behavioral_activation, thought_reframe" in ruled.splitlines()
 
-    nothing_ruled_out = context.build(TurnContext(thread=thread(), profile=None, technique=None))
+    nothing_ruled_out = build(TurnContext(thread=thread(), profile=None, technique=None))
     assert "ruled_out" not in nothing_ruled_out
 
 
 def test_a_ruled_out_framework_is_told_even_when_no_shortlist_is_shown():
-    block = context.build(
+    block = build(
         TurnContext(thread=thread(), profile=None, technique=None),
         shortlist=[], ruled_out=["behavioral_activation"],
     )
@@ -630,13 +614,13 @@ def test_nothing_is_ruled_out_while_a_framework_runs_or_on_a_safety_concern():
         phase="activate", at_message_count=2,
     )
     running = Framework(id="abcde", name="ABCDE", summary="s", body="b", phases=["offering", "activate"])
-    inside = context.build(
+    inside = build(
         TurnContext(thread=thread(), profile=None, technique=state),
         framework=running, ruled_out=["behavioral_activation"],
     )
     assert "ruled_out" not in inside
 
-    concerned = context.build(
+    concerned = build(
         TurnContext(thread=thread(), profile=None, technique=None),
         safety_concern=True, ruled_out=["behavioral_activation"],
     )

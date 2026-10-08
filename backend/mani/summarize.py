@@ -156,7 +156,7 @@ async def update_quietly(claims, thread_id: uuid.UUID | str) -> None:
         logger.exception("summarization failed for thread %s", thread_id)
 
 
-async def reconcile_due(*, threshold: int = 20, limit: int = 200) -> int:
+async def reconcile_due(*, limit: int = 200) -> int:
     """Catch up every thread whose summary has fallen behind, across every user.
 
     The per-turn trigger (`update_quietly`) is the fast path and covers almost every
@@ -169,6 +169,8 @@ async def reconcile_due(*, threshold: int = 20, limit: int = 200) -> int:
     from mani.auth.jwt import Claims
     from mani.db import pool, summaries
 
+    # The turn refreshes a summary every `context_window` messages, so this catches up the same.
+    threshold = (await cache.load()).tuning.windows.context_window
     async with pool.as_admin() as conn:
         due = await summaries.due_for_summary(conn, threshold=threshold, limit=limit)
 

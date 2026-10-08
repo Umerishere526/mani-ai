@@ -58,11 +58,13 @@ the same change as the work.**
      is a concern: it suspends frameworks and offers without locking.
   2. The router (`router.py`) shortlists every framework their messages show signs of, ranked, with the
      distinction rules from each framework file (`activation.distinctions`) reordering them. A message older
-     than the four recency weights keeps the last one, so a sign stays while its message is in the history
+     than the recency weights (`tuning`) keeps the last one, so a sign stays while its message is in the history
      window. The shortlist is the set Mani may offer from, sent as ids only. A framework their words rule
      out (`never_offer_when_said`) is taken off it and named in `[ctx]` as `ruled_out`.
-  3. `context.py` builds the `[ctx]` block: style, offer timing, the stage in progress, and `their_last`
-     (a vague reply, a correction, or a request only to be heard), as keys from `CTX_KEYS` and values only.
+  3. `context.py` builds the `[ctx]` block: style, offer timing, the stage in progress, and the lines Mani
+     may say word for word (`clarification_lines` while nothing runs, `after_framework_questions` after a
+     framework ended), as keys from `CTX_KEYS` and values only. The code does not label what the person
+     said; the model reads it.
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,
      `heading_toward`, then `text`. The order is deliberate. The schema carries names and types only.
   5. `guards.py` stops a model supplied id or value from being stored unchecked: a technique button for an
@@ -73,14 +75,16 @@ the same change as the work.**
 - **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): six, each reviewed against the
   client's specification. An offer may come from the person's second message, of a set on the shortlist
   once Mani has learned what its Starts when line names. There is no nearest fit: a conversation whose words
-  match no phrase list is offered nothing. The shared body check-in and practice come from
-  `content/prompts/somatic.md`.
-  The body route is held in code (`orchestrator._body_route_step`): the check-in is asked once; whatever
-  the person answers, the next reply asks where, with Chest / Head / Stomach / Somewhere else; "idk" asks
-  again; a place gets the client's practice for that place and style, word for word, ending "How do you feel
-  now?". The framework is not retired, and Chat More / Go to Library do not appear, until a practice has been
-  given (or they decline, or say what they will do). "It comes back" gets the client's waves reply for the
-  style.
+  match no phrase list is offered nothing. The seed appends `somatic_checkin` and `somatic_practice`
+  (`techniques.ENDING_PHASES`) to every framework's phases.
+  The ending is rules in `mani_base.md`'s `ending` section (spec 0009): on the last own stage Mani asks
+  how they feel, offers a short body check, guides it one step per reply with steps it picks, and asks
+  again how they feel. The model ends it with the reply field `ending`: `choice` retires the framework and
+  shows Chat More / Go to Library and the exercise card, `keep_talking` retires it with no buttons and no
+  card. The code keeps `ending` only while the ending is open (`Registry.ending_open`) and when the reply
+  does not also move the stage forward. A framework the model never ends retires after
+  `ending_turn_cap` (12, in `tuning`) of the person's messages, counted from
+  `thread_technique_state.ending_from`; a crisis turn retires an open ending too.
 - **Memory**: per person, folded from earlier chats by `mani/memory.py`; idle threads fold through
   `scripts/fold_idle_threads.py` or `GET /internal/cron/fold-summaries` behind `CRON_SECRET`.
 - **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). A completing framework picks one
@@ -88,8 +92,9 @@ the same change as the work.**
   exercises are listed first, and the pick sees the person's last three messages and the thread's current
   issue. `GET /v1/exercises` is the whole catalog, and responses never carry the storage path.
 - **Admin**: prompt CRUD with versioning, exercise CRUD, crisis event review, a user's memory. A prompt
-  write that would leave a model call's row without a valid level, renamed, or inactive is refused with
-  422, and the write and its version snapshot roll back together.
+  write that would leave a model call's row without a valid level, renamed, or inactive, or a required row
+  (`mani_base`, `response_format`, `replies`, `tuning`) broken, renamed, or inactive, is refused with 422,
+  and the write and its version snapshot roll back together.
 - **Account deletion**: `DELETE /v1/account` removes the user and everything they own.
 - **Eval harness**: `scripts/eval_replies.py` runs scripted conversations through the real stack and removes
   the users it created. `tests/evals/` holds the deterministic checks every suite runs.
@@ -124,8 +129,13 @@ the same change as the work.**
   `test_a_turn_makes_one_chat_call_and_does_not_retry_a_malformed_reply` holds it.
 - **The reply goes out as the model wrote it.** Code after the call only guards what is stored or sent to the
   app (`mani/chat/guards.py`: unknown ids, stage order, library sections, buttons that would overwrite a
-  decline or a retirement) and writes the body ending (`mani/chat/ending.py`). Offer timing is told in
+  decline or a retirement, an `ending` set outside the ending). Offer timing is told in
   `[ctx]`, not enforced, and the grief veto is told as `ruled_out` and keeps the framework off the shortlist.
+- **The ending is ended by the model's `ending` field, and the code never reads words to drive it** (spec
+  0009). `choice` and `keep_talking` retire the framework; Chat More / Go to Library are written by the
+  code on `choice` only; no code edits the reply or matches a message or reply to decide buttons, state or
+  retirement. A 12 message cap (`tuning` `ending_turn_cap`, `ending_from`) is the backstop. Held by
+  `test_turn.py`'s ending tests and `test_guards.py`.
 - **Mani offers only a set on `framework_shortlist`, once it has learned what its Starts when line names,
   and only when `cooldown_passed: yes`** (spec 0007). The rule is told in `mani_base.md` and
   `response_format.md`, never enforced after the call; each offer is logged with `on_shortlist` and
@@ -136,14 +146,22 @@ the same change as the work.**
   descriptions; field meanings live in `response_format.md` `fields` and in each call's prompt. The reply
   shapes live only in `mani_base.md` `reply_shapes` (`Config.reply_shapes`; migration 019 dropped the
   database check), and the router's distinction rules in each framework file's `activation.distinctions`.
+- **The lines Mani sends without the model live in the `replies` row, and the numbers that shape a
+  conversation in the `tuning` row** (spec 0008). Both are required rows of `admin.prompts`, never sent to
+  a model, with no default in code. `content_problem` in `mani/prompts/checks.py` checks them at seed, on
+  every admin write (422, nothing stored) and at cache load (`CONFIG_ERROR`), and the four required rows
+  cannot be deactivated or renamed in the portal. The files in `content/prompts/` are the source of
+  truth: a portal edit lasts until the next seed. `REMOVED_NAMES` in
+  `tests/unit/test_prompts_name_what_exists.py` fails when a moved constant comes back.
 - **Memory is per person**.
 - Also settled: OpenRouter only, asyncpg not PostgREST, the
   `public` and `admin` split, the `mani_service` role, three security definer write functions, the
   deterministic safety screen as the only thing that locks a thread, in process routing, no streaming.
 - **The base prompt is short rules the model reasons from, not scripts.** No word lists and no example
-  conversations. The only lines the model must say exactly are the clarification lines and the after framework question
-  the code supplies, because `context.clarification_used` finds the first in past replies (`tests/unit/test_prompt_lines_the_code_reads.py`); the
-  client's consent and stage lines are examples. There is no size limit in a test.
+  conversations. The only lines the model says word for word are the clarification lines and the after
+  framework questions, sent in `[ctx]` from the `replies` row, and the model tracks which it has already
+  asked from its own replies in the history window; the client's consent and stage lines are examples.
+  There is no size limit in a test.
 - **Every model call names its thinking level in its own prompt row; there is no default** (spec 0004).
   `CALL_PROMPTS` in `mani/prompts/calls.py` lists the call rows, and seed, the admin writes and the call
   sites share one check. The portal cannot pause a call by deactivating its row.
@@ -233,12 +251,12 @@ Ordered by what breaks first.
   `llm_call_facts`. Reviving any of those branches collides again.
 
 
-- **Body route, from the client's 2026-10-02 flow.** Still the client's to confirm: Chat More / Go to Library
-  keep their labels, where the new document says "take me to the library" / "want to keep chatting"; the
-  Reflective chest line was a fragment and is sent with its grammar fixed; the "somewhere else" practice has
-  no client wording and the three style versions are ours, written from their Ground specification. The
-  practice now carries no buttons, as in the new document. In the scripted eval, Direct can stall in a
-  framework's own closing stage (`panic_somatic_once`), which is the model not advancing, not the body route.
+- **The body ending is unmeasured and the client has not seen it.** Spec 0009 replaced the client's fixed
+  check in, per place practices and waves reply with rules the model follows (muhammad's design, 2026-10-08),
+  and shipped on scripted tests alone. Nothing yet measures one step per reply, the step count, `choice`
+  versus `keep_talking`, or how often the cap fires; that is feature 11, after muhammad's yes. The client's
+  documents still describe a fixed check and fixed practices, so they need telling. `mani_base.md`'s
+  `ending` section is reseeded only after muhammad's review of its wording.
 - **Generated TypeScript types** for `web/` and `mobile/` from the OpenAPI schema, with a CI gate. No CI exists.
 - **Admin audio upload.** The 17 seeded exercises come from `content/exercises/` through
   `scripts/seed_exercises.py`; there is no upload route, and the admin exercise CRUD takes an existing

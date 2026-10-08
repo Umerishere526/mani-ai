@@ -78,6 +78,8 @@ def content_hashes(config: Any) -> dict[str, Any]:
     return {
         "mani_base": digest(config.require("mani_base").content),
         "response_format": digest(config.require("response_format").content),
+        "replies": digest(config.require("replies").content),
+        "tuning": digest(config.require("tuning").content),
         "frameworks": {
             fid: digest(config.registry.get(fid).model_dump(mode="json"))
             for fid in sorted(config.registry.ids)

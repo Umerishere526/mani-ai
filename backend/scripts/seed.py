@@ -13,9 +13,12 @@ import yaml
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani.chat.router import distinction_problem, distinction_rules  # noqa: E402
+from mani.chat.techniques import ENDING_PHASES  # noqa: E402
 from mani.config import get_settings  # noqa: E402
-from mani.prompts.cache import parse_reply_shapes  # noqa: E402
 from mani.prompts.calls import CALL_PROMPTS, effort_problem  # noqa: E402
+from mani.prompts.checks import REQUIRED_PROMPTS, content_problem  # noqa: E402
+from mani.prompts.replies import Replies, parse_replies  # noqa: E402
+from mani.prompts.tuning import Tuning, parse_tuning  # noqa: E402
 
 # Authored content, not code: markdown is the input this script loads, and once loaded the
 # database is what the application reads. Kept outside the `mani` package for that reason -
@@ -23,24 +26,6 @@ from mani.prompts.calls import CALL_PROMPTS, effort_problem  # noqa: E402
 CONTENT_DIR = pathlib.Path(__file__).resolve().parent.parent / "content"
 PROMPTS_DIR = CONTENT_DIR / "prompts"
 FRAMEWORKS_DIR = CONTENT_DIR / "frameworks"
-
-# The somatic route is authored once and appended to every framework, rather than repeated in
-# each framework file. It is not a prompt row and not a composer layer - its two stages are
-# merged into each framework's phases and stages here, so the phase machine and [ctx] handle
-# them like any other stage. Skipped by load_prompts below for the same reason.
-SOMATIC_FILE = PROMPTS_DIR / "somatic.md"
-_FENCED_YAML = re.compile(r"```yaml\n(.*?)\n```", re.DOTALL)
-
-
-def load_somatic_stages() -> dict:
-    """The shared somatic route's stage defs, from the fenced yaml block in somatic.md."""
-    match = _FENCED_YAML.search(SOMATIC_FILE.read_text())
-    if not match:
-        raise ValueError(f"{SOMATIC_FILE.name} has no fenced yaml stages block")
-    stages = (yaml.safe_load(match.group(1)) or {}).get("stages")
-    if not stages:
-        raise ValueError(f"{SOMATIC_FILE.name} yaml block has no stages")
-    return stages
 
 
 def parse_prompt(path: pathlib.Path) -> dict:
@@ -62,17 +47,26 @@ def parse_prompt(path: pathlib.Path) -> dict:
     }
 
 
+def load_replies() -> Replies:
+    """The `replies` row as the file holds it, for the evals and tests that need the lines."""
+    return parse_replies(parse_prompt(PROMPTS_DIR / "replies.md")["content"])
+
+
+def load_tuning() -> Tuning:
+    """The `tuning` row as the file holds it."""
+    return parse_tuning(parse_prompt(PROMPTS_DIR / "tuning.md")["content"])
+
+
 def load_prompts(directory: pathlib.Path | None = None) -> list[dict]:
     """Every prompt row to seed, refused with the file named when a model call's row has no
-    usable thinking level, when a model call has no file at all, or when mani_base teaches no
-    reply shapes.
+    usable thinking level, when a model call or a required row has no file at all, or when a
+    row's content is one the application could not run on.
 
     Matched by the frontmatter `name`, never the file name, because the name is what the code
     reads the row by.
     """
     directory = directory if directory is not None else PROMPTS_DIR
-    # somatic.md is the merge source for the frameworks, not a prompt row.
-    files = [p for p in sorted(directory.glob("*.md")) if p.name != SOMATIC_FILE.name]
+    files = sorted(directory.glob("*.md"))
     if not files:
         raise ValueError(f"no prompt files in {directory}")
     prompts = []
@@ -80,15 +74,16 @@ def load_prompts(directory: pathlib.Path | None = None) -> list[dict]:
         prompt = parse_prompt(path)
         if problem := effort_problem(prompt["name"], prompt["model_parameters"]):
             raise ValueError(f"{path.name}: {problem}")
-        if prompt["name"] == "mani_base":
-            # The guard keeps a reply's shape to this list, so seeding none would drop them all.
-            try:
-                parse_reply_shapes(prompt["content"])
-            except ValueError as refused:
-                raise ValueError(f"{path.name}: {refused}") from refused
+        # The same check the portal's writes and the cache load make. For mani_base it keeps a
+        # reply's shape to the list it teaches, so seeding none would drop them all.
+        if problem := content_problem(prompt["name"], prompt["content"]):
+            raise ValueError(f"{path.name}: {problem}")
         prompts.append(prompt)
-    if missing := sorted(CALL_PROMPTS - {p["name"] for p in prompts}):
+    named = {p["name"] for p in prompts}
+    if missing := sorted(CALL_PROMPTS - named):
         raise ValueError(f"no prompt file names the model call {', '.join(missing)}")
+    if missing := [name for name in REQUIRED_PROMPTS if name not in named]:
+        raise ValueError(f"no prompt file names the required row {', '.join(missing)}")
     return prompts
 
 
@@ -173,10 +168,13 @@ def parse_framework(path: pathlib.Path) -> dict:
         "body": "\n".join(lines),
         # Read by nothing, but kept readable rather than blank for anyone looking at the table.
         "activation_conditions": lines[0].removeprefix("Starts when: "),
-        "phases": meta["phases"],
+        # The body ending follows each framework's own phases. The files end at `closing`,
+        # and this is rebuilt from the file every run, so appending is idempotent.
+        "phases": meta["phases"] + list(ENDING_PHASES),
         "display_order": meta.get("display_order", 0),
         "activation": activation,
-        # A framework's own stages carry no block: the seed adds only the somatic ones.
+        # Read by nothing: the stage questions are the Stages line and the ending is the
+        # mani_base prompt's `ending` section.
         "stages": {},
     }
 
@@ -205,18 +203,10 @@ async def seed() -> None:
             if not framework_files:
                 raise SystemExit(f"no framework files in {FRAMEWORKS_DIR}")
 
-            somatic_stages = load_somatic_stages()
-            somatic_phases = list(somatic_stages)
-
             # Every file is checked before any is written, so a refusal leaves nothing half seeded.
             frameworks = [parse_framework(path) for path in framework_files]
             check_distinctions(frameworks)
             for framework in frameworks:
-                # Append the shared somatic route after each framework's own phases. The files
-                # end at `closing`, and this is rebuilt from the file every run, so appending is
-                # idempotent - there is nothing to dedupe.
-                framework["phases"] = framework["phases"] + somatic_phases
-                framework["stages"] = {**framework["stages"], **somatic_stages}
                 await conn.execute(
                     """
                     insert into admin.frameworks

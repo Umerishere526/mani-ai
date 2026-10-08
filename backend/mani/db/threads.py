@@ -27,8 +27,6 @@ COLUMNS = (
 )
 
 DEFAULT_PAGE = 20
-# How many recent reply shapes the model is shown, to keep it from repeating itself.
-STYLE_WINDOW = 7
 
 
 @dataclass(frozen=True)
@@ -185,7 +183,7 @@ select
             from public.thread_response_styles rs
            where rs.thread_id = t.id
            order by rs.created_at desc
-           limit {STYLE_WINDOW}) style), '[]'::jsonb) as recent_styles,
+           limit $3) style), '[]'::jsonb) as recent_styles,
   (select to_jsonb(sm) from public.thread_summaries sm
     where sm.thread_id = t.id)                     as summary,
   -- A flagged thread accepts no further turns, so its last message is when the crisis
@@ -203,9 +201,14 @@ from (select {COLUMNS} from public.threads
 
 
 async def load_turn_context(
-    conn: asyncpg.Connection, thread_id: uuid.UUID | str, user_id: uuid.UUID | str
+    conn: asyncpg.Connection,
+    thread_id: uuid.UUID | str,
+    user_id: uuid.UUID | str,
+    style_window: int,
 ) -> TurnContext | None:
-    row = await conn.fetchrow(_TURN_CONTEXT_SQL, thread_id, user_id)
+    """The turn's snapshot. `style_window` is how many recent reply shapes the model is shown,
+    to keep it from repeating itself."""
+    row = await conn.fetchrow(_TURN_CONTEXT_SQL, thread_id, user_id, style_window)
     if row is None or row["thread"] is None:
         return None
 
@@ -291,9 +294,9 @@ async def apply(
         # Retired, not removed. at_message_count is what the cooldown is measured from,
         # so deleting the row tells the next turn no technique has ever run and lets a
         # second framework start immediately. A finished technique is one whose outcome
-        # is accepted and whose phase is null.
+        # is accepted and whose phase is null, and it has left its ending.
         await conn.execute(
-            "update public.thread_technique_state set phase = null "
+            "update public.thread_technique_state set phase = null, ending_from = null "
             "where thread_id = $1 and user_id = $2",
             thread_id, user_id,
         )
@@ -303,17 +306,18 @@ async def apply(
             """
             insert into public.thread_technique_state
                 (thread_id, user_id, framework_id, outcome, phase,
-                 at_message_count, library_offered_since)
-            values ($1, $2, $3, $4, $5, $6, $7)
+                 at_message_count, library_offered_since, ending_from)
+            values ($1, $2, $3, $4, $5, $6, $7, $8)
             on conflict (thread_id) do update set
                 framework_id         = excluded.framework_id,
                 outcome              = excluded.outcome,
                 phase                = excluded.phase,
                 at_message_count     = excluded.at_message_count,
-                library_offered_since = excluded.library_offered_since
+                library_offered_since = excluded.library_offered_since,
+                ending_from          = excluded.ending_from
             """,
             thread_id, user_id, t.framework_id, t.outcome.value, t.phase,
-            t.at_message_count, t.library_offered_since,
+            t.at_message_count, t.library_offered_since, t.ending_from,
         )
 
     if updates.offer_frameworks:

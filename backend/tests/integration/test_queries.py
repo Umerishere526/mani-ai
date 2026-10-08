@@ -15,9 +15,13 @@ from mani.models.rows import (
     TechniqueState,
     TechniqueTried,
 )
-from mani.prompts.cache import parse_reply_shapes
+from mani.prompts.checks import parse_reply_shapes
 from scripts.seed import PROMPTS_DIR, parse_prompt
 from tests.integration.cleanup import remove_test_users
+from tests.seeded import seeded_tuning
+
+STYLE_WINDOW = seeded_tuning().windows.style_window
+CONTEXT_WINDOW = seeded_tuning().windows.context_window
 
 ALICE = uuid.UUID("a0000000-0000-4000-8000-0000000000c1")
 BOB = uuid.UUID("a0000000-0000-4000-8000-0000000000c2")
@@ -93,7 +97,7 @@ async def test_a_turn_writes_both_sides_and_is_idempotent(alice):
     assert again.was_duplicate is True
     assert again.user_message_id == first.user_message_id
 
-    history = await messages.recent_for_context(alice, thread.id, ALICE)
+    history = await messages.recent_for_context(alice, thread.id, ALICE, CONTEXT_WINDOW)
     assert [m.role for m in history] == ["user", "mani"]
     assert history[1].prompt_options == [{"label": "Tell me more"}]
 
@@ -147,7 +151,7 @@ async def test_the_composed_read_returns_the_whole_turn(alice):
         techniques_tried=[TechniqueTried(name="thought_reframe", helpful=True)],
         summarized_through_message_id=None, summarized_message_count=2)
 
-    ctx = await threads.load_turn_context(alice, thread.id, ALICE)
+    ctx = await threads.load_turn_context(alice, thread.id, ALICE, STYLE_WINDOW)
     assert ctx is not None
     assert ctx.profile.nickname == "Al"
     assert ctx.profile.support_style == "reflective"
@@ -176,7 +180,7 @@ async def test_a_conversation_style_survives_the_round_trip(alice):
     reread = await threads.get(alice, thread.id, ALICE)
     assert reread.conversation_style is SupportStyle.DIRECT
 
-    ctx = await threads.load_turn_context(alice, thread.id, ALICE)
+    ctx = await threads.load_turn_context(alice, thread.id, ALICE, STYLE_WINDOW)
     assert ctx.thread.conversation_style is SupportStyle.DIRECT
 
 
@@ -185,7 +189,7 @@ async def test_the_composed_read_refuses_another_users_thread(alice, users):
 
     thread, _ = await threads.create_or_reuse(alice, ALICE)
     async with pool.as_user(claims_for(BOB)) as bob:
-        assert await threads.load_turn_context(bob, thread.id, BOB) is None
+        assert await threads.load_turn_context(bob, thread.id, BOB, STYLE_WINDOW) is None
 
 
 async def test_offering_the_same_technique_twice_stores_it_once(alice):
@@ -195,7 +199,7 @@ async def test_offering_the_same_technique_twice_stores_it_once(alice):
         await threads.apply(alice, thread.id, ALICE,
                             threads.ThreadUpdates(offer_frameworks=["abcde"]))
 
-    ctx = await threads.load_turn_context(alice, thread.id, ALICE)
+    ctx = await threads.load_turn_context(alice, thread.id, ALICE, STYLE_WINDOW)
     assert ctx.techniques_offered == ["abcde"]
 
 
@@ -224,15 +228,15 @@ async def test_the_style_window_keeps_only_the_recent_ones(alice):
         await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates(
             style=ResponseStyle(shape=shape, voice=None)))
 
-    ctx = await threads.load_turn_context(alice, thread.id, ALICE)
-    assert len(ctx.recent_styles) == threads.STYLE_WINDOW
+    ctx = await threads.load_turn_context(alice, thread.id, ALICE, STYLE_WINDOW)
+    assert len(ctx.recent_styles) == STYLE_WINDOW
     assert ctx.recent_styles[-1].shape == written[-1]
 
 
 async def test_an_empty_update_touches_nothing(alice):
     thread, _ = await threads.create_or_reuse(alice, ALICE)
     await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates())
-    ctx = await threads.load_turn_context(alice, thread.id, ALICE)
+    ctx = await threads.load_turn_context(alice, thread.id, ALICE, STYLE_WINDOW)
     assert ctx.technique is None and ctx.techniques_offered == []
 
 
@@ -376,5 +380,5 @@ async def test_a_shape_added_in_content_is_stored_rather_than_failing_the_turn(a
     await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates(
         style=ResponseStyle(shape="a seventh shape", voice=None)))
 
-    ctx = await threads.load_turn_context(alice, thread.id, ALICE)
+    ctx = await threads.load_turn_context(alice, thread.id, ALICE, STYLE_WINDOW)
     assert ctx.recent_styles[-1].shape == "a seventh shape"

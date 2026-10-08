@@ -25,6 +25,10 @@ from mani.routers.serializers import to_messages, to_thread
 
 router = APIRouter(prefix="/v1/threads", tags=["threads"])
 
+# How many of a thread's latest messages a thread response carries. An API page size, not how
+# much history the model sees.
+THREAD_TAIL = 20
+
 
 @router.get("", response_model=ThreadListOut)
 async def list_threads(
@@ -82,7 +86,7 @@ async def current(user: CurrentUser, conn: UserConn) -> StartOut:
 
 async def _history(conn, thread_id: uuid.UUID, user_id: str) -> list[MessageOut]:
     """A thread's tail, with buttons live only on Mani's newest message."""
-    history = await messages_db.recent_for_context(conn, thread_id, user_id)
+    history = await messages_db.recent_for_context(conn, thread_id, user_id, THREAD_TAIL)
     live = await messages_db.latest_mani_id(conn, thread_id, user_id)
     return to_messages(history, live)
 

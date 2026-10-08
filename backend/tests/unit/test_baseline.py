@@ -5,10 +5,17 @@ from __future__ import annotations
 
 import json
 import sys
+import time
+import uuid
 
 import pytest
 
+from mani.chat.techniques import Registry
+from mani.models.rows import Prompt
+from mani.prompts.cache import Config
 from scripts import baseline
+from scripts.seed import load_prompts
+from tests.seeded import seeded_replies, seeded_tuning
 
 
 def cost_row(input_tokens: int, *, reasoning: int = 0, purpose: str = "chat") -> dict:
@@ -205,3 +212,24 @@ def test_a_scenario_can_be_played_in_one_style(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["eval_replies.py", "--scenario", "journey_dbt_stop", "--style", "supportive"])
     args = eval_replies._parse_args()
     assert (args.scenario, args.style) == ("journey_dbt_stop", "supportive")
+
+
+def test_a_saved_baseline_shows_when_the_replies_or_the_tuning_changed():
+    rows = [Prompt(id=uuid.uuid4(), name=p["name"], content=p["content"]) for p in load_prompts()]
+
+    def hashes(**changed: str) -> dict:
+        prompts = {
+            row.name: row.model_copy(update={"content": changed.get(row.name, row.content)})
+            for row in rows
+        }
+        config = Config(
+            prompts=prompts, registry=Registry([]), loaded_at=time.monotonic(),
+            replies=seeded_replies(), tuning=seeded_tuning(),
+        )
+        return baseline.content_hashes(config)
+
+    seeded = hashes()
+
+    assert hashes(tuning="x: 1")["tuning"] != seeded["tuning"]
+    assert hashes(replies="x: 1")["replies"] != seeded["replies"]
+    assert hashes(tuning="x: 1")["replies"] == seeded["replies"]
