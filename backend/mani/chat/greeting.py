@@ -30,8 +30,8 @@ def greeting(nickname: str | None, returning: bool) -> str:
 
 
 # Buttons asking what an offer involves. An offer carries two, Try it and Keep chatting
-# (muhammad, 2026-09-24), and repairs drops one of these the model still adds, since the offer's
-# own words say how the questions would help.
+# (muhammad, 2026-09-24). These two answer an offer, so guards drops them when the offer's own
+# button is dropped.
 TELL_ME_ABOUT_THIS_LABEL = "Tell me about this"
 EXPLAIN_LABELS = {TELL_ME_ABOUT_THIS_LABEL.lower(), "tell me more"}
 

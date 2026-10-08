@@ -7,31 +7,43 @@ the same change as the work.**
 ## Status, 2026-10-01
 
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
-- Tests: `pytest` runs 798 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
-  JWKS-configured project).
-- Database: 10 migrations, 15 tables (8 `public`, 7 `admin`), 6 frameworks and 5 prompts seeded.
+- Tests: `pytest` runs 615 passed and 4 skipped (the four symmetric-token auth tests, which skip on a
+  JWKS-configured project), against a local database reseeded from `content/`. A database seeded before
+  spec 0005 still holds the old ABCDE `offering` block and fails `test_an_offer_they_typed_past_is_flagged_then_closed`.
+- Cost baseline `before-lean-prompts` (2026-10-07, `scripts/baselines/2026-10-07-before-lean-prompts.json`,
+  gpt-6-luna on effort `high`, Supportive, 3 runs): median per run of the three tagged scenarios is 26 calls,
+  228,251 input tokens (203,763 cached), 25,595 output tokens of which 21,665 are reasoning, 319 s of model
+  time against 320 s of turn time, and 3 findings. A turn takes a median of 11.5 s; 7 of 70 turns were redrafted.
+- Database: 11 migrations (001-010 and 018), 15 tables (8 `public`, 7 `admin`), 6 frameworks and 7 prompts seeded.
   `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
-  private `exercises` bucket (`scripts/seed_exercises.py`). A hosted project does not exist yet.
+  private `exercises` bucket (`scripts/seed_exercises.py`). A hosted project exists and its schema has
+  drifted ahead of this code (see Open engineering).
 - Models: `openai/gpt-6-luna` for chat and for summaries (`mani/config.py`), routed Azure first with
   OpenAI as the fallback. It is a reasoning model: it takes no `temperature` on any provider and reads
   `reasoning_effort` instead, so `mani/llm/chain.py` sends the sampling parameters an ordinary
-  chat model takes only to models that accept them. A prompt row names its own effort in
-  `model_parameters.reasoning_effort` and `mani/config.py` holds the default for the calls that have
-  no row of their own; `mani_base`, `summarization` and `memory_fold` are all on `high`. Effort is
+  chat model takes only to models that accept them. Each of the five model calls names its own effort
+  in its own prompt row's `model_parameters.reasoning_effort`: `mani_base` (the chat turn),
+  `summarization`, `memory_fold`, `exercise_select` and `voice_translation`, all on `high`. There is no
+  default: a call row with no valid level is refused by `scripts/seed.py`, by the admin prompt writes
+  (422), and right before the call, as a config error that spends nothing (`mani/prompts/calls.py`). Effort is
   billed: measured against Azure, `high` spent 26 reasoning tokens where `low` spent 0, about three
   times the cost of the same call. The fallback keeps `data_collection: deny`, so
   training use stays refused, but a turn that cannot reach Azure is processed by a different company -
   a data protection question that is open, not settled.
-- Every call to OpenRouter carries the same provider order, data policy and reasoning effort, from
-  `chain.request_body`. The voice translation in `mani/stt.py` calls the SDK directly and used to send
-  none of them, so a transcript went to whichever provider OpenRouter chose; it now uses the same body.
+- Every call to OpenRouter carries the same provider order and data policy, and the effort its own row
+  names, from `chain.request_body`. The voice translation in `mani/stt.py` calls the SDK directly and used
+  to send none of them, so a transcript went to whichever provider OpenRouter chose; it now uses the same
+  body, with its instruction, model, budget and effort from the `voice_translation` row. A missing row or
+  level returns the untranslated transcript. The exercise pick likewise reads `exercise_select`, and offers
+  the first candidate when that row is missing or has no level.
   It is still not recorded in `admin.llm_calls`, which has no purpose for it.
 - A reasoning model's output budget covers its thinking and its reply together. Every caller sizes
   `max_tokens` for the reply alone, so `chain.sampling` adds `REASONING_ALLOWANCE_TOKENS` (8,192) on top.
   Without it, at effort high, 4 of 61 chat calls ran out of tokens while thinking and the turn failed
   (2026-10-07). Measured at high: 12.6 s for an average turn, 41 s for the longest.
-- `mani_base.md` and `response_format.md` are YAML rules rather than prose (ADR-012): about 10,600 tokens
-  became 4,850. The Framework Index and the per-framework rules are not restructured yet.
+- `mani_base.md` and `response_format.md` are YAML rules rather than prose: about 10,600 tokens became 4,850,
+  then 3,436 words became 2,403 (2026-10-07), with the duplicated rules, word lists and the exact must say lines
+  gone. The Framework Index and the per-framework rules are not restructured yet.
 - Web and mobile do not call this API yet; they run on placeholder data.
 
 ## What the service does
@@ -44,20 +56,20 @@ the same change as the work.**
   1. The deterministic safety screen (`safety.py`) runs before anything else. An explicit statement locks
      the thread with no model call. An indirect one (including passive ideation and "pills in my hand")
      is a concern: it suspends frameworks and offers without locking.
-  2. The router (`router.py`) shortlists frameworks from phrases over their last four messages. It is a hint, never a requirement. When the nearest fit falls due, the top of the shortlist carries its offer wording even if the router is not confident of it.
+  2. The router (`router.py`) shortlists frameworks from phrases over their last four messages. It is a hint, never a requirement. A framework their words rule out (`never_offer_when_said`) is taken off the shortlist and named in `[ctx]` as `ruled_out`. When the nearest fit falls due, the top of the shortlist is the offer candidate even if the router is not confident of it.
   3. `context.py` builds the `[ctx]` block: style, offer timing, the stage in progress, and `their_last`
      (a vague reply, a correction, or a request only to be heard).
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,
      `heading_toward`, `offer_fit`, then `text`. The order is deliberate.
-  5. `redraft.py` may ask once more (twice for a missing question): a feeling the person never named, an
-     offer before it is allowed or one their words rule out, an offer that is due and missing, no
-     question, or the last reply's question asked again.
-  6. `repairs.py` corrects what remains, in code: script leakage, buttons, an early offer, an unnamed feeling.
-  7. Crisis, the reply, the framework state and the summary are written together.
+  5. `guards.py` stops a model supplied id or value from being stored unchecked: a technique button for an
+     unknown framework, inside a running one, or on a turn that declines or retires an offer (with the
+     offer's other buttons), a stage out of order, a library section that does not exist. The reply's
+     words are not edited.
+  6. Crisis, the reply, the framework state and the summary are written together.
 - **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): six, each reviewed against the
   client's specification. A confident offer may come from the person's second message (third for ABCDE,
-  Thought Reframe and ACT); the nearest fit is due by the fourth, with "Try the closest fit" beside
-  "Keep chatting". The shared body check-in and practice come from `content/prompts/somatic.md`.
+  Thought Reframe and ACT); the nearest fit is due by the fourth, which the model words itself with "Keep chatting"
+  beside it. The shared body check-in and practice come from `content/prompts/somatic.md`.
   The body route is held in code (`orchestrator._body_route_step`): the check-in is asked once; whatever
   the person answers, the next reply asks where, with Chest / Head / Stomach / Somewhere else; "idk" asks
   again; a place gets the client's practice for that place and style, word for word, ending "How do you feel
@@ -70,7 +82,9 @@ the same change as the work.**
   exercise from the whole active catalog with one bound tool call (`mani/llm/tools.py`): the framework's own
   exercises are listed first, and the pick sees the person's last three messages and the thread's current
   issue. `GET /v1/exercises` is the whole catalog, and responses never carry the storage path.
-- **Admin**: prompt CRUD with versioning, exercise CRUD, crisis event review, a user's memory.
+- **Admin**: prompt CRUD with versioning, exercise CRUD, crisis event review, a user's memory. A prompt
+  write that would leave a model call's row without a valid level, renamed, or inactive is refused with
+  422, and the write and its version snapshot roll back together.
 - **Account deletion**: `DELETE /v1/account` removes the user and everything they own.
 - **Eval harness**: `scripts/eval_replies.py` runs scripted conversations through the real stack and removes
   the users it created. `tests/evals/` holds the deterministic checks every suite runs.
@@ -100,14 +114,27 @@ the same change as the work.**
 
 ## Decisions in force
 
-- **A turn is one model call, or more when a draft is redrafted**. The one scoped extra
-  call is the exercise pick at the end of a framework. `test_a_turn_costs_exactly_one_provider_call` still
-  holds for a draft that needs no redraft.
+- **A turn is one chat model call, and a malformed chat reply is not retried**. The person sees a retryable
+  error instead. The one scoped extra call is the exercise pick at the end of a framework.
+  `test_a_turn_makes_one_chat_call_and_does_not_retry_a_malformed_reply` holds it.
+- **The reply goes out as the model wrote it.** Code after the call only guards what is stored or sent to the
+  app (`mani/chat/guards.py`: unknown ids, stage order, library sections, buttons that would overwrite a
+  decline or a retirement) and writes the body ending (`mani/chat/ending.py`). Offer timing is told in
+  `[ctx]`, not enforced, and the grief veto is told as `ruled_out` and keeps the framework off the shortlist.
 - **Offers follow Mani's confidence**. Every reply before an offer asks one question.
 - **Memory is per person**.
 - Also settled: OpenRouter only, asyncpg not PostgREST, the
   `public` and `admin` split, the `mani_service` role, three security definer write functions, the
   deterministic safety screen as the only thing that locks a thread, in process routing, no streaming.
+- **The base prompt is short rules the model reasons from, not scripts.** No word lists and no example
+  conversations. The only lines the model must say exactly are the clarification lines and the after framework question
+  the code supplies, because `context.clarification_used` finds the first in past replies (`tests/unit/test_prompt_lines_the_code_reads.py`); the
+  client's consent and stage lines are examples. There is no size limit in a test.
+- **Every model call names its thinking level in its own prompt row; there is no default** (spec 0004).
+  `CALL_PROMPTS` in `mani/prompts/calls.py` lists the call rows, and seed, the admin writes and the call
+  sites share one check. The portal cannot pause a call by deactivating its row.
+- **A prompt change is judged on numbers**: `eval_replies.py --baseline`, 3 runs before and 3 after, compared
+  with `scripts/baseline.py compare` on the per scenario totals (spec 0002). One eval run is noise.
 
 ## Before it takes real traffic
 
@@ -169,7 +196,16 @@ Ordered by what breaks first.
   `llm_calls.decision` rows - so a rollback destroys data. `016` cannot be undone at all: Postgres
   has no `drop value` for an enum, so retiring it means recreating the type or writing a new
   migration forward. Local was reset to 001-010 on 2026-10-07; hosted was not. The two are not the
-  same schema, and nothing reconciles them yet.
+  same schema, and nothing reconciles them yet. Local now also has `018` (`llm_calls.reasoning_tokens`,
+  numbered past 017 so it never collides). Code that writes that column must not reach hosted before
+  `018` does: every cost row insert would fail, and `client._record` swallows the error.
+- **Seed hosted before deploying spec 0004's code.** The code reads `exercise_select` and
+  `voice_translation`, which only the seed writes (ids `...012` and `...013`; confirm no other row holds
+  them first). Deployed before the seed, the exercise pick falls back to the first candidate and voice
+  input stays untranslated, logged, until it runs. Seeding overwrites portal edits to prompts and
+  frameworks, so check hosted's `updated_at` first. Waits on the 011 to 017 reconciliation above. Keep
+  `REASONING_EFFORT` set on hosted until the deploy has proven itself: this code ignores it, and the
+  code a rollback returns to still falls back to it.
 - **Migration numbers were reused across the reverted branches.** `011` was both
   `technique_state_holds` and `technique_outcome_stopped`; `013` was both `llm_call_decision` and
   `llm_call_facts`. Reviving any of those branches collides again.
@@ -192,8 +228,9 @@ Ordered by what breaks first.
 - **`threads.vague_streak`** is granted to the backend and written by nothing; the pacing it belongs to is
   designed, not built.
 - **`appropriate_when` and `not_when`** in the framework files are read by nothing (each file says so).
-- The words "worried", "concerned" and "a lot" still reach about 1 reply in 10 in some scenarios; repairs log
-  them. The feeling check now redrafts the ones in `repairs.FEELING_WORDS`.
+- The words "worried", "concerned" and "a lot" still reached about 1 reply in 10 in some scenarios when code
+  checked for them. Nothing in `mani/` checks for them now, and the evals score them from
+  `tests/evals/vocabulary.py`.
 
 ## Latest measurements
 

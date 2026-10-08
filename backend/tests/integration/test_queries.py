@@ -317,6 +317,28 @@ async def test_a_model_call_is_recorded_with_its_cost(users):
     assert spend["calls"] == 1
 
 
+async def test_a_model_calls_thinking_is_stored_and_can_never_be_negative(users):
+    """The reasoning count is what a thinking level costs; a negative one would quietly
+    lower every total it is summed into."""
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        call_id = await llm_calls.record(
+            conn, purpose=llm_calls.Purpose.CHAT, model="openai/gpt-6-luna",
+            outcome=llm_calls.Outcome.OK, latency_ms=4200, user_id=ALICE,
+            usage=llm_calls.Usage(input_tokens=8230, output_tokens=385, reasoning_tokens=131))
+        stored = await conn.fetchval(
+            "select reasoning_tokens from admin.llm_calls where id = $1", call_id)
+
+        with pytest.raises(asyncpg.CheckViolationError):
+            await llm_calls.record(
+                conn, purpose=llm_calls.Purpose.CHAT, model="openai/gpt-6-luna",
+                outcome=llm_calls.Outcome.OK, latency_ms=1, user_id=ALICE,
+                usage=llm_calls.Usage(reasoning_tokens=-1))
+
+    assert stored == 131
+
+
 async def test_threads_needing_summary_lists_across_users(users):
     """The cron reconciliation pass is cross-user, so this is an admin-only read: threads
     whose message count has outrun their last summary by the same threshold the per-turn

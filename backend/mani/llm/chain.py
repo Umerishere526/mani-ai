@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
@@ -37,16 +37,24 @@ def is_reasoning_model(model: str) -> bool:
     return model.startswith(REASONING_MODEL_PREFIXES)
 
 
-def _reasoning(model: str, settings: Settings, effort: str | None = None) -> dict[str, Any]:
+# How hard a reasoning model thinks before it answers. Every call names one, read from its own
+# prompt row by `mani.prompts.calls.effort_for`; there is no default to fall back to.
+ReasoningEffort = Literal["low", "medium", "high", "xhigh", "max"]
+
+
+def effective_effort(model: str, effort: ReasoningEffort) -> ReasoningEffort | None:
+    """The reasoning effort a call to this model is sent, or None for a model that takes none."""
+    return effort if is_reasoning_model(model) else None
+
+
+def _reasoning(model: str, effort: ReasoningEffort) -> dict[str, Any]:
     """How hard the model thinks before it answers, for the models that read it.
 
     A model that does not take a reasoning effort rejects the key, so it is sent only to
-    the ones that do. A prompt row names its own effort when the work it does deserves a
-    different one; otherwise the configured default stands for all of them.
+    the ones that do.
     """
-    if not is_reasoning_model(model):
-        return {}
-    return {"reasoning": {"effort": effort or settings.reasoning_effort}}
+    chosen = effective_effort(model, effort)
+    return {} if chosen is None else {"reasoning": {"effort": chosen}}
 
 
 # A reasoning model's output budget covers its thinking and its reply together, and every caller
@@ -68,17 +76,18 @@ def request_body(
     model: str,
     settings: Settings,
     routing: dict[str, Any] | None = None,
-    effort: str | None = None,
+    *,
+    effort: ReasoningEffort,
 ) -> dict[str, Any]:
     """What OpenRouter is told beside the messages: which providers may serve the call, under
     which data policy, and how hard to think. Every call sends this, so none of them reaches
-    a provider or a default effort the others refuse."""
+    a provider the others refuse or thinks at a level its prompt row did not name."""
     return {
         "provider": settings.routing(routing),
         # Without this OpenRouter omits the cached-token count, which is the only way to tell
         # whether prompt caching is actually happening.
         "usage": {"include": True},
-        **_reasoning(model, settings, effort),
+        **_reasoning(model, effort),
     }
 
 
@@ -118,7 +127,7 @@ def build(
     max_tokens: int,
     routing: dict[str, Any] | None,
     settings: Settings,
-    reasoning_effort: str | None = None,
+    reasoning_effort: ReasoningEffort,
 ) -> Runnable:
     """A runnable that takes chat messages and returns raw, parsed and parsing_error.
 
@@ -126,7 +135,7 @@ def build(
     makes the token accounting possible - and turns a malformed reply into a value rather than
     an exception, so the caller can decide what a schema failure is worth.
     """
-    extra_body = request_body(model, settings, routing, reasoning_effort)
+    extra_body = request_body(model, settings, routing, effort=reasoning_effort)
     chat = _model(
         settings.openrouter_api_key,
         settings.openrouter_base_url,
@@ -147,7 +156,7 @@ def build_tool_choice(
     max_tokens: int,
     routing: dict[str, Any] | None,
     settings: Settings,
-    reasoning_effort: str | None = None,
+    reasoning_effort: ReasoningEffort,
 ) -> Runnable:
     """A runnable bound to exactly one tool, forced - real tool-calling, not structured
     output. `with_structured_output` and `bind_tools` are two different invocation modes
@@ -158,7 +167,7 @@ def build_tool_choice(
     Returns the model's raw `AIMessage` - `bind_tools` has no `include_raw`/`parsed` split
     of its own, so the caller reads `.tool_calls` directly.
     """
-    extra_body = request_body(model, settings, routing, reasoning_effort)
+    extra_body = request_body(model, settings, routing, effort=reasoning_effort)
     chat = _model(
         settings.openrouter_api_key,
         settings.openrouter_base_url,
@@ -176,19 +185,25 @@ def usage_from(raw: Any) -> llm_calls.Usage:
     if raw is None:
         return llm_calls.Usage()
 
+    # OpenRouter reports the thinking as `completion_tokens_details.reasoning_tokens`, and
+    # langchain-openai copies it into `usage_metadata.output_token_details.reasoning`.
     metadata = getattr(raw, "usage_metadata", None) or {}
     if metadata:
         details = metadata.get("input_token_details") or {}
+        output_details = metadata.get("output_token_details") or {}
         return llm_calls.Usage(
             input_tokens=metadata.get("input_tokens", 0) or 0,
             output_tokens=metadata.get("output_tokens", 0) or 0,
             cached_input_tokens=details.get("cache_read", 0) or 0,
+            reasoning_tokens=output_details.get("reasoning", 0) or 0,
         )
 
     token_usage = (getattr(raw, "response_metadata", None) or {}).get("token_usage") or {}
     prompt_details = token_usage.get("prompt_tokens_details") or {}
+    completion_details = token_usage.get("completion_tokens_details") or {}
     return llm_calls.Usage(
         input_tokens=token_usage.get("prompt_tokens", 0) or 0,
         output_tokens=token_usage.get("completion_tokens", 0) or 0,
         cached_input_tokens=prompt_details.get("cached_tokens", 0) or 0,
+        reasoning_tokens=completion_details.get("reasoning_tokens", 0) or 0,
     )

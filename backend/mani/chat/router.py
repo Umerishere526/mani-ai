@@ -272,9 +272,9 @@ def shortlist(
 ) -> list[Signal]:
     """Rank the frameworks worth offering, most likely first.
 
-    This narrows; it does not decide. The model chooses from the shortlist and `repairs.apply`
-    checks that choice against the registry, exactly as it already does - so a wrong shortlist
-    costs relevance, never a bad identifier in the database.
+    This narrows; it does not decide. The model chooses from the shortlist and `guards.check`
+    checks that choice against the registry - so a wrong shortlist costs relevance, never a bad
+    identifier in the database.
 
     `messages` are the person's own messages, oldest first. `activations` maps a framework id to
     its `admin.frameworks.activation` payload, so adding a framework stays a content change.

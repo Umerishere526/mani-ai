@@ -43,9 +43,8 @@ async def send(
 ) -> TurnOut:
     """One user message in, one reply out.
 
-    Exactly one provider call per turn: the checks that the previous implementation
-    answered with a regeneration - up to six of them - are deterministic corrections in
-    `chat/repairs.py`.
+    One chat provider call per turn, and the reply goes out as the model wrote it: the code
+    after the call only guards what is stored or sent to the app (`chat/guards.py`).
     """
     turn = await orchestrator.send(
         conn, user, thread_id, body.content, body.client_message_id

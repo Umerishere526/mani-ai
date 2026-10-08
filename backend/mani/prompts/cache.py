@@ -13,6 +13,7 @@ from mani.config import get_settings
 from mani.db import config_tables, pool
 from mani.errors import ErrorCategory, ServiceError
 from mani.models.rows import Prompt
+from mani.prompts.calls import CALL_PROMPTS
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +24,11 @@ logger = logging.getLogger(__name__)
 # rather than stored as a prompt, so it is not listed here and cannot go missing.
 REQUIRED_PROMPTS = ("mani_base", "response_format")
 
-# Used by particular paths rather than every turn, but still misconfiguration if absent.
-EXPECTED_PROMPTS = REQUIRED_PROMPTS + ("title_generation", "summarization")
+# Used by particular paths rather than every turn, but still misconfiguration if absent: every
+# model call's own row, and the title layer.
+EXPECTED_PROMPTS = tuple(
+    dict.fromkeys(REQUIRED_PROMPTS + ("title_generation",) + tuple(sorted(CALL_PROMPTS)))
+)
 
 
 @dataclass(frozen=True)

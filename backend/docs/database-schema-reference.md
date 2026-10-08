@@ -3,12 +3,13 @@
 Complete, verified map of every schema, table, column, role, and grant in this project's
 database — queried live from `information_schema`/`pg_catalog`, not reconstructed from the
 migration files. Regenerate rather than hand-edit if the schema changes (§ at the bottom
-has the exact queries) — every table below reflects the state after migrations 001–010.
+has the exact queries) — every table below reflects the state after migrations 001–010 and 018.
 
 Generated 2026-09-23 against local Supabase (`supabase_db_mani`), then hand updated on 2026-10-01 for
 migrations 006 to 010 (the call purpose enum, backend writes of prompt state, bounded profile topics, the
 memory table, the summary's current issue); the counts, `thread_summaries`, the privilege list and the RLS
-note below were checked against the live database that day. Regenerate from the queries at the bottom after
+note below were checked against the live database that day. Hand updated on 2026-10-07 for migration 018
+(`admin.llm_calls.reasoning_tokens`), checked against the live column and its check constraint. Regenerate from the queries at the bottom after
 the next schema change.
 
 The rest of this paragraph describes the original generation: Nothing here was typed
@@ -197,7 +198,7 @@ Append-only log of the model's self-reported style per reply.
 | 4 | `content` | text | required | The live prompt text (seeded from `content/prompts/*.md`). |
 | 5 | `version` | integer | default `1`, `> 0` (CHECK) | |
 | 6 | `model_id` | text | optional | Overrides the default model for this prompt. |
-| 7 | `model_parameters` | jsonb | default `'{}'` | e.g. `temperature`, `maxTokens`. |
+| 7 | `model_parameters` | jsonb | default `'{}'` | e.g. `temperature`, `maxTokens`. A model call's row (`mani/prompts/calls.py` `CALL_PROMPTS`) must hold `reasoning_effort`; the seed and the admin writes refuse it otherwise. |
 | 8 | `routing` | jsonb | default `'{}'` | OpenRouter provider routing overrides. |
 | 9 | `is_active` | boolean | default `true` | |
 | 10 | `created_by` | uuid | FK→`auth.users` SET NULL | |
@@ -264,10 +265,11 @@ Snapshot taken automatically whenever `admin.prompts` is edited via the admin AP
 | 8 | `input_tokens` | integer | default `0` | |
 | 9 | `output_tokens` | integer | default `0` | |
 | 10 | `cached_input_tokens` | integer | default `0` | |
-| 11 | `latency_ms` | integer | default `0` | |
+| 11 | `latency_ms` | integer | default `0` | That attempt's own time. A retried call writes one row per attempt, and neither row counts the other attempt or the pause between them. |
 | 12 | `outcome` | `admin.llm_call_outcome` (enum) | required | Correctly enum-typed, unlike `purpose`. |
 | 13 | `error_message` | text | optional | |
 | 14 | `created_at` | timestamptz | default `now()` | |
+| 15 | `reasoning_tokens` | integer | default `0`, `check (reasoning_tokens >= 0)` | The part of `output_tokens` the model spent thinking before it answered; never add it on top of `output_tokens`. 0 when the provider reports none. Migration 018. |
 
 ### `admin.user_memory`
 Patterns about one person across their conversations, folded in as each finishes (migration 009). Health data: `authenticated` holds nothing on it; only `mani_service` reads and writes it, and RLS scopes that to the caller's own row - the one `admin` table with RLS.

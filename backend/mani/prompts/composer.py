@@ -33,10 +33,11 @@ class SystemPrompt:
 def framework_index(registry: Registry) -> str | None:
     """The catalogue of frameworks, built from the registry rather than written by hand.
 
-    Every line here already exists as data on `admin.frameworks`, seeded from the framework
-    files - a prose copy beside it is a second source of truth that drifts silently the
-    first time somebody edits one and not the other. Generating it means adding a framework
-    is a content change with no prompt edit, which is what the registry already claims.
+    Each framework's body is its eight model facing lines, seeded from the framework file and
+    checked there, so they are rendered as they are. A prose copy beside them would be a second
+    source of truth that drifts silently the first time somebody edits one and not the other,
+    and adding a framework stays a content change with no prompt edit. The client's description
+    of what the questions help with stands above the eight lines, read from the summary column.
 
     Static across users and turns, so it sits in the cached prefix with the other layers.
     """
@@ -48,78 +49,22 @@ def framework_index(registry: Registry) -> str | None:
     lines = [
         "# Framework Index",
         "",
-        "The frameworks available to offer, and what each one is for. The `[ctx]` block "
-        "carries the stage guidance for whichever is running.",
-        "",
-        "| Framework | Id | Use it when |",
-        "|---|---|---|",
+        "The sets of questions you may offer. Each has a Description line, then eight lines: when it "
+        "starts and what to learn first, how it sounds, when to skip it for another, its stages, "
+        "when it ends, how to offer it, and what never to do. While one runs, `[ctx]` names the "
+        "stage you are on.",
     ]
     for framework in present:
-        indication = (framework.activation or {}).get("central_indication", "")
-        lines.append(
-            f"| {framework.name} | `{framework.id}` | {' '.join(indication.split())} |"
-        )
+        lines += ["", f"## {framework.name} (`{framework.id}`)"]
+        description = " ".join((framework.summary or "").split())
+        if description:
+            lines.append(f"Description: {description}")
+        lines.append(framework.body)
 
-    known = set(registry.ids)
-    # Each distinction is written from both sides in the framework files - ABCDE explains
-    # itself against Thought Reframe and Thought Reframe explains itself against ABCDE - and
-    # the ones about not using a framework at all are written five times over. Both are
-    # right in a file a clinician reads and pure waste in a prompt paid for every turn, so
-    # a pair is emitted once and a non-framework comparison only the first time.
-    seen: set[frozenset[str] | str] = set()
-    rendered: list[str] = []
-    for framework in present:
-        for other, text in ((framework.activation or {}).get("distinctions") or {}).items():
-            key = frozenset({framework.id, other}) if other in known else other
-            if key in seen:
-                continue
-            seen.add(key)
-            label = registry.get(other).name if other in known else other.replace("_", " ")
-            rendered.append(f"- **{framework.name} or {label}** — {' '.join(text.split())}")
-
-    if rendered:
-        lines += ["", "## Telling them apart", ""] + rendered
-
-    # The client's description of each is added to the offer by the backend, so it is not
-    # listed here: a model given the text copied it, and offers showed it twice.
     lines += [
-        "", "When you offer one, its description is added to your reply for you. You never "
-        "describe the questions or name them: never its name, its id, or the word \"framework\".",
+        "", "When you offer one, say in fresh words what its questions would help with, from its "
+        "Description line, never copying it: never its name, its id, or the word \"framework\".",
     ]
-
-    # Only the contraindications, not every not_when line: most of those name a different
-    # framework to use instead, which "Telling them apart" already says. These name a
-    # situation where offering any of it would harm the person.
-    never = [
-        f"- **{framework.name}**: {' '.join(text.split())}"
-        for framework in present
-        for text in (framework.activation or {}).get("contraindications") or []
-    ]
-    if never:
-        lines += ["", "## Never offer one when", ""] + never
-
-    # What each one needs to know before it is the right offer. It is how a question can follow
-    # the person's feeling and still be heading somewhere: static, so it sits in the cached
-    # prefix with the rest of the index.
-    to_find_out = [
-        f"- **{framework.name}**: {'; '.join(items)}"
-        + (
-            f" (offer it only from their message {earliest}: it depends on what they took it to mean)"
-            if (earliest := (framework.activation or {}).get("earliest_offer_message"))
-            else ""
-        )
-        for framework in present
-        for items in [(framework.activation or {}).get("to_find_out") or []]
-        if items
-    ]
-    if to_find_out:
-        lines += [
-            "", "## Finding the fit", "",
-            "From their first message, work out which of these they are heading toward, and let "
-            "your questions reach for what is still missing for it - in their words, about their "
-            "feeling, never as a checklist:", "",
-        ] + to_find_out
-
     return "\n".join(lines)
 
 

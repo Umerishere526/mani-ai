@@ -16,3 +16,11 @@ def test_a_word_in_the_decline_field_still_declines(written):
 def test_an_explicit_no_in_the_decline_field_does_not_decline(written):
     reply = Reply.model_validate({"text": "t", "prompts": [{"label": "Try it", "decline": written}]})
     assert reply.prompts[0].decline is False
+
+
+def test_the_model_is_never_asked_for_a_mirroring_voice():
+    """muhammad, 2026-09-24: mirroring is there but never forced. Asking for a voice every
+    turn, never the same twice, forced the rotation the prompt no longer asks for."""
+    style = Reply.model_json_schema()["$defs"]["Style"]
+    assert set(style["properties"]) == {"shape"}
+    assert "voice" not in Reply.model_fields["style"].description

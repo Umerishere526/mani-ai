@@ -30,7 +30,10 @@ a LAN address rather than loopback. The fix is an autouse `no_real_exercise_call
   Eval runs leave an `@eval.mani.local` user behind every time, and once there were 172 the test
   failed. Never assume the shared database is small.
 - Content-driven tests fail when the database was seeded from older `content/`. Re-run
-  `scripts/seed.py` before believing such a failure.
+  `scripts/seed.py` before believing such a failure. Paid again on 2026-10-07: the `[ctx]` a test
+  captured carried `stage_purpose` lines the framework files no longer have. The stored row said
+  so in one query (`select jsonb_object_keys(stages) from admin.frameworks where id = 'abcde'`),
+  so look at the row before reading code.
 
 ## Supabase Free limits
 

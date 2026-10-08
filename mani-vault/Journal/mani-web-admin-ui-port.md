@@ -74,7 +74,7 @@ secondary 9-step ramps, accent, error, success, radii, shadows) into
 `Montserrat`/`JetBrains_Mono` via `next/font/google`.
 
 Deliberately **not** ported: `spacing` (identical to Tailwind's stock 4px
-scale — same finding as the mobile ADR), `transitions` (one-off duration
+scale — same finding as the mobile port), `transitions` (one-off duration
 literals, covered by Tailwind's `duration-*` utilities), `radii.none`/`.full`
 (Tailwind's `rounded-none`/`rounded-full` already match).
 

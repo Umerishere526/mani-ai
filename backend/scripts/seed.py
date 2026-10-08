@@ -13,6 +13,7 @@ import yaml
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani.config import get_settings  # noqa: E402
+from mani.prompts.calls import CALL_PROMPTS, effort_problem  # noqa: E402
 
 # Authored content, not code: markdown is the input this script loads, and once loaded the
 # database is what the application reads. Kept outside the `mani` package for that reason -
@@ -24,7 +25,7 @@ FRAMEWORKS_DIR = CONTENT_DIR / "frameworks"
 # The somatic route is authored once and appended to every framework, rather than repeated in
 # each framework file. It is not a prompt row and not a composer layer - its two stages are
 # merged into each framework's phases and stages here, so the phase machine and [ctx] handle
-# them like any other stage. Skipped in the prompts loop below for the same reason.
+# them like any other stage. Skipped by load_prompts below for the same reason.
 SOMATIC_FILE = PROMPTS_DIR / "somatic.md"
 _FENCED_YAML = re.compile(r"```yaml\n(.*?)\n```", re.DOTALL)
 
@@ -59,12 +60,82 @@ def parse_prompt(path: pathlib.Path) -> dict:
     }
 
 
+def load_prompts(directory: pathlib.Path | None = None) -> list[dict]:
+    """Every prompt row to seed, refused with the file named when a model call's row has no
+    usable thinking level, or when a model call has no file at all.
+
+    Matched by the frontmatter `name`, never the file name, because the name is what the code
+    reads the row by.
+    """
+    directory = directory if directory is not None else PROMPTS_DIR
+    # somatic.md is the merge source for the frameworks, not a prompt row.
+    files = [p for p in sorted(directory.glob("*.md")) if p.name != SOMATIC_FILE.name]
+    if not files:
+        raise ValueError(f"no prompt files in {directory}")
+    prompts = []
+    for path in files:
+        prompt = parse_prompt(path)
+        if problem := effort_problem(prompt["name"], prompt["model_parameters"]):
+            raise ValueError(f"{path.name}: {problem}")
+        prompts.append(prompt)
+    if missing := sorted(CALL_PROMPTS - {p["name"] for p in prompts}):
+        raise ValueError(f"no prompt file names the model call {', '.join(missing)}")
+    return prompts
+
+
+# A framework is eight lines the model reads, in this order, and nothing else: the client's long
+# form lives in docs/specs/, and a file that grows past this would grow the cached prompt with it.
+FRAMEWORK_LABELS = (
+    "Starts when", "Sounds like", "Skip when", "Stages", "Ends when", "Offer", "Never", "Never",
+)
+MAX_LINE = 220
+MAX_STAGES_LINE = 320
+# Everything else in the frontmatter is data only code reads: the phase machine and the router.
+FRAMEWORK_KEYS = {"id", "name", "summary", "display_order", "phases", "activation"}
+ACTIVATION_KEYS = {"strong_signals", "signals", "redirects", "never_offer_when_said"}
+_STAGE = re.compile(r"(\S+) \((.+)\)")
+
+
+def _framework_lines(name: str, body: str, phases: list[str]) -> list[str]:
+    """The eight labelled lines of a framework body, refused with the reason when any rule breaks."""
+    lines = body.strip().split("\n")
+    if len(lines) != len(FRAMEWORK_LABELS):
+        raise ValueError(
+            f"{name}: the body has {len(lines)} lines, not {len(FRAMEWORK_LABELS)} "
+            "(a blank line or a heading counts)"
+        )
+    for number, (line, label) in enumerate(zip(lines, FRAMEWORK_LABELS), start=1):
+        found, _, text = line.partition(": ")
+        if found != label or not text.strip():
+            raise ValueError(f"{name}: line {number} should start with '{label}: ', not {line[:30]!r}")
+        cap = MAX_STAGES_LINE if label == "Stages" else MAX_LINE
+        if len(line) > cap:
+            raise ValueError(f"{name}: the {label} line is {len(line)} characters, over {cap}")
+
+    stages = lines[FRAMEWORK_LABELS.index("Stages")].removeprefix("Stages: ").split(" > ")
+    named = []
+    for stage in stages:
+        match = _STAGE.fullmatch(stage)
+        if not match:
+            raise ValueError(f"{name}: the stage {stage!r} should be an id and a few words in parentheses")
+        named.append(match.group(1))
+    if phases[:1] != ["offering"]:
+        raise ValueError(f"{name}: phases should start with offering")
+    if named != phases[1:]:
+        raise ValueError(
+            f"{name}: the Stages line names {', '.join(named)}, but phases after offering are "
+            f"{', '.join(phases[1:])}"
+        )
+    return lines
+
+
 def parse_framework(path: pathlib.Path) -> dict:
-    """Split a framework file into its YAML frontmatter (the router and stage data) and body.
+    """Split a framework file into its YAML frontmatter (the router and phase data) and body.
 
     Reuses the same frontmatter/body split as a prompt file - only the fields differ. The
     file's own `id` names the framework; the previous version wrote it by hand alongside
-    two hardcoded entries.
+    two hardcoded entries. The body is the eight lines the model reads, checked here so a
+    file that breaks the format is never seeded.
     """
     raw = path.read_text()
     if not raw.startswith("---"):
@@ -74,24 +145,31 @@ def parse_framework(path: pathlib.Path) -> dict:
     for required in ("id", "name", "phases"):
         if required not in meta:
             raise ValueError(f"{path.name} frontmatter has no {required}")
+    if extra := sorted(set(meta) - FRAMEWORK_KEYS):
+        raise ValueError(f"{path.name}: frontmatter keys not allowed: {', '.join(extra)}")
     activation = meta.get("activation") or {}
+    if extra := sorted(set(activation) - ACTIVATION_KEYS):
+        raise ValueError(f"{path.name}: activation keys not allowed: {', '.join(extra)}")
+    lines = _framework_lines(path.name, body, meta["phases"])
     return {
         "id": meta["id"],
         "name": meta["name"],
         "summary": meta.get("summary", ""),
-        "body": body.strip(),
-        # No longer read for routing - admin.frameworks.activation carries that now - but
-        # kept human-readable rather than blank, for anyone looking at the table directly.
-        "activation_conditions": activation.get("central_indication", ""),
+        "body": "\n".join(lines),
+        # Read by nothing, but kept readable rather than blank for anyone looking at the table.
+        "activation_conditions": lines[0].removeprefix("Starts when: "),
         "phases": meta["phases"],
         "display_order": meta.get("display_order", 0),
         "activation": activation,
-        "stages": meta.get("stages") or {},
+        # A framework's own stages carry no block: the seed adds only the somatic ones.
+        "stages": {},
     }
 
 
 async def seed() -> None:
     settings = get_settings()
+    # Checked before connecting, so a refused prompt file stops the run with nothing opened.
+    prompts = load_prompts()
     conn = await asyncpg.connect(settings.database_url)
     try:
         async with conn.transaction():
@@ -102,8 +180,9 @@ async def seed() -> None:
             somatic_stages = load_somatic_stages()
             somatic_phases = list(somatic_stages)
 
-            for path in framework_files:
-                framework = parse_framework(path)
+            # Every file is checked before any is written, so a refusal leaves nothing half seeded.
+            frameworks = [parse_framework(path) for path in framework_files]
+            for framework in frameworks:
                 # Append the shared somatic route after each framework's own phases. The files
                 # end at `closing`, and this is rebuilt from the file every run, so appending is
                 # idempotent - there is nothing to dedupe.
@@ -135,16 +214,10 @@ async def seed() -> None:
                     json.dumps(framework["activation"]),
                     json.dumps(framework["stages"]),
                 )
-                print(f"  {framework['name']:<28} {len(framework['stages'])} stages")
+                print(f"  {framework['name']:<28} {len(framework['phases'])} phases")
             print(f"frameworks: {len(framework_files)}")
 
-            # somatic.md is the merge source above, not a prompt row.
-            files = [p for p in sorted(PROMPTS_DIR.glob("*.md")) if p != SOMATIC_FILE]
-            if not files:
-                raise SystemExit(f"no prompt files in {PROMPTS_DIR}")
-
-            for path in files:
-                prompt = parse_prompt(path)
+            for prompt in prompts:
                 await conn.execute(
                     """
                     insert into admin.prompts
@@ -164,10 +237,13 @@ async def seed() -> None:
                     json.dumps(prompt["model_parameters"]),
                 )
                 print(f"  {prompt['name']:<18} {len(prompt['content']):>6} chars")
-            print(f"prompts: {len(files)}")
+            print(f"prompts: {len(prompts)}")
     finally:
         await conn.close()
 
 
 if __name__ == "__main__":
-    asyncio.run(seed())
+    try:
+        asyncio.run(seed())
+    except ValueError as refused:
+        sys.exit(f"seed refused, nothing written: {refused}")

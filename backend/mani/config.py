@@ -70,10 +70,6 @@ class Settings(BaseSettings):
     default_chat_model: str = "openai/gpt-6-luna"
     default_summary_model: str = "openai/gpt-6-luna"
 
-    # How hard a reasoning model thinks before it answers. Sent only to models that read
-    # it; the rest reject the key. Costs reasoning tokens on every turn at the output rate.
-    reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"] = "high"
-
     # Speech-to-text goes through OpenRouter too, via its separate /audio/transcriptions
     # endpoint - same key, same base_url, same bill as chat. Not a second provider.
     whisper_model: str = "openai/whisper-large-v3"

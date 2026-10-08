@@ -13,7 +13,7 @@ from mani.db import llm_calls, messages as messages_db, summaries, threads
 from mani.llm import client
 from mani.llm.schema import Extraction
 from mani.models.rows import Message, MessageRole, TechniqueTried, ThreadSummary
-from mani.prompts import cache
+from mani.prompts import cache, calls
 
 logger = logging.getLogger(__name__)
 
@@ -96,10 +96,8 @@ async def update(
         return existing
 
     config = await cache.load()
-    prompt = config.prompt("summarization")
-    if prompt is None:
-        logger.warning("no summarization prompt configured; skipping")
-        return existing
+    prompt = config.require("summarization")
+    effort = calls.effort_for(prompt, "summarization")
 
     call = await client.complete(
         [
@@ -119,7 +117,7 @@ async def update(
         purpose=llm_calls.Purpose.SUMMARIZE,
         temperature=prompt.model_parameters.get("temperature", 0),
         max_tokens=prompt.model_parameters.get("maxTokens", 500),
-        reasoning_effort=prompt.model_parameters.get("reasoning_effort"),
+        reasoning_effort=effort,
         routing=prompt.routing,
         user_id=user_id,
         thread_id=thread.id,

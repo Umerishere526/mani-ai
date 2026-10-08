@@ -14,13 +14,13 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | A | Chat turn pipeline | Existing | existing |
 | B | Six frameworks and the body check in | Existing | existing |
 | 1 | Turn cost and latency baseline | Foundation | in-progress |
-| 2 | Thinking level required on every call | Foundation | planned |
-| 3 | Short base prompt of general rules | Slice 1 | planned |
-| 4 | Framework in 8 lines, ABCDE first | Slice 1 | planned |
-| 5 | One model call, no redraft or repairs | Slice 1 | planned |
-| 6 | The other five frameworks in 8 lines | Slice 2 | planned |
+| 2 | Thinking level required on every call | Foundation | in-progress |
+| 3 | Short base prompt of general rules | Slice 1 | in-progress |
+| 4 | Framework in 8 lines, all six | Slice 1 | in-progress |
+| 5 | One model call, no redraft or repairs | Slice 1 | in-progress |
+| 6 | The other five frameworks in 8 lines | Slice 2 | dropped |
 | 7 | Body check in in the lean format | Slice 2 | planned |
-| 8 | Model facing text out of Python | Slice 3 | planned |
+| 8 | Model facing text out of Python | Slice 3 | in-progress |
 | 9 | Reply text and numbers out of Python | Slice 3 | planned |
 | 10 | Crisis decided by the model | Slice 4 | planned |
 | 11 | Thinking level and prompt tuning from measurements | Slice 5 | planned |
@@ -28,7 +28,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 ## Already built
 
 ### A. Chat turn pipeline · existing
-One turn: safety screen, router shortlist, system prompt (base, framework index, response format), `[ctx]` block, model call, redraft, repairs. code in backend/mani/chat/, backend/mani/prompts/, backend/mani/llm/
+One turn: safety screen, router shortlist, system prompt (base, framework index, response format), `[ctx]` block, one model call, integrity guards. code in backend/mani/chat/, backend/mani/prompts/, backend/mani/llm/
 
 ### B. Six frameworks and the body check in · existing
 ABCDE, Thought Reframe, Structured Problem Solving, ACT Choice Point, Behavioral Activation and DBT STOP, each 300 to 390 lines, plus the body check in merged into every framework at seed time. code in backend/content/, backend/scripts/seed.py
@@ -39,41 +39,75 @@ ABCDE, Thought Reframe, Structured Problem Solving, ACT Choice Point, Behavioral
 A repeatable way to see what one turn costs before and after each change: input, cached, output and reasoning tokens, latency, and model calls per turn, for a fixed set of conversations. Without it, "faster" and "cheaper" are guesses, and one eval run is noise (three before, three after).
 **Done when:** one command runs the chosen scenarios and prints those numbers per turn, reasoning tokens are recorded, the numbers survive the eval's own cleanup, and today's numbers are written down as the baseline.
 - [x] Design it (spec): `/architect turn cost and latency baseline`
-- [ ] Build it: `/develop turn cost and latency baseline`
-  - [ ] Honest cost rows: reasoning tokens column (migration 018), both usage readers, latency per attempt (AC-3, AC-13)
-  - [ ] One measured run writes a baseline file, with the local, column and abort guards and cleanup that always runs (AC-1, AC-2, AC-4, AC-5, AC-8, AC-9, AC-10, AC-12)
-  - [ ] Repeated runs with scenario totals and medians, and the offline compare (AC-1, AC-5, AC-6, AC-7, AC-14)
-  - [ ] Docs, the PORT-STATUS decision line, and the first `before-lean-prompts` baseline after muhammad's yes (AC-11)
+- [x] Build it: `/develop turn cost and latency baseline`
+  - [x] Honest cost rows: reasoning tokens column (migration 018), both usage readers, latency per attempt (AC-3, AC-13)
+  - [x] One measured run writes a baseline file, with the local, column and abort guards and cleanup that always runs (AC-1, AC-2, AC-4, AC-5, AC-8, AC-9, AC-10, AC-12)
+  - [x] Repeated runs with scenario totals and medians, and the offline compare (AC-1, AC-5, AC-6, AC-7, AC-14)
+  - [x] Docs, the PORT-STATUS decision line, and the first `before-lean-prompts` baseline after muhammad's yes (AC-11)
 - [ ] Verify it: `/check verify turn cost and latency baseline`
 - [ ] Test it: `/test turn cost and latency baseline`
-Spec [0002](../specs/0002-turn-cost-latency-baseline.md)
+Spec [0002](../specs/0002-turn-cost-latency-baseline/index.md) · code in backend/scripts/eval_replies.py, backend/scripts/baseline.py, backend/mani/llm/, backend/mani/db/llm_calls.py, backend/supabase/migrations/018_llm_call_reasoning_tokens.sql
 
-### 2. Thinking level required on every call · needs a decision
-Every model call names its own thinking level: chat, summary, memory fold, title and the exercise pick. A missing level is an error at seed time, never a silent fallback.
+### 2. Thinking level required on every call · in-progress
+Every model call names its own thinking level in its own prompt row: chat turn, summary, memory fold, exercise pick and voice translation (the title rides on the chat turn). A missing level is refused at seed, at an admin edit and at call time, never a silent fallback. Spec: [0004](../specs/0004-thinking-level-required/index.md) code in backend/mani/prompts/calls.py, backend/content/prompts/
 **Done when:** seeding fails for a prompt row with no level or an unknown one, no model call goes out without an explicit level, and the config fallback is gone.
-- [ ] Design it (spec): `/architect thinking level required`
+- [x] Design it (spec): `/architect thinking level required`
+- [x] Build it: `/develop thinking level required`
+  - [x] The shared check and the voice translation row end to end (AC-1, AC-3, AC-5, AC-6, AC-7, AC-8)
+  - [x] Exercise pick row, then chat turn, summary and memory fold on `effort_for` (AC-1, AC-5, AC-6, AC-7)
+  - [x] Config fallback removed and admin writes refused (AC-2, AC-4)
+  - [x] Tests, a reseeded local run, and PORT-STATUS.md (AC-1 to AC-8)
+- [ ] Verify it: `/check verify thinking level required`
+- [ ] Test it: `/test thinking level required`
 
 ## Slice 1: ABCDE through the lean path
 
-### 3. Short base prompt of general rules · needs a decision
+### 3. Short base prompt of general rules · in-progress
 Rewrite `mani_base` as a short set of general rules: who Mani is, how it replies, the three styles, how a conversation moves. No scripted lines, no example conversations, no banned word lists, and each rule stated once across the base prompt, the response format and the schema descriptions.
 **Done when:** the base prompt and the response format together fit a line budget set in the spec, contain no line the model must say word for word, repeat no rule, and the ABCDE replay conversation still reads well in all three styles.
-- [ ] Design it (spec): `/architect short base prompt`
+**Spec:** [0003](../specs/0003-short-base-prompt.md)
+**Code:** backend/content/prompts/, backend/mani/llm/schema.py, backend/tests/unit/test_prompt_budget.py
+- [x] Design it (spec): `/architect short base prompt`
+- [ ] Build it: `/develop short base prompt`
+  - [x] Guard test reduced to the one check the code needs: the clarification lines (word budget, shape and bans dropped by muhammad, 2026-10-07)
+  - [x] Both prompt files rewritten to the rule home map, `ctx` key list and fixed lines table (AC-3, AC-5, AC-6, AC-7, AC-8)
+  - [x] Schema descriptions without repeats, prompt text tests deleted, whole `pytest` clean, reseeded, PORT-STATUS updated (AC-5, AC-9)
+  - [x] Word band dropped by muhammad, 2026-10-07; the base prompt was rewritten shorter instead (2,403 words)
+  - [ ] ABCDE journey once per style, after muhammad's yes (AC-10)
+- [ ] Verify it: `/check verify short base prompt`
+- [ ] Test it: `/test short base prompt`
 
-### 4. Framework in 8 lines, ABCDE first · needs a decision
-Define the 8 line framework format (when it starts, the words that trigger it, when to skip it, the stages in one line, when it ends, what never happens) using Hussnain's rule, and convert ABCDE to it. The model writes each stage question itself in the chosen style. The unused body, lists and per stage blocks go.
-**Done when:** abcde.md is about 8 lines of model facing content, the seed and the turn send only that, and a real ABCDE conversation runs from offer to end in each style.
-- [ ] Design it (spec): `/architect framework in 8 lines`
+### 4. Framework in 8 lines, all six · in-progress
+Define the 8 line framework format (starts when, sounds like, skip when, stages, ends when, offer, never, never) and convert all six frameworks to it in one change (feature 6 is merged in). The model writes each stage question itself in the chosen style. The unused body, lists and per stage blocks go, and so does the earliest offer gate.
+**Done when:** each framework file is exactly 8 lines of model facing content, the seed refuses anything else, the index and the turn send only that, and the real runs in spec 0005 AC-10 pass.
+Spec: [0005](../specs/0005-framework-in-8-lines.md)
+Code: backend/content/frameworks/, backend/scripts/seed.py, backend/mani/prompts/composer.py, backend/mani/chat/context.py
+- [x] Design it (spec): `/architect framework in 8 lines`
+- [ ] Build it: `/develop framework in 8 lines`
+  - [x] Before baseline, `--style`, and the seed format check (AC-1, AC-2, AC-10)
+  - [x] ABCDE lean through index, `[ctx]`, gate removal, prompt edits and evals (AC-3 to AC-9, AC-12, AC-13, AC-14)
+  - [ ] The other five drafted, muhammad's review stop, reseed, full `pytest` (AC-1, AC-11, AC-14)
+  - [ ] Three new journeys, real runs after muhammad's yes, PORT-STATUS and specs README (AC-10)
+- [ ] Verify it: `/check verify framework in 8 lines`
+- [ ] Test it: `/test framework in 8 lines`
 
-### 5. One model call, no redraft or repairs · needs a decision
+### 5. One model call, no redraft or repairs · in-progress
 Remove the redraft loop and the reply repairs: feeling word checks, repeated question checks, offer timing, closest fit pushes, button trimming and rewritten permission questions. The model's reply goes out as it wrote it, apart from schema validation. Crisis handling stays until feature 10.
-**Done when:** every turn makes exactly one chat call, redraft.py and the repairs are gone or reduced to schema shape, the tests that asserted those checks are removed or rewritten, and the ABCDE replay still completes.
-- [ ] Design it (spec): `/architect one model call no repairs`
+**Done when:** every turn makes exactly one chat call, redraft.py and the repairs are gone or reduced to schema shape, and the tests that asserted those checks are removed or rewritten.
+- [x] Design it (spec): `/architect one model call no repairs`
+- [ ] Build it: `/develop one model call no repairs`
+  - [x] One call end to end: no redraft, no schema retry on chat, the grief veto as `ruled_out` in [ctx] (AC-1, AC-2, AC-7)
+  - [x] Offer in the model's words: description in the index, offer rules rewritten, offer composition removed (AC-3, AC-8, AC-9)
+  - [x] Integrity guards only: guards.py and ending.py, state guards for decline and retiring turns, word lists to the evals (AC-3, AC-4, AC-5, AC-6, AC-10)
+  - [ ] Tests, docs and stale references, full suite with the database up (AC-11, AC-12) (one failure left, waiting on the spec 0005 reseed)
+- [ ] Verify it: `/check verify one model call no repairs`
+- [ ] Test it: `/test one model call no repairs`
+Spec [0006](../specs/0006-one-model-call-no-repairs/index.md) · code in backend/mani/chat/, backend/mani/llm/client.py, backend/mani/prompts/composer.py, backend/content/prompts/
 
 ## Slice 2: Every framework lean
 
-### 6. The other five frameworks in 8 lines
-Convert Thought Reframe, Structured Problem Solving, ACT Choice Point, Behavioral Activation and DBT STOP to the format from feature 4, including how each is told apart from its neighbours.
+### 6. The other five frameworks in 8 lines · dropped
+Merged into feature 4 (spec 0005): all six convert in one change. Originally: convert Thought Reframe, Structured Problem Solving, ACT Choice Point, Behavioral Activation and DBT STOP to the format from feature 4, including how each is told apart from its neighbours.
 **Done when:** each is about 8 lines, a real conversation reaches each one's offer and end, and the router picks the right one for the client's example lines.
 - [ ] Build it: `/develop other five frameworks in 8 lines`
 
@@ -84,10 +118,19 @@ The ending (completion question, body check in, exercise, Chat More or Go to Lib
 
 ## Slice 3: Nothing hardcoded
 
-### 8. Model facing text out of Python · needs a decision
-The instruction text Python adds to the prompt (index headings, `stage_note`, memory and summary wrappers, schema field descriptions, the exercise picker prompt, phrase lists naming framework ids) moves into seeded content, so changing it never needs a code change.
+### 8. Model facing text out of Python · in-progress
+The instruction text Python adds to the prompt (index headings, `stage_note`, memory and summary wrappers, schema field descriptions, the exercise picker prompt, phrase lists naming framework ids) moves into seeded content, so changing it never needs a code change. Also removes the closest fit offer: Mani offers only a set on the router's shortlist that it judges fits.
 **Done when:** no sentence the model reads is written in backend/mani/, and changing any of them needs only a reseed.
-- [ ] Design it (spec): `/architect model facing text out of python`
+Spec: [0007](../specs/0007-model-text-out-of-python/index.md)
+- [x] Design it (spec): `/architect model facing text out of python`
+- [ ] Build it: `/develop model facing text out of python` (needs spec 0004 AC-6 built first)
+  - [ ] `[ctx]` and the layers as keys and headings, the stage rules and layer meanings in `response_format.md`, both contract tests (AC-1, AC-2, AC-5, AC-12)
+  - [ ] Summary, memory fold, exercise pick and tapped button messages, and the schemas with no descriptions (AC-3, AC-4)
+  - [ ] Reply shapes from `mani_base.md`, migration 019 dropping the shape check (AC-6)
+  - [ ] Distinction rules in the framework files, no closest fit, the shortlist as the offer gate, the offer log, in its own PR (AC-7, AC-8, AC-9, AC-10, AC-11)
+  - [ ] Tokenizer count, reseed, full `pytest` with the database up, PORT-STATUS and schema reference (AC-13)
+- [ ] Verify it: `/check verify model facing text out of python`
+- [ ] Test it: `/test model facing text out of python`
 
 ### 9. Reply text and numbers out of Python · needs a decision
 Text sent straight to the person (greeting, style question, openers, after framework questions, button labels, crisis reply) and the timing numbers (cooldowns, offer windows, router weights, summary threshold) move into seeded content or config.
@@ -109,6 +152,7 @@ Use the baseline from feature 1 to choose the thinking level per call and to com
 - [ ] Design it (spec): `/architect thinking level and prompt tuning`
 
 ## Open questions
+- Should call rows also require `model_id`, so `DEFAULT_CHAT_MODEL` and `DEFAULT_SUMMARY_MODEL` go away? Left out of spec 0004 by choice (from spec 0004).
 - Hussnain's 7 to 8 line rule: get the exact format before `/architect framework in 8 lines`.
 - The client's wording for each style, stage and body exercise goes away under the 8 line format. muhammad has allowed rewording to fix comprehension. Confirm the client is fine with the model writing these itself.
 

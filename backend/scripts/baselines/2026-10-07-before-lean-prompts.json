@@ -1,0 +1,2563 @@
+{
+  "label": "before-lean-prompts",
+  "created_at": "2026-10-07T20:24:41Z",
+  "git": {
+    "commit": "45543ed",
+    "diff": "4c8d3d6716fb"
+  },
+  "model": "openai/gpt-6-luna",
+  "reasoning_effort": {
+    "chat": "high",
+    "exercise_select": "high"
+  },
+  "reasoning_reported": true,
+  "content": {
+    "mani_base": "265be4beef6a",
+    "response_format": "b4c2ad9a8a6c",
+    "frameworks": {
+      "abcde": "aca08dfc0822",
+      "act_choice_point": "e71862499b94",
+      "behavioral_activation": "e8867dc85f53",
+      "dbt_stop": "e900007d21e6",
+      "structured_problem_solving": "586c82b6f477",
+      "thought_reframe": "a1c9c05893f5"
+    }
+  },
+  "scripts": "d3a2a9c2553a",
+  "database_host": "127.0.0.1",
+  "style": "supportive",
+  "runs": 3,
+  "scenarios": [
+    "anxiety_free_chat",
+    "criticism_abcde",
+    "journey_abcde"
+  ],
+  "results": [
+    {
+      "run": 1,
+      "scenario": "anxiety_free_chat",
+      "findings": 0,
+      "totals": {
+        "calls": 6,
+        "input_tokens": 49896,
+        "cached_input_tokens": 32400,
+        "output_tokens": 5775,
+        "reasoning_tokens": 4880,
+        "model_latency_ms": 72126,
+        "turn_latency_ms": 72851
+      },
+      "turns": [
+        {
+          "line": 1,
+          "token": "I have a presentation tomorrow and I keep going over it",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8247,
+          "cached_input_tokens": 0,
+          "output_tokens": 528,
+          "reasoning_tokens": 392,
+          "model_latency_ms": 8358,
+          "turn_latency_ms": 8988,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 2,
+          "token": "I keep thinking I'll freeze halfway through",
+          "kind": "typed",
+          "calls": 2,
+          "input_tokens": 16577,
+          "cached_input_tokens": 8100,
+          "output_tokens": 1692,
+          "reasoning_tokens": 1433,
+          "model_latency_ms": 22344,
+          "turn_latency_ms": 22376,
+          "purposes": [
+            "chat",
+            "chat"
+          ],
+          "outcomes": [
+            "ok",
+            "ok"
+          ]
+        },
+        {
+          "line": 3,
+          "token": "I don't know, I just want it to be over",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8311,
+          "cached_input_tokens": 8100,
+          "output_tokens": 1434,
+          "reasoning_tokens": 1277,
+          "model_latency_ms": 17743,
+          "turn_latency_ms": 17766,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 4,
+          "token": "yeah maybe",
+          "kind": "typed",
+          "calls": 2,
+          "input_tokens": 16761,
+          "cached_input_tokens": 16200,
+          "output_tokens": 2121,
+          "reasoning_tokens": 1778,
+          "model_latency_ms": 23681,
+          "turn_latency_ms": 23721,
+          "purposes": [
+            "chat",
+            "chat"
+          ],
+          "outcomes": [
+            "ok",
+            "ok"
+          ]
+        }
+      ]
+    },
+    {
+      "run": 1,
+      "scenario": "criticism_abcde",
+      "findings": 0,
+      "totals": {
+        "calls": 4,
+        "input_tokens": 33182,
+        "cached_input_tokens": 24340,
+        "output_tokens": 4047,
+        "reasoning_tokens": 3432,
+        "model_latency_ms": 46947,
+        "turn_latency_ms": 47024
+      },
+      "turns": [
+        {
+          "line": 1,
+          "token": "My manager criticized my presentation in front of everyone",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8245,
+          "cached_input_tokens": 8140,
+          "output_tokens": 570,
+          "reasoning_tokens": 431,
+          "model_latency_ms": 9507,
+          "turn_latency_ms": 9520,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 2,
+          "token": "She said two of my recommendations did not have enough support",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8263,
+          "cached_input_tokens": 0,
+          "output_tokens": 620,
+          "reasoning_tokens": 478,
+          "model_latency_ms": 8887,
+          "turn_latency_ms": 8907,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 3,
+          "token": "I stopped speaking and avoided her afterward",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8310,
+          "cached_input_tokens": 8100,
+          "output_tokens": 332,
+          "reasoning_tokens": 183,
+          "model_latency_ms": 6330,
+          "turn_latency_ms": 6350,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 4,
+          "token": "I keep thinking I am incompetent",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8364,
+          "cached_input_tokens": 8100,
+          "output_tokens": 2525,
+          "reasoning_tokens": 2340,
+          "model_latency_ms": 22223,
+          "turn_latency_ms": 22247,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        }
+      ]
+    },
+    {
+      "run": 1,
+      "scenario": "journey_abcde",
+      "findings": 4,
+      "totals": {
+        "calls": 16,
+        "input_tokens": 145874,
+        "cached_input_tokens": 114199,
+        "output_tokens": 17398,
+        "reasoning_tokens": 15023,
+        "model_latency_ms": 245291,
+        "turn_latency_ms": 245599
+      },
+      "turns": [
+        {
+          "line": 1,
+          "token": "My manager criticized my presentation in front of the whole team.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8248,
+          "cached_input_tokens": 8140,
+          "output_tokens": 561,
+          "reasoning_tokens": 423,
+          "model_latency_ms": 10103,
+          "turn_latency_ms": 10118,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 2,
+          "token": "She said two of my recommendations didn't have enough support, and now I keep thinking I'm bad at my job.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8279,
+          "cached_input_tokens": 8100,
+          "output_tokens": 861,
+          "reasoning_tokens": 716,
+          "model_latency_ms": 14036,
+          "turn_latency_ms": 14056,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 3,
+          "token": "@accept|It keeps going round in my head and I'd like to work through it.",
+          "kind": "fallback",
+          "calls": 1,
+          "input_tokens": 8344,
+          "cached_input_tokens": 8100,
+          "output_tokens": 975,
+          "reasoning_tokens": 786,
+          "model_latency_ms": 11546,
+          "turn_latency_ms": 11570,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 4,
+          "token": "@accept|Yes, I want to look at it properly.",
+          "kind": "accept",
+          "calls": 1,
+          "input_tokens": 9107,
+          "cached_input_tokens": 0,
+          "output_tokens": 919,
+          "reasoning_tokens": 774,
+          "model_latency_ms": 13971,
+          "turn_latency_ms": 13991,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 6,
+          "token": "She said it in the meeting, right after my slides, in front of everyone.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9018,
+          "cached_input_tokens": 0,
+          "output_tokens": 760,
+          "reasoning_tokens": 604,
+          "model_latency_ms": 11593,
+          "turn_latency_ms": 11610,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 7,
+          "token": "That I'm bad at my job and everyone saw it.",
+          "kind": "typed",
+          "calls": 2,
+          "input_tokens": 18585,
+          "cached_input_tokens": 16338,
+          "output_tokens": 1404,
+          "reasoning_tokens": 1131,
+          "model_latency_ms": 26790,
+          "turn_latency_ms": 26819,
+          "purposes": [
+            "chat",
+            "chat"
+          ],
+          "outcomes": [
+            "ok",
+            "ok"
+          ]
+        },
+        {
+          "line": 8,
+          "token": "I stopped talking for the rest of the meeting and avoided her afterwards.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9319,
+          "cached_input_tokens": 8169,
+          "output_tokens": 407,
+          "reasoning_tokens": 264,
+          "model_latency_ms": 7578,
+          "turn_latency_ms": 7598,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 9,
+          "token": "She also asked me to lead the next project, so maybe not everyone thinks that.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9432,
+          "cached_input_tokens": 8169,
+          "output_tokens": 578,
+          "reasoning_tokens": 432,
+          "model_latency_ms": 9391,
+          "turn_latency_ms": 9409,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 10,
+          "token": "Maybe one presentation had gaps, but it doesn't mean I'm bad at my job.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9485,
+          "cached_input_tokens": 8169,
+          "output_tokens": 1512,
+          "reasoning_tokens": 1342,
+          "model_latency_ms": 17825,
+          "turn_latency_ms": 17843,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 11,
+          "token": "Yes, that feels fairer.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9309,
+          "cached_input_tokens": 8169,
+          "output_tokens": 812,
+          "reasoning_tokens": 696,
+          "model_latency_ms": 10701,
+          "turn_latency_ms": 10719,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 12,
+          "token": "My shoulders feel a bit looser than when we started.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9327,
+          "cached_input_tokens": 8169,
+          "output_tokens": 3880,
+          "reasoning_tokens": 3708,
+          "model_latency_ms": 40712,
+          "turn_latency_ms": 40730,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 13,
+          "token": "@tap:Chat More",
+          "kind": "tap",
+          "calls": 1,
+          "input_tokens": 9402,
+          "cached_input_tokens": 8169,
+          "output_tokens": 2031,
+          "reasoning_tokens": 1905,
+          "model_latency_ms": 31067,
+          "turn_latency_ms": 31099,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 14,
+          "token": "I still keep thinking about that meeting though.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9377,
+          "cached_input_tokens": 8169,
+          "output_tokens": 1526,
+          "reasoning_tokens": 1389,
+          "model_latency_ms": 20117,
+          "turn_latency_ms": 20137,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 15,
+          "token": "I guess I want to stop letting one comment decide how I feel about my work.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9321,
+          "cached_input_tokens": 8169,
+          "output_tokens": 463,
+          "reasoning_tokens": 292,
+          "model_latency_ms": 6630,
+          "turn_latency_ms": 6650,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 16,
+          "token": "Maybe I could ask her for feedback before the next presentation.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9321,
+          "cached_input_tokens": 8169,
+          "output_tokens": 709,
+          "reasoning_tokens": 561,
+          "model_latency_ms": 13231,
+          "turn_latency_ms": 13250,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "scenario": "anxiety_free_chat",
+      "findings": 0,
+      "totals": {
+        "calls": 6,
+        "input_tokens": 49850,
+        "cached_input_tokens": 48744,
+        "output_tokens": 7568,
+        "reasoning_tokens": 6661,
+        "model_latency_ms": 102820,
+        "turn_latency_ms": 102915
+      },
+      "turns": [
+        {
+          "line": 1,
+          "token": "I have a presentation tomorrow and I keep going over it",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8247,
+          "cached_input_tokens": 8244,
+          "output_tokens": 616,
+          "reasoning_tokens": 475,
+          "model_latency_ms": 8958,
+          "turn_latency_ms": 8973,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 2,
+          "token": "I keep thinking I'll freeze halfway through",
+          "kind": "typed",
+          "calls": 2,
+          "input_tokens": 16535,
+          "cached_input_tokens": 16200,
+          "output_tokens": 2014,
+          "reasoning_tokens": 1737,
+          "model_latency_ms": 31678,
+          "turn_latency_ms": 31708,
+          "purposes": [
+            "chat",
+            "chat"
+          ],
+          "outcomes": [
+            "ok",
+            "ok"
+          ]
+        },
+        {
+          "line": 3,
+          "token": "I don't know, I just want it to be over",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8307,
+          "cached_input_tokens": 8100,
+          "output_tokens": 901,
+          "reasoning_tokens": 764,
+          "model_latency_ms": 24942,
+          "turn_latency_ms": 24961,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 4,
+          "token": "yeah maybe",
+          "kind": "typed",
+          "calls": 2,
+          "input_tokens": 16761,
+          "cached_input_tokens": 16200,
+          "output_tokens": 4037,
+          "reasoning_tokens": 3685,
+          "model_latency_ms": 37242,
+          "turn_latency_ms": 37273,
+          "purposes": [
+            "chat",
+            "chat"
+          ],
+          "outcomes": [
+            "ok",
+            "ok"
+          ]
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "scenario": "criticism_abcde",
+      "findings": 1,
+      "totals": {
+        "calls": 4,
+        "input_tokens": 33163,
+        "cached_input_tokens": 32542,
+        "output_tokens": 3817,
+        "reasoning_tokens": 3169,
+        "model_latency_ms": 43180,
+        "turn_latency_ms": 43256
+      },
+      "turns": [
+        {
+          "line": 1,
+          "token": "My manager criticized my presentation in front of everyone",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8245,
+          "cached_input_tokens": 8242,
+          "output_tokens": 703,
+          "reasoning_tokens": 569,
+          "model_latency_ms": 11337,
+          "turn_latency_ms": 11350,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 2,
+          "token": "She said two of my recommendations did not have enough support",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8256,
+          "cached_input_tokens": 8100,
+          "output_tokens": 509,
+          "reasoning_tokens": 382,
+          "model_latency_ms": 6662,
+          "turn_latency_ms": 6682,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 3,
+          "token": "I stopped speaking and avoided her afterward",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8307,
+          "cached_input_tokens": 8100,
+          "output_tokens": 1192,
+          "reasoning_tokens": 1021,
+          "model_latency_ms": 12447,
+          "turn_latency_ms": 12467,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 4,
+          "token": "I keep thinking I am incompetent",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8355,
+          "cached_input_tokens": 8100,
+          "output_tokens": 1413,
+          "reasoning_tokens": 1197,
+          "model_latency_ms": 12734,
+          "turn_latency_ms": 12757,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "scenario": "journey_abcde",
+      "findings": 2,
+      "totals": {
+        "calls": 15,
+        "input_tokens": 136162,
+        "cached_input_tokens": 122477,
+        "output_tokens": 13691,
+        "reasoning_tokens": 11417,
+        "model_latency_ms": 173129,
+        "turn_latency_ms": 173449
+      },
+      "turns": [
+        {
+          "line": 1,
+          "token": "My manager criticized my presentation in front of the whole team.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8248,
+          "cached_input_tokens": 8245,
+          "output_tokens": 649,
+          "reasoning_tokens": 516,
+          "model_latency_ms": 7542,
+          "turn_latency_ms": 7556,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 2,
+          "token": "She said two of my recommendations didn't have enough support, and now I keep thinking I'm bad at my job.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8273,
+          "cached_input_tokens": 8100,
+          "output_tokens": 1187,
+          "reasoning_tokens": 1045,
+          "model_latency_ms": 13011,
+          "turn_latency_ms": 13032,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 3,
+          "token": "@accept|It keeps going round in my head and I'd like to work through it.",
+          "kind": "fallback",
+          "calls": 1,
+          "input_tokens": 8331,
+          "cached_input_tokens": 8100,
+          "output_tokens": 1498,
+          "reasoning_tokens": 1303,
+          "model_latency_ms": 19622,
+          "turn_latency_ms": 19645,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 4,
+          "token": "@accept|Yes, I want to look at it properly.",
+          "kind": "accept",
+          "calls": 1,
+          "input_tokens": 9094,
+          "cached_input_tokens": 8173,
+          "output_tokens": 1646,
+          "reasoning_tokens": 1466,
+          "model_latency_ms": 18467,
+          "turn_latency_ms": 18488,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 6,
+          "token": "She said it in the meeting, right after my slides, in front of everyone.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9011,
+          "cached_input_tokens": 8169,
+          "output_tokens": 669,
+          "reasoning_tokens": 509,
+          "model_latency_ms": 7028,
+          "turn_latency_ms": 7047,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 7,
+          "token": "That I'm bad at my job and everyone saw it.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9252,
+          "cached_input_tokens": 8169,
+          "output_tokens": 398,
+          "reasoning_tokens": 238,
+          "model_latency_ms": 5491,
+          "turn_latency_ms": 5510,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 8,
+          "token": "I stopped talking for the rest of the meeting and avoided her afterwards.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9309,
+          "cached_input_tokens": 8169,
+          "output_tokens": 341,
+          "reasoning_tokens": 185,
+          "model_latency_ms": 4517,
+          "turn_latency_ms": 4536,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 9,
+          "token": "She also asked me to lead the next project, so maybe not everyone thinks that.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9427,
+          "cached_input_tokens": 8169,
+          "output_tokens": 932,
+          "reasoning_tokens": 793,
+          "model_latency_ms": 9717,
+          "turn_latency_ms": 9736,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 10,
+          "token": "Maybe one presentation had gaps, but it doesn't mean I'm bad at my job.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9483,
+          "cached_input_tokens": 8169,
+          "output_tokens": 1317,
+          "reasoning_tokens": 1175,
+          "model_latency_ms": 21369,
+          "turn_latency_ms": 21387,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 11,
+          "token": "Yes, that feels fairer.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9300,
+          "cached_input_tokens": 8169,
+          "output_tokens": 351,
+          "reasoning_tokens": 240,
+          "model_latency_ms": 6175,
+          "turn_latency_ms": 6200,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 12,
+          "token": "My shoulders feel a bit looser than when we started.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9401,
+          "cached_input_tokens": 8169,
+          "output_tokens": 849,
+          "reasoning_tokens": 702,
+          "model_latency_ms": 10210,
+          "turn_latency_ms": 10236,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 13,
+          "token": "@tap:Chat More",
+          "kind": "tap",
+          "calls": 1,
+          "input_tokens": 9888,
+          "cached_input_tokens": 8169,
+          "output_tokens": 1027,
+          "reasoning_tokens": 919,
+          "model_latency_ms": 13109,
+          "turn_latency_ms": 13130,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 14,
+          "token": "I still keep thinking about that meeting though.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9540,
+          "cached_input_tokens": 8169,
+          "output_tokens": 1483,
+          "reasoning_tokens": 1267,
+          "model_latency_ms": 13324,
+          "turn_latency_ms": 13344,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 15,
+          "token": "I guess I want to stop letting one comment decide how I feel about my work.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8798,
+          "cached_input_tokens": 8169,
+          "output_tokens": 943,
+          "reasoning_tokens": 774,
+          "model_latency_ms": 18365,
+          "turn_latency_ms": 18399,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 16,
+          "token": "Maybe I could ask her for feedback before the next presentation.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8807,
+          "cached_input_tokens": 8169,
+          "output_tokens": 401,
+          "reasoning_tokens": 285,
+          "model_latency_ms": 5182,
+          "turn_latency_ms": 5203,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "scenario": "anxiety_free_chat",
+      "findings": 0,
+      "totals": {
+        "calls": 5,
+        "input_tokens": 41589,
+        "cached_input_tokens": 40644,
+        "output_tokens": 5216,
+        "reasoning_tokens": 4421,
+        "model_latency_ms": 57585,
+        "turn_latency_ms": 57675
+      },
+      "turns": [
+        {
+          "line": 1,
+          "token": "I have a presentation tomorrow and I keep going over it",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8247,
+          "cached_input_tokens": 8244,
+          "output_tokens": 1017,
+          "reasoning_tokens": 887,
+          "model_latency_ms": 14146,
+          "turn_latency_ms": 14160,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 2,
+          "token": "I keep thinking I'll freeze halfway through",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8259,
+          "cached_input_tokens": 8100,
+          "output_tokens": 614,
+          "reasoning_tokens": 476,
+          "model_latency_ms": 8189,
+          "turn_latency_ms": 8210,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 3,
+          "token": "I don't know, I just want it to be over",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8308,
+          "cached_input_tokens": 8100,
+          "output_tokens": 1316,
+          "reasoning_tokens": 1161,
+          "model_latency_ms": 12709,
+          "turn_latency_ms": 12730,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 4,
+          "token": "yeah maybe",
+          "kind": "typed",
+          "calls": 2,
+          "input_tokens": 16775,
+          "cached_input_tokens": 16200,
+          "output_tokens": 2269,
+          "reasoning_tokens": 1897,
+          "model_latency_ms": 22541,
+          "turn_latency_ms": 22575,
+          "purposes": [
+            "chat",
+            "chat"
+          ],
+          "outcomes": [
+            "ok",
+            "ok"
+          ]
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "scenario": "criticism_abcde",
+      "findings": 0,
+      "totals": {
+        "calls": 5,
+        "input_tokens": 41530,
+        "cached_input_tokens": 40642,
+        "output_tokens": 3679,
+        "reasoning_tokens": 2914,
+        "model_latency_ms": 43186,
+        "turn_latency_ms": 43277
+      },
+      "turns": [
+        {
+          "line": 1,
+          "token": "My manager criticized my presentation in front of everyone",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8245,
+          "cached_input_tokens": 8242,
+          "output_tokens": 577,
+          "reasoning_tokens": 454,
+          "model_latency_ms": 6526,
+          "turn_latency_ms": 6538,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 2,
+          "token": "She said two of my recommendations did not have enough support",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8259,
+          "cached_input_tokens": 8100,
+          "output_tokens": 655,
+          "reasoning_tokens": 516,
+          "model_latency_ms": 8506,
+          "turn_latency_ms": 8528,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 3,
+          "token": "I stopped speaking and avoided her afterward",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8293,
+          "cached_input_tokens": 8100,
+          "output_tokens": 697,
+          "reasoning_tokens": 555,
+          "model_latency_ms": 8711,
+          "turn_latency_ms": 8734,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 4,
+          "token": "I keep thinking I am incompetent",
+          "kind": "typed",
+          "calls": 2,
+          "input_tokens": 16733,
+          "cached_input_tokens": 16200,
+          "output_tokens": 1750,
+          "reasoning_tokens": 1389,
+          "model_latency_ms": 19443,
+          "turn_latency_ms": 19477,
+          "purposes": [
+            "chat",
+            "chat"
+          ],
+          "outcomes": [
+            "ok",
+            "ok"
+          ]
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "scenario": "journey_abcde",
+      "findings": 3,
+      "totals": {
+        "calls": 16,
+        "input_tokens": 145132,
+        "cached_input_tokens": 130577,
+        "output_tokens": 16700,
+        "reasoning_tokens": 14330,
+        "model_latency_ms": 173650,
+        "turn_latency_ms": 173972
+      },
+      "turns": [
+        {
+          "line": 1,
+          "token": "My manager criticized my presentation in front of the whole team.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8248,
+          "cached_input_tokens": 8245,
+          "output_tokens": 930,
+          "reasoning_tokens": 786,
+          "model_latency_ms": 10056,
+          "turn_latency_ms": 10068,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 2,
+          "token": "She said two of my recommendations didn't have enough support, and now I keep thinking I'm bad at my job.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8271,
+          "cached_input_tokens": 8100,
+          "output_tokens": 1141,
+          "reasoning_tokens": 1005,
+          "model_latency_ms": 11196,
+          "turn_latency_ms": 11216,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 3,
+          "token": "@accept|It keeps going round in my head and I'd like to work through it.",
+          "kind": "fallback",
+          "calls": 1,
+          "input_tokens": 8332,
+          "cached_input_tokens": 8100,
+          "output_tokens": 1056,
+          "reasoning_tokens": 896,
+          "model_latency_ms": 9291,
+          "turn_latency_ms": 9312,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 4,
+          "token": "@accept|Yes, I want to look at it properly.",
+          "kind": "fallback",
+          "calls": 1,
+          "input_tokens": 8405,
+          "cached_input_tokens": 8100,
+          "output_tokens": 1082,
+          "reasoning_tokens": 892,
+          "model_latency_ms": 9898,
+          "turn_latency_ms": 9922,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 5,
+          "token": "@accept|Okay.",
+          "kind": "accept",
+          "calls": 1,
+          "input_tokens": 9166,
+          "cached_input_tokens": 8173,
+          "output_tokens": 1283,
+          "reasoning_tokens": 1107,
+          "model_latency_ms": 12815,
+          "turn_latency_ms": 12835,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 6,
+          "token": "She said it in the meeting, right after my slides, in front of everyone.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9170,
+          "cached_input_tokens": 8169,
+          "output_tokens": 1707,
+          "reasoning_tokens": 1552,
+          "model_latency_ms": 14648,
+          "turn_latency_ms": 14666,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 7,
+          "token": "That I'm bad at my job and everyone saw it.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9144,
+          "cached_input_tokens": 8169,
+          "output_tokens": 658,
+          "reasoning_tokens": 516,
+          "model_latency_ms": 8067,
+          "turn_latency_ms": 8084,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 8,
+          "token": "I stopped talking for the rest of the meeting and avoided her afterwards.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9391,
+          "cached_input_tokens": 8169,
+          "output_tokens": 353,
+          "reasoning_tokens": 209,
+          "model_latency_ms": 8430,
+          "turn_latency_ms": 8447,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 9,
+          "token": "She also asked me to lead the next project, so maybe not everyone thinks that.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9501,
+          "cached_input_tokens": 8169,
+          "output_tokens": 661,
+          "reasoning_tokens": 516,
+          "model_latency_ms": 7778,
+          "turn_latency_ms": 7798,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 10,
+          "token": "Maybe one presentation had gaps, but it doesn't mean I'm bad at my job.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9538,
+          "cached_input_tokens": 8169,
+          "output_tokens": 1528,
+          "reasoning_tokens": 1381,
+          "model_latency_ms": 13587,
+          "turn_latency_ms": 13607,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 11,
+          "token": "Yes, that feels fairer.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9366,
+          "cached_input_tokens": 8169,
+          "output_tokens": 424,
+          "reasoning_tokens": 305,
+          "model_latency_ms": 6447,
+          "turn_latency_ms": 6466,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 12,
+          "token": "My shoulders feel a bit looser than when we started.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9450,
+          "cached_input_tokens": 8169,
+          "output_tokens": 972,
+          "reasoning_tokens": 850,
+          "model_latency_ms": 11189,
+          "turn_latency_ms": 11208,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 13,
+          "token": "@tap:Chat More",
+          "kind": "tap",
+          "calls": 1,
+          "input_tokens": 9918,
+          "cached_input_tokens": 8169,
+          "output_tokens": 1993,
+          "reasoning_tokens": 1850,
+          "model_latency_ms": 20276,
+          "turn_latency_ms": 20297,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 14,
+          "token": "I still keep thinking about that meeting though.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 9573,
+          "cached_input_tokens": 8169,
+          "output_tokens": 1125,
+          "reasoning_tokens": 956,
+          "model_latency_ms": 10499,
+          "turn_latency_ms": 10524,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 15,
+          "token": "I guess I want to stop letting one comment decide how I feel about my work.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8825,
+          "cached_input_tokens": 8169,
+          "output_tokens": 1484,
+          "reasoning_tokens": 1310,
+          "model_latency_ms": 14775,
+          "turn_latency_ms": 14801,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        },
+        {
+          "line": 16,
+          "token": "Maybe I could ask her for feedback before the next presentation.",
+          "kind": "typed",
+          "calls": 1,
+          "input_tokens": 8834,
+          "cached_input_tokens": 8169,
+          "output_tokens": 303,
+          "reasoning_tokens": 199,
+          "model_latency_ms": 4698,
+          "turn_latency_ms": 4721,
+          "purposes": [
+            "chat"
+          ],
+          "outcomes": [
+            "ok"
+          ]
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "anxiety_free_chat": {
+      "totals": {
+        "calls": {
+          "median": 6,
+          "min": 5,
+          "max": 6
+        },
+        "input_tokens": {
+          "median": 49850,
+          "min": 41589,
+          "max": 49896
+        },
+        "cached_input_tokens": {
+          "median": 40644,
+          "min": 32400,
+          "max": 48744
+        },
+        "output_tokens": {
+          "median": 5775,
+          "min": 5216,
+          "max": 7568
+        },
+        "reasoning_tokens": {
+          "median": 4880,
+          "min": 4421,
+          "max": 6661
+        },
+        "model_latency_ms": {
+          "median": 72126,
+          "min": 57585,
+          "max": 102820
+        },
+        "turn_latency_ms": {
+          "median": 72851,
+          "min": 57675,
+          "max": 102915
+        },
+        "findings": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "lines": [
+        {
+          "line": 1,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 8247,
+            "min": 8247,
+            "max": 8247
+          },
+          "cached_input_tokens": {
+            "median": 8244,
+            "min": 0,
+            "max": 8244
+          },
+          "output_tokens": {
+            "median": 616,
+            "min": 528,
+            "max": 1017
+          },
+          "reasoning_tokens": {
+            "median": 475,
+            "min": 392,
+            "max": 887
+          },
+          "model_latency_ms": {
+            "median": 8958,
+            "min": 8358,
+            "max": 14146
+          },
+          "turn_latency_ms": {
+            "median": 8988,
+            "min": 8973,
+            "max": 14160
+          }
+        },
+        {
+          "line": 2,
+          "present_in": 3,
+          "calls": {
+            "median": 2,
+            "min": 1,
+            "max": 2
+          },
+          "input_tokens": {
+            "median": 16535,
+            "min": 8259,
+            "max": 16577
+          },
+          "cached_input_tokens": {
+            "median": 8100,
+            "min": 8100,
+            "max": 16200
+          },
+          "output_tokens": {
+            "median": 1692,
+            "min": 614,
+            "max": 2014
+          },
+          "reasoning_tokens": {
+            "median": 1433,
+            "min": 476,
+            "max": 1737
+          },
+          "model_latency_ms": {
+            "median": 22344,
+            "min": 8189,
+            "max": 31678
+          },
+          "turn_latency_ms": {
+            "median": 22376,
+            "min": 8210,
+            "max": 31708
+          }
+        },
+        {
+          "line": 3,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 8308,
+            "min": 8307,
+            "max": 8311
+          },
+          "cached_input_tokens": {
+            "median": 8100,
+            "min": 8100,
+            "max": 8100
+          },
+          "output_tokens": {
+            "median": 1316,
+            "min": 901,
+            "max": 1434
+          },
+          "reasoning_tokens": {
+            "median": 1161,
+            "min": 764,
+            "max": 1277
+          },
+          "model_latency_ms": {
+            "median": 17743,
+            "min": 12709,
+            "max": 24942
+          },
+          "turn_latency_ms": {
+            "median": 17766,
+            "min": 12730,
+            "max": 24961
+          }
+        },
+        {
+          "line": 4,
+          "present_in": 3,
+          "calls": {
+            "median": 2,
+            "min": 2,
+            "max": 2
+          },
+          "input_tokens": {
+            "median": 16761,
+            "min": 16761,
+            "max": 16775
+          },
+          "cached_input_tokens": {
+            "median": 16200,
+            "min": 16200,
+            "max": 16200
+          },
+          "output_tokens": {
+            "median": 2269,
+            "min": 2121,
+            "max": 4037
+          },
+          "reasoning_tokens": {
+            "median": 1897,
+            "min": 1778,
+            "max": 3685
+          },
+          "model_latency_ms": {
+            "median": 23681,
+            "min": 22541,
+            "max": 37242
+          },
+          "turn_latency_ms": {
+            "median": 23721,
+            "min": 22575,
+            "max": 37273
+          }
+        }
+      ]
+    },
+    "criticism_abcde": {
+      "totals": {
+        "calls": {
+          "median": 4,
+          "min": 4,
+          "max": 5
+        },
+        "input_tokens": {
+          "median": 33182,
+          "min": 33163,
+          "max": 41530
+        },
+        "cached_input_tokens": {
+          "median": 32542,
+          "min": 24340,
+          "max": 40642
+        },
+        "output_tokens": {
+          "median": 3817,
+          "min": 3679,
+          "max": 4047
+        },
+        "reasoning_tokens": {
+          "median": 3169,
+          "min": 2914,
+          "max": 3432
+        },
+        "model_latency_ms": {
+          "median": 43186,
+          "min": 43180,
+          "max": 46947
+        },
+        "turn_latency_ms": {
+          "median": 43277,
+          "min": 43256,
+          "max": 47024
+        },
+        "findings": {
+          "median": 0,
+          "min": 0,
+          "max": 1
+        }
+      },
+      "lines": [
+        {
+          "line": 1,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 8245,
+            "min": 8245,
+            "max": 8245
+          },
+          "cached_input_tokens": {
+            "median": 8242,
+            "min": 8140,
+            "max": 8242
+          },
+          "output_tokens": {
+            "median": 577,
+            "min": 570,
+            "max": 703
+          },
+          "reasoning_tokens": {
+            "median": 454,
+            "min": 431,
+            "max": 569
+          },
+          "model_latency_ms": {
+            "median": 9507,
+            "min": 6526,
+            "max": 11337
+          },
+          "turn_latency_ms": {
+            "median": 9520,
+            "min": 6538,
+            "max": 11350
+          }
+        },
+        {
+          "line": 2,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 8259,
+            "min": 8256,
+            "max": 8263
+          },
+          "cached_input_tokens": {
+            "median": 8100,
+            "min": 0,
+            "max": 8100
+          },
+          "output_tokens": {
+            "median": 620,
+            "min": 509,
+            "max": 655
+          },
+          "reasoning_tokens": {
+            "median": 478,
+            "min": 382,
+            "max": 516
+          },
+          "model_latency_ms": {
+            "median": 8506,
+            "min": 6662,
+            "max": 8887
+          },
+          "turn_latency_ms": {
+            "median": 8528,
+            "min": 6682,
+            "max": 8907
+          }
+        },
+        {
+          "line": 3,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 8307,
+            "min": 8293,
+            "max": 8310
+          },
+          "cached_input_tokens": {
+            "median": 8100,
+            "min": 8100,
+            "max": 8100
+          },
+          "output_tokens": {
+            "median": 697,
+            "min": 332,
+            "max": 1192
+          },
+          "reasoning_tokens": {
+            "median": 555,
+            "min": 183,
+            "max": 1021
+          },
+          "model_latency_ms": {
+            "median": 8711,
+            "min": 6330,
+            "max": 12447
+          },
+          "turn_latency_ms": {
+            "median": 8734,
+            "min": 6350,
+            "max": 12467
+          }
+        },
+        {
+          "line": 4,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 2
+          },
+          "input_tokens": {
+            "median": 8364,
+            "min": 8355,
+            "max": 16733
+          },
+          "cached_input_tokens": {
+            "median": 8100,
+            "min": 8100,
+            "max": 16200
+          },
+          "output_tokens": {
+            "median": 1750,
+            "min": 1413,
+            "max": 2525
+          },
+          "reasoning_tokens": {
+            "median": 1389,
+            "min": 1197,
+            "max": 2340
+          },
+          "model_latency_ms": {
+            "median": 19443,
+            "min": 12734,
+            "max": 22223
+          },
+          "turn_latency_ms": {
+            "median": 19477,
+            "min": 12757,
+            "max": 22247
+          }
+        }
+      ]
+    },
+    "journey_abcde": {
+      "totals": {
+        "calls": {
+          "median": 16,
+          "min": 15,
+          "max": 16
+        },
+        "input_tokens": {
+          "median": 145132,
+          "min": 136162,
+          "max": 145874
+        },
+        "cached_input_tokens": {
+          "median": 122477,
+          "min": 114199,
+          "max": 130577
+        },
+        "output_tokens": {
+          "median": 16700,
+          "min": 13691,
+          "max": 17398
+        },
+        "reasoning_tokens": {
+          "median": 14330,
+          "min": 11417,
+          "max": 15023
+        },
+        "model_latency_ms": {
+          "median": 173650,
+          "min": 173129,
+          "max": 245291
+        },
+        "turn_latency_ms": {
+          "median": 173972,
+          "min": 173449,
+          "max": 245599
+        },
+        "findings": {
+          "median": 3,
+          "min": 2,
+          "max": 4
+        }
+      },
+      "lines": [
+        {
+          "line": 1,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 8248,
+            "min": 8248,
+            "max": 8248
+          },
+          "cached_input_tokens": {
+            "median": 8245,
+            "min": 8140,
+            "max": 8245
+          },
+          "output_tokens": {
+            "median": 649,
+            "min": 561,
+            "max": 930
+          },
+          "reasoning_tokens": {
+            "median": 516,
+            "min": 423,
+            "max": 786
+          },
+          "model_latency_ms": {
+            "median": 10056,
+            "min": 7542,
+            "max": 10103
+          },
+          "turn_latency_ms": {
+            "median": 10068,
+            "min": 7556,
+            "max": 10118
+          }
+        },
+        {
+          "line": 2,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 8273,
+            "min": 8271,
+            "max": 8279
+          },
+          "cached_input_tokens": {
+            "median": 8100,
+            "min": 8100,
+            "max": 8100
+          },
+          "output_tokens": {
+            "median": 1141,
+            "min": 861,
+            "max": 1187
+          },
+          "reasoning_tokens": {
+            "median": 1005,
+            "min": 716,
+            "max": 1045
+          },
+          "model_latency_ms": {
+            "median": 13011,
+            "min": 11196,
+            "max": 14036
+          },
+          "turn_latency_ms": {
+            "median": 13032,
+            "min": 11216,
+            "max": 14056
+          }
+        },
+        {
+          "line": 3,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 8332,
+            "min": 8331,
+            "max": 8344
+          },
+          "cached_input_tokens": {
+            "median": 8100,
+            "min": 8100,
+            "max": 8100
+          },
+          "output_tokens": {
+            "median": 1056,
+            "min": 975,
+            "max": 1498
+          },
+          "reasoning_tokens": {
+            "median": 896,
+            "min": 786,
+            "max": 1303
+          },
+          "model_latency_ms": {
+            "median": 11546,
+            "min": 9291,
+            "max": 19622
+          },
+          "turn_latency_ms": {
+            "median": 11570,
+            "min": 9312,
+            "max": 19645
+          }
+        },
+        {
+          "line": 4,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 9094,
+            "min": 8405,
+            "max": 9107
+          },
+          "cached_input_tokens": {
+            "median": 8100,
+            "min": 0,
+            "max": 8173
+          },
+          "output_tokens": {
+            "median": 1082,
+            "min": 919,
+            "max": 1646
+          },
+          "reasoning_tokens": {
+            "median": 892,
+            "min": 774,
+            "max": 1466
+          },
+          "model_latency_ms": {
+            "median": 13971,
+            "min": 9898,
+            "max": 18467
+          },
+          "turn_latency_ms": {
+            "median": 13991,
+            "min": 9922,
+            "max": 18488
+          }
+        },
+        {
+          "line": 5,
+          "present_in": 1,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 9166,
+            "min": 9166,
+            "max": 9166
+          },
+          "cached_input_tokens": {
+            "median": 8173,
+            "min": 8173,
+            "max": 8173
+          },
+          "output_tokens": {
+            "median": 1283,
+            "min": 1283,
+            "max": 1283
+          },
+          "reasoning_tokens": {
+            "median": 1107,
+            "min": 1107,
+            "max": 1107
+          },
+          "model_latency_ms": {
+            "median": 12815,
+            "min": 12815,
+            "max": 12815
+          },
+          "turn_latency_ms": {
+            "median": 12835,
+            "min": 12835,
+            "max": 12835
+          }
+        },
+        {
+          "line": 6,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 9018,
+            "min": 9011,
+            "max": 9170
+          },
+          "cached_input_tokens": {
+            "median": 8169,
+            "min": 0,
+            "max": 8169
+          },
+          "output_tokens": {
+            "median": 760,
+            "min": 669,
+            "max": 1707
+          },
+          "reasoning_tokens": {
+            "median": 604,
+            "min": 509,
+            "max": 1552
+          },
+          "model_latency_ms": {
+            "median": 11593,
+            "min": 7028,
+            "max": 14648
+          },
+          "turn_latency_ms": {
+            "median": 11610,
+            "min": 7047,
+            "max": 14666
+          }
+        },
+        {
+          "line": 7,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 2
+          },
+          "input_tokens": {
+            "median": 9252,
+            "min": 9144,
+            "max": 18585
+          },
+          "cached_input_tokens": {
+            "median": 8169,
+            "min": 8169,
+            "max": 16338
+          },
+          "output_tokens": {
+            "median": 658,
+            "min": 398,
+            "max": 1404
+          },
+          "reasoning_tokens": {
+            "median": 516,
+            "min": 238,
+            "max": 1131
+          },
+          "model_latency_ms": {
+            "median": 8067,
+            "min": 5491,
+            "max": 26790
+          },
+          "turn_latency_ms": {
+            "median": 8084,
+            "min": 5510,
+            "max": 26819
+          }
+        },
+        {
+          "line": 8,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 9319,
+            "min": 9309,
+            "max": 9391
+          },
+          "cached_input_tokens": {
+            "median": 8169,
+            "min": 8169,
+            "max": 8169
+          },
+          "output_tokens": {
+            "median": 353,
+            "min": 341,
+            "max": 407
+          },
+          "reasoning_tokens": {
+            "median": 209,
+            "min": 185,
+            "max": 264
+          },
+          "model_latency_ms": {
+            "median": 7578,
+            "min": 4517,
+            "max": 8430
+          },
+          "turn_latency_ms": {
+            "median": 7598,
+            "min": 4536,
+            "max": 8447
+          }
+        },
+        {
+          "line": 9,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 9432,
+            "min": 9427,
+            "max": 9501
+          },
+          "cached_input_tokens": {
+            "median": 8169,
+            "min": 8169,
+            "max": 8169
+          },
+          "output_tokens": {
+            "median": 661,
+            "min": 578,
+            "max": 932
+          },
+          "reasoning_tokens": {
+            "median": 516,
+            "min": 432,
+            "max": 793
+          },
+          "model_latency_ms": {
+            "median": 9391,
+            "min": 7778,
+            "max": 9717
+          },
+          "turn_latency_ms": {
+            "median": 9409,
+            "min": 7798,
+            "max": 9736
+          }
+        },
+        {
+          "line": 10,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 9485,
+            "min": 9483,
+            "max": 9538
+          },
+          "cached_input_tokens": {
+            "median": 8169,
+            "min": 8169,
+            "max": 8169
+          },
+          "output_tokens": {
+            "median": 1512,
+            "min": 1317,
+            "max": 1528
+          },
+          "reasoning_tokens": {
+            "median": 1342,
+            "min": 1175,
+            "max": 1381
+          },
+          "model_latency_ms": {
+            "median": 17825,
+            "min": 13587,
+            "max": 21369
+          },
+          "turn_latency_ms": {
+            "median": 17843,
+            "min": 13607,
+            "max": 21387
+          }
+        },
+        {
+          "line": 11,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 9309,
+            "min": 9300,
+            "max": 9366
+          },
+          "cached_input_tokens": {
+            "median": 8169,
+            "min": 8169,
+            "max": 8169
+          },
+          "output_tokens": {
+            "median": 424,
+            "min": 351,
+            "max": 812
+          },
+          "reasoning_tokens": {
+            "median": 305,
+            "min": 240,
+            "max": 696
+          },
+          "model_latency_ms": {
+            "median": 6447,
+            "min": 6175,
+            "max": 10701
+          },
+          "turn_latency_ms": {
+            "median": 6466,
+            "min": 6200,
+            "max": 10719
+          }
+        },
+        {
+          "line": 12,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 9401,
+            "min": 9327,
+            "max": 9450
+          },
+          "cached_input_tokens": {
+            "median": 8169,
+            "min": 8169,
+            "max": 8169
+          },
+          "output_tokens": {
+            "median": 972,
+            "min": 849,
+            "max": 3880
+          },
+          "reasoning_tokens": {
+            "median": 850,
+            "min": 702,
+            "max": 3708
+          },
+          "model_latency_ms": {
+            "median": 11189,
+            "min": 10210,
+            "max": 40712
+          },
+          "turn_latency_ms": {
+            "median": 11208,
+            "min": 10236,
+            "max": 40730
+          }
+        },
+        {
+          "line": 13,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 9888,
+            "min": 9402,
+            "max": 9918
+          },
+          "cached_input_tokens": {
+            "median": 8169,
+            "min": 8169,
+            "max": 8169
+          },
+          "output_tokens": {
+            "median": 1993,
+            "min": 1027,
+            "max": 2031
+          },
+          "reasoning_tokens": {
+            "median": 1850,
+            "min": 919,
+            "max": 1905
+          },
+          "model_latency_ms": {
+            "median": 20276,
+            "min": 13109,
+            "max": 31067
+          },
+          "turn_latency_ms": {
+            "median": 20297,
+            "min": 13130,
+            "max": 31099
+          }
+        },
+        {
+          "line": 14,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 9540,
+            "min": 9377,
+            "max": 9573
+          },
+          "cached_input_tokens": {
+            "median": 8169,
+            "min": 8169,
+            "max": 8169
+          },
+          "output_tokens": {
+            "median": 1483,
+            "min": 1125,
+            "max": 1526
+          },
+          "reasoning_tokens": {
+            "median": 1267,
+            "min": 956,
+            "max": 1389
+          },
+          "model_latency_ms": {
+            "median": 13324,
+            "min": 10499,
+            "max": 20117
+          },
+          "turn_latency_ms": {
+            "median": 13344,
+            "min": 10524,
+            "max": 20137
+          }
+        },
+        {
+          "line": 15,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 8825,
+            "min": 8798,
+            "max": 9321
+          },
+          "cached_input_tokens": {
+            "median": 8169,
+            "min": 8169,
+            "max": 8169
+          },
+          "output_tokens": {
+            "median": 943,
+            "min": 463,
+            "max": 1484
+          },
+          "reasoning_tokens": {
+            "median": 774,
+            "min": 292,
+            "max": 1310
+          },
+          "model_latency_ms": {
+            "median": 14775,
+            "min": 6630,
+            "max": 18365
+          },
+          "turn_latency_ms": {
+            "median": 14801,
+            "min": 6650,
+            "max": 18399
+          }
+        },
+        {
+          "line": 16,
+          "present_in": 3,
+          "calls": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "input_tokens": {
+            "median": 8834,
+            "min": 8807,
+            "max": 9321
+          },
+          "cached_input_tokens": {
+            "median": 8169,
+            "min": 8169,
+            "max": 8169
+          },
+          "output_tokens": {
+            "median": 401,
+            "min": 303,
+            "max": 709
+          },
+          "reasoning_tokens": {
+            "median": 285,
+            "min": 199,
+            "max": 561
+          },
+          "model_latency_ms": {
+            "median": 5182,
+            "min": 4698,
+            "max": 13231
+          },
+          "turn_latency_ms": {
+            "median": 5203,
+            "min": 4721,
+            "max": 13250
+          }
+        }
+      ]
+    }
+  },
+  "totals": {
+    "median": {
+      "calls": 26,
+      "input_tokens": 228251,
+      "cached_input_tokens": 203763,
+      "output_tokens": 25595,
+      "reasoning_tokens": 21665,
+      "model_latency_ms": 319129,
+      "turn_latency_ms": 319620,
+      "findings": 3
+    },
+    "min": {
+      "calls": 25,
+      "input_tokens": 219175,
+      "cached_input_tokens": 170939,
+      "output_tokens": 25076,
+      "reasoning_tokens": 21247,
+      "model_latency_ms": 274421,
+      "turn_latency_ms": 274924,
+      "findings": 3
+    },
+    "max": {
+      "calls": 26,
+      "input_tokens": 228952,
+      "cached_input_tokens": 211863,
+      "output_tokens": 27220,
+      "reasoning_tokens": 23335,
+      "model_latency_ms": 364364,
+      "turn_latency_ms": 365474,
+      "findings": 4
+    }
+  }
+}

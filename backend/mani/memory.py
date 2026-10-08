@@ -16,7 +16,7 @@ from mani.db import llm_calls, memory as memory_db
 from mani.llm import client
 from mani.llm.schema import Memory
 from mani.models.rows import Message, MessageRole
-from mani.prompts import cache
+from mani.prompts import cache, calls
 
 logger = logging.getLogger(__name__)
 
@@ -74,9 +74,8 @@ async def fold_one(
     existing = await memory_db.lock(conn, user_id)
 
     config = await cache.load()
-    prompt = config.prompt("memory_fold")
-    if prompt is None:
-        raise RuntimeError("no memory_fold prompt configured")
+    prompt = config.require("memory_fold")
+    effort = calls.effort_for(prompt, "memory_fold")
 
     call = await client.complete(
         [
@@ -94,7 +93,7 @@ async def fold_one(
         purpose=llm_calls.Purpose.MEMORY_FOLD,
         temperature=prompt.model_parameters.get("temperature", 0),
         max_tokens=prompt.model_parameters.get("maxTokens", 800),
-        reasoning_effort=prompt.model_parameters.get("reasoning_effort"),
+        reasoning_effort=effort,
         routing=prompt.routing,
         user_id=user_id,
         thread_id=thread_id,

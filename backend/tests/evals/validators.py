@@ -6,9 +6,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-# The capsule vocabulary lives beside the code that enforces it, so the eval and the runtime
-# cannot drift into disagreeing about which words are which.
-from mani.chat.repairs import (
+from tests.evals.vocabulary import (
     FEELING_WORDS,
     MAX_CAPSULE_WORDS,
     SELF_JUDGMENTS,

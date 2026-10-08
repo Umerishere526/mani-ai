@@ -279,7 +279,7 @@ def test_an_imminent_action_is_confident_on_one_mention():
 
 
 def test_a_framework_absent_from_the_registry_is_never_returned():
-    """Model-supplied ids are already checked in repairs; the router must not invent one."""
+    """Model-supplied ids are already checked in guards; the router must not invent one."""
     ranked = shortlist(["I am about to send a message I may regret"], {"abcde": ACTIVATIONS["abcde"]})
     assert all(s.framework_id == "abcde" for s in ranked)
 

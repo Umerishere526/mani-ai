@@ -63,53 +63,40 @@ def test_optional_layers_are_simply_absent(config):
     assert [name for name, _ in built.layers] == ["mani_base", "response_format"]
 
 
-def framework(id: str, name: str, indication: str, distinctions: dict) -> Framework:
-    return Framework(
-        id=id, name=name, summary="s", body="b", phases=["offering"],
-        activation={"central_indication": indication, "distinctions": distinctions},
-    )
+def framework(id: str, name: str, body: str = "Starts when: x", summary: str = "s") -> Framework:
+    return Framework(id=id, name=name, summary=summary, body=body, phases=["offering"])
 
 
-def test_the_framework_index_is_built_from_the_registry_not_written_by_hand():
-    """Every line of it already exists on admin.frameworks. A prose copy beside that is a
-    second source of truth, and it drifts the first time somebody edits one and not the
-    other - so adding a framework must need no prompt edit at all."""
+ABCDE_LINES = (
+    "Starts when: you have learned the event and what it came to mean.\n"
+    "Sounds like: \"so I must be\".\n"
+    "Skip when: one quick thought (thought_reframe).\n"
+    "Stages: activate (what happened) > closing (how it sits now)\n"
+    "Ends when: they hold a fairer belief.\n"
+    "Offer: mirror what it came to mean.\n"
+    "Never: invent evidence.\n"
+    "Never: question whether abuse was real."
+)
+
+
+def test_the_framework_index_carries_each_frameworks_description_then_its_eight_lines():
+    """The lines are the model's whole view of a framework, written and checked in its file, so
+    the index renders them as they are. The client's description stands above them as its own
+    line, and a framework with none gets no empty line."""
     registry = Registry([
-        framework("abcde", "ABCDE", "A specific event triggered a belief.",
-                  {"thought_reframe": "Reframe when one thought is already clear."}),
-        framework("dbt_stop", "DBT STOP", "The user is about to act.", {}),
+        framework("abcde", "ABCDE", ABCDE_LINES, summary="These questions help you test a belief."),
+        framework("dbt_stop", "DBT STOP", "Starts when: they are about to act.", summary=""),
     ])
 
     index = composer.framework_index(registry)
 
-    assert "| ABCDE | `abcde` | A specific event triggered a belief. |" in index
-    assert "| DBT STOP | `dbt_stop` | The user is about to act. |" in index
-    # thought_reframe is not in this registry, so it falls back to a readable form of the
-    # id rather than a display name it has no way to look up.
-    assert "**ABCDE or thought reframe** — Reframe when one thought is already clear." in index
-
-
-def test_a_distinction_written_from_both_sides_is_emitted_once():
-    """Every framework file explains itself against its neighbours, so each pair is written
-    twice across the set, and 'continue chatting instead' is written in all six. Correct in
-    a file a clinician reads, pure waste in a prompt paid for on every turn."""
-    registry = Registry([
-        framework("abcde", "ABCDE", "An event and a belief.", {
-            "thought_reframe": "ABCDE goes deeper.",
-            "continued_conversation": "Keep talking when the issue is unclear.",
-        }),
-        framework("thought_reframe", "Thought Reframe", "One painful thought.", {
-            "abcde": "Reframe is the shorter one.",
-            "continued_conversation": "Keep talking when the thought is unclear.",
-        }),
-    ])
-
-    index = composer.framework_index(registry)
-
-    # The pair appears once, from whichever side was reached first - not twice.
-    assert index.count("ABCDE or Thought Reframe") == 1
-    assert "Thought Reframe or ABCDE" not in index
-    assert index.count("continued conversation") == 1
+    assert (
+        "## ABCDE (`abcde`)\nDescription: These questions help you test a belief.\n"
+        f"{ABCDE_LINES}\n\n## DBT STOP (`dbt_stop`)\nStarts when: they are about to act."
+    ) in index
+    assert "Description: \n" not in index
+    for removed in ("Use it when", "Telling them apart", "Never offer one when", "Finding the fit"):
+        assert removed not in index
 
 
 def test_a_framework_index_with_nothing_to_list_is_left_out_entirely():
@@ -121,7 +108,7 @@ def test_a_framework_index_with_nothing_to_list_is_left_out_entirely():
 def test_the_generated_index_reaches_the_composed_prompt(config):
     with_frameworks = Config(
         prompts=config.prompts,
-        registry=Registry([framework("abcde", "ABCDE", "A specific event.", {})]),
+        registry=Registry([framework("abcde", "ABCDE")]),
         loaded_at=time.monotonic(),
     )
     built = composer.compose(with_frameworks, None)
@@ -157,45 +144,6 @@ def test_a_missing_required_layer_is_refused_not_dropped(config):
         composer.compose(without_format, None)
 
 
-def test_the_framework_index_carries_each_frameworks_contraindications():
-    """The lines that protect the person - abuse, a medical cause, a protective action -
-    were authored in every framework file and reached nothing. They are the one part of a
-    framework the model must know before it offers, not after."""
-    stop = Framework(
-        id="dbt_stop", name="DBT STOP", summary="s", body="b", phases=["offering"],
-        activation={
-            "central_indication": "about to act",
-            "contraindications": ["The action itself is protective - leaving, calling for help"],
-        },
-    )
-    index = composer.framework_index(Registry([stop]))
-    assert "Never offer one when" in index
-    assert "**DBT STOP**: The action itself is protective - leaving, calling for help" in index
-
-
-def test_the_framework_index_says_what_each_one_needs_to_find_out():
-    """Questions can follow the person's feeling and still head somewhere only if the model
-    can see what each set of questions needs to learn before it is the right offer."""
-    act = Framework(
-        id="act_choice_point", name="ACT Choice Point", summary="s", body="b", phases=["offering"],
-        activation={
-            "central_indication": "cannot change it",
-            "to_find_out": ["what they cannot control", "what it pulls them toward"],
-        },
-    )
-    index = composer.framework_index(Registry([act]))
-    assert "## Finding the fit" in index
-    assert "- **ACT Choice Point**: what they cannot control; what it pulls them toward" in index
-
-
-def test_every_shipped_framework_says_what_it_needs_to_find_out():
-    from scripts.seed import FRAMEWORKS_DIR, parse_framework
-
-    for path in sorted(FRAMEWORKS_DIR.glob("*.md")):
-        found = parse_framework(path)["activation"].get("to_find_out") or []
-        assert len(found) >= 3, f"{path.name} needs at least three things to find out"
-
-
 def test_the_reply_commits_to_a_lean_before_it_writes_the_text():
     """Structured output is generated in schema order, so a lean declared after the text could
     only describe a reply already written."""
@@ -229,18 +177,22 @@ def test_an_empty_memory_adds_nothing(config):
     assert "user_memory" not in [name for name, _ in built.layers]
 
 
-def test_the_index_never_names_it_to_the_person_nor_hands_over_its_description():
-    """The client: never tell the person the framework's name. Its description is added to the
-    offer by the backend, so the index keeps it from the model, which copied it otherwise."""
+def test_the_index_gives_the_description_to_word_afresh_and_never_the_name():
+    """The client: never tell the person the framework's name. The description is the model's to
+    put in fresh words, so the index hands it over on one line and says nothing about the
+    backend adding it."""
     helps = Framework(
         id="abcde", name="ABCDE", body="b", phases=["offering"],
-        summary="This framework helps you separate what happened from what you told yourself about it.",
-        activation={"central_indication": "a specific event"},
+        summary="This framework helps you separate what happened\nfrom what you told yourself about it.",
     )
     index = composer.framework_index(Registry([helps]))
-    assert "separate what happened from what you told yourself about it" not in index
+    assert (
+        "Description: This framework helps you separate what happened "
+        "from what you told yourself about it."
+    ) in index
     assert 'never its name, its id, or the word "framework"' in index
-    assert "its description is added to your reply for you" in index
+    assert "added to your reply" not in index
+    assert "fresh words" in index
 
 
 def test_the_current_issue_stays_visible_even_without_a_prose_summary_yet():
@@ -251,20 +203,3 @@ def test_the_current_issue_stays_visible_even_without_a_prose_summary_yet():
     )
     assert layer is not None
     assert "Freezing before a talk." in layer
-
-
-def test_the_index_marks_the_frameworks_whose_offer_waits_for_their_third_message():
-    waits = Framework(
-        id="abcde", name="ABCDE", summary="s", body="b", phases=["offering"],
-        activation={"central_indication": "x", "to_find_out": ["the event", "what it meant"],
-                    "earliest_offer_message": 3},
-    )
-    immediate = Framework(
-        id="structured_problem_solving", name="Structured Problem-Solving", summary="s", body="b",
-        phases=["offering"],
-        activation={"central_indication": "y", "to_find_out": ["the problem", "whether it can change"]},
-    )
-    index = composer.framework_index(Registry([waits, immediate]))
-    assert "- **ABCDE**: the event; what it meant (offer it only from their message 3" in index
-    assert "- **Structured Problem-Solving**: the problem; whether it can change" in index
-    assert "whether it can change (offer it only" not in index

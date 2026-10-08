@@ -6,7 +6,9 @@ from typing import Any
 
 import asyncpg
 
+from mani.errors import ErrorCategory, ServiceError
 from mani.models.rows import Framework, Prompt
+from mani.prompts.calls import CALL_PROMPTS, effort_problem
 
 # A closed set, so nothing a request body names can reach a column that is not editable -
 # `version`, `created_by` and the timestamps among them.
@@ -59,6 +61,28 @@ async def get_prompt_by_id(
     return Prompt.from_record(row)
 
 
+def _refuse(reason: str) -> ServiceError:
+    return ServiceError(
+        f"prompt write refused: {reason}",
+        ErrorCategory.INVALID_REQUEST,
+        user_message=f"That change was refused, because {reason}.",
+    )
+
+
+def _check_callable(prompt: Prompt) -> None:
+    """Refuse a written row that a model call could not be made from.
+
+    Run on the row the statement returned, inside the write's transaction, so the check sees
+    the row as it is after the edit and a refusal rolls back the write and its snapshot.
+    """
+    if prompt.name not in CALL_PROMPTS:
+        return
+    if not prompt.is_active:
+        raise _refuse(f"{prompt.name} is a model call and cannot be set inactive")
+    if problem := effort_problem(prompt.name, prompt.model_parameters):
+        raise _refuse(problem)
+
+
 async def create_prompt(
     conn: asyncpg.Connection,
     *,
@@ -81,7 +105,9 @@ async def create_prompt(
         """,
         name, content, description, model_id, model_parameters, routing, created_by,
     )
-    return Prompt.model_validate(dict(row))
+    prompt = Prompt.model_validate(dict(row))
+    _check_callable(prompt)
+    return prompt
 
 
 async def update_prompt(
@@ -101,6 +127,8 @@ async def update_prompt(
     current = await get_prompt_by_id(conn, prompt_id)
     if current is None:
         return None
+    if current.name in CALL_PROMPTS and changes.get("name", current.name) != current.name:
+        raise _refuse(f"{current.name} is a model call and cannot be renamed")
 
     await conn.execute(
         """
@@ -128,7 +156,9 @@ async def update_prompt(
         """,
         prompt_id, updated_by, *(changes[name] for name in columns),
     )
-    return Prompt.from_record(row)
+    prompt = Prompt.from_record(row)
+    _check_callable(prompt)
+    return prompt
 
 
 async def list_prompt_versions(

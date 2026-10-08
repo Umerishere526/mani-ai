@@ -5,10 +5,11 @@ from __future__ import annotations
 
 import re
 
-from mani.chat import repairs
+from mani.chat import ending
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
 from mani.chat.router import Signal, is_confident
 from mani.chat.safety import normalize
+from mani.chat.techniques import OFFERING
 from mani.db.threads import TurnContext
 from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
 
@@ -128,7 +129,7 @@ def clarification_used(history: list[Message] | None) -> bool:
 
 
 def cooldown_passed(ctx: TurnContext, *, urgent: bool = False) -> bool:
-    """Whether a confident offer may be made yet: [ctx] reports it, repairs.apply enforces it."""
+    """Whether a confident offer may be made yet: [ctx] tells the model, which keeps to it."""
     technique = ctx.technique
     if technique is None:
         # An action about to be taken is the one case not worth waiting the rounds out.
@@ -136,15 +137,6 @@ def cooldown_passed(ctx: TurnContext, *, urgent: bool = False) -> bool:
     return ctx.thread.message_count - technique.at_message_count >= clear_cooldown_for(
         technique.outcome
     )
-
-
-def earliest_offer_ok(ctx: TurnContext, activation: dict | None, *, urgent: bool = False) -> bool:
-    """A framework file may set `earliest_offer_message` where its fit needs more than the first
-    two messages (ABCDE, Thought Reframe and ACT depend on what the person took it to mean).
-    Only the first offer waits; after Keep chatting they have said more."""
-    if ctx.technique is not None or urgent:
-        return True
-    return _their_messages(ctx) >= (activation or {}).get("earliest_offer_message", 0)
 
 
 def closest_fit_ok(ctx: TurnContext, *, urgent: bool = False) -> bool:
@@ -184,13 +176,6 @@ _CORRECTION_PHRASES = (
 )
 
 
-def with_rewrite_notes(prefix: str, reasons: list[str]) -> str:
-    """The same [ctx] block with a line per reason the draft cannot stand, so the model writes it
-    again. Said in the block the model already reads."""
-    lines = "\n".join(f"rewrite: {reason}" for reason in reasons)
-    return prefix.replace("\n[/ctx]", f"\n{lines}\n[/ctx]", 1)
-
-
 def classify_reply(text: str) -> str | None:
     """`vague` for a reply that says almost nothing, `correction` for one that says Mani missed
     what they had already said, `heard` for one that asks only to be listened to, otherwise None. A deterministic read, so the model is told rather
@@ -206,7 +191,8 @@ def classify_reply(text: str) -> str | None:
 
 
 def resolve_style(ctx: TurnContext) -> str:
-    """Which of the framework's three `ask` variants to surface this turn.
+    """The conversation style this turn: named in [ctx], and the variant of a somatic stage's
+    `ask` that is sent.
 
     The conversation's own choice wins over the profile's, which is the point of having
     both: onboarding sets a default, and a thread may differ from it without changing it.
@@ -230,6 +216,7 @@ def build(
     framework_starting: bool = False,
     urgent: bool = False,
     their_last: str | None = None,
+    ruled_out: list[str] | None = None,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -239,19 +226,23 @@ def build(
     content and the caller's own history add - all optional, so a turn with none of them still
     formats exactly as before.
 
-    `framework` is the one already active; its current and next stage go in full. `candidate`
-    is the router's top pick when it is confident enough to be worth more than a bare id and
-    score - its offer line goes in, so the offer draws on authored language rather than being
-    improvised from the Framework Index's one-liner alone. Never both at once: a framework is
-    either running or being considered, not both.
+    `framework` is the one already active; its current and next stage go in by id, since the
+    model reads what each stage asks from the framework's Stages line in the index. Only the
+    somatic stages carry a block, and theirs go in full. `candidate` is the router's top pick
+    when it is confident enough to be worth more than a bare id and score - its id goes in as
+    `offer:`, and the model reads that framework's Offer line in the index. Never both at once:
+    a framework is either running or being considered, not both.
 
     `history` is the same window the caller already loads for the model's own conversation
     view - nothing new is fetched for it. Only Mani's own messages in it become recent_openers;
     the person's messages are read here but never surfaced back to the model as an "opener".
+
+    `ruled_out` is the frameworks what they have said rules out. It is told to the model while no
+    framework runs, and the caller has already taken them off `shortlist` and `candidate`.
     """
     technique = ctx.technique
-    # Named first because every stage_ask and offer_ask below is resolved from it, and named
-    # `conversation_style` rather than `style` because `recent_styles` three lines down means
+    # Named first because the model writes every stage question in it and a somatic stage's ask
+    # is resolved from it, and named `conversation_style` rather than `style` because `recent_styles` three lines down means
     # the response shape, which is a different thing entirely.
     lines: list[str] = [f"conversation_style: {resolve_style(ctx)}"]
     if safety_concern:
@@ -294,8 +285,7 @@ def build(
     if question:
         lines.append(f"after_framework_question: {question}")
 
-    # Told to the model as it is enforced: a first offer used to read "yes" here whatever the
-    # count, and the code then dropped what the model had been told it could do.
+    # The offer's timing is told to the model, which keeps to it.
     lines.append(f"cooldown_passed: {'yes' if cooldown_passed(ctx, urgent=urgent) else 'no'}")
     if not safety_concern and not running:
         if closest_fit_due(ctx):
@@ -336,6 +326,8 @@ def build(
         quoted = ", ".join(f'"{o}"' for o in openers)
         lines.append(f"recent_openers: {quoted}")
 
+    if ruled_out and not running and not safety_concern:
+        lines.append(f"ruled_out: {', '.join(ruled_out)}")
     if shortlist and not safety_concern:
         ranked = ", ".join(f"{s.framework_id} ({s.score:.2f})" for s in shortlist)
         lines.append(f"framework_shortlist: {ranked}")
@@ -344,9 +336,9 @@ def build(
             and (is_confident(shortlist) or closest_fit_due(ctx))
             and cooldown_passed(ctx, urgent=urgent)
         ):
-            # The client's description is not here: the backend adds it to the offer, and a
-            # model given the text copied it, so offers showed it twice.
-            lines.extend(_stage_lines("offer", candidate, "offering", resolve_style(ctx)))
+            # The offer's words come from this framework's Description and Offer lines in the
+            # index; only its id is named here.
+            lines.append(f"offer: {candidate.id}")
 
     if running:
         style = resolve_style(ctx)
@@ -356,44 +348,52 @@ def build(
             lines.append("framework_starting: yes")
         lines.append(f"active_framework: {framework.id}")
         lines.append(f"framework_stages: {', '.join(framework.phases)}")
-        stage = _stage_lines("stage", framework, technique.phase, style)
-        # The turn they say yes, a first stage their words already answer (by its ready_when) is
-        # said back and the second stage's question is asked; otherwise the first is asked.
-        index = framework.phase_index(technique.phase)
-        if offer_waiting:
-            # The offering stage's question is the offer they have just typed past.
-            stage = [line for line in stage if not line.startswith("stage_ask:")]
-        if framework_starting and technique.phase == "offering" and index + 1 < len(framework.phases):
+        phase = technique.phase
+        index = framework.phase_index(phase)
+        if framework_starting and phase == OFFERING and index + 1 < len(framework.phases):
             index += 1
-            stage = _stage_lines("stage", framework, framework.phases[index], style)
-        lines.extend(stage)
-        if framework_starting:
-            lines.append(
-                "stage_note: first judge whether what they have told you meets stage_ready_when. "
-                "If it does, say it back in a clause, in their words, and ask the next stage's "
-                "question (next_stage_ask) in the same reply, never asking them to confirm it. "
-                "If it does not, ask stage_ask built from what they said, in their words, so "
-                "that it asks for the missing thing"
-            )
-        else:
-            lines.append(
-                "stage_note: put the stage question in terms of what they have told you, in "
-                "their words; never send it bare"
-            )
-        if 0 <= index < len(framework.phases) - 1:
-            lines.extend(
-                _stage_lines("next_stage", framework, framework.phases[index + 1], style)
-            )
+            phase = framework.phases[index]
+        lines.extend(_stage_lines("stage", framework, phase, style))
+        if phase != OFFERING:
+            # An offer still open has nothing more to say: offer_waiting says how to take what
+            # they typed.
+            lines.append(_stage_note(framework, phase, framework_starting))
+            if 0 <= index < len(framework.phases) - 1:
+                lines.extend(
+                    _stage_lines("next_stage", framework, framework.phases[index + 1], style)
+                )
 
     return "[ctx]\n" + "\n".join(lines) + "\n[/ctx]\n\n"
 
 
-def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> list[str]:
-    """One stage's full guidance - current or next - resolved to one conversation style.
+def _stage_note(framework: Framework, phase: str, starting: bool) -> str:
+    """How to put this stage to them. Only the somatic stages carry a block, and their check in
+    and practice are the client's words; a framework's own stage is asked in the model's words."""
+    if framework.stages.get(phase):
+        return (
+            "stage_note: the body check in and the practice are fixed words; give them exactly as "
+            "this stage gives them, after reflecting what they just said"
+        )
+    if starting:
+        return (
+            "stage_note: first judge whether what they have already told you answers this stage, "
+            "by its words on the Stages line. If it does, say it back in a clause, in their words, "
+            "and ask the next stage's question in the same reply, never asking them to confirm it. "
+            "If it does not, ask this stage's question built from what they said, in their words"
+        )
+    return (
+        "stage_note: ask this stage's question in your own words and the conversation style, "
+        "built from what they have told you, in their words, as its words on the Stages line "
+        "describe it; never send it bare"
+    )
 
-    Purpose, listening cues, readiness and boundaries are clinical rather than tonal and do
-    not vary; `ask` is the one leaf a style changes, so only the resolved style's variant is
-    sent rather than all three.
+
+def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> list[str]:
+    """One stage - current or next - as its id, and in full when it carries a block.
+
+    Only the somatic stages do. Purpose, listening cues, readiness and boundaries are clinical
+    rather than tonal and do not vary; `ask` is the one leaf a style changes, so only the
+    resolved style's variant is sent rather than all three.
     """
     stage = framework.stages.get(phase)
     if not stage:
@@ -406,7 +406,7 @@ def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> l
     if stage.get("boundaries"):
         lines.append(f"{prefix}_boundaries: " + "; ".join(stage["boundaries"]))
     if stage.get("if_unclear"):
-        rendered = " | ".join(f"if {e['when']}: {repairs.reply_for(e, style)}" for e in stage["if_unclear"])
+        rendered = " | ".join(f"if {e['when']}: {ending.reply_for(e, style)}" for e in stage["if_unclear"])
         lines.append(f"{prefix}_if_unclear: {rendered}")
     ask = (stage.get("ask") or {}).get(style)
     if ask:

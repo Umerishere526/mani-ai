@@ -2,9 +2,7 @@
 
 The product specifications for Mani's conversational layer, transcribed from the source PDFs so
 they live in version control rather than as chat attachments. **These are provenance.** The
-implementation source of truth is the code and the ADRs in `mani-vault/Decisions/` (index: `_Index.md`);
-`mani-vault/Programme/conversational-architecture.md` is the historical design that reconciled the
-contradictions between these documents. The content files in `backend/content/frameworks/` are checked
+implementation source of truth is the code, and `backend/PORT-STATUS.md` records the decisions in force. The content files in `backend/content/frameworks/` are checked
 against these specs, but where a spec's tone lines carry scenario text ("her silence", "send it") the
 content uses each stage's primary question instead: `tests/evals/test_negative_set.py` rejects an ask that
 names someone or hands over a feeling word.

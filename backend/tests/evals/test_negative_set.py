@@ -8,15 +8,17 @@ import re
 
 import pytest
 
-from mani.chat import repairs
-from tests.evals import validators
+from tests.evals import validators, vocabulary
 
-CONTENT_DIR = pathlib.Path(__file__).resolve().parents[2] / "content"
+BACKEND_DIR = pathlib.Path(__file__).resolve().parents[2]
+CONTENT_DIR = BACKEND_DIR / "content"
 FRAMEWORKS_DIR = CONTENT_DIR / "frameworks"
+CLIENT_SPECS_DIR = BACKEND_DIR / "docs" / "specs"
 PROMPTS_DIR = CONTENT_DIR / "prompts"
 
-# Transcribed from the "Responses MANI must avoid" table in each framework file, with the
-# user message that preceded them in that framework's worked example. The rule named is
+# Transcribed from the "Responses MANI must avoid" table in each client specification
+# (docs/specs/framework-*.md), with the user message that preceded them in that framework's
+# worked example. The rule named is
 # the specification's own label for the failure.
 FORBIDDEN = [
     (
@@ -182,15 +184,6 @@ def test_replies_that_start_differently_are_left_alone():
     ]) == []
 
 
-def test_presence_may_be_said_in_any_style_while_openers_still_vary():
-    """muhammad, 2026-09-24: presence may be said in any style when the moment calls for it.
-    What stays forbidden is opening the same way twice, the failure that once had all three
-    styles opening with "I'm here." """
-    base = (PROMPTS_DIR / "mani_base.md").read_text()
-    response_format = (PROMPTS_DIR / "response_format.md").read_text()
-    assert "say it simply, in any style" in base
-    assert "Do not open your new reply the same way." in " ".join(response_format.split())
-
 
 def test_every_style_value_the_schema_allows_is_taught():
     """The schema asks the model to declare the shape it used. Any value it can return and was
@@ -235,17 +228,18 @@ def test_a_capsule_mirroring_their_own_word_is_allowed():
 
 
 def test_every_framework_still_carries_its_negative_set():
-    """The examples above are transcribed from these tables. If a framework file loses
+    """The examples above are transcribed from these tables. If a client specification loses
     its table, this set silently stops reflecting the specification it came from."""
-    for path in sorted(FRAMEWORKS_DIR.glob("*.md")):
-        body = path.read_text()
-        assert "Responses MANI must avoid" in body, f"{path.name} has no negative set"
+    specs = sorted(CLIENT_SPECS_DIR.glob("framework-*.md"))
+    assert len(specs) == len(list(FRAMEWORKS_DIR.glob("*.md")))
+    for path in specs:
+        assert "Responses MANI must avoid" in path.read_text(), f"{path.name} has no negative set"
 
 
-# The words a stage's ask may not carry. Every ask is sent into every conversation that
-# reaches its stage, so a person or detail from a framework's worked example ("her silence",
-# "your manager") is handed to people it has nothing to do with, and an author's note to
-# the writer ("- use X only if ...") can be read back to them.
+# The words a framework's eight lines may not carry. They sit in every conversation's prompt,
+# so a person or detail from a worked example ("her silence", "your manager") is handed to
+# people it has nothing to do with, and an author's note to the writer ("- use X only if ...")
+# can be read back to them.
 _EXAMPLE_PEOPLE = re.compile(
     r"\b(she|her|he|him|his|manager|boss|sister|brother|mother|father|partner|friend)\b",
     re.IGNORECASE,
@@ -253,34 +247,19 @@ _EXAMPLE_PEOPLE = re.compile(
 _AUTHOR_NOTE = re.compile(r" - use | only if | only when ", re.IGNORECASE)
 
 
-def _asks():
+def _framework_lines():
     from scripts.seed import parse_framework
 
     for path in sorted(FRAMEWORKS_DIR.glob("*.md")):
-        framework = parse_framework(path)
-        for stage, body in framework["stages"].items():
-            for style, text in body["ask"].items():
-                yield f"{path.stem}.{stage}.{style}", text
+        for line in parse_framework(path)["body"].split("\n"):
+            yield f"{path.stem}: {line.split(':')[0]}", line
 
 
-@pytest.mark.parametrize("where,text", list(_asks()))
-def test_a_stage_ask_carries_nothing_from_a_worked_example(where, text):
-    assert not _EXAMPLE_PEOPLE.search(text), f"{where} names someone: {text}"
-    assert not _AUTHOR_NOTE.search(text), f"{where} carries an author note: {text}"
-    feelings = sorted(repairs.words(text) & repairs.FEELING_WORDS)
-    assert not feelings, f"{where} hands them a feeling they may not have named: {feelings}"
-
-
-@pytest.mark.parametrize("where,text", list(_asks()))
-def test_a_stage_ask_poses_one_question(where, text):
-    """One question at a time: "pulling you toward doing or avoiding" is two, and the person
-    answered "yes" to it."""
-    assert text.count("?") == 1, f"{where} asks {text.count('?')} questions: {text}"
-
-
-def test_staying_on_a_stage_is_not_told_to_repeat_the_same_wording():
-    """Observed live (2026-09-24): ABCDE's activate stage asked for 'the literal words your
-    manager used' three times in a row, near-verbatim, while the person kept answering with
-    something else. The prompt now says explicitly not to do that."""
-    base = (PROMPTS_DIR / "mani_base.md").read_text()
-    assert "never ask twice for the same thing the same way" in base
+@pytest.mark.parametrize("where,line", list(_framework_lines()))
+def test_a_framework_line_carries_nothing_from_a_worked_example(where, line):
+    assert not _EXAMPLE_PEOPLE.search(line), f"{where} names someone: {line}"
+    assert not _AUTHOR_NOTE.search(line), f"{where} carries an author note: {line}"
+    if not line.startswith("Sounds like:"):
+        # Sounds like quotes how a person talks, which can include a feeling.
+        feelings = sorted(vocabulary.words(line) & vocabulary.FEELING_WORDS)
+        assert not feelings, f"{where} hands them a feeling they may not have named: {feelings}"

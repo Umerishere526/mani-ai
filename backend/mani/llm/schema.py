@@ -26,10 +26,10 @@ def _listed(values) -> str:
 
 
 # The closed sets below are named in the descriptions rather than typed as enums, and are
-# checked in repairs.py instead. A value outside an enum is a ValidationError, and a
-# ValidationError here does not degrade one cosmetic field - it costs a second provider call
-# and then raises, losing the message the person typed. Nothing the model reports about its
-# own style is worth a lost turn, so the schema asks and the repair decides.
+# checked in guards.py instead. A value outside an enum is a ValidationError, and a
+# ValidationError here does not degrade one cosmetic field - it fails the whole reply,
+# losing the message the person typed. Nothing the model reports about its own style is
+# worth a lost turn, so the schema asks and the guard decides.
 SHAPES = (
     "warmth lead", "honor and follow", "mirror and ask", "mirror and hold",
     "gentle follow", "presence only",
@@ -81,8 +81,7 @@ class TechniqueState(BaseModel):
     )
     step: str = Field(
         description=(
-            "The current stage id you are executing, from framework_stages in [ctx]. "
-            "Stages must follow that list's order - you cannot skip one."
+            "The current stage id you are executing, from framework_stages in [ctx]."
         )
     )
     accepted: bool | None = Field(
@@ -123,15 +122,14 @@ class Reply(BaseModel):
     reasoning: str | None = Field(
         default=None,
         description=(
-            "Fill this first, before text. Work through the steps under 'The reasoning "
-            "field' in your instructions. Not shown to the user."
+            "Fill this first, before text. Follow the reasoning section of your "
+            "instructions. Not shown to the user."
         ),
     )
     style: Style | None = Field(
         default=None,
         description=(
-            "Choose before writing text: the response shape this reply will use. It may "
-            "repeat; the opening words may not."
+            "Choose before writing text: the response shape this reply will use."
         ),
     )
     heading_toward: str | None = Field(
@@ -139,29 +137,23 @@ class Reply(BaseModel):
         description=(
             "Choose before writing text: the id from the Framework Index that this "
             "conversation is most likely heading toward, or null when nothing has pointed "
-            "anywhere yet. It decides which missing thing your question reaches for. Not "
-            "shown to the user."
+            "anywhere yet. Not shown to the user."
         ),
     )
     offer_fit: Literal["clear", "closest"] | None = Field(
         default=None,
         description=(
-            "Only when this reply offers a set of questions: \"clear\" when you are confident "
-            "it fits what they have told you, \"closest\" when nothing fits well and it is the "
-            "nearest. Null when you are not offering. Choose before writing text."
+            "Only when this reply offers a set of questions: \"clear\" or \"closest\". Null "
+            "when you are not offering. Choose before writing text."
         ),
     )
     text: str = Field(description="Your conversational response to the user. Required.")
     prompts: list[SmartPrompt] | None = Field(
         default=None,
         description=(
-            "Tappable button options if your response ends with a question that has "
-            "2-3 clear choices. Each prompt has a \"label\" field (required). "
-            "ONLY include \"technique\" field when INITIALLY ASKING if user wants to try "
-            "a technique. Include \"library\" ONLY on a button that opens the library. "
-            "Labels should be in USER voice (\"Try it\", "
-            "\"Keep chatting\"). Set to null if no buttons are appropriate "
-            "(e.g., open-ended questions). Two or three, never more."
+            "Tappable button options. Each has a \"label\" (required). Set \"technique\" "
+            "ONLY on the offer's Try it, and \"library\" ONLY on a button that opens the "
+            "library. Two or three, never more. Null when no buttons are appropriate."
         ),
     )
     title: str | None = Field(

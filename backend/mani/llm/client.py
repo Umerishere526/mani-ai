@@ -23,10 +23,13 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_MAX_TOKENS = 2048
+# The exercise pick answers with one id, so its reply needs little room.
+EXERCISE_MAX_TOKENS = 200
 
 # One retry, shared by a malformed reply and a provider that is briefly down. Without it
 # either loses the person's typed message entirely - complete() is called before the turn
-# writes anything, so a raise here leaves nothing in the thread to show for the turn.
+# writes anything, so a raise here leaves nothing in the thread to show for the turn. A caller
+# that cannot afford a second billed call turns the malformed reply's retry off.
 MAX_SCHEMA_ATTEMPTS = 2
 
 
@@ -59,7 +62,12 @@ def _usage_of(exc: BaseException) -> llm_calls.Usage:
     if usage is None:
         return llm_calls.Usage()
     return llm_calls.Usage(
-        input_tokens=usage.prompt_tokens or 0, output_tokens=usage.completion_tokens or 0
+        input_tokens=usage.prompt_tokens or 0,
+        output_tokens=usage.completion_tokens or 0,
+        cached_input_tokens=getattr(usage.prompt_tokens_details, "cached_tokens", None) or 0,
+        reasoning_tokens=(
+            getattr(usage.completion_tokens_details, "reasoning_tokens", None) or 0
+        ),
     )
 
 
@@ -168,19 +176,21 @@ async def complete[T: BaseModel](
     purpose: llm_calls.Purpose,
     temperature: float = DEFAULT_TEMPERATURE,
     max_tokens: int = DEFAULT_MAX_TOKENS,
-    reasoning_effort: str | None = None,
+    reasoning_effort: chain.ReasoningEffort,
     routing: dict[str, Any] | None = None,
     user_id: uuid.UUID | str | None = None,
     thread_id: uuid.UUID | str | None = None,
     prompt_version_id: uuid.UUID | str | None = None,
     settings: Settings | None = None,
+    retry_malformed: bool = True,
 ) -> Call[T]:
     """Ask the model for one structured reply.
 
     OpenRouter is the only provider. LangChain composes the call and parses the reply into
     the schema; the base_url points at OpenRouter, so it is one protocol and one bill, not a
-    second provider. One provider call, plus at most one retry when the reply does not
-    parse - each attempt billed and recorded on its own row.
+    second provider. One provider call, plus at most one retry when the provider is briefly
+    down, and one when the reply does not parse unless `retry_malformed` is False - each
+    attempt billed and recorded on its own row.
     """
     settings = settings or get_settings()
     if not settings.openrouter_api_key:
@@ -202,14 +212,15 @@ async def complete[T: BaseModel](
 
     messages = _apply_model_quirks(messages, model)
 
-    started = time.perf_counter()
     usage = llm_calls.Usage()
     try:
         parsed = None
         for attempt in range(1, MAX_SCHEMA_ATTEMPTS + 1):
             # Reset per attempt, so an attempt that raises is never recorded with the tokens
-            # of the one before it.
+            # of the one before it, and each row's latency is that attempt's own time, not
+            # the attempts and the retry pause before it.
             usage = llm_calls.Usage()
+            started = time.perf_counter()
             try:
                 result = await runnable.ainvoke(messages)
             except _TRANSIENT as exc:
@@ -250,6 +261,13 @@ async def complete[T: BaseModel](
                 prompt_version_id=prompt_version_id,
                 error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}: {failure or 'empty'}",
             )
+            if not retry_malformed:
+                raise ServiceError(
+                    f"model returned no parseable reply: {failure or 'empty'}",
+                    ErrorCategory.LLM_UNAVAILABLE,
+                    retryable=True,
+                    user_message="Mani had trouble responding. Please try again.",
+                )
             if attempt == MAX_SCHEMA_ATTEMPTS:
                 raise ServiceError(
                     f"model returned no parseable reply after {MAX_SCHEMA_ATTEMPTS} "
@@ -287,13 +305,15 @@ async def complete[T: BaseModel](
 async def choose_exercise(
     candidates: list[dict[str, str]],
     framework_name: str,
+    instruction: str,
     *,
     model: str,
     purpose: llm_calls.Purpose,
+    reasoning_effort: chain.ReasoningEffort,
     said: Sequence[str] = (),
     current_issue: str | None = None,
     temperature: float = DEFAULT_TEMPERATURE,
-    max_tokens: int = 200,
+    max_tokens: int = EXERCISE_MAX_TOKENS,
     routing: dict[str, Any] | None = None,
     user_id: uuid.UUID | str | None = None,
     thread_id: uuid.UUID | str | None = None,
@@ -307,6 +327,8 @@ async def choose_exercise(
     `candidates` is `[{"id", "title", "subtitle", "type", "category"}, ...]`, never free
     text. `said` is the person's most recent messages and `current_issue` the thread
     summary's, so the pick fits what they talked about rather than only the framework.
+    `instruction` is the `exercise_select` row's content; the framework name and the list are
+    added beneath it here, so no edit to the row can break the call's formatting.
 
     Never raises. A failure here costs the exercise offer, not the turn - the caller falls
     back to the plain library offer the ordinary reply already makes.
@@ -317,7 +339,7 @@ async def choose_exercise(
 
     runnable = chain.build_tool_choice(
         tools.StartExercise, model=model, temperature=temperature, max_tokens=max_tokens,
-        routing=routing, settings=settings,
+        routing=routing, settings=settings, reasoning_effort=reasoning_effort,
     )
 
     listing = "\n".join(
@@ -330,9 +352,7 @@ async def choose_exercise(
         {
             "role": "system",
             "content": (
-                f"The person just completed the {framework_name} framework. Call "
-                "start_exercise with the id of the exercise from this list that best "
-                f"fits what they just worked through:\n{listing}"
+                f"{instruction}\n\n## Framework\n{framework_name}\n\n## Exercises\n{listing}"
             ),
         }
     ]

@@ -10,6 +10,7 @@ import openai
 from mani.config import Settings, get_settings
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import chain
+from mani.prompts import cache, calls
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +52,9 @@ async def close() -> None:
 # only, not a task switch, and returns text in whatever language was spoken (confirmed
 # against OpenRouter's own API reference, which lists no translate/task parameter).
 # So English-only output is a second, explicit step: one plain chat completion, same
-# key and base_url as everything else here, translating whatever Whisper returned.
-_TRANSLATE_SYSTEM_PROMPT = (
-    "Translate the user's message to English. If it is already in English, return it "
-    "exactly as given, unchanged - do not paraphrase or correct it. Return only the "
-    "translated text, with no quotes, labels, or commentary."
-)
+# key and base_url as everything else here, translating whatever Whisper returned. Its
+# instruction, model, budget and thinking level are the `voice_translation` prompt row.
+TRANSLATION_PROMPT = "voice_translation"
 
 
 async def _translate_to_english(text: str, settings: Settings) -> str:
@@ -64,18 +62,25 @@ async def _translate_to_english(text: str, settings: Settings) -> str:
     input entirely over a translation hiccup - a non-English reply beats none."""
     if not text:
         return text
-    model = settings.default_chat_model
     try:
+        # Inside the try, so a cold cache that cannot reach the database, or a row that is
+        # missing or names no level, costs the translation and not the voice input.
+        prompt = (await cache.load()).require(TRANSLATION_PROMPT)
+        effort = calls.effort_for(prompt, TRANSLATION_PROMPT)
+        model = prompt.model_id or settings.default_chat_model
+        parameters = prompt.model_parameters
         response = await _http(settings).chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": _TRANSLATE_SYSTEM_PROMPT},
+                {"role": "system", "content": prompt.content},
                 {"role": "user", "content": text},
             ],
-            # What they said is health data: the same providers, data policy and effort as
-            # every chat call, not whatever OpenRouter would pick for an unrouted request.
-            extra_body=chain.request_body(model, settings),
-            **chain.sampling(model, 0, 500),
+            # What they said is health data: the same providers and data policy as every
+            # chat call, not whatever OpenRouter would pick for an unrouted request.
+            extra_body=chain.request_body(model, settings, prompt.routing, effort=effort),
+            **chain.sampling(
+                model, parameters.get("temperature", 0), parameters.get("maxTokens", 500)
+            ),
         )
         translated = response.choices[0].message.content
         return translated.strip() if translated else text

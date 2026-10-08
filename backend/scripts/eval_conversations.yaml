@@ -2,12 +2,14 @@
 # ABOUTME: Turns are drawn from the framework files' own worked examples where possible.
 
 - name: anxiety_free_chat
+  baseline: true
   turns:
     - "I have a presentation tomorrow and I keep going over it"
     - "I keep thinking I'll freeze halfway through"
     - "I don't know, I just want it to be over"
     - "yeah maybe"
 - name: criticism_abcde
+  baseline: true
   turns:
     - "My manager criticized my presentation in front of everyone"
     - "She said two of my recommendations did not have enough support"
@@ -165,6 +167,7 @@
 # ---------------------------------------------------------------------------
 
 - name: journey_abcde
+  baseline: true
   expect_framework: true
   expect_after_questions: true
   turns:
@@ -290,6 +293,62 @@
     - "She's busy and hasn't replied yet, but that doesn't mean she doesn't care."
     - "Yes, that feels fairer."
     - "My stomach feels less tight than before."
+    - "@tap:Chat More"
+    - "Thanks."
+
+# Offer to end for the frameworks with no journey above: one line per stage, in order.
+- name: journey_structured_problem_solving
+  expect_framework: true
+  turns:
+    - "I missed the report deadline at work and now there are three more things due this week."
+    - "I don't know what to do first, everything is a mess and I need to make a plan."
+    - "@accept|I really need a way through this week."
+    - "@accept|Yes, let's work it out."
+    - "@accept|Okay."
+    - "The late report is the main thing, the rest can wait a day."
+    - "My manager knows it's late, but I don't know when she needs it by now."
+    - "I can ask her for a new date and decide what to drop this week."
+    - "I want the report done properly without missing the other deadlines."
+    - "I could finish it tonight, ask for two more days, or hand in a shorter version tomorrow."
+    - "Tonight means no sleep, a shorter one might look rushed, two more days would give me room."
+    - "I'll ask for two more days."
+    - "Email her first thing tomorrow with a date I can actually meet."
+    - "Yes, that feels manageable."
+    - "My jaw feels less clenched."
+    - "@tap:Chat More"
+    - "Thanks."
+- name: journey_act_choice_point
+  expect_framework: true
+  turns:
+    - "My sister stopped speaking to me after an argument months ago and I can't make her talk to me."
+    - "I cannot control whether she ever replies, and the thought that I ruined it keeps coming back."
+    - "@accept|I don't want this deciding how I live."
+    - "@accept|Yes, I'd like to choose how to deal with it."
+    - "@accept|Okay."
+    - "I can't make her reply, but I can decide what I do on my side."
+    - "The thought that I ruined everything, and a sinking feeling whenever her birthday comes up."
+    - "It pulls me toward avoiding the whole family so I don't have to face it."
+    - "I want to be someone who stays close to the people I love, even when it's hard."
+    - "Going to my mum's birthday dinner, even if it's awkward."
+    - "I'll tell my mum today that I'm coming on Sunday."
+    - "Yes, it feels like something I can actually do."
+    - "My chest feels a little more open."
+    - "@tap:Chat More"
+    - "Thank you."
+- name: journey_dbt_stop
+  expect_framework: true
+  turns:
+    - "I'm about to send a message to my ex telling him exactly what I think of him."
+    - "I've already written it and my thumb is on send, I know I'll regret it."
+    - "@accept|I need help stopping myself."
+    - "@accept|Yes, help me pause."
+    - "@accept|Okay."
+    - "Okay, I haven't sent it. It's still sitting there."
+    - "I'm still here, I've moved it to drafts."
+    - "My heart is racing and I keep replaying what he said last night."
+    - "I'll leave it unsent tonight and decide tomorrow if I want to say anything."
+    - "Yes, that feels better than sending it."
+    - "My hands have stopped shaking a bit."
     - "@tap:Chat More"
     - "Thanks."
 
