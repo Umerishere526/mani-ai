@@ -14,6 +14,7 @@ from mani.llm import client
 from mani.llm.schema import Extraction
 from mani.models.rows import Message, MessageRole, TechniqueTried, ThreadSummary
 from mani.prompts import cache, calls
+from mani.prompts.composer import tried_line
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +38,7 @@ def existing_context(summary: ThreadSummary | None) -> str:
     if summary.summary:
         parts.append(f"Previous summary: {summary.summary}")
     if summary.techniques_tried:
-        tried = ", ".join(
-            f"{t.name} ({'helpful' if t.helpful else 'not helpful'})"
-            for t in summary.techniques_tried
-        )
-        parts.append(f"Techniques tried: {tried}")
+        parts.append(f"Techniques tried: {tried_line(summary.techniques_tried)}")
     return "\n".join(parts) if parts else "No existing summary."
 
 

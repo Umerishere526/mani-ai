@@ -7,6 +7,7 @@ import uuid
 import pytest
 
 from mani.chat.techniques import Registry
+from mani.config import get_settings
 from mani.errors import ServiceError
 from mani.llm.schema import Memory
 from mani.models.rows import Framework, Profile, TechniqueTried, ThreadSummary
@@ -167,9 +168,10 @@ def test_what_is_remembered_across_chats_reaches_the_prompt_after_the_static_lay
 
     names = [name for name, _ in built.layers]
     assert names.index("user_memory") == names.index("user_context") + 1
-    assert "feels low on Sunday evenings, because of work" in built.text
-    assert "walking the dog" in built.text
-    assert "never say you remember" in built.text.lower()
+    assert (
+        "## Memory\nlow_times: feels low on Sunday evenings, because of work\n"
+        "what_helps: walking the dog"
+    ) in built.text
 
 
 def test_an_empty_memory_adds_nothing(config):
@@ -177,22 +179,19 @@ def test_an_empty_memory_adds_nothing(config):
     assert "user_memory" not in [name for name, _ in built.layers]
 
 
-def test_the_index_gives_the_description_to_word_afresh_and_never_the_name():
-    """The client: never tell the person the framework's name. The description is the model's to
-    put in fresh words, so the index hands it over on one line and says nothing about the
-    backend adding it."""
+def test_the_index_hands_over_the_description_on_one_line_and_says_nothing_else():
+    """How to word an offer from the description is said once, in mani_base.md, so the index
+    carries only its heading, each framework's heading, the description and the eight lines."""
     helps = Framework(
         id="abcde", name="ABCDE", body="b", phases=["offering"],
         summary="This framework helps you separate what happened\nfrom what you told yourself about it.",
     )
     index = composer.framework_index(Registry([helps]))
-    assert (
+    assert index == (
+        "# Framework Index\n\n## ABCDE (`abcde`)\n"
         "Description: This framework helps you separate what happened "
-        "from what you told yourself about it."
-    ) in index
-    assert 'never its name, its id, or the word "framework"' in index
-    assert "added to your reply" not in index
-    assert "fresh words" in index
+        "from what you told yourself about it.\nb"
+    )
 
 
 def test_the_current_issue_stays_visible_even_without_a_prose_summary_yet():
@@ -203,3 +202,58 @@ def test_the_current_issue_stays_visible_even_without_a_prose_summary_yet():
     )
     assert layer is not None
     assert "Freezing before a talk." in layer
+
+
+def test_the_per_user_layers_are_headings_and_keyed_data_only(config):
+    """Every sentence about what a layer means lives in response_format.md, so the code sends
+    only the layer's heading and `key: value` or `- id` lines."""
+    built = composer.compose(
+        config,
+        Profile(user_id=USER, nickname="Al", topics=["burnout", "boundaries"]),
+        offered=["abcde", "dbt_stop"],
+        summary=ThreadSummary(
+            thread_id=THREAD, user_id=USER, summary="Talked about work.",
+            current_issue="Missed credit at work.",
+            techniques_tried=[
+                TechniqueTried(name="abcde", helpful=True),
+                TechniqueTried(name="breathing", helpful=False),
+            ],
+        ),
+        memory=Memory(themes=["work", "sleep"], how_they_talk=["prefers short replies"]),
+    )
+    layers = built.text.split("\n\n")[2:]
+    assert layers == [
+        "## User Context\nnickname: Al\ntopics: burnout, boundaries",
+        "## Memory\nthemes: work; sleep\nhow_they_talk: prefers short replies",
+        "## Techniques Already Offered\n- abcde\n- dbt_stop",
+        "## Conversation Context\ncurrent_issue: Missed credit at work.\n"
+        "summary: Talked about work.\ntechniques_tried: abcde (helpful), breathing (not_helpful)",
+    ]
+    assert {layer.split("\n")[0] for layer in layers} <= set(composer.LAYER_HEADINGS.values())
+
+
+def test_a_summary_with_nothing_in_it_adds_no_layer():
+    assert composer.summary_layer(ThreadSummary(thread_id=THREAD, user_id=USER)) is None
+
+
+def test_the_debug_layer_is_its_own_row_and_only_in_debug_mode(config, monkeypatch):
+    with_debug = Config(
+        prompts=config.prompts | {"debug": prompt("debug", "# Debug\nSAY WHY")},
+        registry=config.registry, loaded_at=config.loaded_at,
+    )
+    assert "debug" not in [name for name, _ in composer.compose(with_debug, None).layers]
+
+    monkeypatch.setattr(get_settings(), "ai_debug_mode", True)
+    built = composer.compose(with_debug, None)
+    assert [name for name, _ in built.layers][-1] == "debug"
+    assert built.text.endswith("# Debug\nSAY WHY")
+
+
+def test_debug_mode_without_its_row_leaves_the_layer_out_and_says_so(config, monkeypatch, caplog):
+    monkeypatch.setattr(get_settings(), "ai_debug_mode", True)
+    with caplog.at_level("WARNING", logger="mani.prompts.composer"):
+        built = composer.compose(config, None)
+    assert "debug" not in [name for name, _ in built.layers]
+    assert [r.getMessage() for r in caplog.records] == [
+        "AI_DEBUG_MODE is on but the debug prompt is missing or inactive"
+    ]

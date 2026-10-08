@@ -3,19 +3,27 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.llm.schema import Memory
-from mani.models.rows import Profile, ThreadSummary
+from mani.models.rows import Profile, TechniqueTried, ThreadSummary
 from mani.prompts.cache import Config
 
-DEBUG_LAYER = (
-    "# Debug\n"
-    "For every response also fill the reasoning field with why you responded that way "
-    "and which part of the prompt influenced it."
-)
+logger = logging.getLogger(__name__)
+
+# The heading of every layer the code writes. What each holds is said once, in
+# response_format.md's `layers` section, and a test ties the two together in both directions,
+# so the code sends headings and data and never a sentence of instruction.
+LAYER_HEADINGS = {
+    "framework_index": "# Framework Index",
+    "user_context": "## User Context",
+    "user_memory": "## Memory",
+    "techniques_used": "## Techniques Already Offered",
+    "summary": "## Conversation Context",
+}
 
 
 @dataclass(frozen=True)
@@ -46,25 +54,13 @@ def framework_index(registry: Registry) -> str | None:
     if not present:
         return None
 
-    lines = [
-        "# Framework Index",
-        "",
-        "The sets of questions you may offer. Each has a Description line, then eight lines: when it "
-        "starts and what to learn first, how it sounds, when to skip it for another, its stages, "
-        "when it ends, how to offer it, and what never to do. While one runs, `[ctx]` names the "
-        "stage you are on.",
-    ]
+    lines = [LAYER_HEADINGS["framework_index"]]
     for framework in present:
         lines += ["", f"## {framework.name} (`{framework.id}`)"]
         description = " ".join((framework.summary or "").split())
         if description:
             lines.append(f"Description: {description}")
         lines.append(framework.body)
-
-    lines += [
-        "", "When you offer one, say in fresh words what its questions would help with, from its "
-        "Description line, never copying it: never its name, its id, or the word \"framework\".",
-    ]
     return "\n".join(lines)
 
 
@@ -84,22 +80,11 @@ def user_context(profile: Profile | None) -> str | None:
 
     lines = []
     if profile.nickname:
-        lines.append(f'The user prefers to be called "{profile.nickname}".')
+        lines.append(f"nickname: {profile.nickname}")
     if profile.topics:
-        lines.append(f"Topics they came here for: {', '.join(profile.topics)}.")
+        lines.append(f"topics: {', '.join(profile.topics)}")
 
-    return "## User Context\n" + "\n".join(lines) if lines else None
-
-
-# Headings for each part of the memory, in the order a reply would use them.
-_MEMORY_HEADINGS = (
-    ("themes", "Keeps coming back to"),
-    ("low_times", "Feels low when"),
-    ("better_times", "Feels better when"),
-    ("what_helps", "What has helped"),
-    ("what_doesnt", "What has not helped"),
-    ("how_they_talk", "How they like the conversation to go"),
-)
+    return LAYER_HEADINGS["user_context"] + "\n" + "\n".join(lines) if lines else None
 
 
 def user_memory(memory: Memory | None) -> str | None:
@@ -110,34 +95,28 @@ def user_memory(memory: Memory | None) -> str | None:
     """
     if memory is None:
         return None
+    # Keyed by the Memory field names, in the order a reply would use them.
     parts = [
-        f"- **{heading}:** " + "; ".join(getattr(memory, field))
-        for field, heading in _MEMORY_HEADINGS
-        if getattr(memory, field)
+        f"{field}: " + "; ".join(entries)
+        for field in Memory.model_fields
+        if (entries := getattr(memory, field))
     ]
     if not parts:
         return None
-    return (
-        "## What you know about them from earlier conversations\n"
-        "Patterns they have described, in their words. Use them to choose how you respond: "
-        "what to ask about, what to offer, what to avoid. Never quote them, never say you "
-        "remember, and never mention an earlier conversation. If they bring something up, "
-        "respond to what they say now.\n\n" + "\n".join(parts)
-    )
+    return LAYER_HEADINGS["user_memory"] + "\n" + "\n".join(parts)
 
 
 def techniques_used(offered: list[str]) -> str | None:
-    """Frequency limiting: what has already been offered in this conversation."""
+    """Frequency limiting: the ids of what has already been offered in this conversation."""
     if not offered:
         return None
-    listed = "\n".join(f"- {name}" for name in offered)
-    return (
-        "## Techniques Already Offered\n"
-        "These have already been offered in this conversation:\n"
-        f"{listed}\n\n"
-        "One they said no to may be offered again once `cooldown_passed: yes`, if it still "
-        "fits best - or a different one, if what they have said since has changed what fits. "
-        "One they have just finished may not be offered again."
+    return LAYER_HEADINGS["techniques_used"] + "\n" + "\n".join(f"- {fid}" for fid in offered)
+
+
+def tried_line(techniques: list[TechniqueTried]) -> str:
+    """What was tried and whether it helped, the one way every prompt is shown it."""
+    return ", ".join(
+        f"{t.name} ({'helpful' if t.helpful else 'not_helpful'})" for t in techniques
     )
 
 
@@ -148,17 +127,24 @@ def summary_layer(summary: ThreadSummary | None) -> str | None:
 
     lines = []
     if summary.current_issue:
-        lines.append(f"**Current issue:** {summary.current_issue}")
+        lines.append(f"current_issue: {summary.current_issue}")
     if summary.summary:
-        lines.append(summary.summary)
+        lines.append(f"summary: {summary.summary}")
     if summary.techniques_tried:
-        tried = ", ".join(
-            f"{t.name} ({'helpful' if t.helpful else 'not helpful'})"
-            for t in summary.techniques_tried
-        )
-        lines.append(f"\n**Techniques discussed**: {tried}")
+        lines.append(f"techniques_tried: {tried_line(summary.techniques_tried)}")
 
-    return "## Conversation Context\n" + "\n".join(lines) if lines else None
+    return LAYER_HEADINGS["summary"] + "\n" + "\n".join(lines) if lines else None
+
+
+def debug_layer(config: Config) -> str | None:
+    """The debug instruction, from its own row, only when debug mode is on."""
+    if not get_settings().ai_debug_mode:
+        return None
+    row = config.prompt("debug")
+    if row is None:
+        logger.warning("AI_DEBUG_MODE is on but the debug prompt is missing or inactive")
+        return None
+    return row.content
 
 
 def compose(
@@ -176,8 +162,6 @@ def compose(
     static prefix - identity and the technique library are by far the largest layers and
     never vary.
     """
-    settings = get_settings()
-
     candidates: list[tuple[str, str | None]] = [
         # Two authored layers with the generated catalogue between them: who Mani is and
         # how a conversation runs, then what may be offered, then what a reply must
@@ -196,7 +180,7 @@ def compose(
 
     candidates += [
         ("techniques_used", techniques_used(offered or [])),
-        ("debug", DEBUG_LAYER if settings.ai_debug_mode else None),
+        ("debug", debug_layer(config)),
         ("summary", summary_layer(summary)),
     ]
 

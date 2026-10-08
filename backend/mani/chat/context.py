@@ -12,6 +12,7 @@ from mani.chat.safety import normalize
 from mani.chat.techniques import OFFERING
 from mani.db.threads import TurnContext
 from mani.models.rows import Framework, Message, MessageRole, TechniqueOutcome
+from mani.prompts.composer import tried_line
 
 # How many messages must pass before a technique may be offered again.
 # After "Keep chatting", three of Mani's replies before it may check again - the same
@@ -329,11 +330,7 @@ def build(
             lines.append(_line("current_phase", technique.phase))
 
     if ctx.summary and ctx.summary.techniques_tried:
-        tried = ", ".join(
-            f"{t.name} ({'helpful' if t.helpful else 'not helpful'})"
-            for t in ctx.summary.techniques_tried
-        )
-        lines.append(_line("history", tried))
+        lines.append(_line("history", tried_line(ctx.summary.techniques_tried)))
 
     if ctx.recent_styles:
         styles = " → ".join(s.shape for s in ctx.recent_styles)

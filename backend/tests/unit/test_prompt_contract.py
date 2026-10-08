@@ -8,6 +8,7 @@ import re
 import yaml
 
 from mani.chat.context import CTX_KEYS
+from mani.prompts.composer import LAYER_HEADINGS
 from scripts.seed import PROMPTS_DIR, parse_prompt
 
 # Entries of the `ctx` section that explain the block as a whole rather than one key.
@@ -32,3 +33,9 @@ def test_every_ctx_key_the_code_sends_is_explained_in_the_prompt():
 def test_every_key_the_prompt_explains_is_one_the_code_can_send():
     """A key explained but never sent tells the model to read something that is not there."""
     assert sorted(set(_section("ctx")) - CTX_NOT_KEYS - CTX_KEYS) == []
+
+
+def test_every_layer_heading_the_code_writes_is_explained_in_the_prompt_and_no_other():
+    """The `layers` section is keyed by each heading's title, and only the code writes them."""
+    written = {heading.lstrip("# ") for heading in LAYER_HEADINGS.values()}
+    assert set(_section("layers")) == written
