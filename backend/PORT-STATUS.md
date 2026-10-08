@@ -7,14 +7,14 @@ the same change as the work.**
 ## Status, 2026-10-01
 
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
-- Tests: `pytest` runs 615 passed and 4 skipped (the four symmetric-token auth tests, which skip on a
+- Tests: `pytest` runs 641 passed and 4 skipped (the four symmetric-token auth tests, which skip on a
   JWKS-configured project), against a local database reseeded from `content/`. A database seeded before
   spec 0005 still holds the old ABCDE `offering` block and fails `test_an_offer_they_typed_past_is_flagged_then_closed`.
 - Cost baseline `before-lean-prompts` (2026-10-07, `scripts/baselines/2026-10-07-before-lean-prompts.json`,
   gpt-6-luna on effort `high`, Supportive, 3 runs): median per run of the three tagged scenarios is 26 calls,
   228,251 input tokens (203,763 cached), 25,595 output tokens of which 21,665 are reasoning, 319 s of model
   time against 320 s of turn time, and 3 findings. A turn takes a median of 11.5 s; 7 of 70 turns were redrafted.
-- Database: 11 migrations (001-010 and 018), 15 tables (8 `public`, 7 `admin`), 6 frameworks and 7 prompts seeded.
+- Database: 12 migrations (001-010, 018 and 019), 15 tables (8 `public`, 7 `admin`), 6 frameworks and 8 prompts seeded.
   `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
   private `exercises` bucket (`scripts/seed_exercises.py`). A hosted project exists and its schema has
   drifted ahead of this code (see Open engineering).
@@ -56,20 +56,25 @@ the same change as the work.**
   1. The deterministic safety screen (`safety.py`) runs before anything else. An explicit statement locks
      the thread with no model call. An indirect one (including passive ideation and "pills in my hand")
      is a concern: it suspends frameworks and offers without locking.
-  2. The router (`router.py`) shortlists frameworks from phrases over their last four messages. It is a hint, never a requirement. A framework their words rule out (`never_offer_when_said`) is taken off the shortlist and named in `[ctx]` as `ruled_out`. When the nearest fit falls due, the top of the shortlist is the offer candidate even if the router is not confident of it.
+  2. The router (`router.py`) shortlists every framework their messages show signs of, ranked, with the
+     distinction rules from each framework file (`activation.distinctions`) reordering them. A message older
+     than the four recency weights keeps the last one, so a sign stays while its message is in the history
+     window. The shortlist is the set Mani may offer from, sent as ids only. A framework their words rule
+     out (`never_offer_when_said`) is taken off it and named in `[ctx]` as `ruled_out`.
   3. `context.py` builds the `[ctx]` block: style, offer timing, the stage in progress, and `their_last`
-     (a vague reply, a correction, or a request only to be heard).
+     (a vague reply, a correction, or a request only to be heard), as keys from `CTX_KEYS` and values only.
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,
-     `heading_toward`, `offer_fit`, then `text`. The order is deliberate.
+     `heading_toward`, then `text`. The order is deliberate. The schema carries names and types only.
   5. `guards.py` stops a model supplied id or value from being stored unchecked: a technique button for an
      unknown framework, inside a running one, or on a turn that declines or retires an offer (with the
      offer's other buttons), a stage out of order, a library section that does not exist. The reply's
      words are not edited.
   6. Crisis, the reply, the framework state and the summary are written together.
 - **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): six, each reviewed against the
-  client's specification. A confident offer may come from the person's second message (third for ABCDE,
-  Thought Reframe and ACT); the nearest fit is due by the fourth, which the model words itself with "Keep chatting"
-  beside it. The shared body check-in and practice come from `content/prompts/somatic.md`.
+  client's specification. An offer may come from the person's second message, of a set on the shortlist
+  once Mani has learned what its Starts when line names. There is no nearest fit: a conversation whose words
+  match no phrase list is offered nothing. The shared body check-in and practice come from
+  `content/prompts/somatic.md`.
   The body route is held in code (`orchestrator._body_route_step`): the check-in is asked once; whatever
   the person answers, the next reply asks where, with Chest / Head / Stomach / Somewhere else; "idk" asks
   again; a place gets the client's practice for that place and style, word for word, ending "How do you feel
@@ -121,7 +126,16 @@ the same change as the work.**
   app (`mani/chat/guards.py`: unknown ids, stage order, library sections, buttons that would overwrite a
   decline or a retirement) and writes the body ending (`mani/chat/ending.py`). Offer timing is told in
   `[ctx]`, not enforced, and the grief veto is told as `ruled_out` and keeps the framework off the shortlist.
-- **Offers follow Mani's confidence**. Every reply before an offer asks one question.
+- **Mani offers only a set on `framework_shortlist`, once it has learned what its Starts when line names,
+  and only when `cooldown_passed: yes`** (spec 0007). The rule is told in `mani_base.md` and
+  `response_format.md`, never enforced after the call; each offer is logged with `on_shortlist` and
+  `cooldown_passed`. There is no closest fit. Every reply before an offer asks one question.
+- **No sentence the model reads is written in `backend/mani/`** (spec 0007). Python sends keys
+  (`context.CTX_KEYS`), headings (`composer.LAYER_HEADINGS`) and data, the prompts explain them, and
+  `tests/unit/test_prompt_contract.py` ties the two in both directions. The reply schemas carry no
+  descriptions; field meanings live in `response_format.md` `fields` and in each call's prompt. The reply
+  shapes live only in `mani_base.md` `reply_shapes` (`Config.reply_shapes`; migration 019 dropped the
+  database check), and the router's distinction rules in each framework file's `activation.distinctions`.
 - **Memory is per person**.
 - Also settled: OpenRouter only, asyncpg not PostgREST, the
   `public` and `admin` split, the `mani_service` role, three security definer write functions, the
@@ -170,7 +184,8 @@ Ordered by what breaks first.
 ## Open decisions for muhammad
 
 - Crisis resources, `PROTOCOLS` and `CLARIFICATION` wording (point 3 above).
-- Tell the client that offers now follow Mani's confidence, with the nearest fit due by the fourth message, which replaced their offer cadence, and have them read about five real
+- Tell the client that Mani now offers only a set the router found signs of, so someone whose words match no
+  phrase list is never offered one, which replaced their offer cadence, and have them read about five real
   Supportive and Reflective transcripts.
 - Tell the client: when a person asks Mani to pick, it offers one small draft step to accept
   or change, which the Behavioral Activation specification's "must not choose the activity" does not allow
@@ -206,6 +221,13 @@ Ordered by what breaks first.
   frameworks, so check hosted's `updated_at` first. Waits on the 011 to 017 reconciliation above. Keep
   `REASONING_EFFORT` set on hosted until the deploy has proven itself: this code ignores it, and the
   code a rollback returns to still falls back to it.
+- **Spec 0007 deploys in order: migration 019, then the seed, then the code.** Deployed before the seed, the
+  model gets no field descriptions and no stage rules until it runs. Hosted waits on the 011 to 017
+  reconciliation above like the rest. The portal skips the seed's checks, so a `mani_base` edit that breaks
+  `reply_shapes` drops every shape and a broken distinction is dropped, both only visible in the logs.
+- **Offers under the shortlist gate are unmeasured.** Spec 0007 shipped on unit and contract tests, with no
+  real run. Measure offers per conversation, offers off the shortlist and offers before the cooldown under
+  feature 11, and grow the phrase lists from conversations where an offer fitted but never came.
 - **Migration numbers were reused across the reverted branches.** `011` was both
   `technique_state_holds` and `technique_outcome_stopped`; `013` was both `llm_call_decision` and
   `llm_call_facts`. Reviving any of those branches collides again.
@@ -249,5 +271,10 @@ change to prompts, framework content or the offer rules, and compare with these.
 - Replies with no question before an offer: 1 of 39 on that chat (from 8 of 47).
 - Wrong framework offered early: Direct chose ACT or a plan for a colleague chat that wants ABCDE, until offers
   for ABCDE, Thought Reframe and ACT were made to wait for the third message (Direct then chose ABCDE 3 of 3).
+- System prompt size, spec 0007, 2026-10-07, counted with tiktoken `o200k_base` from the seeded rows (no
+  model call, no user layers): before 5,391 tokens plus a 1,416 token `Reply` schema, 6,807 together; after
+  6,383 plus 590, 6,973 together (+166, 2.4%). The stage rules, layer meanings and field meanings moved
+  into the cached prefix; `[ctx]` lost `stage_note` on every framework turn. `Extraction` 380 to 193,
+  `Memory` 386 to 178, `StartExercise` 130 to 41. The bill depends on the provider caching the prefix.
 - Local Supabase answers on 54321 to 54324 on this machine, not the 5434x in `config.toml`. See
   `.claude/BACKEND.md`.

@@ -3,13 +3,14 @@
 Complete, verified map of every schema, table, column, role, and grant in this project's
 database — queried live from `information_schema`/`pg_catalog`, not reconstructed from the
 migration files. Regenerate rather than hand-edit if the schema changes (§ at the bottom
-has the exact queries) — every table below reflects the state after migrations 001–010 and 018.
+has the exact queries) — every table below reflects the state after migrations 001–010, 018 and 019.
 
 Generated 2026-09-23 against local Supabase (`supabase_db_mani`), then hand updated on 2026-10-01 for
 migrations 006 to 010 (the call purpose enum, backend writes of prompt state, bounded profile topics, the
 memory table, the summary's current issue); the counts, `thread_summaries`, the privilege list and the RLS
 note below were checked against the live database that day. Hand updated on 2026-10-07 for migration 018
-(`admin.llm_calls.reasoning_tokens`), checked against the live column and its check constraint. Regenerate from the queries at the bottom after
+(`admin.llm_calls.reasoning_tokens`), checked against the live column and its check constraint, and for migration 019
+(drops `response_styles_shape_known`), checked against the live constraint list. Regenerate from the queries at the bottom after
 the next schema change.
 
 The rest of this paragraph describes the original generation: Nothing here was typed
@@ -147,7 +148,7 @@ Append-only log of the model's self-reported style per reply.
 | 1 | `id` | uuid | **PK**, default `gen_random_uuid()` | |
 | 2 | `thread_id` | uuid | FK→`threads` cascade | |
 | 3 | `user_id` | uuid | FK→`auth.users` cascade | |
-| 4 | `shape` | text | required 🔒 | One of 6 values (CHECK `response_styles_shape_known`, added migration 003). Matches `SHAPES` in `mani/llm/schema.py`. |
+| 4 | `shape` | text | required | One of the shapes taught under `reply_shapes` in `content/prompts/mani_base.md`, kept to that list by `guards.check` before the write. Not pinned in the database: migration 019 dropped `response_styles_shape_known` (added in 003), so a shape added in content is stored. |
 | 5 | `voice` | text | optional 🔒 | One of 5 values or null (CHECK `response_styles_voice_known`). No longer set: `VOICES` was removed from `mani/llm/schema.py` and the model's `Style` carries only `shape`. The column and its CHECK remain in the database. |
 | 6 | `created_at` | timestamptz | default `clock_timestamp()` | |
 
@@ -323,12 +324,11 @@ Two different things get called "hardcoded" here, and they need different verdic
 
 ### Deliberate — a closed set of values, enforced in two places on purpose
 
-These are real business rules, not values that should be dynamic. Each is enforced **both** as a CHECK constraint (so the database can never hold something the app doesn't understand) **and** as a matching enum/tuple in code (so the app never even attempts to write something the database would reject). Confirmed identical on both sides, live:
+These are real business rules, not values that should be dynamic. Each is enforced **both** as a CHECK constraint (so the database can never hold something the app doesn't understand) **and** as a matching enum/tuple in code (so the app never even attempts to write something the database would reject). Confirmed identical on both sides, live. The response shape is no longer one of them: its one home is `reply_shapes` in `content/prompts/mani_base.md`, read into `Config.reply_shapes`, and migration 019 dropped its CHECK.
 
 | Value | DB constraint | Code | Values |
 |---|---|---|---|
 | Conversation style | `profiles_support_style_known`, `threads_conversation_style_known` | `mani.models.rows.SupportStyle` | `supportive`, `reflective`, `direct` |
-| Response shape | `response_styles_shape_known` | `SHAPES` in `mani/llm/schema.py` | 6 values (warmth lead, honor and follow, mirror and ask, mirror and hold, gentle follow, presence only) |
 | Mirroring voice | `response_styles_voice_known` | none (`VOICES` was removed; the column is no longer written) | naming, receiving, quoting, transitional, observing |
 
 If either side of one of these pairs is ever changed, the other must change with it, or the database will reject values the app tries to write, or the app will silently drop values it should have accepted. There is no single source of truth to point at automatically — this is worth a comment at each site cross-referencing the other, if it doesn't already have one.

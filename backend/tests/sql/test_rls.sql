@@ -450,7 +450,8 @@ $$;
 rollback;
 
 -- ---------------------------------------------------------------------------
--- The closed sets the application validates are also stated in the database
+-- The mirroring voice is a closed set in the database too; the response shape is not, because
+-- the shapes are listed in the mani_base prompt and the guard keeps a reply to them (019)
 -- ---------------------------------------------------------------------------
 
 begin;
@@ -462,11 +463,11 @@ begin
   begin
     insert into public.thread_response_styles (thread_id, user_id, shape)
     values ('11111111-0000-4000-8000-000000000001',
-            'a0000000-0000-4000-8000-00000000000a', 'vibes');
-    raise exception 'FAIL: an off-list response shape was stored';
+            'a0000000-0000-4000-8000-00000000000a', 'a seventh shape');
+    raise notice 'PASS: a response shape added in content is stored';
   exception
     when check_violation then
-      raise notice 'PASS: response shape is pinned to the set the code validates';
+      raise exception 'FAIL: a response shape outside the six was refused by the database';
   end;
 
   begin
