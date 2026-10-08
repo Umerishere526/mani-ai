@@ -9,13 +9,14 @@ import pytest
 from mani.auth.jwt import Claims
 from mani.config import get_settings
 from mani.db import config_tables, llm_calls, messages, profiles, summaries, threads
-from mani.llm.schema import SHAPES
 from mani.models.rows import (
     ResponseStyle,
     TechniqueOutcome,
     TechniqueState,
     TechniqueTried,
 )
+from mani.prompts.cache import parse_reply_shapes
+from scripts.seed import PROMPTS_DIR, parse_prompt
 from tests.integration.cleanup import remove_test_users
 
 ALICE = uuid.UUID("a0000000-0000-4000-8000-0000000000c1")
@@ -212,9 +213,11 @@ async def test_a_turn_keeps_its_halves_in_order(alice):
     ]
 
 
+SHAPES = sorted(parse_reply_shapes(parse_prompt(PROMPTS_DIR / "mani_base.md")["content"]))
+
+
 async def test_the_style_window_keeps_only_the_recent_ones(alice):
-    """Cycles the real shapes rather than synthetic ones: the column is constrained to the
-    set the schema allows, so `shape-0` is no longer a value this table can hold."""
+    """Cycles the shapes the base prompt teaches, the values a reply can actually store."""
     thread, _ = await threads.create_or_reuse(alice, ALICE)
     written = [SHAPES[n % len(SHAPES)] for n in range(10)]
     for shape in written:
@@ -365,3 +368,13 @@ async def test_threads_needing_summary_lists_across_users(users):
     ids = {(row["thread_id"], row["user_id"]) for row in due}
     assert (thread_a.id, ALICE) in ids
     assert (thread_b.id, BOB) not in ids
+
+
+async def test_a_shape_added_in_content_is_stored_rather_than_failing_the_turn(alice):
+    """The guard keeps a reply to the seeded shapes; the database no longer pins the six."""
+    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates(
+        style=ResponseStyle(shape="a seventh shape", voice=None)))
+
+    ctx = await threads.load_turn_context(alice, thread.id, ALICE)
+    assert ctx.recent_styles[-1].shape == "a seventh shape"

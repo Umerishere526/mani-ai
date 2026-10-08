@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 from mani.chat.greeting import EXPLAIN_LABELS
 from mani.chat.techniques import Registry
-from mani.llm.schema import SHAPES, LibrarySection, Reply, SmartPrompt, Style
+from mani.llm.schema import LibrarySection, Reply, SmartPrompt, Style
 
 MAX_TITLE_LENGTH = 100
 
@@ -61,6 +61,7 @@ def check(
     declined: bool,
     retiring: bool,
     wants_title: bool,
+    shapes: frozenset[str],
 ) -> Checked:
     """The reply as the model wrote it, with only what cannot be stored or shown taken out.
 
@@ -69,7 +70,8 @@ def check(
     a framework runs, on the turn they said no, or on the turn a finished framework retires,
     where the offer's row would overwrite the decline or the retirement. An offer left without
     its Try it takes its Keep chatting and Tell me about this with it. A model reported stage
-    is clamped to the order the framework runs in.
+    is clamped to the order the framework runs in. A reported shape is kept only when it is one
+    of `shapes`, the ones the mani_base prompt teaches.
     """
     notes: list[str] = []
 
@@ -152,7 +154,7 @@ def check(
     style = reply.style
     if style is not None:
         shape = style.shape.strip().lower()
-        if shape not in SHAPES:
+        if shape not in shapes:
             notes.append("dropped the response shape: not on the list")
             style = None
         else:

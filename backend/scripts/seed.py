@@ -13,6 +13,7 @@ import yaml
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani.config import get_settings  # noqa: E402
+from mani.prompts.cache import parse_reply_shapes  # noqa: E402
 from mani.prompts.calls import CALL_PROMPTS, effort_problem  # noqa: E402
 
 # Authored content, not code: markdown is the input this script loads, and once loaded the
@@ -62,7 +63,8 @@ def parse_prompt(path: pathlib.Path) -> dict:
 
 def load_prompts(directory: pathlib.Path | None = None) -> list[dict]:
     """Every prompt row to seed, refused with the file named when a model call's row has no
-    usable thinking level, or when a model call has no file at all.
+    usable thinking level, when a model call has no file at all, or when mani_base teaches no
+    reply shapes.
 
     Matched by the frontmatter `name`, never the file name, because the name is what the code
     reads the row by.
@@ -77,6 +79,12 @@ def load_prompts(directory: pathlib.Path | None = None) -> list[dict]:
         prompt = parse_prompt(path)
         if problem := effort_problem(prompt["name"], prompt["model_parameters"]):
             raise ValueError(f"{path.name}: {problem}")
+        if prompt["name"] == "mani_base":
+            # The guard keeps a reply's shape to this list, so seeding none would drop them all.
+            try:
+                parse_reply_shapes(prompt["content"])
+            except ValueError as refused:
+                raise ValueError(f"{path.name}: {refused}") from refused
         prompts.append(prompt)
     if missing := sorted(CALL_PROMPTS - {p["name"] for p in prompts}):
         raise ValueError(f"no prompt file names the model call {', '.join(missing)}")

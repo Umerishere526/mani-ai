@@ -10,6 +10,8 @@ import pytest
 
 from mani.errors import ErrorCategory, ServiceError
 from mani.models.rows import Prompt
+from mani.prompts import cache
+from mani.prompts.cache import parse_reply_shapes
 from mani.prompts.calls import CALL_PROMPTS, EFFORTS, effort_for, effort_problem
 from scripts import seed
 
@@ -96,3 +98,30 @@ def test_a_call_from_a_row_with_no_level_is_a_config_error():
     assert effort_for(row.model_copy(update={
         "model_parameters": {"reasoning_effort": "low"}
     }), "mani_base") == "low"
+
+
+def test_a_base_prompt_that_teaches_no_reply_shapes_is_refused(prompts_dir):
+    """The guard keeps a reply's shape to the ones mani_base teaches, so seeding none would
+    drop every shape the model reports."""
+    base = prompts_dir / "mani_base.md"
+    text = base.read_text()
+    start = text.index("reply_shapes:\n")
+    end = text.index("\nstyles:")
+    base.write_text(text[:start] + text[end + 1:])
+
+    with pytest.raises(ValueError, match="mani_base.md: mani_base has no non empty reply_shapes map"):
+        seed.load_prompts(prompts_dir)
+
+
+def test_the_shapes_are_read_from_the_base_prompt_trimmed_and_lowercased():
+    assert parse_reply_shapes("reply_shapes:\n  Warmth Lead : a\n  presence only: b\n") == {
+        "warmth lead", "presence only",
+    }
+
+
+def test_a_base_prompt_whose_shapes_do_not_parse_empties_the_set_and_says_so(caplog):
+    with caplog.at_level("ERROR", logger="mani.prompts.cache"):
+        assert cache._reply_shapes("identity: [unclosed") == frozenset()
+    assert [r.getMessage().split(":")[0] for r in caplog.records] == [
+        "reply shapes unreadable, every shape will be dropped"
+    ]

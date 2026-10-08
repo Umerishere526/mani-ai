@@ -185,17 +185,28 @@ def test_replies_that_start_differently_are_left_alone():
 
 
 
-def test_every_style_value_the_schema_allows_is_taught():
-    """The schema asks the model to declare the shape it used. Any value it can return and was
-    never taught is one it will either avoid entirely or use without meaning, and a shape taught
-    but not in the schema is one it can never report. Shapes are taught under `reply_shapes`."""
+def test_every_shape_the_base_prompt_teaches_is_one_the_guard_keeps():
+    """The model reports the shape it used, by the name it was taught under `reply_shapes`. The
+    guard keeps a shape only when it is on the list parsed from the same row, so a name taught
+    in a form the parse does not return would be dropped every time it is used."""
     import yaml
 
-    from mani.llm.schema import SHAPES
+    from mani.chat import guards
+    from mani.chat.techniques import Registry
+    from mani.llm.schema import Reply, Style
+    from mani.prompts.cache import parse_reply_shapes
     from scripts.seed import parse_prompt
 
-    taught = yaml.safe_load(parse_prompt(PROMPTS_DIR / "mani_base.md")["content"])["reply_shapes"]
-    assert set(taught) == set(SHAPES)
+    content = parse_prompt(PROMPTS_DIR / "mani_base.md")["content"]
+    shapes = parse_reply_shapes(content)
+    for taught in yaml.safe_load(content)["reply_shapes"]:
+        checked = guards.check(
+            Reply(text="t", style=Style(shape=taught)), Registry([]),
+            current_framework_id=None, current_phase=None, accepted_this_turn=False,
+            framework_running=False, declined=False, retiring=False, wants_title=False,
+            shapes=shapes,
+        )
+        assert checked.style == Style(shape=taught), taught
 
 
 def test_a_capsule_that_judges_the_person_is_caught():

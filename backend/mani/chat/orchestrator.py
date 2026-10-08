@@ -537,6 +537,7 @@ async def send(
         declined=outcome is TechniqueOutcome.DECLINED,
         retiring=retiring_framework_id is not None,
         wants_title=wants_title,
+        shapes=config.reply_shapes,
     )
     if assessment.blocks_framework or model_concern:
         # A concern pauses the framework rather than ending it: nothing this reply reports

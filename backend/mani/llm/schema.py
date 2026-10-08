@@ -21,17 +21,6 @@ class LibrarySection(StrEnum):
     BURNOUT = "Burnout"
 
 
-# The closed sets below are named in the prompt rather than typed as enums, and are
-# checked in guards.py instead. A value outside an enum is a ValidationError, and a
-# ValidationError here does not degrade one cosmetic field - it fails the whole reply,
-# losing the message the person typed. Nothing the model reports about its own style is
-# worth a lost turn, so the prompt asks and the guard decides.
-SHAPES = (
-    "warmth lead", "honor and follow", "mirror and ask", "mirror and hold",
-    "gentle follow", "presence only",
-)
-
-
 # One tappable capsule under a reply.
 class SmartPrompt(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -66,6 +55,11 @@ class Crisis(BaseModel):
     reason: str
 
 
+# The shape is a closed set named in the prompt (mani_base.md reply_shapes) rather than typed
+# as an enum, and is checked in guards.py instead. A value outside an enum is a
+# ValidationError, and a ValidationError here does not degrade one cosmetic field - it fails
+# the whole reply, losing the message the person typed. Nothing the model reports about its
+# own style is worth a lost turn, so the prompt asks and the guard decides.
 class Style(BaseModel):
     model_config = ConfigDict(extra="ignore")
 

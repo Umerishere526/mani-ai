@@ -24,6 +24,10 @@ OFFER = [
 ]
 
 
+# The shapes as Config.reply_shapes holds them once parsed from the mani_base row.
+SHAPES = frozenset({"warmth lead", "mirror and ask", "presence only"})
+
+
 @pytest.fixture
 def registry() -> Registry:
     return Registry([REFRAMING, ABCDE])
@@ -42,6 +46,7 @@ def check(registry, model_reply, **overrides):
         "declined": False,
         "retiring": False,
         "wants_title": False,
+        "shapes": SHAPES,
     }
     return guards.check(model_reply, registry, **(defaults | overrides))
 
@@ -221,6 +226,14 @@ def test_an_off_list_shape_is_dropped_rather_than_failing_the_turn(registry):
     that costs the person's message. It is only a self report about a reply that is otherwise
     fine, so it is dropped and the reply stands."""
     checked = check(registry, reply(style=Style(shape="vibes")))
+    assert checked.style is None
+    assert checked.text == "Thank you for telling me."
+    assert checked.notes == ["dropped the response shape: not on the list"]
+
+
+def test_with_no_shapes_taught_every_shape_is_dropped_and_the_reply_still_stands(registry):
+    """A mani_base row edited in the portal so its shapes no longer parse leaves the set empty."""
+    checked = check(registry, reply(style=Style(shape="mirror and ask")), shapes=frozenset())
     assert checked.style is None
     assert checked.text == "Thank you for telling me."
     assert checked.notes == ["dropped the response shape: not on the list"]

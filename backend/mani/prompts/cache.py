@@ -8,6 +8,8 @@ import logging
 import time
 from dataclasses import dataclass
 
+import yaml
+
 from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.db import config_tables, pool
@@ -31,6 +33,30 @@ EXPECTED_PROMPTS = tuple(
 )
 
 
+def parse_reply_shapes(content: str) -> frozenset[str]:
+    """The reply shapes the mani_base prompt teaches: the keys of its `reply_shapes` map,
+    trimmed and lowercased. Raises ValueError when the content has no such map, or none to read."""
+    try:
+        shapes = (yaml.safe_load(content) or {}).get("reply_shapes")
+    except (yaml.YAMLError, AttributeError) as exc:
+        raise ValueError(f"mani_base does not parse as a YAML map: {exc}") from exc
+    if not isinstance(shapes, dict) or not shapes:
+        raise ValueError("mani_base has no non empty reply_shapes map")
+    return frozenset(str(name).strip().lower() for name in shapes)
+
+
+def _reply_shapes(content: str) -> frozenset[str]:
+    """The shapes, or none when the row is broken: every shape is then dropped and turns still run.
+
+    The portal skips the seed's check, so a bad edit is logged here rather than failing turns.
+    """
+    try:
+        return parse_reply_shapes(content)
+    except ValueError as exc:
+        logger.error("reply shapes unreadable, every shape will be dropped: %s", exc)
+        return frozenset()
+
+
 @dataclass(frozen=True)
 class Config:
     """An immutable snapshot of everything configurable a turn reads."""
@@ -38,6 +64,8 @@ class Config:
     prompts: dict[str, Prompt]
     registry: Registry
     loaded_at: float
+    # The shapes a reply may report, parsed once per load from the mani_base row.
+    reply_shapes: frozenset[str] = frozenset()
 
     def prompt(self, name: str) -> Prompt | None:
         return self.prompts.get(name)
@@ -79,7 +107,10 @@ async def _read() -> Config:
         logger.warning("no active frameworks; technique offers will be refused")
 
     return Config(
-        prompts=by_name, registry=Registry(frameworks), loaded_at=time.monotonic()
+        prompts=by_name,
+        registry=Registry(frameworks),
+        loaded_at=time.monotonic(),
+        reply_shapes=_reply_shapes(by_name["mani_base"].content),
     )
 
 
