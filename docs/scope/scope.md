@@ -121,14 +121,14 @@ The ending (completion question, body check in, exercise, Chat More or Go to Lib
 ### 8. Model facing text out of Python · in-progress
 The instruction text Python adds to the prompt (index headings, `stage_note`, memory and summary wrappers, schema field descriptions, the exercise picker prompt, phrase lists naming framework ids) moves into seeded content, so changing it never needs a code change. Also removes the closest fit offer: Mani offers only a set on the router's shortlist that it judges fits.
 **Done when:** no sentence the model reads is written in backend/mani/, and changing any of them needs only a reseed.
-Spec: [0007](../specs/0007-model-text-out-of-python/index.md)
+Spec: [0007](../specs/0007-model-text-out-of-python/index.md) · code in backend/mani/chat/context.py, backend/mani/prompts/, backend/mani/llm/schema.py, backend/mani/chat/router.py, backend/content/, backend/supabase/migrations/019_reply_shape_not_pinned.sql
 - [x] Design it (spec): `/architect model facing text out of python`
-- [ ] Build it: `/develop model facing text out of python` (needs spec 0004 AC-6 built first)
-  - [ ] `[ctx]` and the layers as keys and headings, the stage rules and layer meanings in `response_format.md`, both contract tests (AC-1, AC-2, AC-5, AC-12)
-  - [ ] Summary, memory fold, exercise pick and tapped button messages, and the schemas with no descriptions (AC-3, AC-4)
-  - [ ] Reply shapes from `mani_base.md`, migration 019 dropping the shape check (AC-6)
-  - [ ] Distinction rules in the framework files, no closest fit, the shortlist as the offer gate, the offer log, in its own PR (AC-7, AC-8, AC-9, AC-10, AC-11)
-  - [ ] Tokenizer count, reseed, full `pytest` with the database up, PORT-STATUS and schema reference (AC-13)
+- [x] Build it: `/develop model facing text out of python` (needs spec 0004 AC-6 built first)
+  - [x] `[ctx]` and the layers as keys and headings, the stage rules and layer meanings in `response_format.md`, both contract tests (AC-1, AC-2, AC-5, AC-12)
+  - [x] Summary, memory fold, exercise pick and tapped button messages, and the schemas with no descriptions (AC-3, AC-4)
+  - [x] Reply shapes from `mani_base.md`, migration 019 dropping the shape check (AC-6)
+  - [x] Distinction rules in the framework files, no closest fit, the shortlist as the offer gate, the offer log, in its own PR (AC-7, AC-8, AC-9, AC-10, AC-11)
+  - [x] Tokenizer count, reseed, full `pytest` with the database up, PORT-STATUS and schema reference (AC-13)
 - [ ] Verify it: `/check verify model facing text out of python`
 - [ ] Test it: `/test model facing text out of python`
 
