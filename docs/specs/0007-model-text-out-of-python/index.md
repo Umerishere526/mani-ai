@@ -1,7 +1,7 @@
 # 0007. Model facing text out of Python, and offers only from the shortlist
 
 **Date**: 2026-10-07
-**Status**: Proposed
+**Status**: In Progress
 **Decision record**: [rationale.md](rationale.md) (context, premise notes, options considered, rationale, the inventory of text found in Python)
 
 ## Summary

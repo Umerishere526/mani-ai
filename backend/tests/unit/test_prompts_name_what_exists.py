@@ -16,8 +16,7 @@ MANI_DIR = pathlib.Path(__file__).resolve().parents[2] / "mani"
 # the model to read something that is not there, and every other test stays green.
 REMOVED = (
     "Use it when", "Telling them apart", "Never offer one when", "Finding the fit",
-    "offer_ask", "offer_purpose", "offer_lines", "stage_ready_when", "stage_ask",
-    "next_stage_ask", "model question",
+    "offer_ask", "offer_purpose", "offer_lines", "model question", "stage_note",
 )
 
 

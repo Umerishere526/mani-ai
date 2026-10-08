@@ -299,7 +299,8 @@ TONES = ("direct", "supportive", "reflective")
 def test_the_turn_a_framework_starts_names_the_first_stage_and_the_second():
     """Observed: on Try it, Mani asked "what is the exact problem you want to resolve?" of someone
     who had described it. On the yes turn the first working stage and the one after it are named,
-    with the note to judge whether what they said already answers the first."""
+    with framework_starting, whose rule in response_format.md says to judge whether what they said
+    already answers the first."""
     state = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
         phase="offering", at_message_count=8,
@@ -309,11 +310,8 @@ def test_the_turn_a_framework_starts_names_the_first_stage_and_the_second():
     assert "stage: activate" in starting
     assert "next_stage: belief" in starting
     assert "stage: offering" not in starting
-    assert any(
-        line.startswith("stage_note: first judge whether what they have already told you answers "
-                        "this stage, by its words on the Stages line")
-        for line in starting
-    )
+    assert "framework_starting: yes" in starting
+    assert not any(line.startswith("stage_note") for line in starting)
 
 
 def test_an_unconfident_shortlist_carries_no_candidate_content():
@@ -349,7 +347,7 @@ def test_a_frameworks_own_stage_goes_by_id_and_the_model_asks_it_in_its_own_word
     assert "framework_stages: offering, activate, belief, closing, somatic_checkin, somatic_practice" in block
     assert "stage: activate" in block
     assert "next_stage: belief" in block
-    assert any(line.startswith("stage_note: ask this stage's question in your own words") for line in block)
+    assert not any(line.startswith("stage_note") for line in block)
     assert not any(
         line.startswith(f"{prefix}_{field}:")
         for line in block for prefix in ("stage", "next_stage") for field in STAGE_BLOCK_LINES
@@ -370,7 +368,7 @@ def test_a_somatic_stage_keeps_its_block_and_its_fixed_words():
     assert "stage_purpose: Check in with the body after the framework." in block
     assert "stage_ask: What do you notice in your body now?" in block
     assert "next_stage_ask: Where do you feel that most right now?" in block
-    assert any(line.startswith("stage_note: the body check in and the practice are fixed words") for line in block)
+    assert not any(line.startswith("stage_note") for line in block)
 
 
 def test_an_offer_still_open_shows_only_the_offering_stage():
@@ -490,7 +488,7 @@ def test_every_style_focuses_the_question_on_how_the_person_feels():
     for style, focus in (
         ("supportive", "feelings"),
         ("reflective", "feelings"),
-        ("direct", "feeling, then the way through"),
+        ("direct", "feeling_then_way_through"),
     ):
         chosen = thread().model_copy(update={"conversation_style": SupportStyle(style)})
         ctx = TurnContext(thread=chosen, profile=None, technique=None)
@@ -642,7 +640,7 @@ def test_the_last_reply_kind_reaches_the_context_only_when_no_questions_are_runn
         framework=running, their_last="vague",
     )
     assert "their_last" not in inside
-    assert "stage_note: ask this stage's question in your own words" in inside
+    assert "stage: activate" in inside.splitlines()
 
     told_you = context.build(
         TurnContext(thread=thread(), profile=None, technique=state),
@@ -688,3 +686,8 @@ def test_nothing_is_ruled_out_while_a_framework_runs_or_on_a_safety_concern():
         safety_concern=True, ruled_out=["behavioral_activation"],
     )
     assert "ruled_out" not in concerned
+
+
+def test_a_ctx_key_the_prompt_does_not_explain_is_refused():
+    with pytest.raises(ValueError, match="not in CTX_KEYS"):
+        context._line("stage_note", "anything")
