@@ -7,12 +7,12 @@ exercise, before tuning any of that behaviour further in the LangChain prompts o
 **This is a fourth, independent thing in this repo, alongside `web/`, `mobile/` and
 `backend/` - not part of any of them.** It has its own dependencies and does not touch
 backend code. Every message it sends goes through the real `POST /v1/threads/{id}/messages`
-endpoint, the real LangChain call, the real router and safety screen - this is not a mock.
+endpoint, the real LangChain call, the real safety screen - this is not a mock.
 
 ## What it simulates versus what is real
 
 - **Real:** every chat turn, every capsule tap, style selection (tapping one of the greeting's
-  three style buttons), framework offers (including the nearest fit, with its button worded by the model beside "Keep chatting"), the somatic hand-off, the exercise hand-off, crisis locking. All of it
+  three style buttons), framework offers (the seeded offer with its three buttons, Yes, let's try it, Tell me more and I want to keep talking), the somatic hand-off, the exercise hand-off, crisis locking. All of it
   goes over HTTP to the actual FastAPI app - nothing here calls `orchestrator.py` directly.
 - **Real, too:** the library page (sidebar **Library**, or any **Go to Library** button). It lists
   every exercise from `GET /v1/exercises` on one page, grouped by topic, each playable from its
@@ -28,7 +28,7 @@ endpoint, the real LangChain call, the real router and safety screen - this is n
 
 ## Deploying this
 
-Two things to set beyond the environment variables above.
+Two things to set beyond the environment variables in Setup below.
 
 **The password-reset email template.** `supabase/config.toml` configures local Supabase only. On a
 hosted project, set the same template by hand under Authentication → Email Templates → Reset
@@ -96,13 +96,12 @@ messages, with Mani's buttons live only on its newest message, as in the apps.
 
 The three developer panels below only appear with `CHAT_TESTER_DEV_MODE=1` in `chat-tester/.env`
 **and** the sidebar's "Show developer details" toggle switched on. "What Mani remembers" shows without
-them. The developer view lists an offer's framework id but not whether the offer was a confident one
-or the nearest fit; the offer's own words, which say it is the nearest, are how you tell.
+them. The developer view lists an offer's framework id.
 
 - **The sidebar's "Framework state" panel** - a direct read of `thread_technique_state`,
   refreshed on every interaction. Watch `phase` move through a framework's stages as the
   conversation continues, and `outcome` flip from `offered` to `accepted` when you tap
-  "Try it" or say so in free text. The current framework and stage also show under the title.
+  "Yes, let's try it". The current framework and stage also show under the title.
 - **"What Mani remembers"** - a direct read of `admin.user_memory`: the patterns folded in
   from this person's earlier chats. It fills in a few seconds after **New conversation**.
 - **The "Recent calls" panel** - one row per model call, in order, with token counts and

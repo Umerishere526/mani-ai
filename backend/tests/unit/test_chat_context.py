@@ -278,7 +278,7 @@ def test_no_line_names_a_set_to_offer_on_any_turn(person_message):
 
 
 def test_the_turn_a_framework_starts_says_so():
-    """Observed: on Try it, Mani asked "which problem would help most to address first?" of
+    """Observed: on the yes, Mani asked "which problem would help most to address first?" of
     someone who had just named it - the first stage's question, asked as written."""
     offered = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
@@ -289,11 +289,8 @@ def test_the_turn_a_framework_starts_says_so():
     assert "framework_starting" not in build(ctx, framework=framework())
 
 
-TONES = ("direct", "supportive", "reflective")
-
-
 def test_the_turn_a_framework_starts_names_the_first_stage_and_every_stage_still_to_learn():
-    """Observed: on Try it, Mani asked "what is the exact problem you want to resolve?" of someone
+    """Observed: on the yes, Mani asked "what is the exact problem you want to resolve?" of someone
     who had described it. On the yes turn the first working stage and the one after it are named,
     with framework_starting, whose rule in response_format.md says to judge every stage against what
     they said before the offer."""
@@ -460,20 +457,6 @@ def test_the_block_says_which_phase_of_the_conversation_this_is():
 
 
 
-def test_every_style_focuses_the_question_on_how_the_person_feels():
-    """All three styles anchor the question to how the person feels rather than the situation;
-    Direct then turns toward a way through. Said next to the message, where a style rule in the
-    long prompt alone did not hold."""
-    for style, focus in (
-        ("supportive", "feelings"),
-        ("reflective", "feelings"),
-        ("direct", "feeling_then_way_through"),
-    ):
-        chosen = thread().model_copy(update={"conversation_style": SupportStyle(style)})
-        ctx = TurnContext(thread=chosen, profile=None, technique=None)
-        assert f"question_focus: {focus}" in build(ctx)
-
-
 def _finished_framework_history(*later: str) -> list:
     """A framework that ended on the client's two choices, then whatever Mani said since."""
     return [
@@ -543,7 +526,7 @@ def test_the_context_tells_the_model_the_truth_about_the_first_offer():
     assert "cooldown_passed: yes" in build(_on_message(2))
 
 
-def test_after_keep_chatting_an_offer_may_return_after_two_more_exchanges():
+def test_after_i_want_to_keep_talking_an_offer_may_return_after_two_more_exchanges():
     state = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED,
         at_message_count=10,
@@ -552,33 +535,6 @@ def test_after_keep_chatting_an_offer_may_return_after_two_more_exchanges():
     after_two = TurnContext(thread=thread(14), profile=None, technique=state)
     assert not cooldown_passed(after_one)
     assert cooldown_passed(after_two)
-
-
-def test_the_clarification_lines_are_sent_while_nothing_is_running_even_after_one_was_asked():
-    """The client: check once, 'Do I have this right?' or 'What would you like us to focus on
-    today?'. The model tracks whether it already asked, from its own history in the window."""
-    both = (
-        "clarification_lines: Do I have this right? | What would you like us to focus on today?"
-    )
-    ctx = TurnContext(thread=thread(), profile=None, technique=None)
-
-    assert both in build(ctx, history=[mani("What happened after that?")]).splitlines()
-    assert both in build(
-        ctx, history=[mani("Do I have this right?"), user("Yes."), mani("What happened then?")]
-    ).splitlines()
-
-
-def test_the_clarification_lines_are_not_sent_while_a_framework_runs():
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
-        phase="activate", at_message_count=2,
-    )
-    running = Framework(id="abcde", name="ABCDE", summary="s", body="b", phases=["offering", "activate"])
-
-    inside = build(TurnContext(thread=thread(), profile=None, technique=state), framework=running)
-
-    assert "clarification_lines" not in inside
-    assert "stage: activate" in inside.splitlines()
 
 
 def test_what_the_person_said_rules_out_is_told_to_the_model_while_nothing_runs():

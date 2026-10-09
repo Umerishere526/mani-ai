@@ -1,9 +1,7 @@
 ---
 id: 10000000-0000-0000-0000-000000000013
 name: voice_translation
-type: system
 description: Translate a voice transcript into English before it becomes the person's message
-provider: openrouter
 model_id: openai/gpt-6-luna
 model_parameters:
   maxTokens: 500

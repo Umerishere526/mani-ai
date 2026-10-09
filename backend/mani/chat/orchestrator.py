@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import context, guards, ledger, safety, vetoes
+from mani.chat import context, guards, ledger, offer as offers, safety, vetoes
 from mani.chat.greeting import CHAT_MORE_LABEL, GO_TO_LIBRARY_LABEL, greeting, style_options
 from mani.chat.techniques import ENDING_PHASES, OFFERING
 from mani.config import get_settings
@@ -20,7 +20,6 @@ from mani.db import (
     llm_calls,
     messages as messages_db,
     profiles,
-    summaries,
     threads,
 )
 from mani.errors import ErrorCategory, ServiceError
@@ -28,6 +27,7 @@ from mani.llm import client
 from mani.llm.schema import LibrarySection, Reply, SmartPrompt
 from mani.models.rows import (
     Exercise,
+    Framework,
     Message,
     MessageRole,
     ResponseStyle,
@@ -100,6 +100,20 @@ def chosen_style(history: list[Message], content: str) -> SupportStyle | None:
     for option in _last_offered(history):
         if option.get("style") and str(option.get("label", "")).strip().lower() == typed:
             return SupportStyle(option["style"])
+    return None
+
+
+def explained_offer(history: list[Message], content: str) -> tuple[str, str] | None:
+    """The tapped label and the offered framework, when this message is a tap on Tell me more.
+
+    Read from the stored options, like `chosen_style`: `more` is a key only the code writes.
+    """
+    typed = content.strip().lower()
+    for option in _last_offered(history):
+        label = str(option.get("label", ""))
+        if option.get("more") and label.strip().lower() == typed:
+            offer = pending_offer(history)
+            return (label, offer.technique) if offer else None
     return None
 
 
@@ -224,6 +238,13 @@ async def send(
     style = chosen_style(history, content)
     if style is not None:
         return await _open_in_style(conn, ctx, content, style, config.replies, client_message_id)
+    explained = explained_offer(history, content)
+    if explained is not None and explained[1] in config.registry:
+        label, framework_id = explained
+        return await _explain_offer(
+            conn, ctx, content, label, config.registry.get(framework_id), config.replies,
+            client_message_id, settings,
+        )
 
     technique = ctx.technique
     # An ending the model has not closed by the cap is finished here, before the call, so this
@@ -370,7 +391,6 @@ async def send(
         routing=routing,
         user_id=user_id,
         thread_id=ctx.thread.id,
-        prompt_version_id=None,
         retry_malformed=False,
     )
     reply = call.value
@@ -399,7 +419,7 @@ async def send(
                 accepted_framework = offer.technique
                 offered_now.append(offer.technique)
         else:
-            # Carrying on past the offer is Keep chatting (muhammad, 2026-09-24), held here
+            # Carrying on past the offer is I want to keep talking (muhammad, 2026-09-24), held here
             # rather than left to the model, which kept asking again. The one exception is a
             # question the reply answers by making the offer again: they asked about it.
             asked_about_it = "?" in content and any(p.technique for p in reply.prompts or [])
@@ -495,6 +515,19 @@ async def send(
         # The two choices are written here and only here, so a library button the model sent
         # can never silence library_pending.
         checked = dataclasses.replace(checked, prompts=_handoff())
+    stored_options = [p.model_dump(mode="json", exclude_none=True) for p in checked.prompts]
+    offered = next((p.technique for p in checked.prompts if p.technique), None)
+    if offered is not None:
+        # Every check that can stop an offer has run, so the one left is an offer. The model chose
+        # that and which set; its words and buttons are the seeded offer's, so no style is recorded
+        # for text the person never sees.
+        text, stored_options = offers.offer(config.replies, config.registry.get(offered))
+        checked = dataclasses.replace(
+            checked,
+            text=text,
+            prompts=[SmartPrompt.model_validate(option) for option in stored_options],
+            style=None,
+        )
     if not checked.text:
         # Nothing to say. Refused here as retryable, rather than by the
         # messages_content_not_empty constraint as an opaque 500.
@@ -511,8 +544,7 @@ async def send(
         content,
         checked.text,
         selected_prompt=tapped.label if tapped else None,
-        prompt_options=[p.model_dump(mode="json", exclude_none=True) for p in checked.prompts]
-        or None,
+        prompt_options=stored_options or None,
         client_message_id=client_message_id,
     )
 
@@ -795,6 +827,37 @@ async def _open_in_style(
     )
 
 
+async def _explain_offer(
+    conn: asyncpg.Connection,
+    ctx: threads.TurnContext,
+    content: str,
+    label: str,
+    framework: Framework,
+    replies: Replies,
+    client_message_id: uuid.UUID | str | None,
+    settings,
+) -> Turn:
+    """Answer Tell me more from the `replies` row and the offered framework's row.
+
+    No model call, and the offer stays exactly as it was: still waiting on its offering phase, with
+    the two buttons that answer it.
+    """
+    reply, options = offers.told_more(replies, framework)
+    pair = await messages_db.create_pair(
+        conn, ctx.thread.id, content, reply,
+        selected_prompt=label, prompt_options=options, client_message_id=client_message_id,
+    )
+    return Turn(
+        message_id=pair.mani_message_id,
+        content=reply,
+        created_at=pair.created_at,
+        prompts=[SmartPrompt.model_validate(option) for option in options],
+        title=ctx.thread.title,
+        crisis_blocks_chat=settings.crisis_blocks_chat,
+        was_duplicate=pair.was_duplicate,
+    )
+
+
 async def _handle_crisis(
     conn: asyncpg.Connection,
     ctx: threads.TurnContext,
@@ -811,9 +874,9 @@ async def _handle_crisis(
     """Store the turn, flag the thread, and answer with something a person can read.
 
     The reference stored only the user's message and returned an empty string, so the
-    screen went blank at the one moment it mattered most. Called from two places: the
-    deterministic safety screen, before any model call, and the model's own judgment,
-    reported through the reply schema - either way the thread locks the same way.
+    screen went blank at the one moment it mattered most. Called from one place: the
+    deterministic safety screen, before any model call. The model's own crisis judgment
+    does not come here; it is kept as a concern that does not lock the thread.
 
     No exercise is handed over here. The thread is about to lock one way, so an exercise
     would reach someone who cannot ask a single question about it.
@@ -877,12 +940,3 @@ async def _has_earlier_thread(
             user_id, exclude,
         )
     )
-
-
-async def summary_snapshot(
-    conn: asyncpg.Connection, thread_id: uuid.UUID | str, user_id: str
-) -> tuple[list[Message], object | None]:
-    """The messages a summary run should read, and the summary it is updating."""
-    existing = await summaries.get(conn, thread_id)
-    page = await messages_db.list_for_thread(conn, thread_id, user_id, limit=200)
-    return list(reversed(page.messages)), existing

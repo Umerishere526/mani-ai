@@ -60,7 +60,7 @@ def _is_offer_button(prompt: SmartPrompt) -> bool:
 
 
 def without_offer(prompts: list[SmartPrompt]) -> list[SmartPrompt]:
-    """The buttons with the offer taken out: its Try it, and the Keep chatting that only answers it."""
+    """The buttons with the offer taken out: its yes, and the decline that only answers it."""
     return [p for p in prompts if not _is_offer_button(p)]
 
 
@@ -125,8 +125,8 @@ def check(
     Text is the model's own, trimmed. A button is dropped when it has no label, offers a
     framework the registry does not hold, or would open an offer where one cannot stand: while
     a framework runs, on the turn they said no, or on the turn a framework retires, where the
-    offer's row would overwrite the decline or the retirement. An offer left without its Try it
-    takes its Keep chatting with it. A reported step counts only from the framework's last own phase
+    offer's row would overwrite the decline or the retirement. An offer left without its yes
+    takes its decline with it. A reported step counts only from the framework's last own phase
     on, where it is clamped to the order the framework runs in; before that the ledger decides the
     stage. Reported stages are kept to the ones the running framework has and the statuses a reply
     may write. A reported shape is kept only when it is one of `shapes`,
@@ -205,8 +205,8 @@ def check(
                 prompt = prompt.model_copy(update={"library": canonical_library})
         kept.append(prompt)
 
-    # Keep chatting answers an offer. Once the offer's own button is gone it answers nothing, so
-    # it goes with it.
+    # I want to keep talking answers an offer. Once the offer's own button is gone it answers
+    # nothing, so it goes with it.
     if any(p.technique for p in reply.prompts or []) and not any(p.technique for p in kept):
         remaining = without_offer(kept)
         if len(remaining) != len(kept):

@@ -9,7 +9,7 @@ names someone or hands over a feeling word.
 
 | File | Source | What it carries |
 |---|---|---|
-| `conversational-styles.md` | *Direct. Supportive. Reflective.* | The three styles, the full conversation cadence, the greeting and style-selection flow, the somatic check-in wording, per-style behaviour inside a framework, worked scenarios across all three styles |
+| `conversational-styles.md` | *Directive. Supportive. Reflective.* | The three styles, the full conversation cadence, the greeting and style-selection flow, the somatic check-in wording, per-style behaviour inside a framework, worked scenarios across all three styles |
 | `six-frameworks-overview.md` | *Six Frameworks for App* §§1–7 | The comparison table, the selection table, the pairwise distinctions, the safety exception, and the rules and failure modes shared by all six |
 | `framework-abcde.md` | Framework 1 | |
 | `framework-thought-reframe.md` | Framework 2 | |
@@ -32,12 +32,12 @@ must avoid**.
   model reads; the one phrase list in code is the grief veto, `never_offer_when_said`, seeded into
   `admin.frameworks.activation`.
 - **"Important Framework Distinctions"** and each file's §9 → the Skip when lines, which the model reads.
-- **Stage sections (§§11–18)** → `admin.frameworks.stages` jsonb, one entry per phase, with the
-  three tone variants at the `ask` leaf only.
+- **Stage sections (§§11–18)** → each framework's Stages line in its seven line `body`: the stage ids the
+  model reports on, and `thread_technique_state.stage_ledger` tracks.
 - **"Responses MANI Must Avoid"** → `tests/evals/` negative assertions, which run with no model
   call.
-- **Worked examples (§23)** and the styles doc's scenarios → the routing and
-  style-differentiation eval sets.
+- **Worked examples (§23)** → `tests/evals/`, which checks that no framework line carries their scenario
+  text. The styles doc's scenarios → the `client_*` scenarios in `scripts/eval_conversations.yaml`.
 - **Rules repeated across all six** → `content/prompts/mani_base.md` (conversation rules and tone) and, for the body check after a framework, its `ending` section, with `scripts/seed.py` appending the two ending phases to every framework (spec 0009 replaced the fixed check in and practices with rules the model follows).
 
 ## Not in these documents

@@ -14,7 +14,7 @@ the same change as the work.**
   gpt-6-luna on effort `high`, Supportive, 3 runs): median per run of the three tagged scenarios is 26 calls,
   228,251 input tokens (203,763 cached), 25,595 output tokens of which 21,665 are reasoning, 319 s of model
   time against 320 s of turn time, and 3 findings. A turn takes a median of 11.5 s; 7 of 70 turns were redrafted.
-- Database: 12 migrations (001-010, 018 and 019), 15 tables (8 `public`, 7 `admin`), 6 frameworks and 8 prompts seeded.
+- Database: 18 migrations (001-010 and 018-025), 15 tables (8 `public`, 7 `admin`), 6 frameworks and 10 prompts seeded.
   `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
   private `exercises` bucket (`scripts/seed_exercises.py`). A hosted project exists and its schema has
   drifted ahead of this code (see Open engineering).
@@ -61,8 +61,8 @@ the same change as the work.**
      `ruled_out`. Nothing else in code decides which set may be offered; the model judges that from the
      Framework Index (spec 0011).
   3. `context.py` builds the `[ctx]` block: style, offer timing, the stage in progress, and the lines Mani
-     may say word for word (`clarification_lines` while nothing runs, `after_framework_questions` after a
-     framework ended), as keys from `CTX_KEYS` and values only. The code does not label what the person
+     may say word for word (`after_framework_questions` after a framework ended), as keys from `CTX_KEYS`
+     and values only. The code does not label what the person
      said; the model reads it.
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,
      `heading_toward`, then `text`. The order is deliberate. The schema carries names and types only.
@@ -70,10 +70,15 @@ the same change as the work.**
      unknown framework, inside a running one, or on a turn that declines or retires an offer (with the
      offer's other buttons), a stage out of order, a library section that does not exist. The reply's
      words are not edited.
-  6. Crisis, the reply, the framework state and the summary are written together.
+  6. A technique button still there after the guards, a safety concern and the ending is an offer, and
+     `offer.py` writes it (spec 0013): the `replies` row's `offer.text` with the framework's name and
+     summary, and the buttons Yes, let's try it · Tell me more · I want to keep talking. The model's text
+     and style on that turn are dropped. A tap on Tell me more is answered from `offer.more_text` with no
+     model call, and leaves the offer open.
+  7. Crisis, the reply, the framework state and the summary are written together.
 - **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): six, each reviewed against the
   client's specification. An offer may come from the person's second message, of any set the model judges
-  fits, once Mani has learned what its Starts when line names. There is no nearest fit and no urgent case:
+  fits, once Mani can tell what the issue is (spec 0012). There is no nearest fit and no urgent case:
   DBT STOP waits for the second message like the others. The seed appends `somatic_checkin` and `somatic_practice`
   (`techniques.ENDING_PHASES`) to every framework's phases.
   The ending is rules in `mani_base.md`'s `ending` section (spec 0009): on the last own stage Mani asks
@@ -85,7 +90,8 @@ the same change as the work.**
   `ending_turn_cap` (12, in `tuning`) of the person's messages, counted from
   `thread_technique_state.ending_from`; a crisis turn retires an open ending too.
 - **Memory**: per person, folded from earlier chats by `mani/memory.py`; idle threads fold through
-  `scripts/fold_idle_threads.py` or `GET /internal/cron/fold-summaries` behind `CRON_SECRET`.
+  `scripts/fold_idle_threads.py`, which nothing schedules yet (scope feature 19).
+  `GET /internal/cron/fold-summaries` catches up thread summaries, not memory.
 - **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). A completing framework picks one
   exercise from the whole active catalog with one bound tool call (`mani/llm/tools.py`): the framework's own
   exercises are listed first, and the pick sees the person's last three messages and the thread's current
@@ -119,24 +125,26 @@ the same change as the work.**
 | GET POST, PATCH DELETE | `/v1/admin/exercises`, `/{id}` | catalog CRUD |
 | GET | `/v1/admin/crisis-events` | review queue |
 | GET | `/v1/admin/users/{id}/memory` | what is remembered about a person |
-| GET | `/internal/cron/fold-summaries` | idle memory fold, bearer `CRON_SECRET`, no JWT |
+| GET | `/internal/cron/fold-summaries` | thread summary catch up (`summarize.reconcile_due`), bearer `CRON_SECRET`, no JWT |
 
 ## Decisions in force
 
 - **A turn is one chat model call, and a malformed chat reply is not retried**. The person sees a retryable
   error instead. The one scoped extra call is the exercise pick at the end of a framework.
   `test_a_turn_makes_one_chat_call_and_does_not_retry_a_malformed_reply` holds it.
-- **The reply goes out as the model wrote it.** Code after the call only guards what is stored or sent to the
-  app (`mani/chat/guards.py`: unknown ids, stage order, library sections, buttons that would overwrite a
-  decline or a retirement, an `ending` set outside the ending). Offer timing is told in
-  `[ctx]`, not enforced, and the grief veto is told as `ruled_out`.
+- **The reply goes out as the model wrote it, except an offer.** Code after the call only guards what is
+  stored or sent to the app (`mani/chat/guards.py`: unknown ids, stage order, library sections, buttons that
+  would overwrite a decline or a retirement, an `ending` set outside the ending). Offer timing is told in
+  `[ctx]`, not enforced, and the grief veto is told as `ruled_out`. The one exception is an offer (spec
+  0013): the model decides that it offers and which set, and the code writes the offer's text and its three
+  buttons, and the reply to Tell me more, from seeded rows.
 - **The ending is ended by the model's `ending` field, and the code never reads words to drive it** (spec
   0009). `choice` and `keep_talking` retire the framework; Chat More / Go to Library are written by the
   code on `choice` only; no code edits the reply or matches a message or reply to decide buttons, state or
   retirement. A 12 message cap (`tuning` `ending_turn_cap`, `ending_from`) is the backstop. Held by
   `test_turn.py`'s ending tests and `test_guards.py`.
 - **The model judges which set fits, from the Framework Index; code only vetoes** (spec 0011).
-  Mani offers a set once it has learned what its Starts when line names and only when
+  Mani offers a set once it can tell what the issue is and which set fits (spec 0012), and only when
   `cooldown_passed: yes`, never one `ruled_out` names. The rule is told in `mani_base.md` and
   `response_format.md`, never enforced after the call; each offer is logged by id with `cooldown_passed`.
   There is no closest fit and no phrase list for what fits. Every reply before an offer asks one question.
@@ -147,7 +155,8 @@ the same change as the work.**
   shapes live only in `mani_base.md` `reply_shapes` (`Config.reply_shapes`; migration 019 dropped the
   database check), and the grief veto's phrases in `behavioral_activation.md`'s `activation.never_offer_when_said`.
 - **The lines Mani sends without the model live in the `replies` row, and the numbers that shape a
-  conversation in the `tuning` row** (spec 0008). Both are required rows of `admin.prompts`, never sent to
+  conversation in the `tuning` row** (spec 0008). The offer, its button labels and the Tell me more reply
+  are `replies` lines too, filled from the framework's `name` and `summary` (spec 0013). Both are required rows of `admin.prompts`, never sent to
   a model, with no default in code. `content_problem` in `mani/prompts/checks.py` checks them at seed, on
   every admin write (422, nothing stored) and at cache load (`CONFIG_ERROR`), and the four required rows
   cannot be deactivated or renamed in the portal. The files in `content/prompts/` are the source of
@@ -158,15 +167,20 @@ the same change as the work.**
   `public` and `admin` split, the `mani_service` role, three security definer write functions, the
   deterministic safety screen as the only thing that locks a thread, no streaming.
 - **The base prompt is short rules the model reasons from, not scripts.** No word lists and no example
-  conversations. The only lines the model says word for word are the clarification lines and the after
-  framework questions, sent in `[ctx]` from the `replies` row, and the model tracks which it has already
-  asked from its own replies in the history window; the client's consent and stage lines are examples.
-  There is no size limit in a test.
+  conversations. The only lines the model says word for word are the after framework questions, sent in
+  `[ctx]` from the `replies` row, and the model tracks which it has already asked from its own replies in
+  the history window; the client's consent and stage lines are examples. There is no size limit in a test.
+- **Each style line is the client's behavior list in the client's phrases, and nothing else steers the
+  style** (spec 0012). `mani_base.md` `styles` holds it; `[ctx]` names the style and carries no hint about
+  what to ask. A rule that asks for one more question before an offer is cut, not balanced by another
+  rule. The button says Directive; the stored value stays `direct`.
 - **Every model call names its thinking level in its own prompt row; there is no default** (spec 0004).
   `CALL_PROMPTS` in `mani/prompts/calls.py` lists the call rows, and seed, the admin writes and the call
   sites share one check. The portal cannot pause a call by deactivating its row.
 - **A prompt change is judged on numbers**: `eval_replies.py --baseline`, 3 runs before and 3 after, compared
   with `scripts/baseline.py compare` on the per scenario totals (spec 0002). One eval run is noise.
+- **Code, columns, grants and packages nothing reads are removed, not kept in case; write only audit records
+  stay because a person reads them** (spec 0014).
 
 ## Before it takes real traffic
 
@@ -177,7 +191,7 @@ Ordered by what breaks first.
    `db push` does not carry them. Run `scripts/test_db.sh --local` against the hosted database first, or a
    user could clear their own crisis flag.
 2. **Rate limit and cost ceiling.** `DAILY_MESSAGE_LIMIT` exists and defaults to 0 (off). It needs a number
-   from muhammad. There is no per user cost ceiling; `llm_calls.spend_since()` is what one would read. A retried
+   from muhammad. There is no per user cost ceiling; one would sum a person's tokens in `admin.llm_calls`. A retried
    send with the same `client_message_id` returns the first reply for free.
 3. **Crisis resources are empty.** `mani/chat/crisis.py` returns `[]`, and `safety.PROTOCOLS` and
    `CLARIFICATION` are empty too: the specifications refer to an approved protocol and do not contain one.
@@ -191,7 +205,7 @@ Ordered by what breaks first.
 7. **Pool and load.** `mani/db/pool.py` is min 2, max 10 with a 90 second command timeout, sized by reasoning.
    A turn holds a transaction open across the model call, so about 10 turns per process is the ceiling, and
    any `idle_in_transaction_session_timeout` below the model's latency kills turns. Nothing has been load
-   tested. `config.py` also defines `db_pool_*` settings that nothing reads.
+   tested.
 8. **The backend's database role.** `001_initial_schema.sql` grants `mani_service` to `postgres`. If the
    deployed `DATABASE_URL` connects as anything else, `set local role mani_service` fails. Grant it to that role,
    never to `authenticator`.
@@ -202,15 +216,26 @@ Ordered by what breaks first.
 ## Open decisions for muhammad
 
 - Crisis resources, `PROTOCOLS` and `CLARIFICATION` wording (point 3 above).
+- Tell the client that the two check lines ("Do I have this right?", "What would you like us to focus on
+  today?") are gone, and Mani checks its understanding in its own words, as their October 8 examples do
+  (spec 0012).
 - Tell the client that Mani no longer matches phrases to decide what to offer, so a plain sentence can be
   offered a fitting set, and that DBT STOP waits for the second message like the others; have them read
   about five real Supportive and Reflective transcripts.
 - Tell the client: when a person asks Mani to pick, it offers one small draft step to accept
   or change, which the Behavioral Activation specification's "must not choose the activity" does not allow
   as written.
-- Tell the client: after Try it Mani no longer asks the first stage's question when the person
+- Tell the client: after Yes, let's try it Mani no longer asks the first stage's question when the person
   has already said it, and a person who cannot say what to do is offered up to three options at the first
   "I don't know". Both depart from the literal Structured Problem Solving example.
+- Tell the client that every offer now opens with the same lead ("We'll go through a few focused
+  questions. By the end, you will have turned a problem that feels unclear or overwhelming into a practical
+  next step. Would it help to work through it together?"), then the framework's name and their description
+  word for word. The lead is Structured Problem Solving's own description, so that offer says it twice, and
+  it promises a practical next step for all six; the name is shown although their intro document says not to
+  give it. Both are muhammad's call (spec 0013).
+- Tell the client that Tell me more shows the framework's name and description again until they send its
+  wording (spec 0013, scope feature 17).
 - Panic with no action in sight: the overview sends it to DBT STOP, the STOP specification is written around an
   action about to be taken. The client's call.
 - Whether a crisis turn should hand off to an exercise. Left out on purpose; do not add it as a missing branch.
@@ -269,9 +294,7 @@ Ordered by what breaks first.
 - **Admin conversation browser**: do not rebuild it as a general reader. Scope it to threads with an unresolved
   crisis event, log each read, and return metadata by default.
 - **`GET /v1/admin/models`**, which the prompt editor's model dropdown needs.
-- **`threads.vague_streak`** is granted to the backend and written by nothing; the pacing it belongs to is
-  designed, not built.
-- **`appropriate_when` and `not_when`** in the framework files are read by nothing (each file says so).
+- **Vague-reply pacing** is designed, not built, and has no column; it gets one with the code that uses it.
 - The words "worried", "concerned" and "a lot" still reached about 1 reply in 10 in some scenarios when code
   checked for them. Nothing in `mani/` checks for them now, and the evals score them from
   `tests/evals/vocabulary.py`.
@@ -293,10 +316,17 @@ change to prompts, framework content or the offer rules, and compare with these.
 - Replies with no question before an offer: 1 of 39 on that chat (from 8 of 47).
 - Wrong framework offered early: Direct chose ACT or a plan for a colleague chat that wants ABCDE, until offers
   for ABCDE, Thought Reframe and ACT were made to wait for the third message (Direct then chose ABCDE 3 of 3).
+  That wait is gone: every offer may come from the second message (spec 0012, see Frameworks above).
 - System prompt size, spec 0007, 2026-10-07, counted with tiktoken `o200k_base` from the seeded rows (no
   model call, no user layers): before 5,391 tokens plus a 1,416 token `Reply` schema, 6,807 together; after
   6,383 plus 590, 6,973 together (+166, 2.4%). The stage rules, layer meanings and field meanings moved
   into the cached prefix; `[ctx]` lost `stage_note` on every framework turn. `Extraction` 380 to 193,
   `Memory` 386 to 178, `StartExercise` 130 to 41. The bill depends on the provider caching the prefix.
-- Local Supabase answers on 54321 to 54324 on this machine, not the 5434x in `config.toml`. See
-  `.claude/BACKEND.md`.
+- Client cadence, spec 0012, 2026-10-08, one real run each after the reseed, recorded as measured and not
+  rerun. `client_anxiety` Directive: no offer in its three messages, a fail. Mani asked twice whether the
+  chest tightness was new or severe, from the pain rule in `offers` and the `crisis` field's injury
+  guidance, not from the style line. `client_overthinking` Reflective: offer at message 2
+  (`thought_reframe`), a pass. `client_stress` Supportive: offer at message 2 (`structured_problem_solving`),
+  a pass. None of "I hear you", "That makes sense" or "I'm here for you" in any reply; "I'm here with you"
+  came in the Directive and Reflective runs. Prompts 150 lines and 3,616 words before, 148 and 3,460 after.
+- Local Supabase answers on the 5434x ports set in `config.toml`. See `.claude/BACKEND.md`.

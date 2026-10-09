@@ -29,9 +29,9 @@ STAGED = Framework(
 )
 
 OFFER = [
-    SmartPrompt(label="Try it", technique="abcde"),
+    SmartPrompt(label="Yes, let's try it", technique="abcde"),
     SmartPrompt(label="Tell me about this"),
-    SmartPrompt(label="Keep chatting", decline=True),
+    SmartPrompt(label="I want to keep talking", decline=True),
 ]
 
 
@@ -102,14 +102,14 @@ def test_a_button_with_no_label_is_dropped(registry):
     assert checked.notes == ["dropped a button: empty label"]
 
 
-def test_an_invented_technique_id_is_refused_and_takes_the_keep_chatting_with_it(registry):
-    """A model-supplied identifier is untrusted until the registry recognises it, and Keep
-    chatting answers an offer that is no longer there. A Tell me about this answers nothing in
+def test_an_invented_technique_id_is_refused_and_takes_the_decline_with_it(registry):
+    """A model-supplied identifier is untrusted until the registry recognises it, and I want to
+    keep talking answers an offer that is no longer there. A Tell me about this answers nothing in
     particular, so it stays."""
     invented = reply(prompts=[
-        SmartPrompt(label="Try it", technique="box_breathing"),
+        SmartPrompt(label="Yes, let's try it", technique="box_breathing"),
         SmartPrompt(label="Tell me about this"),
-        SmartPrompt(label="Keep chatting", decline=True),
+        SmartPrompt(label="I want to keep talking", decline=True),
         SmartPrompt(label="Go to Library", library="home"),
     ])
     checked = check(registry, invented)
@@ -119,7 +119,7 @@ def test_an_invented_technique_id_is_refused_and_takes_the_keep_chatting_with_it
 
 def test_an_offer_with_a_known_technique_keeps_its_two_buttons(registry):
     checked = check(registry, reply(prompts=OFFER))
-    assert [p.label for p in checked.prompts] == ["Try it", "Tell me about this", "Keep chatting"]
+    assert [p.label for p in checked.prompts] == ["Yes, let's try it", "Tell me about this", "I want to keep talking"]
     assert checked.notes == []
 
 
@@ -130,7 +130,7 @@ def test_no_framework_is_offered_from_inside_a_running_one(registry):
     nested = reply(prompts=[
         SmartPrompt(label="Try ABCDE", technique="abcde"),
         SmartPrompt(label="Try reframing", technique="thought_reframing"),
-        SmartPrompt(label="Keep chatting", decline=True),
+        SmartPrompt(label="I want to keep talking", decline=True),
     ])
     checked = check(
         registry, nested,
@@ -143,7 +143,8 @@ def test_no_framework_is_offered_from_inside_a_running_one(registry):
 @pytest.mark.parametrize("turn", [{"declined": True}, {"retiring": True}])
 def test_an_offer_cannot_stand_on_a_turn_that_records_a_decline_or_a_retirement(registry, turn):
     """Storing the offer would overwrite the decline or cancel the retirement this turn writes. Its
-    Try it and Keep chatting go; a Tell me about this answers nothing in particular and stays."""
+    Yes, let's try it and I want to keep talking go; a Tell me about this answers nothing in
+    particular and stays."""
     offered_again = reply(prompts=OFFER)
     checked = check(registry, offered_again, **turn)
     assert [p.label for p in checked.prompts] == ["Tell me about this"]

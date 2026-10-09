@@ -1,5 +1,5 @@
 # ABOUTME: Scripted conversations for scripts/eval_replies.py, one per named scenario.
-# ABOUTME: Turns are drawn from the framework files' own worked examples where possible.
+# ABOUTME: Each scenario's turns are what the person types, in order, one string per turn.
 
 - name: anxiety_free_chat
   baseline: true
@@ -91,7 +91,7 @@
     - "i don't know"
     - "please guide me, what should i do"
 
-# Observed 2026-10-01 (muhammad's chat, comparing themselves with others online): after Try it Mani asked
+# Observed 2026-10-01 (muhammad's chat, comparing themselves with others online): after Yes, let's try it Mani asked
 # "why does getting back to doing things that feel productive matter?" before anything specific had
 # been named, then answered "pick one for me" and "yes, but what should I start with?" with the same
 # three options twice. The first stage is skipped only when it is answered, a request to pick gets one
@@ -129,7 +129,8 @@
     - "I keep replaying the argument and I still can't see where it went wrong"
     - "that's all I wanted to say"
 
-# The client's own worked scenarios (docs/specs/conversational-styles.md), user turns verbatim.
+# The client's own worked scenarios (docs/specs/conversational-styles.md). The anxiety and
+# overthinking user turns are the document's; the scrolling and stress turns differ from it.
 # Their MANI lines are the target: compare side by side with --verbose.
 - name: client_anxiety
   turns:
@@ -190,7 +191,7 @@
     - "I guess I want to stop letting one comment decide how I feel about my work."
     - "Maybe I could ask her for feedback before the next presentation."
 
-# muhammad's own chat, 2026-09-24: on "Try it", Mani asked which problem to work on first, right
+# muhammad's own chat, 2026-09-24: on "Yes, let's try it", Mani asked which problem to work on first, right
 # after being told. The reply after @accept must build on it, not ask again.
 - name: start_keeps_context
   turns:
@@ -354,12 +355,12 @@
     - "@tap:Chat More"
     - "Thanks."
 
-# Saying "Keep chatting" to an offer, carrying on, and being offered something again once it fits.
+# Saying "I want to keep talking" to an offer, carrying on, and being offered something again once it fits.
 - name: decline_then_reoffer
   turns:
     - "My manager criticized my presentation in front of the whole team."
     - "She said two of my recommendations didn't have enough support, and now I keep thinking I'm bad at my job."
-    - "@tap:Keep chatting"
+    - "@tap:I want to keep talking"
     - "I just keep replaying her words."
     - "It's been going round in my head all day."
     - "I really can't shake the feeling I'm not good enough at this job."

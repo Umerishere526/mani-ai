@@ -19,6 +19,13 @@ logger = logging.getLogger(__name__)
 # transaction across statements.
 _pool: asyncpg.Pool | None = None
 
+# asyncpg pool bounds. Total Postgres backend connections consumed is
+# (concurrently running instances) x MAX_POOL_SIZE, uncapped by anything in this repo - the
+# Supabase session pooler (required because asyncpg uses prepared statements, which the
+# transaction pooler doesn't support) allocates one fixed backend connection per pooled
+# client connection. 2 and 10 are a hedge, not a measured guarantee: raising them needs
+# checking the actual project's pooler connection ceiling first (Supabase dashboard ->
+# Settings -> Database -> connection pooling), which this code cannot see.
 MIN_POOL_SIZE = 2
 MAX_POOL_SIZE = 10
 # A turn holds its connection across a model call, so this has to exceed that.

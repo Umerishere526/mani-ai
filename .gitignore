@@ -3,7 +3,7 @@
 
 # Python
 backend/.venv/
-chat-tester/.venv/
+chat-tester/venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -17,6 +17,8 @@ backend/.eval/
 # Editors
 .vscode/
 .idea/
+# Obsidian's per user view state, different on every machine.
+.obsidian/workspace.json
 
 # Claude Code reads project settings only from the session's working directory,
 # so a .claude/ in an app subdirectory is never loaded. Keep settings at the root.

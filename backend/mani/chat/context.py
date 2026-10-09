@@ -28,8 +28,7 @@ OPENING_MESSAGES = 3
 # section, and a test ties the two together in both directions, so the code sends only keys and
 # values and never a sentence of instruction.
 CTX_KEYS = frozenset({
-    "conversation_style", "safety", "recent_crisis", "conversation_phase",
-    "clarification_lines", "question_focus", "offer_waiting",
+    "conversation_style", "safety", "recent_crisis", "conversation_phase", "offer_waiting",
     "after_framework_questions", "cooldown_passed", "since_last", "this_thread",
     "library_pending", "current_phase", "history", "recent_styles", "recent_openers",
     "ruled_out", "framework_starting", "active_framework",
@@ -190,13 +189,6 @@ def build(
     else:
         phase = "talking"
     lines.append(_line("conversation_phase", phase))
-    if not running:
-        lines.append(_line("clarification_lines", " | ".join(replies.clarification_lines)))
-    if not running:
-        # What the question is about while no stage decides it (muhammad, 2026-09-24): said
-        # here, next to the message, because the style rule in the long prompt alone did not hold.
-        focus = "feeling_then_way_through" if style == "direct" else "feelings"
-        lines.append(_line("question_focus", focus))
     if offer_waiting:
         # Mani's last reply was an offer, and they typed rather than tapped.
         lines.append(_line("offer_waiting", "yes"))

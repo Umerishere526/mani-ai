@@ -1,7 +1,6 @@
 ---
 id: 10000000-0000-0000-0000-000000000010
 name: title_generation
-type: system
 description: Instruction added on 4th message to generate thread title
 ---
 

@@ -44,7 +44,7 @@ it; revoking the DML grant and granting the function to the same role changes no
 
 So `backend/mani/db/pool.py` does `set local role mani_service`. The role is a member of
 `authenticated`, so it inherits the ordinary grants, and holds the few the user must not
-have, checked against the live database: EXECUTE on the three definer functions (`create_message_pair`, `mark_thread_crisis`, `create_greeting`); INSERT, UPDATE and DELETE on `thread_technique_state`; INSERT and UPDATE on `thread_summaries`; SELECT, INSERT and UPDATE on `admin.user_memory`; and column UPDATE on `threads.vague_streak` and `threads.memory_folded_at`.
+have, checked against the live database: EXECUTE on the three definer functions (`create_message_pair`, `mark_thread_crisis`, `create_greeting`); INSERT and UPDATE on `thread_technique_state`; INSERT and UPDATE on `thread_summaries`; SELECT, INSERT and UPDATE on `admin.user_memory`; and column UPDATE on `threads.memory_folded_at`.
 
 RLS still applies to it — the policies carry no `TO` clause, so they target `PUBLIC`, and
 `mani_service` owns no tables and has no `BYPASSRLS`. It is a wider set of privileges,
@@ -63,7 +63,7 @@ exposes is reachable by anyone holding the anon key. Two settings decide that, a
 default to the permissive answer.
 
 - **`[api] schemas` in `supabase/config.toml`.** Only `public` and `graphql_public` are
-  listed, so `admin` — prompts, providers, `llm_calls`, `crisis_events` — is not merely
+  listed, so `admin` — prompts, frameworks, `llm_calls`, `crisis_events`, `user_memory` — is not merely
   denied, it is invisible: requests return `404`, even with the service key. Keep it that
   way. Anything added to that list becomes internet-reachable.
 - **`auto_expose_new_tables`.** Ships commented out and **defaults to `true`**, which

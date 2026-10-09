@@ -6,7 +6,6 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
 
 import asyncpg
 
@@ -23,7 +22,7 @@ from mani.models.rows import (
 
 COLUMNS = (
     "id, user_id, title, message_count, crisis_detected, "
-    "created_at, last_message_at, deleted_at, conversation_style"
+    "created_at, last_message_at, conversation_style"
 )
 
 DEFAULT_PAGE = 20
@@ -281,8 +280,8 @@ async def apply(
         )
 
     if updates.conversation_style is not None:
-        # Its own column grant, added by migration 002 - the grant in 001 is
-        # column-scoped and covers title, last_message_at and deleted_at only, so a
+        # Its own column grant, added by migration 002 - the user's column-scoped UPDATE
+        # grant covers only title and deleted_at otherwise, so a
         # missing grant here would fail at runtime with 42501 and roll back the turn.
         await conn.execute(
             "update public.threads set conversation_style = $1 "

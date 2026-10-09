@@ -25,7 +25,7 @@ def test_a_person_with_no_nickname_is_greeted_as_there():
 
 def test_the_greeting_offers_exactly_the_three_styles_in_the_order_the_file_lists_them():
     options = greeting.style_options(REPLIES)
-    assert [o["label"] for o in options] == ["Direct", "Supportive", "Reflective"]
+    assert [o["label"] for o in options] == ["Directive", "Supportive", "Reflective"]
     assert [o["style"] for o in options] == ["direct", "supportive", "reflective"]
 
 

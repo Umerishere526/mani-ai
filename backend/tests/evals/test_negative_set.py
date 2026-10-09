@@ -209,35 +209,6 @@ def test_every_shape_the_base_prompt_teaches_is_one_the_guard_keeps():
         assert checked.style == Style(shape=taught), taught
 
 
-def test_a_capsule_that_judges_the_person_is_caught():
-    """Observed live: a reply offered "I'm overthinking it" as a button. A label is the one
-    thing in a reply the person may send back as their own words, so it cannot hand them a
-    judgment about themselves to press."""
-    findings = validators.check_capsules(
-        ["Tell me more", "I'm overthinking it"], "She was short with me."
-    )
-    assert "capsule judges them" in {f.rule for f in findings}
-
-
-def test_a_capsule_naming_a_feeling_they_did_not_use_is_caught():
-    findings = validators.check_capsules(
-        ["It's frustrating", "Not sure yet"], "She ended the conversation."
-    )
-    assert "capsule puts feelings in their mouth" in {f.rule for f in findings}
-
-
-def test_neutral_capsules_pass():
-    """The replacements the specification itself gives for the bad examples above."""
-    assert validators.check_capsules(
-        ["Tell me more", "Not sure yet", "Something else"], "She was short with me."
-    ) == []
-
-
-def test_a_capsule_mirroring_their_own_word_is_allowed():
-    """Same rule as the prose: their word is theirs to reflect back."""
-    assert validators.check_capsules(["Still hurt"], "it still hurt afterwards") == []
-
-
 def test_every_framework_still_carries_its_negative_set():
     """The examples above are transcribed from these tables. If a client specification loses
     its table, this set silently stops reflecting the specification it came from."""
@@ -247,7 +218,7 @@ def test_every_framework_still_carries_its_negative_set():
         assert "Responses MANI must avoid" in path.read_text(), f"{path.name} has no negative set"
 
 
-# The words a framework's eight lines may not carry. They sit in every conversation's prompt,
+# The words a framework's seven lines may not carry. They sit in every conversation's prompt,
 # so a person or detail from a worked example ("her silence", "your manager") is handed to
 # people it has nothing to do with, and an author's note to the writer ("- use X only if ...")
 # can be read back to them.

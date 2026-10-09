@@ -22,6 +22,7 @@ REMOVED = (
     "offer_fit", "stage_purpose", "stage_listen_for", "stage_ready_when", "stage_boundaries",
     "stage_if_unclear", "stage_ask", "next_stage",
     "their_last", "clarification_available", "after_framework_question", "framework_shortlist",
+    "clarification_lines", "question_focus", "feeling_then_way_through",
 )
 
 

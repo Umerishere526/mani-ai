@@ -125,6 +125,26 @@ def test_the_reply_to_chat_more_counts_toward_the_three_questions():
     assert not [f for f in findings if f.rule == "after framework"]
 
 
+def test_the_reply_checks_skip_an_offer_the_code_wrote():
+    """The seeded offer names its framework and says "overwhelming", which the model's own replies
+    may not; checked as the model's, it would flag every offer."""
+    from mani.models.rows import SupportStyle
+    from scripts.eval_replies import Exchange, _score
+    from scripts.seed import load_replies
+
+    offer = load_replies().offer.text.format(
+        name="Thought Reframe", description="This framework helps you examine a troubling thought."
+    )
+    rules = {"said a framework", "labelling"}
+
+    def found(offered: bool) -> set[str]:
+        exchange = Exchange(message="I failed the exam", reply=offer, offered=offered)
+        return {f.rule for f in _score([exchange], SupportStyle.DIRECT, {"heard": True})}
+
+    assert rules <= found(offered=False)
+    assert not rules & found(offered=True)
+
+
 def test_a_framework_question_that_shares_nothing_with_what_they_said_is_generic():
     from tests.evals.validators import names_their_situation
 

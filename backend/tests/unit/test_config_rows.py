@@ -44,7 +44,7 @@ REPLIES_REFUSED = {
     "an unknown key": lambda b: b.update(extra="x"),
     "a missing key": lambda b: b.pop("style_question"),
     "an empty line": lambda b: b.update(style_question="   "),
-    "an empty list": lambda b: b.update(clarification_lines=[]),
+    "an empty list": lambda b: b.update(after_framework_questions=[]),
     "a greeting field that is not name": lambda b: b["greeting"].update(new="Hi {nickname}"),
     "a positional greeting field": lambda b: b["greeting"].update(new="Hi {}"),
     "a conversion": lambda b: b["greeting"].update(new="Hi {name!r}"),
@@ -53,9 +53,22 @@ REPLIES_REFUSED = {
     "a missing style": lambda b: b["style_labels"].pop("reflective"),
     "an unknown style": lambda b: b["openers"].update(neutral="Hello"),
     "two labels equal ignoring case": lambda b: b["style_labels"].update(direct="SUPPORTIVE"),
-    "a pipe in a clarification line": lambda b: b.update(clarification_lines=["a | b"]),
+    "a pipe in an after question": lambda b: b.update(after_framework_questions=["a | b"]),
     "a bracket in an after question": lambda b: b.update(after_framework_questions=["a [b]"]),
-    "a newline in a clarification line": lambda b: b.update(clarification_lines=["a\nb"]),
+    "a newline in an after question": lambda b: b.update(after_framework_questions=["a\nb"]),
+    "the check lines left in the row": lambda b: b.update(clarification_lines=["Do I have this right?"]),
+    "a missing offer": lambda b: b.pop("offer"),
+    "an offer without its description": lambda b: b["offer"].update(text="Framework: {name}"),
+    "a tell me more without its name": lambda b: b["offer"].update(more_text="{description}"),
+    "an offer field that is not name or description": lambda b: b["offer"].update(
+        text="{name} {description} {other}"
+    ),
+    "a positional offer field": lambda b: b["offer"].update(more_text="{name} {description} {}"),
+    "a blank offer label": lambda b: b["offer"]["labels"].update(more="   "),
+    "a missing offer label": lambda b: b["offer"]["labels"].pop("decline"),
+    "two offer labels equal ignoring case": lambda b: b["offer"]["labels"].update(
+        more="I WANT TO KEEP TALKING"
+    ),
 }
 
 

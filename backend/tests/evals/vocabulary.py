@@ -37,17 +37,6 @@ FEELING_WORDS = frozenset(
     }
 )
 
-# Judgments a person may hold about themselves but must never be handed as a button to press.
-# Observed live: a reply offered "I'm overthinking it" as a capsule.
-SELF_JUDGMENTS = (
-    "overthinking", "over thinking", "being dramatic", "too sensitive", "overreacting",
-    "over reacting", "being silly", "being stupid", "my fault", "i'm weak", "i am weak",
-    "i'm broken", "i am broken", "not enough", "being needy", "being difficult",
-)
-
-# Five: room for a choice in the person's own voice. Past that a label is becoming a sentence.
-MAX_CAPSULE_WORDS = 5
-
 WORD = re.compile(r"[a-z']+")
 
 

@@ -75,6 +75,14 @@ select pg_temp.want('a user cannot edit a message after the fact',
 select pg_temp.want('a user can rename their own thread',
   has_column_privilege('authenticated', 'public.threads', 'title', 'UPDATE'), true);
 
+-- Deleting a thread is this UPDATE, never a DELETE, so the soft delete cannot be skipped.
+select pg_temp.want('a user can soft delete their own thread',
+  has_column_privilege('authenticated', 'public.threads', 'deleted_at', 'UPDATE'), true);
+
+-- Written only by the message count trigger, inside the definer functions.
+select pg_temp.want('a user cannot move their own last message time',
+  has_column_privilege('authenticated', 'public.threads', 'last_message_at', 'UPDATE'), false);
+
 select pg_temp.want('a user cannot clear their own crisis flag',
   has_column_privilege('authenticated', 'public.threads', 'crisis_detected', 'UPDATE'), false);
 
@@ -84,18 +92,10 @@ select pg_temp.want('a user cannot rewrite their own message count',
 select pg_temp.want('a user cannot reassign a thread to someone else',
   has_column_privilege('authenticated', 'public.threads', 'user_id', 'UPDATE'), false);
 
--- The two columns migration 002 added, and the line between them: how Mani speaks is the
--- person's to choose, the pacing counter behind the vague-reply pivot is not. A user who
--- could write it could reset their own counter and never be moved off a vague loop.
+-- The column migration 002 added: how Mani speaks is the person's to choose.
 select pg_temp.want('a user can choose their conversation style',
   has_column_privilege('authenticated', 'public.threads', 'conversation_style', 'UPDATE'),
   true);
-
-select pg_temp.want('a user cannot reset their own vague streak',
-  has_column_privilege('authenticated', 'public.threads', 'vague_streak', 'UPDATE'), false);
-
-select pg_temp.want('the backend can move the vague streak',
-  has_column_privilege('mani_service', 'public.threads', 'vague_streak', 'UPDATE'), true);
 
 select pg_temp.want('a user can change their own nickname',
   has_column_privilege('authenticated', 'public.profiles', 'nickname', 'UPDATE'), true);
@@ -144,7 +144,11 @@ select pg_temp.want('a user cannot read crisis events',
 select pg_temp.want('a user cannot write crisis events',
   has_table_privilege('authenticated', 'admin.crisis_events', 'INSERT'), false);
 
--- The exercise catalog and the framework registry are shared content, not private data.
+-- The exercise catalog is shared content, not private data. The framework registry is read
+-- only on the backend's admin connection, so a user has no reason to reach it.
+select pg_temp.want('a user cannot read the framework registry',
+  has_table_privilege('authenticated', 'admin.frameworks', 'SELECT'), false);
+
 select pg_temp.want('a user can read the exercise catalog',
   has_table_privilege('authenticated', 'admin.exercises', 'SELECT'), true);
 
@@ -188,10 +192,9 @@ select pg_temp.want('the backend can write a greeting through the function',
 select pg_temp.want('the old two-argument greeting function is gone, not just re-pointed',
   to_regprocedure('public.create_greeting(uuid, text)') is null, true);
 
--- Clearing a finished technique is a backend decision. Both halves matter: without the
--- grant the delete raises, without the policy it silently matches nothing.
-select pg_temp.want('the backend can clear technique state',
-  has_table_privilege('mani_service', 'public.thread_technique_state', 'DELETE'), true);
+-- A finished technique is retired with an UPDATE, so no role but the account cascade deletes it.
+select pg_temp.want('the backend cannot delete technique state',
+  has_table_privilege('mani_service', 'public.thread_technique_state', 'DELETE'), false);
 
 -- Both feed the model: the summary goes into the system prompt, technique state into [ctx].
 select pg_temp.want('a user cannot write their own summary',
@@ -231,16 +234,42 @@ select pg_temp.want('the memory is row-scoped even for the backend',
 select pg_temp.want('a user cannot delete technique state directly',
   has_table_privilege('authenticated', 'public.thread_technique_state', 'DELETE'), false);
 
+-- What no code path does is not granted, to the user or to the backend that inherits from them.
+select pg_temp.want('neither a user nor the backend can hard delete a thread',
+  has_table_privilege('authenticated', 'public.threads', 'DELETE')
+  or has_table_privilege('mani_service', 'public.threads', 'DELETE'), false);
+
+select pg_temp.want('neither a user nor the backend can delete an offered technique',
+  has_table_privilege('authenticated', 'public.thread_techniques_offered', 'DELETE')
+  or has_table_privilege('mani_service', 'public.thread_techniques_offered', 'DELETE'), false);
+
+select pg_temp.want('neither a user nor the backend can edit an exercise completion',
+  has_table_privilege('authenticated', 'public.exercise_completions', 'UPDATE')
+  or has_table_privilege('mani_service', 'public.exercise_completions', 'UPDATE'), false);
+
+select pg_temp.want('the backend cannot move a last message time',
+  has_column_privilege('mani_service', 'public.threads', 'last_message_at', 'UPDATE'), false);
+
+select pg_temp.want('the backend reads the framework registry only as admin',
+  has_table_privilege('mani_service', 'admin.frameworks', 'SELECT'), false);
+
+-- A policy with no grant behind it permits nothing today and anything once a grant is added.
+-- The only DELETE and completion UPDATE policies left are the account cascade's (migration 005).
 do $$
+declare
+  stray text;
 begin
-  if not exists (
-    select 1 from pg_policies
-     where schemaname = 'public' and tablename = 'thread_technique_state'
-       and cmd = 'DELETE'
-  ) then
-    raise exception 'FAIL: thread_technique_state has no DELETE policy, so the grant deletes nothing';
+  select string_agg(tablename || '.' || policyname, ', ') into stray
+    from pg_policies
+   where schemaname = 'public'
+     and ((cmd = 'DELETE' and tablename in
+            ('threads', 'messages', 'thread_technique_state', 'thread_techniques_offered'))
+          or (cmd = 'UPDATE' and tablename = 'exercise_completions'))
+     and roles <> array['supabase_auth_admin']::name[];
+  if stray is not null then
+    raise exception 'FAIL: policies with no code path behind them: %', stray;
   end if;
-  raise notice 'PASS: technique state has a DELETE policy behind the grant';
+  raise notice 'PASS: no DELETE policy beyond the account cascade, and no completion UPDATE policy';
 end
 $$;
 

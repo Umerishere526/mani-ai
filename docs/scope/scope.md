@@ -24,8 +24,14 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 9 | Reply text and numbers out of Python | Slice 3 | in-progress |
 | 12 | Stages skip what the chat already told | Slice 4 | in-progress |
 | 13 | Frameworks offered when the chat fits | Slice 4 | in-progress |
-| 10 | Crisis decided by the model | Slice 5 | planned |
-| 11 | Thinking level and prompt tuning from measurements | Slice 6 | planned |
+| 14 | Mani speaks and asks as the client wrote | Slice 5 | in-progress |
+| 15 | The offer in the client's words | Slice 5 | in-progress |
+| 16 | Audit unused code and files | Slice 5 | in-progress |
+| 17 | Tell me more in the client's words | Slice 5 | planned |
+| 10 | Crisis decided by the model | Slice 6 | planned |
+| 18 | Crisis events can be resolved | Slice 6 | planned |
+| 11 | Thinking level and prompt tuning from measurements | Slice 7 | planned |
+| 19 | Memory folding runs on a schedule | Slice 7 | planned |
 
 ## Already built
 
@@ -183,27 +189,88 @@ Spec: [0011](../specs/0011-offers-follow-the-chat/index.md) · code in backend/m
 - [ ] Verify it: `/check verify frameworks offered when the chat fits`
 - [ ] Test it: `/test frameworks offered when the chat fits`
 
-## Slice 5: Crisis
+## Slice 5: Client cadence
+
+### 14. Mani speaks and asks as the client wrote · in-progress
+Each reply does what the client's Directive, Supportive or Reflective behavior list says (docs/client-share-docs/directive, reflective, supportive .docx), asks the way the client's examples ask, and offers once Mani can identify the issue: about 2 to 4 exchanges, a range, not a count. Reached by replacing and cutting prompt rules, never by adding them, because rule bloat makes the model drift. Today the `Starts when` gates, the "reaches, unseen" question rule and the "If two fit" rule kept the manager and CEO conversation asking for 8 turns, and "Start with what they feel" made Direct restate instead of lead.
+**Done when:** `mani_base.md` plus `response_format.md` are under 150 lines and 3616 words together, and three real conversations, one run each after muhammad's yes (`client_anxiety` Directive, `client_overthinking` Reflective, `client_stress` Supportive), each reach an offer at the person's message 2 to 4 with no "I hear you", "That makes sense" or "I'm here for you". Recorded as measured; a failing run is reported, not rerun. Broader offer measurement stays under feature 11.
+Spec: [0012](../specs/0012-mani-speaks-as-client-wrote/index.md) · code in backend/content/, backend/mani/chat/context.py, backend/mani/prompts/replies.py, chat-tester/app.py
+- [x] Design it (spec): `/architect mani speaks and asks as the client wrote` (decided 2026-10-08: cut and replace rules with the client's phrases, hybrid style lines, `question_focus` and `clarification_lines` cut, Directive label only, offer wording left to feature 15, real runs capped at 3)
+- [x] Build it: `/develop mani speaks and asks as the client wrote`
+  - [x] Tracer: `question_focus` and `clarification_lines` out of code, `[ctx]` and the `replies` row, the Directive label, the prompt and Starts when drafts, `pytest tests/unit` green (AC-1 to AC-8)
+  - [x] Review and reseed: muhammad reviews the wording, reseed, full `pytest` with integration not skipped, `wc -lw` (AC-9, AC-12)
+  - [x] Close out: `conversational-styles.md` from the October 8 doc, the eval yaml comment, PORT-STATUS, journal (AC-10, AC-12)
+  - [x] Real runs: three conversations with muhammad's yes and `get-credits` first (AC-11)
+- [ ] Verify it: `/check verify mani speaks and asks as the client wrote`
+- [ ] Test it: `/test mani speaks and asks as the client wrote`
+
+### 15. The offer in the client's words · in-progress
+The offer is a fixed frame in seeded content: "We'll go through a few focused questions.", `Framework: <name>`, that framework's description word for word from docs/client-share-docs/intro to six frameworks _ three follow up questions .docx, and "Would it help to work through it together?", with three buttons: Yes, let's try it · Tell me more · I want to keep talking. Tell me more gets a short explanation in the chosen style, then Yes, let's try it · I want to keep talking. Showing the name is muhammad's call over the client doc (2026-10-08). Design it with feature 14, since both rewrite the `offers:` rules.
+**Done when:** every offer shows the frame, the name and that framework's client description exactly, with the three buttons; Tell me more answers and leaves the two buttons; and changing any of this text needs only a reseed.
+Spec: [0013](../specs/0013-offer-in-client-words/index.md) · code in backend/content/, backend/mani/chat/offer.py, backend/mani/chat/orchestrator.py, backend/mani/prompts/replies.py, backend/scripts/, chat-tester/app.py
+- [x] Design it (spec): `/architect the offer in the client's words` (decided 2026-10-08: the code writes the offer from seeded rows and the model only decides when and which; one lead for all six, kept by muhammad over the repeat it makes; the client's names and descriptions; Tell me more shows the name and description with no model call until feature 17; the chat tester hides its field while an offer is open; the `Offer:` lines cut to seven; no real runs)
+- [x] Build it: `/develop the offer in the client's words`
+  - [x] Tracer: the `offer` block and its checks, `offer.py`, the orchestrator step, one scripted offer test (AC-1, AC-4)
+  - [x] Tell me more and the other paths: the tap with no model call, typed text past an offer by the one rule, relabelled tests and docstrings (AC-5, AC-6, AC-7, AC-10)
+  - [x] Content and reseed: names, descriptions, seven lines, the prompt drafts reviewed by muhammad, reseed, full `pytest` (AC-2, AC-3, AC-8, AC-11)
+  - [x] Chat tester and close out: the hidden composer, eval checks skip code written replies, PORT-STATUS, BACKEND.md, journal (AC-9, AC-12, AC-13)
+- [ ] Verify it: `/check verify the offer in the client's words`
+- [ ] Test it: `/test the offer in the client's words`
+
+### 16. Audit unused code and files · in-progress
+A list of what nothing reads or runs, each item with evidence: code, framework fields such as `appropriate_when` and `not_when`, columns, scripts, tests and docs. Guardrails and crisis handling are marked keep. muhammad marks each item keep or delete before anything is deleted.
+**Done when:** the list sits in the spec's `rationale.md`, every item carries evidence and muhammad's mark, and the deletes are a build plan.
+Spec: [0014](../specs/0014-audit-unused-code-files/index.md) · code in backend/mani/, backend/scripts/, backend/supabase/migrations/, backend/tests/, backend/content/prompts/, chat-tester/, .claude/, backend/docs/
+- [x] Design it (spec): `/architect audit unused code and files` (decided 2026-10-08: backend, chat tester and docs, not web or mobile; about twenty Python names, two packages, four columns, six grants and a dead policy go; audit columns, guardrails and timestamps stay; the pool settings go and pool.py's 2 and 10 stay; one vulture cross check, no standing check; 0012 and 0013 committed before the build)
+- [x] Build it: `/develop audit unused code and files`
+  - [x] Tracer: the Python deletions, the pool settings, the docstring fixes, the tests and chat tester, no schema change (AC-1, AC-2, AC-3, AC-10)
+  - [x] Packages and content: `langchain-core` for `langchain`, `email-validator` out, the prompt frontmatter, reseed (AC-4, AC-9)
+  - [x] Migrations 022 to 025: the four column drops, the grant revokes, `test_grants.sql` and `test_rls.sql` (AC-5, AC-6, AC-7, AC-8)
+  - [x] Docs, strays and close out: the stale statements, `ai-layer-audit.md`, the old `.eval` outputs, `.obsidian/workspace.json`, PORT-STATUS, journal (AC-11 to AC-15)
+- [ ] Verify it: `/check verify audit unused code and files`
+- [ ] Test it: `/test audit unused code and files`
+
+### 17. Tell me more in the client's words · needs a decision
+from spec 0013. A tap on Tell me more explains how the questions will help, in the client's wording, once the client provides it. Until then it shows the framework's name and description again (spec 0013). The client's own examples are per style and per issue, and fit the panic scenario better than the normal flow (muhammad, 2026-10-08), so the wording waits for the client.
+**Done when:** the client's Tell me more wording is what a tap shows, the two buttons stay, and changing the wording needs only a reseed.
+- [ ] Design it (spec): `/architect tell me more in the client's words`
+
+## Slice 6: Crisis
 
 ### 10. Crisis decided by the model · needs a decision · GA
 Remove the keyword crisis and concern screen. The model's own `crisis` field becomes the only detector. The thread lock and the crisis reply still follow when it fires. This is the riskiest change in the scope, so it comes last and carries the highest rigour.
 **Done when:** safety.py's phrase lists are gone, every crisis eval scenario (direct, indirect, misspelt, mixed with other topics) locks the thread and sends the crisis reply, and no ordinary conversation triggers it.
 - [ ] Design it (spec): `/architect crisis decided by the model`
 
-## Slice 6: Keep improving
+### 18. Crisis events can be resolved · needs a decision · GA
+from spec 0014. `admin.crisis_events.resolution` and `resolved_at` are never written, so the admin list filtered to unresolved returns every crisis event ever recorded. Decide who resolves an event, how, and what the filter shows.
+**Done when:** a crisis event can be marked resolved with a reason, the unresolved filter shows only open events, and the change is covered by the RLS and grant tests.
+- [ ] Design it (spec): `/architect crisis events can be resolved`
+
+## Slice 7: Keep improving
 
 ### 11. Thinking level and prompt tuning from measurements · needs a decision
 Use the baseline from feature 1 to choose the thinking level per call and to compare each prompt change, three runs before and three after, so the prompts keep improving as models get faster.
 **Done when:** each call's level is backed by numbers recorded in PORT-STATUS.md, and the tuning loop is a documented command anyone can run again.
 - [ ] Design it (spec): `/architect thinking level and prompt tuning`
 
+### 19. Memory folding runs on a schedule · needs a decision
+from spec 0014. `scripts/fold_idle_threads.py` folds idle threads into a person's memory, but nothing schedules it, and `/internal/cron/fold-summaries` runs thread summaries, not memory folding. Once deployed, memory may never fold. Decide what runs it and how often.
+**Done when:** memory folding runs on a schedule in a deployed environment, and the docs name what runs it.
+- [ ] Design it (spec): `/architect memory folding runs on a schedule`
+
 ## Deferred
-- Drop the unused `threads.vague_streak` column in its own migration (from spec 0008).
 - Delete mobile's `stylePrompt` once mobile renders the greeting from the API (from spec 0008).
 - Map API error categories to dictionary text in both frontends, instead of `ServiceError.user_message` (from spec 0008).
 - Move `CHAT_MORE_LABEL` and `GO_TO_LIBRARY_LABEL` into the `replies` row once spec 0008 builds it (from spec 0009).
-- Drop the unused `admin.frameworks.stages` column in its own migration (from spec 0009).
 - Tell the client the ending now offers the body check and lets Mani choose the steps (from spec 0009).
+- Tell the client the offer now shows the framework name, against the intro doc's "do not give them the name" (muhammad's call, 2026-10-08, feature 15).
+- Hide the text field in web and mobile while an offer is open, the way the chat tester does, once they are wired to the API (from spec 0013).
+- Tell the client every offer opens with the same lead, and Tell me more shows the name and description until they send its wording (from spec 0013).
+- Tell the client the two check lines ("Do I have this right?", "What would you like us to focus on today?") are gone and Mani checks its understanding in its own words (from spec 0012).
+- Show `ending_from` and `stage_ledger` in the chat tester's framework state panel (from spec 0014).
+- Build spec 0010's `expect_stage`, `stage_turn_cap` and `stage_last_try`, and give it a `verify.md` (from spec 0014).
+- Reconcile this scope's stale lines: the 8 line wording, feature 3's status, "the other five drafted" (from spec 0014, for `/scope`).
 
 ## Open questions
 - Should call rows also require `model_id`, so `DEFAULT_CHAT_MODEL` and `DEFAULT_SUMMARY_MODEL` go away? Left out of spec 0004 by choice (from spec 0004).

@@ -6,7 +6,15 @@ from __future__ import annotations
 from string import Formatter
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, field_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictStr,
+    field_validator,
+    model_validator,
+)
 
 from mani.models.rows import SupportStyle
 from mani.prompts.yaml_row import parse_yaml_row
@@ -33,18 +41,42 @@ def _sendable_in_one_ctx_line(text: str) -> str:
 CtxLine = Annotated[StrictStr, AfterValidator(_sendable_in_one_ctx_line)]
 
 
-def _only_the_name_field(template: str) -> str:
+def _plain_fields(template: str) -> set[str]:
+    """The fields a template fills, each a plain named field with no conversion or format."""
     try:
         parts = list(Formatter().parse(template))
     except ValueError:
         raise ValueError("braces must be balanced") from None
+    fields: set[str] = set()
     for _, name, spec, conversion in parts:
-        if name is not None and (name != "name" or spec or conversion):
-            raise ValueError("the only field allowed is a plain {name}")
+        if name is None:
+            continue
+        if not name or spec or conversion:
+            raise ValueError("a field must be a plain named field, such as {name}")
+        fields.add(name)
+    return fields
+
+
+def _only_the_name_field(template: str) -> str:
+    if _plain_fields(template) - {"name"}:
+        raise ValueError("the only field allowed is a plain {name}")
     return template
 
 
+def _the_name_and_the_description(template: str) -> str:
+    if _plain_fields(template) != {"name", "description"}:
+        raise ValueError("the fields must be exactly {name} and {description}")
+    return template
+
+
+def _differ_ignoring_case(labels: list[str]) -> None:
+    # A tap on a button is matched to its label ignoring case.
+    if len({label.strip().lower() for label in labels}) != len(labels):
+        raise ValueError("two labels are the same ignoring case")
+
+
 GreetingText = Annotated[Text, AfterValidator(_only_the_name_field)]
+OfferText = Annotated[Text, AfterValidator(_the_name_and_the_description)]
 
 
 class _Strict(BaseModel):
@@ -57,14 +89,33 @@ class Greeting(_Strict):
     default_name: Text
 
 
+class OfferLabels(_Strict):
+    accept: Text
+    more: Text
+    decline: Text
+
+    @model_validator(mode="after")
+    def _labels_differ(self) -> OfferLabels:
+        _differ_ignoring_case([self.accept, self.more, self.decline])
+        return self
+
+
+class Offer(_Strict):
+    """The offer the code writes when the model offers a set, and the reply to Tell me more."""
+
+    text: OfferText
+    more_text: OfferText
+    labels: OfferLabels
+
+
 class Replies(_Strict):
     greeting: Greeting
     style_question: Text
     # Both are keyed by SupportStyle value; the order of `style_labels` is the order of the buttons.
     style_labels: dict[str, Text]
     openers: dict[str, Text]
-    clarification_lines: Annotated[list[CtxLine], Field(min_length=1)]
     after_framework_questions: Annotated[list[CtxLine], Field(min_length=1)]
+    offer: Offer
 
     @field_validator("style_labels", "openers")
     @classmethod
@@ -76,9 +127,7 @@ class Replies(_Strict):
     @field_validator("style_labels")
     @classmethod
     def _labels_differ(cls, labels: dict[str, str]) -> dict[str, str]:
-        # A tap on a style button is matched to its label ignoring case.
-        if len({label.strip().lower() for label in labels.values()}) != len(labels):
-            raise ValueError("two labels are the same ignoring case")
+        _differ_ignoring_case(list(labels.values()))
         return labels
 
 

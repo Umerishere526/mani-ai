@@ -1,7 +1,6 @@
 ---
 id: 10000000-0000-0000-0000-000000000016
 name: tuning
-type: system
 description: The numbers that shape a conversation, covering offer timing, windows and memory limits. Never sent to a model.
 ---
 
@@ -10,7 +9,7 @@ offers:
   # Supportive and Reflective until Mani's own judgement was made the signal (muhammad,
   # 2026-10-01). Counted in the person's own messages.
   clear_offer_after: 2
-  # After "Keep chatting" an offer may come back after two more exchanges (counted in messages).
+  # After "I want to keep talking" an offer may come back after two more exchanges (counted in messages).
   clear_cooldown_after_decline: 4
   cooldown_after_complete: 45
   # The style used when neither the conversation nor the profile has chosen one yet. The

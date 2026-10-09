@@ -38,7 +38,6 @@ def token(secret: str = SECRET, **claims) -> str:
 def test_a_valid_token_yields_its_subject():
     claims = verify_token(token(email="a@example.test"), settings())
     assert claims.user_id == USER
-    assert claims.email == "a@example.test"
     assert claims.is_admin is False
 
 

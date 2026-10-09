@@ -3,15 +3,18 @@
 Complete, verified map of every schema, table, column, role, and grant in this project's
 database — queried live from `information_schema`/`pg_catalog`, not reconstructed from the
 migration files. Regenerate rather than hand-edit if the schema changes (§ at the bottom
-has the exact queries) — every table below reflects the state after migrations 001–010, 018 and 019.
+has the exact queries) — every table below reflects the state after migrations 001–010 and 018–025.
 
 Generated 2026-09-23 against local Supabase (`supabase_db_mani`), then hand updated on 2026-10-01 for
 migrations 006 to 010 (the call purpose enum, backend writes of prompt state, bounded profile topics, the
 memory table, the summary's current issue); the counts, `thread_summaries`, the privilege list and the RLS
 note below were checked against the live database that day. Hand updated on 2026-10-07 for migration 018
 (`admin.llm_calls.reasoning_tokens`), checked against the live column and its check constraint, and for migration 019
-(drops `response_styles_shape_known`), checked against the live constraint list. Regenerate from the queries at the bottom after
-the next schema change.
+(drops `response_styles_shape_known`), checked against the live constraint list. Hand updated on 2026-10-08 for migrations
+020 to 025 (`ending_from` and `stage_ledger` on technique state; `threads.vague_streak`, `frameworks.stages`,
+`frameworks.activation_conditions` and `llm_calls.prompt_version_id` dropped; unused grants revoked and policies
+dropped), checked against a throwaway Postgres with every migration applied (`KEEP_DB=1 scripts/test_db.sh`).
+Regenerate from the queries at the bottom after the next schema change.
 
 The rest of this paragraph describes the original generation: Nothing here was typed
 from memory — every table, column, constraint, policy, and grant was queried directly from
@@ -21,7 +24,7 @@ from memory — every table, column, constraint, policy, and grant was queried d
 
 **Nothing in this project alters a Supabase-default table, role attribute, or system
 role.** Every table, every grant beyond the platform's own, and every RLS policy below was
-added by this project's ten migrations (`001` through `010`). The only things touched
+added by this project's migrations (`001` to `010` and `018` to `025`). The only things touched
 outside plain `CREATE`/`GRANT`/`CREATE POLICY` are the documented, intended configuration
 surface Supabase itself exposes for exactly this purpose: `supabase/config.toml` (email
 confirmation, password policy, exposed schemas — see `.claude/SUPABASE.md`).
@@ -48,7 +51,7 @@ Query: `select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid
 
 | Schema | Table | What it holds |
 |---|---|---|
-| `admin` | `frameworks` | The six conversational frameworks (ABCDE, DBT STOP, etc.) — content, stage data, the grief veto's phrases. |
+| `admin` | `frameworks` | The six conversational frameworks (ABCDE, DBT STOP, etc.) — their seven line body, phases, the grief veto's phrases. |
 | `admin` | `prompts` | The live system prompt layers (`mani_base`, `response_format`, etc.), one row per named prompt. |
 | `admin` | `prompt_versions` | Snapshot of a prompt's content every time it's edited, for audit/rollback. |
 | `admin` | `exercises` | The exercise catalog (currently empty — see `PORT-STATUS.md`). |
@@ -100,7 +103,6 @@ One row per user, created automatically by the migration-004 trigger on signup.
 | 7 | `last_message_at` | timestamptz | default `now()` | Maintained by the same trigger as `message_count`. |
 | 8 | `deleted_at` | timestamptz | optional | Soft-delete marker. |
 | 9 | `conversation_style` | text | optional 🔒 | `supportive` / `reflective` / `direct` (CHECK `threads_conversation_style_known`). Wins over `profiles.support_style` when set — see `mani/chat/context.py:resolve_style`. |
-| 10 | `vague_streak` | smallint | default `0`, 0–10 (CHECK) | Currently written by nothing (`PORT-STATUS.md` "Open" — the vague-reply pivot isn't built). |
 | 11 | `memory_folded_at` | timestamptz | optional | The last message folded into `admin.user_memory`; null means never. Only `mani_service` may write it (migration 009). |
 
 ### `public.messages`
@@ -130,6 +132,7 @@ One row per thread — the currently (or most recently) active framework.
 | 7 | `library_offered_since` | boolean | default `false` | Whether the library follow-up has been offered since acceptance. |
 | 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
 | 9 | `ending_from` | integer | optional, `check (ending_from >= 0)` | Thread's `message_count` when the framework entered its ending, read by the turn cap; `null` outside the ending and cleared when the framework retires (migration 020). Not the `ending` column hosted still carries from the reverted migrations: that one is a different column with a different meaning. |
+| 10 | `stage_ledger` | jsonb | default `'{}'`, must be a JSON object (CHECK `technique_state_stage_ledger_is_object`) | What is known of each stage of the running framework: `{"<stage id>": {"status": ..., "turns": n}}`. Statuses and turn counts only, never the person's words; written by `mani/chat/ledger.py` (migration 021). |
 
 ### `public.thread_techniques_offered`
 Frequency-limiting log — every framework ever offered in a thread.
@@ -181,14 +184,12 @@ Append-only log of the model's self-reported style per reply.
 | 1 | `id` | text | **PK** | e.g. `dbt_stop`, `abcde`. |
 | 2 | `name` | text | required | Display name. |
 | 3 | `summary` | text | required | One-line description. |
-| 4 | `body` | text | required | **Written, never read** — see §6. |
-| 5 | `activation_conditions` | text | default `''` | **Written, never read** — the Starts when line is in `body`. |
+| 4 | `body` | text | required | The framework's seven labelled lines, put into the framework index by `mani/prompts/composer.py`. |
 | 6 | `phases` | text[] | required, non-empty, `phases[1]='offering'` (CHECK) | Ordered stage ids. |
 | 7 | `display_order` | integer | default `0` | |
 | 8 | `is_active` | boolean | default `true` | |
 | 9 | `created_at` | timestamptz | default `now()` | |
 | 10 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
-| 11 | `stages` | jsonb | default `'{}'`, must be a JSON object (CHECK) | Per-phase content: purpose, listen_for, ready_when, boundaries, `ask.{style}`. |
 | 12 | `activation` | jsonb | default `'{}'`, must be a JSON object (CHECK) | At most one key, `never_offer_when_said`: the phrases that rule a framework out, read by `mani/chat/vetoes.py` through `Registry.vetoes`. |
 
 ### `admin.prompts`
@@ -261,7 +262,6 @@ Snapshot taken automatically whenever `admin.prompts` is edited via the admin AP
 | 2 | `thread_id` | uuid | optional, FK→`threads` SET NULL | |
 | 3 | `user_id` | uuid | optional, FK→`auth.users` SET NULL | |
 | 4 | `message_id` | uuid | optional, FK→`messages` SET NULL | |
-| 5 | `prompt_version_id` | uuid | optional, FK→`admin.prompt_versions` SET NULL | **Always null in practice** — no call site passes it (`PORT-STATUS.md`). |
 | 6 | `purpose` | `admin.llm_call_purpose` (enum) | required | `chat` / `summarize` / `exercise_select` / `memory_fold`. Made a real enum in migration 006 — was free text; see §6's now-resolved note. `memory_fold` added in 009. |
 | 7 | `model` | text | required | |
 | 8 | `input_tokens` | integer | default `0` | |
@@ -293,14 +293,14 @@ Query: `select rolname, rolsuper, rolinherit, rolcreaterole, rolcanlogin, rolbyp
 | `service_role` | no (assumed via `authenticator`) | **yes** | Anything presenting the service-role key | Full, RLS-bypassing access. Never reaches a client — `backend/mani/config.py`'s `supabase_service_role_key` is the only place this key lives, and it's used only for Storage signing (`mani/storage.py`) and, since this session, the Auth Admin API (`mani/auth_admin.py`). |
 | `authenticator` | **yes** | no | PostgREST's own connection | The role PostgREST logs in as. Not used to do anything itself — it's a member of `anon`, `authenticated`, **and** `service_role`, and `SET ROLE`s to whichever one a request's JWT specifies. This is stock Supabase/PostgREST architecture, not a project decision — confirmed live (`pg_auth_members`). |
 | `supabase_auth_admin` | **yes** | no | GoTrue (Supabase Auth), confirmed via `GOTRUE_DB_DATABASE_URL` | Owns `auth.users` and everything under `auth.*`. Since migration 005, also holds the narrow, table-specific grants and RLS policies needed to complete the cascades this project's own `on delete cascade`/`set null` foreign keys promise when it deletes a user (§3, §5). **Cannot be granted `BYPASSRLS`** — confirmed live, Postgres refuses even from `postgres` here, because it's a reserved role. |
-| `mani_service` | no (assumed by the backend via `SET LOCAL ROLE`) | no | This backend, for every ordinary request | A member of `authenticated`, so it inherits everything that role can do, **plus** a handful of privileges an ordinary user must not have: EXECUTE on the three `security definer` functions (`create_message_pair`, `mark_thread_crisis`, `create_greeting`) DELETE on `thread_technique_state`, INSERT/UPDATE on `thread_summaries` and `thread_technique_state` (moved off `authenticated` in migration 007, since both feed the model), SELECT/INSERT/UPDATE on `admin.user_memory`, and UPDATE on `threads.memory_folded_at` (migration 009) and `threads.vague_streak` (migration 002). RLS still applies — the extra privileges are never a wider view of rows, only a wider set of actions (`.claude/SUPABASE.md`). **Never grant this to `authenticator`** — that would let PostgREST assume it directly and undo the separation (asserted by `tests/sql/test_grants.sql`, confirmed still true here — `mani_service` is absent from `authenticator`'s memberships). |
+| `mani_service` | no (assumed by the backend via `SET LOCAL ROLE`) | no | This backend, for every ordinary request | A member of `authenticated`, so it inherits everything that role can do, **plus** a handful of privileges an ordinary user must not have: EXECUTE on the three `security definer` functions (`create_message_pair`, `mark_thread_crisis`, `create_greeting`), INSERT/UPDATE on `thread_summaries` and `thread_technique_state` (moved off `authenticated` in migration 007, since both feed the model), SELECT/INSERT/UPDATE on `admin.user_memory`, and UPDATE on `threads.memory_folded_at` (migration 009). RLS still applies — the extra privileges are never a wider view of rows, only a wider set of actions (`.claude/SUPABASE.md`). **Never grant this to `authenticator`** — that would let PostgREST assume it directly and undo the separation (asserted by `tests/sql/test_grants.sql`, confirmed still true here — `mani_service` is absent from `authenticator`'s memberships). |
 | `postgres` | yes | yes | Migrations, and anyone connecting directly (e.g. `supabase status`'s credentials) | **Not a true superuser on this platform** (`rolsuper = false`, confirmed live) — Supabase deliberately keeps its own internal roles (like `supabase_auth_admin`) out of reach even from this role, which is why migration 005 could not simply `ALTER ROLE ... BYPASSRLS`. |
 
 ## 5. RLS policies — one row per operation, per table, per role
 
 Query: `select schemaname, tablename, policyname, cmd, roles, qual, with_check from pg_policies where schemaname='public';`
 
-Every `public` table has RLS enabled and a **policy per operation** (`select`/`insert`/`update`/`delete`), never one broad `for all` policy — a broad policy hides mistakes (`.claude/SUPABASE.md`). The pattern, present on every row-owning table:
+Every `public` table has RLS enabled and a **policy per operation it permits** (`select`/`insert`/`update`), never one broad `for all` policy — a broad policy hides mistakes (`.claude/SUPABASE.md`). The pattern, present on every row-owning table:
 
 ```sql
 using ( (select auth.uid()) = user_id )
@@ -316,6 +316,8 @@ with check (
 ```
 
 **Since migration 005**, every table above also carries one additional policy, `auth_admin_cascade_delete` (`for delete to supabase_auth_admin using (true)`), and `threads` carries `auth_admin_cascade_message_count` (`for update ... using (true) with check (true)`) for the one side-effect trigger (`sync_thread_message_count`) that fires during that cascade. These are scoped to exactly one role and one operation each — they do not weaken what `authenticated` can do, since permissive RLS policies are OR'd together, never AND'd.
+
+They are the only DELETE policies. No code path deletes a row a person owns: a thread is soft deleted by an UPDATE of `deleted_at`, and a finished technique is retired by an UPDATE. So neither `authenticated` nor `mani_service` holds DELETE on any `public` table, nor UPDATE on `exercise_completions` or `threads.last_message_at`, and migration 025 dropped the policies that went with those grants (`tests/sql/test_grants.sql` asserts both).
 
 `admin.*` has **no RLS, with one exception**: `admin.user_memory` (migration 009) carries policies scoping `mani_service` to the caller's own row. Every other `admin` table is unreachable via PostgREST regardless (§2), and access there is controlled entirely by grants (§4/§6), not policies.
 
@@ -340,9 +342,9 @@ If either side of one of these pairs is ever changed, the other must change with
 - ~~`admin.llm_calls.purpose`~~ — **resolved, migration 006.** Was free text; is now `admin.llm_call_purpose`, matching `outcome`'s discipline exactly. No Python change was needed — `mani/db/llm_calls.py::record()` already passed `purpose.value` the same way it already passed `outcome.value` into the pre-existing enum column.
 - **`profiles.age_bracket`** — free text, sitting directly next to `support_style`, which is properly constrained. If this is meant to gate anything (content, framing), it currently can't be relied on to hold only expected values.
 
-### Written but never read — not a hardcoding problem, but adjacent
+### Written but never read by code — not a hardcoding problem, but adjacent
 
-`admin.frameworks.body` and `.activation_conditions` are written by `scripts/seed.py` on every seed run and read by nothing (`mani/chat/vetoes.py` reads the `never_offer_when_said` key of the `activation` jsonb column instead). Not incorrect, just a standing cost — every seed writes text nothing will ever load.
+`admin.llm_calls.model`, `.error_message` and `.message_id`, `admin.prompts.created_by` and `.updated_by`, and `admin.prompt_versions.created_by` are written and read by no code. They stay on purpose: each is the only record a person opens by hand when a reply or a prompt goes wrong (which model served a call, why it failed, who edited a prompt). Columns that recorded nothing were dropped (spec 0014).
 
 ## How to regenerate this document
 

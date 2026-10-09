@@ -22,7 +22,7 @@ python scripts/baseline.py compare <before.json> <after.json>  # what changed be
 ./scripts/test_db.sh       # schema + RLS against a throwaway Postgres (needs Docker)
 ```
 
-**Ports.** `backend/supabase/config.toml` sets `5434x` (API `54341`, Postgres `54342`, Studio `54343`, Mailpit `54344`) so it can run beside the previous project's `5433x`. What is running can differ: on this machine the containers answer on the Supabase defaults (API `54321`, Postgres `54322`, Studio `54323`), and `backend/.env` points there. If this paragraph and `docker ps` disagree, `docker ps` and `backend/.env` are right.
+**Ports.** `backend/supabase/config.toml` sets `5434x` (API `54341`, Postgres `54342`, Studio `54343`, Mailpit `54344`) so it can run beside the previous project's `5433x` and anything on the Supabase defaults (`54321` to `54324`). The local containers answer on `5434x`, and `backend/.env` points there. If this paragraph and `docker ps` disagree, `docker ps` and `backend/.env` are right.
 
 To run the RLS assertions against the real local Supabase rather than a throwaway container:
 
@@ -35,12 +35,12 @@ Without activating, call the venv binaries directly — `./.venv/bin/python`, `.
 ## Layout
 
 - `main.py` — `create_app()` plus the module-level `app`. Sentry init and the `ServiceError` handler live here; routes do not.
-- `mani/` — the application package, and the only thing that runs. `config.py`, `errors.py`, `routers/`, `auth/`, `models/`, and the `chat/`, `prompts/`, `llm/` and `db/` layers, plus `memory.py`, `summarize.py`, `background.py`, `storage.py` and `auth_admin.py`. `chat/` is the turn: `orchestrator.py` runs it, `router.py` shortlists frameworks, `safety.py` screens, `context.py` builds the `[ctx]` block and the offer timing, `guards.py` stops a model supplied id or value from being stored unchecked, `ending.py` holds the body ending (the check in, the practice, the returning reply). **It never reads the filesystem for content** — prompts and frameworks come from the database.
-- `content/` — authored markdown, seeded into the `admin` schema by `scripts/seed.py` and never read at runtime. `content/prompts/*.md` become `admin.prompts` (except `somatic.md`, which `seed.py` merges into every framework as the last two stages); `content/frameworks/*.md` become `admin.frameworks`, carrying each framework's per-stage content and its activation data (`central_indication`, `signals`, `to_find_out`, `earliest_offer_message`, `never_offer_when_said`, `contraindications`; `appropriate_when` and `not_when` are read by nothing). Editing one of these changes nothing until it is re-seeded. Kept outside `mani/` because it is input to the database, not code — the same relationship a migration has to the schema.
+- `mani/` — the application package, and the only thing that runs. `config.py`, `errors.py`, `routers/`, `auth/`, `models/`, and the `chat/`, `prompts/`, `llm/` and `db/` layers, plus `memory.py`, `summarize.py`, `background.py`, `storage.py` and `auth_admin.py`. `chat/` is the turn: `orchestrator.py` runs it, `safety.py` screens, `crisis.py` answers a crisis, `context.py` builds the `[ctx]` block and the offer timing, `techniques.py` is the phase machine, `vetoes.py` rules a framework out from what the person said, `ledger.py` keeps what is known of each stage of a running framework, `guards.py` stops a model supplied id or value from being stored unchecked, `offer.py` writes an offer and the reply to Tell me more from seeded rows, `greeting.py` builds the opening line and its style buttons. **It never reads the filesystem for content** — prompts and frameworks come from the database.
+- `content/` — authored markdown, seeded into the `admin` schema by `scripts/seed.py` and never read at runtime. `content/prompts/*.md` become `admin.prompts`; `content/frameworks/*.md` become `admin.frameworks`, each one's seven labelled lines seeded as its `body`, plus `never_offer_when_said`, the one activation key `seed.py` accepts. Editing one of these changes nothing until it is re-seeded. Kept outside `mani/` because it is input to the database, not code — the same relationship a migration has to the schema.
 - `supabase/migrations/` — the schema. `test_harness.sql` stubs what Supabase adds (`auth.users`, `auth.uid()`, the three roles) so the schema can be tested on plain Postgres.
-- `tests/unit/` — deterministic logic. `tests/evals/` — checks that frameworks' stage asks and replies keep the specifications' rules (no scenario text, no invented feelings). `tests/integration/` — whole turns against a live database with a scripted model. `tests/sql/` — schema, RLS and privilege assertions run by `scripts/test_db.sh`.
-- `scripts/` — `seed.py`, `seed_exercises.py` (the library: `content/exercises/exercises.json` plus its MP3s, compressed to 64 kbps mono), `eval_replies.py` with `eval_conversations.yaml`, `baseline.py` (totals, medians and the offline compare for the cost baselines saved in `baselines/`), `fold_idle_threads.py` (memory folding, also reachable as `GET /internal/cron/fold-summaries` behind `CRON_SECRET`), `test_db.sh`.
-- `docs/` — `specs/` holds the client's specifications, one per framework, as the source the content is checked against; `database-schema-reference.md`; `ai-layer-audit.md` (a dated snapshot, read its banner).
+- `tests/unit/` — deterministic logic. `tests/evals/` — checks that framework lines and replies keep the specifications' rules (no scenario text, no invented feelings). `tests/integration/` — whole turns against a live database with a scripted model. `tests/sql/` — schema, RLS and privilege assertions run by `scripts/test_db.sh`.
+- `scripts/` — `seed.py`, `seed_exercises.py` (the library: `content/exercises/exercises.json` plus its MP3s, compressed to 64 kbps mono), `eval_replies.py` with `eval_conversations.yaml`, `baseline.py` (totals, medians and the offline compare for the cost baselines saved in `baselines/`), `fold_idle_threads.py` (memory folding; nothing schedules it yet, see scope feature 19), `test_db.sh`. `GET /internal/cron/fold-summaries` behind `CRON_SECRET` runs `summarize.reconcile_due`, which catches up thread summaries, not memory folding.
+- `docs/` — `specs/` holds the client's specifications, one per framework, as the source the content is checked against; `database-schema-reference.md`.
 - `PORT-STATUS.md` — what the service does, what changed from the implementation it replaces, and what is still open. **Update it in the same change as the work.**
 - `requirements.txt` — runtime dependencies only, pinned, hand-maintained. `requirements-dev.txt` adds pytest and `fastapi-cli` on top. **Add a new dependency to whichever file it belongs in** — do not `pip freeze` over them, which buries the packages that matter under their transitive closure and puts a test runner in the deployed image.
 - `Dockerfile` — the API process. Platform-agnostic (Fly, Railway, Cloud Run); never Lambda-style, because a turn holds a connection across a multi-second model call.
@@ -56,13 +56,13 @@ pip install -r requirements.txt -r requirements-dev.txt
 
 ## Conventions
 
-- Use Pydantic models for request and response bodies rather than raw dicts — `pydantic` 2.13 is already installed, as are `pydantic-settings` and `email-validator`.
+- Use Pydantic models for request and response bodies rather than raw dicts — `pydantic` 2.13 is already installed, as is `pydantic-settings`.
 - Read configuration through `pydantic-settings` and a `.env` file (`python-dotenv` is installed). Never commit secrets or inline them in `main.py`.
 - As routes grow past a handful, split them into `APIRouter` modules and include them from `main.py` — don't let `main.py` become a dumping ground.
 - `sentry-sdk` is initialised in `create_app()` when `SENTRY_DSN` is set, with `send_default_pii=False` — conversation content is special-category health data and must not ride along on an error report.
 - Postgres is reached directly with `asyncpg`, not through PostgREST. A chat turn makes many writes that must succeed or fail together, and PostgREST cannot hold a transaction across statements.
 - OpenRouter is the only model provider. LangChain (`langchain-openai`) composes the call and parses the structured reply; the `openai` protocol is used because OpenRouter speaks it — it is not a second provider. The key lives in the environment, never in the database.
-- A turn is one chat model call and the reply goes out as the model wrote it. A malformed chat reply is not retried, and the exercise pick at the end of a framework is the one scoped extra call.
+- A turn is one chat model call and the reply goes out as the model wrote it, except an offer: its text and buttons, and the reply to Tell me more, are written by the code from seeded rows. A malformed chat reply is not retried, and the exercise pick at the end of a framework is the one scoped extra call.
 
 ## Identity and authorization
 
@@ -84,8 +84,6 @@ So generate it, and gate it:
 - Keep response models explicit on every route (`response_model=`), or the generated schema degrades to `Any` and the types become decorative.
 
 ## API conventions
-
-Things a reviewer will check for.
 
 Things a reviewer will check for, and where they are.
 
@@ -117,7 +115,7 @@ Things a reviewer will check for, and where they are.
 - `pytest.ini` sets `filterwarnings = error`. A warning fails the suite; that is deliberate, so fix the cause rather than filtering it.
 - Integration tests skip rather than fail when no database is reachable. A green run that skipped everything is not a passing run — check the count.
 - The running app and the integration tests read frameworks and prompts from the database, not from `content/`. After editing a file there, run `python scripts/seed.py`; the app picks it up when its prompt cache expires or the server restarts.
-- Run the whole `pytest`, not only `tests/unit`: `tests/evals` fails on stage asks that carry scenario text or hand over a feeling word.
+- Run the whole `pytest`, not only `tests/unit`: `tests/evals` fails on framework lines that carry scenario text, or replies that hand over a feeling word.
 
 ## Where things live
 

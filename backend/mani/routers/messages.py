@@ -43,8 +43,10 @@ async def send(
 ) -> TurnOut:
     """One user message in, one reply out.
 
-    One chat provider call per turn, and the reply goes out as the model wrote it: the code
-    after the call only guards what is stored or sent to the app (`chat/guards.py`).
+    At most one chat provider call per turn, and the reply goes out as the model wrote it: the
+    code after the call only guards what is stored or sent to the app (`chat/guards.py`). An offer
+    is the exception: its text and buttons, and the reply to Tell me more, which makes no call, are
+    written from seeded rows (`chat/offer.py`).
     """
     turn = await orchestrator.send(
         conn, user, thread_id, body.content, body.client_message_id

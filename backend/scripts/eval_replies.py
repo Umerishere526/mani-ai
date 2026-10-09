@@ -308,9 +308,12 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
     for index, exchange in enumerate(exchanges):
         # Everything said so far in this chat.
         said = " ".join(e.message for e in exchanges[: index + 1] if e.chat == exchange.chat)
-        findings += validators.check(exchange.reply, said)
+        # An offer and the reply to Tell me more are the seeded words, not the model's, and both
+        # carry the offer's technique button: the framework's name in them is meant.
+        if not exchange.offered:
+            findings += validators.check(exchange.reply, said)
+            findings += validators.says_framework(exchange.reply, FRAMEWORK_NAMES)
         findings += validators.style_findings(exchange.reply, style.value)
-        findings += validators.says_framework(exchange.reply, FRAMEWORK_NAMES)
         if exchange.finding:
             findings.append(validators.Finding("script", exchange.finding))
         if exchange.chat > 1 and scenario.get("markers"):

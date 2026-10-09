@@ -1,9 +1,7 @@
 ---
 id: 10000000-0000-0000-0000-000000000009
 name: summarization
-type: system
 description: Compress earlier messages so Mani remembers past the recent window
-provider: openrouter
 model_id: openai/gpt-6-luna
 model_parameters:
   maxTokens: 500

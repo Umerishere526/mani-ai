@@ -33,19 +33,15 @@ class SystemPrompt:
     # otherwise only shows up on the bill.
     layers: list[tuple[str, int]] = field(default_factory=list)
 
-    @property
-    def length(self) -> int:
-        return len(self.text)
-
 
 def framework_index(registry: Registry) -> str | None:
     """The catalogue of frameworks, built from the registry rather than written by hand.
 
-    Each framework's body is its eight model facing lines, seeded from the framework file and
+    Each framework's body is its seven model facing lines, seeded from the framework file and
     checked there, so they are rendered as they are. A prose copy beside them would be a second
     source of truth that drifts silently the first time somebody edits one and not the other,
     and adding a framework stays a content change with no prompt edit. The client's description
-    of what the questions help with stands above the eight lines, read from the summary column.
+    of what the questions help with stands above the seven lines, read from the summary column.
 
     Static across users and turns, so it sits in the cached prefix with the other layers.
     """
@@ -57,9 +53,8 @@ def framework_index(registry: Registry) -> str | None:
     lines = [LAYER_HEADINGS["framework_index"]]
     for framework in present:
         lines += ["", f"## {framework.name} (`{framework.id}`)"]
-        description = " ".join((framework.summary or "").split())
-        if description:
-            lines.append(f"Description: {description}")
+        if framework.description:
+            lines.append(f"Description: {framework.description}")
         lines.append(framework.body)
     return "\n".join(lines)
 

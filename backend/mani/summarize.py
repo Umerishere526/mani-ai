@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 # How much raw conversation one summarization run reads.
 BATCH = 200
 
+# How many threads one catch-up run summarizes.
+RECONCILE_BATCH = 200
+
 
 def transcript(messages: list[Message]) -> str:
     return "\n\n".join(
@@ -156,7 +159,7 @@ async def update_quietly(claims, thread_id: uuid.UUID | str) -> None:
         logger.exception("summarization failed for thread %s", thread_id)
 
 
-async def reconcile_due(*, limit: int = 200) -> int:
+async def reconcile_due() -> int:
     """Catch up every thread whose summary has fallen behind, across every user.
 
     The per-turn trigger (`update_quietly`) is the fast path and covers almost every
@@ -172,7 +175,7 @@ async def reconcile_due(*, limit: int = 200) -> int:
     # The turn refreshes a summary every `context_window` messages, so this catches up the same.
     threshold = (await cache.load()).tuning.windows.context_window
     async with pool.as_admin() as conn:
-        due = await summaries.due_for_summary(conn, threshold=threshold, limit=limit)
+        due = await summaries.due_for_summary(conn, threshold=threshold, limit=RECONCILE_BATCH)
 
     done = 0
     for row in due:

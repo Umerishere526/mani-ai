@@ -210,9 +210,6 @@ class ManiClient:
             json={"content": content, "client_message_id": client_message_id or str(uuid.uuid4())},
         )
 
-    def list_messages(self, thread_id: str) -> dict[str, Any]:
-        return self._call("GET", f"/v1/threads/{thread_id}/messages")
-
     def list_threads(self, limit: int = 20) -> list[dict[str, Any]]:
         """GET /v1/threads - the person's conversations, most recently active first."""
         return self._call("GET", "/v1/threads", params={"limit": limit})["threads"]
@@ -234,10 +231,6 @@ class ManiClient:
     def set_profile(self, nickname: str) -> dict[str, Any]:
         """PUT /v1/profile - what onboarding calls, so the greeting can use their name."""
         return self._call("PUT", "/v1/profile", json={"nickname": nickname})
-
-    def set_conversation_style(self, thread_id: str, style: str) -> dict[str, Any]:
-        """PATCH /v1/threads/{id} - the same endpoint a style-picker screen would call."""
-        return self._call("PATCH", f"/v1/threads/{thread_id}", json={"conversation_style": style})
 
     def transcribe_audio(self, audio_bytes: bytes, filename: str = "recording.wav") -> str:
         """POST /v1/audio/transcriptions - voice in, text out. Not JSON: a multipart

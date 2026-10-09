@@ -9,8 +9,6 @@ from dataclasses import dataclass
 from mani.chat.techniques import ENDING_PHASES
 from tests.evals.vocabulary import (
     FEELING_WORDS,
-    MAX_CAPSULE_WORDS,
-    SELF_JUDGMENTS,
     WORD,
     words,
 )
@@ -146,45 +144,6 @@ def repeated_openers(replies: list[str]) -> list[Finding]:
             findings.append(
                 Finding("repeated opener", f"two replies in a row open {' '.join(shared)!r}")
             )
-    return findings
-
-
-MAX_CAPSULES = 3
-
-
-def check_capsules(labels: list[str], user_message: str) -> list[Finding]:
-    """The buttons under a reply, which are a separate surface from its text.
-
-    A label is the one thing in a reply the person may send back as their own words, so it
-    carries a stricter rule than the prose does: it may not name a feeling, characterise the
-    situation, or judge them. Checking only the reply text misses it entirely.
-    """
-    findings: list[Finding] = []
-    said = words(user_message)
-
-    for label in labels:
-        introduced = sorted(w for w in words(label) & FEELING_WORDS if w not in said)
-        if introduced:
-            findings.append(
-                Finding("capsule puts feelings in their mouth", f"{label!r}: {introduced}")
-            )
-        judgments = [p for p in SELF_JUDGMENTS if p in label.lower()]
-        if judgments:
-            findings.append(
-                Finding("capsule judges them", f"{label!r}: {judgments}")
-            )
-        if len(label.split()) > MAX_CAPSULE_WORDS:
-            findings.append(
-                Finding("capsule too long", f"{label!r} is {len(label.split())} words")
-            )
-
-    if len(labels) > MAX_CAPSULES:
-        findings.append(Finding("too many capsules", f"{len(labels)} offered"))
-
-    lowered = [label.strip().lower() for label in labels]
-    if len(set(lowered)) != len(lowered):
-        findings.append(Finding("duplicate capsule", f"{labels}"))
-
     return findings
 
 

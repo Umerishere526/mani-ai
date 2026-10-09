@@ -310,20 +310,6 @@ async def test_the_library_listing_is_the_whole_catalog_home_items_included(alic
             )
 
 
-async def test_a_model_call_is_recorded_with_its_cost(users):
-    from mani.db import pool
-
-    async with pool.as_admin() as conn:
-        await llm_calls.record(
-            conn, purpose=llm_calls.Purpose.CHAT, model="google/gemini-3-flash-preview",
-            outcome=llm_calls.Outcome.OK, latency_ms=4200, user_id=ALICE,
-            usage=llm_calls.Usage(input_tokens=8230, output_tokens=385))
-        spend = await llm_calls.spend_since(conn, ALICE)
-
-    assert spend["input_tokens"] == 8230
-    assert spend["calls"] == 1
-
-
 async def test_a_model_calls_thinking_is_stored_and_can_never_be_negative(users):
     """The reasoning count is what a thinking level costs; a negative one would quietly
     lower every total it is summed into."""

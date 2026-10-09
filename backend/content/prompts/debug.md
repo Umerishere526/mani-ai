@@ -1,7 +1,6 @@
 ---
 id: 10000000-0000-0000-0000-000000000014
 name: debug
-type: system
 description: Added to the system prompt only when AI_DEBUG_MODE is on
 ---
 

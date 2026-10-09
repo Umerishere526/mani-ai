@@ -55,15 +55,11 @@ def model(monkeypatch):
     scripted_calls = {"count": 0}
 
     async def scripted(messages, schema, **kwargs):
-        from mani.db import llm_calls
         from mani.llm import client as client_module
 
         scripted_calls["count"] += 1
         return client_module.Call(
             value=Reply(text="How can I support you with that today?"),
-            model="test/model",
-            usage=llm_calls.Usage(input_tokens=100, output_tokens=20),
-            latency_ms=1,
             call_id=uuid.uuid4(),
         )
 

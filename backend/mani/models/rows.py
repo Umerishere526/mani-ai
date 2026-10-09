@@ -73,7 +73,6 @@ class Thread(Row):
     crisis_detected: bool = False
     created_at: dt.datetime
     last_message_at: dt.datetime
-    deleted_at: dt.datetime | None = None
     # Chosen per conversation. Null means this thread has not chosen, and the profile's
     # support_style stands as the default - the same closed set, deliberately.
     conversation_style: SupportStyle | None = None
@@ -151,15 +150,16 @@ class Framework(Row):
     name: str
     summary: str
     body: str
-    activation_conditions: str = ""
     phases: list[str]
     display_order: int = 0
-    # Holds at most `never_offer_when_said`, the phrases that rule a framework out. `stages` is
-    # empty for every framework, since `body` holds its eight lines and the mani_base prompt the
-    # ending's rules; it is read only by the admin side until the column is dropped.
-    # activation_conditions holds the Starts when line and is read by nothing.
+    # Holds at most `never_offer_when_said`, the phrases that rule a framework out.
     activation: dict[str, Any] = Field(default_factory=dict)
-    stages: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def description(self) -> str:
+        """The summary on one line, as the model and the person are shown it. The framework file
+        folds it over several."""
+        return " ".join(self.summary.split())
 
     def phase_index(self, phase: str | None) -> int:
         """Position in the sequence, or -1 for nothing started / unknown."""

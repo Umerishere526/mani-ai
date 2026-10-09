@@ -1,4 +1,4 @@
-# ABOUTME: Checks the seed refuses a framework file that is not the eight labelled lines.
+# ABOUTME: Checks the seed refuses a framework file that is not the seven labelled lines.
 # ABOUTME: Writes real framework files to a temp folder; the shipped files are parsed as they are.
 
 from __future__ import annotations
@@ -27,7 +27,6 @@ LINES = [
     "affected them) | examine (what supports it, then what challenges it) > balanced (a fairer "
     "belief) > closing (how it sits now)",
     "Ends when: they hold a belief that fits all the evidence and sounds like them.",
-    "Offer: mirror what the event came to mean to them, in their words, then ask if they want to look at it.",
     "Never: invent evidence, or decide the belief is false.",
     "Never: question whether abuse or danger was real or as serious as it felt.",
 ]
@@ -39,12 +38,10 @@ def write(tmp_path, lines=LINES, frontmatter=FRONTMATTER):
     return path
 
 
-def test_eight_labelled_lines_seed_as_the_body_and_starts_when_as_the_activation_text(tmp_path):
+def test_seven_labelled_lines_seed_as_the_body(tmp_path):
     parsed = parse_framework(write(tmp_path))
 
     assert parsed["body"] == "\n".join(LINES)
-    assert parsed["activation_conditions"] == LINES[0].removeprefix("Starts when: ")
-    assert parsed["stages"] == {}
     assert parsed["phases"][0] == "offering"
 
 
@@ -52,7 +49,6 @@ def test_the_body_ending_follows_the_files_own_phases_in_every_shipped_framework
     for path in sorted(FRAMEWORKS_DIR.glob("*.md")):
         parsed = parse_framework(path)
         assert parsed["phases"][-3:] == ["closing", *ENDING_PHASES], path.name
-        assert parsed["stages"] == {}, path.name
 
 
 def _replaced(index, line):
@@ -62,9 +58,10 @@ def _replaced(index, line):
 @pytest.mark.parametrize(
     ("lines", "reason"),
     [
-        (LINES + ["Never: a third rule."], "the body has 9 lines, not 8"),
-        (LINES[:3] + [""] + LINES[3:7], "line 4 should start with 'Stages: '"),
-        (["# ABCDE"] + LINES[:7], "line 1 should start with 'Starts when: '"),
+        (LINES[:5] + ["Offer: mirror what it came to mean, then ask."] + LINES[5:],
+         "the body has 8 lines, not 7"),
+        (LINES[:3] + [""] + LINES[3:6], "line 4 should start with 'Stages: '"),
+        (["# ABCDE"] + LINES[:6], "line 1 should start with 'Starts when: '"),
         (LINES[:4] + LINES[5:] + ["Never: one more."], "line 5 should start with 'Ends when: '"),
         ([LINES[1], LINES[0]] + LINES[2:], "line 1 should start with 'Starts when: '"),
         (_replaced(4, "Ends when: " + "x" * 210), "the Ends when line is 221 characters, over 220"),
@@ -110,6 +107,9 @@ def test_words_inside_a_stages_parentheses_may_carry_commas(tmp_path):
         (FRONTMATTER.replace('["died"]', '["died", " "]'),
          "never_offer_when_said must be a list of non empty strings"),
         (FRONTMATTER.replace("[offering, activate,", "[activate,"), "phases should start with offering"),
+        (FRONTMATTER.replace('summary: "Look at what a setback came to mean."\n', ""),
+         "frontmatter has no summary"),
+        (FRONTMATTER.replace('"Look at what a setback came to mean."', '"  "'), "summary must not be blank"),
     ],
 )
 def test_frontmatter_beyond_the_code_data_is_refused(tmp_path, frontmatter, reason):
@@ -117,9 +117,9 @@ def test_frontmatter_beyond_the_code_data_is_refused(tmp_path, frontmatter, reas
         parse_framework(write(tmp_path, frontmatter=frontmatter))
 
 
-def test_every_shipped_framework_is_eight_lines_with_only_code_data_beside_them():
+def test_every_shipped_framework_is_seven_lines_with_only_code_data_beside_them():
     """parse_framework is the seed's own check, so a shipped file it refuses could never be seeded."""
     files = sorted(FRAMEWORKS_DIR.glob("*.md"))
     assert len(files) == 6
     for path in files:
-        assert len(parse_framework(path)["body"].split("\n")) == 8, path.name
+        assert len(parse_framework(path)["body"].split("\n")) == 7, path.name

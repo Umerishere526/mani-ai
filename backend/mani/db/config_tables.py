@@ -22,10 +22,7 @@ PROMPT_COLUMNS = (
     "id, name, description, content, version, model_id, "
     "model_parameters, routing, is_active"
 )
-FRAMEWORK_COLUMNS = (
-    "id, name, summary, body, activation_conditions, phases, display_order, "
-    "activation, stages"
-)
+FRAMEWORK_COLUMNS = "id, name, summary, body, phases, display_order, activation"
 
 
 async def list_active_prompts(conn: asyncpg.Connection) -> list[Prompt]:
@@ -38,13 +35,6 @@ async def list_active_prompts(conn: asyncpg.Connection) -> list[Prompt]:
         f"select {PROMPT_COLUMNS} from admin.prompts where is_active order by name"
     )
     return Prompt.from_records(rows)
-
-
-async def get_prompt(conn: asyncpg.Connection, name: str) -> Prompt | None:
-    row = await conn.fetchrow(
-        f"select {PROMPT_COLUMNS} from admin.prompts where name = $1 and is_active", name
-    )
-    return Prompt.from_record(row)
 
 
 async def list_all_prompts(conn: asyncpg.Connection) -> list[Prompt]:

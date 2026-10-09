@@ -27,7 +27,6 @@ class Claims(BaseModel):
 
     sub: str
     role: str = AUDIENCE
-    email: str | None = None
     app_metadata: dict[str, Any] = Field(default_factory=dict)
     # Kept verbatim so the database session can be given exactly what was verified.
     raw: dict[str, Any] = Field(default_factory=dict, repr=False)
@@ -101,7 +100,6 @@ def verify_token(token: str, settings: Settings | None = None) -> Claims:
     return Claims(
         sub=subject,
         role=payload.get("role", AUDIENCE),
-        email=payload.get("email"),
         app_metadata=payload.get("app_metadata") or {},
         raw=payload,
     )

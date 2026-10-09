@@ -1,9 +1,7 @@
 ---
 id: 10000000-0000-0000-0000-000000000011
 name: memory_fold
-type: system
 description: Fold a finished conversation into what Mani knows about the person across conversations
-provider: openrouter
 model_id: openai/gpt-6-luna
 model_parameters:
   maxTokens: 800

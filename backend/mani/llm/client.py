@@ -35,12 +35,9 @@ MAX_SCHEMA_ATTEMPTS = 2
 
 @dataclass(frozen=True)
 class Call[T: BaseModel]:
-    """A completed model call: what came back, and what it cost."""
+    """A completed model call: what came back, and the id of its record."""
 
     value: T
-    model: str
-    usage: llm_calls.Usage
-    latency_ms: int
     call_id: uuid.UUID | None
 
 
@@ -137,7 +134,6 @@ async def _record(
     latency_ms: int,
     user_id: uuid.UUID | str | None,
     thread_id: uuid.UUID | str | None,
-    prompt_version_id: uuid.UUID | str | None,
     error_message: str | None,
 ) -> uuid.UUID | None:
     """Write the cost row for a call, successful or not.
@@ -160,7 +156,6 @@ async def _record(
                 latency_ms=latency_ms,
                 user_id=user_id,
                 thread_id=thread_id,
-                prompt_version_id=prompt_version_id,
                 error_message=error_message,
             )
     except Exception:
@@ -180,7 +175,6 @@ async def complete[T: BaseModel](
     routing: dict[str, Any] | None = None,
     user_id: uuid.UUID | str | None = None,
     thread_id: uuid.UUID | str | None = None,
-    prompt_version_id: uuid.UUID | str | None = None,
     settings: Settings | None = None,
     retry_malformed: bool = True,
 ) -> Call[T]:
@@ -232,7 +226,7 @@ async def complete[T: BaseModel](
                 await _record(
                     purpose=purpose, model=model, outcome=llm_calls.Outcome.PROVIDER_ERROR,
                     usage=llm_calls.Usage(), latency_ms=int((time.perf_counter() - started) * 1000),
-                    user_id=user_id, thread_id=thread_id, prompt_version_id=prompt_version_id,
+                    user_id=user_id, thread_id=thread_id,
                     error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}, retrying: {exc}",
                 )
                 await asyncio.sleep(TRANSIENT_RETRY_DELAY_SECONDS)
@@ -258,7 +252,6 @@ async def complete[T: BaseModel](
             await _record(
                 purpose=purpose, model=model, outcome=llm_calls.Outcome.SCHEMA_INVALID,
                 usage=usage, latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-                prompt_version_id=prompt_version_id,
                 error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}: {failure or 'empty'}",
             )
             if not retry_malformed:
@@ -287,7 +280,7 @@ async def complete[T: BaseModel](
         await _record(
             purpose=purpose, model=model, outcome=outcome, usage=usage,
             latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-            prompt_version_id=prompt_version_id, error_message=str(exc),
+            error_message=str(exc),
         )
         raise error from exc
 
@@ -295,11 +288,9 @@ async def complete[T: BaseModel](
     call_id = await _record(
         purpose=purpose, model=model, outcome=llm_calls.Outcome.OK, usage=usage,
         latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-        prompt_version_id=prompt_version_id, error_message=None,
+        error_message=None,
     )
-    return Call(
-        value=parsed, model=model, usage=usage, latency_ms=latency_ms, call_id=call_id
-    )
+    return Call(value=parsed, call_id=call_id)
 
 
 async def choose_exercise(
@@ -317,7 +308,6 @@ async def choose_exercise(
     routing: dict[str, Any] | None = None,
     user_id: uuid.UUID | str | None = None,
     thread_id: uuid.UUID | str | None = None,
-    prompt_version_id: uuid.UUID | str | None = None,
     settings: Settings | None = None,
 ) -> str | None:
     """Ask the model which exercise fits, from the closed list of the active catalog.
@@ -376,7 +366,7 @@ async def choose_exercise(
         await _record(
             purpose=purpose, model=model, outcome=outcome, usage=usage,
             latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-            prompt_version_id=prompt_version_id, error_message=str(exc),
+            error_message=str(exc),
         )
         return None
 
@@ -398,6 +388,6 @@ async def choose_exercise(
     await _record(
         purpose=purpose, model=model, outcome=outcome, usage=usage,
         latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-        prompt_version_id=prompt_version_id, error_message=error_message,
+        error_message=error_message,
     )
     return exercise_id

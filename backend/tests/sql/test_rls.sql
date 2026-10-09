@@ -327,7 +327,7 @@ $$;
 rollback;
 
 -- ---------------------------------------------------------------------------
--- Finishing a technique clears its row, for the owner only
+-- A finished technique is retired with an UPDATE, never deleted
 -- ---------------------------------------------------------------------------
 
 begin;
@@ -335,8 +335,6 @@ set local role mani_service;
 set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-00000000000a"}';
 
 do $$
-declare
-  n integer;
 begin
   insert into public.thread_technique_state
     (thread_id, user_id, framework_id, outcome, phase, at_message_count)
@@ -344,19 +342,15 @@ begin
           'a0000000-0000-4000-8000-00000000000a',
           'thought_reframing', 'accepted', 'ground', 4);
 
-  -- The turn after a technique reaches `ground` accepted. This is the ordinary
-  -- successful path, and the whole turn shares one transaction: a failure here loses
-  -- the user's message and Mani's reply with it.
-  delete from public.thread_technique_state
-   where thread_id = '11111111-0000-4000-8000-000000000001'
-     and user_id = 'a0000000-0000-4000-8000-00000000000a';
-
-  select count(*) into n from public.thread_technique_state
-   where thread_id = '11111111-0000-4000-8000-000000000001';
-  if n <> 0 then
-    raise exception 'FAIL: the grant exists but the delete matched nothing (missing policy?)';
-  end if;
-  raise notice 'PASS: a finished technique can be cleared';
+  begin
+    delete from public.thread_technique_state
+     where thread_id = '11111111-0000-4000-8000-000000000001'
+       and user_id = 'a0000000-0000-4000-8000-00000000000a';
+    raise exception 'FAIL: the backend deleted technique state, which no code path does';
+  exception
+    when insufficient_privilege then
+      raise notice 'PASS: the backend cannot delete technique state';
+  end;
 end
 $$;
 rollback;

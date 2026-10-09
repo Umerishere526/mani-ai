@@ -86,10 +86,10 @@ def load_prompts(directory: pathlib.Path | None = None) -> list[dict]:
     return prompts
 
 
-# A framework is eight lines the model reads, in this order, and nothing else: the client's long
+# A framework is seven lines the model reads, in this order, and nothing else: the client's long
 # form lives in docs/specs/, and a file that grows past this would grow the cached prompt with it.
 FRAMEWORK_LABELS = (
-    "Starts when", "Sounds like", "Skip when", "Stages", "Ends when", "Offer", "Never", "Never",
+    "Starts when", "Sounds like", "Skip when", "Stages", "Ends when", "Never", "Never",
 )
 MAX_LINE = 220
 STAGES_DIVIDER = " | "
@@ -101,7 +101,7 @@ _STAGE = re.compile(r"(\S+) \((.+)\)")
 
 
 def _framework_lines(name: str, body: str, phases: list[str]) -> list[str]:
-    """The eight labelled lines of a framework body, refused with the reason when any rule breaks."""
+    """The seven labelled lines of a framework body, refused with the reason when any rule breaks."""
     lines = body.strip().split("\n")
     if len(lines) != len(FRAMEWORK_LABELS):
         raise ValueError(
@@ -150,7 +150,7 @@ def parse_framework(path: pathlib.Path) -> dict:
 
     Reuses the same frontmatter/body split as a prompt file - only the fields differ. The
     file's own `id` names the framework; the previous version wrote it by hand alongside
-    two hardcoded entries. The body is the eight lines the model reads, checked here so a
+    two hardcoded entries. The body is the seven lines the model reads, checked here so a
     file that breaks the format is never seeded.
     """
     raw = path.read_text()
@@ -158,9 +158,12 @@ def parse_framework(path: pathlib.Path) -> dict:
         raise ValueError(f"{path.name} has no frontmatter")
     _, frontmatter, body = raw.split("---", 2)
     meta = yaml.safe_load(frontmatter) or {}
-    for required in ("id", "name", "phases"):
+    for required in ("id", "name", "summary", "phases"):
         if required not in meta:
             raise ValueError(f"{path.name} frontmatter has no {required}")
+    # The description every offer of it shows, word for word.
+    if not isinstance(meta["summary"], str) or not meta["summary"].strip():
+        raise ValueError(f"{path.name}: summary must not be blank")
     if extra := sorted(set(meta) - FRAMEWORK_KEYS):
         raise ValueError(f"{path.name}: frontmatter keys not allowed: {', '.join(extra)}")
     activation = meta.get("activation") or {}
@@ -173,18 +176,13 @@ def parse_framework(path: pathlib.Path) -> dict:
     return {
         "id": meta["id"],
         "name": meta["name"],
-        "summary": meta.get("summary", ""),
+        "summary": meta["summary"],
         "body": "\n".join(lines),
-        # Read by nothing, but kept readable rather than blank for anyone looking at the table.
-        "activation_conditions": lines[0].removeprefix("Starts when: "),
         # The body ending follows each framework's own phases. The files end at `closing`,
         # and this is rebuilt from the file every run, so appending is idempotent.
         "phases": meta["phases"] + list(ENDING_PHASES),
         "display_order": meta.get("display_order", 0),
         "activation": activation,
-        # Read by nothing: the stage questions are the Stages line and the ending is the
-        # mani_base prompt's `ending` section.
-        "stages": {},
     }
 
 
@@ -205,28 +203,23 @@ async def seed() -> None:
                 await conn.execute(
                     """
                     insert into admin.frameworks
-                        (id, name, summary, body, activation_conditions, phases,
-                         display_order, activation, stages)
-                    values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)
+                        (id, name, summary, body, phases, display_order, activation)
+                    values ($1, $2, $3, $4, $5, $6, $7::jsonb)
                     on conflict (id) do update set
                         name = excluded.name,
                         summary = excluded.summary,
                         body = excluded.body,
-                        activation_conditions = excluded.activation_conditions,
                         phases = excluded.phases,
                         display_order = excluded.display_order,
-                        activation = excluded.activation,
-                        stages = excluded.stages
+                        activation = excluded.activation
                     """,
                     framework["id"],
                     framework["name"],
                     framework["summary"],
                     framework["body"],
-                    framework["activation_conditions"],
                     framework["phases"],
                     framework["display_order"],
                     json.dumps(framework["activation"]),
-                    json.dumps(framework["stages"]),
                 )
                 print(f"  {framework['name']:<28} {len(framework['phases'])} phases")
             print(f"frameworks: {len(framework_files)}")

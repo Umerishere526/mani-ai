@@ -1,7 +1,7 @@
 ---
 id: dbt_stop
-name: DBT STOP
-summary: "These questions help you interrupt an automatic reaction so you can pause, understand what is happening, and choose how you want to respond rather than simply reacting."
+name: STOP Framework
+summary: "This framework helps you interrupt an automatic reaction so you can pause, understand what is happening, and choose how you want to respond rather than simply reacting."
 display_order: 6
 phases: [offering, stop, pause, observe, proceed, closing]
 ---
@@ -10,6 +10,5 @@ Sounds like: "I am about to send a message", "I am about to lose it", "I will te
 Skip when: it has already happened and nothing more is about to, the action protects them, they can already choose a response (act_choice_point), or a plan is needed (structured_problem_solving).
 Stages: stop (the action not taken yet) | pause (staying here, not going back to it) > observe (what is happening now, in their words, not why) > proceed (what they choose to do next) > closing (how it sits now)
 Ends when: they have paused the action and chosen their next step on purpose; it need not be the right one, and they need not be settled.
-Offer: name what they are about to do, in their words, then ask if they want to pause it together for a moment first.
 Never: use this in place of the safety protocol, for suicide, self harm, harm to anyone, an overdose or danger, or keep them here when they need emergency help.
 Never: delay a protective action such as leaving, calling for help or seeking care, judge the urge, or choose what they do next.

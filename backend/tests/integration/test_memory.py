@@ -37,11 +37,7 @@ class Scripted:
             value = self.remembered
         else:
             value = Reply(text="What happens on those evenings?")
-        return client.Call(
-            value=value, model="test/model",
-            usage=llm_calls.Usage(input_tokens=10, output_tokens=5),
-            latency_ms=1, call_id=uuid.uuid4(),
-        )
+        return client.Call(value=value, call_id=uuid.uuid4())
 
 
 @pytest.fixture
@@ -235,8 +231,7 @@ async def test_the_next_chat_is_shaped_by_the_memory_but_carries_none_of_the_old
 
     async def watching(messages, schema, **kwargs):
         sent.append(messages)
-        return client.Call(value=Reply(text="How has today been?"), model="test/model",
-                           usage=llm_calls.Usage(), latency_ms=1, call_id=uuid.uuid4())
+        return client.Call(value=Reply(text="How has today been?"), call_id=uuid.uuid4())
 
     monkeypatch.setattr(client, "complete", watching)
     from mani.db import pool
@@ -289,8 +284,8 @@ async def test_a_fold_can_record_its_own_cost_while_it_holds_the_thread(
         call = await fake(messages, schema, **kwargs)
         recorded.append(await client._record(
             purpose=kwargs["purpose"], model="test/model", outcome=llm_calls.Outcome.OK,
-            usage=call.usage, latency_ms=1, user_id=kwargs.get("user_id"),
-            thread_id=kwargs.get("thread_id"), prompt_version_id=None, error_message=None,
+            usage=llm_calls.Usage(), latency_ms=1, user_id=kwargs.get("user_id"),
+            thread_id=kwargs.get("thread_id"), error_message=None,
         ))
         return call
 

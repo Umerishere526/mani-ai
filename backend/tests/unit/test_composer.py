@@ -77,13 +77,12 @@ ABCDE_LINES = (
     "Skip when: one quick thought (thought_reframe).\n"
     "Stages: activate (what happened) > closing (how it sits now)\n"
     "Ends when: they hold a fairer belief.\n"
-    "Offer: mirror what it came to mean.\n"
     "Never: invent evidence.\n"
     "Never: question whether abuse was real."
 )
 
 
-def test_the_framework_index_carries_each_frameworks_description_then_its_eight_lines():
+def test_the_framework_index_carries_each_frameworks_description_then_its_seven_lines():
     """The lines are the model's whole view of a framework, written and checked in its file, so
     the index renders them as they are. The client's description stands above them as its own
     line, and a framework with none gets no empty line."""
@@ -186,8 +185,8 @@ def test_an_empty_memory_adds_nothing(config):
 
 
 def test_the_index_hands_over_the_description_on_one_line_and_says_nothing_else():
-    """How to word an offer from the description is said once, in mani_base.md, so the index
-    carries only its heading, each framework's heading, the description and the eight lines."""
+    """The offer's words are the seeded offer's, not the model's, so the index carries only its
+    heading, each framework's heading, the description and the seven lines."""
     helps = Framework(
         id="abcde", name="ABCDE", body="b", phases=["offering"],
         summary="This framework helps you separate what happened\nfrom what you told yourself about it.",

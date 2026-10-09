@@ -24,7 +24,7 @@ st.set_page_config(page_title="Mani chat tester", page_icon="🧠", layout="cent
 
 # The greeting's style buttons, by the label the person taps - used only to show which
 # style the conversation is in.
-STYLES = {"direct": "Direct", "supportive": "Supportive", "reflective": "Reflective"}
+STYLES = {"direct": "Directive", "supportive": "Supportive", "reflective": "Reflective"}
 
 
 def run(coro):
@@ -325,75 +325,81 @@ else:
     # it. Only the Send button (or Enter in the field) calls send() - one trigger, same
     # as a typed message, no parallel path.
     # -----------------------------------------------------------------------
-    with st.container(key="composer_bar"):
-        if st.session_state.show_recorder:
-            st.caption("🎤 Recording - tap again to cancel")
-            recording = st.audio_input(
-                "Voice message",
-                key=f"mic_{st.session_state.mic_cycle}",
-                label_visibility="collapsed",
-            )
+    # An open offer is answered with its buttons, as the apps will be: the field, Send and the mic
+    # come back after any reply without one. An open recorder is closed too, so it does not
+    # reappear on the next render.
+    if any(button.get("technique") for button in buttons):
+        st.session_state.show_recorder = False
+    else:
+        with st.container(key="composer_bar"):
+            if st.session_state.show_recorder:
+                st.caption("🎤 Recording - tap again to cancel")
+                recording = st.audio_input(
+                    "Voice message",
+                    key=f"mic_{st.session_state.mic_cycle}",
+                    label_visibility="collapsed",
+                )
 
-            if recording is not None:
-                with st.spinner("Transcribing…"):
-                    try:
-                        transcript = client.transcribe_audio(
-                            recording.getvalue(), recording.name or "recording.wav"
+                if recording is not None:
+                    with st.spinner("Transcribing…"):
+                        try:
+                            transcript = client.transcribe_audio(
+                                recording.getvalue(), recording.name or "recording.wav"
+                            )
+                        except mani.ApiError as exc:
+                            st.error(str(exc))
+                            transcript = None
+                    # Reset the recorder and close the panel regardless of outcome, so a
+                    # failed or already-used clip never re-submits itself on the next
+                    # rerun, and the panel vanishes the moment a recording is handled -
+                    # it never sits open after stopping.
+                    st.session_state.mic_cycle += 1
+                    st.session_state.show_recorder = False
+                    if transcript:
+                        # Only ever fills the draft - nothing here calls send(). A fresh
+                        # field key next render means this is a clean reseed, not a live
+                        # mutation of an already-rendered widget.
+                        st.session_state.draft = transcript
+                        st.session_state.composer_cycle += 1
+                    st.rerun()
+
+            mic_col, composer_col = st.columns([1, 9])
+            with mic_col:
+                mic_icon = "✕" if st.session_state.show_recorder else "🎤"
+                if st.button(mic_icon, key="mic_toggle", use_container_width=True):
+                    st.session_state.show_recorder = not st.session_state.show_recorder
+                    st.rerun()
+
+            field_key = f"draft_{st.session_state.composer_cycle}"
+            with composer_col:
+                with st.form("composer", border=False, enter_to_submit=False):
+                    field_col, button_col = st.columns([5, 1])
+                    with field_col:
+                        # A text area so a long message wraps and the field grows, instead of
+                        # scrolling sideways. height="content" (Streamlit >=1.64) grows it with
+                        # the text rather than fixing it at one size.
+                        st.text_area(
+                            "Message",
+                            value=st.session_state.draft,
+                            key=field_key,
+                            placeholder="Type, or tap 🎤 and edit before sending…",
+                            label_visibility="collapsed",
+                            height="content",
                         )
-                    except mani.ApiError as exc:
-                        st.error(str(exc))
-                        transcript = None
-                # Reset the recorder and close the panel regardless of outcome, so a
-                # failed or already-used clip never re-submits itself on the next
-                # rerun, and the panel vanishes the moment a recording is handled -
-                # it never sits open after stopping.
-                st.session_state.mic_cycle += 1
-                st.session_state.show_recorder = False
-                if transcript:
-                    # Only ever fills the draft - nothing here calls send(). A fresh
-                    # field key next render means this is a clean reseed, not a live
-                    # mutation of an already-rendered widget.
-                    st.session_state.draft = transcript
-                    st.session_state.composer_cycle += 1
+                    with button_col:
+                        submitted = st.form_submit_button(
+                            "Send ➤", use_container_width=True, type="primary"
+                        )
+
+            if submitted:
+                content = st.session_state[field_key].strip()
+                if content:
+                    send(content)
+                # A new cycle means a new field key next render, seeded empty - the clean
+                # way to clear it without touching the widget that just rendered.
+                st.session_state.draft = ""
+                st.session_state.composer_cycle += 1
                 st.rerun()
-
-        mic_col, composer_col = st.columns([1, 9])
-        with mic_col:
-            mic_icon = "✕" if st.session_state.show_recorder else "🎤"
-            if st.button(mic_icon, key="mic_toggle", use_container_width=True):
-                st.session_state.show_recorder = not st.session_state.show_recorder
-                st.rerun()
-
-        field_key = f"draft_{st.session_state.composer_cycle}"
-        with composer_col:
-            with st.form("composer", border=False, enter_to_submit=False):
-                field_col, button_col = st.columns([5, 1])
-                with field_col:
-                    # A text area so a long message wraps and the field grows, instead of
-                    # scrolling sideways. height="content" (Streamlit >=1.64) grows it with
-                    # the text rather than fixing it at one size.
-                    st.text_area(
-                        "Message",
-                        value=st.session_state.draft,
-                        key=field_key,
-                        placeholder="Type, or tap 🎤 and edit before sending…",
-                        label_visibility="collapsed",
-                        height="content",
-                    )
-                with button_col:
-                    submitted = st.form_submit_button(
-                        "Send ➤", use_container_width=True, type="primary"
-                    )
-
-        if submitted:
-            content = st.session_state[field_key].strip()
-            if content:
-                send(content)
-            # A new cycle means a new field key next render, seeded empty - the clean
-            # way to clear it without touching the widget that just rendered.
-            st.session_state.draft = ""
-            st.session_state.composer_cycle += 1
-            st.rerun()
 
     # A text_area takes plain Enter as a new line, so sending on Enter (Shift+Enter for a
     # real line break) is wired up by hand: this intercepts Enter in the composer's textarea

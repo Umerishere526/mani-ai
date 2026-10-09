@@ -1,9 +1,7 @@
 ---
 id: 10000000-0000-0000-0000-000000000012
 name: exercise_select
-type: system
 description: Pick the exercise that follows a framework the person just completed
-provider: openrouter
 model_id: openai/gpt-6-luna
 model_parameters:
   maxTokens: 200
