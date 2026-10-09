@@ -6,7 +6,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class LibrarySection(StrEnum):
@@ -34,6 +34,9 @@ SHAPES = (
     "warmth lead", "honor and follow", "mirror and ask", "mirror and hold",
     "gentle follow", "presence only",
 )
+# The two shapes that ask nothing. A draft that chose one is not asked for a question: the model
+# reads when someone only wants to be listened to, so no phrase list has to.
+NO_QUESTION_SHAPES = ("mirror and hold", "presence only")
 
 
 class SmartPrompt(BaseModel):
@@ -81,8 +84,9 @@ class TechniqueState(BaseModel):
     )
     step: str = Field(
         description=(
-            "The current stage id you are executing, from framework_stages in [ctx]. "
-            "Stages must follow that list's order - you cannot skip one."
+            "The stage you are asking in this reply, from framework_stages in [ctx]. It may be "
+            "several stages past the last one when what they said already answered those between. "
+            "The closing and the body route are never skipped."
         )
     )
     accepted: bool | None = Field(
@@ -112,6 +116,43 @@ class Style(BaseModel):
     )
 
 
+class StageKnown(BaseModel):
+    """One stage of the running framework, and what the conversation already holds for it."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    stage: str = Field(description="The stage id, from framework_stages in [ctx].")
+    known: str | None = Field(
+        default=None,
+        description=(
+            "What they have already said, here or in the Conversation Context, that this stage "
+            "asks for, in their own short words. Part of it is fine. Null when they have said "
+            "nothing for it."
+        ),
+    )
+    status: Literal["known", "partial", "confirm", "missing"] | None = Field(
+        default=None,
+        description=(
+            "known: what they said already meets the stage's ready_when, so it is not asked. "
+            "partial: they said some of it, so ask only for the gap. confirm: you have a possible "
+            "answer they did not state, and the stage's own lines say to confirm it. missing: "
+            "they said nothing for it, so ask it."
+        ),
+    )
+    met: bool | None = Field(
+        default=None,
+        description="Optional. True when status is known.",
+    )
+
+    @model_validator(mode="after")
+    def _status_and_met_agree(self) -> "StageKnown":
+        """Either field may be given; the other follows, so a ledger is always read one way."""
+        if self.status is None:
+            self.status = "known" if self.met else ("partial" if self.known else "missing")
+        self.met = self.status == "known"
+        return self
+
+
 class Reply(BaseModel):
     """What one turn asks the model for. Optional fields come back null, not absent."""
 
@@ -139,8 +180,8 @@ class Reply(BaseModel):
         description=(
             "Choose before writing text: the id from the Framework Index that this "
             "conversation is most likely heading toward, or null when nothing has pointed "
-            "anywhere yet. It decides which missing thing your question reaches for. Not "
-            "shown to the user."
+            "anywhere yet. It decides which set you offer, never what you ask. Not shown to "
+            "the user."
         ),
     )
     offer_fit: Literal["clear", "closest"] | None = Field(
@@ -149,6 +190,16 @@ class Reply(BaseModel):
             "Only when this reply offers a set of questions: \"clear\" when you are confident "
             "it fits what they have told you, \"closest\" when nothing fits well and it is the "
             "nearest. Null when you are not offering. Choose before writing text."
+        ),
+    )
+    stages_known: list[StageKnown] | None = Field(
+        default=None,
+        description=(
+            "Only while the questions run (active_framework is in [ctx]); null otherwise. Fill "
+            "it before text. One entry per stage, in order, starting with the stage in force "
+            "and stopping at the first that is not met. That stage is the one you ask, and "
+            "state.step must name it. Your question asks only for what its known does not "
+            "already hold. Not shown to the user."
         ),
     )
     text: str = Field(description="Your conversational response to the user. Required.")

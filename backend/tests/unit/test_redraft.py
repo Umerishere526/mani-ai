@@ -3,7 +3,7 @@
 
 from mani.chat import redraft
 from mani.chat.techniques import Registry
-from mani.llm.schema import Reply, SmartPrompt
+from mani.llm.schema import Reply, SmartPrompt, StageKnown, TechniqueState
 from mani.models.rows import Framework
 
 
@@ -27,15 +27,65 @@ def offer(technique: str) -> Reply:
     )
 
 
+def stages() -> Registry:
+    return Registry([Framework(
+        id="abcde", name="ABCDE", summary="s", body="b",
+        phases=["offering", "activate", "belief", "consequence", "closing"],
+    )])
+
+
+def at(step: str | None) -> Reply:
+    return Reply(
+        text="What changed first?",
+        state=None if step is None else TechniqueState(technique="abcde", step=step),
+    )
+
+
+def ledger(*entries: tuple[str, bool], step: str | None) -> Reply:
+    return Reply(
+        text="What did it come to mean for you?",
+        stages_known=[StageKnown(stage=s, known="their words" if met else None, met=met)
+                      for s, met in entries],
+        state=None if step is None else TechniqueState(technique="abcde", step=step),
+    )
+
+
+def test_a_draft_that_asks_the_first_stage_its_ledger_leaves_open_stands():
+    """muhammad, 2026-10-09: what the conversation already holds answers stages; the reply asks the
+    first one it does not, and says so in stages_known."""
+    starting = redraft.StageInForce("abcde", "activate", asked=False)
+    draft = ledger(("activate", True), ("belief", True), ("consequence", False), step="consequence")
+    assert redraft.reasons(draft, [], stages(), offer_not_allowed=False, stage_in_force=starting) == []
+
+
+def test_a_draft_whose_step_disagrees_with_its_own_ledger_is_redrafted():
+    starting = redraft.StageInForce("abcde", "activate", asked=False)
+    stayed = ledger(("activate", True), ("belief", False), step="activate")
+    jumped = ledger(("activate", True), ("belief", False), step="consequence")
+    for draft in (stayed, jumped):
+        reasons = redraft.reasons(draft, [], stages(), offer_not_allowed=False, stage_in_force=starting)
+        assert len(reasons) == 1 and "belief is the first stage not yet answered" in reasons[0]
+
+
+def test_the_closing_is_asked_even_when_the_ledger_calls_it_met():
+    """The closing is theirs to answer, so it is skipped only once it has been asked."""
+    framework = stages().get("abcde")
+    walk = ledger(("consequence", True), ("closing", True), step="closing")
+    not_asked = redraft.StageInForce("abcde", "consequence", asked=True)
+    assert redraft.ledger_stage(walk, framework, not_asked) == "closing"
+    asked = redraft.StageInForce("abcde", "closing", asked=True)
+    assert redraft.ledger_stage(ledger(("closing", True), step="closing"), framework, asked) is None
+
+
+def test_a_draft_with_no_ledger_is_not_judged_by_one():
+    starting = redraft.StageInForce("abcde", "activate", asked=False)
+    assert redraft.reasons(at("consequence"), [], stages(), offer_not_allowed=False,
+                           stage_in_force=starting) == []
+
+
 def test_a_clean_question_stands():
     draft = Reply(text="What is the hardest part of the evenings?")
     assert redraft.reasons(draft, ["i'm lonely"], registry(), offer_not_allowed=False) == []
-
-
-def test_a_feeling_they_never_named_is_a_reason():
-    draft = Reply(text="That sounds stressful. What do you need first?")
-    why = redraft.reasons(draft, ["i have an exam"], registry(), offer_not_allowed=False)
-    assert len(why) == 1 and "stressful" in why[0]
 
 
 def test_an_offer_before_the_clients_cadence_allows_it_is_a_reason():
@@ -65,11 +115,6 @@ def test_a_due_closest_fit_is_not_forced_when_mani_has_no_lean():
     assert redraft.reasons(undecided, ["hi"], registry(), offer_not_allowed=False, closest_fit_due=True) == []
 
 
-def test_a_due_closest_fit_is_not_forced_while_pain_may_be_physical():
-    leaning = Reply(text="Is it in your body?", heading_toward="act_choice_point")
-    assert redraft.reasons(leaning, ["i'm in pain"], registry(), offer_not_allowed=False, closest_fit_due=True) == []
-
-
 def test_a_comfort_with_no_question_is_a_reason_before_an_offer():
     comfort = Reply(text="It is okay to feel that way. I am here with you.")
     why = redraft.reasons(comfort, ["i felt small"], registry(), offer_not_allowed=False, needs_question=True)
@@ -84,11 +129,6 @@ def test_no_question_is_fine_when_it_is_not_needed():
 
 def test_an_offer_carries_its_own_permission_question():
     assert redraft.reasons(offer("act_choice_point"), ["x"], registry(), offer_not_allowed=False, needs_question=True) == []
-
-
-def test_an_offer_that_depends_on_what_it_meant_waits_and_says_why():
-    why = redraft.reasons(offer("act_choice_point"), ["i felt embarrassed"], registry(), offer_not_allowed=False, earliest_wait=True)
-    assert len(why) == 1 and "what they took it to mean" in why[0] and "ACT Choice Point" in why[0]
 
 
 FIRST = (
@@ -127,3 +167,41 @@ def test_a_due_closest_fit_is_never_asked_to_call_itself_the_nearest():
                                    closest_fit_due=True))
     assert why
     assert "nearest" not in why and "closest" not in why
+
+
+def test_a_draft_that_chose_a_shape_asking_nothing_is_not_asked_for_a_question():
+    """Whether someone only wants to be listened to is the model's reading, shown by its shape."""
+    from mani.llm.schema import Style
+
+    holding = Reply(text="That has been sitting with you.", style=Style(shape="mirror and hold"))
+    asking = Reply(text="That has been sitting with you.", style=Style(shape="mirror and ask"))
+    none = Reply(text="That has been sitting with you.")
+    for draft, expected in ((holding, []), (asking, 1), (none, 1)):
+        found = redraft.reasons(draft, [], registry(), offer_not_allowed=False, needs_question=True)
+        assert len(found) == (expected if isinstance(expected, int) else len(expected))
+
+
+def test_a_ledger_status_and_met_always_agree():
+    assert StageKnown(stage="a", met=True).status == "known"
+    assert StageKnown(stage="a", known="some", met=False).status == "partial"
+    assert StageKnown(stage="a").status == "missing"
+    confirm = StageKnown(stage="a", status="confirm", known="a possible event")
+    assert confirm.met is False
+
+
+def test_the_ledger_view_lists_every_stage_with_what_the_reply_does():
+    framework = Framework(
+        id="abcde", name="ABCDE", summary="s", body="b",
+        phases=["offering", "activate", "belief", "consequence", "effective", "somatic_checkin"],
+        stages={"activate": {"title": "A: Activating Event"}},
+    )
+    reply = ledger(("belief", True), ("consequence", False), step="consequence")
+    rows = redraft.ledger_view(reply, framework)
+    assert [(r["stage"], r["status"]) for r in rows] == [
+        ("activate", "done"), ("belief", "known"), ("consequence", "missing"), ("effective", "not_reached"),
+    ]
+    assert rows[0]["title"] == "A: Activating Event"
+    assert rows[1]["action"] == "bypassed, not asked" and rows[2]["asking"] and not rows[1]["asking"]
+    assert redraft.ledger_view(Reply(text="x"), framework) == []
+
+

@@ -156,7 +156,7 @@ _WHITESPACE = re.compile(r"\s+")
 def normalize(text: str) -> str:
     """Lowercase, expand contractions, drop punctuation, collapse whitespace.
 
-    Shared with the framework router so a phrase written one way in the specification matches
+    Shared with the eligibility checks so a phrase written one way in the specification matches
     the same sentence typed either way by a person.
     """
     lowered = text.lower().translate(_APOSTROPHES)

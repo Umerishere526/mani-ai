@@ -103,11 +103,6 @@ def framework_index(registry: Registry) -> str | None:
     # prefix with the rest of the index.
     to_find_out = [
         f"- **{framework.name}**: {'; '.join(items)}"
-        + (
-            f" (offer it only from their message {earliest}: it depends on what they took it to mean)"
-            if (earliest := (framework.activation or {}).get("earliest_offer_message"))
-            else ""
-        )
         for framework in present
         for items in [(framework.activation or {}).get("to_find_out") or []]
         if items
@@ -119,6 +114,40 @@ def framework_index(registry: Registry) -> str | None:
             "your questions reach for what is still missing for it - in their words, about their "
             "feeling, never as a checklist:", "",
         ] + to_find_out
+
+    # The client's own offer wording, one pattern per style. Mani writes its part of an offer in
+    # that pattern and changes only what is in angle brackets, so it reads as a whole sentence.
+    patterns = [
+        f"**{framework.name}**\n" + "\n".join(
+            f"- {style}: {' '.join(str(text).split())}" for style, text in offer.items()
+        )
+        for framework in present
+        for offer in [((framework.stages or {}).get("offering") or {}).get("offer") or {}]
+        if offer
+    ]
+    keep_chatting = [
+        f"**{framework.name}**\n" + "\n".join(
+            f"- {style}: {' '.join(str(text).split())}" for style, text in lines_by_style.items()
+        )
+        for framework in present
+        for lines_by_style in [((framework.stages or {}).get("offering") or {}).get("keep_chatting") or {}]
+        if lines_by_style
+    ]
+    if patterns:
+        lines += [
+            "", "## How to word an offer", "",
+            "Write your part of an offer in the pattern for the conversation style in force. Keep "
+            "every word as written, the whole pattern and never shortened. Change only what is in angle brackets, to fit what they told "
+            "you, so the whole sentence reads naturally. The permission question is added after "
+            "your part.", "",
+        ] + patterns
+    if keep_chatting:
+        lines += [
+            "", "## When they choose Keep chatting", "",
+            "Carry on the conversation with this question for the style in force, keeping its words "
+            "and changing only what is in angle brackets to fit what they said. Offer nothing in "
+            "that reply.", "",
+        ] + keep_chatting
 
     return "\n".join(lines)
 

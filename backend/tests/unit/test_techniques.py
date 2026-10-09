@@ -21,9 +21,16 @@ STOP = Framework(
 )
 
 
+# What every seeded framework looks like: content stages, a closing, then the body route.
+WITH_BODY_ROUTE = Framework(
+    id="with_body_route", name="With body route", summary="s", body="b",
+    phases=["offering", "one", "two", "three", "closing", "somatic_checkin", "somatic_practice"],
+)
+
+
 @pytest.fixture
 def registry() -> Registry:
-    return Registry([REFRAMING, ABCDE, STOP])
+    return Registry([REFRAMING, ABCDE, STOP, WITH_BODY_ROUTE])
 
 
 def test_the_opening_move_is_offering(registry):
@@ -43,12 +50,20 @@ def test_stepping_back_is_allowed(registry):
     assert registry.validate_transition("thought_reframing", "explore", "surface").ok
 
 
-def test_jumping_ahead_is_refused_and_names_what_was_skipped(registry):
-    t = registry.validate_transition("thought_reframing", "offering", "explore")
-    assert not t.ok
+def test_jumping_over_stages_their_words_already_answered_is_allowed(registry):
+    """muhammad, 2026-10-09: a stage the conversation already answers is skipped, and so are the
+    ones after it that it answers too."""
+    assert registry.validate_transition("thought_reframing", "offering", "explore").ok
+    assert registry.validate_transition("with_body_route", "offering", "closing").ok
+    assert registry.validate_transition("with_body_route", "one", "three").ok
+
+
+def test_the_closing_and_the_body_route_cannot_be_jumped_over(registry):
+    t = registry.validate_transition("with_body_route", "two", "somatic_practice")
     assert t.verdict is Verdict.SKIPPED_PHASES
-    assert t.skipped == ["surface", "externalize"]
-    assert t.expected_next == "surface"
+    assert t.skipped == ["closing", "somatic_checkin"]
+    assert t.expected_next == "closing"
+    assert registry.validate_transition("thought_reframing", "land", "ground").ok, "the last stage is landed on, not jumped"
 
 
 def test_starting_mid_technique_is_refused(registry):
@@ -87,8 +102,9 @@ def test_phases_belong_to_their_own_framework(registry):
 
 
 def test_clamp_corrects_instead_of_discarding_the_turn(registry):
-    # A skip is worth a corrected field, not another paid model call.
-    assert registry.clamp("thought_reframing", "offering", "explore") == "surface"
+    # A skip over a stage that must be asked is worth a corrected field, not another paid model call.
+    assert registry.clamp("with_body_route", "three", "somatic_practice") == "closing"
+    assert registry.clamp("thought_reframing", "offering", "explore") == "explore"
     assert registry.clamp("thought_reframing", None, "explore") == OFFERING
     assert registry.clamp("thought_reframing", "offering", "surface") == "surface"
 
@@ -101,8 +117,8 @@ def test_clamp_records_nothing_when_nothing_is_trustworthy(registry):
 def test_registry_membership_is_the_closed_set(registry):
     assert "abcde" in registry
     assert "made_up" not in registry
-    assert sorted(registry.ids) == ["abcde", "dbt_stop", "thought_reframing"]
-    assert len(registry) == 3
+    assert sorted(registry.ids) == ["abcde", "dbt_stop", "thought_reframing", "with_body_route"]
+    assert len(registry) == 4
 
 
 def test_the_last_phase_is_what_finishes_a_framework(registry):

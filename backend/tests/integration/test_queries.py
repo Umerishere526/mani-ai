@@ -136,26 +136,26 @@ async def test_the_composed_read_returns_the_whole_turn(alice):
                           support_style="reflective")
     await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates(
         technique=TechniqueState(
-            thread_id=thread.id, framework_id="thought_reframe",
+            thread_id=thread.id, framework_id="abcde",
             outcome=TechniqueOutcome.OFFERED, phase="offering", at_message_count=2),
-        offer_frameworks=["thought_reframe"],
+        offer_frameworks=["abcde"],
         style=ResponseStyle(shape="mirror and ask", voice="naming"),
     ))
     await summaries.upsert(
         alice, thread.id, ALICE, summary="Talked about work.",
-        techniques_tried=[TechniqueTried(name="thought_reframe", helpful=True)],
+        techniques_tried=[TechniqueTried(name="abcde", helpful=True)],
         summarized_through_message_id=None, summarized_message_count=2)
 
     ctx = await threads.load_turn_context(alice, thread.id, ALICE)
     assert ctx is not None
     assert ctx.profile.nickname == "Al"
     assert ctx.profile.support_style == "reflective"
-    assert ctx.technique.framework_id == "thought_reframe"
+    assert ctx.technique.framework_id == "abcde"
     assert ctx.technique.outcome == TechniqueOutcome.OFFERED
-    assert ctx.techniques_offered == ["thought_reframe"]
+    assert ctx.techniques_offered == ["abcde"]
     assert ctx.recent_styles[0].shape == "mirror and ask"
     assert ctx.summary.summary == "Talked about work."
-    assert ctx.summary.techniques_tried[0].name == "thought_reframe"
+    assert ctx.summary.techniques_tried[0].name == "abcde"
 
 
 async def test_a_conversation_style_survives_the_round_trip(alice):
@@ -271,10 +271,8 @@ async def test_config_tables_are_readable_and_seeded(users):
     # registry at compose time, so it is deliberately not a row here.
     assert {p.name for p in prompts} >= {"mani_base", "response_format"}
     assert "framework_index" not in {p.name for p in prompts}
-    assert {f.id for f in frameworks} == {
-        "abcde", "thought_reframe", "behavioral_activation",
-        "structured_problem_solving", "act_choice_point", "dbt_stop",
-    }
+    # ABCDE is the only framework offered; the others are paused, not removed.
+    assert {f.id for f in frameworks} == {"abcde"}
     assert frameworks[0].phases[0] == "offering"
 
 

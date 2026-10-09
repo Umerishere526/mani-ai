@@ -16,8 +16,7 @@ activation:
     - "whether it is one problem or several"
     - "whether they do not know what to do, as opposed to knowing and not starting"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
   appropriate_when:
     - "The user has a specific practical problem"
     - "The problem can be influenced through action"
@@ -41,39 +40,6 @@ activation:
     - "The decision requires professional expertise MANI cannot provide - a medical treatment plan, a legal conclusion, an investment or financial decision. Mani may help the person work out who could advise them, and must not replace qualified judgment"
     - "The plan would be retaliation, deception, an unsafe confrontation, or harm to the person or someone else"
     - "The situation is abuse, a threat, or emergency danger - it is never a communication problem or an ordinary decision, and the safety protocol applies, not a plan"
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "do not know which option"
-    - "every choice has a downside"
-    - "keep changing my mind"
-    - "need to make a decision"
-    - "everything is a mess"
-    - "do not know where to begin"
-    # This framework's own appropriate_when already names it; only the signal list omitted it,
-    # so the plainest way of saying it matched nothing at all.
-    - "do not know what to do"
-    - "do not even know where to begin"
-    - "do not know where to start"
-    - "do not know what i should do"
-    - "do not know what to say to"
-  signals:
-    - "behind on everything"
-    - "confused between"
-    - "missed the deadline"
-    - "missed the report deadline"
-    - "compare my options"
-    - "make a plan"
-    - "need to decide what to do"
-    - "too many things happening"
-    - "cannot separate any of it"
-    - "missed a deadline"
-    - "cannot afford all these bills"
-    - "problem with my roommate"
-    - "two commitments at the same time"
-    - "prepare for a difficult conversation"
-    - "thought about this for days"
-    - "going over the same options"
-    - "worrying instead of deciding"
   redirects:
     - signal: "I know what to do, but I cannot make myself begin."
       instead: behavioral_activation

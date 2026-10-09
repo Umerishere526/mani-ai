@@ -308,6 +308,27 @@ else:
 
 with st.sidebar:
     st.divider()
+    # What Mani knew of each stage of the running framework on its last reply, and what the reply
+    # did about it. Sent by the backend only while AI_DEBUG_MODE is on.
+    st.subheader("🧾 What Mani knows")
+    LEDGER_ICONS = {
+        "known": "✅", "partial": "🟡", "confirm": "❓", "missing": "⬜", "done": "✔️", "not_reached": "⚪",
+    }
+    ledger = (last_turn or {}).get("ledger")
+    if ledger:
+        for row in ledger:
+            marker = "▶ " if row.get("asking") else ""
+            st.markdown(
+                f"{LEDGER_ICONS.get(row['status'], '•')} {marker}**{row.get('title') or row['stage']}**  \n"
+                f"{row['action']}"
+            )
+            if row.get("known"):
+                st.caption(f"knows: {row['known']}")
+        st.caption("✅ bypassed  🟡 partial  ❓ confirm  ⬜ missing  ✔️ done earlier  ▶ asked this reply")
+    else:
+        st.caption("Shown while a framework is running, with AI_DEBUG_MODE on in the backend.")
+
+    st.divider()
     # The person's conversations, newest activity first. Tapping one opens it to continue; the
     # open one is marked and cannot be tapped. "New conversation" above starts another.
     st.subheader("Conversations")

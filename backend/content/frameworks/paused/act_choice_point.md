@@ -9,17 +9,13 @@ activation:
     The user may not be able to change or resolve the situation, but does not want it deciding
     how they act - the focus shifts from making the thought or feeling go away to choosing how
     to respond while it is present.
-  # A confident offer waits for their third message: the fit depends on what they took the event or
-  # the thought to mean, which the first two messages rarely say.
-  earliest_offer_message: 3
   to_find_out:
     - "what part of the situation they cannot change or control"
     - "the thought, feeling or urge that stays with them"
     - "what it pulls them toward doing"
     - "whether they want help choosing how to respond, not solving or disproving it"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
   appropriate_when:
     - "The user cannot fully control or resolve the situation"
     - "A thought cannot be proved or disproved"
@@ -42,29 +38,6 @@ activation:
   contraindications:
     - "The situation is something that should change rather than be accepted - ongoing abuse, an unsafe workplace, a real medical or financial risk. Accepting a feeling is not the same as accepting a harmful situation, and this framework must never blur that line"
     - "The experience is being used to push the person toward forgiving, tolerating, or accepting what is unjust or harmful, or away from medical, legal, or emergency help - self-protection is never a move away from what matters"
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "cannot change what happened"
-    - "cannot make them"
-    - "cannot make my family"
-    - "cannot control whether"
-    - "never receive an apology"
-    - "cannot control what"
-    - "make the uncertainty go away"
-  signals:
-    - "cannot stop thinking"
-    - "cannot change the situation"
-    - "thought may never go away"
-    - "do not want it making my decisions"
-    - "may keep coming back"
-    - "get rid of this feeling"
-    - "waiting to feel certain"
-    - "this fear making my decisions"
-    - "avoiding the conversation"
-    - "keep defending myself"
-    - "being approved of"
-    - "want to say no"
-    - "withdrawing from people"
   redirects:
     - signal: "I think everyone believes I am incompetent, and I want to know if that is accurate."
       instead: thought_reframe

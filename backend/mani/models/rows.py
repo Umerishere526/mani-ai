@@ -119,6 +119,11 @@ class ThreadSummary(Row):
     summarized_message_count: int = 0
 
 
+# The body route that ends every framework, and the one stage a practice may be run from. Code runs
+# these stages, so the model never skips them and no stage button is shown on them.
+ENDING_STAGES = frozenset({"somatic_checkin", "somatic_practice", "grounding"})
+
+
 class Framework(Row):
     """A therapeutic technique, with its phase sequence as ordered data."""
 
@@ -129,7 +134,7 @@ class Framework(Row):
     activation_conditions: str = ""
     phases: list[str]
     display_order: int = 0
-    # The router's input (central indication, weighted phrase lists, distinctions) and the
+    # The activation data (central indication, distinctions, contraindications, vetoes) and the
     # per-phase clinical content (purpose, listening cues, readiness, boundaries, the styled
     # `ask`). activation_conditions is left in place and simply stops being read for routing -
     # a flat string cannot hold either shape.
@@ -147,6 +152,16 @@ class Framework(Row):
 
     def knows_phase(self, phase: str | None) -> bool:
         return phase in self.phases
+
+    @property
+    def closing(self) -> str | None:
+        """The last stage before the body route: where the person says whether it helped."""
+        return next((p for p in reversed(self.phases) if p not in ENDING_STAGES), None)
+
+    def may_skip(self, phase: str) -> bool:
+        """Whether a stage may be left unasked because what the person said already answers it.
+        The closing stage and the body route are always run: they are theirs to answer."""
+        return phase != self.closing and phase not in ENDING_STAGES
 
 
 class Prompt(Row):

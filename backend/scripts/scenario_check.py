@@ -30,6 +30,8 @@ ECHO = 0.6
 OPENS_ON_THEM = 0.4
 # Two styles whose questions at the same point share this much of their words ask the same thing.
 SAME_QUESTION = 0.5
+# A question made up almost wholly of words the person has already said is asking for what they said.
+ASKS_WHAT_THEY_SAID = 0.8
 # Conversations run at once. A turn holds a pool connection while client.complete records its cost
 # row on a second, so more than half of MAX_POOL_SIZE at once can leave every turn waiting forever.
 AT_ONCE = 4
@@ -59,13 +61,15 @@ def _question(text: str) -> set[str]:
     return _words(asked[-1]) if asked else set()
 
 
-def _check(exchange: Exchange, registry, told_more: bool) -> None:
+def _check(exchange: Exchange, registry, told_more: bool, said: set[str]) -> None:
     said, opening = _words(exchange.person), _words(_first_sentence(exchange.reply))
     echo = len(opening & said) / len(opening) if opening else 0.0
     exchange.opens_on_them = echo >= OPENS_ON_THEM
     exchange.question = _question(exchange.reply)
     if echo >= ECHO:
         exchange.flags.append(f"hands their words back ({echo:.0%})")
+    if exchange.question and len(exchange.question & said) / len(exchange.question) >= ASKS_WHAT_THEY_SAID:
+        exchange.flags.append("asks what they already said")
     if INTERNAL.search(exchange.reply):
         exchange.flags.append("internal words")
     if not exchange.offered:
@@ -95,11 +99,13 @@ async def _converse(name: str, lines: list[str], style: str, registry) -> list[E
             thread, _ = await orchestrator.start_thread(conn, claims)
         await _send(claims, thread.id, style.capitalize())
         exchanges: list[Exchange] = []
+        said: set[str] = set()
         for text in lines:
-            exchanges.append(await _exchange(claims, thread.id, text, registry, told_more=False))
+            said |= _words(text)
+            exchanges.append(await _exchange(claims, thread.id, text, registry, told_more=False, said=said))
             if exchanges[-1].offered:
                 exchanges.append(
-                    await _exchange(claims, thread.id, TELL_ME_MORE_LABEL, registry, told_more=True)
+                    await _exchange(claims, thread.id, TELL_ME_MORE_LABEL, registry, told_more=True, said=said)
                 )
                 break
         return exchanges
@@ -109,13 +115,15 @@ async def _converse(name: str, lines: list[str], style: str, registry) -> list[E
             await conn.execute("delete from auth.users where id = $1", user)
 
 
-async def _exchange(claims: Claims, thread_id, text: str, registry, *, told_more: bool) -> Exchange:
+async def _exchange(
+    claims: Claims, thread_id, text: str, registry, *, told_more: bool, said: set[str]
+) -> Exchange:
     turn = await _send(claims, thread_id, text)
     exchange = Exchange(
         person=text, reply=turn.content, buttons=[p.label for p in turn.prompts],
         offered=next((p.technique for p in turn.prompts if p.technique), None),
     )
-    _check(exchange, registry, told_more)
+    _check(exchange, registry, told_more, said)
     return exchange
 
 

@@ -15,7 +15,7 @@ activation:
     - "what gets in the way of beginning"
     - "whether anything physical or medical explains it, or whether this is early grief (then not this)"
   # Said anywhere in the conversation, an offer of this framework is redrafted and then dropped:
-  # early grief is not the avoidance it treats. Whole phrases, matched as the signals are.
+  # early grief is not the avoidance it treats. Whole phrases, matched as whole words.
   never_offer_when_said:
     - "died"
     - "passed away"
@@ -28,8 +28,7 @@ activation:
     - "grieving"
     - "grief"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
   appropriate_when:
     - "The user knows something they want or need to do"
     - "The user is having difficulty beginning"
@@ -55,30 +54,6 @@ activation:
     - "Fatigue with no identifiable avoidance pattern behind it - nothing they used to do and stopped, no trigger they are avoiding - which points to an undiagnosed medical cause (thyroid, anaemia, sleep, medication) rather than a Behavioral Activation case"
     - "The person cannot complete basic care, or their inactivity looks like an impairment that needs professional evaluation - activity planning is not the response, and they must never be told to push through a limitation"
     - "Acute grief in the period right after a loss - the withdrawal Behavioral Activation treats is avoidance of reminders and of life going on, not the ordinary work of mourning itself"
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "but i cannot start"
-    - "but i cannot begin"
-    - "in bed all day"
-    - "stopped answering"
-    - "keep avoiding the task"
-    # The open fragment, so "cannot make myself start", "begin", "get up" and "do anything"
-    # all match. The two specific forms it replaces left the commonest phrasing routing nowhere.
-    - "cannot make myself"
-  signals:
-    - "stopped cooking"
-    - "not been getting dressed"
-    - "stopped going outside"
-    - "kept up with anything"
-    - "no structure anymore"
-    - "ignored everyone's messages"
-    - "keep canceling plans"
-    - "speak to anyone"
-    - "stopped calling my family"
-    - "when i feel ready"
-    - "waiting to want to"
-    - "i have no motivation"
-    - "i will start tomorrow"
   redirects:
     - signal: "I do not know what I should do."
       instead: structured_problem_solving

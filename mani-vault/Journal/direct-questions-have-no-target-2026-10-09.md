@@ -63,3 +63,72 @@ against `scenario_check.py` itself; seen with the same pattern in a replay scrip
 conversations ran.
 
 See [[measure-before-tuning-prompts]], [[prompt-restructure-2026-10-07]].
+
+## What muhammad saw next, and what changed (2026-10-10)
+
+His next Direct chat (left out of meetings, wondering if his role is changing) read as "a questioning
+jerk": a menu at message 1 ("Would you rather work out whether your role is changing, or focus on what
+you could do next?"), then facts ("What else has changed?", "Has anyone explained why?"), no warmth. A
+replay with reasoning tied each to a change of mine: the third target produced the menu, "the pointed
+question alone" removed every human word, and with nothing left to aim at Direct audited the event.
+His first message already held A and B of ABCDE, so the fit was there at once.
+
+Decided by muhammad, not measured by model runs at his request: the third target is gone; questions
+find the fit like a specialist (short, one thing, no menus), Direct is warm and never interrogative
+(Lolly's own words), and a framework is offered as soon as it fits, from the first message, with no
+`earliest_offer_message` and no router wait. The lesson: removing a bad behaviour by prohibition
+("never restate", "question alone") swings to the opposite failure; say what to do instead.
+
+## "How is it for them" made the questions abstract (later on 2026-10-09)
+
+muhammad's Direct chat: left out of meetings, "I might be getting fired", "no shelter and food for
+me". Mani restated him every turn ("Being left out has you questioning...") and asked "What is that
+possibility like for you?", then "What would being fired mean for you?", which walked him into the
+worst case. Replayed three times with reasoning: every reply cited "Direct style calls for a brief
+reflection and one focused question" (the `_MEANING` recipe "a few words of your own that show you
+understood"), and the questions came straight from my rule "ask how that part is for them, or what
+it is like". A feeling question with nothing concrete in it becomes a hypothetical.
+
+Fixed by saying what to ask instead: something real and present (what made them think it, what they
+noticed, how they are with it today), never a hypothetical, and a fear of what may happen gets "what
+has made you think so". Direct opens with the question. Basics (food, shelter, safety) get kind words
+and "is this happening now". Replays: 3 of 3 asked concrete questions, none restated. scenario_check:
+flags 10, 9, then 6 across three versions; "same question across styles" rose to 7 when all three asked
+"what made you think it", fell to 1 once each style had its own target (Direct what made them think
+it, Supportive how they are with it today, Reflective why it matters).
+
+## Phrase lists removed (muhammad, 2026-10-09)
+
+Removed: `classify_reply` and its four phrase lists (vague, unsure, correction, heard), the
+`their_last` line and meanings, `FEELING_WORDS` with its stemming and misspelling helpers,
+`introduced_feelings` and `without_feeling_sentences`, `SELF_JUDGMENTS` and the button length limit,
+and `_PAIN`. Their rules moved into `response_format.md` as one reasoning step. "Only wants to be
+heard" is now the draft's own shape (`NO_QUESTION_SHAPES`), so a no-question reply is not redrafted.
+
+Cost to expect, not measured: nothing enforces "never name a feeling they did not" in code any more;
+that is the client's rule, enforced only by the prompt, and `scenario_check.py` showed the model slips
+now and then ("frustrating") even with the list. Kept on purpose: crisis screen, script and
+internal-word stripping, `[ctx]` injection guard, imminent-action phrases, body route words, vetoes.
+Check live before trusting: a vent message ("I just need to get it out") should still get no
+question, and "I already told you" should still be taken at its word.
+
+## Asked again what they had just said (2026-10-09, muhammad's meetings chat)
+
+"I have been left out of a few important meetings, I am starting to wonder if my role is changing."
+Mani: "What about being left out makes you think your role may be changing?" The meetings are the
+reason; the question asked for the reason. My own Direct target ("what made them think it") caused
+it: in a message that says X happened, so I wonder Y, X is already the answer to "what made you
+wonder". Fixed generally, not for meetings: before asking, split the message into what happened, what
+they conclude, what is still unsaid, and ask only for the last; Direct now asks what they have noticed
+since. `scenario_check.py` has the scenario (`left_out_of_meetings`) and a flag, "asks what they
+already said", for a question made almost wholly of words already said (measurement only, nothing at
+runtime). 3 runs x 3 styles: 0 flags, none asked why.
+Still seen: a Supportive turn 3 asked "How has the thought of being fired affected you today?", the
+banned shape, so that rule only holds some of the time.
+
+Correction (muhammad, same day): "how is the thought of being fired affecting you" is not a banned
+shape. I had banned "how a fear or a thought is affecting them" as a hypothetical, but it asks about
+something they said. The only problem is the word "fear" (or "worry") when they did not use it; the
+same idea can be asked in their words. The rule now bans only "what would it mean / be like if" and
+the feeling word, and allows "how is X affecting you". Lesson: I turned a feeling-word rule into a
+ban on a whole question shape.
