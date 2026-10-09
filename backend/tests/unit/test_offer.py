@@ -28,8 +28,8 @@ def test_every_set_is_offered_in_the_seeded_words_alone(framework_id):
     text, buttons = offers.offer(REPLIES, framework, "Want to try?", answering=False)
 
     assert text == _seeded(REPLIES.offer.text, framework)
-    assert text.startswith("We'll go through a few focused questions.")
-    assert f"Framework: {framework.name}\n\n{framework.description}" in text
+    assert text.startswith(f"I've a framework called {framework.name} for you that asks a few focused questions.")
+    assert text.endswith(f"Would it help to work through it together?\n\n{framework.description}")
     assert [b["label"] for b in buttons] == ["Try It", "Tell Me More", "Keep Chatting"]
 
 

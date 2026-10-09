@@ -37,7 +37,7 @@ def not_found() -> asyncpg.PostgresError:
 async def test_a_race_that_clears_on_the_second_attempt_still_links(monkeypatch):
     calls = {"n": 0}
 
-    async def flaky(conn, call_id, message_id):
+    async def flaky(conn, call_id, message_id, *, reported_stages, stage):
         calls["n"] += 1
         if calls["n"] < 2:
             raise not_found()
@@ -51,7 +51,7 @@ async def test_a_race_that_clears_on_the_second_attempt_still_links(monkeypatch)
 
 
 async def test_a_race_that_never_clears_gives_up_without_raising(monkeypatch):
-    async def always_fails(conn, call_id, message_id):
+    async def always_fails(conn, call_id, message_id, *, reported_stages, stage):
         raise not_found()
 
     monkeypatch.setattr(llm_calls, "attach_message", always_fails)
@@ -61,14 +61,16 @@ async def test_a_race_that_never_clears_gives_up_without_raising(monkeypatch):
     await orchestrator.link_call(call_id="c", message_id="m")
 
 
-async def test_a_clean_first_attempt_does_not_retry(monkeypatch):
-    calls = {"n": 0}
+async def test_a_clean_first_attempt_does_not_retry_and_carries_the_turns_stages(monkeypatch):
+    calls = []
 
-    async def clean(conn, call_id, message_id):
-        calls["n"] += 1
+    async def clean(conn, call_id, message_id, *, reported_stages, stage):
+        calls.append((call_id, message_id, reported_stages, stage))
 
     monkeypatch.setattr(llm_calls, "attach_message", clean)
 
-    await orchestrator.link_call(call_id="c", message_id="m")
+    await orchestrator.link_call(
+        call_id="c", message_id="m", reported_stages={"belief": "partial"}, stage="belief"
+    )
 
-    assert calls["n"] == 1
+    assert calls == [("c", "m", {"belief": "partial"}, "belief")]

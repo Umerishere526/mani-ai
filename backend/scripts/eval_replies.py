@@ -327,8 +327,9 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
     `heard`: someone asking only to be heard, where a reply with no question is right.
     `expect_framework`: a journey, which must reach a framework and hand off at its end.
     `markers`: words only the first chat used, which the second must not bring across.
+    `expect_stage` on a turn: the stage the database holds after that line.
     """
-    findings: list[validators.Finding] = []
+    findings: list[validators.Finding] = _stage_findings(exchanges, scenario)
     for index, exchange in enumerate(exchanges):
         # Everything said so far in this chat.
         said = " ".join(e.message for e in exchanges[: index + 1] if e.chat == exchange.chat)
@@ -372,6 +373,29 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
             findings.append(validators.Finding("journey", "never entered a framework"))
         elif not any(str(phase).startswith("somatic") for phase in reached):
             findings.append(validators.Finding("journey", f"stopped at {reached[-1]}, never reached somatic"))
+    return findings
+
+
+def _lines(scenario: dict) -> list[str]:
+    """The script's lines as sent. A turn is the line, or `{say: <line>, expect_stage: <phase>}`."""
+    return [turn["say"] if isinstance(turn, dict) else turn for turn in scenario["turns"]]
+
+
+def _stage_findings(exchanges: list[Exchange], scenario: dict) -> list[validators.Finding]:
+    """Each `expect_stage` against the stored phase after its line. A line that sent nothing (an
+    `@accept` once the offer was taken) is held to the phase after the last line sent before it,
+    so one expectation on the last `@accept` holds whichever of them took the offer."""
+    findings: list[validators.Finding] = []
+    for line_number, turn in enumerate(scenario.get("turns", []), 1):
+        if not isinstance(turn, dict) or "expect_stage" not in turn:
+            continue
+        sent = [e for e in exchanges if e.line <= line_number]
+        framework = sent[-1].framework if sent else None
+        if (framework[2] if framework else None) != turn["expect_stage"]:
+            stored = " ".join(str(part) for part in framework) if framework else "no framework"
+            findings.append(validators.Finding(
+                "stage", f"line {line_number}: stored {stored}, expected {turn['expect_stage']}"
+            ))
     return findings
 
 
@@ -479,7 +503,7 @@ async def main() -> int:
                 if not args.user:
                     created.append(user_id)
                 try:
-                    exchanges = await _run_one(user_id, style, scenario["turns"], scenario.get("start_in"))
+                    exchanges = await _run_one(user_id, style, _lines(scenario), scenario.get("start_in"))
                 except TurnFailed as failed:
                     print(f"\nstopped: {scenario['name']} / {style.value}, {failed} raised: "
                           f"{failed.__cause__!r}", file=sys.stderr)
@@ -548,7 +572,7 @@ async def _measure(args: argparse.Namespace, scenarios: list[dict]) -> int:
                 user_id = await _fresh_user(scenario["name"], style)
                 created.append(user_id)
                 exchanges = await _run_one(
-                    user_id, style, scenario["turns"], scenario.get("start_in"), measure=True
+                    user_id, style, _lines(scenario), scenario.get("start_in"), measure=True
                 )
                 # Every chat turn makes at least one call, so a turn with no row means the
                 # rows were lost, and counting it as zero would make the run look cheaper.

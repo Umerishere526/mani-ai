@@ -13,7 +13,7 @@ import asyncpg
 from mani.auth.jwt import Claims
 from mani.chat import context, guards, ledger, offer as offers, safety, vetoes
 from mani.chat.greeting import CHAT_MORE_LABEL, GO_TO_LIBRARY_LABEL, greeting, style_options
-from mani.chat.techniques import ENDING_PHASES, OFFERING
+from mani.chat.techniques import OFFERING
 from mani.config import get_settings
 from mani.db import (
     exercises as exercises_db,
@@ -63,6 +63,10 @@ class Turn:
     was_duplicate: bool = False
     needs_summary: bool = False
     llm_call_id: uuid.UUID | None = None
+    # What the chat call's reply reported of each stage, as the guard kept it, and the phase this
+    # turn stored. Written to the call's admin.llm_calls row when it is linked; never sent to a client.
+    reported_stages: dict[str, str] | None = None
+    stage: str | None = None
     # Present only when AI_DEBUG_MODE is on; never sent to an ordinary client.
     reasoning: str | None = None
     # Set only on the turn a framework's ending closes with a choice, and only when the
@@ -257,7 +261,7 @@ async def send(
     capped = (
         technique is not None
         and technique.outcome is TechniqueOutcome.ACCEPTED
-        and technique.phase in ENDING_PHASES
+        and config.registry.ending_open(technique.framework_id, technique.phase)
         and technique.ending_from is not None
         and (ctx.thread.message_count - technique.ending_from) // 2
         >= tuning.windows.ending_turn_cap
@@ -488,6 +492,7 @@ async def send(
                 technique.framework_id if technique else None
             ),
             accepted_this_turn=accepted_this_turn, count_after=ctx.thread.message_count + 2,
+            stage_turn_cap=tuning.windows.stage_turn_cap,
         )
     retiring = capped or checked.ending is not None
     if retiring or any(
@@ -581,7 +586,7 @@ async def send(
         # Carried from the stored row, never moved forward and never cleared by a step back,
         # so the cap cannot be reset by stepping between the last own phase and the ending.
         ending_from = technique.ending_from if technique else None
-        if ending_from is None and checked.phase in ENDING_PHASES:
+        if ending_from is None and config.registry.ending_open(decided, checked.phase):
             ending_from = count_after
         updates.technique = TechniqueState(
             thread_id=ctx.thread.id,
@@ -643,6 +648,8 @@ async def send(
         # fired on two different units and drifted further apart with every summary.
         needs_summary=count_after - summarized >= tuning.windows.context_window,
         llm_call_id=call.call_id,
+        reported_stages={s: status.value for s, status in checked.stages.items()} if checked.stages else None,
+        stage=updates.technique.phase if updates.technique else None,
         exercise=exercise,
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
     )
@@ -658,14 +665,17 @@ def _running_state(
     framework_id: str | None,
     accepted_this_turn: bool,
     count_after: int,
+    stage_turn_cap: int,
 ) -> tuple[TechniqueState | None, guards.Checked]:
     """The row a turn writes while a framework runs, and the checked reply with the phase it records.
 
     Before the framework's last own phase the stage comes from the ledger: what the reply reports of
     each stage over what was stored, and the stage asked is the first not known. On the turn they say
     yes the ledger starts empty, so the reply judges every stage against all they said before the
-    offer. From the last own phase on the ledger is as stored and the reported step moves through the
-    ending. None when the framework is not one the registry holds.
+    offer. After that each turn counts one more on the stage they were answering, and a stage still
+    not known at `stage_turn_cap` turns is passed, and turns known if a later reply says so. From
+    the last own phase on the ledger is as stored and the reported step moves through the ending.
+    None when the framework is not one the registry holds.
     """
     if framework_id is None or framework_id not in registry:
         return None, checked
@@ -680,8 +690,10 @@ def _running_state(
     else:
         stage_ledger = ledger.with_reported(
             {} if accepting else ledger.stored_stages(registry, framework_id, stored),
-            checked.stages, notes,
+            checked.stages, stage_turn_cap, notes,
         )
+        if not accepting and stored_phase in registry.ledger_stages(framework_id):
+            stage_ledger = ledger.counted(stage_ledger, stored_phase, stage_turn_cap, notes)
         phase = registry.stage_from_ledger(framework_id, stage_ledger)
         if checked.stages is None:
             notes.append("no stages reported on a running turn")
@@ -692,7 +704,7 @@ def _running_state(
     # Carried from the stored row, never moved forward and never cleared by a step back, so the
     # cap cannot be reset by stepping between the last own phase and the ending.
     ending_from = technique.ending_from if technique else None
-    if ending_from is None and phase in ENDING_PHASES:
+    if ending_from is None and registry.ending_open(framework_id, phase):
         ending_from = count_after
     state = TechniqueState(
         thread_id=ctx.thread.id,
@@ -777,13 +789,19 @@ LINK_RETRY_ATTEMPTS = 5
 LINK_RETRY_DELAY_SECONDS = 0.05
 
 
-async def link_call(call_id: uuid.UUID, message_id: uuid.UUID) -> None:
-    """Point a recorded model call at the message it produced.
+async def link_call(
+    call_id: uuid.UUID,
+    message_id: uuid.UUID,
+    *,
+    reported_stages: dict[str, str] | None = None,
+    stage: str | None = None,
+) -> None:
+    """Point a recorded model call at the message it produced, with the turn's stages.
 
     admin.llm_calls carries a foreign key to public.messages, and the turn that wrote the
     message has not necessarily committed yet when this runs - see the note above. A
     failure after every retry costs a forensic link, not a delivered reply, so it is logged
-    and swallowed rather than raised.
+    and swallowed rather than raised; the turn's stages are lost with it.
     """
     import asyncio
 
@@ -792,7 +810,9 @@ async def link_call(call_id: uuid.UUID, message_id: uuid.UUID) -> None:
     for attempt in range(1, LINK_RETRY_ATTEMPTS + 1):
         try:
             async with pool.as_admin() as conn:
-                await llm_calls.attach_message(conn, call_id, message_id)
+                await llm_calls.attach_message(
+                    conn, call_id, message_id, reported_stages=reported_stages, stage=stage
+                )
             return
         except asyncpg.PostgresError:
             if attempt == LINK_RETRY_ATTEMPTS:

@@ -22,7 +22,7 @@ activation:
 Starts when: you have learned what they have stopped or avoid doing, and that they know what they could do but cannot begin, with no physical cause or recent death behind it.
 Sounds like: "but I cannot start", "in bed all day", "I stopped answering", "I cannot make myself", "waiting to feel ready", plans cancelled and days without structure.
 Skip when: mourning a recent loss, tiredness with nothing avoided, crashes after exertion, a medical or physical limit, not knowing what to do (structured_problem_solving), or one troubling thought (thought_reframe).
-Stages: stopped (what they stopped or avoid) > matters (why it matters to them) | choose (one activity) > manageable (small enough for today) > begin (when, or on what cue) > barrier (the likely obstacle and what they will do) > closing (how it sits now)
+Stages: stopped (what they stopped or avoid) > matters (why it matters to them) > choose (one activity) > manageable (small enough for today) > begin (when, or on what cue) > barrier (the likely obstacle and what they will do) > closing (how it sits now)
 Ends when: they have one small, safe action and when to begin it; they need not feel motivated, and nothing promises it will work.
 Never: lecture about motivation, pressure or blame them, pick the activity for them, or make the step bigger than they can manage today.
 Never: suggest an activity that could put them at risk, or tell them to push through a physical limit, an illness, or what may need a professional to assess.

@@ -102,7 +102,6 @@ FRAMEWORK_LABELS = (
     "Starts when", "Sounds like", "Skip when", "Stages", "Ends when", "Never", "Never",
 )
 MAX_LINE = 220
-STAGES_DIVIDER = " | "
 MAX_STAGES_LINE = 420
 # Everything else in the frontmatter is data only code reads: the phase machine and the veto.
 FRAMEWORK_KEYS = {"id", "name", "summary", "display_order", "phases", "activation"}
@@ -127,20 +126,8 @@ def _framework_lines(name: str, body: str, phases: list[str]) -> list[str]:
             raise ValueError(f"{name}: the {label} line is {len(line)} characters, over {cap}")
 
     stages_line = lines[FRAMEWORK_LABELS.index("Stages")].removeprefix("Stages: ")
-    # The | marks where the stages Mani learns from what they already said end and the ones they
-    # work through together begin. The model reads it; no code does.
-    if stages_line.count(STAGES_DIVIDER) != 1:
-        raise ValueError(
-            f"{name}: the Stages line needs exactly one '{STAGES_DIVIDER.strip()}', between the stages "
-            f"they have usually told already and the ones they work through, not "
-            f"{stages_line.count(STAGES_DIVIDER)}"
-        )
-    told, worked = stages_line.split(STAGES_DIVIDER)
-    if not told.strip() or not worked.strip():
-        raise ValueError(f"{name}: the Stages line has no stage on one side of the '{STAGES_DIVIDER.strip()}'")
-    stages = told.split(" > ") + worked.split(" > ")
     named = []
-    for stage in stages:
+    for stage in stages_line.split(" > "):
         match = _STAGE.fullmatch(stage)
         if not match:
             raise ValueError(f"{name}: the stage {stage!r} should be an id and a few words in parentheses")

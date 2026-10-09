@@ -57,7 +57,11 @@ async def send(
     # transaction commits - see mani/background.py for how that was confirmed.
     if turn.llm_call_id and turn.message_id:
         fire_and_forget(
-            orchestrator.link_call(turn.llm_call_id, turn.message_id), name="link_call"
+            orchestrator.link_call(
+                turn.llm_call_id, turn.message_id,
+                reported_stages=turn.reported_stages, stage=turn.stage,
+            ),
+            name="link_call",
         )
 
     if turn.needs_summary:

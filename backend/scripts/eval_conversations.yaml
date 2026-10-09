@@ -212,6 +212,18 @@
     - "That I'm bad at my job and everyone saw it."
     - "I stopped talking for the rest of the meeting and avoided her afterwards."
 
+# muhammad's own chat, 2026-10-09: C answered with feelings only was held partial until the cap passed
+# it. C is how it affected them, feelings or actions (client ABCDE doc), so the reply after "depressed and
+# anxious" must report consequences known and ask D.
+- name: abcde_consequences_feeling_only
+  turns:
+    - "I have been left out of a few important meetings lately, I'm starting to wonder if my role on the team is changing."
+    - "I think I'll lose my job."
+    - "@accept|I'd like to work through it."
+    - "@accept|Okay."
+    - "It makes me feel depressed and anxious."
+    - "Nobody has said anything, it's the way people in the office act around me."
+
 # muhammad's own chat, 2026-09-24: on "Yes, let's try it", Mani asked which problem to work on first, right
 # after being told. The reply after @accept must build on it, not ask again.
 - name: start_keeps_context
@@ -398,3 +410,103 @@
     - "I can see my desk, a lamp and the window"
     - "I feel calmer for a second, then it comes back"
     - "still not great honestly"
+# From thread 18757742, 2026-10-09: the cap passed E and its draft was answered on `closing`.
+# Mani asks before the body check and gives no step until they say yes.
+- name: abcde_closing_asks_before_body_check
+  start_in: {framework: abcde, phase: closing}
+  turns:
+    - "yes i believe in myself"
+    - "i feel ok"
+    - "sure"
+    - "laptop"
+
+# Stages skip what the chat already told (spec 0010). A turn written `{say: <line>, expect_stage: <phase>}`
+# checks the stage stored after that line. On the last `@accept` of a group it holds whichever one
+# took the offer. The `@accept` fallbacks add nothing to any stage.
+- name: stages_abcde_told_before_offer
+  turns:
+    - "My manager criticized my presentation in front of the whole team, and now I keep telling myself I'm bad at my job."
+    - "I went quiet for the rest of the meeting and I've been avoiding her since."
+    - "@accept|I'd like to work through it."
+    - "@accept|Okay."
+    - {say: "@accept|Okay, let's try it.", expect_stage: dispute}
+# The same story, accepted by typing rather than tapping: it must land on the same stage.
+- name: stages_abcde_free_text_yes
+  turns:
+    - "My manager criticized my presentation in front of the whole team, and now I keep telling myself I'm bad at my job."
+    - "I went quiet for the rest of the meeting and I've been avoiding her since."
+    - {say: "yeah let's do it", expect_stage: dispute}
+# ABCDE is offered only once the meaning is known (its Starts when), so a vague meaning is
+# checked inside a running ABCDE: B stays open and only what it came to mean is asked.
+- name: stages_abcde_vague_meaning
+  start_in: {framework: abcde, phase: activating_event}
+  turns:
+    - {say: "My manager criticized my presentation in front of the whole team yesterday.", expect_stage: belief}
+    - {say: "I don't know, it just got to me.", expect_stage: belief}
+# From the "left out of meetings" chat, 2026-10-09: what it meant, and both sides of D, told
+# before the offer, C not. C is asked, then E, with no D question in between.
+- name: stages_abcde_out_of_order
+  turns:
+    - "I keep getting left out of the planning meetings at work."
+    - "It makes me think my team doesn't value me at all."
+    - "They decide things without me and never ask what I think, so it seems true."
+    - "Nope, no one has ever said a word against my work, and my last review was good."
+    - "@accept|I'd like to work through it."
+    - "@accept|Okay."
+    - {say: "@accept|Okay, let's try it.", expect_stage: consequences}
+    - {say: "I've gone quiet at work and I dread Mondays now.", expect_stage: effective_new_belief}
+# One side of D only (what makes the belief seem true): D stays open and only its missing side is asked.
+- name: stages_abcde_one_side_of_dispute
+  turns:
+    - "My friend cancelled our plans for the third time this month."
+    - "I keep thinking I'm the one nobody wants around."
+    - "Because of that thought I stayed in all weekend and felt awful."
+    - "She's cancelled three times and she always seems busy when I ask, so it feels true."
+    - "@accept|I'd like to work through it."
+    - "@accept|Okay."
+    - {say: "@accept|Okay, let's try it.", expect_stage: dispute}
+# A stage that never becomes clear is passed after `stage_turn_cap` (3) turns and left behind.
+- name: stages_abcde_stall
+  start_in: {framework: abcde, phase: activating_event}
+  turns:
+    - {say: "My manager criticized my presentation in front of the whole team.", expect_stage: belief}
+    - "I don't know."
+    - {say: "I really can't say.", expect_stage: belief}
+    - {say: "No idea, honestly.", expect_stage: consequences}
+
+# Every other framework, its first two stages told before the offer: it starts at the third.
+- name: stages_thought_reframe_told_before_offer
+  turns:
+    - "My friend hasn't replied to my message for two days, and I keep thinking she doesn't care about me anymore."
+    - "It matters because she's the one person I always count on."
+    - "@accept|I'd like to work through it."
+    - "@accept|Okay."
+    - {say: "@accept|Okay, let's try it.", expect_stage: facts}
+- name: stages_structured_problem_solving_told_before_offer
+  turns:
+    - "I missed the report deadline at work and now three more things are due this week, I need a plan."
+    - "My manager knows the report is late, I'm assuming she's annoyed, and I don't know when she needs it by now."
+    - "@accept|I'd like to work through it."
+    - "@accept|Okay."
+    - {say: "@accept|Okay, let's try it.", expect_stage: control}
+- name: stages_act_choice_point_told_before_offer
+  turns:
+    - "My sister stopped speaking to me after an argument. I can't make her reply, but I can choose what I do on my side."
+    - "The thought that I ruined everything keeps coming back, with a sinking feeling in my stomach."
+    - "@accept|I'd like to work through it."
+    - "@accept|Okay."
+    - {say: "@accept|Okay, let's try it.", expect_stage: pull}
+- name: stages_behavioral_activation_told_before_offer
+  turns:
+    - "I've stopped answering my friends and I've been in bed most of the week."
+    - "They matter to me, I really don't want to lose them."
+    - "@accept|I'd like to work through it."
+    - "@accept|Okay."
+    - {say: "@accept|Okay, let's try it.", expect_stage: choose}
+- name: stages_dbt_stop_told_before_offer
+  turns:
+    - "I'm about to send my ex a furious message, it's written and my thumb is on send."
+    - "I haven't sent it. I've put the phone face down and I'm staying here."
+    - "@accept|Help me with this."
+    - "@accept|Okay."
+    - {say: "@accept|Okay, let's try it.", expect_stage: observe}

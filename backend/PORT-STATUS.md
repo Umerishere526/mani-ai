@@ -85,7 +85,7 @@ the same change as the work.**
   DBT STOP waits for the second message like the others. The seed appends `somatic_checkin` and `somatic_practice`
   (`techniques.ENDING_PHASES`) to every framework's phases.
   The ending is rules in `mani_base.md`'s `ending` section (spec 0009): on the last own stage Mani asks
-  how they feel, offers a short body check, guides it one step per reply with steps it picks, and asks
+  how they feel, asks if they would like a short body check, guides it one step per reply with steps it picks, and asks
   again how they feel. The model ends it with the reply field `ending`: `choice` retires the framework and
   shows Chat More / Go to Library and the exercise card, `keep_talking` retires it with no buttons and no
   card. The code keeps `ending` only while the ending is open (`Registry.ending_open`) and when the reply
@@ -149,7 +149,8 @@ the same change as the work.**
 - **The ending is ended by the model's `ending` field, and the code never reads words to drive it** (spec
   0009). `choice` and `keep_talking` retire the framework; Chat More / Go to Library are written by the
   code on `choice` only; no code edits the reply or matches a message or reply to decide buttons, state or
-  retirement. A 12 message cap (`tuning` `ending_turn_cap`, `ending_from`) is the backstop. Held by
+  retirement. A 12 message cap (`tuning` `ending_turn_cap`, `ending_from`), counted from the framework's last own
+  phase (`closing`), is the backstop. Held by
   `test_turn.py`'s ending tests and `test_guards.py`.
 - **The model judges which set fits, from the Framework Index; code only vetoes** (spec 0011).
   Mani offers a set once it knows what they are struggling with and what makes it hard, from their second
@@ -173,6 +174,15 @@ the same change as the work.**
   cannot be deactivated or renamed in the portal. The files in `content/prompts/` are the source of
   truth: a portal edit lasts until the next seed. `REMOVED_NAMES` in
   `tests/unit/test_prompts_name_what_exists.py` fails when a moved constant comes back.
+- **Any stage of a running framework is skipped once the conversation makes it clear, in any order and
+  whoever asked** (muhammad, 2026-10-09, spec 0010). The model reports each stage as missing, partial or
+  known in the turn's one call; the code keeps the statuses in `thread_technique_state.stage_ledger` and
+  asks the first stage not known. A stage still not known after 3 turns (`tuning` `stage_turn_cap`) is
+  passed and left behind, so it is asked at most 4 times and no stage holds the thread. A passed stage turns
+  known when a later reply says so, since the reply that passes it still asks it once more; a stage at the cap
+  is never moved back, so none is asked past it. No stage needs the person's own words, and no
+  Stages line carries a divider. Each chat call's `admin.llm_calls` row keeps what the reply reported (`reported_stages`) and the
+  stage stored (`stage`), shown in the chat tester. Held by `test_techniques.py` and `test_turn.py`'s ledger tests.
 - **ABCDE is offered over Thought Reframe whenever both fit** (the client's ABCDE Framework doc,
   October 2026). Told in `abcde.md`'s Starts when and `thought_reframe.md`'s Skip when, never enforced in code.
 - **ABCDE names each letter as it goes, A is for Activating Event to E is for Effective New Belief**, from
@@ -190,6 +200,11 @@ the same change as the work.**
   conversations. The only lines the model says word for word are the after framework questions, sent in
   `[ctx]` from the `replies` row, and the model tracks which it has already asked from its own replies in
   the history window; the client's consent and stage lines are examples. There is no size limit in a test.
+- **Every reply the model writes is in plain everyday words, with no dramatic, poetic or fancy phrases, and
+  each question asks one thing, with the client's ABCDE questions as the bar** (muhammad, 2026-10-09, spec
+  0017). Reached by cutting the sentences that packed their story into the question, put a restatement
+  first or pushed for new phrasing each time, not by adding a rule. Judged by eye in real runs, with no
+  word limit and no eval check.
 - **Each style line is the client's behavior list in the client's phrases, and nothing else steers the
   style** (spec 0012). `mani_base.md` `styles` holds it; `[ctx]` names the style and carries no hint about
   what to ask. A rule that asks for one more question before an offer is cut, not balanced by another
@@ -256,6 +271,9 @@ Ordered by what breaks first.
   Mani's own goes before the offer only when it answers a question the person typed about it, so an offer
   does not respond to the person's last message. No count of exchanges is enforced beyond holding the
   first offer until the person's second message (spec 0016).
+- Tell the client that Mani no longer walks every stage: any stage the conversation has already made clear
+  is skipped, in any order and whoever asked, and a stage asked 4 times is left behind. E is still reached
+  only once B, C and D are clear (spec 0010).
 - Tell the client that ABCDE's Tell Me More uses their per style steps, and the other five show their name
   and description until their documents arrive (spec 0015).
 - Tell the client that their Supportive and Reflective style lines were reworded so care is about what the
@@ -285,6 +303,9 @@ Ordered by what breaks first.
   versus `keep_talking`, or how often the cap fires; that is feature 11, after muhammad's yes. The client's
   documents still describe a fixed check and fixed practices, so they need telling. `mani_base.md`'s
   `ending` section is reseeded only after muhammad's review of its wording.
+  Thread 18757742 (2026-10-09) began the steps with no offer: the stage cap passed E, so the answer to
+  its last try arrived on `closing`, and Mani put the offer and the first step in one reply. The offer is now
+  worded as a question; one real run asked first and gave no step. Scenario `abcde_closing_asks_before_body_check`.
 - **Generated TypeScript types** for `web/` and `mobile/` from the OpenAPI schema, with a CI gate. No CI exists.
 - **Admin audio upload.** The 17 seeded exercises come from `content/exercises/` through
   `scripts/seed_exercises.py`; there is no upload route, and the admin exercise CRUD takes an existing
@@ -365,3 +386,16 @@ change to prompts, framework content or the offer rules, and compare with these.
   Prompts 145 lines and 3,422 words; pytest 690 passed, 4 skipped, integration 147 none skipped. Twelve runs
   cost 0.02 dollars.
 - Local Supabase answers on the 5434x ports set in `config.toml`. See `.claude/BACKEND.md`.
+- Stages skip what the chat told, spec 0010, 2026-10-09, the six `stages_abcde_*` scenarios once in Supportive
+  after the reseed with `stage_turn_cap` 3, recorded as measured and not rerun. Told before the offer: lands on
+  `dispute` by tap and by a typed yes alike (passes). Out of order: the offer came at message 2, the next
+  message declined it, a later "I'd like to work through it" took it back, and the stage was `consequences`,
+  then `effective_new_belief` once C was answered, with no D question (passes). Stall: `belief` passed by the
+  cap after 3 counted turns, then `consequences` (passes). One side of D: stored `consequences`, not
+  `dispute`, so C ("I stayed in all weekend and felt awful about it") was judged not clear and asked 3 more
+  times; D was never reached (fails). Vague meaning: no offer in 5 messages, because ABCDE's Starts when
+  needs what the event came to mean, so the case AC-13 describes cannot arise in a real ABCDE run (fails,
+  a spec question). Every offer turn logged "dropped a stage report: not a stage of the framework". Rerun the same day after
+  spec 0010's third amendment: vague meaning, now started inside a running ABCDE, held `belief` and asked only
+  what it meant (passes); one side of D, with C tied to the thought, landed on `dispute` and asked only what
+  questions the belief, three times from fresh angles (passes).

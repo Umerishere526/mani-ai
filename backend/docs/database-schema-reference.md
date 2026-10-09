@@ -14,6 +14,8 @@ note below were checked against the live database that day. Hand updated on 2026
 020 to 025 (`ending_from` and `stage_ledger` on technique state; `threads.vague_streak`, `frameworks.stages`,
 `frameworks.activation_conditions` and `llm_calls.prompt_version_id` dropped; unused grants revoked and policies
 dropped), checked against a throwaway Postgres with every migration applied (`KEEP_DB=1 scripts/test_db.sh`).
+Hand updated on 2026-10-09 for migration 026 (`reported_stages` and `stage` on `admin.llm_calls`), checked against the
+live columns and the check constraint on local Supabase.
 Regenerate from the queries at the bottom after the next schema change.
 
 The rest of this paragraph describes the original generation: Nothing here was typed
@@ -131,8 +133,8 @@ One row per thread — the currently (or most recently) active framework.
 | 6 | `at_message_count` | integer | required | Thread's `message_count` when this state was last written — the cooldown clock. |
 | 7 | `library_offered_since` | boolean | default `false` | Whether the library follow-up has been offered since acceptance. |
 | 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
-| 9 | `ending_from` | integer | optional, `check (ending_from >= 0)` | Thread's `message_count` when the framework entered its ending, read by the turn cap; `null` outside the ending and cleared when the framework retires (migration 020). Not the `ending` column hosted still carries from the reverted migrations: that one is a different column with a different meaning. |
-| 10 | `stage_ledger` | jsonb | default `'{}'`, must be a JSON object (CHECK `technique_state_stage_ledger_is_object`) | What is known of each stage of the running framework: `{"<stage id>": {"status": ..., "turns": n}}`. Statuses and turn counts only, never the person's words; written by `mani/chat/ledger.py` (migration 021). |
+| 9 | `ending_from` | integer | optional, `check (ending_from >= 0)` | Thread's `message_count` when the framework reached its last own phase (`closing`), read by the ending turn cap; `null` outside the ending and cleared when the framework retires (migration 020). Not the `ending` column hosted still carries from the reverted migrations: that one is a different column with a different meaning. |
+| 10 | `stage_ledger` | jsonb | default `'{}'`, must be a JSON object (CHECK `technique_state_stage_ledger_is_object`) | What is known of each stage of the running framework: `{"<stage id>": {"status": ..., "turns": n}}`. Statuses and turn counts only, never the person's words; written by `mani/chat/ledger.py` (migration 021). Not the `known` column hosted still carries from the reverted migration 012. |
 
 ### `public.thread_techniques_offered`
 Frequency-limiting log — every framework ever offered in a thread.
@@ -272,6 +274,8 @@ Snapshot taken automatically whenever `admin.prompts` is edited via the admin AP
 | 13 | `error_message` | text | optional | |
 | 14 | `created_at` | timestamptz | default `now()` | |
 | 15 | `reasoning_tokens` | integer | default `0`, `check (reasoning_tokens >= 0)` | The part of `output_tokens` the model spent thinking before it answered; never add it on top of `output_tokens`. 0 when the provider reports none. Migration 018. |
+| 16 | `reported_stages` | jsonb | optional, must be a JSON object (CHECK `llm_calls_reported_stages_is_object`) | What a chat call's reply reported of each stage of the running framework, as `guards.check` kept it: `{"<stage id>": "missing" \| "partial" \| "known"}`, whether or not the turn applied it. Null on other calls and on a chat turn that kept none. Ids and statuses only; set with `message_id` by `llm_calls.attach_message` (migration 026). |
+| 17 | `stage` | text | optional | The phase of the technique row the chat turn stored (`offering` on an offer); null when the turn wrote no technique row, so a concern turn, a retirement and a decline record stages with `stage` null. Migration 026. |
 
 ### `admin.user_memory`
 Patterns about one person across their conversations, folded in as each finishes (migration 009). Health data: `authenticated` holds nothing on it; only `mani_service` reads and writes it, and RLS scopes that to the caller's own row - the one `admin` table with RLS.

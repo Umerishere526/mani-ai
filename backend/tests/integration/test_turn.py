@@ -1957,7 +1957,7 @@ async def test_the_stage_follows_the_ledger_not_the_step_and_a_correction_reopen
     assert "moved the stage back: belief" in await _checked_notes(caplog)
 
 
-async def test_a_stage_the_code_passed_stays_passed_whatever_the_reply_reports(alice, model):
+async def test_a_stage_the_code_passed_stays_passed_when_the_reply_reports_it_short_of_known(alice, model):
     model(Reply(text="What did it come to mean?", state=_abcde_state("belief", belief="missing")))
     thread = await start(alice)
     await _land_on(alice, thread.id, "consequences", {
@@ -1972,6 +1972,63 @@ async def test_a_stage_the_code_passed_stays_passed_whatever_the_reply_reports(a
     assert _ledger(row)["belief"] == ("passed", 4)
 
 
+async def test_a_passed_stage_answered_on_the_ask_after_its_pass_is_recorded_known(alice, model):
+    """The reply on the turn that passes a stage still asks it, so their next answer is judged."""
+    model(Reply(text="What makes it seem true?", state=_abcde_state(
+        "dispute", consequences="known", dispute="missing",
+    )))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "dispute", {
+        "activating_event": LedgerEntry(status=StageStatus.KNOWN),
+        "belief": LedgerEntry(status=StageStatus.KNOWN),
+        "consequences": LedgerEntry(status=StageStatus.PASSED, turns=3),
+    })
+
+    await send(alice, thread.id, "I keep away from people when they gather in the office")
+
+    row = await _state_row(thread.id)
+    assert row["phase"] == "dispute"
+    assert _ledger(row)["consequences"] == ("known", 3)
+
+
+async def test_a_stage_answered_on_its_first_turn_moves_on_that_turn(alice, model, caplog):
+    model(Reply(text="What makes it seem true?", state=_abcde_state("dispute", consequences="known")))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "consequences", {
+        "activating_event": LedgerEntry(status=StageStatus.KNOWN),
+        "belief": LedgerEntry(status=StageStatus.KNOWN),
+    })
+    caplog.set_level(logging.INFO)
+
+    await send(alice, thread.id, "It makes me feel depressed and anxious")
+
+    row = await _state_row(thread.id)
+    assert row["phase"] == "dispute"
+    assert _ledger(row)["consequences"] == ("known", 1)
+    assert "passed by the cap" not in await _checked_notes(caplog)
+
+
+async def test_a_stage_answered_on_its_second_turn_moves_on_that_turn(alice, model):
+    model(
+        Reply(text="How has it affected you?", state=_abcde_state("consequences", consequences="partial")),
+        Reply(text="What makes it seem true?", state=_abcde_state("dispute", consequences="known")),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "consequences", {
+        "activating_event": LedgerEntry(status=StageStatus.KNOWN),
+        "belief": LedgerEntry(status=StageStatus.KNOWN),
+    })
+
+    await send(alice, thread.id, "It is hard")
+    assert (await _state_row(thread.id))["phase"] == "consequences"
+
+    await send(alice, thread.id, "I feel anxious all day")
+
+    row = await _state_row(thread.id)
+    assert row["phase"] == "dispute"
+    assert _ledger(row)["consequences"] == ("known", 2)
+
+
 async def test_a_reply_naming_another_framework_is_ignored_and_the_stage_is_held(alice, model, caplog):
     model(Reply(text="What supports it?", state=TechniqueState(
         technique="dbt_stop", step="stop", stages=_stages(stop="known"),
@@ -1984,7 +2041,8 @@ async def test_a_reply_naming_another_framework_is_ignored_and_the_stage_is_held
 
     row = await _state_row(thread.id)
     assert (row["outcome"], row["phase"]) == ("accepted", "dispute")
-    assert set(_ledger(row)) == {"activating_event", "belief", "consequences"}
+    assert set(_ledger(row)) == {"activating_event", "belief", "consequences", "dispute"}
+    assert _ledger(row)["dispute"] == ("missing", 1)
     assert "ignored state: not the running framework" in await _checked_notes(caplog)
 
 
@@ -1998,6 +2056,7 @@ async def test_a_running_turn_with_no_state_holds_the_stage(alice, model, caplog
 
     row = await _state_row(thread.id)
     assert (row["outcome"], row["phase"]) == ("accepted", "consequences")
+    assert _ledger(row)["consequences"] == ("missing", 1)
     assert "no stages reported on a running turn" in await _checked_notes(caplog)
 
 
@@ -2013,7 +2072,108 @@ async def test_a_reply_that_completes_the_ledger_moves_to_closing_and_drops_its_
     turn = await send(alice, thread.id, "maybe I did my best")
 
     assert turn.prompts == []
-    assert (await _state_row(thread.id))["phase"] == "closing"
+    row = await _state_row(thread.id)
+    assert row["phase"] == "closing"
+    # The ending cap counts from the last own phase, so a framework stuck on closing retires too.
+    assert row["ending_from"] == await _message_count(alice, thread.id)
+
+
+async def _message_count(alice, thread_id) -> int:
+    from mani.db import pool
+
+    async with pool.as_user(alice) as conn:
+        return (await threads.get(conn, thread_id, ALICE)).message_count
+
+
+async def test_a_stage_still_not_known_at_the_cap_is_passed_and_the_next_one_asked(alice, model, caplog):
+    model(Reply(text="What did it come to mean to you?", state=_abcde_state("belief", belief="partial")))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "belief", stage_ledger={
+        "activating_event": LedgerEntry(status=StageStatus.KNOWN),
+        "belief": LedgerEntry(status=StageStatus.PARTIAL),
+    })
+    caplog.set_level(logging.INFO)
+
+    await send(alice, thread.id, "I am not sure")
+    row = await _state_row(thread.id)
+    assert (row["phase"], _ledger(row)["belief"]) == ("belief", ("partial", 1))
+
+    for turn in range(TUNING.windows.stage_turn_cap - 2):
+        await send(alice, thread.id, f"hard to say {turn}")
+    assert (await _state_row(thread.id))["phase"] == "belief"
+
+    await send(alice, thread.id, "I do not know")
+
+    row = await _state_row(thread.id)
+    assert row["phase"] == "consequences"
+    assert _ledger(row)["belief"] == ("passed", TUNING.windows.stage_turn_cap)
+    assert "passed by the cap: belief" in await _checked_notes(caplog)
+
+
+async def test_no_stage_holds_the_thread_past_the_cap_whatever_the_model_reports(alice, model):
+    """A model that never reports a stage still reaches closing, after every stage has had its turns."""
+    model(Reply(text="Tell me more."))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "activating_event", stage_ledger={})
+    bound = len(ABCDE_STAGES) * TUNING.windows.stage_turn_cap
+
+    for turn in range(bound - 1):
+        await send(alice, thread.id, f"hm {turn}")
+    assert (await _state_row(thread.id))["phase"] == "effective_new_belief"
+
+    await send(alice, thread.id, "hm")
+    row = await _state_row(thread.id)
+    assert row["phase"] == "closing"
+    assert {status for status, _ in _ledger(row).values()} == {"passed"}
+
+
+async def test_a_concern_turn_leaves_the_stage_and_its_count_as_they_were(alice, model):
+    model(Reply(text="I am here with you. Tell me more about that.",
+                state=_abcde_state("dispute", belief="known", consequences="known")))
+    thread = await start(alice)
+    stored = {"activating_event": LedgerEntry(status=StageStatus.KNOWN),
+              "belief": LedgerEntry(status=StageStatus.PARTIAL, turns=2)}
+    await _land_on(alice, thread.id, "belief", stage_ledger=stored)
+
+    await send(alice, thread.id, "honestly I don\u2019t want to be here anymore")
+
+    row = await _state_row(thread.id)
+    assert (row["outcome"], row["phase"]) == ("accepted", "belief")
+    assert _ledger(row) == {"activating_event": ("known", 0), "belief": ("partial", 2)}
+
+
+async def test_try_it_on_a_concern_turn_is_kept_and_the_next_turn_is_the_accepting_one(alice, model):
+    model(
+        OFFER_TO_TRY,
+        Reply(text="I hear you, and I'm right here with you.", crisis=Crisis(reason="hopelessness"),
+              state=_abcde_state("dispute", activating_event="known", belief="known")),
+        Reply(text="What makes that belief feel true?",
+              state=_abcde_state("activating_event", activating_event="known", belief="known", consequences="known")),
+    )
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "my manager criticised me and I felt small and avoided everyone")
+
+    await send(alice, thread.id, "Try It")
+    row = await _state_row(thread.id)
+    assert (row["outcome"], row["phase"], _ledger(row)) == ("accepted", "offering", {})
+
+    await send(alice, thread.id, "I am okay, let's go on")
+    row = await _state_row(thread.id)
+    assert row["phase"] == "dispute"
+    assert _ledger(row) == {"activating_event": ("known", 0), "belief": ("known", 0), "consequences": ("known", 0)}
+
+
+@pytest.mark.parametrize(("turns_short_of_the_cap", "retired"), [(0, True), (1, False)])
+async def test_a_framework_held_on_closing_retires_at_the_ending_cap(alice, model, turns_short_of_the_cap, retired):
+    model(_ending("How does it sit now?", None, step="closing"))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "closing")
+    turns_since_closing = TUNING.windows.ending_turn_cap - turns_short_of_the_cap
+    await _set_counts(thread.id, message_count=30, ending_from=30 - 2 * turns_since_closing)
+
+    await send(alice, thread.id, "I do not know")
+
+    assert (await _state_row(thread.id))["phase"] == (None if retired else "closing")
 
 
 async def test_from_closing_on_the_reported_stages_and_steps_before_it_change_nothing(alice, model):
@@ -2027,3 +2187,45 @@ async def test_from_closing_on_the_reported_stages_and_steps_before_it_change_no
     assert row["phase"] == "closing"
     assert set(_ledger(row)) == set(ABCDE_STAGES)
     assert {status for status, _ in _ledger(row).values()} == {"known"}
+
+
+async def test_a_running_turn_records_the_kept_stages_and_the_stored_stage_on_its_call_row(alice, model):
+    """What the reply reported, as the guard kept it, and the stage the code stored, so a run can be
+    read turn by turn after it ends. The off list entry never reaches the row."""
+    from mani.db import pool
+
+    model(Reply(text="What did it come to mean to you?",
+                state=_abcde_state("belief", activating_event="known", belief="partial", closing="known")))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "activating_event", stage_ledger={})
+
+    turn = await send(alice, thread.id, "my manager criticised me in front of everyone")
+    assert (turn.reported_stages, turn.stage) == ({"activating_event": "known", "belief": "partial"}, "belief")
+
+    async with pool.as_admin() as conn:
+        call_id = await llm_calls.record(
+            conn, purpose=llm_calls.Purpose.CHAT, model="test/model", outcome=llm_calls.Outcome.OK,
+            usage=llm_calls.Usage(), latency_ms=1, user_id=ALICE, thread_id=thread.id,
+        )
+    await orchestrator.link_call(
+        call_id, turn.message_id, reported_stages=turn.reported_stages, stage=turn.stage
+    )
+
+    async with pool.as_admin() as conn:
+        row = await conn.fetchrow(
+            "select message_id, reported_stages, stage from admin.llm_calls where id = $1", call_id
+        )
+    assert dict(row) == {
+        "message_id": turn.message_id,
+        "reported_stages": {"activating_event": "known", "belief": "partial"},
+        "stage": "belief",
+    }
+
+
+async def test_a_turn_with_no_framework_running_or_offered_records_no_stages(alice, model):
+    model(Reply(text="That sounds like a long day. What happened?"))
+    thread = await start(alice)
+
+    turn = await send(alice, thread.id, "I had a hard day")
+
+    assert (turn.reported_stages, turn.stage) == (None, None)

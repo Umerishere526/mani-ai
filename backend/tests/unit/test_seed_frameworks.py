@@ -24,7 +24,7 @@ LINES = [
     'Sounds like: "so I must be", "this proves I", one setback read as a verdict on who they are.',
     "Skip when: one quick thought to reframe (thought_reframe), or they only want to be heard.",
     "Stages: activating_event (what happened) > belief (what it came to mean) > consequences (how believing it "
-    "affected them) | dispute (what supports it, then what challenges it) > effective_new_belief (a fairer "
+    "affected them) > dispute (what supports it, then what challenges it) > effective_new_belief (a fairer "
     "belief) > closing (how it sits now)",
     "Ends when: they hold a belief that fits all the evidence and sounds like them.",
     "Never: invent evidence, or decide the belief is false.",
@@ -67,16 +67,16 @@ def _replaced(index, line):
         (_replaced(4, "Ends when: " + "x" * 210), "the Ends when line is 221 characters, over 220"),
         (_replaced(3, LINES[3] + " " + "y" * (420 - len(LINES[3]))), "the Stages line is 421 characters, over 420"),
         (
-            _replaced(3, "Stages: activating_event (what happened) > belief (what it meant) | dispute (the evidence) "
+            _replaced(3, "Stages: activating_event (what happened) > belief (what it meant) > dispute (the evidence) "
                          "> effective_new_belief (a fairer belief) > closing (how it sits)"),
             "the Stages line names activating_event, belief, dispute, effective_new_belief, closing, but phases after "
             "offering are activating_event, belief, consequences, dispute, effective_new_belief, closing",
         ),
-        (_replaced(3, "Stages: activating_event | belief"), "the stage 'activating_event' should be an id and a few words"),
-        (_replaced(3, LINES[3].replace(" | ", " > ")), "the Stages line needs exactly one '|'"),
-        (_replaced(3, LINES[3].replace(" > effective_new_belief", " | effective_new_belief")), "the Stages line needs exactly one '|'"),
-        (_replaced(3, "Stages:  | dispute (the evidence)"), "no stage on one side of the '|'"),
-        (_replaced(3, "Stages: activating_event (what happened) | "), "no stage on one side of the '|'"),
+        (
+            _replaced(3, LINES[3].replace(" > dispute", " | dispute")),
+            "the Stages line names activating_event, belief, consequences, effective_new_belief, closing, but phases "
+            "after offering are activating_event, belief, consequences, dispute, effective_new_belief, closing",
+        ),
     ],
 )
 def test_a_body_that_breaks_the_format_is_refused_with_the_file_and_the_reason(tmp_path, lines, reason):

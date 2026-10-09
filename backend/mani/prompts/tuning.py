@@ -39,6 +39,7 @@ class WindowTuning(_Strict):
     recent_openers_window: _count(1, 10)
     title_after_messages: _count(1, 21)
     ending_turn_cap: _count(2, 50)
+    stage_turn_cap: _count(2, 20)
 
 
 class MemoryTuning(_Strict):

@@ -34,7 +34,7 @@ after_framework_questions:
 # goes before it only when it answers a typed question about the offer.
 # Wording from muhammad (2026-10-08, 2026-10-09) and the client's intro document in docs/client-share-docs/.
 offer:
-  text: "We'll go through a few focused questions. By the end, you will have turned a problem that feels unclear or overwhelming into a practical next step. Would it help to work through it together?\n\nFramework: {name}\n\n{description}"
+  text: "I've a framework called {name} for you that asks a few focused questions. By the end, you will have turned a problem that feels unclear or overwhelming into a practical next step. Would it help to work through it together?\n\n{description}"
   # What a tap on Tell me more gets until the client gives its own wording.
   more_text: "Framework: {name}\n\n{description}"
   # The three buttons, in this order. A tap is matched to its label ignoring case, so no two may match.

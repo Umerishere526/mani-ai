@@ -5,6 +5,7 @@ import pytest
 
 from mani.chat.techniques import ENDING_PHASES, OFFERING, Registry, Verdict
 from mani.models.rows import Framework, LedgerEntry, StageStatus
+from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
 REFRAMING = Framework(
     id="thought_reframing", name="Thought Reframing", summary="s", body="b",
@@ -195,3 +196,16 @@ def test_every_stage_known_or_passed_is_the_last_own_phase():
 
 def test_an_unknown_framework_has_no_stage_to_ask(registry):
     assert registry.stage_from_ledger("somatic_breathing", {}) is None
+
+
+def test_a_stage_told_out_of_order_is_skipped_in_every_shipped_framework():
+    """A, B and D told, C not: C is asked, then the ending, with nothing in between. Parsed from the
+    shipped files, so a Stages line that splits its stages into kinds again would show here."""
+    shipped = [Framework.model_validate(parse_framework(path)) for path in sorted(FRAMEWORKS_DIR.glob("*.md"))]
+    registry = Registry(shipped)
+    for framework in shipped:
+        stages = registry.ledger_stages(framework.id)
+        told = {s: entry(StageStatus.KNOWN) for s in stages if s != stages[1]}
+        assert registry.stage_from_ledger(framework.id, told) == stages[1], framework.id
+        told[stages[1]] = entry(StageStatus.KNOWN)
+        assert registry.stage_from_ledger(framework.id, told) == "closing", framework.id

@@ -31,9 +31,15 @@ windows:
   # least", because a single crisis turn writes one message, not two.
   title_after_messages: 3
   # The model ends a framework's ending by setting `ending`. If it never does, the framework is
-  # retired once the person has sent this many messages since the ending began, so it cannot
-  # hold the thread, and block every new offer, for good.
+  # retired once the person has sent this many messages since the ending began, at the
+  # framework's last own phase (closing), so it cannot hold the thread, and block every new
+  # offer, for good.
   ending_turn_cap: 12
+  # The turns any one stage of a running framework may take, across every visit to it, before
+  # it is passed and left behind, so no stage can hold the thread either. The stage is asked
+  # once more than this, because the reply on the turn that passes it was written while [ctx]
+  # still named it: at 3 it is asked 4 times.
+  stage_turn_cap: 3
 memory:
   # The memory is pasted into the system prompt of every later chat, so it is bounded whatever
   # the model returns: a runaway list is a cost multiplier and an injection channel.

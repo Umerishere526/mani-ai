@@ -153,6 +153,8 @@ framework_state = run(mani.framework_debug_state(thread["id"])) if developer els
 caption = [f"style: {STYLES[st.session_state.style]}"] if st.session_state.style else []
 if framework_state and framework_state.get("phase"):
     caption.append(f"framework: {framework_state['framework_id']} · stage: {framework_state['phase']}")
+    if ledger := mani.ledger_text(framework_state):
+        caption.append(ledger)
 if caption:
     st.caption("  ·  ".join(caption))
 
@@ -362,6 +364,9 @@ with st.sidebar:
                     f"in={call['input_tokens']:<5} cached={call['cached_input_tokens']:<5} "
                     f"{call['latency_ms']}ms"
                 )
+                # The newest call may show none until the next rerun: its row is linked after the reply goes out.
+                if stages := mani.call_stages_text(call, (framework_state or {}).get("phases") or []):
+                    st.text(f"{'':<15} {stages}")
             if not calls:
                 st.caption("No calls recorded yet for this thread.")
 

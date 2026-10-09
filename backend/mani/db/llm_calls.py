@@ -68,13 +68,19 @@ async def attach_message(
     conn: asyncpg.Connection,
     call_id: uuid.UUID | str,
     message_id: uuid.UUID | str,
+    *,
+    reported_stages: dict[str, str] | None = None,
+    stage: str | None = None,
 ) -> None:
-    """Link a recorded call to the message it produced.
+    """Link a recorded call to the message it produced, with what the turn recorded of the stages.
 
     The call is logged before the message exists, so the link is made afterwards. It is
     what lets an incident ask which call, model and cost produced a particular reply.
+    `reported_stages` is what the reply reported of each stage, as the guard kept it, and `stage`
+    the phase the turn stored: ids and statuses only, so a run can be read turn by turn after it ends.
     """
     await conn.execute(
-        "update admin.llm_calls set message_id = $2 where id = $1", call_id, message_id
+        "update admin.llm_calls set message_id = $2, reported_stages = $3, stage = $4 where id = $1",
+        call_id, message_id, reported_stages, stage,
     )
 

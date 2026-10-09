@@ -1,4 +1,4 @@
-# ABOUTME: Checks the cost baseline's arithmetic, the eval script's arguments and how its offer tokens resolve.
+# ABOUTME: Checks the cost baseline's arithmetic, the eval script's arguments, its offer tokens and stage checks.
 # ABOUTME: Runs are built from plain rows, so nothing here calls a model or needs a database.
 
 from __future__ import annotations
@@ -259,3 +259,27 @@ def test_more_taps_tell_me_more_when_offered_types_the_fallback_otherwise_and_on
     assert _offer_token("@accept|Okay.", told, False, True) == (labels.accept, "accept", True, True)
     assert _offer_token("@accept|Okay.", [], False, True) == ("Okay.", "fallback", False, True)
     assert _offer_token("@accept|Okay.", offered, True, True) == (None, "typed", True, True)
+
+
+def test_expect_stage_holds_a_skipped_accept_line_to_the_stage_the_offer_was_taken_on():
+    """covers: spec 0010 AC-13 - `expect_stage` reads the stored phase after its line."""
+    from scripts.eval_replies import Exchange, _lines, _stage_findings
+    from tests.evals.validators import Finding
+
+    scenario = {"turns": [
+        "My manager criticized me in front of everyone.",
+        "@accept|Okay.",
+        {"say": "@accept|Okay.", "expect_stage": "dispute"},
+        {"say": "I stopped talking.", "expect_stage": "effective_new_belief"},
+    ]}
+    # The offer was taken on line 2, so line 3 sent nothing.
+    exchanges = [
+        Exchange(message="m", reply="r", line=1, framework=("abcde", "offered", "offering")),
+        Exchange(message="m", reply="r", line=2, framework=("abcde", "accepted", "dispute")),
+        Exchange(message="m", reply="r", line=4, framework=("abcde", "accepted", "dispute")),
+    ]
+
+    assert _lines(scenario)[2:] == ["@accept|Okay.", "I stopped talking."]
+    assert _stage_findings(exchanges, scenario) == [
+        Finding("stage", "line 4: stored abcde accepted dispute, expected effective_new_belief"),
+    ]

@@ -273,12 +273,17 @@ async def framework_debug_state(thread_id: str) -> dict[str, Any] | None:
         return None
     conn = await asyncpg.connect(DATABASE_URL)
     try:
+        # The framework's phases come along so the ledger can be shown in stage order: jsonb keeps none.
         row = await conn.fetchrow(
-            "select framework_id, outcome, phase, at_message_count, library_offered_since "
-            "from public.thread_technique_state where thread_id = $1",
+            "select t.framework_id, t.outcome, t.phase, t.at_message_count, t.library_offered_since, "
+            "t.stage_ledger, f.phases "
+            "from public.thread_technique_state t left join admin.frameworks f on f.id = t.framework_id "
+            "where t.thread_id = $1",
             uuid.UUID(thread_id),
         )
-        return dict(row) if row else None
+        if row is None:
+            return None
+        return {**dict(row), "stage_ledger": _json(row["stage_ledger"]) or {}, "phases": row["phases"] or []}
     finally:
         await conn.close()
 
@@ -291,13 +296,48 @@ async def recent_call_costs(thread_id: str, limit: int = 5) -> list[dict[str, An
     try:
         rows = await conn.fetch(
             "select purpose, outcome, model, input_tokens, output_tokens, "
-            "cached_input_tokens, latency_ms, created_at "
+            "cached_input_tokens, latency_ms, created_at, reported_stages, stage "
             "from admin.llm_calls where thread_id = $1 order by created_at desc limit $2",
             uuid.UUID(thread_id), limit,
         )
-        return [dict(r) for r in rows]
+        return [{**dict(r), "reported_stages": _json(r["reported_stages"])} for r in rows]
     finally:
         await conn.close()
+
+
+def _json(value: Any) -> Any:
+    """A jsonb value as Python, decoded when it arrives as text."""
+    return json.loads(value) if isinstance(value, str) else value
+
+
+def ledger_stages(phases: list[str]) -> list[str]:
+    """The stages the backend's stage ledger tracks (mani/chat/techniques.py, ledger_stages_of): the
+    phases after offering and before the last own phase, the one before the body check ending."""
+    start = phases.index("offering") + 1 if "offering" in phases else 0
+    end = phases.index("somatic_checkin") if "somatic_checkin" in phases else len(phases)
+    return phases[start:max(end - 1, start)]
+
+
+def ledger_text(state: dict[str, Any]) -> str:
+    """The stored ledger, one `<stage> <status>` per stage in order, with its turns when above 0."""
+    shown = []
+    for stage in ledger_stages(state["phases"]):
+        entry = state["stage_ledger"].get(stage) or {}
+        turns = entry.get("turns") or 0
+        shown.append(f"{stage} {entry.get('status') or 'missing'}" + (f" ({turns})" if turns > 0 else ""))
+    return " · ".join(shown)
+
+
+def call_stages_text(call: dict[str, Any], phases: list[str]) -> str | None:
+    """What a chat call reported of each stage and the stage then stored, or None when it recorded
+    neither. Ids in the running framework's order; ids it does not have follow, sorted, since a call
+    holds no framework id and an older one may belong to a framework no longer running."""
+    reported = call["reported_stages"] or {}
+    if call["purpose"] != "chat" or (not reported and call["stage"] is None):
+        return None
+    order = [s for s in phases if s in reported] + sorted(s for s in reported if s not in phases)
+    listed = ", ".join(f"{s} {reported[s]}" for s in order) or "–"
+    return f"reported: {listed}  → {call['stage'] or '–'}"
 
 
 async def remembered(user_id: str) -> dict[str, Any] | None:
@@ -318,8 +358,6 @@ async def remembered(user_id: str) -> dict[str, Any] | None:
             return None
         # A bare asyncpg connection returns jsonb as text; the backend's pool decodes it with a
         # codec this tool does not register.
-        memory = row["memory"]
-        return {"memory": json.loads(memory) if isinstance(memory, str) else memory,
-                "updated_at": row["updated_at"]}
+        return {"memory": _json(row["memory"]), "updated_at": row["updated_at"]}
     finally:
         await conn.close()
