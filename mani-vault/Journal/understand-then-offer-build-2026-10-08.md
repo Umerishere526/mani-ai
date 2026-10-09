@@ -69,3 +69,43 @@ Lines that passed show what the client asked for: Reflective 2 "It's hard to fee
 - **The regression scenario read warm enough but leans on meta lines** ("I won't assume what you mean", "I won't try to steer you"), and Reflective still retells. No offer in any style, which is right there.
 
 Related: [[prompt-changes-cut-not-add]], [[client-response-feedback-2026-10-08]], [[measure-before-tuning-prompts]]
+
+## Round 3 (the offer rule, the card, E6, E5, E12), recorded as measured, not rerun
+
+Built: `offers.offer(replies, framework, style, line, answering=...)` holds the rule; the orchestrator passes `checked.text` and `answering = deferred and outcome is OFFERED`. `offer.text` is the card alone. New `tests/unit/test_offer.py` (6 cases, written red first). Counts 74 and 71 lines, 3422 words. pytest 690 passed, 4 skipped (JWKS), integration 147 none skipped. Credit 18.46 dollars before, 18.44 after the twelve runs. muhammad committed round 2 as `1056b45` before this build, so round 3's diff stands alone.
+
+| Bullet, out of 3 | Direct | Supportive | Reflective |
+|---|---|---|---|
+| No restating before the offer | 1 | 0 | 0 |
+| First reply asks what the decision is | 3 | 3 | 3 |
+| Offer at message 3 or later | 3 | 3 | 3 |
+| Offer turn: step, help, ask, no recap | 3 | 2 | 1 |
+| After the yes asks nothing told | 3 | 3 | 3 |
+
+AC-8 fails on bullet 1 everywhere and bullet 4 in Reflective. All nine offers were Structured Problem Solving, so the ABCDE path ran only in tests.
+
+Restating replies, with shape and reasoning:
+- Direct 1, msg 1, `warmth lead`: "That sounds frustrating, especially when your mind keeps reopening the decision." Reasoning: "stuck between options and frustrated by the repeated doubt".
+- Direct 2, msg 1, `warmth lead`: "Going back and forth can be frustrating."
+- Supportive 1, 2, 3, msg 1, `warmth lead`: "It can be frustrating…", "the back and forth is frustrating…", "That sounds frustrating…". Supportive 2 also hands back "worried" at msg 2.
+- Reflective 1, msg 1, `gentle follow`: "You're trying to understand what keeps pulling you back and forth." I graded this a retelling, but it is borderline: it sits close to the client's own Reflective example ("Sometimes the hardest part of a decision is understanding what's keeping you from making it").
+- Reflective 2, msg 1 and 2, `mirror and ask`: retells both messages ("the possibility of getting it wrong makes it hard to settle").
+- Reflective 3, msg 1, `mirror and ask`: "that back and forth is frustrating".
+
+Offer turns that failed bullet 4 (recap): Supportive 1, Reflective 1, Reflective 3, each opening with the person's pay, responsibility and familiarity said back. Offer turns that passed read like the client's point 5, for example Direct 1: "It can be hard to choose when each option offers something you value. We can sort through what you know, what matters most about each choice, and find a practical next step. Would you like to do that together?"
+
+## What I learned in round 3
+
+- **The offer rule fixed the double offer.** Bullet 4 went from 0 of 9 to 6 of 9. When the model is allowed to write what it keeps writing, it writes it well; the failures are recaps, not offers said twice.
+- **E5's concrete span fixed the timing.** 9 of 9 offered at message 3, from 6 of 9.
+- **E12 moved the reasoning but not the opener.** The reasoning now starts from what they face, and it names "frustrated" as part of what they face; the reply then hands it back. After three rounds of line swaps, "That sounds frustrating" at a first message that says "I'm frustrated" looks like the model's default, not a line in the prompt. The spec's Follow-up names the next levers: `goal`'s "Help them feel heard", `moves.acknowledgment`, then the reply schema itself. That is an `/architect` decision, not another `/develop` tweak.
+- **The retelling rule is hard to grade at the edges.** The client's own better examples retell lightly ("You've been going back and forth…"). Reflective 1's opener is close to their Reflective example. If the rule is tightened or loosened, it should be against the client's examples, word for word.
+
+## Round 4 (2026-10-09): the seeded offer for every set
+
+muhammad saw ABCDE offered in the client's per style text ("There's a framework called ABCDE that helps you…") and asked for the shared lead on every set, with `Framework: {name}` and the intro document's description. The model's line is dropped on an offer turn unless it answers a typed question. ABCDE keeps only its per style Tell Me More. E6 went back to the seeded-alone wording from 4109189. Prompts: 74 + 71 lines, 3409 words. pytest 691 passed, 4 JWKS skips.
+
+- **Round 3 fixed the double offer by giving the offer to the model. muhammad wanted the opposite fix:** fixed words in front of every person. When a fix removes seeded text that muhammad wrote, show him the resulting offer turn before building, not only the measured bullets.
+- **The client's intro document says not to name the framework.** muhammad overrides that and shows the name. This is recorded in PORT-STATUS "Tell the client".
+
+Related: [[understand-then-offer-design-2026-10-08]], [[client-documents-win-over-our-rules-and-adrs]]

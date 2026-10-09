@@ -20,3 +20,35 @@ _Steps derived from spec 0016 acceptance criteria and its value sourcing table. 
 
 ## Acceptance-criteria coverage
 - AC-1 … the vague opener step, the diff and the real runs · AC-2 … the vague opener step, the diff and the runs' first reply · AC-3 … the one message step, the tuning diff and the runs' first offer column · AC-4 … the UI offer and Tell Me More steps and the integration tests · AC-5 … the diff and the runs' reply after Try It · AC-6 … `wc` and the diff · AC-7 … `pytest` · AC-8 … the three runs · AC-9 … the PORT-STATUS step
+
+## Round 3 · updated 2026-10-08
+_Steps derived from spec 0016 round 3 (AC-1, AC-3, AC-4, AC-6, AC-7, AC-8) and its round 3 Value sourcing rows._
+
+### Commands
+- [ ] `cd backend && pytest tests/unit/test_offer.py` → 6 pass: ABCDE alone in each style, ABCDE after a typed question, the model's offer then the card, the card alone for a blank line → AC-4, AC-7
+- [ ] `cd backend && pytest` → 690 passed, 4 JWKS skips; `pytest tests/integration` → 147 passed, none skipped → AC-7
+- [ ] `wc -l content/prompts/mani_base.md content/prompts/response_format.md` → 74 and 71; `cat` both `| wc -w` → 3422 → AC-1, AC-3, AC-6
+
+### Real conversation (after a reseed and restart)
+- [ ] A conversation offered Structured Problem Solving → the offer turn is Mani's own words, a blank line, then `Framework: Structured Problem Solving` and its description; buttons Try It · Tell Me More · Keep Chatting → AC-4, AC-8
+- [ ] A conversation offered ABCDE → the client's text for the thread's style, with nothing before it → AC-4
+- [ ] With an ABCDE offer waiting, type "what would that involve?" → Mani's answer, a blank line, then the client's text; the offer stays `offered` in `thread_technique_state` → AC-4 (`answering` from `deferred` and the outcome)
+- [ ] With `ai_debug_mode` on, a reply's reasoning starts from what they face, not from what they need → AC-1 (E12)
+
+### Acceptance criteria coverage
+- AC-1 · E12 reasoning step · AC-3 · E5 span (offer at message 3 or later, 9 of 9 in the round 3 runs) · AC-4 · the offer rule · AC-6 · counts · AC-7 · tests · AC-8 · the twelve runs, recorded in `backend/PORT-STATUS.md`
+
+## Round 4 · updated 2026-10-09
+_Steps derived from spec 0016 round 4._
+
+### Commands
+- [ ] `cd backend && pytest tests/unit/test_offer.py` → 7 pass: ABCDE and Structured Problem Solving offered in the seeded words alone, an answer before the offer, ABCDE's Tell Me More per style, the name and description for the rest
+- [ ] `cd backend && pytest` → 691 passed, 4 JWKS skips; integration not skipped
+- [ ] `wc -l` of `mani_base.md` and `response_format.md` → 74 and 71; `cat` both `| wc -w` → 3409
+
+### Real conversation (after a reseed and restart)
+- [ ] An offer of any set → "We'll go through a few focused questions. …Would it help to work through it together?", a blank line, `Framework: <name>`, a blank line, the description; nothing before it; buttons Try It · Tell Me More · Keep Chatting
+- [ ] An ABCDE offer → the same shared words, not the client's per style text
+- [ ] Tell Me More on ABCDE → its five steps in the thread's style; on another set → its name and description
+- [ ] With an offer waiting, type "what would that involve?" → Mani's answer, a blank line, then the seeded offer; the offer stays `offered`
+

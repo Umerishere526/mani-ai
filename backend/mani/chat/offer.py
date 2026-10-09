@@ -14,12 +14,20 @@ def _styled(replies: Replies, framework: Framework, style: str) -> StyledOffer |
     return replies.offer.by_framework.get(framework.id, {}).get(style)
 
 
-def offer(replies: Replies, framework: Framework, style: str) -> tuple[str, list[dict]]:
-    """The offer's text and its three buttons, in order. `more` is read back by the backend when
-    Tell me more is tapped; like the greeting's `style`, it is never part of the model's reply."""
+def _joined(*parts: str) -> str:
+    return "\n\n".join(part for part in parts if part)
+
+
+def offer(
+    replies: Replies, framework: Framework, line: str, *, answering: bool
+) -> tuple[str, list[dict]]:
+    """The offer turn's text and its three buttons, in order. The seeded offer goes out alone, after
+    the model's `line` only when it answers a typed question about the offer. `more` is read back by
+    the backend when Tell me more is tapped; like the greeting's `style`, it is never part of the
+    model's reply."""
     labels = replies.offer.labels
-    styled = _styled(replies, framework, style)
-    text = styled.text if styled else _filled(replies.offer.text, framework)
+    seeded = _filled(replies.offer.text, framework)
+    text = _joined(line, seeded) if answering else seeded
     return text, [
         {"label": labels.accept, "technique": framework.id},
         {"label": labels.more, "more": True},

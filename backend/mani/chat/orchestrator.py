@@ -521,14 +521,16 @@ async def send(
     offered = next((p.technique for p in checked.prompts if p.technique), None)
     if offered is not None:
         # Every check that can stop an offer has run, so the one left is an offer. The model chose
-        # that and which set; its own line leads and the seeded offer's words and buttons follow.
-        # No style is recorded, because the shape it reported describes a reply, not a bridge line.
-        seeded, stored_options = offers.offer(
-            config.replies, config.registry.get(offered), style_now
+        # that and which set; the seeded offer goes out alone, after the model's line only when
+        # that line answers a typed question about the offer (still waiting, so still offered). No
+        # style is recorded, because the shape it reported describes a reply, not an offer.
+        text, stored_options = offers.offer(
+            config.replies, config.registry.get(offered), checked.text,
+            answering=deferred and outcome is TechniqueOutcome.OFFERED,
         )
         checked = dataclasses.replace(
             checked,
-            text="\n\n".join(part for part in (checked.text, seeded) if part),
+            text=text,
             prompts=[SmartPrompt.model_validate(option) for option in stored_options],
             style=None,
         )

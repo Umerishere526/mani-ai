@@ -71,13 +71,12 @@ the same change as the work.**
      offer's other buttons), a stage out of order, a library section that does not exist. The reply's
      words are not edited.
   6. A technique button still there after the guards, a safety concern and the ending is an offer, and
-     `offer.py` writes it (spec 0013): the `replies` row's `offer.text` with the framework's name and
-     summary, and the buttons Try It · Tell Me More · Keep Chatting. A framework listed under
-     `offer.by_framework` gets its own text in the conversation style instead (spec 0015). The model's own
-     line goes first, a blank line, then the seeded offer, or the seeded offer alone when that line is
-     blank; only the model's style on that turn is dropped (spec 0016). A tap on Tell me more is answered
-     from `offer.more_text`, or that framework's per style steps, with no model call, and leaves the offer
-     open.
+     `offer.py` writes it (spec 0013): the `replies` row's `offer.text`, the shared lead, then the
+     framework's name and summary, the same for every set and style, and the buttons Try It · Tell Me More ·
+     Keep Chatting. The model's line is dropped unless it answers a typed question about the offer, when it
+     goes first; the model's style on that turn is dropped too (spec 0016). A tap on Tell me more is answered
+     from `offer.more_text`, or, for a framework listed under `offer.by_framework`, its per style steps
+     (spec 0015), with no model call, and leaves the offer open.
   7. Crisis, the reply, the framework state and the summary are written together.
 - **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): six, each reviewed against the
   client's specification. An offer may come from the person's second message, of any set the model judges
@@ -140,10 +139,11 @@ the same change as the work.**
   stored or sent to the app (`mani/chat/guards.py`: unknown ids, stage order, library sections, buttons that
   would overwrite a decline or a retirement, an `ending` set outside the ending). Offer timing is told in
   `[ctx]`, not enforced, and the grief veto is told as `ruled_out`. The one exception is an offer (spec
-  0013): the model decides that it offers and which set, and the code writes the offer's text and its three
-  buttons, and the reply to Tell me more, from seeded rows. The model's own line goes before the seeded
-  offer, unchecked, and only its style is dropped (spec 0016). A framework listed under `offer.by_framework`
-  gets its per style text, and Tell me more its per style steps, in the style `[ctx]` names (spec 0015).
+  0013): the model decides that it offers and which set, and the code writes the three buttons and the reply to
+  Tell me more from seeded rows. Every set is offered in the same seeded words, the shared lead, the name
+  and the description, with the model's line and style dropped unless the line answers a typed question
+  about the offer (muhammad, 2026-10-09, spec 0016). A framework listed under `offer.by_framework` gets
+  its per style steps for Tell me more, in the style `[ctx]` names (spec 0015).
   The buttons are the client's capsules, Try It · Tell Me More · Keep Chatting, and Try It · Keep Chatting
   after Tell Me More.
 - **The ending is ended by the model's `ending` field, and the code never reads words to drive it** (spec
@@ -166,8 +166,8 @@ the same change as the work.**
 - **The lines Mani sends without the model live in the `replies` row, and the numbers that shape a
   conversation in the `tuning` row** (spec 0008). The offer, its button labels and the Tell me more reply
   are `replies` lines too, filled from the framework's `name` and `summary` (spec 0013), except a framework
-  listed under `offer.by_framework`: its offer and Tell me more are literal text per style, all three styles
-  or none, with no `{` or `}`, and the seed refuses an id with no framework file (spec 0015). Both are required rows of `admin.prompts`, never sent to
+  listed under `offer.by_framework`: its Tell me more is literal text per style, all three styles or none,
+  with no `{` or `}`, and the seed refuses an id with no framework file (spec 0015). Both are required rows of `admin.prompts`, never sent to
   a model, with no default in code. `content_problem` in `mani/prompts/checks.py` checks them at seed, on
   every admin write (422, nothing stored) and at cache load (`CONFIG_ERROR`), and the four required rows
   cannot be deactivated or renamed in the portal. The files in `content/prompts/` are the source of
@@ -245,18 +245,16 @@ Ordered by what breaks first.
 - Tell the client: after Try It Mani no longer asks the first stage's question when the person
   has already said it, and a person who cannot say what to do is offered up to three options at the first
   "I don't know". Both depart from the literal Structured Problem Solving example.
-- Tell the client that every offer now opens with the same lead ("We'll go through a few focused
-  questions. By the end, you will have turned a problem that feels unclear or overwhelming into a practical
-  next step. Would it help to work through it together?"), then the framework's name and their description
-  word for word. The lead is Structured Problem Solving's own description, so that offer says it twice, and
-  it promises a practical next step for all six; the name is shown although their intro document says not to
-  give it. Both are muhammad's call (spec 0013).
-- Tell the client that ABCDE's offer and Tell Me More now use their per style wording, generalised where it
-  quoted one person: "your anxiety" became "how you're feeling", and Supportive's "Feeling overwhelmed can
-  make you question how well you're handling things." was dropped. The other five keep the shared offer, and
-  Tell me more shows their name and description, until their documents arrive (spec 0015).
-- Tell the client that every offer now opens with one line of Mani's own before their wording, and that no
-  count of exchanges is enforced beyond holding the first offer until the person's second message (spec 0016).
+- Tell the client that every framework, ABCDE included, is offered in the same words: "We'll go through a few
+  focused questions. By the end, you will have turned a problem that feels unclear or overwhelming into a
+  practical next step. Would it help to work through it together?", then the framework's name and their
+  intro document's description word for word. The name is shown although that document says not to give
+  it, and ABCDE's per style offer wording is not used, both muhammad's call (spec 0013, 0016). A line of
+  Mani's own goes before the offer only when it answers a question the person typed about it, so an offer
+  does not respond to the person's last message. No count of exchanges is enforced beyond holding the
+  first offer until the person's second message (spec 0016).
+- Tell the client that ABCDE's Tell Me More uses their per style steps, and the other five show their name
+  and description until their documents arrive (spec 0015).
 - Tell the client that their Supportive and Reflective style lines were reworded so care is about what the
   person faces, never their feeling handed back: Supportive "Acknowledges what they are facing", Reflective
   "Reflects the meaning behind what they say, never its details" (spec 0016).
@@ -375,4 +373,19 @@ change to prompts, framework content or the offer rules, and compare with these.
   style: no offer in any; Direct opens twice with "I won't…" and ends "I'm here with you" (off style), Supportive
   ends "I hear you", Reflective retells twice. Prompts 145 lines and 3,424 words; pytest 684 passed, 4
   skipped, integration 147 none skipped. Twelve runs cost 0.03 dollars.
+- Understand then offer, round 3, spec 0016, 2026-10-08, `client_job_decision` three times per style after
+  the reseed of the offer rule, the card, E6, E5 and E12, recorded as measured and not rerun. AC-8 fails on
+  restating in every style and on the offer turn in Reflective. Per bullet, out of 3, Direct / Supportive /
+  Reflective: no restating before the offer 1 / 0 / 0; first reply asks what the decision is 3 / 3 / 3; offer
+  at message 3 or later 3 / 3 / 3 (from 3 / 2 / 1); the offer turn steps from what they said, says how the
+  questions help and asks, with no recap 3 / 2 / 1 (from 0 / 0 / 0); after the yes asks nothing told 3 / 3 /
+  3. Every offer was `structured_problem_solving`, so ABCDE was not reached. "Frustrating" came back at the
+  person's first message in 7 of 9 runs ("That sounds frustrating", "It can be frustrating", "that back and
+  forth is frustrating"), now with reasoning that names their frustration as what they face; Reflective
+  also opens by retelling ("It sounds like the decision keeps pulling you back…"). The three offer turns that
+  failed recap their details ("The better pay and responsibility on one side, and the familiar people…").
+  The say back after the yes came in 4 runs (measured only). Regression, `disclosure_no_question_needed`
+  once per style: no offer in any, none cold; "I'm here with you" in Direct and Reflective (off style).
+  Prompts 145 lines and 3,422 words; pytest 690 passed, 4 skipped, integration 147 none skipped. Twelve runs
+  cost 0.02 dollars.
 - Local Supabase answers on the 5434x ports set in `config.toml`. See `.claude/BACKEND.md`.

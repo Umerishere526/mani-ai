@@ -107,3 +107,67 @@ The failed replies trace to lines that ask for them, so replacing those lines is
 muhammad chose (2026-10-08): update spec 0016 in place; all four restating lines including Supportive; E6 rewritten concretely; three runs per style with a bullet passing on 2 of 3, because one run is noise ([[measure-before-tuning-prompts]]); restating graded as a feeling handed back in any form or a sentence retelling what they said, while care about the situation passes; the say back after Try It measured only, since the client's rule inside a set is not asking again, which held; and the shape and reasoning of every reply printed on the rerun.
 
 The round 2 cross check (a read only pass on another model) found gaps in how the runs would be measured, and muhammad applied all eight fixes. The wrapper must wrap `orchestrator.send`, since `_open_chat` makes no model call. Turning on `AI_DEBUG_MODE` would add the debug row to the system prompt and measure a different prompt, so only the orchestrator's settings are swapped. A reply's shape is found by counting `thread_response_styles` rows around each call, because the table has no message id. The `labelling` finding flags only feeling words the person did not use, so restating is graded by hand. A run with no offer fails the offer bullets out of 3. And since E8 and E9 touch every reply, `disclosure_no_question_needed` runs once per style as a measured regression record.
+
+## Round 3 (2026-10-08)
+
+Round 2 changed five lines and failed again. Round 3 redesigns the offer turn and moves the restating fix to the reasoning step.
+
+### Context
+
+Round 2's nine runs, out of 3 per style (Direct / Supportive / Reflective): no restating before the offer 0 / 0 / 2; first reply asks what the decision is 3 / 3 / 3; offer at message 3 or later 3 / 2 / 1; bridge with no question and no recap 0 / 0 / 0. Reflective's two restating passes came from offers at message 2, which left only one reply to judge.
+
+- **Restating.** "That sounds frustrating" opened 5 of 6 Direct and Supportive runs, always under `warmth lead`, which E9 had just rewritten. Every one of those replies had reasoning that began "they need to be heard" or "a kind acknowledgment". The reasoning field is generated before `text` (schema order, [[measure-before-tuning-prompts]]). Its first step, as E3 left it, asks "What do they need right now, whether comfort, space, acceptance, agency or to be understood?". The model answers "to be heard", then writes a reply that hears.
+- **Bridge.** Every bridge line made an offer of its own and ended "Would you like…?", with reasoning such as "Offer it now". The seeded generic lead then said it again ("Would it help to work through it together?"). Reading the client's feedback again, their point 5 asks for exactly what the model wrote: "make a natural transition, explain briefly how the framework could help, and allow the user to choose." So the duplicate is the generic lead, which is muhammad's wording from spec 0013, built from Structured Problem Solving's own description. The model is doing what the client asked. ABCDE is different: the client wrote its offer per style, and their text already explains and asks.
+- **Timing.** Three of six Supportive and Reflective runs offered at message 2, right after "There are good reasons for both". The client calls exactly that abrupt (point 8, about Supportive). E5's "what pulls them each way" was read as satisfied by "good reasons for both".
+
+### Options considered
+
+**The offer turn**
+- **The model's line is the offer, and the card follows (chosen).** For the five sets without the client's wording, cut the generic lead from `offer.text`, leaving "Framework: {name}" and the description. E6 says the line is the offer. ABCDE keeps the client's text alone. Pros: matches the client's point 5 and what the model already writes; removes the "practical next step" said twice (an open item since spec 0013); keeps the client's words wherever they exist. Cons: the offer for five sets is unchecked model text, which can recap; there are two paths through `offers.offer`.
+- **The seeded offer alone again** (the model's line dropped on a first offer and a return, kept only for a typed question). Pros: the double offer is certain to go. Cons: the person's last message gets no answer, and the generic lead stays, which the client called scripted (point 3). It undoes round 1's reason for the join.
+- **Keep the join, and cut the `response_format.md` lines that frame the reply as the offer** (`conversation_phase`'s "then offer as offers says", the reasoning step's "Then offer or not"). Pros: prompt only. Cons: a third prompt round against an instruction that failed 9 of 9, while the model never sees the text it sits in front of.
+
+**ABCDE after a typed question**
+- **The answer, then the client's text (chosen).** They asked something and get an answer. A second ask is possible.
+- **The client's text alone, always.** One rule, but the question goes unanswered and the same offer is repeated.
+
+**The restating**
+- **Reasoning step 1 starts from what they face (chosen):** "What are they facing, and what do you not yet know about it?". It hits the field written first, and every failing reply's reasoning traced to it.
+- **Keep the needs list and drop "to be understood".** A smaller move, but "comfort" and "acceptance" still point at hearing.
+- **Step 1 plus the `acknowledgment` move.** Two levers at once, so a result can't be traced to one.
+- **Measure only.** It leaves the client's most repeated point unfixed.
+
+The client's own example sentences were not pasted into the prompt. Prompt examples come back near word for word ([[measure-before-tuning-prompts]]), and `client_job_decision` is the client's own conversation, so the runs would measure recall.
+
+**The timing**
+- **One concrete span in E5 (chosen):** "what draws them to each option, not only that both have reasons".
+- **Measure only.** Reflective fails the bullet 1 of 3.
+- **A floor of the third message** (`clear_offer_after: 3`). A fixed count, which the client asked not to make a rule, and still only told to the model.
+
+### Rationale
+
+The bridge failed because two writers made the same move, not because the model ignored E6. Making the model the writer of the offer for the sets the client has not written, and the client the writer where they have, gives the person one offer in every case. It follows the client's point 5 literally, and it keeps their documents first ([[client-documents-win-over-our-rules-and-adrs]]). The rule lives in `offer.py`, beside the choice of seeded wording it depends on, and it reads the row and the turn's path, never the model's words, so spec 0006 holds. E12 and E5 round 3 are swaps of one line and one span, so the prompts stay at 145 lines and shrink by 2 words ([[prompt-changes-cut-not-add]]).
+
+muhammad chose (2026-10-08): the model's line as the offer with the card after; for ABCDE after a typed question, the answer then the client's text; reasoning step 1 issue first; E5 concrete; the same proof as round 2; and the fourth bullet graded as "step, help, ask" (follows from what they said, says briefly how the questions could help, asks, no recap of their details, no feeling handed back).
+
+The round 3 cross check (a read only pass on another model) confirmed the counts, the single caller of `offers.offer`, and that `answering` is exact at the offer step. It found eight gaps, and muhammad applied all eight fixes:
+- An eval test that relied on "overwhelming" in the cut lead.
+- One test helper asked to give two answers for ABCDE.
+- No named source for the unit test's framework row.
+- No grading rule for an ABCDE or blank offer in the runs.
+- A stale skip comment in the eval script.
+- Comments and docstrings that still said the offer is all seeded.
+- The stripped line left unstated.
+- A restart missing after the reseed.
+
+## Round 4 (2026-10-09)
+
+muhammad saw an ABCDE offer in the client's per style wording and asked for the shared seeded offer on every set instead: the spec 0013 lead, the name, and the description from the client's intro document. Round 3 had removed the double offer by handing the offer to the model. Round 4 removes it the other way, by dropping the model's line on an offer turn.
+
+muhammad chose (2026-10-09):
+- The seeded offer goes out alone, with the model's line first only when it answers a typed question about the offer. Keeping the line next to the restored lead would bring back round 2's double ask.
+- The name is shown, although the intro document says not to give it.
+- Tell Me More stays as it is. For the five sets without the client's steps, it repeats the description already in the offer.
+
+Cost: the offer turn no longer answers the person's last message, which is the cost round 3 avoided. The lead is Structured Problem Solving's own description, so for that set "practical next step" is said twice.
+

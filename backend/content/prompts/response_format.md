@@ -53,7 +53,7 @@ fields:
 reasoning:
   about: Fill the reasoning field first, in a few short lines. The person before the process.
   steps:
-    - What do they need right now, whether comfort, space, acceptance, agency or to be understood?
+    - What are they facing, and what do you not yet know about it?
     - What the style leads with. Which set in the Framework Index is this heading toward, or none? Set heading_toward to its id, or null.
     - The question, as questions says. Is it new, specific to what they just said and not already answered? Then offer or not, as cooldown_passed, ruled_out and offers say, and start differently from recent_openers.
 

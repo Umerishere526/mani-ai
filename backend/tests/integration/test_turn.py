@@ -276,8 +276,8 @@ async def test_a_draft_that_used_to_be_asked_for_again_is_stored_as_written_afte
 async def test_an_offer_that_breaks_a_told_rule_still_goes_out_after_one_call(
     alice, model, message, draft, opened
 ):
-    """The cooldown and the grief veto are told, not enforced, so the offer goes out: the model's
-    line, then the seeded words."""
+    """The cooldown and the grief veto are told, not enforced, so the offer goes out: the seeded
+    words."""
     scripted = model(draft)
     thread = await start(alice)
     if opened:
@@ -285,7 +285,7 @@ async def test_an_offer_that_breaks_a_told_rule_still_goes_out_after_one_call(
     turn = await send(alice, thread.id, message)
 
     assert scripted.calls == 1
-    assert turn.content == await _offer_turn(draft.state.technique, TUNING.offers.default_style, draft.text)
+    assert turn.content == await _offer_turn(draft.state.technique)
     assert [p.label for p in turn.prompts] == OFFER_LABELS
 
 
@@ -346,20 +346,23 @@ def _offer(technique: str) -> Reply:
 OFFER_LABELS = ["Try It", "Tell Me More", "Keep Chatting"]
 
 
-async def _offer_text(technique: str, style: str, more: bool = False) -> str:
-    """The offer, or the reply to Tell me more, as the person sees it: the framework's own text in
-    that style when the row has it, otherwise the seeded lines filled from the framework's own row."""
-    styled = REPLIES.offer.by_framework.get(technique, {}).get(style)
-    if styled:
-        return styled.more_text if more else styled.text
+async def _filled(template: str, technique: str) -> str:
     framework = (await orchestrator.cache.load()).registry.get(technique)
-    template = REPLIES.offer.more_text if more else REPLIES.offer.text
     return template.format(name=framework.name, description=" ".join(framework.summary.split()))
 
 
-async def _offer_turn(technique: str, style: str, line: str = BRIDGE) -> str:
-    """An offer turn as the person sees it: the model's own line, a blank line, then the offer."""
-    return f"{line}\n\n{await _offer_text(technique, style)}"
+async def _offer_turn(technique: str, answer: str = "") -> str:
+    """An offer turn as the person sees it: the seeded offer, filled from the framework's own row,
+    after the model's line only when that line answers a typed question about the offer."""
+    seeded = await _filled(REPLIES.offer.text, technique)
+    return f"{answer}\n\n{seeded}" if answer else seeded
+
+
+async def _told_more(technique: str, style: str) -> str:
+    """The reply to Tell me more: the framework's own text in that style when the row has it,
+    otherwise the seeded line filled from the framework's own row."""
+    styled = REPLIES.offer.by_framework.get(technique, {}).get(style)
+    return styled.more_text if styled else await _filled(REPLIES.offer.more_text, technique)
 
 
 def _stored_offer(technique: str) -> list[dict]:
@@ -374,10 +377,8 @@ def _stored_offer(technique: str) -> list[dict]:
 async def test_an_offer_is_made_on_the_second_message_in_any_style(alice, model, technique):
     """muhammad, 2026-10-01: once Mani can tell what fits it should offer, not wait out the old
     four. No framework waits for a later message either: ABCDE's offer stands on the second.
-    The model decides that it offers and which set; its own line leads, and the words and the
-    three buttons after it are the seeded offer's."""
-    from mani.models.rows import SupportStyle
-
+    The model decides that it offers and which set; the words and the three buttons are the
+    seeded offer's, and the model's own line is dropped."""
     scripted = model(
         Reply(text="What is the hardest part of it?", heading_toward=technique),
         _offer(technique),
@@ -388,10 +389,8 @@ async def test_an_offer_is_made_on_the_second_message_in_any_style(alice, model,
     turn = await send(alice, thread.id, "i'm confused between studying everything or picking topics")
 
     assert scripted.calls == 2
-    assert turn.content == await _offer_turn(technique, SupportStyle.SUPPORTIVE.value)
-    if technique not in REPLIES.offer.by_framework:
-        # The client's own ABCDE lines end with it; the shared frame never says it.
-        assert "Would you like to try it?" not in turn.content
+    assert turn.content == await _offer_turn(technique)
+    assert BRIDGE not in turn.content
     assert [p.label for p in turn.prompts] == OFFER_LABELS
     assert [p.technique for p in turn.prompts if p.technique] == [technique]
     stored = (await _history(alice, thread.id))[-1]
@@ -420,16 +419,16 @@ async def _supportive(thread):
     ("technique", "style"),
     [("abcde", "direct"), ("abcde", "supportive"), ("abcde", "reflective"), ("thought_reframe", "reflective")],
 )
-async def test_an_offer_is_written_in_the_conversation_style(alice, model, technique, style):
-    """covers: AC-3, AC-4, AC-6 - a framework with its own wording is offered in the thread's style,
-    exactly as seeded, and one without it still gets the shared frame."""
+async def test_an_offer_is_the_same_seeded_words_in_every_style(alice, model, technique, style):
+    """muhammad, 2026-10-09: every set, ABCDE included, is offered in the shared seeded words
+    whatever the thread's style; only Tell me more follows the style."""
     scripted = model(_offer(technique))
     thread = await past_the_opening(await start(alice))
     await _in_style(thread, style)
     turn = await send(alice, thread.id, "my manager criticised me in front of everyone")
 
     assert scripted.calls == 1
-    assert turn.content == await _offer_turn(technique, style)
+    assert turn.content == await _offer_turn(technique)
     assert [p.label for p in turn.prompts] == OFFER_LABELS
     stored = (await _history(alice, thread.id))[-1]
     assert (stored.content, stored.prompt_options) == (turn.content, _stored_offer(technique))
@@ -443,8 +442,8 @@ async def test_an_offer_is_written_in_the_conversation_style(alice, model, techn
 async def test_a_thread_with_no_style_offers_in_the_profile_style_then_the_default(
     alice, model, profile_style, expected
 ):
-    """covers: AC-4 - the offer and Tell me more take the style [ctx] names: the thread's, then the
-    profile's, then the tuning default."""
+    """covers: AC-4 - Tell me more takes the style [ctx] names: the thread's, then the profile's,
+    then the tuning default."""
     from mani.db import pool
 
     model(_offer("abcde"))
@@ -455,8 +454,8 @@ async def test_a_thread_with_no_style_offers_in_the_profile_style_then_the_defau
     offered = await send(alice, thread.id, "my manager criticised me in front of everyone")
     explained = await send(alice, thread.id, "Tell Me More")
 
-    assert offered.content == await _offer_turn("abcde", expected)
-    assert explained.content == await _offer_text("abcde", expected, more=True)
+    assert offered.content == await _offer_turn("abcde")
+    assert explained.content == await _told_more("abcde", expected)
 
 
 async def test_a_plain_sentence_is_offerable_at_the_second_message_and_logged_by_id_only(
@@ -505,7 +504,7 @@ async def test_the_turn_is_stored_and_the_thread_state_follows_it(alice, model):
     async with pool.as_user(alice) as conn:
         ctx = await threads.load_turn_context(conn, thread.id, ALICE, STYLE_WINDOW)
 
-    assert turn.content == await _offer_text("abcde", TUNING.offers.default_style)
+    assert turn.content == await _offer_turn("abcde")
     assert ctx.technique.framework_id == "abcde"
     assert ctx.technique.outcome is TechniqueOutcome.OFFERED
     assert ctx.techniques_offered == ["abcde"]
@@ -556,7 +555,7 @@ async def test_tell_me_more_is_answered_with_no_model_call_and_the_offer_stays_o
     turn = await send(alice, thread.id, "tell me MORE")
 
     assert scripted.calls == asked
-    assert turn.content == await _offer_text("abcde", "reflective", more=True)
+    assert turn.content == await _told_more("abcde", "reflective")
     assert [p.label for p in turn.prompts] == ["Try It", "Keep Chatting"]
     assert (turn.llm_call_id, turn.needs_summary, turn.was_duplicate) == (None, False, False)
     assert turn.crisis_blocks_chat is get_settings().crisis_blocks_chat
@@ -960,11 +959,10 @@ async def test_asking_about_an_offer_leaves_it_open(alice, model):
         ctx = await threads.load_turn_context(conn, thread.id, ALICE, STYLE_WINDOW)
 
     assert ctx.technique.outcome is TechniqueOutcome.OFFERED
-    # One rule for every offer the checks keep: the reply carried it again, so the model's answer
-    # goes out with the whole offer after it.
+    # The reply carried the offer again, so it still waits. A typed question is the one case where
+    # the model's line goes before the seeded offer: it is the answer to what they asked.
     assert turn.content == await _offer_turn(
-        "abcde", TUNING.offers.default_style,
-        "We'd look at what happened and what you told yourself about it.",
+        "abcde", "We'd look at what happened and what you told yourself about it."
     )
     assert [p.label for p in turn.prompts] == OFFER_LABELS
 

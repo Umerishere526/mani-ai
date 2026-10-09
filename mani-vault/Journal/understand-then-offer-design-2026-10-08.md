@@ -36,3 +36,14 @@ Round 1 results: [[understand-then-offer-build-2026-10-08]].
 - **The eval deletes its users, so per reply data is gone after a run.** Round 2 prints shape (from `thread_response_styles`) and reasoning (`AI_DEBUG_MODE`) during the run, so a second failure names its line.
 
 muhammad's choices: update 0016 in place, all four restating lines including Supportive, E6 concrete, three runs per style passing on 2 of 3, restating = a feeling handed back in any form or a retelling sentence, say back after Try It measured only.
+
+## Round 3 design (2026-10-08, after round 2's nine runs failed)
+
+Round 2 results: [[understand-then-offer-build-2026-10-08]].
+
+- **The bridge failure was two writers doing the same job, not the model ignoring E6.** The client's point 5 asks Mani to "make a natural transition, explain briefly how the framework could help, and allow the user to choose", which is what every bridge line wrote. The seeded generic lead (spec 0013) then did it again. Read the client's own words before blaming the model for a line it keeps writing.
+- **The printed reasoning named the driver.** Every "That sounds frustrating" reply had reasoning that opened "they need to be heard", which comes from reasoning step 1's needs list. Swapping a style or shape line (E9) did nothing, because the reasoning is written first. Next time a reply pattern survives a shape line swap, read the reasoning before touching another line.
+- **Grading must say what happens when the run takes another path.** The scenario has no `expect_framework`, so an ABCDE offer or a blank line would have left the fourth bullet ungradeable. The cross check caught it.
+- **A cut to seeded text can break an eval test that leaned on its words.** `test_style_findings.py` expected `labelling` to fire on "overwhelming" in the lead.
+
+muhammad's choices: the model's line is the offer for the five sets without client wording, with the name and description card after; ABCDE in the client's words alone, the model's answer first only after a typed question; reasoning step 1 starts from what they face; E5 concrete ("what draws them to each option, not only that both have reasons"); the same nine plus three runs; the fourth bullet graded as step, help, ask; all eight cross check fixes applied.

@@ -75,7 +75,7 @@ REPLIES_REFUSED = {
         more_text="   "
     ),
     "a field in framework text": lambda b: b["offer"]["by_framework"]["abcde"]["direct"].update(
-        text="Try {name}?"
+        more_text="Try {name}?"
     ),
     "an escaped brace in framework text": lambda b: b["offer"]["by_framework"]["abcde"]["reflective"].update(
         more_text="Steps {{ A }}"

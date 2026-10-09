@@ -114,19 +114,18 @@ class OfferLabels(_Strict):
 
 
 class StyledOffer(_Strict):
-    """One framework's offer and reply to Tell me more in one conversation style, sent as written."""
+    """One framework's reply to Tell me more in one conversation style, sent as written."""
 
-    text: LiteralText
     more_text: LiteralText
 
 
 class Offer(_Strict):
-    """The offer the code writes when the model offers a set, and the reply to Tell me more."""
+    """The offer of every set, and the reply to Tell me more."""
 
     text: OfferText
     more_text: OfferText
     labels: OfferLabels
-    # Keyed by framework id, then by SupportStyle value: sent instead of `text` and `more_text`.
+    # Keyed by framework id, then by SupportStyle value: sent instead of `more_text`.
     by_framework: dict[str, dict[str, StyledOffer]]
 
     @field_validator("by_framework")
