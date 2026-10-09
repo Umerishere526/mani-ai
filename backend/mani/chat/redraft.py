@@ -106,9 +106,9 @@ def reasons(
         )
     elif not technique and closest_fit_due and reply.heading_toward and not pain_mentioned(user_texts):
         notes.append(
-            "you have talked for several replies and not offered: offer the nearest set of "
-            "questions now, with offer_fit closest unless you are confident, and say it is the "
-            "nearest and that they can keep talking instead"
+            "you have talked for several replies and not offered: offer the set of questions "
+            "that fits best now, by its name and plainly, the way you would one that fits "
+            "exactly, with offer_fit set as it really is"
         )
     elif technique and ruled_out(reply, user_texts, registry):
         framework = registry.get(technique)

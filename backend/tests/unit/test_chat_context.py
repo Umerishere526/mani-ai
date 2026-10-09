@@ -319,8 +319,10 @@ def test_an_unconfident_shortlist_carries_no_candidate_content():
     assert "offer_ask" not in block
 
 
-def test_the_closest_fit_carries_its_offer_line_even_when_the_router_is_not_confident():
-    # covers: AC-3
+def test_an_unconfident_guess_stays_a_hint_even_when_the_closest_fit_is_due():
+    """Live, 2026-10-08: one generic phrase, "I don't know what to do", made the router's weak top
+    pick the candidate at the closest fit, and a friend who had not replied got the practical
+    questions. Below confidence the guess is a hint; Mani chooses by what they described."""
     block = context.build(
         TurnContext(
             thread=thread(message_count=10),
@@ -331,7 +333,8 @@ def test_the_closest_fit_carries_its_offer_line_even_when_the_router_is_not_conf
         candidate=framework(),
     )
     assert "closest_fit: due" in block
-    assert "offer_ask: Would you like to work through it?" in block
+    assert "framework_shortlist: abcde (0.45)" in block
+    assert "offer_ask" not in block
 
 
 def test_an_active_framework_carries_current_and_next_stage_resolved_to_style():
@@ -468,18 +471,30 @@ def test_the_block_says_which_phase_of_the_conversation_this_is():
 
 
 
-def test_every_style_focuses_the_question_on_how_the_person_feels():
-    """All three styles anchor the question to how the person feels rather than the situation;
-    Direct then turns toward a way through. Said next to the message, where a style rule in the
-    long prompt alone did not hold."""
-    for style, focus in (
-        ("supportive", "feelings"),
-        ("reflective", "feelings"),
-        ("direct", "feeling, then the way through"),
-    ):
-        chosen = thread().model_copy(update={"conversation_style": SupportStyle(style)})
-        ctx = TurnContext(thread=chosen, profile=None, technique=None)
-        assert f"question_focus: {focus}" in context.build(ctx)
+def _block_in(style: str) -> list[str]:
+    chosen = thread().model_copy(update={"conversation_style": SupportStyle(style)})
+    return context.build(TurnContext(thread=chosen, profile=None, technique=None)).splitlines()
+
+
+def test_each_style_asks_its_own_kind_of_question():
+    """Loli's test, 2026-10-09: Supportive and Reflective asked near-identical questions at the
+    same point in the conversation, because both were given the same question focus."""
+    focuses = {
+        style: next(line for line in _block_in(style) if line.startswith("question_focus:"))
+        for style in ("direct", "supportive", "reflective")
+    }
+    assert len(set(focuses.values())) == 3
+
+
+def test_the_style_in_force_carries_what_that_style_does_on_every_turn():
+    """The style is said next to the message, as the stage is, where a style rule in the long
+    prompt alone did not hold: three styles came out as one conversation in different words."""
+    meanings = {}
+    for style in ("direct", "supportive", "reflective"):
+        lines = _block_in(style)
+        meanings[style] = lines[lines.index(f"conversation_style: {style}") + 1]
+    assert all(meaning.startswith("  means: ") for meaning in meanings.values())
+    assert len(set(meanings.values())) == 3
 
 
 def _finished_framework_history(*later: str) -> list:
@@ -530,35 +545,45 @@ def test_a_declined_offer_may_come_back_after_three_replies():
     assert context.COOLDOWN_AFTER_DECLINE == 6
 
 
-def _on_message(person_message: int, technique=None):
+def _on_message(person_message: int, technique=None, style: str | None = None):
     # The greeting, the style they tapped, its opener, then one pair per message.
-    return TurnContext(thread=thread(3 + 2 * (person_message - 1)), profile=None, technique=technique)
+    on = thread(3 + 2 * (person_message - 1))
+    if style:
+        on = on.model_copy(update={"conversation_style": SupportStyle(style)})
+    return TurnContext(thread=on, profile=None, technique=technique)
 
 
 @pytest.mark.parametrize("style", ["direct", "supportive", "reflective"])
 def test_a_confident_offer_may_come_from_the_second_message_in_any_style(style):
-    """Mani's own confidence is the signal (muhammad, 2026-10-01); it was four rounds for
-    Supportive and Reflective. Supportive offered on the first message about a panic attack, so
-    the floor stays at two."""
+    """muhammad, 2026-10-09: no fixed count. Once their concern is clear Mani may offer, after the
+    one exchange it takes to hear it."""
     chosen = thread(3).model_copy(update={"conversation_style": SupportStyle(style)})
     assert not context.cooldown_passed(TurnContext(thread=chosen, profile=None, technique=None))
     chosen = thread(5).model_copy(update={"conversation_style": SupportStyle(style)})
     assert context.cooldown_passed(TurnContext(thread=chosen, profile=None, technique=None))
 
 
-def test_the_closest_fit_is_due_by_the_fourth_message_and_not_before():
-    assert not context.closest_fit_ok(_on_message(3))
-    assert context.closest_fit_ok(_on_message(4))
-    assert context.closest_fit_due(_on_message(4))
-    assert not context.closest_fit_due(_on_message(3))
+def test_direct_owes_the_closest_fit_by_the_fourth_message_and_not_before():
+    assert not context.closest_fit_ok(_on_message(3, style="direct"))
+    assert context.closest_fit_ok(_on_message(4, style="direct"))
+    assert context.closest_fit_due(_on_message(4, style="direct"))
+    assert not context.closest_fit_due(_on_message(3, style="direct"))
+
+
+@pytest.mark.parametrize("style", ["supportive", "reflective"])
+def test_supportive_and_reflective_may_take_longer_before_the_closest_fit(style):
+    """muhammad, 2026-10-09: Supportive and Reflective may take more turns to hear the person out;
+    Direct gets there sooner."""
+    assert not context.closest_fit_due(_on_message(5, style=style))
+    assert context.closest_fit_due(_on_message(6, style=style))
 
 
 def test_the_context_tells_the_model_the_truth_about_the_first_offer():
     """It said `cooldown_passed: yes` on every first message, then the code dropped the offer."""
-    assert "cooldown_passed: no" in context.build(_on_message(1))
-    second = context.build(_on_message(2))
+    assert "cooldown_passed: no" in context.build(_on_message(1, style="direct"))
+    second = context.build(_on_message(2, style="direct"))
     assert "cooldown_passed: yes" in second and "closest_fit" not in second
-    assert "closest_fit: due" in context.build(_on_message(4))
+    assert "closest_fit: due" in context.build(_on_message(4, style="direct"))
 
 
 def test_after_keep_chatting_a_confident_offer_returns_sooner_than_the_closest_fit():
@@ -661,3 +686,163 @@ def test_after_keep_chatting_the_wait_for_the_meaning_no_longer_applies():
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED, at_message_count=5,
     )
     assert context.earliest_offer_ok(_on_message(2, technique=state), {"earliest_offer_message": 3})
+
+
+def _running_note(style: str, *, starting: bool = False) -> str:
+    """The stage_note of a framework turn in one conversation style."""
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde",
+        outcome=TechniqueOutcome.OFFERED if starting else TechniqueOutcome.ACCEPTED,
+        phase="offering" if starting else "activate", at_message_count=2,
+    )
+    chosen = thread().model_copy(update={"conversation_style": SupportStyle(style)})
+    block = context.build(
+        TurnContext(thread=chosen, profile=None, technique=state),
+        framework=framework(), framework_starting=starting,
+    )
+    return next(line for line in block.splitlines() if line.startswith("stage_note:"))
+
+
+def test_a_stage_already_answered_is_checked_with_them_not_asked_again():
+    """muhammad, 2026-10-08: what they already said, anywhere in the conversation, is checked
+    with them in one gentle question rather than asked again or skipped silently."""
+    for starting in (True, False):
+        note = _running_note("supportive", starting=starting)
+        assert "already" in note and "check" in note
+        assert "never asking them to confirm" not in note
+
+
+def test_mani_keeps_the_chosen_style_inside_a_framework():
+    """The stage decides what is asked; the style decides how it sounds (muhammad, 2026-10-08)."""
+    notes = {style: _running_note(style) for style in ("direct", "supportive", "reflective")}
+    assert "Direct" in notes["direct"]
+    assert "Supportive" in notes["supportive"]
+    assert "Reflective" in notes["reflective"]
+    assert len(set(notes.values())) == 3
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "i didnt said he stay with me what are you talking about",
+        "I didn't say that",
+        "i never said that",
+        "that's not what I said",
+        "that is not what i meant",
+        "where did you get that from",
+    ],
+)
+def test_being_told_mani_got_it_wrong_is_a_correction(text):
+    """muhammad's chat, 2026-10-08: "i didnt said he stay with me what are you talking about"
+    was not recognised, so Mani explained its own assumption instead of taking what they said."""
+    assert context.classify_reply(text) == "correction"
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["i didn't say anything when she yelled", "he never said sorry", "what did she mean"],
+)
+def test_saying_what_someone_did_not_say_is_not_a_correction(text):
+    assert context.classify_reply(text) is None
+
+
+# Fields of a stage or of the offer explain themselves by name; the group they belong to carries
+# one meaning, on `offer` and on `active_framework`.
+_SELF_EXPLAINED = {"stage", "next_stage", "framework_stages", "stage_note"}
+
+
+def _every_kind_of_block() -> list[str]:
+    """[ctx] in each state it can be in, so every key it can carry is seen at least once."""
+    starting = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
+        phase="offering", at_message_count=8,
+    )
+    running = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+        phase="activate", at_message_count=4,
+    )
+    declined = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED,
+        phase=None, at_message_count=2,
+    )
+    summary = ThreadSummary(
+        thread_id=THREAD, user_id=USER,
+        techniques_tried=[TechniqueTried(name="ABCDE", helpful=True)],
+    )
+    early = TurnContext(
+        thread=thread(message_count=5), profile=None, technique=None, summary=summary,
+        recent_styles=[ResponseStyle(shape="mirror and ask")], recent_crisis=True,
+    )
+    return [
+        context.build(early, history=[mani("What happened then?")], their_last="vague"),
+        context.build(early, their_last="heard"),
+        context.build(early, their_last="correction"),
+        context.build(
+            TurnContext(thread=thread(message_count=10),
+                        profile=Profile(user_id=USER, support_style="direct"), technique=None),
+            shortlist=[Signal("abcde", 0.45, ["embarrassed me"])], candidate=framework(),
+        ),
+        context.build(TurnContext(thread=thread(message_count=10), profile=None,
+                                  technique=declined, techniques_offered=["abcde"])),
+        context.build(TurnContext(thread=thread(), profile=None, technique=None),
+                      safety_concern=True),
+        context.build(TurnContext(thread=thread(), profile=None, technique=starting),
+                      framework=framework(), framework_starting=True, their_last="correction"),
+        context.build(TurnContext(thread=thread(), profile=None, technique=starting),
+                      framework=framework(), offer_waiting=True),
+        context.build(TurnContext(thread=thread(), profile=None, technique=running),
+                      framework=framework()),
+        context.build(TurnContext(thread=thread(), profile=None, technique=None,
+                                  techniques_offered=["abcde"]),
+                      history=_finished_framework_history()),
+        context.with_rewrite_notes(
+            context.build(TurnContext(thread=thread(), profile=None, technique=None)),
+            ["your draft asks no question"],
+        ),
+    ]
+
+
+def test_every_line_of_the_block_says_what_it_means_for_this_turn():
+    """The block is the one place a key is explained. A key added without a meaning would reach
+    the model unexplained, as four offer keys and their_last once did (2026-10-08)."""
+    for block in _every_kind_of_block():
+        lines = block.strip().splitlines()[1:-1]
+        for i, line in enumerate(lines):
+            if line.startswith("  "):
+                continue
+            key = line.split(":", 1)[0]
+            if key in _SELF_EXPLAINED or key.startswith(("stage_", "next_stage_", "offer_")):
+                continue
+            # Several rewrite reasons are one group, explained once after the last.
+            if i + 1 < len(lines) and lines[i + 1].startswith(f"{key}: "):
+                continue
+            assert i + 1 < len(lines) and lines[i + 1].startswith("  means: "), key
+
+
+def test_only_the_meaning_of_the_value_sent_reaches_the_model():
+    """A vague reply carries the vague guidance and nothing about being heard or corrected."""
+    vague, heard, correction = _every_kind_of_block()[:3]
+    assert "two ways it could go" in vague
+    assert "ask no question" not in vague and "misunderstood" not in vague
+    assert "ask no question" in heard
+    assert "misunderstood" in correction
+
+
+def test_the_block_is_weighed_with_the_conversation_never_instead_of_it():
+    from scripts.seed import parse_prompt
+    import pathlib
+
+    import yaml
+
+    rules = yaml.safe_load(parse_prompt(
+        pathlib.Path(__file__).parents[2] / "content/prompts/response_format.md")["content"])
+    assert set(rules["ctx"]) == {"about"}
+    assert "never in place of it" in rules["ctx"]["about"]
+
+
+def test_a_stage_is_left_after_two_tries_unless_it_says_to_stay():
+    """Live, 2026-10-08: Reflective asked what the thought meant five times running while the
+    person kept offering evidence. Two tries, then what they gave is taken and the stage moves."""
+    for starting in (True, False):
+        note = _running_note("reflective", starting=starting)
+        assert "twice" in note and "move to the next stage" in note

@@ -126,8 +126,8 @@ stages:
       - when: "what they describe is abuse, threats, coercion, harassment, or other danger"
         reply: "What is happening sounds serious, and staying safe comes first. What would be most helpful to talk through?"
     ask:
-      supportive: "What part of this can you not control?"
-      reflective: "What part of this can you not control?"
+      supportive: "Which part of this is out of your hands?"
+      reflective: "When you look at it, which part can you not change?"
       direct: "What part of this can you not control?"
   present:
     purpose: "Identify the thought, feeling, memory, physical experience, or urge, using only the user's language."
@@ -144,9 +144,9 @@ stages:
       - when: "several experiences at once"
         reply: "Several things are present. Which one has the strongest pull on what you do?"
     ask:
-      supportive: "What is showing up for you when you think about it?"
+      supportive: "When you think about it, what comes up for you?"
       reflective: "What is showing up for you when you think about it?"
-      direct: "What is showing up for you when you think about it?"
+      direct: "What comes up when you think about it?"
   pull:
     purpose: "Recognize what the internal experience is pulling the user toward doing or avoiding."
     listen_for: "The action, reaction, avoidance, or pattern the experience is encouraging."
@@ -165,8 +165,8 @@ stages:
       - when: "cannot identify the pull"
         reply: "The effect on your actions is not clear yet. What do you find yourself doing when the thought appears?"
     ask:
-      supportive: "What is that pulling you toward doing?"
-      reflective: "What is that pulling you toward doing?"
+      supportive: "What does that make you want to do?"
+      reflective: "What do you notice it pulling you toward, or away from?"
       direct: "What is that pulling you toward doing?"
   matters:
     purpose: "Clarify how the user wants to act and what they want their response to represent."
@@ -191,8 +191,8 @@ stages:
       - when: "answers with how it feels instead of what matters - \"It makes me happy and sad.\""
         reply: "You said <something concrete that already helped or mattered, in their words>. What would you want to do with that?"
     ask:
-      supportive: "What matters to you in how you respond?"
-      reflective: "What matters to you in how you respond?"
+      supportive: "Whatever happens, how would you like to respond?"
+      reflective: "What would you want your response to show about what matters to you?"
       direct: "What matters to you in how you respond?"
   toward:
     purpose: "Identify a response that moves toward what the user said matters."
@@ -217,8 +217,8 @@ stages:
       - when: "framed as removing the feeling - \"I'll do this so the anxiety stops.\""
         reply: "That would help the anxiety settle. What does it move you toward, apart from that?"
     ask:
-      supportive: "What response would move you toward that?"
-      reflective: "What response would move you toward that?"
+      supportive: "What could you do that moves you toward that?"
+      reflective: "What response would bring you closer to that?"
       direct: "What response would move you toward that?"
   action:
     purpose: "Turn the chosen direction into one manageable action."
@@ -235,8 +235,8 @@ stages:
       - when: "wants the thought removed before acting - \"I cannot act until I stop thinking they will reject me.\""
         reply: "You want the thought gone before you act. What could you do while the thought is still present?"
     ask:
-      supportive: "What is one action you can take?"
-      reflective: "What is one action you can take?"
+      supportive: "What is one small thing you could do?"
+      reflective: "What would one step toward that look like?"
       direct: "What is one action you can take?"
   closing:
     purpose: "Confirm completion in the user's own terms, without claiming the thought or feeling has changed."

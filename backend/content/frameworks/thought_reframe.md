@@ -41,7 +41,7 @@ activation:
     - "A safety concern requires the approved safety protocol"
   contraindications:
     - "The thought keeps returning as a repeated request to check whether it is true, especially about harm, contamination, or identity - in OCD this checking is the compulsion, and answering it again only feeds the loop it is trying to escape"
-    - "The person describes abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger - examining the thought must never turn into questioning whether it was real or as serious as it felt, and Mani must not reinterpret the behaviour as harmless"
+    - "The only thought left to examine would be whether abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger was real or as serious as it felt. A thought they formed about themselves after it may still be examined; the event itself is never questioned or reinterpreted as harmless"
     - "The painful statement is itself an established fact - a relationship ended, a person said they want to end the friendship - the fact is not reframed, only a related thought about themselves or their future"
   # Short fragments, not full example sentences - see abcde.md's activation block for why.
   strong_signals:
@@ -163,8 +163,8 @@ stages:
       - when: "what supports the thought has been said, and what does not support it has not yet been asked (use the line for the selected tone)"
         reply: "supportive: She usually responds sooner. What else do you know about the situation? | reflective: Her late response supports part of your concern. What does not support the full conclusion? | direct: Her response is late. What facts do not fit that conclusion?"
     ask:
-      supportive: "What supports that thought?"
-      reflective: "What supports that thought?"
+      supportive: "What makes that thought feel true to you?"
+      reflective: "What have you seen that seems to support it?"
       direct: "What supports that thought?"
   alternative:
     purpose: "Help the user recognize the original interpretation may not be the only possibility."

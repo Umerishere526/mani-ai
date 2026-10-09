@@ -85,7 +85,7 @@ def test_the_technique_being_offered_is_not_a_duplicate_of_itself(registry):
     fixed = fix(
         registry, still_offering, already_offered=["abcde"], current_framework_id="abcde"
     )
-    assert len(fixed.prompts) == 1
+    assert [p.technique for p in fixed.prompts if p.technique] == ["abcde"]
 
 
 def test_no_framework_is_offered_from_inside_a_running_one(registry):
@@ -343,7 +343,7 @@ def test_the_offer_still_waiting_for_an_answer_is_not_held_to_its_own_cooldown(r
         registry, pending, cooldown_passed=False,
         current_framework_id="abcde", current_phase="offering", already_offered=["abcde"],
     )
-    assert [p.technique for p in fixed.prompts] == ["abcde"]
+    assert [p.technique for p in fixed.prompts if p.technique] == ["abcde"]
 
 
 def test_state_naming_a_different_framework_than_the_running_one_is_ignored(registry):
@@ -361,7 +361,7 @@ def test_state_naming_a_different_framework_than_the_running_one_is_ignored(regi
 
 def test_the_offer_buttons_are_try_it_and_keep_chatting(registry):
     """Two buttons under every offer (muhammad, 2026-09-24): both survive the label-length and
-    offer-coherence repairs, and a "Tell me about this" the model still adds is dropped."""
+    offer-coherence repairs. Three buttons stand under an offer (muhammad, 2026-10-08)."""
     offer = reply(
         text="I have a sequence of questions that could help. Would you like to try it?",
         prompts=[
@@ -371,7 +371,7 @@ def test_the_offer_buttons_are_try_it_and_keep_chatting(registry):
         ],
     )
     fixed = fix(registry, offer)
-    assert [p.label for p in fixed.prompts] == ["Try it", "Keep chatting"]
+    assert [p.label for p in fixed.prompts] == ["Try it", "Tell me more", "Keep chatting"]
 
 
 def test_an_offer_refused_by_the_cooldown_takes_its_words_with_it(registry):
@@ -416,7 +416,7 @@ def test_varied_offer_wording_keeps_its_buttons(registry):
                  SmartPrompt(label="Tell me about this"),
                  SmartPrompt(label="Keep chatting", decline=True)],
     )
-    assert [p.label for p in fix(registry, offer).prompts] == ["Try it", "Keep chatting"]
+    assert [p.label for p in fix(registry, offer).prompts] == ["Try it", "Tell me more", "Keep chatting"]
 
 
 def test_an_offer_made_only_by_buttons_gets_the_clients_permission_question(registry):
@@ -431,7 +431,7 @@ def test_an_offer_made_only_by_buttons_gets_the_clients_permission_question(regi
     )
     fixed = fix(registry, silent, conversation_style="direct")
     assert fixed.text.endswith("Would you like to try it with me?")
-    assert len(fixed.prompts) == 2
+    assert len(fixed.prompts) == 3
 
 
 def test_offer_buttons_under_a_different_question_are_dropped(registry):
@@ -459,7 +459,7 @@ def test_a_real_offer_keeps_its_buttons(registry):
                  SmartPrompt(label="Keep chatting", decline=True)],
     )
     fixed = fix(registry, offer, conversation_style="direct")
-    assert len(fixed.prompts) == 2
+    assert len(fixed.prompts) == 3
     assert fixed.text.startswith("I have a structured approach that can help you work through this.")
     assert fixed.text.endswith("Would you like to try it with me?")
 
@@ -484,13 +484,13 @@ def test_ordinary_chat_carries_no_buttons(registry):
     assert any("outside an offer or a framework's end" in n for n in fixed.notes)
 
 
-def test_an_offer_keeps_its_two_buttons(registry):
+def test_an_offer_keeps_the_buttons_it_carries(registry):
     offer = reply(
         text="There are some questions that could help with this. Would you like to try them?",
         prompts=[SmartPrompt(label="Try it", technique="abcde"),
                  SmartPrompt(label="Keep chatting", decline=True)],
     )  # its question gives way to the client's, see the composed-offer tests
-    assert [p.label for p in fix(registry, offer).prompts] == ["Try it", "Keep chatting"]
+    assert [p.label for p in fix(registry, offer).prompts] == ["Try it", "Tell me more", "Keep chatting"]
 
 
 def test_the_end_of_a_framework_keeps_its_buttons(registry):
@@ -521,17 +521,40 @@ OFFER_BUTTONS = [
 ]
 
 
-def test_an_offer_shows_the_clients_description_word_for_word_then_asks():
-    """muhammad, 2026-09-24: every offer shows the client's description of the questions word
-    for word, so the person sees what they would come away with. The backend adds it, so it
-    can never be paraphrased or dropped, then the client's permission question for the style."""
-    part = ("Her silence keeps coming back to you. "
-            "There are some questions we could go through together for this.")
+def test_an_offer_is_manis_line_then_the_clients_question():
+    """muhammad, 2026-10-09: the offer is short, as in the client's own examples. The description
+    is kept for Tell me more, so nothing is promised before they have asked to hear more."""
+    part = "There's a set of questions called ABCDE we could go through for this."
     fixed = fix(Registry([DESCRIBED]), reply(text=part, prompts=OFFER_BUTTONS),
                 conversation_style="supportive")
-    assert fixed.text == (
-        f"{part}\n\n{DESCRIBED.summary}\n\nWould it help to work through it together?"
-    )
+    assert fixed.text == f"{part}\n\nWould it help to work through it together?"
+    assert DESCRIBED.summary not in fixed.text
+    assert [p.label for p in fixed.prompts] == ["Try it", "Tell me more", "Keep chatting"]
+
+
+def test_an_offer_always_names_the_set_of_questions():
+    """muhammad, 2026-10-09: the person is told which set of questions is offered. A model line
+    that leaves the name out gets it added; one that says it, in any spelling, is left alone."""
+    unnamed = "There are some questions we could go through together for this."
+    fixed = fix(Registry([DESCRIBED]), reply(text=unnamed, prompts=OFFER_BUTTONS),
+                conversation_style="direct")
+    assert fixed.text == f"{unnamed} It's called ABCDE.\n\nWould you like to try it with me?"
+
+    named = "A set of questions called abcde could help with this."
+    fixed = fix(Registry([DESCRIBED]), reply(text=named, prompts=OFFER_BUTTONS),
+                conversation_style="direct")
+    assert fixed.text.count("ABCDE") + fixed.text.count("abcde") == 1
+
+
+def test_tell_me_more_shows_the_description_and_offers_again():
+    """The client's description is the answer to Tell me more, after Mani's own words about it,
+    and the offer comes back with Try it and Keep chatting."""
+    explained = "We would look at what happened, and at what you told yourself about it."
+    last = "There's a set of questions called ABCDE for this.\n\nWould you like to try it?"
+    fixed = fix(Registry([DESCRIBED]), reply(text=explained, prompts=OFFER_BUTTONS),
+                conversation_style="reflective", last_mani_text=last,
+                selected_label="Tell me more", current_framework_id="abcde")
+    assert fixed.text == f"{explained}\n\n{DESCRIBED.summary}\n\nWould you like to try it?"
     assert [p.label for p in fixed.prompts] == ["Try it", "Keep chatting"]
 
 
@@ -542,7 +565,7 @@ def test_the_models_own_permission_question_gives_way_to_the_clients():
     fixed = fix(Registry([DESCRIBED]),
                 reply(text=f"{part} Would you like to try them?", prompts=OFFER_BUTTONS),
                 conversation_style="direct")
-    assert fixed.text == f"{part}\n\n{DESCRIBED.summary}\n\nWould you like to try it with me?"
+    assert fixed.text == f"{part} It's called ABCDE.\n\nWould you like to try it with me?"
     assert fixed.text.count("?") == 1
 
 
@@ -550,9 +573,10 @@ def test_the_description_is_not_repeated_when_the_last_reply_showed_it():
     """They asked what it involves, and Mani explained in its own words and offered again.
     The description is already on their screen, so only the question is added."""
     explained = "We would look at what happened, and at what you told yourself about it."
-    last = f"There are some questions for this.\n\n{DESCRIBED.summary}\n\nWould you like to try it?"
+    last = (f"There's a set of questions called ABCDE for this.\n\n{DESCRIBED.summary}"
+            "\n\nWould you like to try it?")
     fixed = fix(Registry([DESCRIBED]), reply(text=explained, prompts=OFFER_BUTTONS),
-                conversation_style="reflective", last_mani_text=last)
+                conversation_style="reflective", last_mani_text=last, offer_asked_about=True)
     assert fixed.text == f"{explained}\n\nWould you like to try it?"
 
 
@@ -561,7 +585,7 @@ def test_a_description_the_model_already_wrote_is_not_added_twice():
     exactly once."""
     part = f"There are some questions we could go through together for this. {DESCRIBED.summary}"
     fixed = fix(Registry([DESCRIBED]), reply(text=part, prompts=OFFER_BUTTONS),
-                conversation_style="direct")
+                conversation_style="direct", offer_asked_about=True)
     assert fixed.text.count(DESCRIBED.summary) == 1
     assert fixed.text.endswith("Would you like to try it with me?")
 
@@ -634,15 +658,30 @@ def test_a_plain_form_of_their_own_feeling_word_is_theirs_but_another_feeling_is
     assert repairs.introduced_feelings("That sounds overwhelming and stressful.", said) == ["overwhelming"]
 
 
-def test_an_offer_of_the_nearest_fit_says_so_on_its_button_and_keeps_keep_chatting(registry):
+def test_the_nearest_fit_is_offered_with_the_same_buttons_as_a_confident_one(registry):
+    """An offer is an offer. The nearest fit carries no hedging label of its own, so a person
+    choosing it is not told they are settling (muhammad, 2026-10-08)."""
     nearest = reply(
-        text="Nothing is a perfect match. Would you like to try it?",
+        text="Would you like to try it?",
         prompts=[SmartPrompt(label="Try it", technique="abcde"),
                  SmartPrompt(label="Keep chatting", decline=True)],
     )
-    fixed = fix(registry, nearest, closest_fit=True)
-    assert [p.label for p in fixed.prompts] == ["Try the closest fit", "Keep chatting"]
-    assert fixed.prompts[0].technique == "abcde" and fixed.prompts[1].decline is True
+    fixed = fix(registry, nearest)
+    assert [p.label for p in fixed.prompts] == ["Try it", "Tell me more", "Keep chatting"]
+    assert fixed.prompts[0].technique == "abcde" and fixed.prompts[2].decline is True
+
+
+def test_tell_me_more_survives_beside_an_offer(registry):
+    """Three buttons under an offer (muhammad, 2026-10-08): Try it, Tell me more, Keep chatting.
+    The explain button used to be dropped here."""
+    offered = reply(
+        text="Would you like to try it?",
+        prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                 SmartPrompt(label="Tell me more"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
+    )
+    fixed = fix(registry, offered)
+    assert [p.label for p in fixed.prompts] == ["Try it", "Tell me more", "Keep chatting"]
 
 
 def test_a_confident_offer_keeps_its_own_label(registry):
@@ -651,7 +690,7 @@ def test_a_confident_offer_keeps_its_own_label(registry):
         prompts=[SmartPrompt(label="Try it", technique="abcde"),
                  SmartPrompt(label="Keep chatting", decline=True)],
     )
-    assert [p.label for p in fix(registry, confident).prompts] == ["Try it", "Keep chatting"]
+    assert [p.label for p in fix(registry, confident).prompts] == ["Try it", "Tell me more", "Keep chatting"]
 
 
 def test_a_misspelling_of_their_feeling_word_is_their_word():
@@ -715,3 +754,13 @@ def test_the_acknowledgement_before_a_question_is_the_replys_first_sentence():
     text = "It is okay not to know where. Try bringing gentle attention there. Where is it?"
     assert repairs.first_sentence(text) == "It is okay not to know where."
     assert repairs.first_sentence("No full stop here") == "No full stop here"
+
+
+def test_internal_words_never_reach_the_person(registry):
+    """Loli's test, 2026-10-09: "the nearest fit I have" and "the closest fit I have" reached the
+    person in all three styles. A sentence carrying the system's own words is dropped; the
+    question stays."""
+    leaked = reply(text="This is the closest fit I have. What happened after that?")
+    fixed = fix(registry, leaked)
+    assert fixed.text == "What happened after that?"
+    assert any("internal" in note for note in fixed.notes)

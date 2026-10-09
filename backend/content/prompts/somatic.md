@@ -25,7 +25,6 @@ stages:
       - "must not summarize the framework before asking"
       - "must not ask the check-in more than once"
       - "must not add a feeling or a body sensation the user did not name"
-      - "receive their answer and check it back once before the practice (\"Your thoughts feel slower, but there is still some tightness in your chest. Does that feel right?\")"
     if_unclear:
       - when: "their closing answer already names an action they are going to take"
         reply: "It sounds like you're ready to act on that. We can skip the body check-in. Would you like to keep chatting or go to the Library?"

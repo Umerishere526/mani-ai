@@ -1,7 +1,7 @@
 ---
 id: structured_problem_solving
 name: Structured Problem-Solving
-summary: "We'll go through a few focused questions. By the end, you will have turned a problem that feels unclear or overwhelming into a practical next step."
+summary: "We'll go through a few focused questions. By the end, you will have turned a problem that feels unclear into a practical next step."
 display_order: 4
 phases: [offering, problem, facts, control, outcome, options, compare, select, first_action, closing]
 activation:
@@ -11,6 +11,7 @@ activation:
     solution rather than reflection alone.
   to_find_out:
     - "the practical problem, in one sentence"
+    - "that they want a decision or a plan for it, not to understand it or to feel differently about it"
     - "whether a decision or an action could change it"
     - "whether it is one problem or several"
     - "whether they do not know what to do, as opposed to knowing and not starting"
@@ -133,8 +134,8 @@ stages:
       - when: "they have already described the problem before the stage began - do not ask them to confirm it"
         reply: "<their problem, in a clause, in their words>. What do you know for certain about it?"
     ask:
-      supportive: "What is the exact problem you want to resolve?"
-      reflective: "What is the exact problem you want to resolve?"
+      supportive: "What is the part you most want to sort out?"
+      reflective: "When you narrow it down, what is the problem you want to resolve?"
       direct: "What is the exact problem you want to resolve?"
   facts:
     purpose: "Clarify what is known, what is believed, and what remains uncertain."
@@ -153,8 +154,8 @@ stages:
       - when: "a time critical risk is still open - cards or accounts that can still be used, a deadline about to pass, something that gets worse by the hour"
         reply: "<the risk, in a clause>. Contacting <whoever can stop it, such as the bank or the police> is usually the first step. Have you been able to reach them?"
     ask:
-      supportive: "What do you know for certain?"
-      reflective: "What do you know for certain?"
+      supportive: "What do you know for sure so far?"
+      reflective: "What do you know for certain, and what are you still guessing?"
       direct: "What do you know for certain?"
   control:
     purpose: "Determine which part the user can influence."
@@ -171,8 +172,8 @@ stages:
       - when: "they cannot say what is theirs to do - \"I don't know.\""
         reply: "<two or three things that are plausibly theirs to do, in plain words>. Which of those have you already done?"
     ask:
-      supportive: "Which part is within your control?"
-      reflective: "Which part is within your control?"
+      supportive: "Which part of this is in your hands?"
+      reflective: "When you look at it, which part can you influence?"
       direct: "Which part is within your control?"
   outcome:
     purpose: "Identify what the user wants the response to accomplish."
@@ -189,8 +190,8 @@ stages:
       - when: "they cannot say what they want - \"I don't know.\""
         reply: "I'd say the result you want is <a plain draft of the obvious result for their situation>. Is that right, or is it something else?"
     ask:
-      supportive: "What do you want your response to accomplish?"
-      reflective: "What do you want your response to accomplish?"
+      supportive: "What would you like your response to do for you?"
+      reflective: "What would a good outcome look like to you?"
       direct: "What do you want your response to accomplish?"
   options:
     purpose: "Identify realistic options without judging them immediately."
@@ -209,8 +210,8 @@ stages:
       - when: "asks MANI to decide, or cannot name any option - \"Tell me what to do.\" / \"I don't know.\" Do not ask for their options again"
         reply: "You want a direct answer. <Two or three realistic ways to start, in plain words, the most urgent first>. Which one feels most doable?"
     ask:
-      supportive: "What are your possible responses?"
-      reflective: "What are your possible responses?"
+      supportive: "What are some things you could do, even small ones?"
+      reflective: "What responses can you see open to you?"
       direct: "What are your possible responses?"
   compare:
     purpose: "Consider the relevant benefits, limitations, risks, and consequences of each option."
@@ -227,8 +228,8 @@ stages:
       - when: "only risks named - \"Every option could go wrong.\""
         reply: "Every option has a possible downside. Which risk is most manageable?"
     ask:
-      supportive: "What are the strengths and limitations of each?"
-      reflective: "What are the strengths and limitations of each?"
+      supportive: "What do you like and not like about each one?"
+      reflective: "What would each of these bring, and what would it cost?"
       direct: "What are the strengths and limitations of each?"
   select:
     purpose: "Help the user choose the option that best fits the outcome and circumstances."
@@ -244,8 +245,8 @@ stages:
       - when: "cannot choose"
         reply: "The decision is still unclear. Which option best supports the outcome you identified?"
     ask:
-      supportive: "Which response best fits what you want to accomplish?"
-      reflective: "Which response best fits what you want to accomplish?"
+      supportive: "Which one fits best with what you want?"
+      reflective: "Which response sits best with what you want to accomplish?"
       direct: "Which response best fits what you want to accomplish?"
   first_action:
     purpose: "Turn the selected response into one specific beginning."
@@ -262,8 +263,8 @@ stages:
       - when: "they cannot name a first action - \"I don't know.\""
         reply: "A small first step could be <one concrete step that follows from what they chose>. Does that feel doable?"
     ask:
-      supportive: "What is the first action?"
-      reflective: "What is the first action?"
+      supportive: "What is a first step that feels doable?"
+      reflective: "What would beginning look like?"
       direct: "What is the first action?"
   closing:
     purpose: "Confirm completion in the user's own terms, without promising the decision will produce the desired outcome."

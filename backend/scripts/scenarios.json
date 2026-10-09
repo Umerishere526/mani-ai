@@ -1,0 +1,47 @@
+{
+  "workplace_boundaries": {
+    "source": "Loli's testing, 2026-10-09, the same messages in all three styles",
+    "lines": [
+      "I keep agreeing to take on more work even when I already have too much to do. I know I need to start saying no, but I'm worried about how my manager will react.",
+      "I'm afraid he'll think I'm not committed to my job or that I can't handle my responsibilities.",
+      "I'm worried it could affect how he sees me professionally and whether he considers me for future opportunities.",
+      "He hasn't actually reacted negatively before. I think I'm just afraid of what might happen if I start saying no."
+    ]
+  },
+  "job_decision": {
+    "source": "Loli's testing, 2026-10-08",
+    "lines": [
+      "I'm facing an important decision, and I keep going back and forth. Every time I think I've made up my mind, I start questioning myself again. I'm frustrated because I don't understand why I can't just decide.",
+      "I'm trying to decide whether to accept a new job opportunity or stay where I am. There are good reasons for both, and I'm afraid of making the wrong choice.",
+      "The new job offers better pay and more responsibility, but I've been at my current company for years. I know the people, I'm comfortable there, and I'm worried I might regret leaving"
+    ]
+  },
+  "big_brother": {
+    "source": "muhammad's testing, 2026-10-09",
+    "lines": [
+      "i think i am not good enough",
+      "i think i am not good enough as a big brother as i was not able to provide for my little brother",
+      "i mean i wanted to be aperfect role model for him but i failed i am not someone good enough he can look upto"
+    ]
+  },
+  "embarrassed_at_work": {
+    "source": "muhammad's testing, 2026-10-09",
+    "lines": [
+      "i was embarassed in front of the whole office",
+      "my manger did this to me",
+      "he blamed his wrong work on me and insulted me which made me feeling like this",
+      "i have been constantly in a state i cant describe now i fear how would i face my colleagues",
+      "idk yet"
+    ]
+  },
+  "manager_threat": {
+    "source": "muhammad's testing, 2026-10-09: Mani asked again for what they had told it",
+    "lines": [
+      "i feel embarassed, my manager critisized my work infront of everyone",
+      "he critisized my work in front o f thw hole office",
+      "It has been happening for quite a bit time but this time it was way too much. He insulted me and said I would be fired.",
+      "No, but he seems like he wants to get me fired because he's been constantly pointing out errors in my work that are even irrelevant or small mistakes. And this time he had me feel too embarrassed",
+      "Nothing much, it's just that I was too embarrassed and I have this feeling that my colleagues will be laughing at me because it was a too embarrassing moment. It had never been done before to anyone, so that's my concern right now."
+    ]
+  }
+}

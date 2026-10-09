@@ -229,9 +229,9 @@ def test_an_empty_memory_adds_nothing(config):
     assert "user_memory" not in [name for name, _ in built.layers]
 
 
-def test_the_index_never_names_it_to_the_person_nor_hands_over_its_description():
-    """The client: never tell the person the framework's name. Its description is added to the
-    offer by the backend, so the index keeps it from the model, which copied it otherwise."""
+def test_the_index_says_to_name_it_and_keeps_its_description_from_the_model():
+    """muhammad, 2026-10-09: an offer names its set of questions. The description is added by the
+    backend when they ask to hear more, so the index keeps it from the model, which copied it."""
     helps = Framework(
         id="abcde", name="ABCDE", body="b", phases=["offering"],
         summary="This framework helps you separate what happened from what you told yourself about it.",
@@ -239,8 +239,9 @@ def test_the_index_never_names_it_to_the_person_nor_hands_over_its_description()
     )
     index = composer.framework_index(Registry([helps]))
     assert "separate what happened from what you told yourself about it" not in index
-    assert 'never its name, its id, or the word "framework"' in index
-    assert "its description is added to your reply for you" in index
+    assert "say its name" in index
+    assert "Never its id." in index
+    assert 'never the word "framework"' not in index
 
 
 def test_the_current_issue_stays_visible_even_without_a_prose_summary_yet():

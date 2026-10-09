@@ -112,8 +112,8 @@ stages:
       - when: "already acted - \"I already sent it.\""
         reply: "The message has already been sent. Is there another action you are about to take?"
     ask:
-      supportive: "Can you stop the action before it happens?"
-      reflective: "Can you stop the action before it happens?"
+      supportive: "Can you hold off on it for now, here with me?"
+      reflective: "Can you notice the urge without acting on it yet?"
       direct: "Can you stop the action before it happens?"
   pause:
     purpose: "Enter Pause Mode and remain with MANI without returning to the action."
@@ -191,8 +191,8 @@ stages:
       - when: "chooses retaliation"
         reply: "You want him to experience what you experienced. What response would avoid intensifying the situation?"
     ask:
-      supportive: "What response would help rather than intensify this?"
-      reflective: "What response would help rather than intensify this?"
+      supportive: "What would help you right now, rather than make this harder?"
+      reflective: "What response would help, rather than add to this?"
       direct: "What response would help rather than intensify this?"
   closing:
     purpose: "Confirm completion in the user's own terms, without claiming the user has calmed down or made the correct decision."

@@ -80,11 +80,11 @@ def framework_index(registry: Registry) -> str | None:
     if rendered:
         lines += ["", "## Telling them apart", ""] + rendered
 
-    # The client's description of each is added to the offer by the backend, so it is not
-    # listed here: a model given the text copied it, and offers showed it twice.
+    # The client's description of each is added by the backend when they ask to hear more, so
+    # it is not listed here: a model given the text copied it, and offers showed it twice.
     lines += [
-        "", "When you offer one, its description is added to your reply for you. You never "
-        "describe the questions or name them: never its name, its id, or the word \"framework\".",
+        "", "When you offer one, say its name, as written above. Its description is added for "
+        "you if they ask to hear more. Never its id.",
     ]
 
     # Only the contraindications, not every not_when line: most of those name a different

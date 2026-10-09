@@ -16,7 +16,7 @@ python scripts/seed_exercises.py  # uploads content/exercises/ audio to the priv
 fastapi dev main.py        # dev server with reload on :8000
 fastapi run main.py        # production mode
 pytest                     # the whole suite: unit, evals and integration (integration skips without a database)
-python scripts/eval_replies.py --scenario <name> --verbose   # real model conversations from scripts/eval_conversations.yaml; removes its own users
+python scripts/scenario_check.py [--scenario <name>] [--style <style>]   # the client's test conversations from scripts/scenarios.json, in every style, against the real model; removes its own users
 ./scripts/test_db.sh       # schema + RLS against a throwaway Postgres (needs Docker)
 ```
 
@@ -36,8 +36,8 @@ Without activating, call the venv binaries directly — `./.venv/bin/python`, `.
 - `mani/` — the application package, and the only thing that runs. `config.py`, `errors.py`, `routers/`, `auth/`, `models/`, and the `chat/`, `prompts/`, `llm/` and `db/` layers, plus `memory.py`, `summarize.py`, `background.py`, `storage.py` and `auth_admin.py`. `chat/` is the turn: `orchestrator.py` runs it, `router.py` shortlists frameworks, `safety.py` screens, `context.py` builds the `[ctx]` block and the offer timing, `redraft.py` decides when a draft is asked for again, `repairs.py` corrects what remains. **It never reads the filesystem for content** — prompts and frameworks come from the database.
 - `content/` — authored markdown, seeded into the `admin` schema by `scripts/seed.py` and never read at runtime. `content/prompts/*.md` become `admin.prompts` (except `somatic.md`, which `seed.py` merges into every framework as the last two stages); `content/frameworks/*.md` become `admin.frameworks`, carrying each framework's per-stage content and its activation data (`central_indication`, `signals`, `to_find_out`, `earliest_offer_message`, `never_offer_when_said`, `contraindications`; `appropriate_when` and `not_when` are read by nothing). Editing one of these changes nothing until it is re-seeded. Kept outside `mani/` because it is input to the database, not code — the same relationship a migration has to the schema.
 - `supabase/migrations/` — the schema. `test_harness.sql` stubs what Supabase adds (`auth.users`, `auth.uid()`, the three roles) so the schema can be tested on plain Postgres.
-- `tests/unit/` — deterministic logic. `tests/evals/` — checks that frameworks' stage asks and replies keep the specifications' rules (no scenario text, no invented feelings). `tests/integration/` — whole turns against a live database with a scripted model. `tests/sql/` — schema, RLS and privilege assertions run by `scripts/test_db.sh`.
-- `scripts/` — `seed.py`, `seed_exercises.py` (the library: `content/exercises/exercises.json` plus its MP3s, compressed to 64 kbps mono), `eval_replies.py` with `eval_conversations.yaml`, `fold_idle_threads.py` (memory folding, also reachable as `GET /internal/cron/fold-summaries` behind `CRON_SECRET`), `test_db.sh`.
+- `tests/unit/` — deterministic logic. `tests/integration/` — whole turns against a live database with a scripted model. `tests/sql/` — schema, RLS and privilege assertions run by `scripts/test_db.sh`.
+- `scripts/` — `seed.py`, `seed_exercises.py` (the library: `content/exercises/exercises.json` plus its MP3s, compressed to 64 kbps mono), `scenario_check.py` with `scenarios.json`, `fold_idle_threads.py` (memory folding, also reachable as `GET /internal/cron/fold-summaries` behind `CRON_SECRET`), `test_db.sh`.
 - `docs/` — `specs/` holds the client's specifications, one per framework, as the source the content is checked against; `database-schema-reference.md`; `ai-layer-audit.md` (a dated snapshot, read its banner).
 - `PORT-STATUS.md` — what the service does, what changed from the implementation it replaces, and what is still open. **Update it in the same change as the work.**
 - `requirements.txt` — runtime dependencies only, pinned, hand-maintained. `requirements-dev.txt` adds pytest and `fastapi-cli` on top. **Add a new dependency to whichever file it belongs in** — do not `pip freeze` over them, which buries the packages that matter under their transitive closure and puts a test runner in the deployed image.
@@ -115,7 +115,7 @@ Things a reviewer will check for, and where they are.
 - `pytest.ini` sets `filterwarnings = error`. A warning fails the suite; that is deliberate, so fix the cause rather than filtering it.
 - Integration tests skip rather than fail when no database is reachable. A green run that skipped everything is not a passing run — check the count.
 - The running app and the integration tests read frameworks and prompts from the database, not from `content/`. After editing a file there, run `python scripts/seed.py`; the app picks it up when its prompt cache expires or the server restarts.
-- Run the whole `pytest`, not only `tests/unit`: `tests/evals` fails on stage asks that carry scenario text or hand over a feeling word.
+- Run the whole `pytest`, not only `tests/unit`: the integration tests run whole turns against the database.
 
 ## Where things live
 

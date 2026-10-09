@@ -15,7 +15,9 @@ from mani.auth.jwt import Claims
 from mani.chat import context, redraft, repairs, router, safety
 from mani.chat.greeting import (
     CHAT_MORE_LABEL,
+    EXPLAIN_LABELS,
     GO_TO_LIBRARY_LABEL,
+    TRY_IT_LABEL,
     OPENERS,
     STYLE_OPTIONS,
     greeting,
@@ -299,6 +301,14 @@ async def send(
                 was_duplicate=True,
             )
 
+    # One turn at a time per conversation, held until this turn's transaction ends. A second
+    # message sent while the first is still waiting on the model (a person re-sending after a
+    # long wait, a double tap) waits here and then reads the first reply. Without it both turns
+    # read the same history and asked the same question twice (2026-10-09).
+    await conn.execute(
+        "select pg_advisory_xact_lock(hashtextextended($1, 1))", f"thread:{thread_id}"
+    )
+
     ctx = await threads.load_turn_context(conn, thread_id, user_id)
     if ctx is None:
         raise ServiceError(
@@ -407,9 +417,10 @@ async def send(
         )
     ):
         shortlist = router.shortlist(user_texts, config.registry.activations)
-        # The closest fit is owed now, so the top of the shortlist is offered in the client's own
-        # words even when the router is not confident of it.
-        if shortlist and (router.is_confident(shortlist) or context.closest_fit_due(ctx)):
+        # Only a confident pick becomes the candidate. Below that the shortlist is a hint and Mani
+        # chooses by what they described: handing over a weak top pick when the closest fit fell
+        # due let one generic phrase choose the questions (2026-10-08).
+        if shortlist and router.is_confident(shortlist):
             candidate = config.registry.get(shortlist[0].framework_id)
 
     wants_title = (
@@ -478,6 +489,13 @@ async def send(
         and context.classify_reply(content) != "heard"
     )
 
+    # They asked about the offer still open, by typing a question or tapping Tell me more. The
+    # reply answers and offers the same one again, which is not a new offer and waits for nothing.
+    asked_about_offer = offer is not None and (
+        (deferred and "?" in content)
+        or (tapped is not None and tapped.label.strip().lower() in EXPLAIN_LABELS)
+    )
+
     def _earliest_ok(draft: Reply) -> bool:
         named = redraft.offered(draft, config.registry)
         return context.earliest_offer_ok(
@@ -492,7 +510,7 @@ async def send(
             # offer already open is Keep chatting unless it asks about the offer, so offering
             # again there needs the same window; the repeat used to be dropped and leave no
             # question.
-            offer_not_allowed=(not deferred or "?" not in content)
+            offer_not_allowed=not asked_about_offer
             and not (closest_ok if draft.offer_fit == "closest" else clear_ok),
             closest_fit_due=context.closest_fit_due(ctx) and not assessment.blocks_framework
             and not deferred,
@@ -544,6 +562,13 @@ async def send(
             ctx.thread.id, reply.crisis.reason,
         )
 
+    if asked_about_offer and offer.technique and not any(p.technique for p in reply.prompts or []):
+        # Asking about the offer is answered by making it again. A reply that explained and
+        # stopped left the offer with no buttons, and the yes typed after it started nothing.
+        reply = reply.model_copy(
+            update={"prompts": [SmartPrompt(label=TRY_IT_LABEL, technique=offer.technique)]}
+        )
+
     if deferred:
         if reply.state is not None and reply.state.accepted is True:
             outcome = TechniqueOutcome.ACCEPTED
@@ -557,6 +582,20 @@ async def send(
             asked_about_it = "?" in content and any(p.technique for p in reply.prompts or [])
             if not asked_about_it or (reply.state is not None and reply.state.accepted is False):
                 outcome = TechniqueOutcome.DECLINED
+    elif (
+        tapped is None
+        and technique is not None
+        and outcome is TechniqueOutcome.OFFERED
+        and reply.state is not None
+        and reply.state.accepted is True
+        and reply.state.technique == technique.framework_id
+    ):
+        # An offer can stay open with no buttons under Mani's last reply, when the answer to Tell
+        # me more asked something else. A yes to it is still a yes; read from the offer that is
+        # open, not from whether buttons were showing, or the questions run while it says offered.
+        outcome = TechniqueOutcome.ACCEPTED
+        accepted_this_turn = True
+        offered_now.append(technique.framework_id)
     elif (
         technique is None
         and ctx.technique is not None
@@ -596,7 +635,6 @@ async def send(
         # stood open.
         # An offer a second draft still makes after what they said ruled it out is dropped the
         # way an early one is.
-        closest_fit=reply.offer_fit == "closest",
         cooldown_passed=(
             (closest_ok if reply.offer_fit == "closest" else clear_ok and _earliest_ok(reply))
             and outcome is not TechniqueOutcome.DECLINED
@@ -614,6 +652,7 @@ async def send(
                     for m in [m for m in history if m.role is MessageRole.MANI][1:])
         ),
         clarification_already_used=context.clarification_used(history),
+        offer_asked_about=asked_about_offer,
     )
     if assessment.blocks_framework or model_concern:
         # A concern pauses the framework rather than ending it: nothing this reply reports

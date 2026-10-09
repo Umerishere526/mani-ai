@@ -57,7 +57,7 @@ def test_the_same_offer_is_fine_when_nothing_rules_it_out():
 def test_not_offering_when_the_closest_fit_is_due_is_a_reason_if_mani_leans_somewhere():
     leaning = Reply(text="What is the hardest part?", heading_toward="act_choice_point")
     why = redraft.reasons(leaning, ["my dog died"], registry(), offer_not_allowed=False, closest_fit_due=True)
-    assert len(why) == 1 and "offer the nearest set" in why[0]
+    assert len(why) == 1 and "offer the set of questions that fits best now" in why[0]
 
 
 def test_a_due_closest_fit_is_not_forced_when_mani_has_no_lean():
@@ -117,3 +117,13 @@ def test_a_different_question_after_an_answer_is_not_a_repeat():
     assert redraft.reasons(
         moved_on, [], registry(), offer_not_allowed=False, last_mani_text=FIRST
     ) == []
+
+
+def test_a_due_closest_fit_is_never_asked_to_call_itself_the_nearest():
+    """Loli's test, 2026-10-09: "the nearest fit I have ... though we can keep talking instead"
+    reached the person in all three styles. This note told the model to say exactly that."""
+    leaning = Reply(text="What happened next?", heading_toward="abcde")
+    why = " ".join(redraft.reasons(leaning, ["my manager"], registry(), offer_not_allowed=False,
+                                   closest_fit_due=True))
+    assert why
+    assert "nearest" not in why and "closest" not in why

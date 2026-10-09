@@ -164,9 +164,14 @@ def normalize(text: str) -> str:
     return _WHITESPACE.sub(" ", _PUNCTUATION.sub(" ", expanded)).strip()
 
 
+# "It hit me so hard" is a figure of speech, and it is the client's own sign that ABCDE fits.
+# Only "hit me" with a thing as its subject is set aside; a person hitting them still asks.
+_FIGURATIVE_HIT = re.compile(r"\b(it|that|this|what) (really |just |suddenly )?hits? me\b")
+
+
 def screen(text: str) -> Assessment:
     """Assess one message. Crisis wins over concern; the first category matched is reported."""
-    normalized = normalize(text)
+    normalized = _FIGURATIVE_HIT.sub(" ", normalize(text))
 
     for level, patterns in ((Level.CRISIS, _CRISIS), (Level.CONCERN, _CONCERN)):
         hits = [(category, phrase) for category, phrase in patterns if phrase in normalized]

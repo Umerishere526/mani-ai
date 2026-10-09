@@ -72,8 +72,9 @@ the same change as the work.**
   issue. `GET /v1/exercises` is the whole catalog, and responses never carry the storage path.
 - **Admin**: prompt CRUD with versioning, exercise CRUD, crisis event review, a user's memory.
 - **Account deletion**: `DELETE /v1/account` removes the user and everything they own.
-- **Eval harness**: `scripts/eval_replies.py` runs scripted conversations through the real stack and removes
-  the users it created. `tests/evals/` holds the deterministic checks every suite runs.
+- **Scenario check**: `scripts/scenario_check.py` replays the client's test conversations (`scripts/scenarios.json`)
+  through the real stack in every style. It flags replies that hand the person's words back, styles that ask the
+  same question at the same point, internal words, and offer mistakes, and removes the users it created.
 
 ## The API
 
@@ -103,8 +104,41 @@ the same change as the work.**
 - **A turn is one model call, or more when a draft is redrafted**. The one scoped extra
   call is the exercise pick at the end of a framework. `test_a_turn_costs_exactly_one_provider_call` still
   holds for a draft that needs no redraft.
-- **Offers follow Mani's confidence**. Every reply before an offer asks one question.
+- **Offers follow Mani's confidence, with no fixed count**: from the person's second message once their concern is
+  clear, and the closest fit due by their fourth message in Direct, their sixth in Supportive and Reflective. Every
+  reply before an offer asks one question, and the questions only make
+  the situation and feeling clearer, never aiming at a set. The set is chosen by what hurts, by its Use it when and
+  Telling them apart; Structured Problem-Solving only once they say they want a decision or plan. Below the
+  router's confidence its guess is a hint, never the candidate, even when the closest fit is due (2026-10-08:
+  wrong SPS offers went from 4 of 10 live conversations to 0, and the real decision still got SPS).
 - **Memory is per person**.
+- **An offer is one short line that names its framework** (the word may be said), building on the newest thing they
+  said, then the client's permission question; the client's description is shown only when they ask to hear more.
+- **Each style is its own way of talking.** Its recipe and its own question focus ride on every turn in `[ctx]`:
+  Direct asks concretely and plainly, Supportive how it is for them, Reflective what sits behind it.
+  Mani reflects only when it adds understanding, never as a formula before every question; in Direct most
+  replies are the question alone.
+- **An offer carries the client's three buttons**, Try it, Tell me more, Keep chatting, set in `repairs.py`
+  whatever the model labels them; after Tell me more it comes back with the other two. The nearest fit is
+  offered exactly like a confident one, with no label or wording that says it is the nearest.
+- **Inside a framework, what they already said is checked, not asked again**: one gentle check in Mani's
+  words, anything but a no moves on. A question that makes them uneasy can be skipped, and memory records it.
+  The chosen style rides on every framework turn in `stage_note`. A stage moves on once its `ready_when` is
+  met, never needing complete or certain answers, and after two tries unless the stage says to stay.
+- **Questions before an offer learn three things, in order**: what happened, what about it is hurting or
+  worrying them now, and whether they want to feel better or to do something (asked only when not plain).
+  The model writes down what it already knows of each and asks for the first it does not, never anything
+  it wrote down; all three known is "their concern is clear" (`context._MEANING["conversation_phase"]`).
+  Mani never joins two things they said
+  into a link they did not make. Told it got something wrong, in any words, it says it misunderstood and asks
+  what would be more accurate (the client's line), never explaining what it meant.
+- **`[ctx]` explains itself.** Each line carries its meaning for this turn's value on the line under it
+  (`context._MEANING`), so `response_format.md` holds only what the block is. A test fails if a key is sent
+  without one.
+- **An open offer is read from the database, not from the buttons on screen.** A yes to it starts it either
+  way, and asking about it (Tell me more, or a typed question) is answered by offering it again.
+- **"It hit me so hard" is not violence.** `safety.screen` sets aside "hit me" when a thing is its subject
+  (it, that, this, what); a person hitting them still asks.
 - **chat-tester resets a password on the page**: email and new password, set through the Auth Admin API with
   no email. Anyone who can reach the page can reset any account, so it stays non-public. A browser session
   is remembered for seven days.
@@ -144,6 +178,12 @@ Ordered by what breaks first.
    write it. Attestation layers on after the rate limit, in front of the chat endpoint only.
 
 ## Open decisions for muhammad
+
+- Tell the client (2026-10-08): "overwhelming" was removed from the Structured Problem Solving description,
+  since every offer showed a feeling the person had not named; Supportive and Reflective questions were
+  written for the 26 stages whose three styles were identical (the client's wording is kept as Direct, or as
+  Reflective for ACT `present`); the offer buttons read Try it / Tell me more / Keep chatting, not the
+  specification's "Yes, let's try it" / "I want to keep talking". Have them review the new lines.
 
 - Crisis resources, `PROTOCOLS` and `CLARIFICATION` wording (point 3 above).
 - Tell the client that offers now follow Mani's confidence, with the nearest fit due by the fourth message, which replaced their offer cadence, and have them read about five real
@@ -195,8 +235,8 @@ Ordered by what breaks first.
 
 ## Latest measurements
 
-Taken 2026-10-01 with `scripts/eval_replies.py`, three runs of four scenarios, every style. Re-measure after any
-change to prompts, framework content or the offer rules, and compare with these.
+Taken 2026-10-01 with the earlier eval harness, since removed. `scripts/scenario_check.py` replaces it; its first
+run is the next baseline. Re-measure after any change to prompts, framework content or the offer rules.
 
 - Reached an offer: 36 of 36 conversations (grief had been 1 of 9). First offers at message 2 to 4.
 - Redrafts: 7% of replies across scenarios, 17 to 19% on the hardest chat (a colleague, an embarrassing

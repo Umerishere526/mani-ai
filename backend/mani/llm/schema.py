@@ -272,7 +272,10 @@ class Memory(BaseModel):
     )
     what_doesnt: list[str] = Field(
         default_factory=list,
-        description="What they said did not help, or asked not to do.",
+        description=(
+            "What they said did not help, asked not to do, or a question they skipped or found "
+            "uncomfortable."
+        ),
     )
     how_they_talk: list[str] = Field(
         default_factory=list,

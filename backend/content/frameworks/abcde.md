@@ -39,7 +39,7 @@ activation:
     - "The user cannot participate in reflective questions"
     - "A safety concern requires the approved safety protocol"
   contraindications:
-    - "The person describes abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger - examining what it means must never turn into questioning whether it was real or as serious as it felt, and Mani must not reinterpret the behaviour as harmless"
+    - "The only thing left to examine would be whether abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger was real or as serious as it felt. What they came to believe about themselves after it may still be examined; the event itself is never questioned or reinterpreted as harmless"
   # Short fragments, not the full example sentences from the spec. router.py matches these as
   # whole words against what the person actually typed - a real message practically never
   # contains a whole authored sentence verbatim, but it very often contains the three or four
@@ -121,8 +121,8 @@ stages:
       - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
         reply: "What happened sounds serious, and I am not going to ask you to see it differently. What would be most helpful to talk through?"
     ask:
-      supportive: "What happened?"
-      reflective: "What happened?"
+      supportive: "Can you tell me what happened?"
+      reflective: "What happened, as you remember it?"
       direct: "What happened?"
   belief:
     purpose: "Identify what the user believes the event means."
@@ -141,8 +141,8 @@ stages:
       - when: "several beliefs at once"
         reply: "Several thoughts came at once. Which one affected you most?"
     ask:
-      supportive: "What did that come to mean for you?"
-      reflective: "What did that come to mean for you?"
+      supportive: "What did you find yourself telling yourself after that?"
+      reflective: "Looking at it now, what did that seem to say to you?"
       direct: "What did that come to mean for you?"
   consequence:
     purpose: "Identify how believing that affected what the user felt, did, avoided, or wanted to do."
@@ -182,8 +182,8 @@ stages:
       - when: "the user has named evidence that challenges the belief (use the line for the selected tone)"
         reply: "supportive: She has also trusted you with important work. How does that affect the original belief? | reflective: That evidence does not fully fit the original belief. What does it suggest instead? | direct: That evidence challenges the original belief. What conclusion do the full facts support?"
     ask:
-      supportive: "What supports that belief?"
-      reflective: "What supports that belief?"
+      supportive: "What makes that belief feel true to you?"
+      reflective: "What have you seen that seems to back that belief up?"
       direct: "What supports that belief?"
   balanced:
     purpose: "Develop a believable belief that includes the relevant evidence and remains in the user's language."

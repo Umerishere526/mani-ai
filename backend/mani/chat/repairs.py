@@ -7,7 +7,13 @@ import re
 from difflib import SequenceMatcher
 from dataclasses import dataclass, field
 
-from mani.chat.greeting import CLARIFICATION_QUESTIONS, EXPLAIN_LABELS
+from mani.chat.greeting import (
+    CLARIFICATION_QUESTIONS,
+    EXPLAIN_LABELS,
+    KEEP_CHATTING_LABEL,
+    TELL_ME_MORE_LABEL,
+    TRY_IT_LABEL,
+)
 from mani.chat.techniques import Registry
 from mani.llm.schema import SHAPES, LibrarySection, Reply, SmartPrompt, Style
 
@@ -77,9 +83,6 @@ SELF_JUDGMENTS = (
     "over reacting", "being silly", "being stupid", "my fault", "i'm weak", "i am weak",
     "i'm broken", "i am broken", "not enough", "being needy", "being difficult",
 )
-
-# The label on an offer of the nearest set of questions when none fits well.
-CLOSEST_FIT_LABEL = "Try the closest fit"
 
 # Five: room for a choice in the person's own voice. Past that a label is becoming a sentence.
 MAX_CAPSULE_WORDS = 5
@@ -193,6 +196,28 @@ def without_feeling_sentences(text: str, unwanted: list[str]) -> str | None:
     if "?" in text and not any("?" in s for s in kept):
         return None
     return " ".join(kept)
+
+
+# The system's own words, which a person must never read (Loli's test, 2026-10-09: "the nearest
+# fit I have" reached the person in all three styles).
+_INTERNAL_WORDS = re.compile(
+    r"\b(nearest|closest)\s+fit\b|\bframework[_ ]id\b|\boffer_fit\b|\bheading_toward\b"
+    r"|\bframework index\b|\bcooldown\b|\[/?ctx\]",
+    re.IGNORECASE,
+)
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
+
+
+def without_internal_words(text: str) -> str:
+    """The text with every sentence that carries the system's own words dropped."""
+    if not _INTERNAL_WORDS.search(text):
+        return text
+    paragraphs = []
+    for paragraph in text.split("\n\n"):
+        kept = [s for s in _SENTENCE_BREAK.split(paragraph) if not _INTERNAL_WORDS.search(s)]
+        if kept:
+            paragraphs.append(" ".join(kept))
+    return "\n\n".join(paragraphs)
 
 
 def strip_script_leakage(text: str) -> tuple[str, list[str]]:
@@ -349,21 +374,47 @@ def _without_permission_question(text: str) -> str:
     return text
 
 
-def _compose_offer(
-    part: str, registry: Registry, framework_id: str, style: str, last_mani_text: str | None
-) -> str:
-    """Mani's part, the client's description, the client's question: one paragraph each.
+def _says_name(text: str, name: str) -> bool:
+    """Whether the set's name is in the text, however it is spelt or spaced."""
+    letters = re.compile(r"[^a-z0-9]")
+    return letters.sub("", name.lower()) in letters.sub("", text.lower())
 
-    The description is left out when the last reply already showed it, which is the offer
-    made again after they asked what it involves, or when the model wrote it itself.
+
+def _compose_offer(
+    part: str,
+    registry: Registry,
+    framework_id: str,
+    style: str,
+    last_mani_text: str | None,
+    *,
+    describe: bool,
+) -> str:
+    """Mani's part, which names the set, then the client's question: one paragraph each.
+
+    The offer is short, as in the client's own examples (muhammad, 2026-10-09). The client's
+    description goes between the two only when they asked to hear more, and never twice: not
+    when the last reply showed it, nor when the model wrote it itself.
     """
     framework = registry.get(framework_id)
-    description = " ".join(framework.summary.split()) if framework and framework.summary else ""
-    # Exactly once: not again when the last reply showed it, nor when the model wrote it anyway.
-    already = " ".join(f"{last_mani_text or ''} {part}".split())
-    if description and description in already:
-        description = ""
+    shown = " ".join(f"{last_mani_text or ''} {part}".split())
+    if framework and not _says_name(shown, framework.name):
+        part = f"{part} It's called {framework.name}.".strip()
+    description = ""
+    if describe and framework and framework.summary:
+        description = " ".join(framework.summary.split())
+        if description in shown:
+            description = ""
     return "\n\n".join(p for p in (part, description, PERMISSION_QUESTIONS[style]) if p)
+
+
+def _offer_buttons(framework_id: str, *, explained: bool) -> list[SmartPrompt]:
+    """The client's buttons under an offer, in their words whatever the model wrote. Once they have
+    tapped Tell me more they have been told, so the offer comes back with the other two."""
+    buttons = [SmartPrompt(label=TRY_IT_LABEL, technique=framework_id)]
+    if not explained:
+        buttons.append(SmartPrompt(label=TELL_ME_MORE_LABEL))
+    buttons.append(SmartPrompt(label=KEEP_CHATTING_LABEL, decline=True))
+    return buttons
 
 
 def _normalize(name: str) -> str:
@@ -388,7 +439,7 @@ def apply(
     nickname: str | None = None,
     name_said_before: bool = False,
     clarification_already_used: bool = False,
-    closest_fit: bool = False,
+    offer_asked_about: bool = False,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again.
 
@@ -401,6 +452,10 @@ def apply(
     text, leaked = strip_script_leakage(reply.text.strip())
     if leaked:
         notes.append(f"stripped script metadata: {', '.join(leaked)}")
+    spoken = without_internal_words(text)
+    if spoken != text:
+        notes.append("dropped a sentence with internal words")
+        text = spoken
 
     if clarification_already_used:
         # The client's one-time check, backstopped in code: [ctx] already told the model not
@@ -458,11 +513,6 @@ def apply(
         if selected and key == selected:
             # Offering back the button the user just pressed reads as not listening.
             notes.append(f"dropped the button the user just tapped: {label}")
-            continue
-        if key in EXPLAIN_LABELS and any(p.technique for p in reply.prompts or []):
-            # An offer has two buttons, Try it and Keep chatting (muhammad, 2026-09-24): the
-            # offer's own words already say how the questions would help.
-            notes.append(f"dropped an explain button from an offer: {label}")
             continue
         # A label may not name a feeling they did not name, judge them, or run long enough
         # to be a sentence. Dropping the button is the whole correction: rewriting one would
@@ -522,12 +572,6 @@ def apply(
                 notes.append(f"dropped an already-offered technique: {prompt.technique}")
                 continue
 
-        if prompt.technique is not None and closest_fit:
-            # An offer of the nearest fit says so on the button, so the person chooses it knowing
-            # it is not a perfect match; Keep chatting beside it is the other way out.
-            prompt = prompt.model_copy(update={"label": CLOSEST_FIT_LABEL})
-            key = CLOSEST_FIT_LABEL.lower()
-
         seen_labels.add(key)
         kept.append(prompt)
 
@@ -548,9 +592,9 @@ def apply(
         notes.append(f"trimmed {len(kept)} buttons to {MAX_PROMPTS}")
         kept = kept[:MAX_PROMPTS]
 
-    # An offer is built here, not by the model (muhammad, 2026-09-24): Mani's own part, then
-    # the client's description of the questions word for word, so the person sees what they
-    # would come away with, then the client's permission question for the style. A question
+    # An offer is built here, not by the model: Mani's own part, which names the set, then the
+    # client's permission question for the style. When they asked to hear more, the client's
+    # description goes between the two, word for word (muhammad, 2026-10-09). A question
     # of the model's own asking that permission gives way to the client's. Any other question
     # means the offer shares a reply with something else, so its buttons are dropped: the
     # offer can come next turn, and a reply is never left asking two things at once.
@@ -567,7 +611,13 @@ def apply(
             without = _BLANK_RUN.sub("\n\n", _OFFER_SENTENCE.sub("", part)).strip()
             text = without or part
         else:
-            text = _compose_offer(part, registry, offered_id, conversation_style, last_mani_text)
+            # They asked about it, by Tell me more or a typed question: the answer carries the
+            # client's description, and the offer comes back without Tell me more.
+            asked = offer_asked_about or selected in EXPLAIN_LABELS
+            text = _compose_offer(
+                part, registry, offered_id, conversation_style, last_mani_text, describe=asked
+            )
+            kept = _offer_buttons(offered_id, explained=asked)
 
     framework_id: str | None = None
     phase: str | None = None
