@@ -8,7 +8,6 @@ import json
 import os
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 import client as mani
 from library import render_library
@@ -26,6 +25,43 @@ st.set_page_config(page_title="Mani chat tester", page_icon="🧠", layout="cent
 # style the conversation is in.
 STYLES = {"direct": "Direct", "supportive": "Supportive", "reflective": "Reflective"}
 
+# Where Mani's reply will appear, while it is on its way: three dots pulsing in a pill.
+# Colours are .streamlit/config.toml's secondaryBackgroundColor, borderColor and primaryColor.
+THINKING_PILL = """
+<style>
+/* Streamlit pushes message content down so one line of text centres on the avatar. The
+   pill is as tall as the avatar instead (2rem), so it starts level with it. */
+[data-testid="stChatMessageContent"]:has(.thinking-pill) {
+    margin-top: 0;
+}
+.thinking-pill {
+    box-sizing: border-box;
+    display: inline-flex;
+    gap: 0.3rem;
+    align-items: center;
+    height: 2rem;
+    padding: 0 0.9rem;
+    border-radius: 999px;
+    background: #EEF3F0;
+    border: 1px solid #D5E0DA;
+}
+.thinking-pill span {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: #1F7A5A;
+    animation: thinking-pulse 1.2s infinite ease-in-out;
+}
+.thinking-pill span:nth-child(2) { animation-delay: 0.15s; }
+.thinking-pill span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes thinking-pulse {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+    30% { transform: translateY(-0.25rem); opacity: 1; }
+}
+</style>
+<div class="thinking-pill" aria-label="Mani is thinking"><span></span><span></span><span></span></div>
+"""
+
 
 def run(coro):
     return asyncio.run(coro)
@@ -37,6 +73,8 @@ def reset_thread_state(thread: dict, messages: list[dict]) -> None:
     st.session_state.style = thread.get("conversation_style")
     st.session_state.locked = thread.get("crisis_detected") and thread.get("crisis_blocks_chat")
     st.session_state.last_turn = None
+    # A message still waiting to go belongs to the conversation it was typed in.
+    st.session_state.pending = None
 
 
 # ---------------------------------------------------------------------------
@@ -151,13 +189,33 @@ if last_turn:
             if exercise.get("audio_url"):
                 st.audio(exercise["audio_url"])
 
+# A message that has been sent and not yet answered: the person's own bubble straight away,
+# and the thinking pill where Mani's reply will appear. The backend call itself runs at the
+# very end of the script, once everything else on the page is drawn.
+pending = st.session_state.get("pending")
+if pending:
+    with st.chat_message("user", avatar="🧑"):
+        st.write(pending)
+    with st.chat_message("assistant", avatar="🧠"):
+        st.markdown(THINKING_PILL, unsafe_allow_html=True)
+
+
 def send(content: str) -> None:
-    with st.spinner("Mani is responding..."):
-        try:
-            turn = client.send_message(thread["id"], content)
-        except mani.ApiError as exc:
-            st.error(str(exc))
-            return
+    # Only queues it. The rerun every caller makes shows it as pending, and that run
+    # delivers it.
+    st.session_state.pending = content
+
+
+def deliver(content: str) -> None:
+    # Cleared before the call, so a rerun that interrupts it cannot send the message twice.
+    st.session_state.pending = None
+    try:
+        turn = client.send_message(thread["id"], content)
+    except mani.ApiError as exc:
+        # Kept in session state rather than shown here: the rerun that follows would wipe
+        # an st.error before anyone could read it, and a failed send would look like nothing.
+        st.session_state.send_error = str(exc)
+        return
     st.session_state.messages.append({"role": "user", "content": content, "prompts": []})
     st.session_state.messages.append(
         {"role": "mani", "content": turn["content"], "prompts": turn.get("prompts") or []}
@@ -172,129 +230,19 @@ def send(content: str) -> None:
         st.session_state.locked = True
 
 
-# Composer state. `draft` seeds the text field's initial value; the field's own widget
-# key is `draft_{composer_cycle}`, deliberately a different name. Streamlit refuses to
-# touch a widget's own key once it has rendered this run (confirmed by testing - it
-# raises StreamlitWidgetAlreadyInstantiatedError), so both "fill it with a transcript"
-# and "clear it after Send" work by bumping composer_cycle and reseeding `draft`, which
-# mints a fresh widget next render instead of mutating the live one.
-# `mic_cycle` mints a fresh key for the recorder after each use so the consumed clip
-# disappears rather than sitting there re-triggering transcription on every rerun.
-if "draft" not in st.session_state:
-    st.session_state.draft = ""
-if "composer_cycle" not in st.session_state:
-    st.session_state.composer_cycle = 0
-if "mic_cycle" not in st.session_state:
-    st.session_state.mic_cycle = 0
-# Whether the voice recorder panel is open. WhatsApp-style: tapping the mic icon pops
-# it open above the composer row; it closes itself the moment a recording is stopped
-# and handled, leaving just the (now-filled) text field - never left sitting open.
-if "show_recorder" not in st.session_state:
-    st.session_state.show_recorder = False
-
-# Floats the composer above the bottom of the viewport as one rounded card, rather
-# than a bar flush with the screen edge. `st-key-composer_bar` is the CSS class
-# Streamlit derives from the container's key, so this only ever targets that one
-# container - and everything inside it (including the recorder pop-up, when open)
-# inherits the same rounded shape via overflow: hidden, rather than needing its own
-# matching radius set separately.
-st.markdown(
-    """
-    <style>
-    .st-key-composer_bar {
-        position: fixed;
-        bottom: 1.25rem;
-        /* left/width are a fallback for the instant before the JS sync below runs
-           once; they are then overridden by the real content column's own
-           position, since a fixed max-width guess here drifts out of alignment
-           whenever the sidebar is collapsed/expanded or the window is resized -
-           confirmed by measuring both live: with the sidebar open, the content
-           column sat 150px right of a viewport-centered guess. */
-        left: 0;
-        right: 0;
-        z-index: 999;
-        margin-inline: auto;
-        width: calc(100% - 2.5rem);
-        max-width: 46rem;
-        padding: 0.75rem 1rem;
-        border-radius: 1.5rem;
-        overflow: hidden;
-        /* Hardcoded, not var(--...) - Streamlit's theme colors aren't exposed as
-           stable named CSS variables in this version (checked: only emotion's
-           auto-hashed ones are), so this must match .streamlit/config.toml's
-           secondaryBackgroundColor by hand if that value ever changes. */
-        background: #EEF3F0;
-        border: 1px solid rgba(31, 122, 90, 0.25);
-        box-shadow: 0 8px 24px rgba(28, 38, 33, 0.10);
-    }
-    .st-key-composer_bar div[data-testid="stForm"] {
-        border: none;
-        padding: 0;
-    }
-    /* The field sits flush in the card: no outline of its own, focused or not, and no
-       "Press ⌘+Enter to submit form" hint, since Enter sends (wired up below). */
-    .st-key-composer_bar [data-testid="stTextAreaRootElement"] {
-        border: none;
-    }
-    .st-key-composer_bar [data-testid="InputInstructions"] {
-        display: none;
-    }
-    /* WhatsApp-style: one line tall until the text wraps or Shift+Enter adds a line,
-       then it grows up to a cap and scrolls inside. Streamlit renders the field with
-       rows=3 and a 68px minimum, which is what made an empty field look like a box;
-       field-sizing sizes it to its text instead. A browser without field-sizing keeps
-       the three-row box and still works. */
-    .st-key-composer_bar textarea {
-        field-sizing: content;
-        min-height: 0;
-        max-height: 10rem;
-    }
-    /* Room at the bottom of the message feed so the last bubble never sits under
-       the floating composer. */
-    .block-container {
-        padding-bottom: 10rem;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# Keeps the floating composer's left edge and width locked to the real chat content
-# column, not a guessed viewport-centered width. Needed because the content column is
-# centered in the space *after* the sidebar, while a plain CSS fixed-position guess
-# centers against the full viewport - measured live, that mismatch was 150px with the
-# sidebar open. Runs in an iframe with documented same-origin access to the app (per
-# components.v1.html's own docs), so window.parent.document reaches the real page.
-components.html(
-    """
-    <script>
-    function syncComposerBar() {
-        const doc = window.parent.document;
-        const bar = doc.querySelector(".st-key-composer_bar");
-        const content = doc.querySelector(".block-container");
-        if (!bar || !content) return;
-        const rect = content.getBoundingClientRect();
-        bar.style.left = rect.left + "px";
-        bar.style.width = rect.width + "px";
-        bar.style.right = "auto";
-        bar.style.maxWidth = "none";
-        bar.style.marginInline = "0";
-    }
-    syncComposerBar();
-    window.parent.addEventListener("resize", syncComposerBar);
-    const target = window.parent.document.querySelector(".block-container") || window.parent.document.body;
-    new ResizeObserver(syncComposerBar).observe(target);
-    // Also catches the sidebar's own collapse/expand animation, which resizes the
-    // content column without firing a window resize event.
-    setInterval(syncComposerBar, 250);
-    </script>
-    """,
-    height=0,
-)
+# A voice transcript waiting to be put into the composer. The composer's own key can't be
+# written once it has rendered this run (Streamlit raises), so the transcript is held here
+# and written into `composer` on the next run, before the field is drawn.
+if "voice_draft" not in st.session_state:
+    st.session_state.voice_draft = None
 
 if st.session_state.locked:
     st.warning("This conversation is paused after a crisis flag. Start a new conversation to continue.")
 else:
+    send_error = st.session_state.pop("send_error", None)
+    if send_error:
+        st.error(send_error)
+
     # Mani's newest message is the only one whose buttons are live, exactly as in the apps.
     # A tap sends the label as the person's message; the backend matches it to the button.
     # A button carrying a library section opens the library instead, as the apps navigate
@@ -302,8 +250,9 @@ else:
     # type="secondary" (the default) on purpose: a suggested reply is a shortcut, not the
     # composer's Send action, and the two must not look like the same control.
     latest = next((m for m in reversed(st.session_state.messages) if m["role"] == "mani"), None)
+    # Hidden while a message is on its way: they answer the reply before it.
     buttons = (latest or {}).get("prompts") or []
-    if buttons:
+    if buttons and not pending:
         cols = st.columns(len(buttons))
         for index, (col, button) in enumerate(zip(cols, buttons)):
             if col.button(button["label"], use_container_width=True, key=f"tap_{index}_{len(st.session_state.messages)}"):
@@ -314,117 +263,43 @@ else:
                 st.rerun()
 
     # -----------------------------------------------------------------------
-    # Composer: pinned to the bottom of the screen, flat rather than boxed. The mic
-    # is a toggle button beside the field, WhatsApp-style - tapping it pops the
-    # recorder open above the row; stopping a recording closes it again immediately,
-    # so it's never left open once used.
+    # Composer: Streamlit's own chat input, pinned to the bottom of the page, with its
+    # built-in mic. Enter sends, Shift+Enter adds a line.
     #
-    # Voice never reaches the backend on its own. Recording stops -> Streamlit's own
-    # player lets the person listen back -> this sends the clip to the transcription
-    # endpoint only -> the result lands as editable draft text, same as if they'd typed
-    # it. Only the Send button (or Enter in the field) calls send() - one trigger, same
-    # as a typed message, no parallel path.
+    # Voice never reaches the backend on its own. A recording comes back here, goes to the
+    # transcription endpoint only, and the result lands in the field as editable text,
+    # same as if it had been typed. Only sending text calls send() - one trigger, same as a
+    # typed message, no parallel path.
     # -----------------------------------------------------------------------
-    with st.container(key="composer_bar"):
-        if st.session_state.show_recorder:
-            st.caption("🎤 Recording - tap again to cancel")
-            recording = st.audio_input(
-                "Voice message",
-                key=f"mic_{st.session_state.mic_cycle}",
-                label_visibility="collapsed",
-            )
+    if st.session_state.voice_draft is not None:
+        st.session_state.composer = st.session_state.voice_draft
+        st.session_state.voice_draft = None
 
-            if recording is not None:
-                with st.spinner("Transcribing…"):
-                    try:
-                        transcript = client.transcribe_audio(
-                            recording.getvalue(), recording.name or "recording.wav"
-                        )
-                    except mani.ApiError as exc:
-                        st.error(str(exc))
-                        transcript = None
-                # Reset the recorder and close the panel regardless of outcome, so a
-                # failed or already-used clip never re-submits itself on the next
-                # rerun, and the panel vanishes the moment a recording is handled -
-                # it never sits open after stopping.
-                st.session_state.mic_cycle += 1
-                st.session_state.show_recorder = False
-                if transcript:
-                    # Only ever fills the draft - nothing here calls send(). A fresh
-                    # field key next render means this is a clean reseed, not a live
-                    # mutation of an already-rendered widget.
-                    st.session_state.draft = transcript
-                    st.session_state.composer_cycle += 1
-                st.rerun()
-
-        mic_col, composer_col = st.columns([1, 9])
-        with mic_col:
-            mic_icon = "✕" if st.session_state.show_recorder else "🎤"
-            if st.button(mic_icon, key="mic_toggle", use_container_width=True):
-                st.session_state.show_recorder = not st.session_state.show_recorder
-                st.rerun()
-
-        field_key = f"draft_{st.session_state.composer_cycle}"
-        with composer_col:
-            with st.form("composer", border=False, enter_to_submit=False):
-                field_col, button_col = st.columns([5, 1])
-                with field_col:
-                    # A text area so a long message wraps and the field grows, instead of
-                    # scrolling sideways. height="content" (Streamlit >=1.64) grows it with
-                    # the text rather than fixing it at one size.
-                    st.text_area(
-                        "Message",
-                        value=st.session_state.draft,
-                        key=field_key,
-                        placeholder="Type, or tap 🎤 and edit before sending…",
-                        label_visibility="collapsed",
-                        height="content",
-                    )
-                with button_col:
-                    submitted = st.form_submit_button(
-                        "Send ➤", use_container_width=True, type="primary"
-                    )
-
-        if submitted:
-            content = st.session_state[field_key].strip()
-            if content:
-                send(content)
-            # A new cycle means a new field key next render, seeded empty - the clean
-            # way to clear it without touching the widget that just rendered.
-            st.session_state.draft = ""
-            st.session_state.composer_cycle += 1
-            st.rerun()
-
-    # A text_area takes plain Enter as a new line, so sending on Enter (Shift+Enter for a
-    # real line break) is wired up by hand: this intercepts Enter in the composer's textarea
-    # and clicks Send, rather than switching to st.chat_input, which has no way to seed the
-    # field from a voice transcript the way this one does.
-    components.html(
-        """
-        <script>
-        function wireComposerEnter() {
-            const doc = window.parent.document;
-            const bar = doc.querySelector(".st-key-composer_bar");
-            if (!bar) return;
-            const textarea = bar.querySelector("textarea");
-            const button = [...bar.querySelectorAll("button")]
-                .find(b => b.innerText.includes("Send"));
-            if (!textarea || !button || textarea.dataset.enterWired) return;
-            textarea.dataset.enterWired = "1";
-            textarea.addEventListener("keydown", (event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    button.click();
-                }
-            });
-        }
-        wireComposerEnter();
-        new MutationObserver(wireComposerEnter)
-            .observe(window.parent.document.body, {childList: true, subtree: true});
-        </script>
-        """,
-        height=0,
+    # Disabled while a message is on its way: a second submit would rerun the script and
+    # stop the one waiting on the reply.
+    submitted = st.chat_input(
+        "Type, or tap the mic and edit before sending…",
+        key="composer",
+        accept_audio=True,
+        disabled=bool(pending),
     )
+
+    if submitted and submitted.audio:
+        with st.spinner("Transcribing…"):
+            try:
+                transcript = client.transcribe_audio(
+                    submitted.audio.getvalue(), submitted.audio.name or "recording.wav"
+                )
+            except mani.ApiError as exc:
+                st.error(str(exc))
+                transcript = None
+        # Only ever fills the field - nothing here calls send().
+        if transcript:
+            st.session_state.voice_draft = transcript
+            st.rerun()
+    elif submitted and submitted.text.strip():
+        send(submitted.text.strip())
+        st.rerun()
 
 # ---------------------------------------------------------------------------
 # Dev inspector - direct reads, not API calls. This is the point of the tool: seeing the
@@ -493,3 +368,9 @@ with st.sidebar:
         if last_turn:
             with st.expander("📦 Last turn, raw"):
                 st.code(json.dumps(last_turn, indent=2, default=str), language="json")
+
+# The message send() queued goes to the backend last, so the person's message and the
+# thinking pill are already on screen while Mani's reply is on its way.
+if pending:
+    deliver(pending)
+    st.rerun()

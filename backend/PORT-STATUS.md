@@ -105,6 +105,9 @@ the same change as the work.**
   holds for a draft that needs no redraft.
 - **Offers follow Mani's confidence**. Every reply before an offer asks one question.
 - **Memory is per person**.
+- **chat-tester resets a password on the page**: email and new password, set through the Auth Admin API with
+  no email. Anyone who can reach the page can reset any account, so it stays non-public. A browser session
+  is remembered for seven days.
 - Also settled: OpenRouter only, asyncpg not PostgREST, the
   `public` and `admin` split, the `mani_service` role, three security definer write functions, the
   deterministic safety screen as the only thing that locks a thread, in process routing, no streaming.
@@ -161,15 +164,10 @@ Ordered by what breaks first.
 
 ## Open engineering
 
-- **The hosted database is seven migrations ahead of this code.** `main` was reverted to `1473a0c`,
-  which ships migrations 001-010, but hosted still has 011-017 applied from the reverted branches:
-  `holds`, `known`, `ending` and `phase_since` on `thread_technique_state`, `decision` on
-  `admin.llm_calls`, the `public.framework_outcomes` table, and `'stopped'` on the
-  `technique_outcome` enum. Hosted holds live data in them - 2 `framework_outcomes` rows, 55
-  `llm_calls.decision` rows - so a rollback destroys data. `016` cannot be undone at all: Postgres
-  has no `drop value` for an enum, so retiring it means recreating the type or writing a new
-  migration forward. Local was reset to 001-010 on 2026-10-07; hosted was not. The two are not the
-  same schema, and nothing reconciles them yet.
+- **Hosted and local schemas match.** Checked read-only on 2026-10-07: the same migrations, columns,
+  enums, functions and RLS policies, and the same prompts, frameworks and exercises (only seed timestamps
+  differ). The production deployment is `45543ed`, the head of `main`. What prod's environment variables
+  hold is not readable, so those are unchecked.
 - **Migration numbers were reused across the reverted branches.** `011` was both
   `technique_state_holds` and `technique_outcome_stopped`; `013` was both `llm_call_decision` and
   `llm_call_facts`. Reviving any of those branches collides again.
