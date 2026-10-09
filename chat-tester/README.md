@@ -20,22 +20,16 @@ endpoint, the real LangChain call, the real safety screen - this is not a mock.
 - **Real, too:** sign-in, sign-up and forgot-password, through Supabase Auth with an email and
   password. The backend verifies the token exactly as it will a phone's, and it is refreshed when
   it expires. Each account sees only its own conversations - the backend scopes every thread to
-  the signed-in user. A forgotten password is reset with a six-digit code emailed to the account,
-  so only the person who can read that mailbox can change it.
+  the signed-in user. A forgotten password is reset on the page itself: email plus a new
+  password, no email or code involved.
 - **Open, on purpose:** anyone who can reach the page can create an account. Sign-up goes
   through the Admin API (created confirmed, no email sent), so it uses the service role key and
-  every new account can spend model credit. Don't put a link to this tool anywhere public.
+  every new account can spend model credit. For the same reason, anyone who can reach the page can
+  reset any account's password and read its conversations. Don't put a link to this tool anywhere public.
 
 ## Deploying this
 
-Two things to set beyond the environment variables in Setup below.
-
-**The password-reset email template.** `supabase/config.toml` configures local Supabase only. On a
-hosted project, set the same template by hand under Authentication → Email Templates → Reset
-Password, with a body containing `{{ .Token }}` (the six-digit code). Without it the hosted project
-sends its default *link*, which redirects to that project's Site URL - not this app - and the person
-lands on a dead page. Check the project's email rate limit too: the hosted default is far lower than
-the local `max_frequency = "1s"`.
+One thing to set beyond the environment variables above.
 
 **Where sessions are kept.** A signed-in session lives in a file on the instance that handled the
 sign-in, so a reload is recognised by that instance. On one container - how this tool is run - that
@@ -83,14 +77,24 @@ cd chat-tester && source venv/bin/activate && streamlit run app.py
 
 The app opens on a **Sign in** / **Sign up** screen. Sign up takes an email, a password and an
 optional nickname the greeting uses; after that, the same email and password sign back in to the
-same conversations. **Forgot password** emails a six-digit code to the account's address; entering
-it with a new password sets that password and signs you in. Refreshing the browser tab keeps you
-signed in - the session is remembered for fourteen days. The sidebar's **Sign out** switches
+same conversations. **Forgot password** takes the account's email and a new password (twice) and,
+on submit, sets that password and signs you in. Refreshing the browser tab keeps you
+signed in - the session is remembered for seven days. The sidebar's **Sign out** switches
 accounts, and **New conversation** starts a fresh thread for the signed-in user. Under it,
 **Conversations** lists that user's threads, most recently active first (the latest 20, titled once a
 thread has had an exchange, "Untitled" before that). Tap one to open it and continue; the open one is
 marked ▶. Hover a title to see its message count and last activity. An opened thread shows its latest 100
 messages, with Mani's buttons live only on its newest message, as in the apps.
+
+## Tests
+
+```bash
+cd chat-tester && source venv/bin/activate && pip install -r requirements-dev.txt
+pytest
+```
+
+They sign up, reset and delete real accounts on the local Supabase in `.env`, and skip when it is
+not running. Never point them at a hosted project.
 
 ## What to look at
 

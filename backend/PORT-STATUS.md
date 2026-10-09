@@ -109,26 +109,26 @@ the same change as the work.**
 
 ## The API
 
-| Method | Path | |
-|---|---|---|
-| GET | `/health`, `/health/ready` | liveness, readiness |
-| GET PUT | `/v1/profile` | onboarding answers |
-| GET POST | `/v1/threads` | list, start (writes the greeting) |
-| POST | `/v1/threads/current` | what to show on opening the app; creates a thread on first call |
-| GET PATCH DELETE | `/v1/threads/{id}` | fetch, set `conversation_style`, soft delete |
-| GET POST | `/v1/threads/{id}/messages` | history (paged), **send a turn** |
-| GET | `/v1/exercises`, `/home`, `/{id}` | catalog with signed audio |
-| GET POST | `/v1/exercises/completions` | a user's completions |
-| GET | `/v1/crisis/resources` | empty until real services exist |
-| DELETE | `/v1/account` | delete the account and its data |
-| GET POST | `/v1/admin/prompts` | portal |
-| GET PATCH | `/v1/admin/prompts/{id}` | patch snapshots the old version first |
-| GET | `/v1/admin/prompts/{id}/versions` | history |
-| POST | `/v1/admin/prompts/cache/invalidate` | publish now |
-| GET POST, PATCH DELETE | `/v1/admin/exercises`, `/{id}` | catalog CRUD |
-| GET | `/v1/admin/crisis-events` | review queue |
-| GET | `/v1/admin/users/{id}/memory` | what is remembered about a person |
-| GET | `/internal/cron/fold-summaries` | thread summary catch up (`summarize.reconcile_due`), bearer `CRON_SECRET`, no JWT |
+| Method                 | Path                                 |                                                                                   |
+| ---------------------- | ------------------------------------ | --------------------------------------------------------------------------------- |
+| GET                    | `/health`, `/health/ready`           | liveness, readiness                                                               |
+| GET PUT                | `/v1/profile`                        | onboarding answers                                                                |
+| GET POST               | `/v1/threads`                        | list, start (writes the greeting)                                                 |
+| POST                   | `/v1/threads/current`                | what to show on opening the app; creates a thread on first call                   |
+| GET PATCH DELETE       | `/v1/threads/{id}`                   | fetch, set `conversation_style`, soft delete                                      |
+| GET POST               | `/v1/threads/{id}/messages`          | history (paged), **send a turn**                                                  |
+| GET                    | `/v1/exercises`, `/home`, `/{id}`    | catalog with signed audio                                                         |
+| GET POST               | `/v1/exercises/completions`          | a user's completions                                                              |
+| GET                    | `/v1/crisis/resources`               | empty until real services exist                                                   |
+| DELETE                 | `/v1/account`                        | delete the account and its data                                                   |
+| GET POST               | `/v1/admin/prompts`                  | portal                                                                            |
+| GET PATCH              | `/v1/admin/prompts/{id}`             | patch snapshots the old version first                                             |
+| GET                    | `/v1/admin/prompts/{id}/versions`    | history                                                                           |
+| POST                   | `/v1/admin/prompts/cache/invalidate` | publish now                                                                       |
+| GET POST, PATCH DELETE | `/v1/admin/exercises`, `/{id}`       | catalog CRUD                                                                      |
+| GET                    | `/v1/admin/crisis-events`            | review queue                                                                      |
+| GET                    | `/v1/admin/users/{id}/memory`        | what is remembered about a person                                                 |
+| GET                    | `/internal/cron/fold-summaries`      | thread summary catch up (`summarize.reconcile_due`), bearer `CRON_SECRET`, no JWT |
 
 ## Decisions in force
 
@@ -180,6 +180,9 @@ the same change as the work.**
   `consequences`, `dispute` and `effective_new_belief`, because the model reads an id as the stage's name. A
   Stages line may run to 420 characters (`seed.py` `MAX_STAGES_LINE`) to hold them.
 - **Memory is per person**.
+- **chat-tester resets a password on the page**: email and new password, set through the Auth Admin API with
+  no email. Anyone who can reach the page can reset any account, so it stays non-public. A browser session
+  is remembered for seven days.
 - Also settled: OpenRouter only, asyncpg not PostgREST, the
   `public` and `admin` split, the `mani_service` role, three security definer write functions, the
   deterministic safety screen as the only thing that locks a thread, no streaming.
@@ -268,39 +271,13 @@ Ordered by what breaks first.
 
 ## Open engineering
 
-- **The hosted database is seven migrations ahead of this code.** `main` was reverted to `1473a0c`,
-  which ships migrations 001-010, but hosted still has 011-017 applied from the reverted branches:
-  `holds`, `known`, `ending` and `phase_since` on `thread_technique_state`, `decision` on
-  `admin.llm_calls`, the `public.framework_outcomes` table, and `'stopped'` on the
-  `technique_outcome` enum. Hosted holds live data in them - 2 `framework_outcomes` rows, 55
-  `llm_calls.decision` rows - so a rollback destroys data. `016` cannot be undone at all: Postgres
-  has no `drop value` for an enum, so retiring it means recreating the type or writing a new
-  migration forward. Local was reset to 001-010 on 2026-10-07; hosted was not. The two are not the
-  same schema, and nothing reconciles them yet. Local now also has `018` (`llm_calls.reasoning_tokens`,
-  numbered past 017 so it never collides). Code that writes that column must not reach hosted before
-  `018` does: every cost row insert would fail, and `client._record` swallows the error.
-- **Seed hosted before deploying spec 0004's code.** The code reads `exercise_select` and
-  `voice_translation`, which only the seed writes (ids `...012` and `...013`; confirm no other row holds
-  them first). Deployed before the seed, the exercise pick falls back to the first candidate and voice
-  input stays untranslated, logged, until it runs. Seeding overwrites portal edits to prompts and
-  frameworks, so check hosted's `updated_at` first. Waits on the 011 to 017 reconciliation above. Keep
-  `REASONING_EFFORT` set on hosted until the deploy has proven itself: this code ignores it, and the
-  code a rollback returns to still falls back to it.
-- **Spec 0007 deploys in order: migration 019, then the seed, then the code.** Deployed before the seed, the
-  model gets no field descriptions and no stage rules until it runs. Hosted waits on the 011 to 017
-  reconciliation above like the rest. The portal skips the seed's checks, so a `mani_base` edit that breaks
-  `reply_shapes` drops every shape and a broken `never_offer_when_said` is ignored, both only visible in the logs.
-- **Spec 0011 deploys the other way round: the seed, then the code.** The `tuning` row loses its `router`
-  block and `Tuning` refuses unknown keys, so new code on the old row fails on its first load, and old code
-  on the new row fails when its cached snapshot next expires (300 seconds in production). Hosted waits on
-  the 011 to 017 reconciliation above like the rest.
-- **Offers on plain phrasing are unmeasured.** Specs 0007 and 0011 shipped on unit and contract tests, with
-  no real run. Measure offers per conversation, offers where a Skip when line applied and offers before the
-  cooldown under feature 11, with muhammad's yes for each real run.
+- **Hosted and local schemas match.** Checked read-only on 2026-10-07: the same migrations, columns,
+  enums, functions and RLS policies, and the same prompts, frameworks and exercises (only seed timestamps
+  differ). The production deployment is `45543ed`, the head of `main`. What prod's environment variables
+  hold is not readable, so those are unchecked.
 - **Migration numbers were reused across the reverted branches.** `011` was both
   `technique_state_holds` and `technique_outcome_stopped`; `013` was both `llm_call_decision` and
   `llm_call_facts`. Reviving any of those branches collides again.
-
 
 - **The body ending is unmeasured and the client has not seen it.** Spec 0009 replaced the client's fixed
   check in, per place practices and waves reply with rules the model follows (muhammad's design, 2026-10-08),
@@ -378,8 +355,7 @@ change to prompts, framework content or the offer rules, and compare with these.
   restating in every style and on the offer turn in Reflective. Per bullet, out of 3, Direct / Supportive /
   Reflective: no restating before the offer 1 / 0 / 0; first reply asks what the decision is 3 / 3 / 3; offer
   at message 3 or later 3 / 3 / 3 (from 3 / 2 / 1); the offer turn steps from what they said, says how the
-  questions help and asks, with no recap 3 / 2 / 1 (from 0 / 0 / 0); after the yes asks nothing told 3 / 3 /
-  3. Every offer was `structured_problem_solving`, so ABCDE was not reached. "Frustrating" came back at the
+  questions help and asks, with no recap 3 / 2 / 1 (from 0 / 0 / 0); after the yes asks nothing told 3 / 3 / 3. Every offer was `structured_problem_solving`, so ABCDE was not reached. "Frustrating" came back at the
   person's first message in 7 of 9 runs ("That sounds frustrating", "It can be frustrating", "that back and
   forth is frustrating"), now with reasoning that names their frustration as what they face; Reflective
   also opens by retelling ("It sounds like the decision keeps pulling you back…"). The three offer turns that

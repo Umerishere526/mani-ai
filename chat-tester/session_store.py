@@ -23,7 +23,7 @@ import client as mani
 # Only an opaque key goes in the URL. The refresh token itself stays in a file next to the
 # app's temp directory, so a shared or pasted URL carries no credential on its own.
 PARAM = "s"
-TTL_SECONDS = 14 * 24 * 60 * 60
+TTL_SECONDS = 7 * 24 * 60 * 60
 
 # Alongside Streamlit's own temp files rather than in the repo, so a stray token is never
 # committed and a machine reboot clears them.
