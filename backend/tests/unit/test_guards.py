@@ -29,9 +29,9 @@ STAGED = Framework(
 )
 
 OFFER = [
-    SmartPrompt(label="Yes, let's try it", technique="abcde"),
+    SmartPrompt(label="Try It", technique="abcde"),
     SmartPrompt(label="Tell me about this"),
-    SmartPrompt(label="I want to keep talking", decline=True),
+    SmartPrompt(label="Keep Chatting", decline=True),
 ]
 
 
@@ -96,20 +96,20 @@ def test_buttons_are_kept_as_the_model_sent_them_in_its_order(registry):
 
 
 def test_a_button_with_no_label_is_dropped(registry):
-    blank = reply(prompts=[SmartPrompt(label="  "), SmartPrompt(label="Tell me more")])
+    blank = reply(prompts=[SmartPrompt(label="  "), SmartPrompt(label="Tell Me More")])
     checked = check(registry, blank)
-    assert [p.label for p in checked.prompts] == ["Tell me more"]
+    assert [p.label for p in checked.prompts] == ["Tell Me More"]
     assert checked.notes == ["dropped a button: empty label"]
 
 
 def test_an_invented_technique_id_is_refused_and_takes_the_decline_with_it(registry):
-    """A model-supplied identifier is untrusted until the registry recognises it, and I want to
-    keep talking answers an offer that is no longer there. A Tell me about this answers nothing in
+    """A model-supplied identifier is untrusted until the registry recognises it, and Keep
+    Chatting answers an offer that is no longer there. A Tell me about this answers nothing in
     particular, so it stays."""
     invented = reply(prompts=[
-        SmartPrompt(label="Yes, let's try it", technique="box_breathing"),
+        SmartPrompt(label="Try It", technique="box_breathing"),
         SmartPrompt(label="Tell me about this"),
-        SmartPrompt(label="I want to keep talking", decline=True),
+        SmartPrompt(label="Keep Chatting", decline=True),
         SmartPrompt(label="Go to Library", library="home"),
     ])
     checked = check(registry, invented)
@@ -119,7 +119,7 @@ def test_an_invented_technique_id_is_refused_and_takes_the_decline_with_it(regis
 
 def test_an_offer_with_a_known_technique_keeps_its_two_buttons(registry):
     checked = check(registry, reply(prompts=OFFER))
-    assert [p.label for p in checked.prompts] == ["Yes, let's try it", "Tell me about this", "I want to keep talking"]
+    assert [p.label for p in checked.prompts] == ["Try It", "Tell me about this", "Keep Chatting"]
     assert checked.notes == []
 
 
@@ -130,7 +130,7 @@ def test_no_framework_is_offered_from_inside_a_running_one(registry):
     nested = reply(prompts=[
         SmartPrompt(label="Try ABCDE", technique="abcde"),
         SmartPrompt(label="Try reframing", technique="thought_reframing"),
-        SmartPrompt(label="I want to keep talking", decline=True),
+        SmartPrompt(label="Keep Chatting", decline=True),
     ])
     checked = check(
         registry, nested,
@@ -143,7 +143,7 @@ def test_no_framework_is_offered_from_inside_a_running_one(registry):
 @pytest.mark.parametrize("turn", [{"declined": True}, {"retiring": True}])
 def test_an_offer_cannot_stand_on_a_turn_that_records_a_decline_or_a_retirement(registry, turn):
     """Storing the offer would overwrite the decline or cancel the retirement this turn writes. Its
-    Yes, let's try it and I want to keep talking go; a Tell me about this answers nothing in
+    Try It and Keep Chatting go; a Tell me about this answers nothing in
     particular and stays."""
     offered_again = reply(prompts=OFFER)
     checked = check(registry, offered_again, **turn)
@@ -163,11 +163,11 @@ def test_a_button_to_a_library_section_that_does_not_exist_lands_on_the_library_
     page rather than a section that does not exist."""
     nowhere = reply(prompts=[
         SmartPrompt(label="Go to Library", library="my mother's funeral"),
-        SmartPrompt(label="Tell me more"),
+        SmartPrompt(label="Tell Me More"),
     ])
     checked = check(registry, nowhere)
     assert [(p.label, p.library) for p in checked.prompts] == [
-        ("Go to Library", "home"), ("Tell me more", None),
+        ("Go to Library", "home"), ("Tell Me More", None),
     ]
     assert checked.notes == ["sent a button to the library home: unknown library section"]
 

@@ -27,7 +27,10 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 14 | Mani speaks and asks as the client wrote | Slice 5 | in-progress |
 | 15 | The offer in the client's words | Slice 5 | in-progress |
 | 16 | Audit unused code and files | Slice 5 | in-progress |
-| 17 | Tell me more in the client's words | Slice 5 | planned |
+| 17 | Offer and Tell me more per framework and style | Slice 5 | in-progress |
+| 20 | ABCDE from the client's ABCDE doc | Slice 5 | in-progress |
+| 22 | Mani understands the issue, then offers naturally | Slice 5 | in-progress |
+| 21 | The ending follows the issue | Slice 5 | planned |
 | 10 | Crisis decided by the model | Slice 6 | planned |
 | 18 | Crisis events can be resolved | Slice 6 | planned |
 | 11 | Thinking level and prompt tuning from measurements | Slice 7 | planned |
@@ -193,7 +196,7 @@ Spec: [0011](../specs/0011-offers-follow-the-chat/index.md) · code in backend/m
 
 ### 14. Mani speaks and asks as the client wrote · in-progress
 Each reply does what the client's Directive, Supportive or Reflective behavior list says (docs/client-share-docs/directive, reflective, supportive .docx), asks the way the client's examples ask, and offers once Mani can identify the issue: about 2 to 4 exchanges, a range, not a count. Reached by replacing and cutting prompt rules, never by adding them, because rule bloat makes the model drift. Today the `Starts when` gates, the "reaches, unseen" question rule and the "If two fit" rule kept the manager and CEO conversation asking for 8 turns, and "Start with what they feel" made Direct restate instead of lead.
-**Done when:** `mani_base.md` plus `response_format.md` are under 150 lines and 3616 words together, and three real conversations, one run each after muhammad's yes (`client_anxiety` Directive, `client_overthinking` Reflective, `client_stress` Supportive), each reach an offer at the person's message 2 to 4 with no "I hear you", "That makes sense" or "I'm here for you". Recorded as measured; a failing run is reported, not rerun. Broader offer measurement stays under feature 11.
+**Done when:** `mani_base.md` plus `response_format.md` are under 150 lines and 3616 words together, and three real conversations, one run each after muhammad's yes (`client_anxiety` Directive, `client_overthinking` Reflective, `client_stress` Supportive), each reach an offer with no "I hear you", "That makes sense" or "I'm here for you". Recorded as measured; a failing run is reported, not rerun. When the offer comes is feature 22's, since the client dropped the 2 to 4 window (2026-10-08). Broader offer measurement stays under feature 11.
 Spec: [0012](../specs/0012-mani-speaks-as-client-wrote/index.md) · code in backend/content/, backend/mani/chat/context.py, backend/mani/prompts/replies.py, chat-tester/app.py
 - [x] Design it (spec): `/architect mani speaks and asks as the client wrote` (decided 2026-10-08: cut and replace rules with the client's phrases, hybrid style lines, `question_focus` and `clarification_lines` cut, Directive label only, offer wording left to feature 15, real runs capped at 3)
 - [x] Build it: `/develop mani speaks and asks as the client wrote`
@@ -230,10 +233,46 @@ Spec: [0014](../specs/0014-audit-unused-code-files/index.md) · code in backend/
 - [ ] Verify it: `/check verify audit unused code and files`
 - [ ] Test it: `/test audit unused code and files`
 
-### 17. Tell me more in the client's words · needs a decision
-from spec 0013. A tap on Tell me more explains how the questions will help, in the client's wording, once the client provides it. Until then it shows the framework's name and description again (spec 0013). The client's own examples are per style and per issue, and fit the panic scenario better than the normal flow (muhammad, 2026-10-08), so the wording waits for the client.
-**Done when:** the client's Tell me more wording is what a tap shows, the two buttons stay, and changing the wording needs only a reseed.
-- [ ] Design it (spec): `/architect tell me more in the client's words`
+### 17. Offer and Tell me more per framework and style · in-progress
+from spec 0013. A tap on Tell me more explains how the questions will help, in the client's wording. Until then it shows the framework's name and description again (spec 0013). The client's wording has arrived for ABCDE (docs/client-share-docs/ABCDE Framework.docx, transcribed in backend/docs/specs/framework-abcde.md §0.4 and §0.6): a different offer line for each style ("There's a framework called ABCDE that helps you …"), and a Tell Me More that lists all five steps in that style. muhammad wants both built (2026-10-08). The open points are where text for each framework and style lives, how `offer.py` picks it, and what the other five show until their documents arrive.
+**Done when:** an ABCDE offer and its Tell Me More show the client's text for the chosen style, generalised where it quoted one person, the two buttons stay after Tell Me More, Try It after Tell Me More neither restarts nor repeats the five steps, and changing the wording needs only a reseed.
+Spec: [0015](../specs/0015-offer-per-framework-style/index.md) · code in backend/content/prompts/replies.md, backend/mani/prompts/replies.py, backend/mani/chat/offer.py, backend/mani/chat/orchestrator.py, backend/scripts/
+- [x] Design it (spec): `/architect offer and tell me more per framework and style` (decided 2026-10-08: literal per style text in `replies.offer.by_framework`, ABCDE generalised where it quoted one user, the other five on the shared offer, all three styles or none, no prompt change, one Reflective real run after muhammad's yes)
+- [x] Build it: `/develop offer and tell me more per framework and style`
+  - [x] Tracer: `by_framework` and its checks, the ABCDE block, the style through the offer step, the per style offer tests (AC-1, AC-3, AC-4, AC-6)
+  - [x] Tell Me More in the style, then Try It, and the no style default (AC-3, AC-4, AC-5)
+  - [x] The seed id check, the `@more` token, the `abcde_told_more` scenario, reseed after muhammad's yes, full `pytest` (AC-2, AC-7, AC-8). Built 2026-10-08, reseeded, 684 passed, 4 skipped
+  - [x] Close out: PORT-STATUS, journal, and the one real run after muhammad's yes (AC-7, AC-9). Real run passed, 0 findings. Journal: offer-per-style-build-2026-10-08
+- [ ] Verify it: `/check verify offer and tell me more per framework and style`
+- [ ] Test it: `/test offer and tell me more per framework and style`
+
+### 20. ABCDE from the client's ABCDE doc · in-progress
+The client's ABCDE Framework doc (October 2026) in the seven ABCDE lines: each letter named as Mani goes (A is for Activating Event, D is for Dispute, E is for Effective New Belief), including stages the chat already answered; ABCDE offered over Thought Reframe whenever both fit; the end reached once they tell what they know from what they assumed, with no new belief manufactured. Also the client's buttons, Try It · Tell Me More · Keep Chatting, for all six. The stage ids are the client's step names, `activating_event` to `effective_new_belief`, and the Stages line cap went to 420 to hold them (muhammad, 2026-10-08).
+**Done when:** the ABCDE lines carry the letter names, Dispute, Effective New Belief, the priority and the end; Thought Reframe defers to ABCDE; the buttons read Try It · Tell Me More · Keep Chatting; the doc is transcribed in backend/docs/specs/framework-abcde.md; reseeded; full `pytest` green.
+code in backend/content/frameworks/abcde.md, backend/content/frameworks/thought_reframe.md, backend/content/prompts/replies.md, backend/scripts/seed.py, backend/docs/specs/framework-abcde.md
+- [x] Build it: `/develop abcde from the client doc` (built 2026-10-08, reseeded, full `pytest` 670 passed, 4 skipped)
+- [ ] Verify it: `/check verify abcde from the client doc` (only a real run shows the letters named, with muhammad's yes)
+- [ ] Test it: `/test abcde from the client doc`
+
+### 22. Mani understands the issue, then offers naturally · in-progress
+The client's feedback on all three styles (docs/client-share-docs/mani-response-feedback-2026-10-08.md): Mani restates what the person just said instead of answering it, asks a narrow question before it knows what the issue is, and moves into a framework with a recap. The client's principle: understand the problem, introduce the framework naturally, use what they already shared, and never make them explain it twice. No fixed number of exchanges before the offer. Reached by cutting and replacing prompt rules, never by adding them. The transcripts predate features 15 and 17, so the recap before the offer is gone, but the seeded offer now arrives with no bridge from the conversation.
+**Done when:** in the client's job decision conversation, three real runs per style after muhammad's yes, each check holding in at least 2 of a style's 3 runs, no reply opens by restating what they just said, the first question asks what the decision is, both sides are explored before any offer, the offer reads as a natural next step that lets them choose, and the first stage question asks nothing they already told; and `mani_base.md` plus `response_format.md` end with no more lines than they started with.
+Spec: [0016](../specs/0016-understand-issue-then-offer-naturally/index.md) · code in backend/content/prompts/mani_base.md, backend/content/prompts/response_format.md, backend/mani/chat/orchestrator.py, backend/scripts/eval_conversations.yaml
+- [x] Design it (spec): `/architect mani understands the issue then offers naturally` (decided 2026-10-08: seven prompt lines replaced one for one, mirroring only to check understanding, ask what the issue is first, offer once the issue, what makes it hard and for a choice what pulls each way are known, the model's own line before every seeded offer, no say back on a yes, floor of 2 kept, no code check on the bridge, one `client_job_decision` run per style after muhammad's yes; round 2 after those runs failed: E6 made concrete, E8 to E11 swap `rules` line 18, `warmth lead`, and the Supportive and Reflective style lines so care is about what they face and never their feeling handed back, three runs per style passing on 2 of 3, shapes and reasoning printed, the say back after Try It measured only)
+- [ ] Build it: `/develop mani understands the issue then offers naturally`
+  - [x] The bridge: the model's line before the seeded offer on every kept offer, E6, and the offer tests (AC-4, AC-7)
+  - [x] The prompt cuts E1 to E5 and E7, line and word counts, reseed, full `pytest` (AC-1, AC-2, AC-3, AC-5, AC-6, AC-7)
+  - [x] The `client_job_decision` scenario and the three real runs after muhammad's yes (AC-8): run 2026-10-08, all three fail on restating, see PORT-STATUS measurements
+  - [x] PORT-STATUS, spec 0012 AC-11 check and the journal note (AC-9)
+  - [x] Round 2: E6 rewritten, E8 to E11, reseed, full `pytest`, nine graded runs plus three measured after muhammad's yes, PORT-STATUS and journal (AC-1, AC-4, AC-6, AC-8, AC-9): run 2026-10-08, AC-8 fails on restating (Direct and Supportive 0 of 3) and the bridge (0 of 9, each makes its own offer), see PORT-STATUS measurements
+- [ ] Verify it: `/check verify mani understands the issue then offers naturally`
+- [ ] Test it: `/test mani understands the issue then offers naturally`
+
+### 21. The ending follows the issue · waiting on the client
+from the client's ABCDE doc: completing a framework must not trigger a body check by itself. This replaces feature 7's "every framework ends by offering the body check" (spec 0009), for all six. muhammad's thinking (2026-10-08, may change): no three after framework questions, since the stages usually answer them already (feature 12). If the issue is not resolved when the framework finishes, keep chatting and offer another framework that fits. Once the issue is resolved, offer the body check; if they want it, do it, otherwise stop with Chat More and Go to Library. Held until the client answers; today's flow is audited in `mani-vault/Journal/ending-waits-on-client-2026-10-08.md`.
+**Done when:** set once the client answers.
+- [ ] Ask the client: should Mani offer a body check after a framework, and when; if the issue is not resolved, another framework, how soon, and may the same one return; the three after framework questions, yes or no; when Chat More and Go to Library appear; all six frameworks or ABCDE only
+- [ ] Design it (spec): `/architect the ending follows the issue`
 
 ## Slice 6: Crisis
 

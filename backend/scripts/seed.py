@@ -56,6 +56,16 @@ def load_tuning() -> Tuning:
     return parse_tuning(parse_prompt(PROMPTS_DIR / "tuning.md")["content"])
 
 
+def check_offer_frameworks(replies: Replies, framework_ids: set[str]) -> None:
+    """Refuses wording under `offer.by_framework` for a framework with no file, which no offer
+    would ever send, so a renamed id cannot silently drop its text."""
+    unknown = sorted(set(replies.offer.by_framework) - framework_ids)
+    if unknown:
+        raise ValueError(
+            f"replies.md: offer.by_framework names no framework file: {', '.join(unknown)}"
+        )
+
+
 def load_prompts(directory: pathlib.Path | None = None) -> list[dict]:
     """Every prompt row to seed, refused with the file named when a model call's row has no
     usable thinking level, when a model call or a required row has no file at all, or when a
@@ -93,7 +103,7 @@ FRAMEWORK_LABELS = (
 )
 MAX_LINE = 220
 STAGES_DIVIDER = " | "
-MAX_STAGES_LINE = 320
+MAX_STAGES_LINE = 420
 # Everything else in the frontmatter is data only code reads: the phase machine and the veto.
 FRAMEWORK_KEYS = {"id", "name", "summary", "display_order", "phases", "activation"}
 ACTIVATION_KEYS = {"never_offer_when_said"}
@@ -199,6 +209,7 @@ async def seed() -> None:
 
             # Every file is checked before any is written, so a refusal leaves nothing half seeded.
             frameworks = [parse_framework(path) for path in framework_files]
+            check_offer_frameworks(load_replies(), {framework["id"] for framework in frameworks})
             for framework in frameworks:
                 await conn.execute(
                     """

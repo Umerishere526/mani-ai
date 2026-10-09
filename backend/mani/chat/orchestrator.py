@@ -238,12 +238,14 @@ async def send(
     style = chosen_style(history, content)
     if style is not None:
         return await _open_in_style(conn, ctx, content, style, config.replies, client_message_id)
+    # The style [ctx] names this turn, so the seeded offer and Tell me more speak in it too.
+    style_now = context.resolve_style(ctx, tuning.offers.default_style)
     explained = explained_offer(history, content)
     if explained is not None and explained[1] in config.registry:
         label, framework_id = explained
         return await _explain_offer(
             conn, ctx, content, label, config.registry.get(framework_id), config.replies,
-            client_message_id, settings,
+            style_now, client_message_id, settings,
         )
 
     technique = ctx.technique
@@ -419,7 +421,7 @@ async def send(
                 accepted_framework = offer.technique
                 offered_now.append(offer.technique)
         else:
-            # Carrying on past the offer is I want to keep talking (muhammad, 2026-09-24), held here
+            # Carrying on past the offer is Keep Chatting (muhammad, 2026-09-24), held here
             # rather than left to the model, which kept asking again. The one exception is a
             # question the reply answers by making the offer again: they asked about it.
             asked_about_it = "?" in content and any(p.technique for p in reply.prompts or [])
@@ -519,12 +521,14 @@ async def send(
     offered = next((p.technique for p in checked.prompts if p.technique), None)
     if offered is not None:
         # Every check that can stop an offer has run, so the one left is an offer. The model chose
-        # that and which set; its words and buttons are the seeded offer's, so no style is recorded
-        # for text the person never sees.
-        text, stored_options = offers.offer(config.replies, config.registry.get(offered))
+        # that and which set; its own line leads and the seeded offer's words and buttons follow.
+        # No style is recorded, because the shape it reported describes a reply, not a bridge line.
+        seeded, stored_options = offers.offer(
+            config.replies, config.registry.get(offered), style_now
+        )
         checked = dataclasses.replace(
             checked,
-            text=text,
+            text="\n\n".join(part for part in (checked.text, seeded) if part),
             prompts=[SmartPrompt.model_validate(option) for option in stored_options],
             style=None,
         )
@@ -834,6 +838,7 @@ async def _explain_offer(
     label: str,
     framework: Framework,
     replies: Replies,
+    style: str,
     client_message_id: uuid.UUID | str | None,
     settings,
 ) -> Turn:
@@ -842,7 +847,7 @@ async def _explain_offer(
     No model call, and the offer stays exactly as it was: still waiting on its offering phase, with
     the two buttons that answer it.
     """
-    reply, options = offers.told_more(replies, framework)
+    reply, options = offers.told_more(replies, framework, style)
     pair = await messages_db.create_pair(
         conn, ctx.thread.id, content, reply,
         selected_prompt=label, prompt_options=options, client_message_id=client_message_id,

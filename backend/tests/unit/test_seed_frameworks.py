@@ -1,4 +1,4 @@
-# ABOUTME: Checks the seed refuses a framework file that is not the seven labelled lines.
+# ABOUTME: Checks the seed refuses a framework file that is not the seven labelled lines, and offer wording for no file.
 # ABOUTME: Writes real framework files to a temp folder; the shipped files are parsed as they are.
 
 from __future__ import annotations
@@ -6,14 +6,14 @@ from __future__ import annotations
 import pytest
 
 from mani.chat.techniques import ENDING_PHASES
-from scripts.seed import FRAMEWORKS_DIR, parse_framework
+from scripts.seed import FRAMEWORKS_DIR, check_offer_frameworks, load_replies, parse_framework
 
 FRONTMATTER = """---
 id: abcde
 name: ABCDE
 summary: "Look at what a setback came to mean."
 display_order: 1
-phases: [offering, activate, belief, consequence, examine, balanced, closing]
+phases: [offering, activating_event, belief, consequences, dispute, effective_new_belief, closing]
 activation:
   never_offer_when_said: ["died"]
 ---
@@ -23,8 +23,8 @@ LINES = [
     "Starts when: you have learned the event that set it off and what it came to mean about them.",
     'Sounds like: "so I must be", "this proves I", one setback read as a verdict on who they are.',
     "Skip when: one quick thought to reframe (thought_reframe), or they only want to be heard.",
-    "Stages: activate (what happened) > belief (what it came to mean) > consequence (how believing it "
-    "affected them) | examine (what supports it, then what challenges it) > balanced (a fairer "
+    "Stages: activating_event (what happened) > belief (what it came to mean) > consequences (how believing it "
+    "affected them) | dispute (what supports it, then what challenges it) > effective_new_belief (a fairer "
     "belief) > closing (how it sits now)",
     "Ends when: they hold a belief that fits all the evidence and sounds like them.",
     "Never: invent evidence, or decide the belief is false.",
@@ -65,18 +65,18 @@ def _replaced(index, line):
         (LINES[:4] + LINES[5:] + ["Never: one more."], "line 5 should start with 'Ends when: '"),
         ([LINES[1], LINES[0]] + LINES[2:], "line 1 should start with 'Starts when: '"),
         (_replaced(4, "Ends when: " + "x" * 210), "the Ends when line is 221 characters, over 220"),
-        (_replaced(3, LINES[3] + " " + "y" * (320 - len(LINES[3]))), "the Stages line is 321 characters, over 320"),
+        (_replaced(3, LINES[3] + " " + "y" * (420 - len(LINES[3]))), "the Stages line is 421 characters, over 420"),
         (
-            _replaced(3, "Stages: activate (what happened) > belief (what it meant) | examine (the evidence) "
-                         "> balanced (a fairer belief) > closing (how it sits)"),
-            "the Stages line names activate, belief, examine, balanced, closing, but phases after "
-            "offering are activate, belief, consequence, examine, balanced, closing",
+            _replaced(3, "Stages: activating_event (what happened) > belief (what it meant) | dispute (the evidence) "
+                         "> effective_new_belief (a fairer belief) > closing (how it sits)"),
+            "the Stages line names activating_event, belief, dispute, effective_new_belief, closing, but phases after "
+            "offering are activating_event, belief, consequences, dispute, effective_new_belief, closing",
         ),
-        (_replaced(3, "Stages: activate | belief"), "the stage 'activate' should be an id and a few words"),
+        (_replaced(3, "Stages: activating_event | belief"), "the stage 'activating_event' should be an id and a few words"),
         (_replaced(3, LINES[3].replace(" | ", " > ")), "the Stages line needs exactly one '|'"),
-        (_replaced(3, LINES[3].replace(" > balanced", " | balanced")), "the Stages line needs exactly one '|'"),
-        (_replaced(3, "Stages:  | examine (the evidence)"), "no stage on one side of the '|'"),
-        (_replaced(3, "Stages: activate (what happened) | "), "no stage on one side of the '|'"),
+        (_replaced(3, LINES[3].replace(" > effective_new_belief", " | effective_new_belief")), "the Stages line needs exactly one '|'"),
+        (_replaced(3, "Stages:  | dispute (the evidence)"), "no stage on one side of the '|'"),
+        (_replaced(3, "Stages: activating_event (what happened) | "), "no stage on one side of the '|'"),
     ],
 )
 def test_a_body_that_breaks_the_format_is_refused_with_the_file_and_the_reason(tmp_path, lines, reason):
@@ -106,7 +106,7 @@ def test_words_inside_a_stages_parentheses_may_carry_commas(tmp_path):
          "never_offer_when_said must be a list of non empty strings"),
         (FRONTMATTER.replace('["died"]', '["died", " "]'),
          "never_offer_when_said must be a list of non empty strings"),
-        (FRONTMATTER.replace("[offering, activate,", "[activate,"), "phases should start with offering"),
+        (FRONTMATTER.replace("[offering, activating_event,", "[activating_event,"), "phases should start with offering"),
         (FRONTMATTER.replace('summary: "Look at what a setback came to mean."\n', ""),
          "frontmatter has no summary"),
         (FRONTMATTER.replace('"Look at what a setback came to mean."', '"  "'), "summary must not be blank"),
@@ -123,3 +123,17 @@ def test_every_shipped_framework_is_seven_lines_with_only_code_data_beside_them(
     assert len(files) == 6
     for path in files:
         assert len(parse_framework(path)["body"].split("\n")) == 7, path.name
+
+
+def test_offer_wording_for_a_framework_with_no_file_stops_the_seed():
+    """covers: AC-2 - a mistyped or renamed id would never be offered, so its wording would go
+    unused without a word; the seed refuses it by name instead."""
+    replies = load_replies()
+    shipped = {parse_framework(path)["id"] for path in FRAMEWORKS_DIR.glob("*.md")}
+    mistyped = replies.model_copy(update={"offer": replies.offer.model_copy(update={
+        "by_framework": {"abcd": replies.offer.by_framework["abcde"]},
+    })})
+
+    check_offer_frameworks(replies, shipped)
+    with pytest.raises(ValueError, match="offer.by_framework names no framework file: abcd$"):
+        check_offer_frameworks(mistyped, shipped)

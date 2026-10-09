@@ -12,7 +12,7 @@ endpoint, the real LangChain call, the real safety screen - this is not a mock.
 ## What it simulates versus what is real
 
 - **Real:** every chat turn, every capsule tap, style selection (tapping one of the greeting's
-  three style buttons), framework offers (the seeded offer with its three buttons, Yes, let's try it, Tell me more and I want to keep talking), the somatic hand-off, the exercise hand-off, crisis locking. All of it
+  three style buttons), framework offers (the seeded offer with its three buttons, Try It, Tell Me More and Keep Chatting), the somatic hand-off, the exercise hand-off, crisis locking. All of it
   goes over HTTP to the actual FastAPI app - nothing here calls `orchestrator.py` directly.
 - **Real, too:** the library page (sidebar **Library**, or any **Go to Library** button). It lists
   every exercise from `GET /v1/exercises` on one page, grouped by topic, each playable from its
@@ -101,7 +101,7 @@ them. The developer view lists an offer's framework id.
 - **The sidebar's "Framework state" panel** - a direct read of `thread_technique_state`,
   refreshed on every interaction. Watch `phase` move through a framework's stages as the
   conversation continues, and `outcome` flip from `offered` to `accepted` when you tap
-  "Yes, let's try it". The current framework and stage also show under the title.
+  "Try It". The current framework and stage also show under the title.
 - **"What Mani remembers"** - a direct read of `admin.user_memory`: the patterns folded in
   from this person's earlier chats. It fills in a few seconds after **New conversation**.
 - **The "Recent calls" panel** - one row per model call, in order, with token counts and

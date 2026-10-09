@@ -67,7 +67,21 @@ REPLIES_REFUSED = {
     "a blank offer label": lambda b: b["offer"]["labels"].update(more="   "),
     "a missing offer label": lambda b: b["offer"]["labels"].pop("decline"),
     "two offer labels equal ignoring case": lambda b: b["offer"]["labels"].update(
-        more="I WANT TO KEEP TALKING"
+        more="KEEP CHATTING"
+    ),
+    "a missing by_framework": lambda b: b["offer"].pop("by_framework"),
+    "a framework offer missing a style": lambda b: b["offer"]["by_framework"]["abcde"].pop("direct"),
+    "a blank framework tell me more": lambda b: b["offer"]["by_framework"]["abcde"]["supportive"].update(
+        more_text="   "
+    ),
+    "a field in framework text": lambda b: b["offer"]["by_framework"]["abcde"]["direct"].update(
+        text="Try {name}?"
+    ),
+    "an escaped brace in framework text": lambda b: b["offer"]["by_framework"]["abcde"]["reflective"].update(
+        more_text="Steps {{ A }}"
+    ),
+    "an unknown key in a framework offer": lambda b: b["offer"]["by_framework"]["abcde"]["direct"].update(
+        extra="x"
     ),
 }
 

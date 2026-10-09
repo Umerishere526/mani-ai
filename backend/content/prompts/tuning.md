@@ -9,7 +9,7 @@ offers:
   # Supportive and Reflective until Mani's own judgement was made the signal (muhammad,
   # 2026-10-01). Counted in the person's own messages.
   clear_offer_after: 2
-  # After "I want to keep talking" an offer may come back after two more exchanges (counted in messages).
+  # After "Keep Chatting" an offer may come back after two more exchanges (counted in messages).
   clear_cooldown_after_decline: 4
   cooldown_after_complete: 45
   # The style used when neither the conversation nor the profile has chosen one yet. The

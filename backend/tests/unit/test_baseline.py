@@ -1,4 +1,4 @@
-# ABOUTME: Checks the cost baseline's arithmetic: totals, medians, ranges and the compare table.
+# ABOUTME: Checks the cost baseline's arithmetic, the eval script's arguments and how its offer tokens resolve.
 # ABOUTME: Runs are built from plain rows, so nothing here calls a model or needs a database.
 
 from __future__ import annotations
@@ -233,3 +233,29 @@ def test_a_saved_baseline_shows_when_the_replies_or_the_tuning_changed():
     assert hashes(tuning="x: 1")["tuning"] != seeded["tuning"]
     assert hashes(replies="x: 1")["replies"] != seeded["replies"]
     assert hashes(tuning="x: 1")["replies"] == seeded["replies"]
+
+
+def test_more_taps_tell_me_more_when_offered_types_the_fallback_otherwise_and_once_only():
+    """covers: AC-7 - `@more` and `@accept` resolve the same way, each with its own flag."""
+    from mani.llm.schema import SmartPrompt
+    from scripts.eval_replies import _offer_token
+
+    replies = seeded_replies()
+    labels = replies.offer.labels
+    # As a turn returns them: the `more` key is dropped, so only the label marks Tell me more.
+    offered = [SmartPrompt.model_validate(p) for p in [
+        {"label": labels.accept, "technique": "abcde"},
+        {"label": labels.more, "more": True},
+        {"label": labels.decline, "decline": True},
+    ]]
+    told = [SmartPrompt.model_validate(p) for p in [
+        {"label": labels.accept, "technique": "abcde"},
+        {"label": labels.decline, "decline": True},
+    ]]
+
+    assert _offer_token("@more|Go on.", offered, False, False) == (labels.more, "more", False, True)
+    assert _offer_token("@more|Go on.", told, False, False) == ("Go on.", "fallback", False, False)
+    assert _offer_token("@more|Go on.", offered, False, True) == (None, "typed", False, True)
+    assert _offer_token("@accept|Okay.", told, False, True) == (labels.accept, "accept", True, True)
+    assert _offer_token("@accept|Okay.", [], False, True) == ("Okay.", "fallback", False, True)
+    assert _offer_token("@accept|Okay.", offered, True, True) == (None, "typed", True, True)

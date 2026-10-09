@@ -205,7 +205,7 @@ def check(
                 prompt = prompt.model_copy(update={"library": canonical_library})
         kept.append(prompt)
 
-    # I want to keep talking answers an offer. Once the offer's own button is gone it answers
+    # Keep Chatting answers an offer. Once the offer's own button is gone it answers
     # nothing, so it goes with it.
     if any(p.technique for p in reply.prompts or []) and not any(p.technique for p in kept):
         remaining = without_offer(kept)

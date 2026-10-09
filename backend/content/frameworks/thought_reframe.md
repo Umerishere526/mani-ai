@@ -7,7 +7,7 @@ phases: [offering, thought, significance, facts, alternative, reframe, closing]
 ---
 Starts when: you have learned the one thought going round, in their words, and the moment it is tied to.
 Sounds like: "nobody cares about me", "they did not answer because", "I am going to fail", one painful reading of a moment that seems like the only one.
-Skip when: an event, belief and effects to unpack (abcde), a plan to make (structured_problem_solving), a thought no evidence settles (act_choice_point), a settled fact such as a loss, or they only want to be heard.
+Skip when: anything abcde also fits (abcde), a plan to make (structured_problem_solving), a thought no evidence settles (act_choice_point), a settled fact such as a loss, or they only want to be heard.
 Stages: thought (the one thought, in their words, tied to a moment) > significance (what makes it matter to them) | facts (what supports it, then what does not, then what is unknown) > alternative (another credible reading) > reframe (a brief balanced thought they find believable) > closing (how it sits now)
 Ends when: they hold a thought that fits the facts and is credible to them; they need not drop the old one or feel differently.
 Never: argue, invent evidence, decide the thought is false, or keep checking a thought about harm, contamination or identity that they ask to have settled again and again.

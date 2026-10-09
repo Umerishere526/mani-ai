@@ -48,7 +48,7 @@ def test_a_framework_that_ends_with_one_hand_off_button_is_caught():
     assert missing_handoff(neither) == []
     one = [("somatic_practice", []), (None, ["Go to Library"])]
     assert missing_handoff(one)
-    assert missing_handoff([("somatic_checkin", []), (None, ["Tell me more"])]) == []
+    assert missing_handoff([("somatic_checkin", []), (None, ["Tell Me More"])]) == []
 
 
 def test_a_second_chat_that_cites_the_first_is_caught():

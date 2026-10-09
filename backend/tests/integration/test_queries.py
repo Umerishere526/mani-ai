@@ -88,7 +88,7 @@ async def test_a_turn_writes_both_sides_and_is_idempotent(alice):
 
     first = await messages.create_pair(
         alice, thread.id, "I had a hard day", "That sounds heavy.",
-        prompt_options=[{"label": "Tell me more"}], client_message_id=client_id)
+        prompt_options=[{"label": "Tell Me More"}], client_message_id=client_id)
     assert first.was_duplicate is False
 
     again = await messages.create_pair(
@@ -99,7 +99,7 @@ async def test_a_turn_writes_both_sides_and_is_idempotent(alice):
 
     history = await messages.recent_for_context(alice, thread.id, ALICE, CONTEXT_WINDOW)
     assert [m.role for m in history] == ["user", "mani"]
-    assert history[1].prompt_options == [{"label": "Tell me more"}]
+    assert history[1].prompt_options == [{"label": "Tell Me More"}]
 
 
 async def test_the_idempotency_lookup_is_user_scoped(alice, users):

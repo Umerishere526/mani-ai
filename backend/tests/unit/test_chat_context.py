@@ -225,9 +225,9 @@ def test_a_context_block_can_be_stripped_back_out():
 
 
 def test_a_tap_is_matched_against_the_last_message_that_offered_buttons():
-    history = [mani("Want to try something?", [{"label": "Yes, let's try it",
+    history = [mani("Want to try something?", [{"label": "Try It",
                                                 "technique": "abcde"}])]
-    tapped = find_tapped_prompt(history, "yes, let's try it")
+    tapped = find_tapped_prompt(history, "try it")
     assert tapped is not None and tapped.technique == "abcde"
 
 
@@ -235,16 +235,16 @@ def test_a_stale_offer_is_not_matched_once_mani_has_spoken_again():
     """The reference searched back to the last Mani message carrying any options, so a
     plain reply in between left the old offer live and every later answer resolved it."""
     history = [
-        mani("Want to try something?", [{"label": "Yes, let's try it", "technique": "abcde"}]),
+        mani("Want to try something?", [{"label": "Try It", "technique": "abcde"}]),
         user("not now, I want to talk about work"),
         mani("Tell me about work."),
     ]
-    assert find_tapped_prompt(history, "yes, let's try it") is None
+    assert find_tapped_prompt(history, "try it") is None
     assert pending_offer(history) is None
 
 
 def test_typed_text_is_not_mistaken_for_a_tap():
-    history = [mani("Want to try something?", [{"label": "Yes, let's try it"}])]
+    history = [mani("Want to try something?", [{"label": "Try It"}])]
     assert find_tapped_prompt(history, "I think so maybe") is None
 
 

@@ -40,6 +40,8 @@ SCENARIOS = pathlib.Path(__file__).with_name("eval_conversations.yaml")
 
 # What each framework is called, read from the content so the check never lists them itself.
 FRAMEWORK_NAMES = [parse_framework(p)["name"] for p in sorted(FRAMEWORKS_DIR.glob("*.md"))]
+# The Tell me more button's label, which `@more` taps.
+MORE_LABEL = load_replies().offer.labels.more
 
 # Every eval user is created fresh under this domain, so none of them carries another run's
 # threads or memory, and they can be found and removed afterwards.
@@ -76,7 +78,8 @@ class Exchange:
     chat: int = 1
     finding: str | None = None
     # Where the line sits in the scenario's script (from 1), the line as written, and what was
-    # sent for it: `typed`, `tap`, `accept` (the offer button) or `fallback` (no offer to tap).
+    # sent for it: `typed`, `tap`, `accept` (the offer button), `more` (Tell me more) or
+    # `fallback` (no button to tap).
     line: int = 0
     token: str = ""
     kind: str = "typed"
@@ -199,6 +202,28 @@ async def _framework_after(claims: Claims, thread_id) -> tuple[str, str, str | N
     return technique.framework_id, technique.outcome.value, technique.phase
 
 
+def _offer_token(
+    line: str, last_prompts: list, accepted: bool, told_more: bool
+) -> tuple[str | None, str, bool, bool]:
+    """What an `@accept` or `@more` line sends, its kind, and the two flags after it. The message
+    is None when the line is skipped, because that button was already tapped."""
+    fallback = line.partition("|")[2] or "Yes, I'd like some help with this."
+    if line.startswith("@accept"):
+        if accepted:
+            return None, "typed", accepted, told_more
+        offer = next((p for p in last_prompts if p.technique), None)
+        if offer is not None:
+            return offer.label, "accept", True, told_more
+        return fallback, "fallback", accepted, told_more
+    if told_more:
+        return None, "typed", accepted, told_more
+    # The `more` key never reaches a turn's prompts, so the button is found by its seeded label.
+    more = next((p for p in last_prompts if p.label.lower() == MORE_LABEL.lower()), None)
+    if more is not None:
+        return more.label, "more", accepted, True
+    return fallback, "fallback", accepted, told_more
+
+
 async def _run_one(
     user_id: str, style: SupportStyle, turns: list[str], start_in: dict | None = None,
     *, measure: bool = False,
@@ -207,6 +232,7 @@ async def _run_one(
 
     - `@accept|<fallback>` taps the offer if the last reply made one; otherwise sends the
       fallback line and tries again at the next `@accept`. Once accepted, later ones are skipped.
+    - `@more|<fallback>` taps Tell me more the same way, and is skipped once tapped.
     - `@tap:<label>` taps that button; if the last reply did not offer it, the label is sent
       anyway and the turn records the missing button.
     - `@newchat` folds what was said into memory, as starting a chat does in the app, and
@@ -239,6 +265,7 @@ async def _run_one(
             )
 
     accepted = bool(start_in)
+    told_more = False
     last_prompts: list = []
     try:
         for line_number, line in enumerate(turns, 1):
@@ -252,15 +279,12 @@ async def _run_one(
                 chat += 1
                 last_prompts = []
                 continue
-            if line.startswith("@accept"):
-                if accepted:
+            if line.startswith(("@accept", "@more")):
+                message, kind, accepted, told_more = _offer_token(
+                    line, last_prompts, accepted, told_more
+                )
+                if message is None:
                     continue
-                offer = next((p for p in last_prompts if p.technique), None)
-                if offer is not None:
-                    message, accepted, kind = offer.label, True, "accept"
-                else:
-                    message = line.partition("|")[2] or "Yes, I'd like some help with this."
-                    kind = "fallback"
             elif line.startswith("@tap:"):
                 message = line.removeprefix("@tap:")
                 kind = "tap"
@@ -308,8 +332,9 @@ def _score(exchanges: list[Exchange], style: SupportStyle, scenario: dict) -> li
     for index, exchange in enumerate(exchanges):
         # Everything said so far in this chat.
         said = " ".join(e.message for e in exchanges[: index + 1] if e.chat == exchange.chat)
-        # An offer and the reply to Tell me more are the seeded words, not the model's, and both
-        # carry the offer's technique button: the framework's name in them is meant.
+        # An offer is the seeded words after one line of the model's, read by hand, and the reply to
+        # Tell me more is seeded. Both carry the offer's technique button: the framework's name in
+        # them is meant.
         if not exchange.offered:
             findings += validators.check(exchange.reply, said)
             findings += validators.says_framework(exchange.reply, FRAMEWORK_NAMES)

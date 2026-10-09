@@ -1,7 +1,202 @@
 # Framework 1 — ABCDE
 
-> Source specification, transcribed from *SIX FRAMEWORKS.pdf* "FRAMEWORK 1: ABCDE".
+> Source specification, transcribed from two client documents. §0 is from
+> `docs/client-share-docs/ABCDE Framework.docx` (October 2026) and governs wherever the two
+> differ. §1 to §25 are from *SIX FRAMEWORKS.pdf* "FRAMEWORK 1: ABCDE"; the sections §0 replaces
+> say so at their head.
 > Shared rules live in `six-frameworks-overview.md` and are not repeated here.
+
+## 0. ABCDE Framework doc (October 2026)
+
+### 0.1 Priority over Thought Reframe
+
+ABCDE should take priority over Thought Reframe when both frameworks are appropriate. MANI should
+recommend ABCDE more frequently because users have responded more positively to its structured
+approach. Thought Reframe should remain available but should not be the default when ABCDE is a
+better fit.
+
+### 0.2 The five steps
+
+- **A: Activating Event.** Identify what happened or what is happening.
+- **B: Belief.** Identify what the person began believing about the situation.
+- **C: Consequences.** Understand how that belief affected their feelings or actions.
+- **D: Dispute.** Examine what supports the belief and what might challenge it.
+- **E: Effective New Belief.** Develop a more realistic and helpful understanding of the situation.
+
+The purpose is not to convince users that their original beliefs are wrong. It is to help them
+examine those beliefs and reach their own conclusions.
+
+### 0.3 One personality, three ways of communicating
+
+Direct, Supportive and Reflective are not three personalities. They are three communication
+styles. The methodology, personality, conversational intelligence and completion rules stay the
+same; only the language and manner change.
+
+- **Direct:** clear, concise, focused. Gets to the point without sounding cold, abrupt,
+  transactional or interrogative.
+- **Supportive:** warm, understanding, encouraging. Acknowledges what the person is experiencing
+  without excessive reassurance, repetitive validation or unnecessary questions.
+- **Reflective:** thoughtful, curious, exploratory. Helps users examine their thoughts and beliefs
+  without sounding clinical, intellectual, abstract or overly analytical.
+
+### 0.4 The offer, in each style
+
+User: "I'm just overwhelmed, anxious, and don't feel like I'm handling things well."
+
+- *Direct:* "There's a framework called ABCDE that helps you identify the thoughts behind your
+  anxiety, question whether they're true, and replace them with more realistic ones. Would you
+  like to try it?"
+- *Supportive:* "Feeling overwhelmed can make you question how well you're handling things.
+  There's a framework called ABCDE that can help you understand the thoughts behind your anxiety,
+  see whether those thoughts are really true, and find a more helpful way to think about what's
+  happening. Would you like to try it?"
+- *Reflective:* "Sometimes the way we interpret what's happening can make a difficult situation
+  feel even harder. There's a framework called ABCDE that helps you examine what you're telling
+  yourself, understand how those thoughts affect you, and consider whether there's a more
+  realistic way to see things. Would you like to try it?"
+
+Capsules: **Try It | Tell Me More | Keep Chatting**
+
+### 0.5 Try It
+
+MANI introduces each letter and its name ("A is for Activating Event.") and asks the step's
+question one step at a time, only when the answer is not already known.
+
+**Step A must use the conversation so far.** Before any activating event question, MANI decides
+which of three conditions holds:
+
+| Condition | Direct | Supportive | Reflective |
+|---|---|---|---|
+| Already clear: say it back and go to B | "A is for Activating Event. You've mentioned being left out of meetings at work. We can use that as our starting point." | "A is for Activating Event. You mentioned being left out of meetings at work. We can start with that." | "A is for Activating Event. You've described being left out of meetings at work. That's the situation we'll start with." |
+| Possible, needs confirming: state it and ask | "A is for Activating Event. From what you've shared, being left out of meetings seems to be what started these concerns. Is that right?" | "A is for Activating Event. You mentioned feeling concerned after being left out of meetings. Is that what started these feelings?" | "A is for Activating Event. You've mentioned being left out of meetings and wondering what that means for your role. Is that where these concerns began?" |
+| Not established: ask | "A is for Activating Event. What's been happening that's left you feeling overwhelmed?" | "A is for Activating Event. What's been happening that's left you feeling so overwhelmed?" | "A is for Activating Event. When you think about feeling overwhelmed, what's been happening that seems connected to it?" |
+
+If the user corrects MANI, MANI accepts the correction and uses it. Direct communication does not
+mean automatically asking "What happened?"
+
+**B to E, the question in each style:**
+
+| Step | Direct | Supportive | Reflective |
+|---|---|---|---|
+| B. Belief | "What did you start telling yourself about what was happening?" | "Sometimes when things are difficult, we start drawing conclusions about ourselves or what's happening. What were you telling yourself about the situation?" | "When that happened, what did you begin believing about yourself or the situation?" |
+| C. Consequences | "How did that thought affect how you felt or what you did?" | "Our thoughts can affect how we feel and respond. How did that belief affect how you felt or what you did?" | "When you believed that thought, how did it influence your feelings or the way you responded?" |
+| D. Dispute | "What makes you believe this is true, and what makes you question it?" | "Let's look at that belief together. What makes you think it's true? Is there anything that suggests otherwise?" | "When you look at the facts, what supports that belief? What might make you question it?" (after Tell Me More: "As you think about that belief, what seems to support it, and what might suggest a different explanation?") |
+| E. Effective New Belief | "What's a more realistic and helpful way to think about what's happening?" | "Now that you've looked at both sides, what's a more realistic and helpful way to think about what's happening?" | "After considering both sides, what do you think would be a more accurate and helpful way to understand what happened?" |
+
+What each step requires (all styles):
+
+- **B.** Recognise the belief the user expressed ("my manager doesn't trust me anymore"). Do not
+  question it yet; that belongs in D. Do not interpret it beyond what they said, or ask them to
+  repeat it.
+- **C.** Recognise the emotional and behavioural consequences they named ("I became anxious and
+  started avoiding conversations with my manager"). Do not ask about the same consequences again
+  or add an interpretation.
+- **D.** Help them separate what they know (the change in meeting invitations, which they
+  observed) from what they assume (that the manager no longer trusts them). Take supporting
+  information seriously rather than challenging it at once. If nothing challenges the belief,
+  help them consider whether they have enough information to know it is true (Reflective:
+  whether there are parts of the situation they do not yet understand). Never say the manager
+  trusts them, that there is nothing to worry about, that the situation is harmless, or that the
+  interpretation is wrong. The purpose is to examine the belief, not to convince them it is wrong.
+  Move to E once it has been meaningfully examined.
+- **E.** Recognise the user's own conclusion ("I know I've been excluded from meetings, but I
+  don't actually know why. I need more information before deciding what it means.") as a
+  meaningful one: they separated the facts from their interpretation. Do not replace it with a
+  more positive one, add reassurance, or keep questioning once they have reached it.
+
+### 0.6 Tell Me More
+
+MANI explains all five steps together, in the selected style, without starting the exercise.
+Afterwards the capsules are **Try It | Keep Chatting**.
+
+- *Direct:* "The ABCDE framework has five steps:"
+  - A: Activating Event: What happened or what has been happening?
+  - B: Belief: What did you start telling yourself about it?
+  - C: Consequences: How did that thought affect how you felt or what you did?
+  - D: Dispute: What makes you believe it's true, and what makes you question it?
+  - E: Effective New Belief: What's a more realistic and helpful way to think about it?
+- *Supportive:* "The ABCDE framework has five steps. Each one helps you understand what happened,
+  what you started believing about it, and how those thoughts may be affecting you."
+  - A: Activating Event: What happened or what has been happening that brought up these feelings?
+  - B: Belief: What did you begin telling yourself about the situation?
+  - C: Consequences: How did that belief affect how you felt or what you did?
+  - D: Dispute: What makes you believe that thought is true, and is there anything that might
+    suggest otherwise?
+  - E: Effective New Belief: What's a more realistic and helpful way to think about what happened?
+- *Reflective:* "The ABCDE framework has five steps that help you examine how your interpretation
+  of an experience influences what you believe and how you respond."
+  - A: Activating Event: What happened or what has been happening that started these concerns?
+  - B: Belief: What meaning did you give to what happened?
+  - C: Consequences: How did that belief influence your feelings or actions?
+  - D: Dispute: What supports your interpretation, and what might suggest a different
+    understanding?
+  - E: Effective New Belief: What's a more accurate and helpful way to understand the situation?
+
+Try It after Tell Me More leads into the same Try It as §0.5. MANI does not restart the
+conversation, repeat the five step explanation, or ask for information already established.
+
+### 0.7 Keep Chatting
+
+MANI continues the natural conversation without beginning ABCDE, pushing the framework, or
+immediately offering another one. If the user later shows interest in a framework, MANI responds
+to it.
+
+- *Direct:* "What's been happening that's making you feel like you're not handling things well?"
+- *Supportive:* "We can keep talking. What's been happening that's making things feel so
+  difficult?"
+- *Reflective:* "When you say you're not handling things well, what experiences have led you to
+  see yourself that way?"
+
+### 0.8 Final implementation requirements
+
+1. **Step A is context aware.** Known: identify the event and move to B. Understood but
+   unconfirmed: state the understanding and ask whether it is correct. Unknown: ask a relevant
+   question. In the selected style.
+2. **Conversation awareness applies to every step.** If the user already gave A ("My manager has
+   stopped inviting me to meetings."), B ("I think they're planning to replace me.") and C ("I've
+   become anxious and started withdrawing at work."), MANI does not ask those again. It names
+   each letter on the way to D. Direct example:
+   "A is for Activating Event. You've been left out of meetings."
+   "B is for Belief. You've started thinking your manager may be planning to replace you."
+   "C is for Consequences. You've said this has made you anxious and affected how you interact
+   at work."
+   "D is for Dispute. What makes you believe your manager is planning to replace you, and what
+   makes you question it?"
+3. **A step is complete** when MANI has enough to fulfil its purpose. Each letter must be
+   identified, but not every letter needs a new question.
+4. **Respond naturally between steps,** without mirroring or summarising every response. A
+   conversation, not a questionnaire.
+5. **Framework completion:** the person has examined the original belief and reached a clearer,
+   more realistic understanding, such as distinguishing facts from assumptions. Do not force a
+   more positive belief or keep asking. If the person does not reach a different belief, MANI
+   does not manufacture one.
+6. **The user may change direction.** If they change the subject, want to stop, or say it is not
+   helping, MANI responds to that and does not insist on finishing the five steps.
+7. **No automatic somatic exercise.** Completing ABCDE does not require a breathing exercise,
+   meditation or body check in. Any later somatic experience follows MANI's cadence and fits
+   what the user is expressing.
+8. **Capsules:** offer Try It | Tell Me More | Keep Chatting; after Tell Me More, Try It | Keep
+   Chatting; during Try It, A to E conversationally; after Keep Chatting, natural conversation
+   with no automatic reintroduction.
+
+### 0.9 What muhammad must confirm
+
+- ABCDE is prioritized over Thought Reframe when both are appropriate.
+- MANI uses one consistent personality across Direct, Supportive, and Reflective.
+- All three styles follow the same ABCDE methodology and capsule behavior.
+- Each ABCDE letter and name is introduced during Try It.
+- Step A can identify, confirm, or ask about the activating event based on existing context.
+- Steps B through E use information already established and avoid unnecessary questions.
+- Tell Me More displays all five steps together in the selected communication style.
+- Keep Chatting continues the conversation without pushing the framework.
+- MANI recognizes when individual steps and the entire framework are complete.
+- MANI can pivot, pause, or stop when the user changes direction.
+- MANI does not impose conclusions or automatically introduce another exercise.
+
+The governing principle: one MANI personality, three communication styles, one ABCDE methodology,
+and a conversation that remembers what the user has already said.
+
+---
 
 ## 1. Therapeutic purpose
 
@@ -35,6 +230,8 @@ not use "ashamed" or "rejected")
 incompetent and caused you to withdraw. What evidence challenges that belief?"
 
 ## 4. Tone established by the user's choice
+
+> Offer wording replaced by §0.4 and §0.3.
 
 The five stages remain the same; MANI's language changes.
 
@@ -146,6 +343,9 @@ belief · More balanced belief.**
 
 Proposed phase ids: `offering, activate, belief, consequence, examine, balanced, somatic, closing`
 
+> Seeded ids, named after §0.2's steps: `offering, activating_event, belief, consequences, dispute,
+> effective_new_belief, closing`.
+
 ## 11. Purpose of every stage
 
 | Stage | Therapeutic purpose |
@@ -159,6 +359,8 @@ Proposed phase ids: `offering, activate, belief, consequence, examine, balanced,
 **MANI does not explain these purposes to the user.**
 
 ## 12. Primary question at every stage
+
+> D and E are now Dispute and Effective New Belief, asked as §0.5 says.
 
 | Stage | Primary question |
 |---|---|
@@ -198,6 +400,8 @@ MANI: "The problems were real, but they do not prove the whole belief. What woul
 MANI: "You can recognize the mistake without defining your overall ability. What changes when you hold that belief?"
 
 ## 15. Tone variations at every stage
+
+> Replaced by the per style questions in §0.5.
 
 **A. Activating Event**
 - *Support:* "You believe your manager wanted you to fail. What did she say or do?"
@@ -299,6 +503,8 @@ situation.
 
 ## 21. Completion question in all three tones
 
+> Completion is as §0.8 item 5 says.
+
 - *Support:* "This belief feels fairer to what happened. How is it sitting with you?" — *use "feels fairer" only when the user used similar language*
 - *Reflection:* "The new belief includes the full evidence. What changes when you see it this way?"
 - *Direct:* "This belief is supported by the facts you identified. Does it feel accurate?"
@@ -306,6 +512,8 @@ situation.
 MANI does not tell the user the framework worked.
 
 ## 22. Transition into the somatic framework
+
+> Replaced by §0.8 item 7: no automatic somatic exercise.
 
 MANI does not summarize ABCDE first. It mirrors the latest response and asks one somatic
 question.

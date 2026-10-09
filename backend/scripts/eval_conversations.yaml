@@ -152,10 +152,19 @@
     - "I'm trying to balance work, family, and everything else, and I have a deadline coming up."
     - "I don't know where to start."
     - "Mostly the deadline. It's on Friday and I haven't begun."
+# The client's job decision conversation (feedback of 2026-10-08), run once per style (spec 0016).
+# Their principle: understand the problem, introduce the set naturally, use what they already shared.
+- name: client_job_decision
+  turns:
+    - "I'm facing an important decision, and I keep going back and forth. Every time I think I've made up my mind, I start questioning myself again. I'm frustrated because I don't understand why I can't just decide."
+    - "I'm trying to decide whether to accept a new job opportunity or stay where I am. There are good reasons for both, and I'm afraid of making the wrong choice."
+    - "The new job offers better pay and more responsibility, but I've been at my current company for years. I know the people, I'm comfortable there, and I'm worried I might regret leaving."
+    - "@accept|I just want to stop going back and forth and be able to decide."
+    - "@accept|Okay, let's try it."
 
 # Inside a framework: starts with ABCDE accepted, then answers its stages the way a person would.
 - name: framework_abcde_stages
-  start_in: {framework: abcde, phase: activate}
+  start_in: {framework: abcde, phase: activating_event}
   turns:
     - "My manager criticized my presentation in front of the whole team."
     - "She said two of my recommendations didn't have enough support."
@@ -164,7 +173,7 @@
     - "Well, she also asked me to lead the next project, so maybe not everyone thinks that."
 
 # ---------------------------------------------------------------------------
-# Demo rehearsal: whole journeys, improvised openings, and a returning person.
+# `@accept|<line>` taps the offer when there is one, otherwise says <line>. `@more|<line>` taps Tell Me More the same way.
 # `@accept|<line>` taps the offer when there is one, otherwise says <line>.
 # `@tap:<label>` taps a named button. `@newchat` folds memory and opens a second chat.
 # ---------------------------------------------------------------------------
@@ -190,6 +199,18 @@
     - "I still keep thinking about that meeting though."
     - "I guess I want to stop letting one comment decide how I feel about my work."
     - "Maybe I could ask her for feedback before the next presentation."
+
+# Tell Me More before Try It: the reply after Try It must neither list the five steps again nor ask
+# for the event they already gave (client ABCDE doc, Tell Me More). Run in Reflective (spec 0015).
+- name: abcde_told_more
+  turns:
+    - "My manager criticized my presentation in front of the whole team."
+    - "She said two of my recommendations didn't have enough support, and now I keep thinking I'm bad at my job."
+    - "@more|It keeps going round in my head and I'd like to work through it."
+    - "@more|Yes, I want to look at it properly."
+    - "@accept|Okay, let's try it."
+    - "That I'm bad at my job and everyone saw it."
+    - "I stopped talking for the rest of the meeting and avoided her afterwards."
 
 # muhammad's own chat, 2026-09-24: on "Yes, let's try it", Mani asked which problem to work on first, right
 # after being told. The reply after @accept must build on it, not ask again.
@@ -355,12 +376,12 @@
     - "@tap:Chat More"
     - "Thanks."
 
-# Saying "I want to keep talking" to an offer, carrying on, and being offered something again once it fits.
+# Saying "Keep Chatting" to an offer, carrying on, and being offered something again once it fits.
 - name: decline_then_reoffer
   turns:
     - "My manager criticized my presentation in front of the whole team."
     - "She said two of my recommendations didn't have enough support, and now I keep thinking I'm bad at my job."
-    - "@tap:I want to keep talking"
+    - "@tap:Keep Chatting"
     - "I just keep replaying her words."
     - "It's been going round in my head all day."
     - "I really can't shake the feeling I'm not good enough at this job."

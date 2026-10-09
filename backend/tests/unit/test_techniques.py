@@ -154,7 +154,7 @@ def test_a_veto_list_a_portal_edit_broke_is_ignored_with_one_error_naming_no_phr
 # Shaped as the seed writes ABCDE: its own stages, `closing` as the last own phase, then the ending.
 SEEDED_ABCDE = Framework(
     id="abcde", name="ABCDE", summary="s", body="b",
-    phases=["offering", "activate", "belief", "consequence", "examine", "balanced", "closing", *ENDING_PHASES],
+    phases=["offering", "activating_event", "belief", "consequences", "dispute", "effective_new_belief", "closing", *ENDING_PHASES],
 )
 
 
@@ -164,7 +164,7 @@ def entry(status: StageStatus, turns: int = 0) -> LedgerEntry:
 
 def test_the_ledger_tracks_the_stages_between_the_offer_and_the_last_own_phase():
     registry = Registry([SEEDED_ABCDE])
-    assert registry.ledger_stages("abcde") == ["activate", "belief", "consequence", "examine", "balanced"]
+    assert registry.ledger_stages("abcde") == ["activating_event", "belief", "consequences", "dispute", "effective_new_belief"]
     assert registry.ledger_stages("somatic_breathing") == []
     assert registry.ledger_stages(None) == []
 
@@ -179,17 +179,17 @@ def test_a_framework_seeded_without_the_ending_ends_its_own_stages_on_its_last_p
 def test_the_stage_asked_is_the_first_one_not_known():
     registry = Registry([SEEDED_ABCDE])
     known = entry(StageStatus.KNOWN)
-    assert registry.stage_from_ledger("abcde", {}) == "activate"
-    assert registry.stage_from_ledger("abcde", {"activate": known, "belief": known, "consequence": known}) == "examine"
+    assert registry.stage_from_ledger("abcde", {}) == "activating_event"
+    assert registry.stage_from_ledger("abcde", {"activating_event": known, "belief": known, "consequences": known}) == "dispute"
     # A stage with nothing yet, or only part, is still the one to ask, whatever follows it.
-    assert registry.stage_from_ledger("abcde", {"activate": known, "belief": entry(StageStatus.PARTIAL), "consequence": known}) == "belief"
-    assert registry.stage_from_ledger("abcde", {"belief": known}) == "activate"
+    assert registry.stage_from_ledger("abcde", {"activating_event": known, "belief": entry(StageStatus.PARTIAL), "consequences": known}) == "belief"
+    assert registry.stage_from_ledger("abcde", {"belief": known}) == "activating_event"
 
 
 def test_every_stage_known_or_passed_is_the_last_own_phase():
     registry = Registry([SEEDED_ABCDE])
     ledger = {s: entry(StageStatus.KNOWN) for s in registry.ledger_stages("abcde")}
-    ledger["examine"] = entry(StageStatus.PASSED, turns=4)
+    ledger["dispute"] = entry(StageStatus.PASSED, turns=4)
     assert registry.stage_from_ledger("abcde", ledger) == "closing"
 
 

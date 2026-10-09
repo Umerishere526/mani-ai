@@ -69,6 +69,18 @@ def _the_name_and_the_description(template: str) -> str:
     return template
 
 
+def _no_braces(text: str) -> str:
+    # Literal text is never formatted, so a {field} or an escaped {{ would reach the person as written.
+    if "{" in text or "}" in text:
+        raise ValueError("must hold no { or }, since nothing is filled in")
+    return text
+
+
+def _keyed_by_every_style(by_style: dict) -> None:
+    if sorted(by_style) != sorted(STYLES):
+        raise ValueError(f"keys must be exactly {', '.join(STYLES)}")
+
+
 def _differ_ignoring_case(labels: list[str]) -> None:
     # A tap on a button is matched to its label ignoring case.
     if len({label.strip().lower() for label in labels}) != len(labels):
@@ -77,6 +89,7 @@ def _differ_ignoring_case(labels: list[str]) -> None:
 
 GreetingText = Annotated[Text, AfterValidator(_only_the_name_field)]
 OfferText = Annotated[Text, AfterValidator(_the_name_and_the_description)]
+LiteralText = Annotated[Text, AfterValidator(_no_braces)]
 
 
 class _Strict(BaseModel):
@@ -100,12 +113,30 @@ class OfferLabels(_Strict):
         return self
 
 
+class StyledOffer(_Strict):
+    """One framework's offer and reply to Tell me more in one conversation style, sent as written."""
+
+    text: LiteralText
+    more_text: LiteralText
+
+
 class Offer(_Strict):
     """The offer the code writes when the model offers a set, and the reply to Tell me more."""
 
     text: OfferText
     more_text: OfferText
     labels: OfferLabels
+    # Keyed by framework id, then by SupportStyle value: sent instead of `text` and `more_text`.
+    by_framework: dict[str, dict[str, StyledOffer]]
+
+    @field_validator("by_framework")
+    @classmethod
+    def _every_style_or_none(
+        cls, by_framework: dict[str, dict[str, StyledOffer]]
+    ) -> dict[str, dict[str, StyledOffer]]:
+        for by_style in by_framework.values():
+            _keyed_by_every_style(by_style)
+        return by_framework
 
 
 class Replies(_Strict):
@@ -120,8 +151,7 @@ class Replies(_Strict):
     @field_validator("style_labels", "openers")
     @classmethod
     def _one_for_each_style(cls, by_style: dict[str, str]) -> dict[str, str]:
-        if sorted(by_style) != sorted(STYLES):
-            raise ValueError(f"keys must be exactly {', '.join(STYLES)}")
+        _keyed_by_every_style(by_style)
         return by_style
 
     @field_validator("style_labels")
