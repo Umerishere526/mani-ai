@@ -89,7 +89,7 @@ messages, with Mani's buttons live only on its newest message, as in the apps.
 ## Tests
 
 ```bash
-cd chat-tester && source .venv/bin/activate && pip install -r requirements-dev.txt
+cd chat-tester && source venv/bin/activate && pip install -r requirements-dev.txt
 pytest
 ```
 
