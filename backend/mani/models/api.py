@@ -67,6 +67,18 @@ class SendMessageIn(BaseModel):
     client_message_id: uuid.UUID | None = None
 
 
+class LedgerRow(BaseModel):
+    """One stage of the running framework as the model read it this turn. Debug mode only."""
+
+    stage: str
+    title: str | None = None
+    status: str
+    known: str | None = None
+    action: str
+    # The stage this reply asks.
+    asking: bool = False
+
+
 class TurnOut(BaseModel):
     id: uuid.UUID | None = None
     content: str
@@ -78,6 +90,8 @@ class TurnOut(BaseModel):
     was_duplicate: bool = False
     # Null unless AI_DEBUG_MODE is on.
     reasoning: str | None = None
+    # Null unless AI_DEBUG_MODE is on: what the model knew of each stage and what it did about it.
+    ledger: list[LedgerRow] | None = None
     # Set only on the turn a framework completes, and only once the catalog has a
     # matching exercise.
     exercise: "ExerciseOut | None" = None

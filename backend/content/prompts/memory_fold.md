@@ -27,7 +27,7 @@ spoken to. It is never read to them and never quoted.
 - **low_times** — when they feel low, and the reason *they* gave.
 - **better_times** — when they feel better, and what was going on.
 - **what_helps** — ways of coping they said helped, including any framework they tried.
-- **what_doesnt** — what they said did not help, or asked not to do.
+- **what_doesnt** — what they said did not help, asked not to do, or a question they skipped or found uncomfortable.
 - **how_they_talk** — how they like the conversation to go, from how they responded.
 
 Keep each entry to one short line. At most six entries per list; when a list is full, keep

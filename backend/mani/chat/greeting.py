@@ -29,11 +29,13 @@ def greeting(nickname: str | None, returning: bool) -> str:
     return f"{hello} {STYLE_QUESTION}"
 
 
-# Buttons asking what an offer involves. An offer carries two, Try it and Keep chatting
-# (muhammad, 2026-09-24), and repairs drops one of these the model still adds, since the offer's
-# own words say how the questions would help.
+# The client's three buttons under an offer (muhammad, 2026-10-08), set by repairs whatever the
+# model labelled them. Tell me more is the one that asks what the questions involve.
+TRY_IT_LABEL = "Try it"
+TELL_ME_MORE_LABEL = "Tell me more"
+KEEP_CHATTING_LABEL = "Keep chatting"
 TELL_ME_ABOUT_THIS_LABEL = "Tell me about this"
-EXPLAIN_LABELS = {TELL_ME_ABOUT_THIS_LABEL.lower(), "tell me more"}
+EXPLAIN_LABELS = {TELL_ME_ABOUT_THIS_LABEL.lower(), TELL_ME_MORE_LABEL.lower()}
 
 # The two choices every framework ends on - the client's cadence: "Framework completes ->
 # Somatic check-in -> Chat More OR Go to Library".

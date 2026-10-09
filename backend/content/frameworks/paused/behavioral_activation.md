@@ -15,7 +15,7 @@ activation:
     - "what gets in the way of beginning"
     - "whether anything physical or medical explains it, or whether this is early grief (then not this)"
   # Said anywhere in the conversation, an offer of this framework is redrafted and then dropped:
-  # early grief is not the avoidance it treats. Whole phrases, matched as the signals are.
+  # early grief is not the avoidance it treats. Whole phrases, matched as whole words.
   never_offer_when_said:
     - "died"
     - "passed away"
@@ -28,8 +28,7 @@ activation:
     - "grieving"
     - "grief"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
   appropriate_when:
     - "The user knows something they want or need to do"
     - "The user is having difficulty beginning"
@@ -55,30 +54,6 @@ activation:
     - "Fatigue with no identifiable avoidance pattern behind it - nothing they used to do and stopped, no trigger they are avoiding - which points to an undiagnosed medical cause (thyroid, anaemia, sleep, medication) rather than a Behavioral Activation case"
     - "The person cannot complete basic care, or their inactivity looks like an impairment that needs professional evaluation - activity planning is not the response, and they must never be told to push through a limitation"
     - "Acute grief in the period right after a loss - the withdrawal Behavioral Activation treats is avoidance of reminders and of life going on, not the ordinary work of mourning itself"
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "but i cannot start"
-    - "but i cannot begin"
-    - "in bed all day"
-    - "stopped answering"
-    - "keep avoiding the task"
-    # The open fragment, so "cannot make myself start", "begin", "get up" and "do anything"
-    # all match. The two specific forms it replaces left the commonest phrasing routing nowhere.
-    - "cannot make myself"
-  signals:
-    - "stopped cooking"
-    - "not been getting dressed"
-    - "stopped going outside"
-    - "kept up with anything"
-    - "no structure anymore"
-    - "ignored everyone's messages"
-    - "keep canceling plans"
-    - "speak to anyone"
-    - "stopped calling my family"
-    - "when i feel ready"
-    - "waiting to want to"
-    - "i have no motivation"
-    - "i will start tomorrow"
   redirects:
     - signal: "I do not know what I should do."
       instead: structured_problem_solving
@@ -139,8 +114,8 @@ stages:
       - when: "they report an injury, severe or sudden physical symptoms, intoxication, or a medical condition as the reason"
         reply: "A physical symptom like that comes first, and I would not ask you to push through it. What would be most helpful right now?"
     ask:
-      supportive: "What have you stopped doing?"
-      reflective: "What have you stopped doing?"
+      supportive: "What have you been stepping back from lately?"
+      reflective: "What have you noticed yourself no longer doing?"
       direct: "What have you stopped doing?"
   matters:
     purpose: "Establish why returning to this activity matters to the user."
@@ -155,8 +130,8 @@ stages:
       - when: "it does not matter - \"I only think I should do it.\""
         reply: "This action does not matter to you right now. What would matter more?"
     ask:
-      supportive: "Why does this matter to you?"
-      reflective: "Why does this matter to you?"
+      supportive: "What makes this one matter to you?"
+      reflective: "What does this give you, when you do it?"
       direct: "Why does this matter to you?"
   choose:
     purpose: "Select one activity rather than attempting everything."
@@ -174,8 +149,8 @@ stages:
       - when: "asks MANI to pick - \"Pick one for me.\" / \"What should I start with?\""
         reply: "<one of the things they named, as a small first step>. Does that work, or would you change it?"
     ask:
-      supportive: "Which one do you want to begin with?"
-      reflective: "Which one do you want to begin with?"
+      supportive: "Which one feels right to start with?"
+      reflective: "Of these, which one are you drawn to first?"
       direct: "Which one do you want to begin with?"
   manageable:
     purpose: "Reduce the activity until it fits the user's present capacity."
@@ -194,8 +169,8 @@ stages:
       - when: "cannot identify an action - \"I don't know.\""
         reply: "The first action is not clear yet. Would <one to three very small options that fit what they stopped, such as getting dressed, opening the curtains, or texting someone> feel most manageable?"
     ask:
-      supportive: "What is the smallest version you could do?"
-      reflective: "What is the smallest version you could do?"
+      supportive: "What is the smallest version that would feel doable?"
+      reflective: "What would a much smaller version of it look like?"
       direct: "What is the smallest version you could do?"
   begin:
     purpose: "Turn the activity into a specific action rather than a general intention."
@@ -211,8 +186,8 @@ stages:
       - when: "cannot choose a time"
         reply: "A set time does not work for you. What could remind you to begin?"
     ask:
-      supportive: "When will you do it?"
-      reflective: "When will you do it?"
+      supportive: "When could you give it a try?"
+      reflective: "When do you see yourself doing it?"
       direct: "When will you do it?"
   barrier:
     purpose: "Identify what may prevent action and what the user can do if it appears."
@@ -231,8 +206,8 @@ stages:
       - when: "the action is unsafe"
         reply: "That action could place you at risk. What is a safer action you can take?"
     ask:
-      supportive: "What could prevent you from beginning?"
-      reflective: "What could prevent you from beginning?"
+      supportive: "What might get in the way of starting?"
+      reflective: "What do you notice could stop you from beginning?"
       direct: "What could prevent you from beginning?"
   closing:
     purpose: "Confirm completion in the user's own terms, without promising the plan will work or that the user will feel better."

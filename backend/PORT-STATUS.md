@@ -44,20 +44,23 @@ the same change as the work.**
   1. The deterministic safety screen (`safety.py`) runs before anything else. An explicit statement locks
      the thread with no model call. An indirect one (including passive ideation and "pills in my hand")
      is a concern: it suspends frameworks and offers without locking.
-  2. The router (`router.py`) shortlists frameworks from phrases over their last four messages. It is a hint, never a requirement. When the nearest fit falls due, the top of the shortlist carries its offer wording even if the router is not confident of it.
-  3. `context.py` builds the `[ctx]` block: style, offer timing, the stage in progress, and `their_last`
-     (a vague reply, a correction, or a request only to be heard).
+  2. Code decides one thing about which framework: an imminent action (`eligibility.py`) makes DBT STOP the candidate, with its offering stage in `[ctx]`. Every other choice is the model's, from the Framework Index.
+  3. `context.py` builds the `[ctx]` block: style, offer timing, the stage in progress and the stages
+     after it. Nothing in code classifies what the person said: whether a reply is vague, a correction or
+     a wish only to be listened to is the model's reading (`response_format.md`, reasoning).
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,
      `heading_toward`, `offer_fit`, then `text`. The order is deliberate.
-  5. `redraft.py` may ask once more (twice for a missing question): a feeling the person never named, an
+  5. `redraft.py` may ask once more (twice for a missing question): an
      offer before it is allowed or one their words rule out, an offer that is due and missing, no
-     question, or the last reply's question asked again.
-  6. `repairs.py` corrects what remains, in code: script leakage, buttons, an early offer, an unnamed feeling.
+     question (unless the draft chose a shape that asks nothing), or the last reply's question asked again.
+  6. `repairs.py` corrects what remains, in code: script leakage, buttons, an early offer.
   7. Crisis, the reply, the framework state and the summary are written together.
-- **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): six, each reviewed against the
-  client's specification. A confident offer may come from the person's second message (third for ABCDE,
-  Thought Reframe and ACT); the nearest fit is due by the fourth, with "Try the closest fit" beside
-  "Keep chatting". The shared body check-in and practice come from `content/prompts/somatic.md`.
+- **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): only ABCDE is seeded and offered
+  (the client's ABCDE document of 2026-10-09). The other five are kept in `content/frameworks/paused/`; the seed
+  sets their rows inactive (never deleted, since threads and exercises refer to them), and moving a file back up
+  brings it back. ABCDE ends on E and then the shared body check-in below (muhammad, 2026-10-09: the check-in
+  is asked). A framework is offered as soon as it fits, from the person's first message; the
+  nearest fit is due by the fourth (sixth in Supportive and Reflective), offered like any other. The shared body check-in and practice come from `content/prompts/somatic.md`.
   The body route is held in code (`orchestrator._body_route_step`): the check-in is asked once; whatever
   the person answers, the next reply asks where, with Chest / Head / Stomach / Somewhere else; "idk" asks
   again; a place gets the client's practice for that place and style, word for word, ending "How do you feel
@@ -72,8 +75,9 @@ the same change as the work.**
   issue. `GET /v1/exercises` is the whole catalog, and responses never carry the storage path.
 - **Admin**: prompt CRUD with versioning, exercise CRUD, crisis event review, a user's memory.
 - **Account deletion**: `DELETE /v1/account` removes the user and everything they own.
-- **Eval harness**: `scripts/eval_replies.py` runs scripted conversations through the real stack and removes
-  the users it created. `tests/evals/` holds the deterministic checks every suite runs.
+- **Scenario check**: `scripts/scenario_check.py` replays the client's test conversations (`scripts/scenarios.json`)
+  through the real stack in every style. It flags replies that hand the person's words back, styles that ask the
+  same question at the same point, internal words, and offer mistakes, and removes the users it created.
 
 ## The API
 
@@ -103,8 +107,89 @@ the same change as the work.**
 - **A turn is one model call, or more when a draft is redrafted**. The one scoped extra
   call is the exercise pick at the end of a framework. `test_a_turn_costs_exactly_one_provider_call` still
   holds for a draft that needs no redraft.
-- **Offers follow Mani's confidence**. Every reply before an offer asks one question.
+- **A framework is offered as soon as it fits, with no count to wait out**: from the person's first message
+  (muhammad, 2026-10-10; there is no `earliest_offer_message`).
+  The closest fit is due by their fourth message in Direct, their sixth in Supportive and Reflective. Every
+  reply before an offer asks one question, and what they say back about how it is for them is how the set
+  is found. The set is chosen by what hurts, by its Use it when and
+  Telling them apart; Structured Problem-Solving only once they say they want a decision or plan. No phrase
+  matching ranks or shortlists them: the model chooses, code only checks (cooldown, already offered, what they
+  said that rules one out) and owns the imminent action (muhammad, 2026-10-09; 2026-10-08: when a weak router
+  guess stopped being the candidate, wrong SPS offers went from 4 of 10 live conversations to 0).
 - **Memory is per person**.
+- **An offer is one short line that names its framework** (the word may be said), building on the newest thing they
+  said, then the client's permission question; the client's description is shown only when they ask to hear more.
+- **Each style is its own way of talking.** Its recipe and its own question focus ride on every turn in `[ctx]`:
+  All three ask about how one part is for them (muhammad, 2026-10-09); Direct goes to the heart of that part,
+  Supportive asks what it is like, Reflective what it brings up. Direct is never cold or interrogative: a few
+  words of Mani's own, then one short question, never more facts about the event. Mani reflects only when it adds understanding, never as a formula before every question.
+- **An offer carries the client's three buttons**, Try it, Tell me more, Keep chatting, set in `repairs.py`
+  whatever the model labels them; after Tell me more it comes back with the other two. The nearest fit is
+  offered exactly like a confident one, with no label or wording that says it is the nearest.
+- **Inside a framework, a stage their words already answer is skipped, with no check and no mention**
+  (muhammad, 2026-10-09): the model walks the stages in order from the one in force, skips each whose `ready_when`
+  what they said (here or in the Conversation Context) already meets, and asks the first that is not, reporting
+  that stage in `state.step` even several ahead. `[ctx]` carries the current and next stage in full and every
+  later stage up to the closing as `later_stage` (`ready_when` and the style's `ask`). Before the text the model fills
+  `stages_known`: from the stage in force, each stage with what they already said for it, in their short words,
+  and whether it is met, stopping at the first that is not; the question asks only for what that stage's known
+  does not hold. A draft whose `state.step` disagrees with its own ledger is redrafted once
+  (`redraft.ledger_stage`); a draft with no ledger is not judged by one. `Framework.may_skip`
+  decides what is never skipped, the closing and the body route, and `Registry.clamp` corrects a jump over
+  them to the closing. This holds from the turn they say yes. No stage question carries a button: a
+  "Not sure" button was added by mistake and removed (muhammad, 2026-10-09). The chosen style rides on every
+  framework turn in `stage_note`. A stage that is asked moves on once its `ready_when` is met, never needing
+  complete or certain answers, and after two tries unless the stage says to stay. A question that makes them
+  uneasy is let go and the next stage asked; memory records it. Unsure typed ("I don't know", "not sure") is
+  still helped once before the stage moves on: Mani offers what their situation or feeling points to as a
+  possibility to check, or the client's don't-know line, then weighs whatever they say against the stage
+  (muhammad 2026-10-10; now the model's reading, not a phrase list).
+- **Only ABCDE is offered, from the client's ABCDE document** (muhammad, 2026-10-09). The chat never names a
+  stage: no letter, no "A is for Activating Event.", no line for a stage already answered (a version that wrote
+  those lines was removed the same day). What Mani knows lives in the stage ledger, and the chat only asks, in its
+  own tone for the style, the next thing that is missing, with the document's question for the stage. A stage the
+  conversation answers is bypassed without a word; the closing
+  (E) is always asked. Step A confirms a possible event once ("Is that right?"), the one place anything is
+  confirmed; where it is not known it asks, using the feeling word they gave if they named one. Tell me more is
+  the numbered five steps in the person's style word for word (`stages.offering.explain`), the offer follows the
+  client's pattern per style (`offer`), Keep chatting asks the client's question (`keep_chatting`), the permission
+  question is "Would you like to try it?" in every style, and the body check-in is asked after E (muhammad
+  decided to keep it). An imminent action points to no framework while STOP is paused (`urgent` is false
+  unless `dbt_stop` is in the registry). Supportive inside a framework adds no extra reassurance, validation or
+  questions.
+- **The stage ledger** (`stages_known`, written before the reply): each stage with what they already said and a
+  `status` of known (bypassed), partial (ask only the gap), confirm or missing. With `AI_DEBUG_MODE` on, a turn
+  returns `ledger`: every ABCDE stage as bypassed, partial, confirm, missing, done earlier or not reached, with
+  the stage the reply asks marked, and the chat tester shows it in the sidebar under "What Mani knows".
+- **No phrase lists judge the conversation** (muhammad, 2026-10-09): code holds no list of what people say
+  (vague, unsure, correcting, wanting only to be heard), no list of feeling words, no list of self-judgments
+  and no pain words. The rules for those live in the prompts, and a draft answers them itself: a reply that
+  asks nothing says so by its shape (`schema.NO_QUESTION_SHAPES`). What code still checks is not about meaning:
+  the crisis screen, script and internal-word stripping, the `[ctx]` injection guard, the imminent-action
+  phrases, the body route's place and decline words, and `never_offer_when_said` in the framework files.
+- **Questions before an offer are about one part, and how it is for them** (muhammad, 2026-10-09): the model
+  chooses the one part they gave most weight or said last, asks what happened in it only if it does not know,
+  then asks about something real and present in it, in their words, and lets them find the word, never saying a
+  feeling they did not say. Never a hypothetical ("what would it mean"), never "what would it be like if"; asking how something they said is affecting them is fine in their own words, and a feeling word may be used in a question to confirm or correct (muhammad, 2026-10-09), never told to them as what they feel; a
+  fear of what may happen gets what they have noticed since, never why they think it. Before asking, the model
+  splits their message into what happened, what they conclude and what is still unsaid, and asks only for the last
+  (the reason they gave for a thought is already answered). Direct asks what they have noticed since, Supportive how
+  they are with it today, Reflective why it matters to them. Direct opens with the question, never a restatement. One short question of about ten words, never harder than the last, no two-part questions, no menu of
+  choices (a vague or unsure reply gets an easier question about one small part, not two ways it could go), and
+  no advice or suggestion hidden in a question. No question is aimed at a set: `heading_toward` only decides
+  what is offered (`context._MEANING["conversation_phase"]`). Mani never joins two things they said into a link
+  they did not make. Told it got something wrong, in any words, it says it misunderstood and asks what would be
+  more accurate (the client's line), never explaining what it meant.
+- **Mani's language is plain, everyday English**: correct grammar and punctuation, each sentence short enough
+  to say in one breath, as people talk in daily life (`mani_base.md` `voice`). Stage questions inside a
+  framework keep the framework's own wording and are not made about feeling.
+- **`[ctx]` explains itself.** Each line carries its meaning for this turn's value on the line under it
+  (`context._MEANING`), so `response_format.md` holds only what the block is. A test fails if a key is sent
+  without one.
+- **An open offer is read from the database, not from the buttons on screen.** A yes to it starts it either
+  way, and asking about it (Tell me more, or a typed question) is answered by offering it again.
+- **"It hit me so hard" is not violence.** `safety.screen` sets aside "hit me" when a thing is its subject
+  (it, that, this, what); a person hitting them still asks.
 - **chat-tester resets a password on the page**: email and new password, set through the Auth Admin API with
   no email. Anyone who can reach the page can reset any account, so it stays non-public. A browser session
   is remembered for seven days.
@@ -144,6 +229,12 @@ Ordered by what breaks first.
    write it. Attestation layers on after the rate limit, in front of the chat endpoint only.
 
 ## Open decisions for muhammad
+
+- Tell the client (2026-10-08): "overwhelming" was removed from the Structured Problem Solving description,
+  since every offer showed a feeling the person had not named; Supportive and Reflective questions were
+  written for the 26 stages whose three styles were identical (the client's wording is kept as Direct, or as
+  Reflective for ACT `present`); the offer buttons read Try it / Tell me more / Keep chatting, not the
+  specification's "Yes, let's try it" / "I want to keep talking". Have them review the new lines.
 
 - Crisis resources, `PROTOCOLS` and `CLARIFICATION` wording (point 3 above).
 - Tell the client that offers now follow Mani's confidence, with the nearest fit due by the fourth message, which replaced their offer cadence, and have them read about five real
@@ -195,8 +286,8 @@ Ordered by what breaks first.
 
 ## Latest measurements
 
-Taken 2026-10-01 with `scripts/eval_replies.py`, three runs of four scenarios, every style. Re-measure after any
-change to prompts, framework content or the offer rules, and compare with these.
+Taken 2026-10-01 with the earlier eval harness, since removed. `scripts/scenario_check.py` replaces it; its first
+run is the next baseline. Re-measure after any change to prompts, framework content or the offer rules.
 
 - Reached an offer: 36 of 36 conversations (grief had been 1 of 9). First offers at message 2 to 4.
 - Redrafts: 7% of replies across scenarios, 17 to 19% on the hardest chat (a colleague, an embarrassing

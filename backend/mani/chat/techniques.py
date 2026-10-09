@@ -61,7 +61,7 @@ class Registry:
 
     @property
     def activations(self) -> dict[str, dict]:
-        """Every framework's routing data, keyed by id - the router's whole input."""
+        """Every framework's activation data, keyed by id - what the veto check reads."""
         return {fid: f.activation for fid, f in self._by_id.items()}
 
     def get(self, framework_id: str | None) -> Framework | None:
@@ -116,11 +116,14 @@ class Registry:
                 expected_next=OFFERING,
             )
 
-        if next_index - current_index > 1:
+        # A stage their words already answer is left unasked, and so are the ones after it if they
+        # answer those too, so a jump of several stages is legal. What may not be jumped is a
+        # stage that is theirs to answer: the closing and the body route.
+        skipped = framework.phases[current_index + 1 : next_index]
+        must_ask = [phase for phase in skipped if not framework.may_skip(phase)]
+        if must_ask:
             return Transition(
-                Verdict.SKIPPED_PHASES,
-                skipped=framework.phases[current_index + 1 : next_index],
-                expected_next=framework.phases[current_index + 1],
+                Verdict.SKIPPED_PHASES, skipped=must_ask, expected_next=must_ask[0]
             )
 
         return Transition(Verdict.OK)

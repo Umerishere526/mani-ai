@@ -120,3 +120,33 @@ def test_the_screen_is_never_blank_while_the_protocols_are_unwritten():
     assert PROTOCOLS == {}, "protocol wording is a clinical decision, not an engineering one"
     assert protocol_for(Category.SUICIDE) == crisis.CRISIS_REPLY
     assert protocol_for(None).strip()
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I want to understand why it hit me so hard",
+        "it hit me so hard",
+        "that really hit me",
+        "this just hit me today",
+        "what hit me most was the silence",
+    ],
+)
+def test_it_hit_me_as_a_figure_of_speech_does_not_fire(text):
+    """The client's own ABCDE signal, "why it hit me so hard", was read as violence and Mani
+    asked whether they were in danger (muhammad's test, 2026-10-08)."""
+    assert screen(text).level is Level.NONE
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "he hit me last night",
+        "she hits me when she drinks",
+        "my dad hit me",
+        "they hit me and I ran",
+        "it hit me so hard when he hit me again",
+    ],
+)
+def test_a_person_hitting_them_still_asks(text):
+    assert screen(text).level is Level.CONCERN

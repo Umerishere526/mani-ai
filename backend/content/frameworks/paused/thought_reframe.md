@@ -8,9 +8,6 @@ activation:
   central_indication: >-
     One specific painful thought or interpretation is intensifying distress, and the user wants
     a brief shift in perspective rather than a deep event-by-event examination.
-  # A confident offer waits for their third message: the fit depends on what they took the event or
-  # the thought to mean, which the first two messages rarely say.
-  earliest_offer_message: 3
   to_find_out:
     - "the exact thought going round, in their words"
     - "the situation it is attached to"
@@ -18,8 +15,7 @@ activation:
     - "whether they want a brief look rather than a deep one"
     - "whether it could be tested against facts (a loss or a settled fact is not a thought to test)"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
   appropriate_when:
     - "One specific thought is intensifying the user's difficulty"
     - "The thought contains an assumption, prediction, or broad conclusion"
@@ -41,32 +37,8 @@ activation:
     - "A safety concern requires the approved safety protocol"
   contraindications:
     - "The thought keeps returning as a repeated request to check whether it is true, especially about harm, contamination, or identity - in OCD this checking is the compulsion, and answering it again only feeds the loop it is trying to escape"
-    - "The person describes abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger - examining the thought must never turn into questioning whether it was real or as serious as it felt, and Mani must not reinterpret the behaviour as harmless"
+    - "The only thought left to examine would be whether abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger was real or as serious as it felt. A thought they formed about themselves after it may still be examined; the event itself is never questioned or reinterpreted as harmless"
     - "The painful statement is itself an established fact - a relationship ended, a person said they want to end the friendship - the fact is not reframed, only a related thought about themselves or their future"
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "nobody cares about me"
-    - "did not answer because"
-    - "going to fail"
-    - "do not like me"
-  signals:
-    - "why else would he"
-    - "why else would she"
-    - "only one explanation"
-    - "already know how this will end"
-    - "point of trying"
-    - "i am a failure"
-    - "she hates me"
-    - "he hates me"
-    - "it is hopeless"
-    - "i ruined everything"
-    - "this proves i"
-    - "proves i will never"
-    - "everyone must think i am"
-    - "i know i do not matter"
-    - "know if that is accurate"
-    - "certain i will fail"
-    - "will think i am"
   redirects:
     - signal: "I keep thinking I am incompetent, and I want to understand why one criticism affected me so strongly."
       instead: abcde
@@ -104,10 +76,8 @@ stages:
     purpose: "Isolate one specific thought in the user's own language."
     listen_for: "One specific assumption, conclusion, prediction, or belief in the user's language."
     ready_when: >-
-      One specific thought identified. If several appear, ask which one to examine. Once you have
-      mirrored it back, anything other than a no confirms it: an elaboration, a detail about when
-      it came up, or a yes all mean move on to its significance. Never ask for that confirmation
-      a second time.
+      One specific thought identified, in their own words. If several appear, ask which one to
+      examine. A thought they have already said is identified; never ask them to confirm it.
     boundaries:
       - "must not select the thought for the user"
       - "must not combine several thoughts"
@@ -163,8 +133,8 @@ stages:
       - when: "what supports the thought has been said, and what does not support it has not yet been asked (use the line for the selected tone)"
         reply: "supportive: She usually responds sooner. What else do you know about the situation? | reflective: Her late response supports part of your concern. What does not support the full conclusion? | direct: Her response is late. What facts do not fit that conclusion?"
     ask:
-      supportive: "What supports that thought?"
-      reflective: "What supports that thought?"
+      supportive: "What makes that thought feel true to you?"
+      reflective: "What have you seen that seems to support it?"
       direct: "What supports that thought?"
   alternative:
     purpose: "Help the user recognize the original interpretation may not be the only possibility."

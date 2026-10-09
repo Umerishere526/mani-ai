@@ -9,17 +9,13 @@ activation:
     The user may not be able to change or resolve the situation, but does not want it deciding
     how they act - the focus shifts from making the thought or feeling go away to choosing how
     to respond while it is present.
-  # A confident offer waits for their third message: the fit depends on what they took the event or
-  # the thought to mean, which the first two messages rarely say.
-  earliest_offer_message: 3
   to_find_out:
     - "what part of the situation they cannot change or control"
     - "the thought, feeling or urge that stays with them"
     - "what it pulls them toward doing"
     - "whether they want help choosing how to respond, not solving or disproving it"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
   appropriate_when:
     - "The user cannot fully control or resolve the situation"
     - "A thought cannot be proved or disproved"
@@ -42,29 +38,6 @@ activation:
   contraindications:
     - "The situation is something that should change rather than be accepted - ongoing abuse, an unsafe workplace, a real medical or financial risk. Accepting a feeling is not the same as accepting a harmful situation, and this framework must never blur that line"
     - "The experience is being used to push the person toward forgiving, tolerating, or accepting what is unjust or harmful, or away from medical, legal, or emergency help - self-protection is never a move away from what matters"
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "cannot change what happened"
-    - "cannot make them"
-    - "cannot make my family"
-    - "cannot control whether"
-    - "never receive an apology"
-    - "cannot control what"
-    - "make the uncertainty go away"
-  signals:
-    - "cannot stop thinking"
-    - "cannot change the situation"
-    - "thought may never go away"
-    - "do not want it making my decisions"
-    - "may keep coming back"
-    - "get rid of this feeling"
-    - "waiting to feel certain"
-    - "this fear making my decisions"
-    - "avoiding the conversation"
-    - "keep defending myself"
-    - "being approved of"
-    - "want to say no"
-    - "withdrawing from people"
   redirects:
     - signal: "I think everyone believes I am incompetent, and I want to know if that is accurate."
       instead: thought_reframe
@@ -126,8 +99,8 @@ stages:
       - when: "what they describe is abuse, threats, coercion, harassment, or other danger"
         reply: "What is happening sounds serious, and staying safe comes first. What would be most helpful to talk through?"
     ask:
-      supportive: "What part of this can you not control?"
-      reflective: "What part of this can you not control?"
+      supportive: "Which part of this is out of your hands?"
+      reflective: "When you look at it, which part can you not change?"
       direct: "What part of this can you not control?"
   present:
     purpose: "Identify the thought, feeling, memory, physical experience, or urge, using only the user's language."
@@ -144,9 +117,9 @@ stages:
       - when: "several experiences at once"
         reply: "Several things are present. Which one has the strongest pull on what you do?"
     ask:
-      supportive: "What is showing up for you when you think about it?"
+      supportive: "When you think about it, what comes up for you?"
       reflective: "What is showing up for you when you think about it?"
-      direct: "What is showing up for you when you think about it?"
+      direct: "What comes up when you think about it?"
   pull:
     purpose: "Recognize what the internal experience is pulling the user toward doing or avoiding."
     listen_for: "The action, reaction, avoidance, or pattern the experience is encouraging."
@@ -165,8 +138,8 @@ stages:
       - when: "cannot identify the pull"
         reply: "The effect on your actions is not clear yet. What do you find yourself doing when the thought appears?"
     ask:
-      supportive: "What is that pulling you toward doing?"
-      reflective: "What is that pulling you toward doing?"
+      supportive: "What does that make you want to do?"
+      reflective: "What do you notice it pulling you toward, or away from?"
       direct: "What is that pulling you toward doing?"
   matters:
     purpose: "Clarify how the user wants to act and what they want their response to represent."
@@ -191,8 +164,8 @@ stages:
       - when: "answers with how it feels instead of what matters - \"It makes me happy and sad.\""
         reply: "You said <something concrete that already helped or mattered, in their words>. What would you want to do with that?"
     ask:
-      supportive: "What matters to you in how you respond?"
-      reflective: "What matters to you in how you respond?"
+      supportive: "Whatever happens, how would you like to respond?"
+      reflective: "What would you want your response to show about what matters to you?"
       direct: "What matters to you in how you respond?"
   toward:
     purpose: "Identify a response that moves toward what the user said matters."
@@ -217,8 +190,8 @@ stages:
       - when: "framed as removing the feeling - \"I'll do this so the anxiety stops.\""
         reply: "That would help the anxiety settle. What does it move you toward, apart from that?"
     ask:
-      supportive: "What response would move you toward that?"
-      reflective: "What response would move you toward that?"
+      supportive: "What could you do that moves you toward that?"
+      reflective: "What response would bring you closer to that?"
       direct: "What response would move you toward that?"
   action:
     purpose: "Turn the chosen direction into one manageable action."
@@ -235,8 +208,8 @@ stages:
       - when: "wants the thought removed before acting - \"I cannot act until I stop thinking they will reject me.\""
         reply: "You want the thought gone before you act. What could you do while the thought is still present?"
     ask:
-      supportive: "What is one action you can take?"
-      reflective: "What is one action you can take?"
+      supportive: "What is one small thing you could do?"
+      reflective: "What would one step toward that look like?"
       direct: "What is one action you can take?"
   closing:
     purpose: "Confirm completion in the user's own terms, without claiming the thought or feeling has changed."

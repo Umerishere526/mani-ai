@@ -15,8 +15,7 @@ activation:
     - "whether it can safely wait a moment"
     - "whether anyone is at risk (then safety, not this)"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications; the
-  # router reads strong_signals and signals.
+  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
   appropriate_when:
     - "The user is close to acting impulsively"
     - "The action has not yet occurred"
@@ -39,28 +38,6 @@ activation:
     - "The intended action involves suicide, self-harm, harm to another person, overdose, immediate danger, or inability to remain safe - the safety protocol, not STOP"
     - "The action itself is protective - leaving, getting away from someone, calling emergency services, or seeking medical help. STOP exists to interrupt a regrettable action, and pausing a protective one is the same failure with the direction reversed: it delays the person from doing the thing that helps"
     - "The person would be kept near an abusive person, kept from contacting emergency help, or kept in the conversation when outside emergency support is needed - Pause Mode never takes priority over leaving danger or getting help"
-  # Short fragments, not full example sentences - see abcde.md's activation block for why.
-  strong_signals:
-    - "about to send a message"
-    - "already wrote the email"
-    - "call her right now"
-    - "about to post everything"
-    - "keep typing and deleting"
-    - "about to lose it"
-    - "confront her right now"
-    - "quitting today"
-    - "ending the relationship right now"
-  signals:
-    - "tell him exactly what i think"
-    - "something that will hurt him"
-    - "if she says one more thing"
-    - "canceling everything"
-    - "this purchase even though"
-    - "will regret it"
-    - "will make things worse"
-    - "react this way"
-    - "need help stopping myself"
-    - "cannot think before i respond"
   distinctions:
     somatic_transition: >-
       STOP interrupts an immediate action. The somatic transition follows a completed process
@@ -112,8 +89,8 @@ stages:
       - when: "already acted - \"I already sent it.\""
         reply: "The message has already been sent. Is there another action you are about to take?"
     ask:
-      supportive: "Can you stop the action before it happens?"
-      reflective: "Can you stop the action before it happens?"
+      supportive: "Can you hold off on it for now, here with me?"
+      reflective: "Can you notice the urge without acting on it yet?"
       direct: "Can you stop the action before it happens?"
   pause:
     purpose: "Enter Pause Mode and remain with MANI without returning to the action."
@@ -191,8 +168,8 @@ stages:
       - when: "chooses retaliation"
         reply: "You want him to experience what you experienced. What response would avoid intensifying the situation?"
     ask:
-      supportive: "What response would help rather than intensify this?"
-      reflective: "What response would help rather than intensify this?"
+      supportive: "What would help you right now, rather than make this harder?"
+      reflective: "What response would help, rather than add to this?"
       direct: "What response would help rather than intensify this?"
   closing:
     purpose: "Confirm completion in the user's own terms, without claiming the user has calmed down or made the correct decision."

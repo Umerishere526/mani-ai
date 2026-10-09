@@ -21,6 +21,9 @@ CONTENT_DIR = pathlib.Path(__file__).resolve().parent.parent / "content"
 PROMPTS_DIR = CONTENT_DIR / "prompts"
 FRAMEWORKS_DIR = CONTENT_DIR / "frameworks"
 
+# Only the files directly in frameworks/ are seeded. A framework moved into frameworks/paused/ is
+# left out of the registry (its row is set inactive, never deleted, because threads and exercises
+# refer to it) and comes back by moving the file up again.
 # The somatic route is authored once and appended to every framework, rather than repeated in
 # each framework file. It is not a prompt row and not a composer layer - its two stages are
 # merged into each framework's phases and stages here, so the phase machine and [ctx] handle
@@ -60,7 +63,7 @@ def parse_prompt(path: pathlib.Path) -> dict:
 
 
 def parse_framework(path: pathlib.Path) -> dict:
-    """Split a framework file into its YAML frontmatter (the router and stage data) and body.
+    """Split a framework file into its YAML frontmatter (the activation and stage data) and body.
 
     Reuses the same frontmatter/body split as a prompt file - only the fields differ. The
     file's own `id` names the framework; the previous version wrote it by hand alongside
@@ -113,9 +116,10 @@ async def seed() -> None:
                     """
                     insert into admin.frameworks
                         (id, name, summary, body, activation_conditions, phases,
-                         display_order, activation, stages)
-                    values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)
+                         display_order, activation, stages, is_active)
+                    values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, true)
                     on conflict (id) do update set
+                        is_active = true,
                         name = excluded.name,
                         summary = excluded.summary,
                         body = excluded.body,
@@ -136,6 +140,14 @@ async def seed() -> None:
                     json.dumps(framework["stages"]),
                 )
                 print(f"  {framework['name']:<28} {len(framework['stages'])} stages")
+            seeded_ids = [parse_framework(path)["id"] for path in framework_files]
+            paused = await conn.fetch(
+                "update admin.frameworks set is_active = false "
+                "where is_active and not (id = any($1::text[])) returning id",
+                seeded_ids,
+            )
+            for row in paused:
+                print(f"  {row['id']:<28} paused")
             print(f"frameworks: {len(framework_files)}")
 
             # somatic.md is the merge source above, not a prompt row.

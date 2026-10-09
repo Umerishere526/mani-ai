@@ -205,6 +205,8 @@ def test_the_reply_commits_to_a_lean_before_it_writes_the_text():
     assert fields.index("heading_toward") < fields.index("text")
     assert fields.index("style") < fields.index("heading_toward")
     assert fields.index("heading_toward") < fields.index("offer_fit") < fields.index("text")
+    # The walk through the stages is written before the question it decides.
+    assert fields.index("stages_known") < fields.index("text")
 
 
 def test_what_is_remembered_across_chats_reaches_the_prompt_after_the_static_layers(config):
@@ -229,9 +231,9 @@ def test_an_empty_memory_adds_nothing(config):
     assert "user_memory" not in [name for name, _ in built.layers]
 
 
-def test_the_index_never_names_it_to_the_person_nor_hands_over_its_description():
-    """The client: never tell the person the framework's name. Its description is added to the
-    offer by the backend, so the index keeps it from the model, which copied it otherwise."""
+def test_the_index_says_to_name_it_and_keeps_its_description_from_the_model():
+    """muhammad, 2026-10-09: an offer names its set of questions. The description is added by the
+    backend when they ask to hear more, so the index keeps it from the model, which copied it."""
     helps = Framework(
         id="abcde", name="ABCDE", body="b", phases=["offering"],
         summary="This framework helps you separate what happened from what you told yourself about it.",
@@ -239,8 +241,9 @@ def test_the_index_never_names_it_to_the_person_nor_hands_over_its_description()
     )
     index = composer.framework_index(Registry([helps]))
     assert "separate what happened from what you told yourself about it" not in index
-    assert 'never its name, its id, or the word "framework"' in index
-    assert "its description is added to your reply for you" in index
+    assert "say its name" in index
+    assert "Never its id." in index
+    assert 'never the word "framework"' not in index
 
 
 def test_the_current_issue_stays_visible_even_without_a_prose_summary_yet():
@@ -253,18 +256,18 @@ def test_the_current_issue_stays_visible_even_without_a_prose_summary_yet():
     assert "Freezing before a talk." in layer
 
 
-def test_the_index_marks_the_frameworks_whose_offer_waits_for_their_third_message():
-    waits = Framework(
-        id="abcde", name="ABCDE", summary="s", body="b", phases=["offering"],
-        activation={"central_indication": "x", "to_find_out": ["the event", "what it meant"],
-                    "earliest_offer_message": 3},
-    )
-    immediate = Framework(
-        id="structured_problem_solving", name="Structured Problem-Solving", summary="s", body="b",
-        phases=["offering"],
-        activation={"central_indication": "y", "to_find_out": ["the problem", "whether it can change"]},
-    )
-    index = composer.framework_index(Registry([waits, immediate]))
-    assert "- **ABCDE**: the event; what it meant (offer it only from their message 3" in index
-    assert "- **Structured Problem-Solving**: the problem; whether it can change" in index
-    assert "whether it can change (offer it only" not in index
+@pytest.mark.parametrize("name", ["mani_base", "response_format"])
+def test_every_rule_in_a_prompt_file_is_a_sentence_not_a_yaml_mapping(name):
+    """A colon inside a bullet turns it into a mapping, and the rule then reaches the model as a
+    key and a value instead of as the sentence it was written as (it happened to two rules)."""
+    import pathlib
+
+    import yaml
+
+    from scripts.seed import parse_prompt
+
+    path = pathlib.Path(__file__).parents[2] / f"content/prompts/{name}.md"
+    sections = yaml.safe_load(parse_prompt(path)["content"])
+    for section, body in sections.items():
+        if isinstance(body, list):
+            assert all(isinstance(rule, str) for rule in body), section

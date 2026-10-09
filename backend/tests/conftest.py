@@ -6,6 +6,11 @@ import pathlib
 
 ENV_FILE = pathlib.Path(__file__).resolve().parent.parent / ".env"
 
+# Debug mode adds a layer to the prompt and fields to a turn. A developer turns it on in .env to
+# watch a conversation, which must not change what the tests expect, and the environment wins over
+# .env, so it is pinned off here.
+os.environ["AI_DEBUG_MODE"] = "false"
+
 if not ENV_FILE.exists():
     # Only a fallback, for a machine with no .env - enough for the unit suite to import
     # the app. Guarded on ENV_FILE, not just os.environ.setdefault, because setdefault
