@@ -10,14 +10,14 @@ STYLE_QUESTION = "How would you like me to speak with you today?"
 # The greeting's buttons. `style` is read back by the backend when one is tapped; the client
 # only ever sends the label, exactly as it does for every other button.
 STYLE_OPTIONS = [
-    {"label": "Direct", "style": "direct"},
+    {"label": "Directive", "style": "directive"},
     {"label": "Supportive", "style": "supportive"},
     {"label": "Reflective", "style": "reflective"},
 ]
 
 # What Mani says once a style is chosen - fixed wording from the same spec.
 OPENERS = {
-    "direct": "How can I help you today?",
+    "directive": "How can I help you today?",
     "supportive": "How can I support you today?",
     "reflective": "What's on your mind today?",
 }

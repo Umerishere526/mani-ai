@@ -44,9 +44,9 @@ stages:
     ask:
       supportive: "Would you like to try it?"
       reflective: "Would you like to try it?"
-      direct: "Would you like to try it?"
+      directive: "Would you like to try it?"
     offer:
-      direct: |-
+      directive: |-
         There's a framework called ABCDE that helps you identify the thoughts behind <what they are going through, as a short noun phrase that reads naturally after "the thoughts behind", in their words, such as your anxiety, being left out of meetings, or what happened with your sister. When they describe someone's behaviour, name the situation, never the behaviour as a verb, so not your sister stopping talking to you but how things are with your sister. Never a whole sentence, never "the thought that", never a verb phrase like "wondering whether">, question whether they're true, and replace them with more realistic ones.
       supportive: |-
         <A short warm line in your own words that shows you understood what they said, using their words, such as "Feeling overwhelmed can make you question how well you're handling things.">
@@ -55,14 +55,14 @@ stages:
         <A short line about how the way we interpret what is happening can make it feel harder, fitted to what they said, such as "Sometimes the way we interpret what's happening can make a difficult situation feel even harder.">
         There's a framework called ABCDE that helps you examine what you're telling yourself about <what they are going through, the same short noun phrase>, understand how those thoughts affect you, and consider whether there's a more realistic way to see things.
     keep_chatting:
-      direct: |-
+      directive: |-
         What's been happening that's making you feel like <what they said they are struggling with, in their words>?
       supportive: |-
         We can keep talking. What's been happening that's making things feel so <how they described it, in their words>?
       reflective: |-
         When you say <what they said about themselves or the situation, in their words>, what experiences have led you to see it that way?
     explain:
-      direct: |-
+      directive: |-
         The ABCDE framework has five steps:
 
         1. A: Activating Event: What happened or what has been happening?
@@ -100,12 +100,12 @@ stages:
     if_unclear:
       - when: "a possible event has come up but they have not said it is where this began, so confirm it"
         reply:
-          direct: "From what you've shared, <the event, in their words> seems to be what started these concerns. Is that right?"
+          directive: "From what you've shared, <the event, in their words> seems to be what started these concerns. Is that right?"
           supportive: "You mentioned <the event, in their words>. Is that what started these feelings?"
           reflective: "You've mentioned <the event, in their words>. Is that where these concerns began?"
       - when: "they have named how they feel but not what happened, so ask for the event using their own word for the feeling"
         reply:
-          direct: "What's been happening that's left you feeling <their word for it>?"
+          directive: "What's been happening that's left you feeling <their word for it>?"
           supportive: "What's been happening that's left you feeling so <their word for it>?"
           reflective: "When you think about feeling <their word for it>, what's been happening that seems connected to it?"
       - when: "assumed motive - \"My manager embarrassed me because she wants me to fail.\""
@@ -115,7 +115,7 @@ stages:
       - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
         reply: "What happened sounds serious, and I am not going to ask you to see it differently. What would be most helpful to talk through?"
     ask:
-      direct: "What's been happening that's behind this?"
+      directive: "What's been happening that's behind this?"
       supportive: "What's been happening that's left things feeling so hard?"
       reflective: "What's been happening that seems connected to it?"
   belief:
@@ -134,7 +134,7 @@ stages:
       - when: "several beliefs at once"
         reply: "Several thoughts came at once. Which one affected you most?"
     ask:
-      direct: "What did you start telling yourself about what was happening?"
+      directive: "What did you start telling yourself about what was happening?"
       supportive: "Sometimes when things are difficult, we start drawing conclusions about ourselves or what's happening. What were you telling yourself about the situation?"
       reflective: "When that happened, what did you begin believing about yourself or the situation?"
   consequence:
@@ -151,7 +151,7 @@ stages:
       - when: "consequence unclear - \"It affected everything.\""
         reply: "It affected everything. What changed first?"
     ask:
-      direct: "How did that thought affect how you felt or what you did?"
+      directive: "How did that thought affect how you felt or what you did?"
       supportive: "Our thoughts can affect how we feel and respond. How did that belief affect how you felt or what you did?"
       reflective: "When you believed that thought, how did it influence your feelings or the way you responded?"
   dispute:
@@ -172,7 +172,7 @@ stages:
       - when: "what supports the belief has been said and what challenges it has not been asked"
         reply: "What might make you question the belief that <their belief, in their words>?"
     ask:
-      direct: "What makes you believe this is true, and what makes you question it?"
+      directive: "What makes you believe this is true, and what makes you question it?"
       supportive: "Let's look at that belief together. What makes you think it's true? Is there anything that suggests otherwise?"
       reflective: "As you think about that belief, what seems to support it, and what might suggest a different explanation?"
   effective:
@@ -187,7 +187,7 @@ stages:
       - "must not keep questioning once they have reached a clear understanding"
       - "must not force a positive conclusion or a change of feeling"
     ask:
-      direct: "What's a more realistic and helpful way to think about what's happening?"
+      directive: "What's a more realistic and helpful way to think about what's happening?"
       supportive: "Now that you've looked at both sides, what's a more realistic and helpful way to think about what's happening?"
       reflective: "After considering both sides, what do you think would be a more accurate and helpful way to understand what happened?"
 ---

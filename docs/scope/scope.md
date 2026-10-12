@@ -15,6 +15,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | B   | Six frameworks and the body check in     | Existing | existing    |
 | 12  | No offer before a real conversation (R1) | Now      | in-progress |
 | 13  | Faster turns (R2)                        | Now      | in-progress |
+| 14  | Styles from the client's document (R8, R9) | Now    | in-progress |
 
 ## Already built
 
@@ -54,6 +55,20 @@ One chat call per turn at a low thinking level, with no redraft. Code shapes the
 - [ ] Verify it: `/check verify faster turns`
 - [ ] Test it: `/test faster turns`
       Decision in [PORT-STATUS.md](../../backend/PORT-STATUS.md#decisions-in-force) (one chat call at effort `low`), requirement [R2](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12). code in backend/mani/chat/reply_checks.py, backend/mani/chat/orchestrator.py, backend/mani/llm/. A live run for the 4 s and 10 s target is owed (muhammad's yes).
+
+### 14. Styles from the client's document (R8, R9)
+
+Each style gets its own prompt file written from the client's behavior lists, and only the chosen one reaches the model. Rules shared by every style that contradict the client's document are cut, and the stored value becomes `directive`.
+**Done when:** the system prompt carries exactly one style file, chosen from the thread; no style rules remain in `mani_base.md`, `context.py` or `response_format.md`; `direct` is renamed `directive` everywhere (DB, code, content, tests, tester); the contradicting base rules are cut, and a measured run (after muhammad's yes) in all three styles shows Directive leading, Supportive accompanying, Reflective mirroring then asking.
+
+- [x] Build it: `/develop styles from the client's document`
+  - [x] Rename `direct` to `directive` (migration 019, code, content, tests)
+  - [x] Three style prompt files, one composed per thread; framework index prints only the chosen style
+  - [x] Cut the contradicting rules in mani_base, `[ctx]` and response_format; scenario_check measures behavior, not shared words
+  - [x] Client document recorded, requirements conflict rows, PORT-STATUS decisions edited in place
+- [ ] Verify it: `/check verify styles from the client's document`
+- [ ] Test it: `/test styles from the client's document`
+      Requirements [R8, R9](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12). Design in the approved plan of 2026-10-12: one style file in the system prompt after `response_format`, framework index for the chosen style only, the client's bullets plus two examples per style. code in backend/content/prompts/style_*.md, backend/mani/prompts/composer.py, backend/mani/chat/context.py, backend/supabase/migrations/019_conversation_style_directive.sql. A live run of the four client scenarios is owed (muhammad's yes).
 
 ## Legend
 

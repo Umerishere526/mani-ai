@@ -93,7 +93,7 @@ stages:
     ask:
       supportive: "Even one step feels difficult right now. Would it help to find something manageable together?"
       reflective: "You have stopped doing something that matters to you. Would it help to look at one part you may want to return to?"
-      direct: "You know what needs attention, but beginning is the barrier. Would you like to choose one realistic first action?"
+      directive: "You know what needs attention, but beginning is the barrier. Would you like to choose one realistic first action?"
   stopped:
     purpose: "Identify the activity, routine, connection, responsibility, or act of care the user has stopped or is avoiding."
     listen_for: "What the user has stopped, delayed, canceled, or avoided."
@@ -116,7 +116,7 @@ stages:
     ask:
       supportive: "What have you been stepping back from lately?"
       reflective: "What have you noticed yourself no longer doing?"
-      direct: "What have you stopped doing?"
+      directive: "What have you stopped doing?"
   matters:
     purpose: "Establish why returning to this activity matters to the user."
     listen_for: "The user's reason for wanting to return to the activity."
@@ -132,7 +132,7 @@ stages:
     ask:
       supportive: "What makes this one matter to you?"
       reflective: "What does this give you, when you do it?"
-      direct: "Why does this matter to you?"
+      directive: "Why does this matter to you?"
   choose:
     purpose: "Select one activity rather than attempting everything."
     listen_for: "The single activity the user wants to address first."
@@ -151,7 +151,7 @@ stages:
     ask:
       supportive: "Which one feels right to start with?"
       reflective: "Of these, which one are you drawn to first?"
-      direct: "Which one do you want to begin with?"
+      directive: "Which one do you want to begin with?"
   manageable:
     purpose: "Reduce the activity until it fits the user's present capacity."
     listen_for: "A limited action the user believes is possible within current capacity."
@@ -171,7 +171,7 @@ stages:
     ask:
       supportive: "What is the smallest version that would feel doable?"
       reflective: "What would a much smaller version of it look like?"
-      direct: "What is the smallest version you could do?"
+      directive: "What is the smallest version you could do?"
   begin:
     purpose: "Turn the activity into a specific action rather than a general intention."
     listen_for: "A specific time, cue, place, or starting condition."
@@ -188,7 +188,7 @@ stages:
     ask:
       supportive: "When could you give it a try?"
       reflective: "When do you see yourself doing it?"
-      direct: "When will you do it?"
+      directive: "When will you do it?"
   barrier:
     purpose: "Identify what may prevent action and what the user can do if it appears."
     listen_for: "A likely obstacle and a response the user considers realistic."
@@ -208,7 +208,7 @@ stages:
     ask:
       supportive: "What might get in the way of starting?"
       reflective: "What do you notice could stop you from beginning?"
-      direct: "What could prevent you from beginning?"
+      directive: "What could prevent you from beginning?"
   closing:
     purpose: "Confirm completion in the user's own terms, without promising the plan will work or that the user will feel better."
     ready_when: >-
@@ -225,7 +225,7 @@ stages:
     ask:
       supportive: "You chose one action that feels manageable today. How is that sitting with you?"
       reflective: "You chose one action without waiting for motivation. What changes when you approach it this way?"
-      direct: "You have one action, a starting point, and a response to the barrier. Is the plan realistic?"
+      directive: "You have one action, a starting point, and a response to the barrier. Is the plan realistic?"
 ---
 
 # Behavioral Activation

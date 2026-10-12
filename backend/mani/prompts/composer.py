@@ -9,7 +9,7 @@ from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.llm.schema import Memory
 from mani.models.rows import Profile, ThreadSummary
-from mani.prompts.cache import Config
+from mani.prompts.cache import Config, style_prompt
 
 DEBUG_LAYER = (
     "# Debug\n"
@@ -30,7 +30,7 @@ class SystemPrompt:
         return len(self.text)
 
 
-def framework_index(registry: Registry) -> str | None:
+def framework_index(registry: Registry, style: str) -> str | None:
     """The catalogue of frameworks, built from the registry rather than written by hand.
 
     Every line here already exists as data on `admin.frameworks`, seeded from the framework
@@ -38,7 +38,8 @@ def framework_index(registry: Registry) -> str | None:
     first time somebody edits one and not the other. Generating it means adding a framework
     is a content change with no prompt edit, which is what the registry already claims.
 
-    Static across users and turns, so it sits in the cached prefix with the other layers.
+    Static across users and turns in one style, so it sits in the cached prefix after that
+    style's layer. Only that style's offer and Keep chatting wording is listed.
     """
     frameworks = [registry.get(fid) for fid in registry.ids]
     present = [f for f in frameworks if f is not None]
@@ -115,41 +116,36 @@ def framework_index(registry: Registry) -> str | None:
             "feeling, never as a checklist:", "",
         ] + to_find_out
 
-    # The client's own offer wording, one pattern per style. Mani writes its part of an offer in
-    # that pattern and changes only what is in angle brackets, so it reads as a whole sentence.
-    patterns = [
-        f"**{framework.name}**\n" + "\n".join(
-            f"- {style}: {' '.join(str(text).split())}" for style, text in offer.items()
-        )
-        for framework in present
-        for offer in [((framework.stages or {}).get("offering") or {}).get("offer") or {}]
-        if offer
-    ]
-    keep_chatting = [
-        f"**{framework.name}**\n" + "\n".join(
-            f"- {style}: {' '.join(str(text).split())}" for style, text in lines_by_style.items()
-        )
-        for framework in present
-        for lines_by_style in [((framework.stages or {}).get("offering") or {}).get("keep_chatting") or {}]
-        if lines_by_style
-    ]
+    # The client's own offer wording in this style. Mani writes its part of an offer in that
+    # pattern and changes only what is in angle brackets, so it reads as a whole sentence.
+    patterns = _offering_lines(present, "offer", style)
+    keep_chatting = _offering_lines(present, "keep_chatting", style)
     if patterns:
         lines += [
             "", "## How to word an offer", "",
-            "Write your part of an offer in the pattern for the conversation style in force. Keep "
-            "every word as written, the whole pattern and never shortened. Change only what is in angle brackets, to fit what they told "
+            "Write your part of an offer in this pattern. Keep every word as written, the whole "
+            "pattern and never shortened. Change only what is in angle brackets, to fit what they told "
             "you, so the whole sentence reads naturally. The permission question is added after "
             "your part.", "",
         ] + patterns
     if keep_chatting:
         lines += [
             "", "## When they choose Keep chatting", "",
-            "Carry on the conversation with this question for the style in force, keeping its words "
-            "and changing only what is in angle brackets to fit what they said. Offer nothing in "
-            "that reply.", "",
+            "Carry on the conversation with this question, keeping its words and changing only what "
+            "is in angle brackets to fit what they said. Offer nothing in that reply.", "",
         ] + keep_chatting
 
     return "\n".join(lines)
+
+
+def _offering_lines(frameworks: list, key: str, style: str) -> list[str]:
+    """Each framework's offering wording under `key`, in one style, headed by its name."""
+    return [
+        f"**{framework.name}**\n{' '.join(str(text).split())}"
+        for framework in frameworks
+        for text in [(((framework.stages or {}).get("offering") or {}).get(key) or {}).get(style)]
+        if text
+    ]
 
 
 def user_context(profile: Profile | None) -> str | None:
@@ -159,9 +155,8 @@ def user_context(profile: Profile | None) -> str | None:
     topics it had collected, so onboarding shaped nothing.
 
     The support style is deliberately absent. It is resolved per turn from the conversation
-    first and the profile second, and named in the [ctx] block, which is where mani_base.md
-    tells the model to read it. A second copy here would be the profile's answer contradicting
-    a conversation that had chosen differently.
+    first and the profile second, and composed as its own layer. A second copy here would be
+    the profile's answer contradicting a conversation that had chosen differently.
     """
     if profile is None:
         return None
@@ -249,6 +244,7 @@ def compose(
     config: Config,
     profile: Profile | None,
     *,
+    style: str,
     should_generate_title: bool = False,
     offered: list[str] | None = None,
     summary: ThreadSummary | None = None,
@@ -257,19 +253,19 @@ def compose(
     """Build the system prompt for one turn.
 
     Order is fixed and identical every turn, which is what lets the provider cache the
-    static prefix - identity and the technique library are by far the largest layers and
-    never vary.
+    static prefix: one shared by every style, then one per style. `style` is the conversation
+    style resolved for this turn; only its own layer is sent.
     """
     settings = get_settings()
 
     candidates: list[tuple[str, str | None]] = [
-        # Two authored layers with the generated catalogue between them: who Mani is and
-        # how a conversation runs, then what may be offered, then what a reply must
-        # satisfy. All three are identical for every user and every turn, which is what
-        # lets the provider cache the prefix.
+        # Who Mani is and how a conversation runs, then what a reply must satisfy: identical
+        # for every user and style. Then the chosen style and the catalogue in its wording,
+        # identical for every conversation in that style.
         ("mani_base", config.require("mani_base").content),
-        ("framework_index", framework_index(config.registry)),
         ("response_format", config.require("response_format").content),
+        ("style", config.require(style_prompt(style)).content),
+        ("framework_index", framework_index(config.registry, style)),
         ("user_context", user_context(profile)),
         ("user_memory", user_memory(memory)),
     ]

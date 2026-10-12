@@ -44,7 +44,7 @@ class TechniqueOutcome(StrEnum):
 class SupportStyle(StrEnum):
     SUPPORTIVE = "supportive"
     REFLECTIVE = "reflective"
-    DIRECT = "direct"
+    DIRECTIVE = "directive"
 
 
 class Profile(Row):

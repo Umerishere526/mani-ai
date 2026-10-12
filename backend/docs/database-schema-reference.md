@@ -81,7 +81,7 @@ One row per user, created automatically by the migration-004 trigger on signup.
 | 1 | `user_id` | uuid | **PK**, FK→`auth.users(id)` cascade | Same id as the Auth user. Deleting the auth user deletes this row. |
 | 2 | `nickname` | text | optional | 1–40 chars if set (CHECK `profiles_nickname_sane`). |
 | 3 | `topics` | text[] | default `'{}'` | Free-text topics from onboarding. At most 10, 600 chars in total (CHECK `profiles_topics_bounded`, migration 008) - pasted into every system prompt. |
-| 4 | `support_style` | text | optional 🔒 | `supportive` / `reflective` / `direct` (CHECK `profiles_support_style_known`). Matches `mani.models.rows.SupportStyle`. The onboarding default; a thread's own `conversation_style` overrides it. |
+| 4 | `support_style` | text | optional 🔒 | `supportive` / `reflective` / `directive` (CHECK `profiles_support_style_known`). Matches `mani.models.rows.SupportStyle`. The onboarding default; a thread's own `conversation_style` overrides it. |
 | 5 | `age_bracket` | text | optional | **Not constrained** — see §6. |
 | 6 | `created_at` | timestamptz | default `now()` | |
 | 7 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
@@ -97,7 +97,7 @@ One row per user, created automatically by the migration-004 trigger on signup.
 | 6 | `created_at` | timestamptz | default `now()` | |
 | 7 | `last_message_at` | timestamptz | default `now()` | Maintained by the same trigger as `message_count`. |
 | 8 | `deleted_at` | timestamptz | optional | Soft-delete marker. |
-| 9 | `conversation_style` | text | optional 🔒 | `supportive` / `reflective` / `direct` (CHECK `threads_conversation_style_known`). Wins over `profiles.support_style` when set — see `mani/chat/context.py:resolve_style`. |
+| 9 | `conversation_style` | text | optional 🔒 | `supportive` / `reflective` / `directive` (CHECK `threads_conversation_style_known`). Wins over `profiles.support_style` when set — see `mani/chat/context.py:resolve_style`. |
 | 10 | `vague_streak` | smallint | default `0`, 0–10 (CHECK) | Currently written by nothing (`PORT-STATUS.md` "Open" — the vague-reply pivot isn't built). |
 | 11 | `memory_folded_at` | timestamptz | optional | The last message folded into `admin.user_memory`; null means never. Only `mani_service` may write it (migration 009). |
 
@@ -325,7 +325,7 @@ These are real business rules, not values that should be dynamic. Each is enforc
 
 | Value | DB constraint | Code | Values |
 |---|---|---|---|
-| Conversation style | `profiles_support_style_known`, `threads_conversation_style_known` | `mani.models.rows.SupportStyle` | `supportive`, `reflective`, `direct` |
+| Conversation style | `profiles_support_style_known`, `threads_conversation_style_known` | `mani.models.rows.SupportStyle` | `supportive`, `reflective`, `directive` |
 | Response shape | `response_styles_shape_known` | `SHAPES` in `mani/llm/schema.py` | 6 values (warmth lead, honor and follow, mirror and ask, mirror and hold, gentle follow, presence only) |
 | Mirroring voice | `response_styles_voice_known` | none (`VOICES` was removed; the column is no longer written) | naming, receiving, quoting, transitional, observing |
 

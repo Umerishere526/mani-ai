@@ -169,14 +169,14 @@ async def test_a_conversation_style_survives_the_round_trip(alice):
 
     await threads.apply(
         alice, thread.id, ALICE,
-        threads.ThreadUpdates(conversation_style=SupportStyle.DIRECT),
+        threads.ThreadUpdates(conversation_style=SupportStyle.DIRECTIVE),
     )
 
     reread = await threads.get(alice, thread.id, ALICE)
-    assert reread.conversation_style is SupportStyle.DIRECT
+    assert reread.conversation_style is SupportStyle.DIRECTIVE
 
     ctx = await threads.load_turn_context(alice, thread.id, ALICE)
-    assert ctx.thread.conversation_style is SupportStyle.DIRECT
+    assert ctx.thread.conversation_style is SupportStyle.DIRECTIVE
 
 
 async def test_the_composed_read_refuses_another_users_thread(alice, users):

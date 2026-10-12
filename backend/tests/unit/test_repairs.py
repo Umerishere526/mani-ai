@@ -337,14 +337,15 @@ def test_an_offer_made_only_by_buttons_gets_the_clients_permission_question(regi
             SmartPrompt(label="Keep chatting", decline=True),
         ],
     )
-    fixed = fix(registry, silent, conversation_style="direct")
+    fixed = fix(registry, silent, conversation_style="directive")
     assert fixed.text.endswith("Would you like to try it?")
     assert len(fixed.prompts) == 3
 
 
-def test_offer_buttons_under_a_different_question_are_dropped(registry):
+def test_a_different_question_beside_an_offer_gives_way_to_it(registry):
     """"What feels strongest right now?" with [Yes, let's try it] under it asks one thing and
-    offers another. Dropping the offer is the safe correction; it can come next turn."""
+    offers another. The offer is what the turn decided, so the other question goes and the
+    reply asks only the client's permission question."""
     mixed = reply(
         text="Your chest feels tight and your thoughts are racing. What feels strongest right now?",
         prompts=[
@@ -354,8 +355,24 @@ def test_offer_buttons_under_a_different_question_are_dropped(registry):
         ],
     )
     fixed = fix(registry, mixed, conversation_style="reflective")
-    assert fixed.prompts == []
-    assert fixed.text.endswith("What feels strongest right now?")
+    assert [p.label for p in fixed.prompts] == ["Try it", "Tell me more", "Keep chatting"]
+    assert "What feels strongest" not in fixed.text
+    assert fixed.text.count("?") == 1
+    assert fixed.text.endswith("Would you like to try it?")
+
+
+def test_their_quoted_question_does_not_cost_the_offer(registry):
+    """Mani quoted their "why me" back to them, and the question mark inside the quote read as
+    a second question: the buttons went and the offer was left with no way to answer it."""
+    part = (
+        "“Why me?” sounds like the question coming up for you. There’s a framework called ABCDE "
+        "that helps you identify the thoughts behind this situation with your coworker, question "
+        "whether they’re true, and replace them with more realistic ones."
+    )
+    offer = reply(text=f"{part}\n\nWould you like to try it?", prompts=OFFER_BUTTONS)
+    fixed = fix(registry, offer, conversation_style="directive")
+    assert fixed.text == f"{part}\n\nWould you like to try it?"
+    assert [p.label for p in fixed.prompts] == ["Try it", "Tell me more", "Keep chatting"]
 
 
 def test_a_real_offer_keeps_its_buttons(registry):
@@ -366,13 +383,13 @@ def test_a_real_offer_keeps_its_buttons(registry):
         prompts=[SmartPrompt(label="Try it", technique="abcde"),
                  SmartPrompt(label="Keep chatting", decline=True)],
     )
-    fixed = fix(registry, offer, conversation_style="direct")
+    fixed = fix(registry, offer, conversation_style="directive")
     assert len(fixed.prompts) == 3
     assert fixed.text.startswith("I have a structured approach that can help you work through this.")
     assert fixed.text.endswith("Would you like to try it?")
 
 
-@pytest.mark.parametrize("style", ["direct", "supportive", "reflective"])
+@pytest.mark.parametrize("style", ["directive", "supportive", "reflective"])
 def test_presence_reaches_the_person_in_any_style(registry, style):
     """muhammad, 2026-09-24: presence may be said in any style when the moment calls for it,
     so a reply that says it reaches the person as written."""
@@ -438,12 +455,12 @@ def test_an_offer_always_names_the_set_of_questions():
     that leaves the name out gets it added; one that says it, in any spelling, is left alone."""
     unnamed = "There are some questions we could go through together for this."
     fixed = fix(Registry([DESCRIBED]), reply(text=unnamed, prompts=OFFER_BUTTONS),
-                conversation_style="direct")
+                conversation_style="directive")
     assert fixed.text == f"{unnamed} It's called ABCDE.\n\nWould you like to try it?"
 
     named = "A set of questions called abcde could help with this."
     fixed = fix(Registry([DESCRIBED]), reply(text=named, prompts=OFFER_BUTTONS),
-                conversation_style="direct")
+                conversation_style="directive")
     assert fixed.text.count("ABCDE") + fixed.text.count("abcde") == 1
 
 
@@ -465,7 +482,7 @@ def test_the_models_own_permission_question_gives_way_to_the_clients():
     part = "You keep going over what he said. There are some questions we could go through."
     fixed = fix(Registry([DESCRIBED]),
                 reply(text=f"{part} Would you like to try them?", prompts=OFFER_BUTTONS),
-                conversation_style="direct")
+                conversation_style="directive")
     assert fixed.text == f"{part} It's called ABCDE.\n\nWould you like to try it?"
     assert fixed.text.count("?") == 1
 
@@ -486,7 +503,7 @@ def test_a_description_the_model_already_wrote_is_not_added_twice():
     exactly once."""
     part = f"There are some questions we could go through together for this. {DESCRIBED.summary}"
     fixed = fix(Registry([DESCRIBED]), reply(text=part, prompts=OFFER_BUTTONS),
-                conversation_style="direct", offer_asked_about=True)
+                conversation_style="directive", offer_asked_about=True)
     assert fixed.text.count(DESCRIBED.summary) == 1
     assert fixed.text.endswith("Would you like to try it?")
 
@@ -507,15 +524,18 @@ def test_their_name_is_used_once_at_most_and_never_first(registry, text, said_be
 
 
 def test_an_offer_sharing_a_reply_with_another_question_leaves_no_half_offer(registry):
-    """Its buttons go, so the offer can come next turn; its words go with them, or the person
-    reads an offer with nothing to answer it."""
+    """The other question goes and the offer stays whole, with its question and its buttons,
+    so the person never reads an offer with nothing to answer it."""
     stacked = reply(
         text="What does that feel like for you? There are some questions we could go through together for this.",
         prompts=OFFER_BUTTONS,
     )
     fixed = fix(registry, stacked)
-    assert fixed.prompts == []
-    assert fixed.text == "What does that feel like for you?"
+    assert [p.label for p in fixed.prompts] == ["Try it", "Tell me more", "Keep chatting"]
+    assert fixed.text == (
+        "There are some questions we could go through together for this. It's called ABCDE."
+        "\n\nWould you like to try it?"
+    )
 
 
 CHECK_IN = ("Before we move on, let's check in. What are you noticing in your body right now "
@@ -597,17 +617,17 @@ def test_declining_or_knowing_what_to_do_is_told_apart_from_not_knowing_where():
 def test_a_practice_is_the_clients_words_for_the_place_in_the_style_being_spoken():
     stage = {"if_unclear": [
         {"when": "they feel it in the chest",
-         "reply": {"supportive": "Supportive chest.", "direct": "Direct chest.", "reflective": "Reflective\nchest."}},
+         "reply": {"supportive": "Supportive chest.", "directive": "Directive chest.", "reflective": "Reflective\nchest."}},
         {"when": "they feel it somewhere else", "reply": "Bring gentle attention."},
         {"when": "they have not said where they feel it", "reply": "Where?", "prompts": ["Chest"]},
     ]}
-    assert repairs.practice_for(stage, "Chest", "direct") == ("Direct chest.", [])
+    assert repairs.practice_for(stage, "Chest", "directive") == ("Directive chest.", [])
     assert repairs.practice_for(stage, "Chest", "reflective")[0] == "Reflective\nchest."
     assert repairs.practice_for(stage, "Somewhere else", "supportive")[0] == "Bring gentle attention."
-    assert repairs.practice_for(stage, "Head", "direct") is None
-    assert repairs.practice_in(stage, "Hmm. Direct chest. Fine.", "direct")
-    assert not repairs.practice_in(stage, "Hmm. Direct chest. Fine.", "supportive")
-    assert not repairs.practice_in(stage, "Where?", "direct")
+    assert repairs.practice_for(stage, "Head", "directive") is None
+    assert repairs.practice_in(stage, "Hmm. Directive chest. Fine.", "directive")
+    assert not repairs.practice_in(stage, "Hmm. Directive chest. Fine.", "supportive")
+    assert not repairs.practice_in(stage, "Where?", "directive")
 
 
 def test_the_acknowledgement_before_a_question_is_the_replys_first_sentence():

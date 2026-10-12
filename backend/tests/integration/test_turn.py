@@ -12,7 +12,7 @@ from mani.chat import context, crisis, orchestrator
 from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
-from mani.chat.repairs import PERMISSION_QUESTIONS
+from mani.chat.repairs import PERMISSION_QUESTION
 from mani.llm.schema import Crisis, Reply, ReplyWithoutOffer, SmartPrompt, Style, TechniqueState
 from mani.models.rows import TechniqueOutcome, TechniqueState as TechniqueRow
 from tests.integration.cleanup import remove_test_users
@@ -227,7 +227,7 @@ async def test_before_the_window_opens_the_model_is_given_no_way_to_name_a_techn
     from mani.models.rows import SupportStyle
 
     scripted = model(Reply(text="What has that been like for you this week?"))
-    thread = await _in_style(await start(alice), SupportStyle.DIRECT)
+    thread = await _in_style(await start(alice), SupportStyle.DIRECTIVE)
     turn = await send(alice, thread.id, RESENTFUL)
 
     assert scripted.calls == 1
@@ -244,7 +244,7 @@ async def test_an_offer_still_made_on_their_first_message_cannot_start_a_framewo
     from mani.models.rows import SupportStyle
 
     model(_offer("abcde"))
-    thread = await _in_style(await start(alice), SupportStyle.DIRECT)
+    thread = await _in_style(await start(alice), SupportStyle.DIRECTIVE)
     turn = await send(alice, thread.id, RESENTFUL)
 
     assert [p for p in turn.prompts if p.technique] == []
@@ -273,7 +273,7 @@ async def test_a_confident_offer_is_made_on_the_third_message(alice, model):
     assert [p.label for p in turn.prompts] == ["Try it", "Tell me more", "Keep chatting"]
 
 
-@pytest.mark.parametrize("style", ["direct", "supportive", "reflective"])
+@pytest.mark.parametrize("style", ["directive", "supportive", "reflective"])
 async def test_an_offer_made_by_the_fifth_message_is_plain_and_costs_one_call(alice, model, style):
     """The best fit is due by the person's fifth message, the same in every style (2026-10-12)."""
     from mani.models.rows import SupportStyle
@@ -295,7 +295,7 @@ async def test_a_due_offer_that_is_not_made_is_logged_never_asked_for_again(alic
     from mani.models.rows import SupportStyle
 
     scripted = model(Reply(text="What is the hardest part of the evenings?", heading_toward="abcde"))
-    thread = await _in_style(await past_the_opening(await start(alice)), SupportStyle.DIRECT)
+    thread = await _in_style(await past_the_opening(await start(alice)), SupportStyle.DIRECTIVE)
     turn = await send(alice, thread.id, "i miss him and the flat is quiet")
 
     assert scripted.calls == 1
@@ -311,7 +311,7 @@ async def test_a_motive_they_believe_in_reaches_a_due_offer_with_no_offer_wordin
     from mani.models.rows import SupportStyle
 
     scripted = model(*[Reply(text="What was happening just then?")] * 5)
-    thread = await _in_style(await start(alice), SupportStyle.DIRECT)
+    thread = await _in_style(await start(alice), SupportStyle.DIRECTIVE)
     for message in (
         "I'm very upset. My manager embarrassed me today because he wants me to fail.",
         "EVERYTHING WENT WRONG",
@@ -887,7 +887,7 @@ async def test_buttons_are_returned_only_on_manis_newest_message(alice, model):
 
     rendered = to_messages(history, live)
     # The offer's words are composed by the backend, ending on the client's permission question.
-    offer = next(m for m in rendered if any(q in m.content for q in PERMISSION_QUESTIONS.values()))
+    offer = next(m for m in rendered if PERMISSION_QUESTION in m.content)
     newest = rendered[-1]
 
     assert newest.id == live and newest.content == "Good. What happened first?"
@@ -1053,7 +1053,7 @@ async def test_a_new_chat_asks_how_the_person_wants_to_be_spoken_to(alice):
     thread = await start(alice)
     [first] = await _history(alice, thread.id)
     assert first.content == "Hi Al. It's MANI. How would you like me to speak with you today?"
-    assert [o["label"] for o in first.prompt_options] == ["Direct", "Supportive", "Reflective"]
+    assert [o["label"] for o in first.prompt_options] == ["Directive", "Supportive", "Reflective"]
 
 
 async def test_choosing_a_style_sets_it_and_opens_in_it_with_no_model_call(alice, model):
@@ -1074,6 +1074,41 @@ async def test_choosing_a_style_sets_it_and_opens_in_it_with_no_model_call(alice
 
     await send(alice, thread.id, "I keep going over an argument with my sister")
     assert "conversation_style: reflective" in scripted.last_messages[-1]["content"]
+    # The client's styles document (2026-10-12): only the chosen style reaches the model.
+    system = scripted.last_messages[0]["content"]
+    assert "reflective_mani:" in system
+    assert "directive_mani:" not in system and "supportive_mani:" not in system
+
+
+async def test_a_greeting_stored_with_the_direct_button_opens_in_directive_after_migration_019(alice, model):
+    """A greeting written before the rename still waits for its tap. 019 rewrites its button, so
+    the tap opens the thread in the renamed style. Replaying 019 is safe: it ends where it began."""
+    import pathlib
+
+    from mani.db import pool
+
+    scripted = model(Reply(text="What is happening for you?"))
+    thread = await start(alice)
+    before_019 = [
+        {"label": "Direct", "style": "direct"},
+        {"label": "Supportive", "style": "supportive"},
+        {"label": "Reflective", "style": "reflective"},
+    ]
+    migration = pathlib.Path(__file__).parents[2] / "supabase/migrations/019_conversation_style_directive.sql"
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.messages set prompt_options = $2 where thread_id = $1",
+            thread.id, before_019,
+        )
+        await conn.execute(migration.read_text())
+
+    turn = await send(alice, thread.id, "Directive")
+
+    assert turn.content == "How can I help you today?"
+    assert scripted.calls == 0
+    async with pool.as_user(alice) as conn:
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+    assert ctx.thread.conversation_style.value == "directive"
 
 
 async def test_the_same_message_sent_twice_at_once_is_answered_and_paid_for_once(alice, model):
@@ -1527,13 +1562,14 @@ async def test_tell_me_more_offers_again_even_when_the_model_only_explains(alice
 
 async def test_a_yes_to_an_open_offer_starts_it_even_with_no_buttons_showing(alice, model):
     """An offer can stay open with no buttons under Mani's last message, when the reply to Tell
-    me more asked something else. A yes then started the questions in Mani's words while the
-    database still said offered, so the framework never properly began."""
+    me more came on a safety concern and held them back. A yes then started the questions in
+    Mani's words while the database still said offered, so the framework never properly began."""
     from mani.db import pool
 
     asked_instead = Reply(
         text="They help you choose a first step. What part of it bothers you most?",
         state=TechniqueState(technique="abcde", step="offering"),
+        crisis=Crisis(reason="hopelessness"),
     )
     begins = Reply(
         text="Okay. I'll guide you through it one step at a time. What do you know for certain?",

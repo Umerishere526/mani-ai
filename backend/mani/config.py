@@ -130,6 +130,11 @@ class Settings(BaseSettings):
     # When false the crisis panel still appears but the user can keep chatting.
     crisis_blocks_chat: bool = True
 
+    # Pauses the first offer window, for conversation testing: the first offer may come from
+    # the first message and is never due, so the model alone decides when. Off by default,
+    # because the client rejected an offer on the first message (R1).
+    pause_first_offer_window: bool = False
+
     # Paid replies one person may get in 24 hours. 0 turns it off. muhammad's number is 300,
     # off for now so testing is not capped; set it before real traffic. Only turns that call
     # the model count, and the safety screen runs before it - a crisis is always answered.

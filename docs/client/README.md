@@ -33,3 +33,5 @@ conflict under "Conflicts" in [requirements.md](requirements.md) and update the 
 | -------- | ---- | ----- |
 | 2026-10-12 | Lolly | [MANI offered ABCDE after the first message](messages/2026-10-12-framework-after-first-message.md) |
 | 2026-10-12 | Lolly | [Urgency, unresolved issues and the Wednesday deadline](messages/2026-10-12-urgency-and-wednesday-deadline.md) |
+| 2026-10-12 | client | [Directive, Supportive, Reflective: the styles document](messages/2026-10-12-styles-document.md) |
+| 2026-10-12 | Lolly | [Job decision: testing feedback in all three styles](messages/2026-10-12-job-decision-testing-feedback.md) |

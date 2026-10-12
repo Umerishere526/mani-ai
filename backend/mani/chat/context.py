@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 
 from mani.chat import repairs
+from mani.config import get_settings
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
 from mani.db.threads import TurnContext
 from mani.models.rows import ENDING_STAGES, Framework, Message, MessageRole, TechniqueOutcome
@@ -122,6 +123,8 @@ def offer_window(ctx: TurnContext, *, urgent: bool = False) -> str:
     if technique is not None:
         since = ctx.thread.message_count - technique.at_message_count
         return "open" if since >= cooldown_for(technique.outcome) else "not_yet"
+    if get_settings().pause_first_offer_window:
+        return "open"
     theirs = _their_messages(ctx)
     if theirs >= FIRST_OFFER_DUE:
         return "due"
@@ -129,7 +132,8 @@ def offer_window(ctx: TurnContext, *, urgent: bool = False) -> str:
 
 
 def resolve_style(ctx: TurnContext) -> str:
-    """Which of the framework's three `ask` variants to surface this turn.
+    """The conversation style in force this turn: which style layer is composed, and which of a
+    framework's style variants is surfaced.
 
     The conversation's own choice wins over the profile's, which is the point of having
     both: onboarding sets a default, and a thread may differ from it without changing it.
@@ -147,61 +151,21 @@ def resolve_style(ctx: TurnContext) -> str:
 # the meanings lived in response_format.md (2026-10-08).
 _FIT_PLAINLY = "Offer it plainly, the way you would one that fits exactly."
 _MEANING: dict[str, str | dict[str, str]] = {
-    "conversation_style": {
-        "direct": (
-            "Direct, for the whole conversation. Clear, concise and focused, never cold, abrupt, "
-            "transactional or interrogative. Most replies are just the question; never open by "
-            "restating what they said. A few plain words of your own come first only after "
-            "something painful or new. Get to the heart of it quickly."
-        ),
-        "supportive": (
-            "Supportive, for the whole conversation. Warm, understanding and encouraging. A brief "
-            "word in your own words that shows you are with them, never their sentence handed "
-            "back, then a gentle question."
-        ),
-        "reflective": (
-            "Reflective, for the whole conversation. Help them look at what sits behind what they "
-            "said, so the understanding is their own. Reflect the meaning when it opens "
-            "something, never their words."
-        ),
-    },
+    "conversation_style": (
+        "the style they chose, for the whole conversation. conversation_style in your instructions "
+        "says what each reply is trying to do in it."
+    ),
     "conversation_phase": {
         "understanding": (
-"nothing has been offered yet. Your questions come from listening, the way a "
-            "specialist listens. In reasoning, first write what they have told you, then choose "
-            "the one part of it that matters most to them, the part they gave the most weight or "
-            "said last. If you do not know what happened in that part, ask once, in a few words. "
-            "Once you do, stop asking what happened and ask about something real and present in "
-            "it that they have not said yet, in their words: what they have noticed since, or how "
-            "they are with it today. Never ask for something their message already answers, "
-            "including why they think something when they said what led them to it. Never a hypothetical such as what would it mean or what would it be like if. "
-            "Asking how something they said is affecting them is fine, in their words. Never tell "
-            "them what they feel. One short question, about ten words, "
-            "one thing at a time, in plain everyday words, no harder than the last. No two-part "
-            "questions, no menu of choices, no advice and no suggestion hidden in a question. "
-            "What they say about how it is for them shows which set fits."
+            "nothing has been offered yet. Your questions come from listening, the way a "
+            "specialist listens. Never tell them what they feel. One question, in plain everyday "
+            "words. No menu of choices, no advice and no suggestion hidden in a question. What "
+            "they say about how it is for them shows which set fits."
         ),
         "framework": "the questions are running, so follow the stage.",
         "talking": (
             "an offer was declined or the questions finished, so talk with them, following "
             "what they say."
-        ),
-    },
-    "question_focus": {
-        "the heart of it": (
-            "ask about the one part that matters most to them: what they have noticed since, or "
-            "how they are with it now, in a few plain words, never what they already said. Never dig for more facts about the "
-            "event or the other people in it."
-        ),
-        "how it is for them": (
-            "ask gently how they are with that one part today, in their words, so they can find "
-            "the word for it themselves, never what made them think it. Once their concern is "
-            "clear, never ask what is at stake."
-        ),
-        "what sits behind it": (
-            "ask what sits behind that one part, why it matters to them or what it says to them, "
-            "in plain words, never what made them think it. Never ask what is at stake, and never "
-            "the same question twice in other words."
         ),
     },
     "clarification_available": {
@@ -270,8 +234,7 @@ _MEANING: dict[str, str | dict[str, str]] = {
         "unless it is the last, the one after, each with its purpose, what to listen for, when "
         "it is done, its boundaries and what to do if unclear. The stages after those are listed "
         "as later_stage, each with only when it is done and its question. Each ask is a model "
-        "question already in this style, so ask what it asks, in their words, about their "
-        "situation, never word for word."
+        "question already in this style, so ask it as written, or only the part still missing."
     ),
     "later_stage": (
         "a stage after the next one, shown only so you can tell whether what they have already "
@@ -353,11 +316,6 @@ def build(
     lines += _line("conversation_phase", phase)
     if not running and not clarification_used(history):
         lines += _line("clarification_available", "yes")
-    if not running:
-        # What the question is about while no stage decides it (muhammad, 2026-09-24): said
-        # here, next to the message, because the style rule in the long prompt alone did not hold.
-        focus = _QUESTION_FOCUS[resolve_style(ctx)]
-        lines += _line("question_focus", focus)
     if offer_waiting:
         # Mani's last reply was an offer, and they typed rather than tapped.
         lines += _line("offer_waiting", "yes")
@@ -427,7 +385,7 @@ def build(
             index += 1
             stage = _stage_lines("stage", framework, framework.phases[index], style)
         lines.extend(stage)
-        lines.append(f"stage_note: {_stage_note(framework, style, starting=framework_starting)}")
+        lines.append(f"stage_note: {_stage_note(framework, starting=framework_starting)}")
         if 0 <= index < len(framework.phases) - 1:
             lines.extend(
                 _stage_lines("next_stage", framework, framework.phases[index + 1], style)
@@ -448,15 +406,14 @@ _WALK_THE_STAGES = (
     "told you, here or in the Conversation Context, meets by its stage_ready_when is skipped "
     "without a word: never ask it, never check it with them, never say it is done. Do the same "
     "for the next stage and for each later_stage, until you reach one that is not met. Ask that "
-    "stage's question, built from what they said in their own words so that it asks for the "
-    "missing thing, and report that stage in state.step even when it is several ahead. Write "
-    "this walk in stages_known first: for each stage, what they already said for it in their "
-    "short words, and its status. known is not asked. partial asks only for the gap. confirm "
+    "stage's question, only for the missing thing, and report that stage in state.step even when "
+    "it is several ahead. Write this walk in stages_known first: for each stage, what they "
+    "already said for it in their short words, and its status. known is not asked. partial asks "
+    "only for the gap. confirm "
     "states what you have and asks whether it is right, only where the stage's own lines say to. "
     "missing is asked. The question asks only for what the stage's known does not hold yet, so it "
     "is precise: never ask again for a part they gave. Never say a stage's letter or name, and "
-    "never say a stage was skipped or is done. Ask the question in your own tone, as the "
-    "conversation flows, so it reads as the next natural thing to ask."
+    "never say a stage was skipped or is done."
 )
 
 # A stage is a step, not an exam: it never needs complete or certain answers, and a person asked
@@ -466,40 +423,16 @@ _TWO_TRIES = (
     "the next stage, unless stage_ready_when says to stay."
 )
 
-# Mani keeps the chosen style inside a framework: the stage decides what is asked, the style
-# decides how it sounds.
-_IN_STYLE = {
-    "direct": "You are still Mani in Direct here: lead, keep it short and clear, and move them on.",
-    "supportive": (
-        "You are still Mani in Supportive here: warm and understanding, with no excessive "
-        "reassurance, no repeated validation and no extra questions. Respond to what is "
-        "meaningful in what they said, never their sentence handed back, then ask gently."
-    ),
-    "reflective": (
-        "You are still Mani in Reflective here: help them look at what sits behind their answer, "
-        "and reflect its meaning only when that opens something."
-    ),
-}
 
-# What each style's question is about while no stage decides it. All three are about how one part
-# is for the person (muhammad, 2026-10-09); the three differ in how far each reaches into it, so the
-# styles do not ask the same question (Loli's test, 2026-10-09: two of them shared one).
-_QUESTION_FOCUS = {
-    "direct": "the heart of it",
-    "supportive": "how it is for them",
-    "reflective": "what sits behind it",
-}
-
-
-def _stage_note(framework: Framework, style: str, *, starting: bool) -> str:
+def _stage_note(framework: Framework, *, starting: bool) -> str:
     """How to take the stage in force: walk past what they already answered, then ask."""
     said = (
         "They have just said yes, so what they told you before it counts toward every stage. "
         if starting
-        else "Put the question in terms of what they have told you, in their words; never send it bare. "
+        else ""
     )
     never = f"{framework.closing} is never skipped. " if framework.closing else ""
-    return f"{said}{_WALK_THE_STAGES} {never}{_TWO_TRIES} {_IN_STYLE[style]}"
+    return f"{said}{_WALK_THE_STAGES} {never}{_TWO_TRIES}"
 
 
 def _later_stage_lines(

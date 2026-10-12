@@ -1,5 +1,5 @@
 # ABOUTME: Runs the client's test conversations through the real stack and model, in every style.
-# ABOUTME: Reports what the client checks by eye (repeating, styles that sound alike, the offer) and what each turn cost.
+# ABOUTME: Reports what the client checks by eye (asking again, the offer and its timing) and what each turn cost.
 
 from __future__ import annotations
 
@@ -24,15 +24,9 @@ from mani.db import pool  # noqa: E402
 from mani.prompts import cache  # noqa: E402
 
 SCENARIOS = pathlib.Path(__file__).with_name("scenarios.json")
-STYLES = ("direct", "supportive", "reflective")
+STYLES = ("directive", "supportive", "reflective")
 WORD = re.compile(r"[a-z']{4,}")
 INTERNAL = re.compile(r"\b(nearest|closest)\b|\bframework_id\b|\boffer_window\b", re.IGNORECASE)
-# The share of a reply's first sentence made of the person's own last words. Past ECHO it is their
-# sentence handed back; past OPENS_ON_THEM the reply opens by restating them.
-ECHO = 0.6
-OPENS_ON_THEM = 0.4
-# Two styles whose questions at the same point share this much of their words ask the same thing.
-SAME_QUESTION = 0.5
 # A question made up almost wholly of words the person has already said is asking for what they said.
 ASKS_WHAT_THEY_SAID = 0.8
 # What a turn is held to (R2, muhammad 2026-10-12). Reported, never a failure: one run is noise.
@@ -62,7 +56,6 @@ class Exchange:
     buttons: list[str]
     offered: str | None
     flags: list[str] = field(default_factory=list)
-    opens_on_them: bool = False
     question: set[str] = field(default_factory=set)
     cost: Cost = field(default_factory=Cost)
     checks: list[str] = field(default_factory=list)
@@ -72,22 +65,13 @@ def _words(text: str) -> set[str]:
     return set(WORD.findall(text.lower()))
 
 
-def _first_sentence(text: str) -> str:
-    return re.split(r"(?<=[.!?])\s+", text.strip(), maxsplit=1)[0]
-
-
 def _question(text: str) -> set[str]:
     asked = [s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s.endswith("?")]
     return _words(asked[-1]) if asked else set()
 
 
 def _check(exchange: Exchange, registry, told_more: bool, said: set[str]) -> None:
-    said, opening = _words(exchange.person), _words(_first_sentence(exchange.reply))
-    echo = len(opening & said) / len(opening) if opening else 0.0
-    exchange.opens_on_them = echo >= OPENS_ON_THEM
     exchange.question = _question(exchange.reply)
-    if echo >= ECHO:
-        exchange.flags.append(f"hands their words back ({echo:.0%})")
     if exchange.question and len(exchange.question & said) / len(exchange.question) >= ASKS_WHAT_THEY_SAID:
         exchange.flags.append("asks what they already said")
     if INTERNAL.search(exchange.reply):
@@ -183,11 +167,9 @@ def _report(name: str, runs: dict[str, list[Exchange]]) -> int:
     print(f"\n=== {name} ===")
     flagged = 0
     for style, exchanges in runs.items():
-        opened = sum(e.opens_on_them for e in exchanges if e.person != TELL_ME_MORE_LABEL)
         offer = next((i + 1 for i, e in enumerate(exchanges) if e.offered), None)
         framework = next((e.offered for e in exchanges if e.offered), None)
-        print(f"\n  {style}: opens on their words {opened}/{len(exchanges)}, "
-              f"offer at their message {offer or '-'} ({framework or 'none'})")
+        print(f"\n  {style}: offer at their message {offer or '-'} ({framework or 'none'})")
         for exchange in exchanges:
             flagged += len(exchange.flags)
             mark = "  !! " + "; ".join(exchange.flags) if exchange.flags else ""
@@ -195,18 +177,6 @@ def _report(name: str, runs: dict[str, list[Exchange]]) -> int:
             print(f"    > {exchange.person[:60]}\n      {exchange.reply.splitlines()[0][:110]}{mark}{checked}\n"
                   f"      {cost.seconds:.1f} s, {cost.calls} call(s), {cost.input_tokens} in "
                   f"({cost.cached_tokens} cached), {cost.output_tokens} out ({cost.reasoning_tokens} thinking)")
-    for turn in range(max(len(e) for e in runs.values())):
-        # An offer and its Tell me more end on the client's permission question, the same in every style.
-        questions = {
-            s: e[turn].question for s, e in runs.items()
-            if turn < len(e) and e[turn].question and not e[turn].offered and e[turn].person != TELL_ME_MORE_LABEL
-        }
-        pairs = [(a, b) for a in questions for b in questions if a < b]
-        for a, b in pairs:
-            shared = len(questions[a] & questions[b]) / len(questions[a] | questions[b])
-            if shared >= SAME_QUESTION:
-                flagged += 1
-                print(f"  !! message {turn + 1}: {a} and {b} ask the same question ({shared:.0%})")
     return flagged
 
 

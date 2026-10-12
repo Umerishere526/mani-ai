@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from mani.chat.greeting import (
@@ -42,13 +43,9 @@ _BLANK_RUN = re.compile(r"\n{3,}")
 # whatever reaches the client to navigate on is always exactly what LibrarySection defines.
 _LIBRARY_SECTIONS = {section.value.lower(): section.value for section in LibrarySection}
 
-# The permission question an offer asks, in each style. The client's ABCDE document asks it the
-# same way in all three (2026-10-09).
-PERMISSION_QUESTIONS = {
-    "direct": "Would you like to try it?",
-    "supportive": "Would you like to try it?",
-    "reflective": "Would you like to try it?",
-}
+# The permission question an offer asks. The client's ABCDE document asks it the same way in all
+# three styles (2026-10-09).
+PERMISSION_QUESTION = "Would you like to try it?"
 
 # Words that mark a reply's question as the offer itself rather than some other question.
 _OFFER_WORDS = re.compile(
@@ -83,16 +80,29 @@ _INTERNAL_WORDS = re.compile(
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
 
 
-def without_internal_words(text: str) -> str:
-    """The text with every sentence that carries the system's own words dropped."""
-    if not _INTERNAL_WORDS.search(text):
-        return text
+def _without_sentences(text: str, drop: Callable[[str], bool]) -> str:
+    """The text with every sentence `drop` picks removed, paragraph by paragraph. Unchanged,
+    spacing included, when it picks none."""
     paragraphs = []
+    dropped = False
     for paragraph in text.split("\n\n"):
-        kept = [s for s in _SENTENCE_BREAK.split(paragraph) if not _INTERNAL_WORDS.search(s)]
+        sentences = _SENTENCE_BREAK.split(paragraph)
+        kept = [s for s in sentences if not drop(s)]
+        dropped = dropped or len(kept) < len(sentences)
         if kept:
             paragraphs.append(" ".join(kept))
-    return "\n\n".join(paragraphs)
+    return "\n\n".join(paragraphs) if dropped else text
+
+
+def without_internal_words(text: str) -> str:
+    """The text with every sentence that carries the system's own words dropped."""
+    return _without_sentences(text, lambda s: bool(_INTERNAL_WORDS.search(s)))
+
+
+def _asks_them(sentence: str) -> bool:
+    """Whether a sentence is a question put to them. A question quoted inside a sentence,
+    as in “Why me?” sounds like the question, does not end it, so it is not one."""
+    return sentence.rstrip().endswith("?")
 
 
 def strip_script_leakage(text: str) -> tuple[str, list[str]]:
@@ -275,7 +285,7 @@ def _compose_offer(
     # the whole answer to Tell me more, so Mani's part is not added to it.
     explained = ((framework.stages.get("offering") or {}).get("explain") or {}).get(style) if framework else None
     if describe and explained:
-        return "\n\n".join((explained, PERMISSION_QUESTIONS[style]))
+        return "\n\n".join((explained, PERMISSION_QUESTION))
     shown = " ".join(f"{last_mani_text or ''} {part}".split())
     if framework and not _says_name(shown, framework.name):
         part = f"{part} It's called {framework.name}.".strip()
@@ -284,7 +294,7 @@ def _compose_offer(
         description = " ".join(framework.summary.split())
         if description in shown:
             description = ""
-    return "\n\n".join(p for p in (part, description, PERMISSION_QUESTIONS[style]) if p)
+    return "\n\n".join(p for p in (part, description, PERMISSION_QUESTION) if p)
 
 
 def _offer_buttons(framework_id: str, *, explained: bool) -> list[SmartPrompt]:
@@ -446,29 +456,25 @@ def apply(
     # An offer is built here, not by the model: Mani's own part, which names the set, then the
     # client's permission question for the style. When they asked to hear more, the client's
     # description goes between the two, word for word (muhammad, 2026-10-09). A question
-    # of the model's own asking that permission gives way to the client's. Any other question
-    # means the offer shares a reply with something else, so its buttons are dropped: the
-    # offer can come next turn, and a reply is never left asking two things at once.
+    # of the model's own asking that permission gives way to the client's, and so does any
+    # other question it put to them: the offer is what this turn decided, and a reply never
+    # asks two things at once.
     offered_id = next((p.technique for p in kept if p.technique), None)
     if offered_id is not None:
         part = _without_permission_question(text)
         if part != text:
             notes.append("replaced the model's permission question with the client's")
-        if "?" in part:
-            dropped = [p.label for p in kept if _is_offer_button(p)]
-            kept = [p for p in kept if not _is_offer_button(p)]
-            notes.append(f"dropped offer buttons under a question that is not the offer: {dropped}")
-            # Its words go too, or the person reads an offer with nothing to answer it.
-            without = _BLANK_RUN.sub("\n\n", _OFFER_SENTENCE.sub("", part)).strip()
-            text = without or part
-        else:
-            # They asked about it, by Tell me more or a typed question: the answer carries the
-            # client's description, and the offer comes back without Tell me more.
-            asked = offer_asked_about or selected in EXPLAIN_LABELS
-            text = _compose_offer(
-                part, registry, offered_id, conversation_style, last_mani_text, describe=asked
-            )
-            kept = _offer_buttons(offered_id, explained=asked)
+        trimmed = _without_sentences(part, _asks_them)
+        if trimmed != part:
+            notes.append("trimmed a question from the reply that carries the offer")
+            part = trimmed
+        # They asked about it, by Tell me more or a typed question: the answer carries the
+        # client's description, and the offer comes back without Tell me more.
+        asked = offer_asked_about or selected in EXPLAIN_LABELS
+        text = _compose_offer(
+            part, registry, offered_id, conversation_style, last_mani_text, describe=asked
+        )
+        kept = _offer_buttons(offered_id, explained=asked)
 
     framework_id: str | None = None
     phase: str | None = None

@@ -71,7 +71,7 @@ stages:
     ask:
       supportive: "This thought keeps returning for you. Would it help to look at it together?"
       reflective: "Would it help to examine what supports that thought and what else may be true?"
-      direct: "Would you like to test that thought against the facts?"
+      directive: "Would you like to test that thought against the facts?"
   thought:
     purpose: "Isolate one specific thought in the user's own language."
     listen_for: "One specific assumption, conclusion, prediction, or belief in the user's language."
@@ -96,7 +96,7 @@ stages:
     ask:
       supportive: "This is the thought that keeps returning. Is this the one you want to look at together?"
       reflective: "Is that the thought you want to examine?"
-      direct: "Is that the thought you want to test?"
+      directive: "Is that the thought you want to test?"
   significance:
     purpose: "Understand what makes the thought matter, without labelling their experience."
     listen_for: "Why the thought matters and what the user believes it says about themselves, another person, or the future."
@@ -112,7 +112,7 @@ stages:
     ask:
       supportive: "What makes that thought difficult for you?"
       reflective: "What gives it that meaning?"
-      direct: "What is that conclusion based on?"
+      directive: "What is that conclusion based on?"
   facts:
     purpose: "Separate what the user knows from what they assume or predict."
     listen_for: "What supports the thought, what does not, what is assumed, what remains unknown."
@@ -131,11 +131,11 @@ stages:
       - when: "the thought is supported by an established fact - \"She told me she does not want the friendship.\""
         reply: "She directly ended the friendship. What thought about yourself or your future do you want help examining?"
       - when: "what supports the thought has been said, and what does not support it has not yet been asked (use the line for the selected tone)"
-        reply: "supportive: She usually responds sooner. What else do you know about the situation? | reflective: Her late response supports part of your concern. What does not support the full conclusion? | direct: Her response is late. What facts do not fit that conclusion?"
+        reply: "supportive: She usually responds sooner. What else do you know about the situation? | reflective: Her late response supports part of your concern. What does not support the full conclusion? | directive: Her response is late. What facts do not fit that conclusion?"
     ask:
       supportive: "What makes that thought feel true to you?"
       reflective: "What have you seen that seems to support it?"
-      direct: "What supports that thought?"
+      directive: "What supports that thought?"
   alternative:
     purpose: "Help the user recognize the original interpretation may not be the only possibility."
     listen_for: "At least one credible possibility that does not deny known facts."
@@ -152,7 +152,7 @@ stages:
     ask:
       supportive: "You do not know the reason yet. What else might be possible?"
       reflective: "The silence allows more than one interpretation. What is another possibility?"
-      direct: "The facts do not confirm the reason. What is another explanation?"
+      directive: "The facts do not confirm the reason. What is another explanation?"
   reframe:
     purpose: "Develop a brief, balanced thought grounded in the facts the user identified."
     listen_for: "A thought the user considers accurate, balanced, and believable."
@@ -177,7 +177,7 @@ stages:
     ask:
       supportive: "What thought would be fairer to what you know?"
       reflective: "The original thought treats one explanation as certain. What belief includes the uncertainty?"
-      direct: "The reason remains unknown. What conclusion do the facts support?"
+      directive: "The reason remains unknown. What conclusion do the facts support?"
   closing:
     purpose: "Confirm completion in the user's own terms, without declaring that the framework worked."
     ready_when: >-
@@ -193,7 +193,7 @@ stages:
     ask:
       supportive: "How is that thought sitting with you?"
       reflective: "The new thought includes what you know and what remains unknown. What changes when you see it this way?"
-      direct: "The new thought fits the available facts. Does it feel accurate?"
+      directive: "The new thought fits the available facts. Does it feel accurate?"
 ---
 
 # Thought Reframe

@@ -23,7 +23,7 @@ st.set_page_config(page_title="Mani chat tester", page_icon="🧠", layout="cent
 
 # The greeting's style buttons, by the label the person taps - used only to show which
 # style the conversation is in.
-STYLES = {"direct": "Direct", "supportive": "Supportive", "reflective": "Reflective"}
+STYLES = {"directive": "Directive", "supportive": "Supportive", "reflective": "Reflective"}
 
 # Where Mani's reply will appear, while it is on its way: three dots pulsing in a pill.
 # Colours are .streamlit/config.toml's secondaryBackgroundColor, borderColor and primaryColor.

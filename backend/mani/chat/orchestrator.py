@@ -443,9 +443,14 @@ async def send(
     wants_title = (
         ctx.thread.message_count >= TITLE_AFTER_MESSAGES and not ctx.thread.title
     )
+    conversation_style = context.resolve_style(ctx)
+    if not ctx.thread.conversation_style:
+        # They typed past the greeting's style buttons, so the profile or the default speaks.
+        logger.info("thread %s chose no style; composing in %s", ctx.thread.id, conversation_style)
     system = composer.compose(
         config,
         ctx.profile,
+        style=conversation_style,
         should_generate_title=wants_title,
         offered=offered_now,
         summary=ctx.summary,
@@ -584,7 +589,7 @@ async def send(
         and reply.state.technique == technique.framework_id
     ):
         # An offer can stay open with no buttons under Mani's last reply, when the answer to Tell
-        # me more asked something else. A yes to it is still a yes; read from the offer that is
+        # me more came on a safety concern. A yes to it is still a yes; read from the offer that is
         # open, not from whether buttons were showing, or the questions run while it says offered.
         outcome = TechniqueOutcome.ACCEPTED
         accepted_this_turn = True
@@ -630,7 +635,7 @@ async def send(
             and outcome is not TechniqueOutcome.DECLINED
             and not reply_checks.ruled_out(reply, user_texts, config.registry)
         ),
-        conversation_style=context.resolve_style(ctx),
+        conversation_style=conversation_style,
         wants_title=wants_title,
         # An offer made again after they asked what it involves doesn't repeat the description.
         last_mani_text=next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None),
@@ -663,7 +668,7 @@ async def send(
             fixed,
             technique.framework_id,
             config.registry.get(technique.framework_id).stages,
-            context.resolve_style(ctx),
+            conversation_style,
             content,
             technique.phase,
             _awaiting_place(history),
@@ -673,7 +678,7 @@ async def send(
         # word, never reworded. Skipped when they already described their body and this
         # reply moves straight to the two choices instead of asking again.
         stage = config.registry.get(fixed.framework_id).stages.get("somatic_checkin") or {}
-        script = (stage.get("ask") or {}).get(context.resolve_style(ctx))
+        script = (stage.get("ask") or {}).get(conversation_style)
         if script:
             fixed = dataclasses.replace(fixed, text=repairs.with_the_check_in(fixed.text, script))
     if fixed.notes:
@@ -698,7 +703,7 @@ async def send(
         # The client's words for a feeling that returns after the practice, sent as written.
         returning = repairs.returning_reply(
             config.registry.get(retiring_framework_id).stages.get("somatic_practice") or {},
-            context.resolve_style(ctx),
+            conversation_style,
         )
         if returning:
             fixed = dataclasses.replace(fixed, text=returning)

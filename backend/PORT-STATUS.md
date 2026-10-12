@@ -47,7 +47,8 @@ the same change as the work.**
      the thread with no model call. An indirect one (including passive ideation and "pills in my hand")
      is a concern: it suspends frameworks and offers without locking.
   2. Code decides one thing about which framework: an imminent action (`eligibility.py`) makes DBT STOP the candidate, with its offering stage in `[ctx]`. Every other choice is the model's, from the Framework Index.
-  3. `context.py` builds the `[ctx]` block: style, offer timing, the stage in progress and the stages
+  3. `composer.py` builds the system prompt with the one style file the thread chose, and `context.py`
+     builds the `[ctx]` block: style, offer timing, the stage in progress and the stages
      after it. Nothing in code classifies what the person said: whether a reply is vague, a correction or
      a wish only to be listened to is the model's reading (`response_format.md`, reasoning).
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,
@@ -78,8 +79,8 @@ the same change as the work.**
 - **Admin**: prompt CRUD with versioning, exercise CRUD, crisis event review, a user's memory.
 - **Account deletion**: `DELETE /v1/account` removes the user and everything they own.
 - **Scenario check**: `scripts/scenario_check.py` replays the client's test conversations (`scripts/scenarios.json`)
-  through the real stack in every style. It flags replies that hand the person's words back, styles that ask the
-  same question at the same point, internal words, and offer mistakes, and removes the users it created.
+  through the real stack in every style, including the four scenarios of the client's styles document. It flags
+  questions that ask for what they already said, internal words, and offer mistakes, and removes the users it created.
 
 ## The API
 
@@ -134,15 +135,27 @@ the same change as the work.**
   are one short mirror then the question, and the description belongs after Tell me more (2026-10-09); why
   the word may be said: reason unknown, muhammad to confirm. The line builds on the newest thing they
   said, then the client's permission question; the client's description is shown only when they ask to hear more.
-- **Each style is its own way of talking.** Because the client separates styles by behavior, not phrases, and
-  shared targets made all three styles ask the same question (2026-10-09). Its recipe and its own question focus ride on every turn in `[ctx]`:
-  All three ask about how one part is for them (muhammad, 2026-10-09); Direct goes to the heart of that part,
-  Supportive asks what it is like, Reflective what it brings up. Direct is never cold or interrogative: a few
-  words of Mani's own, then one short question, never more facts about the event. Mani reflects only when it adds understanding, never as a formula before every question.
+- **One style file per thread, in the system prompt, written from the client's behavior lists** (muhammad,
+  2026-10-12). Because the client separates the styles by what each reply is trying to do, and our own recipe per
+  style, under shared rules that contradicted their examples, drifted from it (styles document, 2026-10-12).
+  `content/prompts/style_directive.md`, `style_supportive.md` and `style_reflective.md` each hold that style's
+  behavior, the client's within-framework list word for word, its consent line and two of the client's
+  conversations as examples of the sound. `composer.compose` sends only the style resolved for the thread, after
+  `mani_base` and `response_format`, so the prefix before it caches once for all three; the Framework Index lists
+  only that style's offer and Keep chatting wording. `[ctx]` names the style and carries no recipe. The stored
+  value is `directive` (migration 019), with no `direct` alias. All three rows are required at load
+  (`cache.REQUIRED_PROMPTS`), so seed before deploying. `test_only_the_chosen_style_reaches_the_system_prompt` and
+  `test_a_missing_style_row_is_refused_when_the_prompts_load` in `tests/unit/test_composer.py` hold it.
 - **An offer carries the client's three buttons**, Try it, Tell me more, Keep chatting, set in `repairs.py`
   whatever the model labels them. Because the client's offer has three choices, two after Tell me more, and
   the internal "nearest fit" wording reached people (2026-10-08); after Tell me more it comes back with the other two. The nearest fit is
   offered exactly like a confident one, with no label or wording that says it is the nearest.
+- **An offer the window allows is never dropped for a question beside it; the question goes** (muhammad,
+  2026-10-12). Because the old rule dropped the buttons whenever a `?` appeared before the permission question,
+  and a reflection quoting their "Why me?" lost a valid ABCDE offer: no buttons, no offered row, and the yes
+  after it started nothing (2026-10-12). A question is a sentence that ends in `?`; one quoted inside a sentence
+  is not. `repairs._asks_them`, `test_their_quoted_question_does_not_cost_the_offer` and
+  `test_a_different_question_beside_an_offer_gives_way_to_it` in `tests/unit/test_repairs.py`.
 - **Inside a framework, a stage their words already answer is skipped, with no check and no mention**
   (muhammad, 2026-10-09). Because the client says Mani never makes them repeat what they already said, yet
   people who said it all at once still walked every stage (2026-10-09). The model walks the stages in order from the one in force, skips each whose `ready_when`
@@ -155,8 +168,8 @@ the same change as the work.**
   (`reply_checks.with_ledger_step`); a draft with no ledger is not judged by one. `Framework.may_skip`
   decides what is never skipped, the closing and the body route, and `Registry.clamp` corrects a jump over
   them to the closing. This holds from the turn they say yes. No stage question carries a button: a
-  "Not sure" button was added by mistake and removed (muhammad, 2026-10-09). The chosen style rides on every
-  framework turn in `stage_note`. A stage that is asked moves on once its `ready_when` is met, never needing
+  "Not sure" button was added by mistake and removed (muhammad, 2026-10-09). The chosen style holds inside
+  a framework through its style file. A stage that is asked moves on once its `ready_when` is met, never needing
   complete or certain answers, and after two tries unless the stage says to stay. A question that makes them
   uneasy is let go and the next stage asked; memory records it. Unsure typed ("I don't know", "not sure") is
   still helped once before the stage moves on: Mani offers what their situation or feeling points to as a
@@ -191,25 +204,28 @@ the same change as the work.**
   asks nothing says so by its shape (`schema.NO_QUESTION_SHAPES`). What code still checks is not about meaning:
   the crisis screen, script and internal-word stripping, the `[ctx]` injection guard, the imminent-action
   phrases, the body route's place and decline words, and `never_offer_when_said` in the framework files.
-- **Questions before an offer are about one part, and how it is for them** (muhammad, 2026-10-09). Because
-  without a defined target Mani re-asked what they had said, chased the event and walked them into worst
-  cases (2026-10-09). The model chooses the one part they gave most weight or said last, asks what happened in it only if it does not know,
-  then asks about something real and present in it, in their words, and lets them find the word, never saying a
-  feeling they did not say. Never a hypothetical ("what would it mean"), never "what would it be like if"; asking how something they said is affecting them is fine in their own words, and a feeling word may be used in a question to confirm or correct (muhammad, 2026-10-09), never told to them as what they feel; a
-  fear of what may happen gets what they have noticed since, never why they think it. Before asking, the model
-  splits their message into what happened, what they conclude and what is still unsaid, and asks only for the last
-  (the reason they gave for a thought is already answered). Direct asks what they have noticed since, Supportive how
-  they are with it today, Reflective why it matters to them. Direct opens with the question, never a restatement. One short question of about ten words, never harder than the last, no two-part questions, no menu of
+- **Questions before an offer ask for what is still missing** (muhammad, 2026-10-09; cut 2026-10-12). Because
+  Mani re-asked what they had said and walked them into worst cases (2026-10-09), while the client's own questions
+  ask what made them think it, what feels most pressing, and open on their words (styles document, 2026-10-12).
+  What each question is trying to do comes from the style file. Shared by all three: when the basic what is
+  missing (what happened, what they are deciding), it is asked first; a reflection only checks or shows
+  understanding and never hands their words or feelings back (client's job decision feedback, 2026-10-12);
+  never asking for something they already made clear, in any words; a feeling word only as a question to confirm
+  or correct, never told to them as what they feel; one short question, never harder than the last, no menu of
   choices (a vague or unsure reply gets an easier question about one small part, not two ways it could go), and
-  no advice or suggestion hidden in a question. No question is aimed at a set: `heading_toward` only decides
-  what is offered (`context._MEANING["conversation_phase"]`). Mani never joins two things they said into a link
-  they did not make. Told it got something wrong, in any words, it says it misunderstood and asks what would be
+  no advice or suggestion hidden in a question. Both sides of one decision in one question, and "what would it
+  mean", are allowed: the client asks both (2026-10-12). `heading_toward` only decides what is offered. Mani never joins two things
+  they said into a link they did not make. Told it got something wrong, in any words, it says it misunderstood and asks what would be
   more accurate (the client's line), never explaining what it meant.
 - **Mani's language is plain, everyday English**. Because muhammad wants human-like language in plain
   everyday words (2026-10-07); why stage questions are not made about feeling: reason unknown, muhammad to
   confirm. Correct grammar and punctuation, each sentence short enough
   to say in one breath, as people talk in daily life (`mani_base.md` `voice`). Stage questions inside a
-  framework keep the framework's own wording and are not made about feeling.
+  framework keep the framework's own wording and are not made about feeling: the client's `ask` for the
+  style is asked as written, or only its missing part, never reworded, because rewording it produced
+  stacked lines like "What do you find yourself telling yourself about that?" (2026-10-12;
+  `mani_base.md` `in_a_framework`, `context._stage_note`,
+  `test_a_stage_question_is_asked_as_the_client_wrote_it`).
 - **`[ctx]` explains itself.** Because a plain turn paid about 4,900 characters of key dictionary to explain a
   154 character block, and the two drifted apart (2026-10-09). Each line carries its meaning for this turn's value on the line under it
   (`context._MEANING`), so `response_format.md` holds only what the block is. A test fails if a key is sent

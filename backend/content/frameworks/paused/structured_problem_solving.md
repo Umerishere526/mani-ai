@@ -76,7 +76,7 @@ stages:
     ask:
       supportive: "Several parts of this problem are competing for your attention. Would it help to take them one at a time?"
       reflective: "The facts, assumptions, and possible decisions are connected right now. Would it help to separate them?"
-      direct: "You want a clear decision and first action. Would you like to work through the options?"
+      directive: "You want a clear decision and first action. Would you like to work through the options?"
   problem:
     purpose: "Reduce a broad difficulty to one specific problem."
     listen_for: "One specific problem rather than several connected problems."
@@ -102,7 +102,7 @@ stages:
     ask:
       supportive: "What is the part you most want to sort out?"
       reflective: "When you narrow it down, what is the problem you want to resolve?"
-      direct: "What is the exact problem you want to resolve?"
+      directive: "What is the exact problem you want to resolve?"
   facts:
     purpose: "Clarify what is known, what is believed, and what remains uncertain."
     listen_for: "Verified information, interpretations, predictions, and missing information."
@@ -122,7 +122,7 @@ stages:
     ask:
       supportive: "What do you know for sure so far?"
       reflective: "What do you know for certain, and what are you still guessing?"
-      direct: "What do you know for certain?"
+      directive: "What do you know for certain?"
   control:
     purpose: "Determine which part the user can influence."
     listen_for: "The decision, communication, boundary, preparation, or action available to the user."
@@ -140,7 +140,7 @@ stages:
     ask:
       supportive: "Which part of this is in your hands?"
       reflective: "When you look at it, which part can you influence?"
-      direct: "Which part is within your control?"
+      directive: "Which part is within your control?"
   outcome:
     purpose: "Identify what the user wants the response to accomplish."
     listen_for: "A realistic result the user wants their response to support."
@@ -158,7 +158,7 @@ stages:
     ask:
       supportive: "What would you like your response to do for you?"
       reflective: "What would a good outcome look like to you?"
-      direct: "What do you want your response to accomplish?"
+      directive: "What do you want your response to accomplish?"
   options:
     purpose: "Identify realistic options without judging them immediately."
     listen_for: "More than one safe and realistic option when possible."
@@ -178,7 +178,7 @@ stages:
     ask:
       supportive: "What are some things you could do, even small ones?"
       reflective: "What responses can you see open to you?"
-      direct: "What are your possible responses?"
+      directive: "What are your possible responses?"
   compare:
     purpose: "Consider the relevant benefits, limitations, risks, and consequences of each option."
     listen_for: "The consequences, limitations, risks, timing, and fit of each response."
@@ -196,7 +196,7 @@ stages:
     ask:
       supportive: "What do you like and not like about each one?"
       reflective: "What would each of these bring, and what would it cost?"
-      direct: "What are the strengths and limitations of each?"
+      directive: "What are the strengths and limitations of each?"
   select:
     purpose: "Help the user choose the option that best fits the outcome and circumstances."
     listen_for: "The user's own decision and the reason it fits."
@@ -213,7 +213,7 @@ stages:
     ask:
       supportive: "Which one fits best with what you want?"
       reflective: "Which response sits best with what you want to accomplish?"
-      direct: "Which response best fits what you want to accomplish?"
+      directive: "Which response best fits what you want to accomplish?"
   first_action:
     purpose: "Turn the selected response into one specific beginning."
     listen_for: "A specific, manageable action within the user's control."
@@ -231,7 +231,7 @@ stages:
     ask:
       supportive: "What is a first step that feels doable?"
       reflective: "What would beginning look like?"
-      direct: "What is the first action?"
+      directive: "What is the first action?"
   closing:
     purpose: "Confirm completion in the user's own terms, without promising the decision will produce the desired outcome."
     ready_when: >-
@@ -249,7 +249,7 @@ stages:
     ask:
       supportive: "You chose a response that feels manageable to you. How is that decision sitting with you?"
       reflective: "You chose the response that best supports your intended outcome. What changes now that the decision is clearer?"
-      direct: "You selected the response and the first action. Is the plan realistic?"
+      directive: "You selected the response and the first action. Is the plan realistic?"
 ---
 
 # Structured Problem-Solving

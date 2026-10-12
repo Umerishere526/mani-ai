@@ -8,7 +8,7 @@ from mani.chat.techniques import Registry
 from mani.models.rows import Framework
 from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
-STYLES = ("direct", "supportive", "reflective")
+STYLES = ("directive", "supportive", "reflective")
 
 
 @pytest.fixture(scope="module")
@@ -59,11 +59,11 @@ def test_the_event_stage_confirms_only_a_possible_event_in_each_style(abcde):
 def test_no_stage_letter_or_name_is_sent_for_the_chat_to_repeat(abcde):
     framework = as_framework(abcde)
     block = "\n".join(
-        context._stage_lines("stage", framework, "activate", "direct")
-        + context._later_stage_lines(framework, "dispute", "direct", explain=True)
+        context._stage_lines("stage", framework, "activate", "directive")
+        + context._later_stage_lines(framework, "dispute", "directive", explain=True)
     )
     assert "title" not in block and "label" not in block and "Activating Event" not in block
-    note = context._stage_note(framework, "direct", starting=True)
+    note = context._stage_note(framework, starting=True)
     assert "Never say a stage's letter or name" in note and "skipped without a word" in note
 
 
@@ -73,36 +73,39 @@ def test_the_offer_follows_the_clients_pattern_with_a_slot_for_their_situation(a
     for text in offer.values():
         assert "There's a framework called ABCDE" in text
         assert "<" in text and ">" in text and "?" not in text, "a slot to fill, and no question of its own"
-    assert "helps you identify the thoughts behind <" in offer["direct"]
-    assert "question whether they're true, and replace them with more realistic ones." in offer["direct"]
+    assert "helps you identify the thoughts behind <" in offer["directive"]
+    assert "question whether they're true, and replace them with more realistic ones." in offer["directive"]
 
 
-def test_the_offer_pattern_reaches_the_prompt_through_the_framework_index(abcde):
+def test_the_offer_pattern_of_the_chosen_style_alone_reaches_the_framework_index(abcde):
     from mani.prompts import composer
 
-    index = composer.framework_index(Registry([as_framework(abcde)]))
+    index = composer.framework_index(Registry([as_framework(abcde)]), "directive")
     assert "## How to word an offer" in index
-    assert "- direct: There's a framework called ABCDE that helps you identify the thoughts behind <" in index
+    assert "There's a framework called ABCDE that helps you identify the thoughts behind <" in index
+    # Supportive's pattern and Keep chatting question stay out of a Directive conversation.
+    assert "can help you understand the thoughts behind" not in index
+    assert "We can keep talking." not in index
 
 
 CLIENT_QUESTIONS = {
     "belief": {
-        "direct": "What did you start telling yourself about what was happening?",
+        "directive": "What did you start telling yourself about what was happening?",
         "supportive": "Sometimes when things are difficult, we start drawing conclusions about ourselves or what's happening. What were you telling yourself about the situation?",
         "reflective": "When that happened, what did you begin believing about yourself or the situation?",
     },
     "consequence": {
-        "direct": "How did that thought affect how you felt or what you did?",
+        "directive": "How did that thought affect how you felt or what you did?",
         "supportive": "Our thoughts can affect how we feel and respond. How did that belief affect how you felt or what you did?",
         "reflective": "When you believed that thought, how did it influence your feelings or the way you responded?",
     },
     "dispute": {
-        "direct": "What makes you believe this is true, and what makes you question it?",
+        "directive": "What makes you believe this is true, and what makes you question it?",
         "supportive": "Let's look at that belief together. What makes you think it's true? Is there anything that suggests otherwise?",
         "reflective": "As you think about that belief, what seems to support it, and what might suggest a different explanation?",
     },
     "effective": {
-        "direct": "What's a more realistic and helpful way to think about what's happening?",
+        "directive": "What's a more realistic and helpful way to think about what's happening?",
         "supportive": "Now that you've looked at both sides, what's a more realistic and helpful way to think about what's happening?",
         "reflective": "After considering both sides, what do you think would be a more accurate and helpful way to understand what happened?",
     },
