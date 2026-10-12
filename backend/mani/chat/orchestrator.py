@@ -29,7 +29,6 @@ from mani.db import (
     llm_calls,
     messages as messages_db,
     profiles,
-    summaries,
     threads,
 )
 from mani.errors import ErrorCategory, ServiceError
@@ -1029,12 +1028,3 @@ async def _has_earlier_thread(
             user_id, exclude,
         )
     )
-
-
-async def summary_snapshot(
-    conn: asyncpg.Connection, thread_id: uuid.UUID | str, user_id: str
-) -> tuple[list[Message], object | None]:
-    """The messages a summary run should read, and the summary it is updating."""
-    existing = await summaries.get(conn, thread_id)
-    page = await messages_db.list_for_thread(conn, thread_id, user_id, limit=200)
-    return list(reversed(page.messages)), existing

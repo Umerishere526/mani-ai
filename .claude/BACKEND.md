@@ -15,7 +15,7 @@ python scripts/seed.py     # loads content/ into admin.frameworks and admin.prom
 python scripts/seed_exercises.py  # uploads content/exercises/ audio to the private `exercises` bucket and upserts admin.exercises
 fastapi dev main.py        # dev server with reload on :8000
 fastapi run main.py        # production mode
-pytest                     # the whole suite: unit, evals and integration (integration skips without a database)
+pytest                     # the whole suite: unit and integration (integration skips without a database)
 python scripts/scenario_check.py [--scenario <name>] [--style <style>]   # the client's test conversations from scripts/scenarios.json, in every style, against the real model; removes its own users
 ./scripts/test_db.sh       # schema + RLS against a throwaway Postgres (needs Docker)
 ```
@@ -54,7 +54,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 
 ## Conventions
 
-- Use Pydantic models for request and response bodies rather than raw dicts — `pydantic` 2.13 is already installed, as are `pydantic-settings` and `email-validator`.
+- Use Pydantic models for request and response bodies rather than raw dicts — `pydantic` 2.13 is already installed, as is `pydantic-settings`.
 - Read configuration through `pydantic-settings` and a `.env` file (`python-dotenv` is installed). Never commit secrets or inline them in `main.py`.
 - As routes grow past a handful, split them into `APIRouter` modules and include them from `main.py` — don't let `main.py` become a dumping ground.
 - `sentry-sdk` is initialised in `create_app()` when `SENTRY_DSN` is set, with `send_default_pii=False` — conversation content is special-category health data and must not ride along on an error report.

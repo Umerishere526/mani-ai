@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-09
 tags: [journal, frameworks, stages, dialog-management]
 ---
+> Superseded 2026-10-09 (the Not sure button and the no "is that right?" rule; see "The Not sure button was removed" below) — see Decisions in force in `backend/PORT-STATUS.md`
 
 # A stage the conversation already answers is skipped, never confirmed
 

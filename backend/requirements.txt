@@ -6,7 +6,6 @@ fastapi==0.141.1
 uvicorn[standard]==0.52.4
 pydantic==2.13.5
 pydantic-settings==2.15.0
-email-validator==2.3.0
 # Required by FastAPI to parse the multipart body of the voice-upload endpoint (UploadFile).
 python-multipart==0.0.32
 
@@ -16,8 +15,8 @@ PyJWT[crypto]==2.14.0
 # LangChain composes the model call and parses the structured reply. langchain-openai is an
 # OpenAI-*protocol* client pointed at OpenRouter's base_url - not a second provider, not a
 # second bill - and it depends on this same openai package rather than bringing its own.
-# LangSmith arrives with langchain and stays off: it would receive conversation transcripts.
-langchain==1.4.1
+# LangSmith arrives with langchain-core and stays off: it would receive conversation transcripts.
+langchain-core==1.6.6
 langchain-openai==1.6.2
 openai==3.14.0
 httpx==0.28.1

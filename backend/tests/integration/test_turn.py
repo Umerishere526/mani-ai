@@ -14,7 +14,7 @@ from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
 from mani.chat.repairs import PERMISSION_QUESTIONS
 from mani.llm.schema import Crisis, Reply, SmartPrompt, Style, TechniqueState
-from mani.models.rows import TechniqueOutcome
+from mani.models.rows import TechniqueOutcome, TechniqueState as TechniqueRow
 from tests.integration.cleanup import remove_test_users
 
 ALICE = uuid.UUID("a0000000-0000-4000-8000-0000000000d1")
@@ -144,6 +144,20 @@ async def send(claims: Claims, thread_id, content, **kwargs):
 
     async with pool.as_user(claims) as conn:
         return await orchestrator.send(conn, claims, thread_id, content, **kwargs)
+
+
+async def set_technique_outcome(
+    conn, thread_id, user_id, framework_id: str, outcome: TechniqueOutcome,
+    at_message_count: int, phase: str | None = None,
+) -> None:
+    """Puts the thread straight into a framework state a test would otherwise walk to."""
+    await threads.apply(
+        conn, thread_id, user_id,
+        threads.ThreadUpdates(technique=TechniqueRow(
+            thread_id=thread_id, framework_id=framework_id, outcome=outcome,
+            phase=phase, at_message_count=at_message_count,
+        )),
+    )
 
 
 async def test_a_turn_costs_exactly_one_provider_call(alice, model):
@@ -454,7 +468,7 @@ async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, m
     # The phase clamp only advances one step per turn, so the landed state is set
     # directly rather than walked through all six of abcde's phases.
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="somatic_practice",
         )
@@ -480,7 +494,7 @@ async def _retire_abcde_on(alice, thread_id) -> None:
     from mani.db import pool
 
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread_id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="somatic_practice",
         )
@@ -895,7 +909,7 @@ async def test_a_concern_pauses_a_running_framework_for_that_turn(alice, model):
 
     thread = await start(alice)
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="belief",
         )
@@ -945,7 +959,7 @@ async def test_the_framework_just_finished_is_not_offered_again_right_after(alic
 
     thread = await start(alice)
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=-context.COOLDOWN_AFTER_COMPLETE, phase=None,
         )
@@ -1148,7 +1162,7 @@ async def test_finishing_a_framework_always_offers_chat_more_and_the_library(ali
 
     thread = await start(alice)
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="somatic_practice",
         )
@@ -1171,7 +1185,7 @@ async def test_the_body_check_in_waits_for_their_answer_before_the_two_choices(a
 
     thread = await start(alice)
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="effective",
         )
@@ -1184,7 +1198,7 @@ async def _land_on(alice, thread_id, phase) -> None:
     from mani.db import pool
 
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread_id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase=phase,
         )
@@ -1274,7 +1288,7 @@ async def test_a_choice_already_made_is_not_offered_again(alice, model):
 
     thread = await start(alice)
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="somatic_practice",
         )
@@ -1412,7 +1426,7 @@ async def test_the_body_check_in_is_sent_from_the_script_not_reworded(alice, mod
 
     thread = await start(alice)
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="effective",
         )

@@ -7,7 +7,6 @@ import re
 
 from mani.chat import repairs
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
-from mani.chat.safety import normalize
 from mani.db.threads import TurnContext
 from mani.models.rows import ENDING_STAGES, Framework, Message, MessageRole, TechniqueOutcome
 

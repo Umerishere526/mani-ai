@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-07
 tags: [journal, prompts, frameworks, decisions]
 ---
+> Superseded 2026-10-09 (Choosing a framework, Synonyms) — see [[router-removed-model-chooses-the-framework-2026-10-09]]
 
 # Prompt restructure: what muhammad decided (2026-10-07)
 

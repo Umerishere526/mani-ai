@@ -35,16 +35,6 @@ class Settings(BaseSettings):
     # printed the OpenRouter key. The URL carries the database password.
     database_url: str = Field(repr=False)
 
-    # asyncpg pool bounds. Total Postgres backend connections consumed is
-    # (concurrently-warm Vercel instances) x db_pool_max_size, uncapped by anything in this
-    # repo - the Supabase session pooler (required because asyncpg uses prepared statements,
-    # which the transaction pooler doesn't support) allocates one fixed backend connection
-    # per pooled client connection. These are a hedge, not a measured guarantee: raising them
-    # needs checking the actual project's pooler connection ceiling first (Supabase dashboard
-    # -> Settings -> Database -> connection pooling), which this code cannot see.
-    db_pool_min_size: int = Field(default=2, ge=1)
-    db_pool_max_size: int = Field(default=5, ge=1)
-
     # Supabase hosts Auth and Storage; the database is addressed via database_url.
     supabase_url: str
     supabase_service_role_key: str = Field(repr=False)

@@ -104,11 +104,13 @@ the same change as the work.**
 
 ## Decisions in force
 
-- **A turn is one model call, or more when a draft is redrafted**. The one scoped extra
-  call is the exercise pick at the end of a framework. `test_a_turn_costs_exactly_one_provider_call` still
+- **A turn is one model call, or more when a draft is redrafted**. Because the port cut about 21 calls per
+  turn to one, and rules about what a reply may say only held once the model could redraft (2026-10-01).
+  The one scoped extra call is the exercise pick at the end of a framework. `test_a_turn_costs_exactly_one_provider_call` still
   holds for a draft that needs no redraft.
 - **A framework is offered as soon as it fits, with no count to wait out**: from the person's first message
-  (muhammad, 2026-10-10; there is no `earliest_offer_message`).
+  (muhammad, 2026-10-10; there is no `earliest_offer_message`). Because the client says two to four exchanges is
+  a range, not a count, and the person's first message often already holds the fit (2026-10-10).
   The closest fit is due by their fourth message in Direct, their sixth in Supportive and Reflective. Every
   reply before an offer asks one question, and what they say back about how it is for them is how the set
   is found. The set is chosen by what hurts, by its Use it when and
@@ -116,18 +118,24 @@ the same change as the work.**
   matching ranks or shortlists them: the model chooses, code only checks (cooldown, already offered, what they
   said that rules one out) and owns the imminent action (muhammad, 2026-10-09; 2026-10-08: when a weak router
   guess stopped being the candidate, wrong SPS offers went from 4 of 10 live conversations to 0).
-- **Memory is per person**.
-- **An offer is one short line that names its framework** (the word may be said), building on the newest thing they
+- **Memory is per person**. Because Mani should learn each person's patterns across chats, while a new chat
+  still starts with none of the last one's messages (2026-09-23).
+- **An offer is one short line that names its framework** (the word may be said). Because the client's offers
+  are one short mirror then the question, and the description belongs after Tell me more (2026-10-09); why
+  the word may be said: reason unknown, muhammad to confirm. The line builds on the newest thing they
   said, then the client's permission question; the client's description is shown only when they ask to hear more.
-- **Each style is its own way of talking.** Its recipe and its own question focus ride on every turn in `[ctx]`:
+- **Each style is its own way of talking.** Because the client separates styles by behavior, not phrases, and
+  shared targets made all three styles ask the same question (2026-10-09). Its recipe and its own question focus ride on every turn in `[ctx]`:
   All three ask about how one part is for them (muhammad, 2026-10-09); Direct goes to the heart of that part,
   Supportive asks what it is like, Reflective what it brings up. Direct is never cold or interrogative: a few
   words of Mani's own, then one short question, never more facts about the event. Mani reflects only when it adds understanding, never as a formula before every question.
 - **An offer carries the client's three buttons**, Try it, Tell me more, Keep chatting, set in `repairs.py`
-  whatever the model labels them; after Tell me more it comes back with the other two. The nearest fit is
+  whatever the model labels them. Because the client's offer has three choices, two after Tell me more, and
+  the internal "nearest fit" wording reached people (2026-10-08); after Tell me more it comes back with the other two. The nearest fit is
   offered exactly like a confident one, with no label or wording that says it is the nearest.
 - **Inside a framework, a stage their words already answer is skipped, with no check and no mention**
-  (muhammad, 2026-10-09): the model walks the stages in order from the one in force, skips each whose `ready_when`
+  (muhammad, 2026-10-09). Because the client says Mani never makes them repeat what they already said, yet
+  people who said it all at once still walked every stage (2026-10-09). The model walks the stages in order from the one in force, skips each whose `ready_when`
   what they said (here or in the Conversation Context) already meets, and asks the first that is not, reporting
   that stage in `state.step` even several ahead. `[ctx]` carries the current and next stage in full and every
   later stage up to the closing as `later_stage` (`ready_when` and the style's `ask`). Before the text the model fills
@@ -144,7 +152,10 @@ the same change as the work.**
   still helped once before the stage moves on: Mani offers what their situation or feeling points to as a
   possibility to check, or the client's don't-know line, then weighs whatever they say against the stage
   (muhammad 2026-10-10; now the model's reading, not a phrase list).
-- **Only ABCDE is offered, from the client's ABCDE document** (muhammad, 2026-10-09). The chat never names a
+- **Only ABCDE is offered, from the client's ABCDE document** (muhammad, 2026-10-09). Because the client's
+  ABCDE document of 2026-10-09 is what we build to, and ABCDE's stages give the questions a target
+  (2026-10-09); why the other five are paused and why the body check-in stays: reason unknown, muhammad to
+  confirm. The chat never names a
   stage: no letter, no "A is for Activating Event.", no line for a stage already answered (a version that wrote
   those lines was removed the same day). What Mani knows lives in the stage ledger, and the chat only asks, in its
   own tone for the style, the next thing that is missing, with the document's question for the stage. A stage the
@@ -157,18 +168,22 @@ the same change as the work.**
   decided to keep it). An imminent action points to no framework while STOP is paused (`urgent` is false
   unless `dbt_stop` is in the registry). Supportive inside a framework adds no extra reassurance, validation or
   questions.
-- **The stage ledger** (`stages_known`, written before the reply): each stage with what they already said and a
+- **The stage ledger** (`stages_known`, written before the reply). Because what a stage needs is often half
+  known already, so the question asks only for the missing part (2026-10-09). The ledger holds each stage with what they already said and a
   `status` of known (bypassed), partial (ask only the gap), confirm or missing. With `AI_DEBUG_MODE` on, a turn
   returns `ledger`: every ABCDE stage as bypassed, partial, confirm, missing, done earlier or not reached, with
   the stage the reply asks marked, and the chat tester shows it in the sidebar under "What Mani knows".
-- **No phrase lists judge the conversation** (muhammad, 2026-10-09): code holds no list of what people say
+- **No phrase lists judge the conversation** (muhammad, 2026-10-09). Because literal phrase matching cannot
+  read a paraphrase, so its judgments were silently wrong whenever people worded things differently
+  (2026-10-09). Code holds no list of what people say
   (vague, unsure, correcting, wanting only to be heard), no list of feeling words, no list of self-judgments
   and no pain words. The rules for those live in the prompts, and a draft answers them itself: a reply that
   asks nothing says so by its shape (`schema.NO_QUESTION_SHAPES`). What code still checks is not about meaning:
   the crisis screen, script and internal-word stripping, the `[ctx]` injection guard, the imminent-action
   phrases, the body route's place and decline words, and `never_offer_when_said` in the framework files.
-- **Questions before an offer are about one part, and how it is for them** (muhammad, 2026-10-09): the model
-  chooses the one part they gave most weight or said last, asks what happened in it only if it does not know,
+- **Questions before an offer are about one part, and how it is for them** (muhammad, 2026-10-09). Because
+  without a defined target Mani re-asked what they had said, chased the event and walked them into worst
+  cases (2026-10-09). The model chooses the one part they gave most weight or said last, asks what happened in it only if it does not know,
   then asks about something real and present in it, in their words, and lets them find the word, never saying a
   feeling they did not say. Never a hypothetical ("what would it mean"), never "what would it be like if"; asking how something they said is affecting them is fine in their own words, and a feeling word may be used in a question to confirm or correct (muhammad, 2026-10-09), never told to them as what they feel; a
   fear of what may happen gets what they have noticed since, never why they think it. Before asking, the model
@@ -180,22 +195,35 @@ the same change as the work.**
   what is offered (`context._MEANING["conversation_phase"]`). Mani never joins two things they said into a link
   they did not make. Told it got something wrong, in any words, it says it misunderstood and asks what would be
   more accurate (the client's line), never explaining what it meant.
-- **Mani's language is plain, everyday English**: correct grammar and punctuation, each sentence short enough
+- **Mani's language is plain, everyday English**. Because muhammad wants human-like language in plain
+  everyday words (2026-10-07); why stage questions are not made about feeling: reason unknown, muhammad to
+  confirm. Correct grammar and punctuation, each sentence short enough
   to say in one breath, as people talk in daily life (`mani_base.md` `voice`). Stage questions inside a
   framework keep the framework's own wording and are not made about feeling.
-- **`[ctx]` explains itself.** Each line carries its meaning for this turn's value on the line under it
+- **`[ctx]` explains itself.** Because a plain turn paid about 4,900 characters of key dictionary to explain a
+  154 character block, and the two drifted apart (2026-10-09). Each line carries its meaning for this turn's value on the line under it
   (`context._MEANING`), so `response_format.md` holds only what the block is. A test fails if a key is sent
   without one.
-- **An open offer is read from the database, not from the buttons on screen.** A yes to it starts it either
+- **An open offer is read from the database, not from the buttons on screen.** Because an offer can stay open
+  with no buttons showing, and a typed yes to it then started nothing (2026-10-09). A yes to it starts it either
   way, and asking about it (Tell me more, or a typed question) is answered by offering it again.
-- **"It hit me so hard" is not violence.** `safety.screen` sets aside "hit me" when a thing is its subject
+- **"It hit me so hard" is not violence.** Because the client's own ABCDE signal "why it hit me so hard" was
+  read as violence and Mani asked if they were in danger (2026-10-08). `safety.screen` sets aside "hit me" when a thing is its subject
   (it, that, this, what); a person hitting them still asks.
 - **chat-tester resets a password on the page**: email and new password, set through the Auth Admin API with
-  no email. Anyone who can reach the page can reset any account, so it stays non-public. A browser session
+  no email. Because the test tool should need no mail setup, accepting that the page stays non-public
+  (2026-10-07); the seven day session: reason unknown, muhammad to confirm. Anyone who can reach the page can reset any account, so it stays non-public. A browser session
   is remembered for seven days.
 - Also settled: OpenRouter only, asyncpg not PostgREST, the
   `public` and `admin` split, the `mani_service` role, three security definer write functions, the
   deterministic safety screen as the only thing that locks a thread, in process routing, no streaming.
+  Because: one provider was ever used (2026-09-14); a turn's writes must succeed or fail together, which
+  PostgREST cannot do (2026-09-15); anything PostgREST exposes is reachable with the anon key (2026-09-15);
+  a backend acting as `authenticated` let users forge Mani's replies (2026-09-16); the definer functions write
+  rows no plain grant should allow (2026-09-15); a small model over-fires the crisis flag on ordinary
+  distress (2026-09-29); plain request and response is acceptable while turns stay short (2026-09-14).
+  In process routing no longer describes the code (`router.py` is gone and the model chooses the framework):
+  muhammad to reword or drop it.
 
 ## Before it takes real traffic
 
@@ -220,7 +248,7 @@ Ordered by what breaks first.
 7. **Pool and load.** `mani/db/pool.py` is min 2, max 10 with a 90 second command timeout, sized by reasoning.
    A turn holds a transaction open across the model call, so about 10 turns per process is the ceiling, and
    any `idle_in_transaction_session_timeout` below the model's latency kills turns. Nothing has been load
-   tested. `config.py` also defines `db_pool_*` settings that nothing reads.
+   tested.
 8. **The backend's database role.** `001_initial_schema.sql` grants `mani_service` to `postgres`. If the
    deployed `DATABASE_URL` connects as anything else, `set local role mani_service` fails. Grant it to that role,
    never to `authenticator`.

@@ -6,7 +6,6 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
 
 import asyncpg
 
@@ -15,7 +14,6 @@ from mani.models.rows import (
     Profile,
     ResponseStyle,
     SupportStyle,
-    TechniqueOutcome,
     TechniqueState,
     Thread,
     ThreadSummary,
@@ -352,26 +350,4 @@ async def mark_crisis(
     """Flag the thread and record the event. There is no matching unflag."""
     return await conn.fetchval(
         "select public.mark_thread_crisis($1, $2, $3)", thread_id, reason, message_id
-    )
-
-
-async def set_technique_outcome(
-    conn: asyncpg.Connection,
-    thread_id: uuid.UUID | str,
-    user_id: uuid.UUID | str,
-    framework_id: str,
-    outcome: TechniqueOutcome,
-    at_message_count: int,
-    phase: str | None = None,
-) -> None:
-    """Convenience for the common single-field change."""
-    await apply(
-        conn, thread_id, user_id,
-        ThreadUpdates(technique=TechniqueState(
-            thread_id=thread_id if isinstance(thread_id, uuid.UUID) else uuid.UUID(str(thread_id)),
-            framework_id=framework_id,
-            outcome=outcome,
-            phase=phase,
-            at_message_count=at_message_count,
-        )),
     )
