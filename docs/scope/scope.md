@@ -9,48 +9,43 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 
 ## At a glance
 
-| # | Feature | Phase | Status |
-|---|---------|-------|--------|
-| A | Chat turn pipeline | Existing | existing |
-| B | Six frameworks and the body check in | Existing | existing |
-| 1 | Turn cost and latency baseline | Foundation | in-progress |
-| 2 | Thinking level required on every call | Foundation | planned |
-| 3 | Short base prompt of general rules | Slice 1 | planned |
-| 4 | Framework in 8 lines, ABCDE first | Slice 1 | planned |
-| 5 | Reply repairs out | Slice 1 | planned |
-| 6 | The other five frameworks in 8 lines | Slice 2 | planned |
-| 7 | Body check in in the lean format | Slice 2 | planned |
-| 8 | Model facing text out of Python | Slice 3 | planned |
-| 9 | Reply text and numbers out of Python | Slice 3 | planned |
-| 10 | Crisis decided by the model | Slice 4 | planned |
-| 11 | Thinking level and prompt tuning from measurements | Slice 5 | planned |
-| 12 | No offer before a real conversation (R1) | Now | in-progress |
-| 13 | Faster turns (R2) | Now | in-progress |
+| #   | Feature                                  | Phase    | Status      |
+| --- | ---------------------------------------- | -------- | ----------- |
+| A   | Chat turn pipeline                       | Existing | existing    |
+| B   | Six frameworks and the body check in     | Existing | existing    |
+| 12  | No offer before a real conversation (R1) | Now      | in-progress |
+| 13  | Faster turns (R2)                        | Now      | in-progress |
 
 ## Already built
 
 ### A. Chat turn pipeline · existing
+
 One turn: safety screen, router shortlist, system prompt (base, framework index, response format), `[ctx]` block, model call, repairs. code in backend/mani/chat/, backend/mani/prompts/, backend/mani/llm/
 
 ### B. Six frameworks and the body check in · existing
+
 ABCDE, Thought Reframe, Structured Problem Solving, ACT Choice Point, Behavioral Activation and DBT STOP, each 300 to 390 lines, plus the body check in merged into every framework at seed time. code in backend/content/, backend/scripts/seed.py
 
 ## Now: client blockers
 
 ### 12. No offer before a real conversation (R1) · in-progress
+
 Mani listens before it offers a framework. Code owns one offer window, the same in every style: it opens at the person's third message and the best fit is due at their fifth. The prompts follow the window and never decide timing themselves.
 **Done when:** no offer comes before their third message in any style, the best fit is offered by their fifth, a model offer before the window is stripped, and live runs in all three styles show it.
+
 - [x] Build it: `/develop no offer before a real conversation`
   - [x] `offer_window` in context.py replaces cooldown_passed, closest_fit and offer_fit, with its tests
   - [x] Prompt cuts in mani_base.md and response_format.md, reseeded
   - [x] scenario_check flags an early offer; resentful_coworker scenario added
 - [x] Verify it: `/check verify no offer before a real conversation`
 - [ ] Test it: `/test no offer before a real conversation`
-Decision in [PORT-STATUS.md](../../backend/PORT-STATUS.md#decisions-in-force) (first offer window), requirement [R1](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12).
+      Decision in [PORT-STATUS.md](../../backend/PORT-STATUS.md#decisions-in-force) (first offer window), requirement [R1](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12).
 
 ### 13. Faster turns (R2) · in-progress
+
 One chat call per turn at a low thinking level, with no redraft. Code shapes the reply instead of asking again: no offer field before the offer window opens, and the stage label is set from the model's own ledger.
 **Done when:** every turn makes one chat call, the chat call and exercise pick run at `low`, redraft is gone and its lost checks only log, scenario_check prints each turn's time, calls and tokens, and a measured run (after muhammad's yes) shows a median of 4 s or less and a slowest of 10 s or less in all three styles.
+
 - [x] Build it: `/develop faster turns`
   - [x] Honest cost rows and per turn timing in scenario_check (feature 1's first milestone, slim)
   - [x] Effort `low` for the chat call and the exercise pick
@@ -58,90 +53,12 @@ One chat call per turn at a low thinking level, with no redraft. Code shapes the
   - [x] PORT-STATUS decisions, journal, requirements row, and feature 12's Done when reads "stripped"
 - [ ] Verify it: `/check verify faster turns`
 - [ ] Test it: `/test faster turns`
-Decision in [PORT-STATUS.md](../../backend/PORT-STATUS.md#decisions-in-force) (one chat call at effort `low`), requirement [R2](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12). code in backend/mani/chat/reply_checks.py, backend/mani/chat/orchestrator.py, backend/mani/llm/. A live run for the 4 s and 10 s target is owed (muhammad's yes).
-
-## Foundations
-
-### 1. Turn cost and latency baseline · in-progress
-A repeatable way to see what one turn costs before and after each change: input, cached, output and reasoning tokens, latency, and model calls per turn, for a fixed set of conversations. Without it, "faster" and "cheaper" are guesses, and one eval run is noise (three before, three after).
-**Done when:** one command runs the chosen scenarios and prints those numbers per turn, reasoning tokens are recorded, the numbers survive the eval's own cleanup, and today's numbers are written down as the baseline.
-- [x] Design it (spec): `/architect turn cost and latency baseline`
-- [ ] Build it: `/develop turn cost and latency baseline`
-  - [x] Honest cost rows: reasoning tokens column (migration 018), both usage readers, latency per attempt (AC-3, AC-13)
-  - [ ] One measured run writes a baseline file, with the local, column and abort guards and cleanup that always runs (AC-1, AC-2, AC-4, AC-5, AC-8, AC-9, AC-10, AC-12)
-  - [ ] Repeated runs with scenario totals and medians, and the offline compare (AC-1, AC-5, AC-6, AC-7, AC-14)
-  - [ ] Docs, the PORT-STATUS decision line, and the first `before-lean-prompts` baseline after muhammad's yes (AC-11)
-- [ ] Verify it: `/check verify turn cost and latency baseline`
-- [ ] Test it: `/test turn cost and latency baseline`
-Spec [0002](../specs/0002-turn-cost-latency-baseline.md). The first milestone and per turn timing in `scripts/scenario_check.py` are built under feature 13. The spec still targets `eval_replies.py`, which main deleted, so the later milestones wait on `/architect` amending it.
-
-### 2. Thinking level required on every call · needs a decision
-Every model call names its own thinking level: chat, summary, memory fold, title and the exercise pick. A missing level is an error at seed time, never a silent fallback.
-**Done when:** seeding fails for a prompt row with no level or an unknown one, no model call goes out without an explicit level, and the config fallback is gone.
-- [ ] Design it (spec): `/architect thinking level required`
-
-## Slice 1: ABCDE through the lean path
-
-### 3. Short base prompt of general rules · needs a decision
-Rewrite `mani_base` as a short set of general rules: who Mani is, how it replies, the three styles, how a conversation moves. No scripted lines, no example conversations, no banned word lists, and each rule stated once across the base prompt, the response format and the schema descriptions.
-**Done when:** the base prompt and the response format together fit a line budget set in the spec, contain no line the model must say word for word, repeat no rule, and the ABCDE replay conversation still reads well in all three styles.
-- [ ] Design it (spec): `/architect short base prompt`
-
-### 4. Framework in 8 lines, ABCDE first · needs a decision
-Define the 8 line framework format (when it starts, the words that trigger it, when to skip it, the stages in one line, when it ends, what never happens) using Hussnain's rule, and convert ABCDE to it. The model writes each stage question itself in the chosen style. The unused body, lists and per stage blocks go.
-**Done when:** abcde.md is about 8 lines of model facing content, the seed and the turn send only that, and a real ABCDE conversation runs from offer to end in each style.
-- [ ] Design it (spec): `/architect framework in 8 lines`
-
-### 5. Reply repairs out · needs a decision
-Remove the reply repairs: feeling word checks, button trimming and rewritten permission questions. The model's reply goes out as it wrote it, apart from schema validation and the offer window from feature 12, which stays. The redraft loop is removed by feature 13. Crisis handling stays until feature 10.
-**Done when:** repairs.py is gone or reduced to schema shape and the offer window, no offer reaches the person before the window opens, the tests that asserted the removed repairs are removed or rewritten, and the ABCDE replay still completes.
-- [ ] Design it (spec): `/architect reply repairs out`
-
-## Slice 2: Every framework lean
-
-### 6. The other five frameworks in 8 lines
-Convert Thought Reframe, Structured Problem Solving, ACT Choice Point, Behavioral Activation and DBT STOP to the format from feature 4, including how each is told apart from its neighbours.
-**Done when:** each is about 8 lines, a real conversation reaches each one's offer and end, and the router picks the right one for the client's example lines.
-- [ ] Build it: `/develop other five frameworks in 8 lines`
-
-### 7. Body check in in the lean format · needs a decision
-The ending (completion question, body check in, exercise, Chat More or Go to Library) as short rules the model follows, not verbatim text enforced in code, and no code that matches words inside the content.
-**Done when:** every framework ends with the body check in, the four places get a fitting exercise, no code reads `when` text, and the client's flow holds in all three styles.
-- [ ] Design it (spec): `/architect body check in lean format`
-
-## Slice 3: Nothing hardcoded
-
-### 8. Model facing text out of Python · needs a decision
-The instruction text Python adds to the prompt (index headings, `stage_note`, memory and summary wrappers, schema field descriptions, the exercise picker prompt, phrase lists naming framework ids) moves into seeded content, so changing it never needs a code change.
-**Done when:** no sentence the model reads is written in backend/mani/, and changing any of them needs only a reseed.
-- [ ] Design it (spec): `/architect model facing text out of python`
-
-### 9. Reply text and numbers out of Python · needs a decision
-Text sent straight to the person (greeting, style question, openers, after framework questions, button labels, crisis reply) and the timing numbers (cooldowns, offer windows, router weights, summary threshold) move into seeded content or config.
-**Done when:** no user facing sentence or behaviour number is a Python constant, and each can change with a reseed or config change.
-- [ ] Design it (spec): `/architect reply text and numbers out of python`
-
-## Slice 4: Crisis
-
-### 10. Crisis decided by the model · needs a decision · GA
-Remove the keyword crisis and concern screen. The model's own `crisis` field becomes the only detector. The thread lock and the crisis reply still follow when it fires. This is the riskiest change in the scope, so it comes last and carries the highest rigour.
-**Done when:** safety.py's phrase lists are gone, every crisis eval scenario (direct, indirect, misspelt, mixed with other topics) locks the thread and sends the crisis reply, and no ordinary conversation triggers it.
-- [ ] Design it (spec): `/architect crisis decided by the model`
-
-## Slice 5: Keep improving
-
-### 11. Thinking level and prompt tuning from measurements · needs a decision
-Use the baseline from feature 1 to choose the thinking level per call and to compare each prompt change, three runs before and three after, so the prompts keep improving as models get faster.
-**Done when:** each call's level is backed by numbers recorded in PORT-STATUS.md, and the tuning loop is a documented command anyone can run again.
-- [ ] Design it (spec): `/architect thinking level and prompt tuning`
-
-## Open questions
-- Hussnain's 7 to 8 line rule: get the exact format before `/architect framework in 8 lines`.
-- The client's wording for each style, stage and body exercise goes away under the 8 line format. muhammad has allowed rewording to fix comprehension. Confirm the client is fine with the model writing these itself.
+      Decision in [PORT-STATUS.md](../../backend/PORT-STATUS.md#decisions-in-force) (one chat call at effort `low`), requirement [R2](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12). code in backend/mani/chat/reply_checks.py, backend/mani/chat/orchestrator.py, backend/mani/llm/. A live run for the 4 s and 10 s target is owed (muhammad's yes).
 
 ## Legend
 
 **The decision box.** Every feature carries one sub task ending in `(spec)`. Skills find it by that suffix.
+
 - **Next step** is the first unticked box.
 - **needs a decision** means run `/architect` first. The tag drops once the spec is captured.
 - **Status** goes `planned`, `in-progress`, `done`, plus `existing` (built before this workflow) and `dropped`.
