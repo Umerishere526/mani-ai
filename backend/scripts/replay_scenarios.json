@@ -1,0 +1,316 @@
+{
+  "belief_not_sure": {
+    "about": "told 'not sure' at the belief stage: ask more easily, never supply a belief",
+    "style": "supportive",
+    "framework": "abcde",
+    "phase": "belief",
+    "history": [
+      {
+        "role": "mani",
+        "content": "Hi SABKA PAWA. It's MANI. How would you like me to speak with you today?",
+        "buttons": [
+          {
+            "label": "Direct",
+            "style": "direct"
+          },
+          {
+            "label": "Supportive",
+            "style": "supportive"
+          },
+          {
+            "label": "Reflective",
+            "style": "reflective"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Supportive"
+      },
+      {
+        "role": "mani",
+        "content": "How can I support you today?"
+      },
+      {
+        "role": "user",
+        "content": "i was overworked and underappreciated"
+      },
+      {
+        "role": "mani",
+        "content": "I'm glad you told me you're overworked and underappreciated. There's a framework called ABCDE that can help you understand the thoughts behind being overworked and underappreciated, see whether those thoughts are really true, and find a more helpful way to think about what's happening.\n\nWould you like to try it?",
+        "buttons": [
+          {
+            "label": "Try it",
+            "technique": "abcde"
+          },
+          {
+            "label": "Tell me more"
+          },
+          {
+            "label": "Keep chatting",
+            "decline": true
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Try it"
+      },
+      {
+        "role": "mani",
+        "content": "Okay. We'll take it one step at a time together. What was happening that left you feeling overworked and underappreciated?"
+      },
+      {
+        "role": "user",
+        "content": "work pressure"
+      },
+      {
+        "role": "mani",
+        "content": "I’m sorry work has been putting pressure on you. What has been happening at work?"
+      },
+      {
+        "role": "user",
+        "content": "overworking"
+      },
+      {
+        "role": "mani",
+        "content": "Thanks for spelling that out. What have you been telling yourself about working too much?"
+      }
+    ],
+    "message": "i'm not sure",
+    "flags": {
+      "supplies an answer for them": "\\b(maybe|perhaps)\\b|does that fit|is that close|is that right|were you telling yourself|did you feel you had to|could it be|what if"
+    }
+  },
+  "dispute_not_sure": {
+    "about": "told 'not sure' at the dispute stage: ask more easily, never supply evidence or another view",
+    "style": "supportive",
+    "framework": "abcde",
+    "phase": "dispute",
+    "history": [
+      {
+        "role": "mani",
+        "content": "Hi SABKA PAWA. It's MANI. How would you like me to speak with you today?",
+        "buttons": [
+          {
+            "label": "Direct",
+            "style": "direct"
+          },
+          {
+            "label": "Supportive",
+            "style": "supportive"
+          },
+          {
+            "label": "Reflective",
+            "style": "reflective"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Supportive"
+      },
+      {
+        "role": "mani",
+        "content": "How can I support you today?"
+      },
+      {
+        "role": "user",
+        "content": "i was overworked and underappreciated"
+      },
+      {
+        "role": "mani",
+        "content": "I'm glad you told me you're overworked and underappreciated. There's a framework called ABCDE that can help you understand the thoughts behind being overworked and underappreciated, see whether those thoughts are really true, and find a more helpful way to think about what's happening.\n\nWould you like to try it?",
+        "buttons": [
+          {
+            "label": "Try it",
+            "technique": "abcde"
+          },
+          {
+            "label": "Tell me more"
+          },
+          {
+            "label": "Keep chatting",
+            "decline": true
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Try it"
+      },
+      {
+        "role": "mani",
+        "content": "Okay. We'll take it one step at a time together. What was happening that left you feeling overworked and underappreciated?"
+      },
+      {
+        "role": "user",
+        "content": "work pressure"
+      },
+      {
+        "role": "user",
+        "content": "overworking"
+      },
+      {
+        "role": "mani",
+        "content": "What have you been telling yourself about working so much?"
+      },
+      {
+        "role": "user",
+        "content": "that i'm not good enough"
+      },
+      {
+        "role": "mani",
+        "content": "That sounds heavy. How did that belief affect how you felt or what you did?"
+      },
+      {
+        "role": "user",
+        "content": "i get anxious and just work harder"
+      },
+      {
+        "role": "mani",
+        "content": "Let's look at that belief together. What makes you think it's true? Is there anything that suggests otherwise?"
+      }
+    ],
+    "message": "not sure",
+    "flags": {
+      "supplies an answer for them": "\\b(maybe|perhaps)\\b|does that fit|is that close|is that right|were you telling yourself|did you feel you had to|could it be|what if",
+      "uses the stage line (enough information)": "enough information"
+    }
+  },
+  "activate_possible_event": {
+    "about": "a possible event is named; the activate stage's own lines allow one confirm, so a confirm is still expected",
+    "style": "supportive",
+    "framework": "abcde",
+    "phase": "activate",
+    "history": [
+      {
+        "role": "mani",
+        "content": "Hi SABKA PAWA. It's MANI. How would you like me to speak with you today?",
+        "buttons": [
+          {
+            "label": "Direct",
+            "style": "direct"
+          },
+          {
+            "label": "Supportive",
+            "style": "supportive"
+          },
+          {
+            "label": "Reflective",
+            "style": "reflective"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Supportive"
+      },
+      {
+        "role": "mani",
+        "content": "How can I support you today?"
+      },
+      {
+        "role": "user",
+        "content": "i was overworked and underappreciated"
+      },
+      {
+        "role": "mani",
+        "content": "I'm glad you told me you're overworked and underappreciated. There's a framework called ABCDE that can help you understand the thoughts behind being overworked and underappreciated, see whether those thoughts are really true, and find a more helpful way to think about what's happening.\n\nWould you like to try it?",
+        "buttons": [
+          {
+            "label": "Try it",
+            "technique": "abcde"
+          },
+          {
+            "label": "Tell me more"
+          },
+          {
+            "label": "Keep chatting",
+            "decline": true
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Try it"
+      },
+      {
+        "role": "mani",
+        "content": "Okay. We'll take it one step at a time together. What was happening that left you feeling overworked and underappreciated?"
+      }
+    ],
+    "message": "i don't know, maybe the new project my manager gave me",
+    "flags": {
+      "still confirms the event": "is that (what|where|when)|started"
+    }
+  },
+  "activate_feeling_only": {
+    "about": "a feeling but no event: ask for the event in their word, never invent one",
+    "style": "supportive",
+    "framework": "abcde",
+    "phase": "activate",
+    "history": [
+      {
+        "role": "mani",
+        "content": "Hi SABKA PAWA. It's MANI. How would you like me to speak with you today?",
+        "buttons": [
+          {
+            "label": "Direct",
+            "style": "direct"
+          },
+          {
+            "label": "Supportive",
+            "style": "supportive"
+          },
+          {
+            "label": "Reflective",
+            "style": "reflective"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Supportive"
+      },
+      {
+        "role": "mani",
+        "content": "How can I support you today?"
+      },
+      {
+        "role": "user",
+        "content": "i was overworked and underappreciated"
+      },
+      {
+        "role": "mani",
+        "content": "I'm glad you told me you're overworked and underappreciated. There's a framework called ABCDE that can help you understand the thoughts behind being overworked and underappreciated, see whether those thoughts are really true, and find a more helpful way to think about what's happening.\n\nWould you like to try it?",
+        "buttons": [
+          {
+            "label": "Try it",
+            "technique": "abcde"
+          },
+          {
+            "label": "Tell me more"
+          },
+          {
+            "label": "Keep chatting",
+            "decline": true
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Try it"
+      },
+      {
+        "role": "mani",
+        "content": "Okay. We'll take it one step at a time together. What was happening that left you feeling overworked and underappreciated?"
+      }
+    ],
+    "message": "i just feel so drained all the time",
+    "flags": {
+      "asks in their word (drained)": "drained",
+      "invents an event": "\\b(manager|boss|deadline|project|meeting)\\b"
+    }
+  }
+}

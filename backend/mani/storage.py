@@ -7,29 +7,13 @@ import logging
 
 import httpx
 
+from mani import supabase_http
 from mani.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 BUCKET = "exercises"
 SIGNED_URL_TTL_SECONDS = 3600
-
-_client: httpx.AsyncClient | None = None
-
-
-def _http() -> httpx.AsyncClient:
-    global _client
-    if _client is None:
-        _client = httpx.AsyncClient(timeout=10.0)
-    return _client
-
-
-async def close() -> None:
-    global _client
-    if _client is not None:
-        await _client.aclose()
-        _client = None
-
 
 async def signed_audio_url(path: str | None) -> str | None:
     """A time-limited link to one audio file, or None if it cannot be signed.
@@ -41,15 +25,12 @@ async def signed_audio_url(path: str | None) -> str | None:
         return None
 
     settings = get_settings()
-    base = settings.supabase_url.rstrip("/")
+    base = supabase_http.base_url(settings)
     try:
-        response = await _http().post(
+        response = await supabase_http.client().post(
             f"{base}/storage/v1/object/sign/{BUCKET}/{path.lstrip('/')}",
             json={"expiresIn": SIGNED_URL_TTL_SECONDS},
-            headers={
-                "Authorization": f"Bearer {settings.supabase_service_role_key}",
-                "apikey": settings.supabase_service_role_key,
-            },
+            headers=supabase_http.service_headers(settings),
         )
         response.raise_for_status()
         signed = response.json().get("signedURL")

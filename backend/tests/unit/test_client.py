@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 import uuid
 from types import SimpleNamespace
 
@@ -13,7 +15,7 @@ from openai.types.chat import ChatCompletion
 
 from mani.config import Settings
 from mani.db import llm_calls
-from mani.errors import ServiceError
+from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
 from mani.llm.schema import Reply
 
@@ -40,6 +42,14 @@ class FakeRunnable:
         if isinstance(result, BaseException):
             raise result
         return result
+
+
+class HangingRunnable:
+    """A provider call that does not come back within any time a test will wait."""
+
+    async def ainvoke(self, messages: list[dict]) -> dict:
+        await asyncio.sleep(3)
+        return {"raw": None, "parsed": None, "parsing_error": "never delivered"}
 
 
 def valid(text: str = "hi") -> dict:
@@ -377,3 +387,22 @@ async def test_a_timeout_is_not_retried(monkeypatch, recorded):
             purpose=llm_calls.Purpose.CHAT, settings=settings(),
         )
     assert runnable.calls == 1
+
+
+async def test_a_call_that_never_finishes_is_cut_off_at_its_deadline(monkeypatch, recorded):
+    """The SDK's timeout limits silence between bytes, not how long a call may run, so a provider
+    that keeps a connection alive could hold a turn open for minutes."""
+    install(monkeypatch, HangingRunnable())
+    short = settings().model_copy(update={"llm_timeout_seconds": 0.05})
+
+    started = time.perf_counter()
+    with pytest.raises(ServiceError) as raised:
+        await client.complete(
+            [{"role": "user", "content": "hi"}], Reply, model="m",
+            purpose=llm_calls.Purpose.CHAT, settings=short,
+        )
+
+    assert time.perf_counter() - started < 1.5
+    assert raised.value.category is ErrorCategory.LLM_TIMEOUT
+    assert raised.value.retryable is True
+    assert recorded[-1]["outcome"] is llm_calls.Outcome.TIMEOUT

@@ -17,7 +17,7 @@ EDITABLE_PROMPT_COLUMNS = frozenset(
 
 PROMPT_COLUMNS = (
     "id, name, description, content, version, model_id, "
-    "model_parameters, routing, is_active"
+    "model_parameters, routing, is_active, created_by, updated_by"
 )
 FRAMEWORK_COLUMNS = (
     "id, name, summary, body, activation_conditions, phases, display_order, "
@@ -35,13 +35,6 @@ async def list_active_prompts(conn: asyncpg.Connection) -> list[Prompt]:
         f"select {PROMPT_COLUMNS} from admin.prompts where is_active order by name"
     )
     return Prompt.from_records(rows)
-
-
-async def get_prompt(conn: asyncpg.Connection, name: str) -> Prompt | None:
-    row = await conn.fetchrow(
-        f"select {PROMPT_COLUMNS} from admin.prompts where name = $1 and is_active", name
-    )
-    return Prompt.from_record(row)
 
 
 async def list_all_prompts(conn: asyncpg.Connection) -> list[Prompt]:
@@ -137,7 +130,7 @@ async def list_prompt_versions(
     return await conn.fetch(
         """
         select id, prompt_id, version, content, model_id, model_parameters, routing,
-               change_summary, created_at
+               change_summary, created_by, created_at
           from admin.prompt_versions
          where prompt_id = $1
          order by version desc

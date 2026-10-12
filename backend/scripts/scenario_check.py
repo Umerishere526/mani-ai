@@ -178,7 +178,7 @@ async def main() -> int:
     finally:
         await pool.close_pool()
     by_scenario: dict[str, dict[str, list[Exchange]]] = {}
-    for (name, style), exchanges in zip(jobs, results):
+    for (name, style), exchanges in zip(jobs, results, strict=True):
         by_scenario.setdefault(name, {})[style] = exchanges
     flagged = sum(_report(name, runs) for name, runs in by_scenario.items())
     print(f"\n{flagged} flag(s) across {len(jobs)} conversation(s)")

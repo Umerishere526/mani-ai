@@ -29,13 +29,6 @@ _NEEDS_FOLD = """
 """
 
 
-async def get(conn: asyncpg.Connection, user_id: uuid.UUID | str) -> Memory | None:
-    value = await conn.fetchval(
-        "select memory from admin.user_memory where user_id = $1", user_id
-    )
-    return Memory.model_validate(value) if value else None
-
-
 async def lock(conn: asyncpg.Connection, user_id: uuid.UUID | str) -> Memory:
     """The person's memory, row-locked for the rest of the transaction.
 

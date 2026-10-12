@@ -13,7 +13,6 @@ from mani.models.api import (
     MessageOut,
     ProfileOut,
     PromptOut,
-    PromptVersionOut,
     ThreadOut,
 )
 from mani.models.rows import Exercise, Message, MessageRole, Profile, Prompt, Thread
@@ -94,7 +93,3 @@ def to_completion(completion: Completion) -> CompletionOut:
 
 def to_prompt(prompt: Prompt) -> PromptOut:
     return PromptOut(**prompt.model_dump())
-
-
-def to_prompt_version(record) -> PromptVersionOut:
-    return PromptVersionOut(**dict(record))

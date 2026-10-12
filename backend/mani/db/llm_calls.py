@@ -39,8 +39,6 @@ async def record(
     latency_ms: int,
     user_id: uuid.UUID | str | None = None,
     thread_id: uuid.UUID | str | None = None,
-    message_id: uuid.UUID | str | None = None,
-    prompt_version_id: uuid.UUID | str | None = None,
     error_message: str | None = None,
 ) -> uuid.UUID:
     """Write one row per provider call, successful or not.
@@ -52,13 +50,13 @@ async def record(
     return await conn.fetchval(
         """
         insert into admin.llm_calls
-            (thread_id, user_id, message_id, prompt_version_id, purpose, model,
+            (thread_id, user_id, purpose, model,
              input_tokens, output_tokens, cached_input_tokens, latency_ms,
              outcome, error_message)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         returning id
         """,
-        thread_id, user_id, message_id, prompt_version_id, purpose.value, model,
+        thread_id, user_id, purpose.value, model,
         usage.input_tokens, usage.output_tokens, usage.cached_input_tokens,
         latency_ms, outcome.value, error_message,
     )
@@ -72,8 +70,8 @@ async def attach_message(
     """Link a recorded call to the message it produced.
 
     The call is logged before the message exists, so the link is made afterwards. It is
-    what lets an incident ask which prompt version wrote a particular reply - a question
-    the previous system could not answer at all.
+    what lets an incident ask what the call behind a particular reply cost, how long it took
+    and how it ended - a question the previous system could not answer at all.
     """
     await conn.execute(
         "update admin.llm_calls set message_id = $2 where id = $1", call_id, message_id

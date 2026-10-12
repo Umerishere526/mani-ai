@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
-from mani import auth_admin, storage, stt
+from mani import stt, supabase_http
 from mani.config import get_settings
 from mani.db import pool
 from mani.errors import ErrorCategory, ServiceError
@@ -53,9 +53,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        await storage.close()
+        await supabase_http.close()
         await stt.close()
-        await auth_admin.close()
         await pool.close_pool()
 
 

@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from mani.chat import eligibility, repairs
+from mani.chat import eligibility
 from mani.chat.techniques import Registry
 from mani.llm.schema import NO_QUESTION_SHAPES, Reply
 from mani.models.rows import ENDING_STAGES, Framework

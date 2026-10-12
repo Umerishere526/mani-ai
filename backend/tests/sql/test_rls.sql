@@ -468,16 +468,6 @@ begin
     when check_violation then
       raise notice 'PASS: response shape is pinned to the set the code validates';
   end;
-
-  begin
-    insert into public.thread_response_styles (thread_id, user_id, shape, voice)
-    values ('11111111-0000-4000-8000-000000000001',
-            'a0000000-0000-4000-8000-00000000000a', 'mirror and ask', 'shouting');
-    raise exception 'FAIL: an off-list mirroring voice was stored';
-  exception
-    when check_violation then
-      raise notice 'PASS: mirroring voice is pinned to the set the code validates';
-  end;
 end
 $$;
 rollback;

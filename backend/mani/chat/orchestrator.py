@@ -76,12 +76,16 @@ def _handoff() -> list[SmartPrompt]:
     ]
 
 
+def _last_mani(history: list[Message]) -> Message | None:
+    """Mani's most recent message, if there is one."""
+    return next((m for m in reversed(history) if m.role is MessageRole.MANI), None)
+
+
 def _awaiting_place(history: list[Message]) -> bool:
     """Whether Mani's last reply asked where in the body they feel it, and it is unanswered."""
-    last = next((m for m in reversed(history) if m.role is MessageRole.MANI), None)
-    return bool(last and any(
-        str(o.get("label", "")) == repairs.PLACE_LABELS[0] for o in (last.prompt_options or [])
-    ))
+    return any(
+        str(o.get("label", "")) == repairs.PLACE_LABELS[0] for o in _last_offered(history)
+    )
 
 
 def _body_route_step(
@@ -162,10 +166,9 @@ def _stage_in_force(
 
 def _offered_handoff(history: list[Message]) -> bool:
     """Whether Mani's last reply already put the two choices in front of them."""
-    last = next((m for m in reversed(history) if m.role is MessageRole.MANI), None)
-    return bool(last and any(
-        str(o.get("label", "")).lower() in _HANDOFF_LABELS for o in (last.prompt_options or [])
-    ))
+    return any(
+        str(o.get("label", "")).lower() in _HANDOFF_LABELS for o in _last_offered(history)
+    )
 
 
 @dataclass(frozen=True)
@@ -234,10 +237,8 @@ def pending_offer(history: list[Message]) -> SmartPrompt | None:
 
 def _last_offered(history: list[Message]) -> list[dict]:
     """The buttons under Mani's most recent message, which may be none."""
-    for message in reversed(history):
-        if message.role is MessageRole.MANI:
-            return message.prompt_options or []
-    return []
+    last = _last_mani(history)
+    return (last.prompt_options or []) if last else []
 
 
 def _decided_framework(
@@ -273,6 +274,45 @@ def _conversation(history: list[Message]) -> list[dict[str, str]]:
     ]
 
 
+async def _replayed_turn(
+    conn: asyncpg.Connection,
+    thread_id: uuid.UUID | str,
+    user_id: str,
+    client_message_id: uuid.UUID | str,
+    settings,
+) -> Turn | None:
+    """The turn a message id already produced, as it was stored, or None when it has produced none."""
+    existing = await messages_db.find_pair_by_client_id(conn, user_id, client_message_id)
+    if existing is None:
+        return None
+    user_message, reply_message = existing
+    if str(user_message.thread_id) != str(thread_id):
+        # The key is per person, not per conversation: answering here would hand
+        # back a reply from a different chat and write nothing to this one.
+        raise ServiceError(
+            f"client_message_id {client_message_id} already used in thread "
+            f"{user_message.thread_id}",
+            ErrorCategory.CONFLICT,
+            user_message="That message was already sent in another conversation.",
+        )
+    thread = await threads.get(conn, thread_id, user_id)
+    return Turn(
+        message_id=reply_message.id if reply_message else None,
+        content=reply_message.content if reply_message else "",
+        created_at=reply_message.created_at if reply_message else None,
+        prompts=[
+            SmartPrompt.model_validate(p)
+            for p in (reply_message.prompt_options or [])
+        ]
+        if reply_message
+        else [],
+        title=thread.title if thread else None,
+        crisis_detected=bool(thread and thread.crisis_detected),
+        crisis_blocks_chat=settings.crisis_blocks_chat,
+        was_duplicate=True,
+    )
+
+
 async def send(
     conn: asyncpg.Connection,
     claims: Claims,
@@ -293,36 +333,11 @@ async def send(
             "select pg_advisory_xact_lock(hashtextextended($1, 0))",
             f"{user_id}:{client_message_id}",
         )
-        existing = await messages_db.find_pair_by_client_id(
-            conn, user_id, client_message_id
+        replayed = await _replayed_turn(
+            conn, thread_id, user_id, client_message_id, settings
         )
-        if existing is not None:
-            user_message, reply_message = existing
-            if str(user_message.thread_id) != str(thread_id):
-                # The key is per person, not per conversation: answering here would hand
-                # back a reply from a different chat and write nothing to this one.
-                raise ServiceError(
-                    f"client_message_id {client_message_id} already used in thread "
-                    f"{user_message.thread_id}",
-                    ErrorCategory.CONFLICT,
-                    user_message="That message was already sent in another conversation.",
-                )
-            thread = await threads.get(conn, thread_id, user_id)
-            return Turn(
-                message_id=reply_message.id if reply_message else None,
-                content=reply_message.content if reply_message else "",
-                created_at=reply_message.created_at if reply_message else None,
-                prompts=[
-                    SmartPrompt.model_validate(p)
-                    for p in (reply_message.prompt_options or [])
-                ]
-                if reply_message
-                else [],
-                title=thread.title if thread else None,
-                crisis_detected=bool(thread and thread.crisis_detected),
-                crisis_blocks_chat=settings.crisis_blocks_chat,
-                was_duplicate=True,
-            )
+        if replayed is not None:
+            return replayed
 
     # One turn at a time per conversation, held until this turn's transaction ends. A second
     # message sent while the first is still waiting on the model (a person re-sending after a
@@ -451,9 +466,8 @@ async def send(
     )
     model, parameters, routing = composer.model_settings(config)
 
-    active_framework = config.registry.get(technique.framework_id) if technique else None
     prefix = context.build(
-        ctx, framework=active_framework, candidate=candidate,
+        ctx, framework=running_framework, candidate=candidate,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
         framework_starting=accepted_this_turn, urgent=urgent,
     )
@@ -475,21 +489,23 @@ async def send(
                 user_message="You've reached today's message limit. Please come back tomorrow.",
             )
 
-    call = await client.complete(
-        [{"role": "system", "content": system.text}]
-        + _conversation(history)
-        + [{"role": "user", "content": prefix + for_model}],
-        Reply,
-        model=model,
-        purpose=llm_calls.Purpose.CHAT,
-        temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
-        max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
-        reasoning_effort=parameters.get("reasoning_effort"),
-        routing=routing,
-        user_id=user_id,
-        thread_id=ctx.thread.id,
-        prompt_version_id=None,
-    )
+    async def ask(turn_prefix: str) -> client.Call:
+        return await client.complete(
+            [{"role": "system", "content": system.text}]
+            + _conversation(history)
+            + [{"role": "user", "content": turn_prefix + for_model}],
+            Reply,
+            model=model,
+            purpose=llm_calls.Purpose.CHAT,
+            temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
+            max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
+            reasoning_effort=parameters.get("reasoning_effort"),
+            routing=routing,
+            user_id=user_id,
+            thread_id=ctx.thread.id,
+        )
+
+    call = await ask(prefix)
     reply = call.value
     clear_ok = context.cooldown_passed(ctx)
     closest_ok = context.closest_fit_ok(ctx, urgent=urgent)
@@ -506,6 +522,9 @@ async def send(
         or (tapped is not None and tapped.label.strip().lower() in EXPLAIN_LABELS)
     )
 
+    last_mani = _last_mani(history)
+    last_mani_text = last_mani.content if last_mani else None
+
     def _why(draft: Reply) -> list[str]:
         return redraft.reasons(
             draft, user_texts, config.registry,
@@ -521,9 +540,7 @@ async def send(
             stage_in_force=None if assessment.blocks_framework else _stage_in_force(
                 running_framework, technique, accepted_this_turn=accepted_this_turn,
             ),
-            last_mani_text=next(
-                (m.content for m in reversed(history) if m.role is MessageRole.MANI), None
-            ),
+            last_mani_text=last_mani_text,
         )
 
     why = _why(reply)
@@ -533,22 +550,8 @@ async def send(
     # What still fails is corrected by repairs.apply.
     while why and attempts < 2 and (attempts == 0 or any("asks no question" in w for w in why)):
         logger.info("thread %s redrafting: %s", ctx.thread.id, "; ".join(why))
-        again = await client.complete(
-            [{"role": "system", "content": system.text}]
-            + _conversation(history)
-            + [{"role": "user", "content": context.with_rewrite_notes(prefix, why) + for_model}],
-            Reply,
-            model=model,
-            purpose=llm_calls.Purpose.CHAT,
-            temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
-            max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
-            reasoning_effort=parameters.get("reasoning_effort"),
-            routing=routing,
-            user_id=user_id,
-            thread_id=ctx.thread.id,
-            prompt_version_id=None,
-        )
-        reply = again.value
+        call = await ask(context.with_rewrite_notes(prefix, why))
+        reply = call.value
         attempts += 1
         why = _why(reply)
     if reply.heading_toward:
@@ -652,7 +655,7 @@ async def send(
         conversation_style=context.resolve_style(ctx),
         wants_title=wants_title,
         # An offer made again after they asked what it involves doesn't repeat the description.
-        last_mani_text=next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None),
+        last_mani_text=last_mani_text,
         nickname=ctx.profile.nickname if ctx.profile else None,
         # The greeting says their name by design; the model's own replies count from there.
         name_said_before=bool(
@@ -750,6 +753,12 @@ async def send(
         or None,
         client_message_id=client_message_id,
     )
+    if pair.was_duplicate:
+        # The database kept the first pair and wrote nothing for this one, so the person is
+        # answered with what was stored and none of this draft's state is applied.
+        replayed = await _replayed_turn(conn, thread_id, user_id, client_message_id, settings)
+        if replayed is not None:
+            return replayed
 
     count_after = ctx.thread.message_count + 2
     new_offer = next((p for p in fixed.prompts if p.technique), None)

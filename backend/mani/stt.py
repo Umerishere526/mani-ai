@@ -22,6 +22,10 @@ TIMEOUT_SECONDS = 30.0
 # a platform-level 413 the client cannot branch on.
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
 
+# Translation is a faithful rewrite, not a creative one, so it is sampled without randomness.
+TRANSLATION_TEMPERATURE = 0
+TRANSLATION_MAX_TOKENS = 500
+
 _client: openai.AsyncOpenAI | None = None
 
 
@@ -75,7 +79,7 @@ async def _translate_to_english(text: str, settings: Settings) -> str:
             # What they said is health data: the same providers, data policy and effort as
             # every chat call, not whatever OpenRouter would pick for an unrouted request.
             extra_body=chain.request_body(model, settings),
-            **chain.sampling(model, 0, 500),
+            **chain.sampling(model, TRANSLATION_TEMPERATURE, TRANSLATION_MAX_TOKENS),
         )
         translated = response.choices[0].message.content
         return translated.strip() if translated else text
@@ -84,12 +88,10 @@ async def _translate_to_english(text: str, settings: Settings) -> str:
         return text
 
 
-async def transcribe(
-    audio_bytes: bytes, filename: str, *, settings: Settings | None = None
-) -> str:
+async def transcribe(audio_bytes: bytes, filename: str) -> str:
     """One recording in, its English text out. Raises ServiceError on anything that
     stops the transcription itself; translation failure degrades, it doesn't raise."""
-    settings = settings or get_settings()
+    settings = get_settings()
     if not settings.openrouter_api_key:
         raise ServiceError(
             "OPENROUTER_API_KEY is not set",

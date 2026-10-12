@@ -17,4 +17,4 @@ async def test_a_malformed_storage_url_signs_nothing_instead_of_raising(monkeypa
     monkeypatch.setattr(storage, "get_settings", lambda: broken)
 
     assert await storage.signed_audio_url("home-ground.mp3") is None
-    await storage.close()
+    await storage.supabase_http.close()

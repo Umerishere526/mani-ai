@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import time
 import uuid
@@ -44,6 +45,10 @@ class Call[T: BaseModel]:
 # A provider that is briefly down or unreachable. APITimeoutError is a subclass of
 # APIConnectionError and is excluded where this is caught: the full wait has already happened.
 _TRANSIENT = (openai.InternalServerError, openai.APIConnectionError)
+
+# The SDK's timeout limits how long a connection may go quiet, not how long a call may run, so
+# every provider call also gets a deadline of this many times LLM_TIMEOUT_SECONDS.
+DEADLINE_FACTOR = 2
 TRANSIENT_RETRY_DELAY_SECONDS = 1.0
 
 _SCHEMA_FAILURES = (
@@ -74,7 +79,7 @@ def _as_service_error(exc: Exception) -> tuple[ServiceError, llm_calls.Outcome]:
             ),
             llm_calls.Outcome.PROVIDER_ERROR,
         )
-    if isinstance(exc, openai.APITimeoutError):
+    if isinstance(exc, (openai.APITimeoutError, TimeoutError)):
         return (
             ServiceError(
                 f"provider timed out: {exc}",
@@ -120,6 +125,16 @@ def _apply_model_quirks(messages: list[dict[str, str]], model: str) -> list[dict
     return messages[:-1] + [tail | {"content": f"{tail['content']} /no_think"}]
 
 
+def _elapsed_ms(started: float) -> int:
+    return int((time.perf_counter() - started) * 1000)
+
+
+async def _invoke(runnable, messages: list[dict], settings: Settings):
+    """One provider call, bounded in total time as well as in silence between bytes."""
+    async with asyncio.timeout(settings.llm_timeout_seconds * DEADLINE_FACTOR):
+        return await runnable.ainvoke(messages)
+
+
 async def _record(
     *,
     purpose: llm_calls.Purpose,
@@ -129,7 +144,6 @@ async def _record(
     latency_ms: int,
     user_id: uuid.UUID | str | None,
     thread_id: uuid.UUID | str | None,
-    prompt_version_id: uuid.UUID | str | None,
     error_message: str | None,
 ) -> uuid.UUID | None:
     """Write the cost row for a call, successful or not.
@@ -152,7 +166,6 @@ async def _record(
                 latency_ms=latency_ms,
                 user_id=user_id,
                 thread_id=thread_id,
-                prompt_version_id=prompt_version_id,
                 error_message=error_message,
             )
     except Exception:
@@ -172,7 +185,6 @@ async def complete[T: BaseModel](
     routing: dict[str, Any] | None = None,
     user_id: uuid.UUID | str | None = None,
     thread_id: uuid.UUID | str | None = None,
-    prompt_version_id: uuid.UUID | str | None = None,
     settings: Settings | None = None,
 ) -> Call[T]:
     """Ask the model for one structured reply.
@@ -204,6 +216,9 @@ async def complete[T: BaseModel](
 
     started = time.perf_counter()
     usage = llm_calls.Usage()
+    record = functools.partial(
+        _record, purpose=purpose, model=model, user_id=user_id, thread_id=thread_id
+    )
     try:
         parsed = None
         for attempt in range(1, MAX_SCHEMA_ATTEMPTS + 1):
@@ -211,17 +226,16 @@ async def complete[T: BaseModel](
             # of the one before it.
             usage = llm_calls.Usage()
             try:
-                result = await runnable.ainvoke(messages)
+                result = await _invoke(runnable, messages, settings)
             except _TRANSIENT as exc:
                 if isinstance(exc, openai.APITimeoutError) or attempt == MAX_SCHEMA_ATTEMPTS:
                     raise
                 # The provider was briefly unavailable - seen live, 1 call in 265, from the one
                 # upstream the routing pins. It billed nothing, so one retry costs nothing and
                 # keeps a blip from reaching the person as an error. Recorded as its own row.
-                await _record(
-                    purpose=purpose, model=model, outcome=llm_calls.Outcome.PROVIDER_ERROR,
-                    usage=llm_calls.Usage(), latency_ms=int((time.perf_counter() - started) * 1000),
-                    user_id=user_id, thread_id=thread_id, prompt_version_id=prompt_version_id,
+                await record(
+                    outcome=llm_calls.Outcome.PROVIDER_ERROR, usage=llm_calls.Usage(),
+                    latency_ms=_elapsed_ms(started),
                     error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}, retrying: {exc}",
                 )
                 await asyncio.sleep(TRANSIENT_RETRY_DELAY_SECONDS)
@@ -243,11 +257,9 @@ async def complete[T: BaseModel](
             # A schema failure still cost a real provider call, so it gets its own row
             # rather than being silently absorbed into whichever attempt finally works -
             # both a retried success and an exhausted retry are fully accounted for.
-            latency_ms = int((time.perf_counter() - started) * 1000)
-            await _record(
-                purpose=purpose, model=model, outcome=llm_calls.Outcome.SCHEMA_INVALID,
-                usage=usage, latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-                prompt_version_id=prompt_version_id,
+            latency_ms = _elapsed_ms(started)
+            await record(
+                outcome=llm_calls.Outcome.SCHEMA_INVALID, usage=usage, latency_ms=latency_ms,
                 error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}: {failure or 'empty'}",
             )
             if attempt == MAX_SCHEMA_ATTEMPTS:
@@ -264,20 +276,16 @@ async def complete[T: BaseModel](
         # below, which would call _as_service_error() on an error that already is one.
         raise
     except Exception as exc:
-        latency_ms = int((time.perf_counter() - started) * 1000)
+        latency_ms = _elapsed_ms(started)
         error, outcome = _as_service_error(exc)
-        await _record(
-            purpose=purpose, model=model, outcome=outcome, usage=usage,
-            latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-            prompt_version_id=prompt_version_id, error_message=str(exc),
+        await record(
+            outcome=outcome, usage=usage, latency_ms=latency_ms, error_message=str(exc)
         )
         raise error from exc
 
-    latency_ms = int((time.perf_counter() - started) * 1000)
-    call_id = await _record(
-        purpose=purpose, model=model, outcome=llm_calls.Outcome.OK, usage=usage,
-        latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-        prompt_version_id=prompt_version_id, error_message=None,
+    latency_ms = _elapsed_ms(started)
+    call_id = await record(
+        outcome=llm_calls.Outcome.OK, usage=usage, latency_ms=latency_ms, error_message=None
     )
     return Call(
         value=parsed, model=model, usage=usage, latency_ms=latency_ms, call_id=call_id
@@ -297,7 +305,6 @@ async def choose_exercise(
     routing: dict[str, Any] | None = None,
     user_id: uuid.UUID | str | None = None,
     thread_id: uuid.UUID | str | None = None,
-    prompt_version_id: uuid.UUID | str | None = None,
     settings: Settings | None = None,
 ) -> str | None:
     """Ask the model which exercise fits, from the closed list of the active catalog.
@@ -348,15 +355,14 @@ async def choose_exercise(
     valid_ids = {c["id"] for c in candidates}
 
     try:
-        message = await runnable.ainvoke(messages)
+        message = await _invoke(runnable, messages, settings)
     except Exception as exc:
         logger.warning("exercise selection call failed: %s", exc)
-        latency_ms = int((time.perf_counter() - started) * 1000)
+        latency_ms = _elapsed_ms(started)
         _, outcome = _as_service_error(exc)
         await _record(
             purpose=purpose, model=model, outcome=outcome, usage=usage,
-            latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-            prompt_version_id=prompt_version_id, error_message=str(exc),
+            latency_ms=latency_ms, user_id=user_id, thread_id=thread_id, error_message=str(exc),
         )
         return None
 
@@ -374,10 +380,9 @@ async def choose_exercise(
         outcome = llm_calls.Outcome.OK
         error_message = None
 
-    latency_ms = int((time.perf_counter() - started) * 1000)
+    latency_ms = _elapsed_ms(started)
     await _record(
         purpose=purpose, model=model, outcome=outcome, usage=usage,
-        latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-        prompt_version_id=prompt_version_id, error_message=error_message,
+        latency_ms=latency_ms, user_id=user_id, thread_id=thread_id, error_message=error_message,
     )
     return exercise_id

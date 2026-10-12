@@ -165,6 +165,8 @@ class PromptOut(BaseModel):
     model_parameters: dict = Field(default_factory=dict)
     routing: dict = Field(default_factory=dict)
     is_active: bool = True
+    created_by: uuid.UUID | None = None
+    updated_by: uuid.UUID | None = None
 
 
 class PromptIn(BaseModel):
@@ -193,4 +195,5 @@ class PromptVersionOut(BaseModel):
     model_parameters: dict = Field(default_factory=dict)
     routing: dict = Field(default_factory=dict)
     change_summary: str | None = None
+    created_by: uuid.UUID | None = None
     created_at: dt.datetime

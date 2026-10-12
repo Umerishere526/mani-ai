@@ -5,24 +5,9 @@ from __future__ import annotations
 
 import httpx
 
+from mani import supabase_http
 from mani.config import get_settings
 from mani.errors import ErrorCategory, ServiceError
-
-_client: httpx.AsyncClient | None = None
-
-
-def _http() -> httpx.AsyncClient:
-    global _client
-    if _client is None:
-        _client = httpx.AsyncClient(timeout=10.0)
-    return _client
-
-
-async def close() -> None:
-    global _client
-    if _client is not None:
-        await _client.aclose()
-        _client = None
 
 
 async def delete_user(user_id: str) -> None:
@@ -33,14 +18,10 @@ async def delete_user(user_id: str) -> None:
     means the account still exists, so it raises rather than swallowing the error.
     """
     settings = get_settings()
-    base = settings.supabase_url.rstrip("/")
     try:
-        response = await _http().delete(
-            f"{base}/auth/v1/admin/users/{user_id}",
-            headers={
-                "Authorization": f"Bearer {settings.supabase_service_role_key}",
-                "apikey": settings.supabase_service_role_key,
-            },
+        response = await supabase_http.client().delete(
+            f"{supabase_http.base_url(settings)}/auth/v1/admin/users/{user_id}",
+            headers=supabase_http.service_headers(settings),
         )
         response.raise_for_status()
     except httpx.HTTPError as exc:

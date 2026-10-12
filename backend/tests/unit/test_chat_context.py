@@ -25,6 +25,15 @@ from mani.models.rows import (
 
 USER = uuid.UUID("a0000000-0000-4000-8000-00000000000a")
 THREAD = uuid.UUID("b0000000-0000-4000-8000-00000000000b")
+
+
+def _technique(
+    outcome: TechniqueOutcome, phase: str | None = None, at_message_count: int = 4
+) -> TechniqueState:
+    return TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=outcome, phase=phase,
+        at_message_count=at_message_count,
+    )
 NOW = dt.datetime(2026, 1, 1, tzinfo=dt.UTC)
 
 
@@ -56,10 +65,7 @@ def test_a_thread_with_no_technique_says_the_cooldown_has_passed():
 
 
 def test_a_recent_decline_holds_the_cooldown_closed():
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED,
-        at_message_count=8,
-    )
+    state = _technique(TechniqueOutcome.DECLINED, at_message_count=8)
     block = context.build(TurnContext(thread=thread(10), profile=None, technique=state))
     assert "cooldown_passed: no" in block
     assert "since_last: 2" in block
@@ -67,10 +73,7 @@ def test_a_recent_decline_holds_the_cooldown_closed():
 
 
 def test_an_accepted_technique_waits_for_the_library_offer():
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
-        phase="ground", at_message_count=4, library_offered_since=False,
-    )
+    state = _technique(TechniqueOutcome.ACCEPTED, phase="ground", at_message_count=4)
     block = context.build(TurnContext(thread=thread(60), profile=None, technique=state))
     assert "library_pending: yes" in block
     assert "current_phase: ground" in block
@@ -79,10 +82,7 @@ def test_an_accepted_technique_waits_for_the_library_offer():
 def test_a_retired_technique_still_holds_the_cooldown_closed():
     """Completion used to delete this row. That destroyed at_message_count, so the next
     turn reported that nothing had ever run and a second framework could start at once."""
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
-        phase=None, at_message_count=8,
-    )
+    state = _technique(TechniqueOutcome.ACCEPTED, at_message_count=8)
     block = context.build(TurnContext(thread=thread(10), profile=None, technique=state))
     assert "cooldown_passed: no" in block
     assert "since_last: 2" in block
@@ -96,10 +96,7 @@ def test_a_finished_framework_waits_longer_than_a_declined_one():
     the row it is measured from."""
     started_at = 10
     long_enough_for_a_decline = thread(started_at + context.COOLDOWN_AFTER_DECLINE)
-    finished = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
-        phase=None, at_message_count=started_at,
-    )
+    finished = _technique(TechniqueOutcome.ACCEPTED, at_message_count=started_at)
     declined = finished.model_copy(update={"outcome": TechniqueOutcome.DECLINED})
 
     assert "cooldown_passed: no" in context.build(
@@ -117,7 +114,7 @@ def test_recent_styles_are_listed_by_shape_so_a_reply_can_avoid_repeating_one():
         TurnContext(
             thread=thread(), profile=None, technique=None,
             recent_styles=[
-                ResponseStyle(shape="mirror and ask", voice="naming"),
+                ResponseStyle(shape="mirror and ask"),
                 ResponseStyle(shape="presence only"),
             ],
         )
@@ -261,10 +258,7 @@ def test_the_model_is_never_handed_the_description_it_must_not_write():
 def test_the_turn_a_framework_starts_says_so():
     """Observed: on Try it, Mani asked "which problem would help most to address first?" of
     someone who had just named it - the first stage's question, asked as written."""
-    offered = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
-        phase="offering", at_message_count=8,
-    )
+    offered = _technique(TechniqueOutcome.OFFERED, phase="offering", at_message_count=8)
     ctx = TurnContext(thread=thread(), profile=None, technique=offered)
     assert "framework_starting: yes" in context.build(ctx, framework=framework(), framework_starting=True)
     assert "framework_starting" not in context.build(ctx, framework=framework())
@@ -282,10 +276,7 @@ def test_the_turn_a_framework_starts_shows_the_first_stage_and_the_second():
         stages={"problem": {"purpose": "p", "ready_when": "named", "ask": dict.fromkeys(TONES, "Which problem?")},
                 "facts": {"purpose": "f", "ask": dict.fromkeys(TONES, "What is known?")}},
     )
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
-        phase="offering", at_message_count=8,
-    )
+    state = _technique(TechniqueOutcome.OFFERED, phase="offering", at_message_count=8)
     ctx = TurnContext(thread=thread(), profile=None, technique=state)
     starting = context.build(ctx, framework=running, framework_starting=True).splitlines()
     assert "stage: problem" in starting
@@ -311,10 +302,7 @@ def test_the_closest_fit_falling_due_hands_the_model_no_offer_content():
 
 
 def test_an_active_framework_carries_current_and_next_stage_resolved_to_style():
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
-        phase="activate", at_message_count=4,
-    )
+    state = _technique(TechniqueOutcome.ACCEPTED, phase="activate", at_message_count=4)
     profile = Profile(user_id=USER, support_style="direct")
     block = context.build(
         TurnContext(thread=thread(), profile=profile, technique=state),
@@ -335,10 +323,7 @@ def test_an_active_framework_carries_current_and_next_stage_resolved_to_style():
 
 
 def test_the_last_stage_has_no_next_stage():
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
-        phase="consequence", at_message_count=4,
-    )
+    state = _technique(TechniqueOutcome.ACCEPTED, phase="consequence", at_message_count=4)
     block = context.build(
         TurnContext(thread=thread(), profile=None, technique=state), framework=framework(),
     )
@@ -349,10 +334,7 @@ def test_the_last_stage_has_no_next_stage():
 def test_the_conversations_own_style_wins_over_the_profile_default():
     """Onboarding sets a default; a thread may differ from it without changing it. That
     is the whole reason threads.conversation_style exists beside profiles.support_style."""
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
-        phase="activate", at_message_count=4,
-    )
+    state = _technique(TechniqueOutcome.ACCEPTED, phase="activate", at_message_count=4)
     chose_direct = Thread(
         id=THREAD, user_id=USER, message_count=10, created_at=NOW, last_message_at=NOW,
         conversation_style="direct",
@@ -388,10 +370,7 @@ def test_the_style_in_force_is_named_even_with_no_framework_running():
 
 
 def test_style_falls_back_to_supportive_with_no_profile_or_choice():
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
-        phase="activate", at_message_count=4,
-    )
+    state = _technique(TechniqueOutcome.ACCEPTED, phase="activate", at_message_count=4)
     block = context.build(
         TurnContext(thread=thread(), profile=None, technique=state), framework=framework(),
     )
@@ -554,10 +533,7 @@ def test_the_context_tells_the_model_the_truth_about_the_first_offer():
 
 
 def test_after_keep_chatting_a_confident_offer_returns_sooner_than_the_closest_fit():
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED,
-        at_message_count=10,
-    )
+    state = _technique(TechniqueOutcome.DECLINED, at_message_count=10)
     after_two = TurnContext(thread=thread(14), profile=None, technique=state)
     after_three = TurnContext(thread=thread(16), profile=None, technique=state)
     assert context.cooldown_passed(after_two) and not context.closest_fit_ok(after_two)
@@ -632,18 +608,9 @@ _SELF_EXPLAINED = {"stage", "next_stage", "framework_stages", "stage_note", "lat
 
 def _every_kind_of_block() -> list[str]:
     """[ctx] in each state it can be in, so every key it can carry is seen at least once."""
-    starting = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
-        phase="offering", at_message_count=8,
-    )
-    running = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
-        phase="activate", at_message_count=4,
-    )
-    declined = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED,
-        phase=None, at_message_count=2,
-    )
+    starting = _technique(TechniqueOutcome.OFFERED, phase="offering", at_message_count=8)
+    running = _technique(TechniqueOutcome.ACCEPTED, phase="activate", at_message_count=4)
+    declined = _technique(TechniqueOutcome.DECLINED, at_message_count=2)
     summary = ThreadSummary(
         thread_id=THREAD, user_id=USER,
         techniques_tried=[TechniqueTried(name="ABCDE", helpful=True)],
@@ -717,6 +684,15 @@ def test_a_stage_is_left_after_two_tries_unless_it_says_to_stay():
         assert "twice" in note and "move to the next stage" in note
 
 
+def test_someone_who_is_not_sure_is_asked_more_easily_and_never_handed_an_answer():
+    """Replayed against the model, 2026-10-11: told "not sure" at the belief stage, it stated a
+    belief for them and asked if it fit in about four of nine tries. After this line, none of nine."""
+    for starting in (True, False):
+        note = _running_note("supportive", starting=starting)
+        assert "stage's own line" in note and "easier to answer" in note
+        assert "Never offer an answer for them" in note
+
+
 def _five_stage_framework() -> Framework:
     ask = lambda text: dict.fromkeys(TONES, text)
     return Framework(
@@ -735,10 +711,7 @@ def _five_stage_framework() -> Framework:
 
 
 def _running_at(phase: str) -> TurnContext:
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
-        phase=phase, at_message_count=4,
-    )
+    state = _technique(TechniqueOutcome.ACCEPTED, phase=phase, at_message_count=4)
     return TurnContext(thread=thread(), profile=None, technique=state)
 
 

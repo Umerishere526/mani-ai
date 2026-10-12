@@ -8,11 +8,10 @@ import pytest
 
 from mani import memory
 from mani.chat import orchestrator
-from mani.db import llm_calls, threads
+from mani.db import llm_calls, pool, threads
 from mani.llm import client
 from mani.llm.schema import Memory, Reply
-from tests.integration.test_turn import claims_for, reachable
-from tests.integration.cleanup import remove_test_users
+from tests.integration.cleanup import claims_for, reachable, remove_test_users
 
 BEA = uuid.UUID("a0000000-0000-4000-8000-0000000000d2")
 
@@ -46,7 +45,6 @@ class Scripted:
 async def bea():
     if not await reachable():
         pytest.skip("no database reachable; run `supabase start`")
-    from mani.db import pool
 
     await pool.open_pool()
     async with pool.as_admin() as conn:
@@ -71,8 +69,6 @@ def scripted(monkeypatch):
 
 
 async def _chat(claims, text: str):
-    from mani.db import pool
-
     async with pool.as_user(claims) as conn:
         thread, _ = await orchestrator.start_thread(conn, claims)
     async with pool.as_user(claims) as conn:
@@ -81,8 +77,6 @@ async def _chat(claims, text: str):
 
 
 async def _new_chat(claims):
-    from mani.db import pool
-
     async with pool.as_user(claims) as conn:
         thread, created = await threads.create_or_reuse(conn, claims.user_id)
     assert created
@@ -90,15 +84,14 @@ async def _new_chat(claims):
 
 
 async def _stored(claims):
-    from mani.db import pool, memory as memory_db
-
     async with pool.as_user(claims) as conn:
-        return await memory_db.get(conn, claims.user_id)
+        value = await conn.fetchval(
+            "select memory from admin.user_memory where user_id = $1", claims.user_id
+        )
+    return Memory.model_validate(value) if value else None
 
 
 async def _folded_at(thread_id):
-    from mani.db import pool
-
     async with pool.as_admin() as conn:
         return await conn.fetchval(
             "select memory_folded_at from public.threads where id = $1", thread_id
@@ -137,8 +130,6 @@ async def test_a_conversation_that_continues_is_folded_again_from_where_it_stopp
     fake = scripted()
     first = await _chat(bea, "I always feel low on Sunday evenings because of work")
     await memory.fold_finished(bea)
-
-    from mani.db import pool
 
     async with pool.as_user(bea) as conn:
         await orchestrator.send(conn, bea, first.id, "walking the dog helped this week")
@@ -228,7 +219,6 @@ async def test_the_next_chat_is_shaped_by_the_memory_but_carries_none_of_the_old
                            usage=llm_calls.Usage(), latency_ms=1, call_id=uuid.uuid4())
 
     monkeypatch.setattr(client, "complete", watching)
-    from mani.db import pool
 
     async with pool.as_user(bea) as conn:
         await orchestrator.send(conn, bea, second.id, "hi")
@@ -243,7 +233,6 @@ async def test_an_admin_can_read_what_was_remembered_and_the_person_cannot(bea, 
     await _chat(bea, "I always feel low on Sunday evenings because of work")
     await memory.fold_finished(bea)
 
-    from mani.db import pool
     from mani.routers.admin import get_user_memory
 
     async with pool.as_admin() as conn:
@@ -279,7 +268,7 @@ async def test_a_fold_can_record_its_own_cost_while_it_holds_the_thread(
         recorded.append(await client._record(
             purpose=kwargs["purpose"], model="test/model", outcome=llm_calls.Outcome.OK,
             usage=call.usage, latency_ms=1, user_id=kwargs.get("user_id"),
-            thread_id=kwargs.get("thread_id"), prompt_version_id=None, error_message=None,
+            thread_id=kwargs.get("thread_id"), error_message=None,
         ))
         return call
 

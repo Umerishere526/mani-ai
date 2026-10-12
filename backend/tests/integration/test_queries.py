@@ -6,9 +6,7 @@ import uuid
 import asyncpg
 import pytest
 
-from mani.auth.jwt import Claims
-from mani.config import get_settings
-from mani.db import config_tables, llm_calls, messages, profiles, summaries, threads
+from mani.db import config_tables, llm_calls, messages, pool, profiles, summaries, threads
 from mani.llm.schema import SHAPES
 from mani.models.rows import (
     ResponseStyle,
@@ -16,30 +14,16 @@ from mani.models.rows import (
     TechniqueState,
     TechniqueTried,
 )
-from tests.integration.cleanup import remove_test_users
+from tests.integration.cleanup import claims_for, reachable, remove_test_users
 
 ALICE = uuid.UUID("a0000000-0000-4000-8000-0000000000c1")
 BOB = uuid.UUID("a0000000-0000-4000-8000-0000000000c2")
-
-
-def claims_for(user_id: uuid.UUID) -> Claims:
-    return Claims(sub=str(user_id), raw={"sub": str(user_id), "role": "authenticated"})
-
-
-async def reachable() -> bool:
-    try:
-        conn = await asyncpg.connect(get_settings().database_url, timeout=3)
-    except (OSError, asyncpg.PostgresError):
-        return False
-    await conn.close()
-    return True
 
 
 @pytest.fixture
 async def users():
     if not await reachable():
         pytest.skip("no database reachable; run `supabase start`")
-    from mani.db import pool
 
     await pool.open_pool()
     async with pool.as_admin() as conn:
@@ -57,8 +41,6 @@ async def users():
 
 @pytest.fixture
 async def alice(users):
-    from mani.db import pool
-
     async with pool.as_user(claims_for(ALICE)) as conn:
         yield conn
 
@@ -99,8 +81,6 @@ async def test_a_turn_writes_both_sides_and_is_idempotent(alice):
 
 async def test_the_idempotency_lookup_is_user_scoped(alice, users):
     """A guessed client id must not surface someone else's message."""
-    from mani.db import pool
-
     thread, _ = await threads.create_or_reuse(alice, ALICE)
     client_id = uuid.uuid4()
     await messages.create_pair(alice, thread.id, "private", "reply",
@@ -112,8 +92,6 @@ async def test_the_idempotency_lookup_is_user_scoped(alice, users):
 
 async def test_listing_another_users_thread_returns_nothing(alice, users):
     """The previous system's live defect, from the query layer's side."""
-    from mani.db import pool
-
     thread, _ = await threads.create_or_reuse(alice, ALICE)
     await messages.create_pair(alice, thread.id, "something private", "reply")
 
@@ -139,7 +117,7 @@ async def test_the_composed_read_returns_the_whole_turn(alice):
             thread_id=thread.id, framework_id="abcde",
             outcome=TechniqueOutcome.OFFERED, phase="offering", at_message_count=2),
         offer_frameworks=["abcde"],
-        style=ResponseStyle(shape="mirror and ask", voice="naming"),
+        style=ResponseStyle(shape="mirror and ask"),
     ))
     await summaries.upsert(
         alice, thread.id, ALICE, summary="Talked about work.",
@@ -180,8 +158,6 @@ async def test_a_conversation_style_survives_the_round_trip(alice):
 
 
 async def test_the_composed_read_refuses_another_users_thread(alice, users):
-    from mani.db import pool
-
     thread, _ = await threads.create_or_reuse(alice, ALICE)
     async with pool.as_user(claims_for(BOB)) as bob:
         assert await threads.load_turn_context(bob, thread.id, BOB) is None
@@ -219,7 +195,7 @@ async def test_the_style_window_keeps_only_the_recent_ones(alice):
     written = [SHAPES[n % len(SHAPES)] for n in range(10)]
     for shape in written:
         await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates(
-            style=ResponseStyle(shape=shape, voice=None)))
+            style=ResponseStyle(shape=shape)))
 
     ctx = await threads.load_turn_context(alice, thread.id, ALICE)
     assert len(ctx.recent_styles) == threads.STYLE_WINDOW
@@ -261,8 +237,6 @@ async def test_the_summary_checkpoint_must_be_a_real_message(alice):
 
 
 async def test_config_tables_are_readable_and_seeded(users):
-    from mani.db import pool
-
     async with pool.as_admin() as conn:
         prompts = await config_tables.list_active_prompts(conn)
         frameworks = await config_tables.list_active_frameworks(conn)
@@ -302,8 +276,6 @@ async def test_the_library_listing_is_the_whole_catalog_home_items_included(alic
 
 
 async def test_a_model_call_is_recorded_with_its_cost(users):
-    from mani.db import pool
-
     async with pool.as_admin() as conn:
         await llm_calls.record(
             conn, purpose=llm_calls.Purpose.CHAT, model="google/gemini-3-flash-preview",
@@ -341,3 +313,27 @@ async def test_threads_needing_summary_lists_across_users(users):
     ids = {(row["thread_id"], row["user_id"]) for row in due}
     assert (thread_a.id, ALICE) in ids
     assert (thread_b.id, BOB) not in ids
+
+
+async def test_who_wrote_and_who_changed_a_prompt_comes_back_with_it(users):
+    """The prompts are the clinical content, so an edit must say who made it."""
+    name = f"zz_test_{uuid.uuid4().hex[:8]}"
+    async with pool.as_admin() as conn:
+        try:
+            created = await config_tables.create_prompt(
+                conn, name=name, content="first", created_by=ALICE
+            )
+            edited = await config_tables.update_prompt(
+                conn, created.id, {"content": "second"}, change_summary="reworded", updated_by=BOB
+            )
+            versions = await config_tables.list_prompt_versions(conn, created.id)
+        finally:
+            await conn.execute(
+                "delete from admin.prompt_versions where prompt_id in "
+                "(select id from admin.prompts where name = $1)", name,
+            )
+            await conn.execute("delete from admin.prompts where name = $1", name)
+
+    assert (created.created_by, created.updated_by) == (ALICE, ALICE)
+    assert edited.updated_by == BOB
+    assert [version["created_by"] for version in versions] == [BOB]

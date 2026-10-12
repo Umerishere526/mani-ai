@@ -52,7 +52,8 @@ def _reasoning(model: str, settings: Settings, effort: str | None = None) -> dic
 # A reasoning model's output budget covers its thinking and its reply together, and every caller
 # sizes `max_tokens` for the reply alone. Measured 2026-10-07 at effort high: a chat turn thought
 # for 1,955 of its 2,048 tokens and the reply was cut off. Unused budget is not billed, and
-# LLM_TIMEOUT_SECONDS still bounds a turn that thinks for too long.
+# The call's deadline (client.DEADLINE_FACTOR x LLM_TIMEOUT_SECONDS) still bounds a turn that thinks
+# for too long.
 # ponytail: one allowance for every effort; per-effort allowances if low or max need tuning.
 REASONING_ALLOWANCE_TOKENS = 8192
 
@@ -110,6 +111,28 @@ def _model(
     )
 
 
+def _chat_model(
+    *,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    routing: dict[str, Any] | None,
+    settings: Settings,
+    reasoning_effort: str | None,
+) -> ChatOpenAI:
+    """The configured OpenRouter chat model both runnables are built on."""
+    extra_body = request_body(model, settings, routing, reasoning_effort)
+    return _model(
+        settings.openrouter_api_key,
+        settings.openrouter_base_url,
+        settings.llm_timeout_seconds,
+        model,
+        temperature,
+        max_tokens,
+        json.dumps(extra_body, sort_keys=True),
+    )
+
+
 def build(
     schema: type[BaseModel],
     *,
@@ -126,17 +149,10 @@ def build(
     makes the token accounting possible - and turns a malformed reply into a value rather than
     an exception, so the caller can decide what a schema failure is worth.
     """
-    extra_body = request_body(model, settings, routing, reasoning_effort)
-    chat = _model(
-        settings.openrouter_api_key,
-        settings.openrouter_base_url,
-        settings.llm_timeout_seconds,
-        model,
-        temperature,
-        max_tokens,
-        json.dumps(extra_body, sort_keys=True),
-    )
-    return chat.with_structured_output(schema, method="json_schema", include_raw=True)
+    return _chat_model(
+        model=model, temperature=temperature, max_tokens=max_tokens, routing=routing,
+        settings=settings, reasoning_effort=reasoning_effort,
+    ).with_structured_output(schema, method="json_schema", include_raw=True)
 
 
 def build_tool_choice(
@@ -158,17 +174,10 @@ def build_tool_choice(
     Returns the model's raw `AIMessage` - `bind_tools` has no `include_raw`/`parsed` split
     of its own, so the caller reads `.tool_calls` directly.
     """
-    extra_body = request_body(model, settings, routing, reasoning_effort)
-    chat = _model(
-        settings.openrouter_api_key,
-        settings.openrouter_base_url,
-        settings.llm_timeout_seconds,
-        model,
-        temperature,
-        max_tokens,
-        json.dumps(extra_body, sort_keys=True),
-    )
-    return chat.bind_tools([tool], tool_choice=tool.__name__)
+    return _chat_model(
+        model=model, temperature=temperature, max_tokens=max_tokens, routing=routing,
+        settings=settings, reasoning_effort=reasoning_effort,
+    ).bind_tools([tool], tool_choice=tool.__name__)
 
 
 def usage_from(raw: Any) -> llm_calls.Usage:

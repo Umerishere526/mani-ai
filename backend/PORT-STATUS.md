@@ -7,11 +7,12 @@ the same change as the work.**
 ## Status, 2026-10-01
 
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
-- Tests: `pytest` runs 798 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
+- Tests: `pytest` runs 442 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
   JWKS-configured project).
-- Database: 10 migrations, 15 tables (8 `public`, 7 `admin`), 6 frameworks and 5 prompts seeded.
-  `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
-  private `exercises` bucket (`scripts/seed_exercises.py`). A hosted project does not exist yet.
+- Database: 12 migrations locally, 15 tables (8 `public`, 7 `admin`), the ABCDE framework and 5 prompts
+  seeded. `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in
+  the private `exercises` bucket (`scripts/seed_exercises.py`). The hosted project is at migration 010;
+  011 and 012 have not been pushed to it.
 - Models: `openai/gpt-6-luna` for chat and for summaries (`mani/config.py`), routed Azure first with
   OpenAI as the fallback. It is a reasoning model: it takes no `temperature` on any provider and reads
   `reasoning_effort` instead, so `mani/llm/chain.py` sends the sampling parameters an ordinary
@@ -104,6 +105,23 @@ the same change as the work.**
 
 ## Decisions in force
 
+- **Which prompt text wrote a reply is read from `admin.prompt_versions` by time, not stored on the call.** A chat
+  call is built from several prompts, so one id on `admin.llm_calls` could not name them (migration 012).
+- **Who wrote and who last changed a prompt comes back with it** (`created_by`, `updated_by` on `PromptOut`, and
+  `created_by` on `PromptVersionOut`), so an edit to the clinical content says who made it.
+- **Someone who says they are not sure gets the stage's own line when one fits, otherwise the same question
+  made easier, and is never handed an answer.** The stage note (`context._WHEN_UNSURE`) says so. Replayed
+  against the model (`scripts/replay_turn.py`), a reply supplied a belief in about 4 of 9 tries at the belief stage
+  before the line and 0 of 9 after; the first wording also displaced the client's own dispute line, which the
+  final wording restores (3 of 3). The activate stage's confirm still works (3 of 3).
+- **Every provider call has a total deadline of twice `LLM_TIMEOUT_SECONDS`** (`client.DEADLINE_FACTOR`). The
+  SDK's own timeout limits how long a connection may go quiet, not how long a call may run, so it did not bound
+  a call that kept receiving bytes. A call past its deadline is recorded as a timeout, like any other.
+- **Text is disarmed where it enters a prompt, not only where it is written.** `summarize.transcript`,
+  `composer.summary_layer` and `composer.user_memory` call `context.disarm`, so a stored summary or memory,
+  which the model writes, cannot carry a `[ctx]` block into a later turn.
+- **A send whose message id already has a stored pair is answered with that stored turn.** Its text and buttons
+  are read back (`orchestrator._replayed_turn`) and none of the redrafted reply's state is applied.
 - **A turn is one model call, or more when a draft is redrafted**. The one scoped extra
   call is the exercise pick at the end of a framework. `test_a_turn_costs_exactly_one_provider_call` still
   holds for a draft that needs no redraft.
@@ -255,6 +273,26 @@ Ordered by what breaks first.
 
 ## Open engineering
 
+- **`orchestrator.send()` is 531 lines and its turn state is loose locals** (`outcome` is reassigned at 7 sites,
+  `fixed` at 7). Three of the six candidate extractions rebind `ctx` or `technique`, so they wait for a
+  `TurnState` design: `docs/superpowers/specs/2026-10-11-turn-state-design.md`, awaiting muhammad's review.
+  `test_turn.py` already executes 156 of its 164 lines; the spec lists the eight that it does not.
+- **A background task can be paused by the host, and memory folds are background tasks.** Hosted runs on Vercel
+  (muhammad, 2026-10-11). Three of four `memory_fold` timeouts on hosted ran 264s, 343s and 675s against a 60s
+  timeout, with little or no other traffic around them, which fits an instance paused after its response and
+  resumed later. Not proven. A fold is started by `POST /v1/threads` through `background.fire_and_forget`, so
+  one that is paused is lost until the person next starts a chat. The cron route is the scheduled alternative and
+  nothing calls it yet.
+- **The crisis queue has no way to resolve an event.** `admin.crisis_events` `resolution` and `resolved_at` have no
+  writer and no web or mobile code reads them, so the admin route's unresolved filter matches every row. Options:
+  an admin-only resolve endpoint (a capped note, or a closed set of outcomes so no health detail can be typed
+  in), or dropping the columns. muhammad will decide later (2026-10-11). The thread stays locked either way.
+- **`POST /v1/audio/transcriptions` has no body limit before the file is read.** `stt.MAX_AUDIO_BYTES` is
+  checked after the upload is parsed, so the cap bounds the provider call, not what the server accepts. A body
+  limit belongs at the proxy or the server.
+- **The five paused frameworks have no `offering` content.** Each lacks `offer`, `keep_chatting` and
+  `explain`, which `composer.framework_index` and `repairs` read for the client's offer wording. Resuming one
+  works, and its offers are worded by the model until that content is authored.
 - **Hosted and local schemas match.** Checked read-only on 2026-10-07: the same migrations, columns,
   enums, functions and RLS policies, and the same prompts, frameworks and exercises (only seed timestamps
   differ). The production deployment is `45543ed`, the head of `main`. What prod's environment variables
@@ -278,8 +316,6 @@ Ordered by what breaks first.
 - **Admin conversation browser**: do not rebuild it as a general reader. Scope it to threads with an unresolved
   crisis event, log each read, and return metadata by default.
 - **`GET /v1/admin/models`**, which the prompt editor's model dropdown needs.
-- **`threads.vague_streak`** is granted to the backend and written by nothing; the pacing it belongs to is
-  designed, not built.
 - **`appropriate_when` and `not_when`** in the framework files are read by nothing (each file says so).
 - The words "worried", "concerned" and "a lot" still reach about 1 reply in 10 in some scenarios; repairs log
   them. The feeling check now redrafts the ones in `repairs.FEELING_WORDS`.

@@ -8,6 +8,7 @@ import uuid
 
 import asyncpg
 
+from mani.chat import context
 from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, summaries, threads
 from mani.llm import client
@@ -23,7 +24,8 @@ BATCH = 200
 
 def transcript(messages: list[Message]) -> str:
     return "\n\n".join(
-        f"{'User' if m.role is MessageRole.USER else 'Assistant'}: {m.content}"
+        f"{'User' if m.role is MessageRole.USER else 'Assistant'}: "
+        f"{context.disarm(m.content) if m.role is MessageRole.USER else m.content}"
         for m in messages
     )
 
@@ -37,11 +39,7 @@ def existing_context(summary: ThreadSummary | None) -> str:
     if summary.summary:
         parts.append(f"Previous summary: {summary.summary}")
     if summary.techniques_tried:
-        tried = ", ".join(
-            f"{t.name} ({'helpful' if t.helpful else 'not helpful'})"
-            for t in summary.techniques_tried
-        )
-        parts.append(f"Techniques tried: {tried}")
+        parts.append(f"Techniques tried: {summary.techniques_tried_text}")
     return "\n".join(parts) if parts else "No existing summary."
 
 
@@ -165,7 +163,7 @@ async def update_quietly(claims, thread_id: uuid.UUID | str) -> None:
         logger.exception("summarization failed for thread %s", thread_id)
 
 
-async def reconcile_due(*, threshold: int = 20, limit: int = 200) -> int:
+async def reconcile_due() -> int:
     """Catch up every thread whose summary has fallen behind, across every user.
 
     The per-turn trigger (`update_quietly`) is the fast path and covers almost every
@@ -179,7 +177,9 @@ async def reconcile_due(*, threshold: int = 20, limit: int = 200) -> int:
     from mani.db import pool, summaries
 
     async with pool.as_admin() as conn:
-        due = await summaries.due_for_summary(conn, threshold=threshold, limit=limit)
+        due = await summaries.due_for_summary(
+            conn, threshold=messages_db.CONTEXT_WINDOW, limit=200
+        )
 
     done = 0
     for row in due:

@@ -15,7 +15,7 @@ from mani.errors import ErrorCategory, ServiceError
 from mani.llm.schema import Memory
 from mani.models.api import PromptIn, PromptOut, PromptVersionOut
 from mani.prompts import cache
-from mani.routers.serializers import to_prompt, to_prompt_version
+from mani.routers.serializers import to_prompt
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
@@ -109,7 +109,10 @@ async def update_prompt(
 
 @router.get("/prompts/{prompt_id}/versions", response_model=list[PromptVersionOut])
 async def list_versions(conn: AdminConn, prompt_id: uuid.UUID) -> list[PromptVersionOut]:
-    return [to_prompt_version(r) for r in await config_tables.list_prompt_versions(conn, prompt_id)]
+    return [
+        PromptVersionOut(**dict(r))
+        for r in await config_tables.list_prompt_versions(conn, prompt_id)
+    ]
 
 
 @router.get("/exercises", response_model=list[AdminExercise])

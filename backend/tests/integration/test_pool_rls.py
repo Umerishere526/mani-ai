@@ -6,31 +6,16 @@ import uuid
 import asyncpg
 import pytest
 
-from mani.auth.jwt import Claims
-from mani.config import get_settings
 from mani.db import pool
-from tests.integration.cleanup import remove_test_users
+from tests.integration.cleanup import claims_for, reachable, remove_test_users
 
 ALICE = "a0000000-0000-4000-8000-0000000000a1"
 BOB = "a0000000-0000-4000-8000-0000000000b1"
 
 
-def claims_for(user_id: str) -> Claims:
-    return Claims(sub=user_id, raw={"sub": user_id, "role": "authenticated"})
-
-
-async def database_reachable() -> bool:
-    try:
-        conn = await asyncpg.connect(get_settings().database_url, timeout=3)
-    except (OSError, asyncpg.PostgresError):
-        return False
-    await conn.close()
-    return True
-
-
 @pytest.fixture
 async def db():
-    if not await database_reachable():
+    if not await reachable():
         pytest.skip("no database reachable; run `supabase start`")
 
     await pool.open_pool()

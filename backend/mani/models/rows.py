@@ -98,7 +98,6 @@ class ResponseStyle(Row):
     """One entry in the rolling window used to keep replies from repeating shape."""
 
     shape: str
-    voice: str | None = None
 
 
 class TechniqueTried(BaseModel):
@@ -117,6 +116,14 @@ class ThreadSummary(Row):
     techniques_tried: list[TechniqueTried] = Field(default_factory=list)
     summarized_through_message_id: uuid.UUID | None = None
     summarized_message_count: int = 0
+
+    @property
+    def techniques_tried_text(self) -> str:
+        """The techniques tried, each with whether it helped, on one line."""
+        return ", ".join(
+            f"{t.name} ({'helpful' if t.helpful else 'not helpful'})"
+            for t in self.techniques_tried
+        )
 
 
 # The body route that ends every framework, and the one stage a practice may be run from. Code runs
@@ -174,6 +181,8 @@ class Prompt(Row):
     model_parameters: dict[str, Any] = Field(default_factory=dict)
     routing: dict[str, Any] = Field(default_factory=dict)
     is_active: bool = True
+    created_by: uuid.UUID | None = None
+    updated_by: uuid.UUID | None = None
 
 
 class Exercise(Row):

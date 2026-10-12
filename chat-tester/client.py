@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -173,10 +174,9 @@ class ManiClient:
     base_url: str = API_BASE_URL
 
     def _request(self, method: str, path: str, **kwargs) -> requests.Response:
-        headers = {
-            "Authorization": f"Bearer {self.session.access_token}",
-            "Content-Type": "application/json",
-        }
+        headers = {"Authorization": f"Bearer {self.session.access_token}"}
+        if "files" not in kwargs:
+            headers["Content-Type"] = "application/json"
         return requests.request(
             method, f"{self.base_url}{path}", headers=headers, timeout=90, **kwargs
         )
@@ -211,9 +211,6 @@ class ManiClient:
             json={"content": content, "client_message_id": client_message_id or str(uuid.uuid4())},
         )
 
-    def list_messages(self, thread_id: str) -> dict[str, Any]:
-        return self._call("GET", f"/v1/threads/{thread_id}/messages")
-
     def list_threads(self, limit: int = 20) -> list[dict[str, Any]]:
         """GET /v1/threads - the person's conversations, most recently active first."""
         return self._call("GET", "/v1/threads", params={"limit": limit})["threads"]
@@ -236,36 +233,26 @@ class ManiClient:
         """PUT /v1/profile - what onboarding calls, so the greeting can use their name."""
         return self._call("PUT", "/v1/profile", json={"nickname": nickname})
 
-    def set_conversation_style(self, thread_id: str, style: str) -> dict[str, Any]:
-        """PATCH /v1/threads/{id} - the same endpoint a style-picker screen would call."""
-        return self._call("PATCH", f"/v1/threads/{thread_id}", json={"conversation_style": style})
-
     def transcribe_audio(self, audio_bytes: bytes, filename: str = "recording.wav") -> str:
-        """POST /v1/audio/transcriptions - voice in, text out. Not JSON: a multipart
-        upload, so _call's json-only _request is skipped in favour of files=."""
-        headers = {"Authorization": f"Bearer {self.session.access_token}"}
-        response = requests.post(
-            f"{self.base_url}/v1/audio/transcriptions",
-            headers=headers,
+        """POST /v1/audio/transcriptions - voice in, text out. A multipart upload rather than
+        JSON, so no Content-Type is set and requests supplies the boundary."""
+        return self._call(
+            "POST", "/v1/audio/transcriptions",
             files={"file": (filename, audio_bytes, "audio/wav")},
-            timeout=60,
-        )
-        if response.status_code == 401:
-            self.session = refresh(self.session)
-            headers = {"Authorization": f"Bearer {self.session.access_token}"}
-            response = requests.post(
-                f"{self.base_url}/v1/audio/transcriptions",
-                headers=headers,
-                files={"file": (filename, audio_bytes, "audio/wav")},
-                timeout=60,
-            )
-        if not response.ok:
-            try:
-                body = response.json()
-            except requests.exceptions.JSONDecodeError:
-                body = {"raw": response.text[:300]}
-            raise ApiError(response.status_code, body)
-        return response.json()["text"]
+        )["text"]
+
+
+@asynccontextmanager
+async def _dev_connection():
+    """A connection to the dev database, or None when DATABASE_URL is not set."""
+    if not DATABASE_URL:
+        yield None
+        return
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        yield conn
+    finally:
+        await conn.close()
 
 
 async def framework_debug_state(thread_id: str) -> dict[str, Any] | None:
@@ -276,26 +263,22 @@ async def framework_debug_state(thread_id: str) -> dict[str, Any] | None:
     state is not exposed on any response today. A dev-only inspector, read-only, clearly
     separate from the client calls above.
     """
-    if not DATABASE_URL:
-        return None
-    conn = await asyncpg.connect(DATABASE_URL)
-    try:
+    async with _dev_connection() as conn:
+        if conn is None:
+            return None
         row = await conn.fetchrow(
             "select framework_id, outcome, phase, at_message_count, library_offered_since "
             "from public.thread_technique_state where thread_id = $1",
             uuid.UUID(thread_id),
         )
         return dict(row) if row else None
-    finally:
-        await conn.close()
 
 
 async def recent_call_costs(thread_id: str, limit: int = 5) -> list[dict[str, Any]]:
     """The last few admin.llm_calls rows for this thread - same caveat as above."""
-    if not DATABASE_URL:
-        return []
-    conn = await asyncpg.connect(DATABASE_URL)
-    try:
+    async with _dev_connection() as conn:
+        if conn is None:
+            return []
         rows = await conn.fetch(
             "select purpose, outcome, model, input_tokens, output_tokens, "
             "cached_input_tokens, latency_ms, created_at "
@@ -303,8 +286,6 @@ async def recent_call_costs(thread_id: str, limit: int = 5) -> list[dict[str, An
             uuid.UUID(thread_id), limit,
         )
         return [dict(r) for r in rows]
-    finally:
-        await conn.close()
 
 
 async def remembered(user_id: str) -> dict[str, Any] | None:
@@ -313,10 +294,9 @@ async def remembered(user_id: str) -> dict[str, Any] | None:
     Same caveat as the reads above: a dev-only window onto state no client response carries,
     here so a demo can show that a returning person's patterns were kept.
     """
-    if not DATABASE_URL:
-        return None
-    conn = await asyncpg.connect(DATABASE_URL)
-    try:
+    async with _dev_connection() as conn:
+        if conn is None:
+            return None
         row = await conn.fetchrow(
             "select memory, updated_at from admin.user_memory where user_id = $1",
             uuid.UUID(user_id),
@@ -328,5 +308,3 @@ async def remembered(user_id: str) -> dict[str, Any] | None:
         memory = row["memory"]
         return {"memory": json.loads(memory) if isinstance(memory, str) else memory,
                 "updated_at": row["updated_at"]}
-    finally:
-        await conn.close()

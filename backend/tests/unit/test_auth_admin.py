@@ -46,7 +46,7 @@ class FakeClient:
 
 
 def install(monkeypatch, fake: FakeClient) -> None:
-    monkeypatch.setattr(auth_admin, "_http", lambda: fake)
+    monkeypatch.setattr(auth_admin.supabase_http, "client", lambda: fake)
     monkeypatch.setattr(auth_admin, "get_settings", settings)
 
 

@@ -6,5 +6,8 @@
 pytest==9.1.1
 pytest-asyncio==1.4.0
 
+# Unused imports and likely bugs; see ruff.toml. Run by hand, there is no CI.
+ruff==0.17.0
+
 # `fastapi dev` only. Production runs uvicorn directly.
 fastapi-cli==0.0.32

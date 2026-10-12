@@ -1,0 +1,5 @@
+# Stale code and likely bugs only: unused imports and variables (F) and flake8-bugbear (B).
+# Run by hand: ruff check mani scripts tests main.py
+
+[lint]
+select = ["F", "B"]

@@ -1,9 +1,25 @@
-# ABOUTME: Removes a test's users together with the cost rows their calls left behind.
-# ABOUTME: Shared by every integration fixture, so nothing fabricated outlives its test.
+# ABOUTME: Helpers every integration fixture shares: reaching the database, claims, removing users.
+# ABOUTME: Removal takes the cost rows a test's calls left behind, so nothing outlives its test.
 
 import uuid
 
 import asyncpg
+
+from mani.auth.jwt import Claims
+from mani.config import get_settings
+
+
+async def reachable() -> bool:
+    try:
+        conn = await asyncpg.connect(get_settings().database_url, timeout=3)
+    except (OSError, asyncpg.PostgresError):
+        return False
+    await conn.close()
+    return True
+
+
+def claims_for(user_id: uuid.UUID | str) -> Claims:
+    return Claims(sub=str(user_id), raw={"sub": str(user_id), "role": "authenticated"})
 
 
 async def remove_test_users(conn: asyncpg.Connection, *user_ids: uuid.UUID | str) -> None:

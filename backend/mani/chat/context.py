@@ -7,9 +7,15 @@ import re
 
 from mani.chat import repairs
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
-from mani.chat.safety import normalize
 from mani.db.threads import TurnContext
-from mani.models.rows import ENDING_STAGES, Framework, Message, MessageRole, TechniqueOutcome
+from mani.models.rows import (
+    ENDING_STAGES,
+    Framework,
+    Message,
+    MessageRole,
+    TechniqueOutcome,
+    TechniqueState,
+)
 
 # How many messages must pass before a technique may be offered again.
 # After "Keep chatting", three of Mani's replies before it may check again - the same
@@ -95,20 +101,8 @@ def _after_framework_question(history: list[Message]) -> str | None:
     return next((q for q in AFTER_FRAMEWORK_QUESTIONS if q.lower().rstrip("?") not in since), None)
 
 
-def cooldown_for(outcome: TechniqueOutcome) -> int:
-    return (
-        COOLDOWN_AFTER_COMPLETE
-        if outcome is TechniqueOutcome.ACCEPTED
-        else COOLDOWN_AFTER_DECLINE
-    )
-
-
-def clear_cooldown_for(outcome: TechniqueOutcome) -> int:
-    return (
-        COOLDOWN_AFTER_COMPLETE
-        if outcome is TechniqueOutcome.ACCEPTED
-        else CLEAR_COOLDOWN_AFTER_DECLINE
-    )
+def cooldown_for(outcome: TechniqueOutcome, after_decline: int = COOLDOWN_AFTER_DECLINE) -> int:
+    return COOLDOWN_AFTER_COMPLETE if outcome is TechniqueOutcome.ACCEPTED else after_decline
 
 
 def _their_messages(ctx: TurnContext) -> int:
@@ -133,8 +127,8 @@ def cooldown_passed(ctx: TurnContext) -> bool:
     technique = ctx.technique
     if technique is None:
         return True
-    return ctx.thread.message_count - technique.at_message_count >= clear_cooldown_for(
-        technique.outcome
+    return ctx.thread.message_count - technique.at_message_count >= cooldown_for(
+        technique.outcome, CLEAR_COOLDOWN_AFTER_DECLINE
     )
 
 
@@ -434,11 +428,7 @@ def build(
             lines += _line("current_phase", technique.phase)
 
     if ctx.summary and ctx.summary.techniques_tried:
-        tried = ", ".join(
-            f"{t.name} ({'helpful' if t.helpful else 'not helpful'})"
-            for t in ctx.summary.techniques_tried
-        )
-        lines += _line("history", tried)
+        lines += _line("history", ctx.summary.techniques_tried_text)
 
     if ctx.recent_styles:
         styles = " → ".join(s.shape for s in ctx.recent_styles)
@@ -462,35 +452,51 @@ def build(
         lines += [offer[0], *_meaning("offer", "offering"), *offer[1:]]
 
     if running:
-        style = resolve_style(ctx)
-        if framework_starting:
-            # They have just said yes. What they told Mani before this counts toward the first
-            # stage; the note below says how to use it.
-            lines += _line("framework_starting", "yes")
-        lines += _line("active_framework", framework.id)
-        lines.append(f"framework_stages: {', '.join(framework.phases)}")
-        stage = _stage_lines("stage", framework, technique.phase, style)
-        # The turn they say yes, a first stage their words already answer (by its ready_when) is
-        # said back and the second stage's question is asked; otherwise the first is asked.
-        index = framework.phase_index(technique.phase)
-        if offer_waiting:
-            # The offering stage's question is the offer they have just typed past.
-            stage = [line for line in stage if not line.startswith("stage_ask:")]
-        if framework_starting and technique.phase == "offering" and index + 1 < len(framework.phases):
-            index += 1
-            stage = _stage_lines("stage", framework, framework.phases[index], style)
-        lines.extend(stage)
-        lines.append(f"stage_note: {_stage_note(framework, style, starting=framework_starting)}")
-        if 0 <= index < len(framework.phases) - 1:
-            lines.extend(
-                _stage_lines("next_stage", framework, framework.phases[index + 1], style)
-            )
-            later = [p for p in framework.phases[index + 2 :]]
-            later = later[: next((i for i, p in enumerate(later) if p in ENDING_STAGES), len(later))]
-            for position, phase in enumerate(later):
-                lines.extend(_later_stage_lines(framework, phase, style, explain=position == 0))
+        lines += _running_framework_lines(
+            framework, technique, resolve_style(ctx),
+            offer_waiting=offer_waiting, framework_starting=framework_starting,
+        )
 
     return "[ctx]\n" + "\n".join(lines) + "\n[/ctx]\n\n"
+
+
+def _running_framework_lines(
+    framework: Framework,
+    technique: TechniqueState,
+    style: str,
+    *,
+    offer_waiting: bool,
+    framework_starting: bool,
+) -> list[str]:
+    """The framework in progress: its stages in order, the one in force and those after it."""
+    lines: list[str] = []
+    if framework_starting:
+        # They have just said yes. What they told Mani before this counts toward the first
+        # stage; the note below says how to use it.
+        lines += _line("framework_starting", "yes")
+    lines += _line("active_framework", framework.id)
+    lines.append(f"framework_stages: {', '.join(framework.phases)}")
+    stage = _stage_lines("stage", framework, technique.phase, style)
+    # The turn they say yes, a first stage their words already answer (by its ready_when) is
+    # said back and the second stage's question is asked; otherwise the first is asked.
+    index = framework.phase_index(technique.phase)
+    if offer_waiting:
+        # The offering stage's question is the offer they have just typed past.
+        stage = [line for line in stage if not line.startswith("stage_ask:")]
+    if framework_starting and technique.phase == "offering" and index + 1 < len(framework.phases):
+        index += 1
+        stage = _stage_lines("stage", framework, framework.phases[index], style)
+    lines.extend(stage)
+    lines.append(f"stage_note: {_stage_note(framework, style, starting=framework_starting)}")
+    if 0 <= index < len(framework.phases) - 1:
+        lines.extend(
+            _stage_lines("next_stage", framework, framework.phases[index + 1], style)
+        )
+        later = [p for p in framework.phases[index + 2 :]]
+        later = later[: next((i for i, p in enumerate(later) if p in ENDING_STAGES), len(later))]
+        for position, phase in enumerate(later):
+            lines.extend(_later_stage_lines(framework, phase, style, explain=position == 0))
+    return lines
 
 
 # A stage their words already answer is left unasked, with no check and no mention, and so are the
@@ -517,6 +523,16 @@ _WALK_THE_STAGES = (
 _TWO_TRIES = (
     "If you have already asked for this stage's thing twice, take what they gave you and move to "
     "the next stage, unless stage_ready_when says to stay."
+)
+
+# What helping once means when they say they are not sure: the stage's own line for it when one fits,
+# otherwise the same question made easier, and never an answer supplied. Stating a possible belief,
+# feeling or event is a confirm, which only a stage's own lines may ask for.
+_WHEN_UNSURE = (
+    "If they say they are not sure, use the stage's own line for it when one fits; otherwise ask for "
+    "the same thing again in a way that is easier to answer. Never offer an answer for them: stating "
+    "a possible belief, feeling or event and asking if it fits is a confirm, and only the stage's "
+    "own lines may ask for one."
 )
 
 # Mani keeps the chosen style inside a framework: the stage decides what is asked, the style
@@ -552,7 +568,7 @@ def _stage_note(framework: Framework, style: str, *, starting: bool) -> str:
         else "Put the question in terms of what they have told you, in their words; never send it bare. "
     )
     never = f"{framework.closing} is never skipped. " if framework.closing else ""
-    return f"{said}{_WALK_THE_STAGES} {never}{_TWO_TRIES} {_IN_STYLE[style]}"
+    return f"{said}{_WALK_THE_STAGES} {never}{_TWO_TRIES} {_WHEN_UNSURE} {_IN_STYLE[style]}"
 
 
 def _later_stage_lines(

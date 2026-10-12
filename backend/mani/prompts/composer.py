@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from mani.chat.context import disarm
 from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.llm.schema import Memory
@@ -24,10 +25,6 @@ class SystemPrompt:
     # Which layers were included and how long each was, for the prompt-size question that
     # otherwise only shows up on the bill.
     layers: list[tuple[str, int]] = field(default_factory=list)
-
-    @property
-    def length(self) -> int:
-        return len(self.text)
 
 
 def framework_index(registry: Registry) -> str | None:
@@ -115,24 +112,21 @@ def framework_index(registry: Registry) -> str | None:
             "feeling, never as a checklist:", "",
         ] + to_find_out
 
+    def by_style(key: str) -> list[str]:
+        """Each framework's offering-stage wording under `key`, one line per style."""
+        return [
+            f"**{framework.name}**\n" + "\n".join(
+                f"- {style}: {' '.join(str(text).split())}" for style, text in wording.items()
+            )
+            for framework in present
+            for wording in [((framework.stages or {}).get("offering") or {}).get(key) or {}]
+            if wording
+        ]
+
     # The client's own offer wording, one pattern per style. Mani writes its part of an offer in
     # that pattern and changes only what is in angle brackets, so it reads as a whole sentence.
-    patterns = [
-        f"**{framework.name}**\n" + "\n".join(
-            f"- {style}: {' '.join(str(text).split())}" for style, text in offer.items()
-        )
-        for framework in present
-        for offer in [((framework.stages or {}).get("offering") or {}).get("offer") or {}]
-        if offer
-    ]
-    keep_chatting = [
-        f"**{framework.name}**\n" + "\n".join(
-            f"- {style}: {' '.join(str(text).split())}" for style, text in lines_by_style.items()
-        )
-        for framework in present
-        for lines_by_style in [((framework.stages or {}).get("offering") or {}).get("keep_chatting") or {}]
-        if lines_by_style
-    ]
+    patterns = by_style("offer")
+    keep_chatting = by_style("keep_chatting")
     if patterns:
         lines += [
             "", "## How to word an offer", "",
@@ -195,7 +189,7 @@ def user_memory(memory: Memory | None) -> str | None:
     if memory is None:
         return None
     parts = [
-        f"- **{heading}:** " + "; ".join(getattr(memory, field))
+        f"- **{heading}:** " + disarm("; ".join(getattr(memory, field)))
         for field, heading in _MEMORY_HEADINGS
         if getattr(memory, field)
     ]
@@ -232,15 +226,11 @@ def summary_layer(summary: ThreadSummary | None) -> str | None:
 
     lines = []
     if summary.current_issue:
-        lines.append(f"**Current issue:** {summary.current_issue}")
+        lines.append(f"**Current issue:** {disarm(summary.current_issue)}")
     if summary.summary:
-        lines.append(summary.summary)
+        lines.append(disarm(summary.summary))
     if summary.techniques_tried:
-        tried = ", ".join(
-            f"{t.name} ({'helpful' if t.helpful else 'not helpful'})"
-            for t in summary.techniques_tried
-        )
-        lines.append(f"\n**Techniques discussed**: {tried}")
+        lines.append(f"\n**Techniques discussed**: {summary.techniques_tried_text}")
 
     return "## Conversation Context\n" + "\n".join(lines) if lines else None
 

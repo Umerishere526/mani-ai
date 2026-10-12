@@ -10,18 +10,15 @@ import pytest
 from mani.auth.jwt import Claims
 from mani.chat import context, crisis, orchestrator
 from mani.config import get_settings
-from mani.db import llm_calls, messages as messages_db, profiles, threads
+from mani.db import llm_calls, messages as messages_db, pool, profiles, threads
 from mani.llm import client
 from mani.chat.repairs import PERMISSION_QUESTIONS
 from mani.llm.schema import Crisis, Reply, SmartPrompt, Style, TechniqueState
+from mani.models import rows
 from mani.models.rows import TechniqueOutcome
-from tests.integration.cleanup import remove_test_users
+from tests.integration.cleanup import claims_for, reachable, remove_test_users
 
 ALICE = uuid.UUID("a0000000-0000-4000-8000-0000000000d1")
-
-
-def claims_for(user_id: uuid.UUID) -> Claims:
-    return Claims(sub=str(user_id), raw={"sub": str(user_id), "role": "authenticated"})
 
 
 class ScriptedModel:
@@ -35,18 +32,20 @@ class ScriptedModel:
     def __init__(self, *replies: Reply) -> None:
         self._replies = list(replies)
         self.calls = 0
+        self.call_ids: list[uuid.UUID] = []
         self.last_messages: list[dict] | None = None
 
     async def __call__(self, messages, schema, **kwargs):
         self.calls += 1
         self.last_messages = messages
         reply = self._replies[min(self.calls - 1, len(self._replies) - 1)]
+        self.call_ids.append(uuid.uuid4())
         return client.Call(
             value=reply,
             model="test/model",
             usage=llm_calls.Usage(input_tokens=100, output_tokens=20),
             latency_ms=1,
-            call_id=uuid.uuid4(),
+            call_id=self.call_ids[-1],
         )
 
 
@@ -79,20 +78,10 @@ def no_real_exercise_call(monkeypatch):
     monkeypatch.setattr(orchestrator.client, "choose_exercise", ScriptedChooser())
 
 
-async def reachable() -> bool:
-    try:
-        conn = await asyncpg.connect(get_settings().database_url, timeout=3)
-    except (OSError, asyncpg.PostgresError):
-        return False
-    await conn.close()
-    return True
-
-
 @pytest.fixture
 async def alice():
     if not await reachable():
         pytest.skip("no database reachable; run `supabase start`")
-    from mani.db import pool
 
     await pool.open_pool()
     async with pool.as_admin() as conn:
@@ -119,19 +108,37 @@ def model(monkeypatch):
 
 
 async def start(claims: Claims):
-    from mani.db import pool
-
     async with pool.as_user(claims) as conn:
         await profiles.upsert(conn, ALICE, nickname="Al")
         thread, _ = await orchestrator.start_thread(conn, claims)
     return thread
 
 
+async def set_technique_outcome(
+    conn: asyncpg.Connection,
+    thread_id: uuid.UUID,
+    user_id: uuid.UUID,
+    framework_id: str,
+    outcome: TechniqueOutcome,
+    at_message_count: int,
+    phase: str | None = None,
+) -> None:
+    """Put a thread's technique row in the state a test starts from."""
+    await threads.apply(
+        conn, thread_id, user_id,
+        threads.ThreadUpdates(technique=rows.TechniqueState(
+            thread_id=thread_id,
+            framework_id=framework_id,
+            outcome=outcome,
+            phase=phase,
+            at_message_count=at_message_count,
+        )),
+    )
+
+
 async def past_the_opening(thread):
     """The rounds of conversation the client wants before anything is offered, already had.
     For tests about what happens to an offer, not about when one may come."""
-    from mani.db import pool
-
     async with pool.as_admin() as conn:
         await conn.execute(
             "update public.threads set message_count = message_count + 8 where id = $1", thread.id
@@ -140,8 +147,6 @@ async def past_the_opening(thread):
 
 
 async def send(claims: Claims, thread_id, content, **kwargs):
-    from mani.db import pool
-
     async with pool.as_user(claims) as conn:
         return await orchestrator.send(conn, claims, thread_id, content, **kwargs)
 
@@ -189,6 +194,16 @@ async def test_a_framework_that_fits_is_offered_on_their_first_message(alice, mo
     assert [p.technique for p in turn.prompts if p.technique] == ["abcde"]
 
 
+def _offer_with_explanation() -> Reply:
+    return Reply(
+        text="I have a sequence of questions that could help. Would you like to try it?",
+        prompts=[SmartPrompt(label="Try it", technique="abcde"),
+                 SmartPrompt(label="Tell me about this"),
+                 SmartPrompt(label="Keep chatting", decline=True)],
+        state=TechniqueState(technique="abcde", step="offering"),
+    )
+
+
 def _offer(technique: str, fit: str | None) -> Reply:
     return Reply(
         text="There are some questions we could go through together. Would you like to try it?",
@@ -201,7 +216,6 @@ def _offer(technique: str, fit: str | None) -> Reply:
 
 async def test_a_confident_offer_is_made_on_the_third_message(alice, model):
     """muhammad, 2026-10-09: one exchange about the situation, then Mani's confidence decides."""
-    from mani.db import pool
     from mani.models.rows import SupportStyle
 
     scripted = model(
@@ -228,7 +242,6 @@ async def test_a_confident_offer_is_made_on_the_third_message(alice, model):
 
 async def test_the_closest_fit_is_owed_by_the_fourth_message_and_offers_plainly(alice, model):
     """Direct owes the closest fit by the person's fourth message (muhammad, 2026-10-09)."""
-    from mani.db import pool
     from mani.models.rows import SupportStyle
 
     scripted = model(
@@ -255,7 +268,6 @@ async def test_a_motive_they_believe_in_reaches_the_closest_fit_with_the_deeper_
 ):
     """covers: AC-1, AC-2 - the closest fit is due on the fourth message. Code hands Mani no
     candidate's offer wording: it chooses from the Framework Index (muhammad, 2026-10-08)."""
-    from mani.db import pool
     from mani.models.rows import SupportStyle
 
     scripted = model(*[Reply(text="What was happening just then?")] * 4)
@@ -312,6 +324,21 @@ async def test_a_comforting_reply_with_no_question_is_redrafted_until_it_asks_on
     assert turn.content.endswith("about yourself?")
 
 
+async def test_the_stored_reply_is_linked_to_the_call_that_wrote_it(alice, model):
+    """A redrafted reply replaces the draft it came from, so the cost row that is linked to the
+    stored message must be the redraft's, not the discarded first attempt's."""
+    scripted = model(
+        Reply(text="It is okay to feel that way. I am here with you."),
+        Reply(text="When she raised it in front of the team, what did that say to you about yourself?"),
+    )
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "i felt small when she questioned me in front of everyone")
+
+    assert scripted.calls == 2
+    assert turn.content.endswith("about yourself?")
+    assert turn.llm_call_id == scripted.call_ids[-1]
+
+
 async def test_someone_who_asks_only_to_be_heard_is_not_forced_to_answer_a_question(alice, model):
     """The model reads that someone only wants to be listened to and picks a shape that asks nothing;
     no phrase list in code decides it."""
@@ -350,7 +377,6 @@ async def test_the_turn_is_stored_and_the_thread_state_follows_it(alice, model):
             style=Style(shape="warmth lead"),
         )
     )
-    from mani.db import pool
 
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "everything feels like too much")
@@ -377,7 +403,6 @@ async def test_tapping_the_offer_records_acceptance(alice, model):
             state=TechniqueState(technique="abcde", step="activate"),
         ),
     )
-    from mani.db import pool
 
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "I keep spiralling")
@@ -395,8 +420,6 @@ async def test_tapping_the_offer_records_acceptance(alice, model):
 async def test_a_framework_starts_at_the_first_stage_their_words_do_not_answer(alice, model):
     """muhammad, 2026-10-09: what they said before saying yes answers the first stages, which are
     skipped with no question about them; the reply asks the first that is not answered."""
-    from mani.db import pool
-
     model(
         _offer("abcde", "clear"),
         Reply(
@@ -417,7 +440,6 @@ async def test_a_framework_starts_at_the_first_stage_their_words_do_not_answer(a
 async def test_a_first_stage_reply_that_contradicts_its_own_ledger_is_asked_again(alice, model):
     """The model writes which stages the conversation already answers before it writes the reply;
     a step that skips one it marked open is redrafted rather than recorded."""
-    from mani.db import pool
     from mani.llm.schema import StageKnown
 
     def walk(step: str) -> Reply:
@@ -448,13 +470,12 @@ async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, m
     at_message_count is what the next turn's cooldown is measured from.
     """
     model(Reply(text="How has the rest of the week been?"))
-    from mani.db import pool
 
     thread = await start(alice)
     # The phase clamp only advances one step per turn, so the landed state is set
     # directly rather than walked through all six of abcde's phases.
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="somatic_practice",
         )
@@ -477,10 +498,8 @@ async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, m
 
 async def _retire_abcde_on(alice, thread_id) -> None:
     """Land a thread on ABCDE's final phase, so the next turn is the completing one."""
-    from mani.db import pool
-
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread_id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="somatic_practice",
         )
@@ -493,8 +512,6 @@ async def abcde_exercise(alice):
     A fixture rather than seed content: the real catalog is empty, and the mechanism has
     to be provable before there is anything real in it.
     """
-    from mani.db import pool
-
     async with pool.as_admin() as conn:
         exercise_id = await conn.fetchval(
             "insert into admin.exercises (title, category, audio_path, framework_id) "
@@ -511,8 +528,6 @@ async def abcde_exercise(alice):
 @pytest.fixture
 async def library_exercise(alice):
     """An ordinary library exercise, linked to no framework."""
-    from mani.db import pool
-
     async with pool.as_admin() as conn:
         exercise_id = await conn.fetchval(
             "insert into admin.exercises (title, type, category, audio_path) "
@@ -528,8 +543,6 @@ async def library_exercise(alice):
 @pytest.fixture
 async def empty_catalog(alice):
     """Hide the seeded catalog for one test, and put back exactly what was hidden."""
-    from mani.db import pool
-
     async with pool.as_admin() as conn:
         hidden = await conn.fetch(
             "update admin.exercises set is_active = false where is_active returning id"
@@ -641,7 +654,6 @@ async def test_asking_about_an_offer_leaves_it_open(alice, model):
             state=TechniqueState(technique="abcde", step="offering"),
         ),
     )
-    from mani.db import pool
 
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "I keep spiralling")
@@ -662,7 +674,6 @@ async def test_a_model_reported_crisis_does_not_lock_the_thread(alice, model):
         Reply(text="I hear you, and I'm right here with you.", crisis=Crisis(reason="hopelessness")),
         Reply(text="What has today been like?"),
     )
-    from mani.db import pool
 
     thread = await start(alice)
     turn = await send(alice, thread.id, "there is no point in me being here")
@@ -686,8 +697,6 @@ async def test_a_model_reported_crisis_does_not_lock_the_thread(alice, model):
 async def test_the_safety_screen_locks_a_thread_with_no_provider_call(alice, model):
     """An explicit statement is caught before the model is ever asked anything - the
     scripted model has no reply queued, so a call here would raise, not just cost extra."""
-    from mani.db import pool
-
     scripted = model()
     thread = await start(alice)
     turn = await send(alice, thread.id, "I am going to kill myself tonight.")
@@ -707,8 +716,6 @@ async def test_a_framework_completing_on_a_crisis_turn_is_still_retired(alice, m
     """A crisis turn is still a turn. It used to return before the end-of-turn write, so a
     framework that finished on the same message stayed mid-flight forever - and the thread
     locks one way, so nothing would ever correct it."""
-    from mani.db import pool
-
     thread = await start(alice)
     await _retire_abcde_on(alice, thread.id)
 
@@ -729,8 +736,6 @@ async def test_a_clear_wish_to_die_locks_before_any_call(alice, model):
     """"I want to die" is a clear wish to die, so the deterministic screen locks it before the
     model is ever asked - the sole locking authority, not the model. The scripted model has no
     reply queued, so a call here would raise rather than just cost extra."""
-    from mani.db import pool
-
     scripted = model()
     thread = await start(alice)
     turn = await send(alice, thread.id, "I want to die")
@@ -771,6 +776,38 @@ async def test_a_retried_send_returns_the_first_reply_without_paying_again(alice
     assert again.content == first.content
 
 
+async def test_a_send_that_loses_the_race_returns_the_stored_reply_and_changes_nothing(
+    alice, model, monkeypatch
+):
+    """The retry's pre-check missed what the first send stored, so the model was asked again.
+    The database keeps the first pair, so what the person sees, the buttons they can tap and
+    the thread's state must all be the stored turn's, never the regenerated draft's."""
+    stored = Reply(text="I'm here. What happened?")
+    model(stored, _offer("abcde", "clear"))
+
+    thread = await start(alice)
+    client_id = uuid.uuid4()
+    first = await send(alice, thread.id, "hello", client_message_id=client_id)
+
+    real = orchestrator.messages_db.find_pair_by_client_id
+    looked_up = []
+
+    async def misses_once(conn, user_id, client_message_id):
+        looked_up.append(client_message_id)
+        return None if len(looked_up) == 1 else await real(conn, user_id, client_message_id)
+
+    monkeypatch.setattr(orchestrator.messages_db, "find_pair_by_client_id", misses_once)
+    again = await send(alice, thread.id, "hello", client_message_id=client_id)
+
+    assert again.was_duplicate is True
+    assert again.message_id == first.message_id
+    assert again.content == first.content
+    assert again.prompts == first.prompts
+    async with pool.as_user(alice) as conn:
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+    assert ctx.technique is None
+
+
 async def test_a_title_is_written_once_the_thread_has_an_exchange(alice, model):
     """`message_count == 3` exactly was the reference's gate; one crisis turn writes a
     single message, moved the count past it, and the thread was never titled."""
@@ -778,7 +815,6 @@ async def test_a_title_is_written_once_the_thread_has_an_exchange(alice, model):
         Reply(text="Go on."),
         Reply(text="I see.", title='"Replaying a hard day at work."'),
     )
-    from mani.db import pool
 
     thread = await start(alice)
     await send(alice, thread.id, "work was hard")
@@ -791,8 +827,6 @@ async def test_a_title_is_written_once_the_thread_has_an_exchange(alice, model):
 
 async def test_starting_a_chat_twice_reuses_the_untouched_thread(alice):
     """Tapping "new chat" repeatedly used to leave a trail of empty threads."""
-    from mani.db import pool
-
     async with pool.as_user(alice) as conn:
         first, created_first = await orchestrator.start_thread(conn, alice)
         second, created_second = await orchestrator.start_thread(conn, alice)
@@ -807,7 +841,6 @@ async def test_starting_a_chat_twice_reuses_the_untouched_thread(alice):
 
 async def test_starting_a_chat_after_speaking_makes_a_new_one(alice, model):
     model(Reply(text="Go on."))
-    from mani.db import pool
 
     first = await start(alice)
     await send(alice, first.id, "work was hard")
@@ -828,7 +861,6 @@ async def test_buttons_are_returned_only_on_manis_newest_message(alice, model):
         ),
         Reply(text="Good. What happened first?"),
     )
-    from mani.db import pool
     from mani.routers.serializers import to_messages
 
     thread = await past_the_opening(await start(alice))
@@ -874,8 +906,6 @@ async def test_a_failed_summary_is_logged_and_does_not_break_the_thread(
 
 
 async def _history(claims: Claims, thread_id):
-    from mani.db import pool
-
     async with pool.as_user(claims) as conn:
         return await messages_db.recent_for_context(conn, thread_id, ALICE)
 
@@ -891,11 +921,10 @@ async def test_a_concern_pauses_a_running_framework_for_that_turn(alice, model):
             state=TechniqueState(technique="abcde", step="consequence"),
         )
     )
-    from mani.db import pool
 
     thread = await start(alice)
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="belief",
         )
@@ -917,7 +946,6 @@ async def test_a_new_chat_after_a_crisis_carries_the_flag_but_not_the_lock(alice
     either: the next conversation opens, and the model is told to stay gentle and near
     support. What was said is never carried across - only that it happened."""
     scripted = model(Reply(text="I'm glad you came back. What is on your mind?"))
-    from mani.db import pool
 
     first = await start(alice)
     await send(alice, first.id, "I am going to kill myself")  # the screen locks this thread
@@ -941,11 +969,10 @@ async def test_the_framework_just_finished_is_not_offered_again_right_after(alic
         ),
         Reply(text="What has been on your mind about it since?"),
     )
-    from mani.db import pool
 
     thread = await start(alice)
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=-context.COOLDOWN_AFTER_COMPLETE, phase=None,
         )
@@ -967,7 +994,6 @@ async def test_tapping_decline_records_it_even_when_the_model_reports_no_state(a
         ),
         Reply(text="That's fine. What would help most right now?"),
     )
-    from mani.db import pool
 
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "I keep spiralling")
@@ -1014,7 +1040,6 @@ async def test_choosing_a_style_sets_it_and_opens_in_it_with_no_model_call(alice
     """The client's cadence: greeting, style selection, then that style's opening question.
     The opener is fixed wording from the spec, so it costs nothing to say."""
     scripted = model(Reply(text="What is happening for you?"))
-    from mani.db import pool
 
     thread = await start(alice)
     turn = await send(alice, thread.id, "Reflective")
@@ -1069,8 +1094,6 @@ async def test_a_message_id_reused_in_another_chat_is_refused_not_answered(alice
     client_message_id = uuid.uuid4()
     await send(alice, first_chat.id, "work has been hard lately", client_message_id=client_message_id)
 
-    from mani.db import pool
-
     async with pool.as_user(alice) as conn:
         second_chat, _ = await threads.create_or_reuse(conn, ALICE)
     with pytest.raises(ServiceError) as refused:
@@ -1111,7 +1134,6 @@ async def test_two_summaries_started_together_pay_for_one(alice, monkeypatch):
 async def test_past_the_daily_limit_a_turn_is_refused_before_anything_is_paid(
     alice, model, monkeypatch
 ):
-    from mani.config import get_settings
     from mani.errors import ErrorCategory, ServiceError
 
     scripted = model(Reply(text="What has been the hardest part?"))
@@ -1128,8 +1150,6 @@ async def test_past_the_daily_limit_a_turn_is_refused_before_anything_is_paid(
 async def test_a_crisis_is_still_answered_past_the_daily_limit(alice, model, monkeypatch):
     """The limit caps what can be spent, never whether someone in danger gets a reply: the
     safety screen runs first and answers with no model call at all."""
-    from mani.config import get_settings
-
     model(Reply(text="What has been the hardest part?"))
     monkeypatch.setattr(get_settings(), "daily_message_limit", 1)
     thread = await start(alice)
@@ -1144,11 +1164,10 @@ async def test_finishing_a_framework_always_offers_chat_more_and_the_library(ali
     they came back mislabeled ("Something else"), or not at all, on the reply that ends it."""
     model(Reply(text="Your shoulders feel looser. Does that feel right? What would you like next?",
                 prompts=[SmartPrompt(label="Something else")]))
-    from mani.db import pool
 
     thread = await start(alice)
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="somatic_practice",
         )
@@ -1167,11 +1186,10 @@ async def test_the_body_check_in_waits_for_their_answer_before_the_two_choices(a
                 prompts=[SmartPrompt(label="Chat More"),
                          SmartPrompt(label="Go to Library", library="home")],
                 state=TechniqueState(technique="abcde", step="somatic_checkin")))
-    from mani.db import pool
 
     thread = await start(alice)
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="effective",
         )
@@ -1181,10 +1199,8 @@ async def test_the_body_check_in_waits_for_their_answer_before_the_two_choices(a
 
 
 async def _land_on(alice, thread_id, phase) -> None:
-    from mani.db import pool
-
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread_id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase=phase,
         )
@@ -1270,11 +1286,10 @@ async def test_declining_the_body_check_goes_to_the_two_choices(alice, model):
 async def test_a_choice_already_made_is_not_offered_again(alice, model):
     """If they have already said Chat More, the ending reply just carries on talking."""
     model(Reply(text="We can keep talking. What's on your mind now?"))
-    from mani.db import pool
 
     thread = await start(alice)
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="somatic_practice",
         )
@@ -1287,20 +1302,13 @@ async def test_carrying_on_past_an_offer_is_keep_chatting(alice, model):
     """muhammad, 2026-09-24: someone who types on without answering the offer has chosen to keep
     chatting. Observed: "Would you like to try it?" came back on the very next reply, and the
     one after."""
-    offer = Reply(
-        text="I have a sequence of questions that could help. Would you like to try it?",
-        prompts=[SmartPrompt(label="Try it", technique="abcde"),
-                 SmartPrompt(label="Tell me about this"),
-                 SmartPrompt(label="Keep chatting", decline=True)],
-        state=TechniqueState(technique="abcde", step="offering"),
-    )
+    offer = _offer_with_explanation()
     # What the model actually does: reports no answer either way, and makes the offer again.
     offered_again = offer.model_copy(update={
         "text": "You pick the phone back up. I have a sequence of questions that could help. "
                 "Would you like to try it?",
     })
     model(offer, offered_again)
-    from mani.db import pool
 
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "my manager criticized me in front of everyone")
@@ -1316,15 +1324,8 @@ async def test_carrying_on_past_an_offer_is_keep_chatting(alice, model):
 async def test_an_offer_they_typed_past_is_flagged_then_closed(alice, model):
     """The model is told, on the turn itself, that its offer is waiting and they typed instead;
     a reply that neither re-offers nor reports an answer has let it go, and so does the offer."""
-    offer = Reply(
-        text="I have a sequence of questions that could help. Would you like to try it?",
-        prompts=[SmartPrompt(label="Try it", technique="abcde"),
-                 SmartPrompt(label="Tell me about this"),
-                 SmartPrompt(label="Keep chatting", decline=True)],
-        state=TechniqueState(technique="abcde", step="offering"),
-    )
+    offer = _offer_with_explanation()
     scripted = model(offer, Reply(text="You pick the phone back up. What happens right before?"))
-    from mani.db import pool
 
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "my manager criticized me in front of everyone")
@@ -1343,20 +1344,13 @@ async def test_asking_for_a_declined_framework_themselves_starts_it(alice, model
     """Someone who carried on past an offer and then asks for that help themselves has said
     yes, even before the cooldown would let Mani offer it again. Observed: Mani began the
     questions in its own words while nothing was running."""
-    offer = Reply(
-        text="I have a sequence of questions that could help. Would you like to try it?",
-        prompts=[SmartPrompt(label="Try it", technique="abcde"),
-                 SmartPrompt(label="Tell me about this"),
-                 SmartPrompt(label="Keep chatting", decline=True)],
-        state=TechniqueState(technique="abcde", step="offering"),
-    )
+    offer = _offer_with_explanation()
     model(
         offer,
         Reply(text="You keep replaying it. Which part stays with you?"),
         Reply(text="Okay. We'll take it one step at a time together. What happened?",
               state=TechniqueState(technique="abcde", step="activate", accepted=True)),
     )
-    from mani.db import pool
 
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "my manager criticized me in front of everyone")
@@ -1408,11 +1402,10 @@ async def test_the_body_check_in_is_sent_from_the_script_not_reworded(alice, mod
             state=TechniqueState(technique="abcde", step="somatic_checkin"),
         ),
     )
-    from mani.db import pool
 
     thread = await start(alice)
     async with pool.as_user(alice) as conn:
-        await threads.set_technique_outcome(
+        await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="effective",
         )
@@ -1486,8 +1479,6 @@ async def test_a_yes_to_an_open_offer_starts_it_even_with_no_buttons_showing(ali
     """An offer can stay open with no buttons under Mani's last message, when the reply to Tell
     me more asked something else. A yes then started the questions in Mani's words while the
     database still said offered, so the framework never properly began."""
-    from mani.db import pool
-
     asked_instead = Reply(
         text="They help you choose a first step. What part of it bothers you most?",
         state=TechniqueState(technique="abcde", step="offering"),

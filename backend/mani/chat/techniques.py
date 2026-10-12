@@ -52,9 +52,6 @@ class Registry:
     def __contains__(self, framework_id: object) -> bool:
         return framework_id in self._by_id
 
-    def __len__(self) -> int:
-        return len(self._by_id)
-
     @property
     def ids(self) -> list[str]:
         return list(self._by_id)

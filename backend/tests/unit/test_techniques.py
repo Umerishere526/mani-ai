@@ -118,7 +118,6 @@ def test_registry_membership_is_the_closed_set(registry):
     assert "abcde" in registry
     assert "made_up" not in registry
     assert sorted(registry.ids) == ["abcde", "dbt_stop", "thought_reframing", "with_body_route"]
-    assert len(registry) == 4
 
 
 def test_the_last_phase_is_what_finishes_a_framework(registry):

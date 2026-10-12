@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import re
-from difflib import SequenceMatcher
 from dataclasses import dataclass, field
 
 from mani.chat.greeting import (
