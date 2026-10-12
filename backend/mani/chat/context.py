@@ -115,10 +115,11 @@ def clarification_used(history: list[Message] | None) -> bool:
     )
 
 
-def offer_window(ctx: TurnContext, *, urgent: bool = False) -> str:
-    """Whether an offer may be made in this reply: `not_yet`, `open`, or `due` when the first
-    offer is owed. [ctx] reports it, the reply schema and repairs.apply enforce it. After an
-    earlier offer it reopens once the cooldown has passed and is never due."""
+def offer_window(ctx: TurnContext) -> str:
+    """Whether an offer may be made in this reply: `not_yet`, `open`, or `due` once they have
+    talked for several replies without one. The reply schema and repairs.apply enforce the floor;
+    `due` never forces an offer that does not fit. After an earlier offer it reopens once the
+    cooldown has passed and is never due."""
     technique = ctx.technique
     if technique is not None:
         since = ctx.thread.message_count - technique.at_message_count
@@ -128,7 +129,7 @@ def offer_window(ctx: TurnContext, *, urgent: bool = False) -> str:
     theirs = _their_messages(ctx)
     if theirs >= FIRST_OFFER_DUE:
         return "due"
-    return "open" if urgent or theirs >= FIRST_OFFER_OPENS else "not_yet"
+    return "open" if theirs >= FIRST_OFFER_OPENS else "not_yet"
 
 
 def resolve_style(ctx: TurnContext) -> str:
@@ -149,7 +150,6 @@ def resolve_style(ctx: TurnContext) -> str:
 # this turn: a vague reply carries the vague guidance and nothing about being heard. Keeping the
 # meaning beside the value is also what keeps the two from drifting apart, which they did while
 # the meanings lived in response_format.md (2026-10-08).
-_FIT_PLAINLY = "Offer it plainly, the way you would one that fits exactly."
 _MEANING: dict[str, str | dict[str, str]] = {
     "conversation_style": (
         "the style they chose, for the whole conversation. conversation_style in your instructions "
@@ -186,10 +186,9 @@ _MEANING: dict[str, str | dict[str, str]] = {
     },
     "offer_window": {
         "not_yet": "offer nothing in this reply.",
-        "open": "an offer may be made in this reply, if one fits.",
         "due": (
-            "you have talked for several replies without offering, so offer the set that fits best "
-            f"now. {_FIT_PLAINLY}"
+            "you have talked for several replies without offering. If a set fits, offer it now. If "
+            "none fits yet, offer nothing and check your understanding in one short question."
         ),
     },
     "since_last": "how many messages have passed since the last offer.",
@@ -218,13 +217,6 @@ _MEANING: dict[str, str | dict[str, str]] = {
     "recent_styles": "the shapes of your last few replies. A shape may come back.",
     "recent_openers": (
         "the first words of your last few replies. Do not open your new reply the same way."
-    ),
-    "offer": (
-        "the offering stage of the set for pausing before an action they are about to take, in the "
-        "lines below. Use them to judge whether it fits. offer_ask is the permission question "
-        "added after your part, so never write it yourself. It is the backend's pick from their "
-        "words, so if what they described fits another set better by Telling them apart, offer "
-        "that one instead."
     ),
     "framework_starting": {
         "yes": "they just said yes. stage_note says how to use what they already told you.",
@@ -264,26 +256,19 @@ def build(
     ctx: TurnContext,
     *,
     framework: Framework | None = None,
-    candidate: Framework | None = None,
     history: list[Message] | None = None,
     safety_concern: bool = False,
     offer_waiting: bool = False,
     framework_starting: bool = False,
-    urgent: bool = False,
 ) -> str:
     """Format the metadata header for this turn.
 
     Every value is read from the composed turn snapshot, so the block describes what the
-    database holds rather than what an in-memory copy was mutated to mid-request. `framework`,
-    `candidate` and `recent_mani_replies` are what the framework content and the caller's own
-    history add - all optional, so a turn with none of them still
-    formats exactly as before.
+    database holds rather than what an in-memory copy was mutated to mid-request. `framework` and
+    `history` are what the framework content and the caller's own history add - both optional,
+    so a turn with neither still formats exactly as before.
 
-    `framework` is the one already active; its current and next stage go in full. `candidate`
-    is the framework code picks for the model, the one for an imminent action - its offer line
-    goes in, so the offer draws on authored language rather than being improvised from the
-    Framework Index's one-liner alone. Never both at once: a framework is
-    either running or being considered, not both.
+    `framework` is the one already active; its current and next stage go in full.
 
     `history` is the same window the caller already loads for the model's own conversation
     view - nothing new is fetched for it. Only Mani's own messages in it become recent_openers;
@@ -324,8 +309,10 @@ def build(
         lines += _line("after_framework_question", question)
 
     # Told to the model as it is enforced, so it is never told it may offer what code then drops.
-    window = "not_yet" if safety_concern else offer_window(ctx, urgent=urgent)
-    lines += _line("offer_window", window)
+    # An open window is not sent: read every turn, it was taken as "offer now" (2026-10-12).
+    window = "not_yet" if safety_concern else offer_window(ctx)
+    if window != "open":
+        lines += _line("offer_window", window)
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
         lines += _line("since_last", since_last)
@@ -359,12 +346,6 @@ def build(
     if openers:
         quoted = ", ".join(f'"{o}"' for o in openers)
         lines += _line("recent_openers", quoted)
-
-    if candidate is not None and not safety_concern and window != "not_yet":
-        # The client's description is not here: the backend adds it to the offer, and a
-        # model given the text copied it, so offers showed it twice.
-        offer = _stage_lines("offer", candidate, "offering", resolve_style(ctx))
-        lines += [offer[0], *_meaning("offer", "offering"), *offer[1:]]
 
     if running:
         style = resolve_style(ctx)

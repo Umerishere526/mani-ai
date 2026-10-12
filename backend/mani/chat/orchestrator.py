@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import context, eligibility, repairs, reply_checks, safety
+from mani.chat import context, repairs, reply_checks, safety
 from mani.chat.greeting import (
     CHAT_MORE_LABEL,
     EXPLAIN_LABELS,
@@ -379,8 +379,7 @@ async def send(
     # From here on `technique` means the framework that is live on this turn: offered and
     # awaiting an answer, or accepted and mid-way. A row that is finished (phase cleared) or
     # declined stays in the snapshot, because [ctx] measures the cooldown from it - but it
-    # is not running, so it must not strip technique buttons or keep the imminent-action offer
-    # switched off.
+    # is not running, so it must not strip technique buttons.
     if technique is not None and (
         technique.phase is None
         or technique.outcome not in (TechniqueOutcome.OFFERED, TechniqueOutcome.ACCEPTED)
@@ -412,7 +411,7 @@ async def send(
 
     # The deterministic screen runs on every turn, before the model is asked anything. It
     # costs nothing and cannot be skipped for budget reasons. Crisis short-circuits the model
-    # call entirely; concern only suppresses the imminent-action offer below, so the model still answers.
+    # call entirely; concern only holds the framework and any offer, so the model still answers.
     assessment = safety.screen(content)
     if assessment.level is safety.Level.CRISIS:
         return await _handle_crisis(
@@ -423,21 +422,8 @@ async def send(
             updates=updates,
         )
 
-    # Read by the imminent-action check below and by the capsule repair further down, which needs
-    # everything they have said rather than only this turn.
-    user_texts = [m.content for m in history if m.role is MessageRole.USER] + [content]
-
-    # Which framework fits is the model's call, from the Framework Index. Code decides only the one
-    # case it must not leave to the model: an imminent action is offered a pause now, with the
-    # offering stage in hand. repairs.apply still checks whatever is offered.
-    candidate = None
-    # Only while the framework it points to is available; with that one paused, nothing is urgent.
-    urgent = (
-        eligibility.IMMINENT_ACTION_FRAMEWORK in config.registry and eligibility.urgent(user_texts)
-    )
-    if urgent and technique is None and assessment.level is safety.Level.NONE:
-        candidate = config.registry.get(eligibility.IMMINENT_ACTION_FRAMEWORK)
-
+    # Which framework fits is the model's call, from the Framework Index; code owns only when an
+    # offer may come. repairs.apply still checks whatever is offered.
     running_framework = config.registry.get(technique.framework_id) if technique else None
 
     wants_title = (
@@ -460,9 +446,9 @@ async def send(
 
     active_framework = config.registry.get(technique.framework_id) if technique else None
     prefix = context.build(
-        ctx, framework=active_framework, candidate=candidate,
+        ctx, framework=active_framework,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
-        framework_starting=accepted_this_turn, urgent=urgent,
+        framework_starting=accepted_this_turn,
     )
     for_model = (
         f'User tapped the button: "{tapped.label}".'
@@ -482,7 +468,7 @@ async def send(
                 user_message="You've reached today's message limit. Please come back tomorrow.",
             )
 
-    window = context.offer_window(ctx, urgent=urgent)
+    window = context.offer_window(ctx)
     # They asked about the offer still open, by typing a question or tapping Tell me more. The
     # reply answers and offers the same one again, which is not a new offer and waits for nothing.
     asked_about_offer = offer is not None and (
@@ -628,13 +614,7 @@ async def send(
         framework_running=outcome is TechniqueOutcome.ACCEPTED,
         # The reply that takes a no never carries the next offer, however long the last one
         # stood open.
-        # An offer a second draft still makes after what they said ruled it out is dropped the
-        # way an early one is.
-        offer_allowed=(
-            window != "not_yet"
-            and outcome is not TechniqueOutcome.DECLINED
-            and not reply_checks.ruled_out(reply, user_texts, config.registry)
-        ),
+        offer_allowed=window != "not_yet" and outcome is not TechniqueOutcome.DECLINED,
         conversation_style=conversation_style,
         wants_title=wants_title,
         # An offer made again after they asked what it involves doesn't repeat the description.

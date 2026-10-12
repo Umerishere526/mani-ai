@@ -26,7 +26,7 @@ from mani.prompts import cache  # noqa: E402
 SCENARIOS = pathlib.Path(__file__).with_name("scenarios.json")
 STYLES = ("directive", "supportive", "reflective")
 WORD = re.compile(r"[a-z']{4,}")
-INTERNAL = re.compile(r"\b(nearest|closest)\b|\bframework_id\b|\boffer_window\b", re.IGNORECASE)
+INTERNAL = re.compile(r"\bframework_id\b|\boffer_window\b", re.IGNORECASE)
 # A question made up almost wholly of words the person has already said is asking for what they said.
 ASKS_WHAT_THEY_SAID = 0.8
 # What a turn is held to (R2, muhammad 2026-10-12). Reported, never a failure: one run is noise.
@@ -90,7 +90,32 @@ def _check(exchange: Exchange, registry, told_more: bool, said: set[str]) -> Non
         exchange.flags.append(f"capsules {exchange.buttons}")
 
 
-async def _converse(name: str, lines: list[str], style: str, registry) -> list[Exchange]:
+def conversations(groups: dict) -> dict[str, dict]:
+    """Every conversation in scenarios.json by name, carrying its group's expectations under its own."""
+    return {
+        name: {**conversation, "group": group_name,
+               "expect": {**group.get("expect", {}), **conversation.get("expect", {})}}
+        for group_name, group in groups.items()
+        for name, conversation in group["conversations"].items()
+    }
+
+
+def timing_flags(offered_at: int | None, lines: int, expect: dict) -> dict[int, str]:
+    """What is wrong with when the offer came, keyed by the person's message the flag belongs on.
+    `offer_from` is the earliest message an offer may follow; `offer_by` the latest, checked only
+    when the conversation reaches it."""
+    earliest = expect.get("offer_from", context.FIRST_OFFER_OPENS)
+    latest = expect.get("offer_by")
+    if offered_at is not None and offered_at < earliest:
+        return {offered_at: f"offered at their message {offered_at}, expected from {earliest}"}
+    if latest is not None and offered_at is not None and offered_at > latest:
+        return {offered_at: f"offered at their message {offered_at}, expected by {latest}"}
+    if latest is not None and offered_at is None and lines >= latest:
+        return {latest: f"no offer by their message {latest}"}
+    return {}
+
+
+async def _converse(name: str, lines: list[str], expect: dict, style: str, registry) -> list[Exchange]:
     """One conversation in one style, up to the first offer and its Tell me more."""
     user = uuid.uuid4()
     claims = Claims(sub=str(user), raw={"sub": str(user), "role": "authenticated"})
@@ -105,18 +130,20 @@ async def _converse(name: str, lines: list[str], style: str, registry) -> list[E
         exchanges: list[Exchange] = []
         said: set[str] = set()
         billed = [0]
+        offered_at = None
         for number, text in enumerate(lines, start=1):
             said |= _words(text)
             exchanges.append(
                 await _exchange(claims, thread.id, text, registry, told_more=False, said=said, billed=billed)
             )
             if exchanges[-1].offered:
-                if number < context.FIRST_OFFER_OPENS:
-                    exchanges[-1].flags.append(f"offered at their message {number}, before the window opens")
+                offered_at = number
                 exchanges.append(await _exchange(
                     claims, thread.id, TELL_ME_MORE_LABEL, registry, told_more=True, said=said, billed=billed
                 ))
                 break
+        for number, flag in timing_flags(offered_at, len(lines), expect).items():
+            exchanges[number - 1].flags.append(flag)
         return exchanges
     finally:
         async with pool.as_admin() as conn:
@@ -182,11 +209,14 @@ def _report(name: str, runs: dict[str, list[Exchange]]) -> int:
 
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scenario", help="run only this scenario from scenarios.json")
+    parser.add_argument("--scenario", help="run only this conversation, or this group, from scenarios.json")
     parser.add_argument("--style", choices=STYLES, help="run only this style")
     args = parser.parse_args()
-    scenarios = json.loads(SCENARIOS.read_text())
-    chosen = {k: v for k, v in scenarios.items() if not args.scenario or k == args.scenario}
+    scenarios = conversations(json.loads(SCENARIOS.read_text()))
+    chosen = {
+        name: c for name, c in scenarios.items()
+        if not args.scenario or args.scenario in (name, c["group"])
+    }
     styles = [args.style] if args.style else list(STYLES)
     await pool.open_pool()
     try:
@@ -196,7 +226,7 @@ async def main() -> int:
 
         async def gated(name: str, style: str) -> list[Exchange]:
             async with gate:
-                return await _converse(name, chosen[name]["lines"], style, registry)
+                return await _converse(name, chosen[name]["lines"], chosen[name]["expect"], style, registry)
 
         results = await asyncio.gather(*(gated(name, style) for name, style in jobs))
     finally:

@@ -11,7 +11,7 @@ def registry() -> Registry:
     return Registry([
         Framework(
             id="behavioral_activation", name="Behavioral Activation", summary="s", body="b",
-            phases=["offering"], activation={"never_offer_when_said": ["died"]},
+            phases=["offering"], activation={},
         ),
         Framework(
             id="act_choice_point", name="ACT Choice Point", summary="s", body="b",
@@ -92,15 +92,6 @@ def test_a_clean_question_stands():
     assert reply_checks.misses(
         draft, registry(), offer_due=False, needs_question=True, last_mani_text=None
     ) == []
-
-
-def test_an_offer_what_they_said_rules_out_is_found():
-    assert reply_checks.ruled_out(offer("behavioral_activation"), ["my dog died"], registry()) == "behavioral_activation"
-
-
-def test_the_same_offer_is_fine_when_nothing_rules_it_out():
-    assert reply_checks.ruled_out(offer("behavioral_activation"), ["i stopped answering people"], registry()) is None
-    assert reply_checks.ruled_out(offer("act_choice_point"), ["my dog died"], registry()) is None
 
 
 def test_not_offering_when_an_offer_is_due_is_missed_if_mani_leans_somewhere():

@@ -186,7 +186,7 @@ Append-only log of the model's self-reported style per reply.
 | 9 | `created_at` | timestamptz | default `now()` | |
 | 10 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
 | 11 | `stages` | jsonb | default `'{}'`, must be a JSON object (CHECK) | Per-phase content: purpose, listen_for, ready_when, boundaries, `ask.{style}`. |
-| 12 | `activation` | jsonb | default `'{}'`, must be a JSON object (CHECK) | `central_indication`/`distinctions`/`contraindications`/`never_offer_when_said` — what the prompt and `mani/chat/eligibility.py` read. |
+| 12 | `activation` | jsonb | default `'{}'`, must be a JSON object (CHECK) | `central_indication`/`to_find_out`/`distinctions`/`contraindications` — what the prompt reads. |
 
 ### `admin.prompts`
 | # | Column | Type | Required | Purpose |
@@ -339,7 +339,7 @@ If either side of one of these pairs is ever changed, the other must change with
 
 ### Written but never read — not a hardcoding problem, but adjacent
 
-`admin.frameworks.body` and `.activation_conditions` are written by `scripts/seed.py` on every seed run and read by nothing (the prompt and `mani/chat/eligibility.py` read the `activation` jsonb column instead, per migration 002's own comment). Not incorrect, just a standing cost — every seed writes text nothing will ever load.
+`admin.frameworks.body` and `.activation_conditions` are written by `scripts/seed.py` on every seed run and read by nothing (the prompt reads the `activation` jsonb column instead, per migration 002's own comment). Not incorrect, just a standing cost — every seed writes text nothing will ever load.
 
 ## How to regenerate this document
 

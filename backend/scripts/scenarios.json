@@ -1,99 +1,131 @@
 {
-  "resentful_coworker": {
-    "source": "Lolly's Direct test, 2026-10-12 (R1): line 1 is her message word for word; lines 2 to 5 are muhammad's test lines",
-    "lines": [
-      "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
-      "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
-      "I keep thinking they only see me as someone useful, not as a colleague.",
-      "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
-      "I don't know how to handle it without making things awkward at work."
-    ]
+  "says_how_it_is_early": {
+    "about": "They say how it is for them (a feeling, a worry, or what they tell themselves) in their first messages. The offer may come once the window opens, and comes within the client's two to four exchanges after the issue.",
+    "expect": {"offer_from": 3, "offer_by": 5},
+    "conversations": {
+      "resentful_coworker": {
+        "source": "Lolly's Directive test, 2026-10-12 (R1): line 1 is her message word for word; lines 2 to 5 are muhammad's test lines",
+        "lines": [
+          "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
+          "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
+          "I keep thinking they only see me as someone useful, not as a colleague.",
+          "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
+          "I don't know how to handle it without making things awkward at work."
+        ]
+      },
+      "workplace_boundaries": {
+        "source": "Loli's testing, 2026-10-09, the same messages in all three styles",
+        "lines": [
+          "I keep agreeing to take on more work even when I already have too much to do. I know I need to start saying no, but I'm worried about how my manager will react.",
+          "I'm afraid he'll think I'm not committed to my job or that I can't handle my responsibilities.",
+          "I'm worried it could affect how he sees me professionally and whether he considers me for future opportunities.",
+          "He hasn't actually reacted negatively before. I think I'm just afraid of what might happen if I start saying no."
+        ]
+      },
+      "job_decision": {
+        "source": "Loli's testing, 2026-10-08",
+        "lines": [
+          "I'm facing an important decision, and I keep going back and forth. Every time I think I've made up my mind, I start questioning myself again. I'm frustrated because I don't understand why I can't just decide.",
+          "I'm trying to decide whether to accept a new job opportunity or stay where I am. There are good reasons for both, and I'm afraid of making the wrong choice.",
+          "The new job offers better pay and more responsibility, but I've been at my current company for years. I know the people, I'm comfortable there, and I'm worried I might regret leaving"
+        ]
+      },
+      "big_brother": {
+        "source": "muhammad's testing, 2026-10-09",
+        "lines": [
+          "i think i am not good enough",
+          "i think i am not good enough as a big brother as i was not able to provide for my little brother",
+          "i mean i wanted to be aperfect role model for him but i failed i am not someone good enough he can look upto"
+        ]
+      },
+      "embarrassed_at_work": {
+        "source": "muhammad's testing, 2026-10-09",
+        "lines": [
+          "i was embarassed in front of the whole office",
+          "my manger did this to me",
+          "he blamed his wrong work on me and insulted me which made me feeling like this",
+          "i have been constantly in a state i cant describe now i fear how would i face my colleagues",
+          "idk yet"
+        ]
+      },
+      "manager_threat": {
+        "source": "muhammad's testing, 2026-10-09: Mani asked again for what they had told it",
+        "lines": [
+          "i feel embarassed, my manager critisized my work infront of everyone",
+          "he critisized my work in front o f thw hole office",
+          "It has been happening for quite a bit time but this time it was way too much. He insulted me and said I would be fired.",
+          "No, but he seems like he wants to get me fired because he's been constantly pointing out errors in my work that are even irrelevant or small mistakes. And this time he had me feel too embarrassed",
+          "Nothing much, it's just that I was too embarrassed and I have this feeling that my colleagues will be laughing at me because it was a too embarrassing moment. It had never been done before to anyone, so that's my concern right now."
+        ]
+      },
+      "left_out_of_meetings": {
+        "source": "muhammad's testing, 2026-10-09",
+        "lines": [
+          "i have been left out of a few important meeting lately, i am starting to wonder if the role on the team is changing.",
+          "just told you not being invited to meetingd",
+          "i think i might be getting fired"
+        ]
+      }
+    }
   },
-  "workplace_boundaries": {
-    "source": "Loli's testing, 2026-10-09, the same messages in all three styles",
-    "lines": [
-      "I keep agreeing to take on more work even when I already have too much to do. I know I need to start saying no, but I'm worried about how my manager will react.",
-      "I'm afraid he'll think I'm not committed to my job or that I can't handle my responsibilities.",
-      "I'm worried it could affect how he sees me professionally and whether he considers me for future opportunities.",
-      "He hasn't actually reacted negatively before. I think I'm just afraid of what might happen if I start saying no."
-    ]
+  "describes_only_what_happened": {
+    "about": "Their first messages give only what happened or what they keep doing, with no feeling or belief. No offer until they say how it is for them.",
+    "expect": {"offer_from": 4, "offer_by": 5},
+    "conversations": {
+      "coworker_in_fragments": {
+        "source": "muhammad's chat-tester run, 2026-10-12: lines 1 to 3 word for word (ABCDE was offered on line 3); lines 4 and 5 written by Claude to say how it is for them",
+        "lines": [
+          "I have a coworker who is always asking me for help",
+          "I usually say yes.",
+          "i end updoing the majority of their work",
+          "It's starting to make me resentful.",
+          "I think they only see me as someone useful."
+        ]
+      }
+    }
   },
-  "job_decision": {
-    "source": "Loli's testing, 2026-10-08",
-    "lines": [
-      "I'm facing an important decision, and I keep going back and forth. Every time I think I've made up my mind, I start questioning myself again. I'm frustrated because I don't understand why I can't just decide.",
-      "I'm trying to decide whether to accept a new job opportunity or stay where I am. There are good reasons for both, and I'm afraid of making the wrong choice.",
-      "The new job offers better pay and more responsibility, but I've been at my current company for years. I know the people, I'm comfortable there, and I'm worried I might regret leaving"
-    ]
-  },
-  "big_brother": {
-    "source": "muhammad's testing, 2026-10-09",
-    "lines": [
-      "i think i am not good enough",
-      "i think i am not good enough as a big brother as i was not able to provide for my little brother",
-      "i mean i wanted to be aperfect role model for him but i failed i am not someone good enough he can look upto"
-    ]
-  },
-  "embarrassed_at_work": {
-    "source": "muhammad's testing, 2026-10-09",
-    "lines": [
-      "i was embarassed in front of the whole office",
-      "my manger did this to me",
-      "he blamed his wrong work on me and insulted me which made me feeling like this",
-      "i have been constantly in a state i cant describe now i fear how would i face my colleagues",
-      "idk yet"
-    ]
-  },
-  "manager_threat": {
-    "source": "muhammad's testing, 2026-10-09: Mani asked again for what they had told it",
-    "lines": [
-      "i feel embarassed, my manager critisized my work infront of everyone",
-      "he critisized my work in front o f thw hole office",
-      "It has been happening for quite a bit time but this time it was way too much. He insulted me and said I would be fired.",
-      "No, but he seems like he wants to get me fired because he's been constantly pointing out errors in my work that are even irrelevant or small mistakes. And this time he had me feel too embarrassed",
-      "Nothing much, it's just that I was too embarrassed and I have this feeling that my colleagues will be laughing at me because it was a too embarrassing moment. It had never been done before to anyone, so that's my concern right now."
-    ]
-  },
-  "left_out_of_meetings": {
-    "source": "muhammad's testing, 2026-10-09",
-    "lines": [
-      "i have been left out of a few important meeting lately, i am starting to wonder if the role on the team is changing.",
-      "just told you not being invited to meetingd",
-      "i think i might be getting fired"
-    ]
-  },
-  "client_panic": {
-    "source": "the client's styles document, 2026-10-12: the person's lines from its Reflective panic conversation, word for word",
-    "lines": [
-      "I feel like I might have a panic attack.",
-      "My chest feels tight, my thoughts are racing, and I feel like I'm losing control.",
-      "The feeling that I'm losing control."
-    ]
-  },
-  "client_overthinking": {
-    "source": "the client's styles document, 2026-10-12: the person's lines from its Directive overthinking conversation, word for word",
-    "lines": [
-      "I'm upset.",
-      "My best friend sent me a text and now I think she hates me.",
-      "She was really short with me and ended the conversation. Now I keep replaying it and wondering what I did wrong.",
-      "Yes. I can't stop thinking about it."
-    ]
-  },
-  "client_scrolling": {
-    "source": "the client's styles document, 2026-10-12: the person's lines from its Directive scrolling conversation, word for word",
-    "lines": [
-      "I cannot stop scrolling, but I need to.",
-      "I tell myself I'm going to put my phone down, but then I keep scrolling. I can lose an hour without even realizing it.",
-      "I don't even know. I just keep checking one more thing.",
-      "Yes. Exactly."
-    ]
-  },
-  "client_stress": {
-    "source": "the client's styles document, 2026-10-12: the person's lines from its Directive stress conversation, word for word",
-    "lines": [
-      "I'm stressed. I'm trying to balance work, family, and everything else, and I have a deadline coming up.",
-      "The deadline. I need to finish a presentation by Friday, but my kids need me, work keeps piling up, and I can't seem to focus.",
-      "I keep jumping from one thing to another."
-    ]
+  "client_documents": {
+    "about": "The person's lines from the client's styles document of 2026-10-12, word for word. In the document the offer comes right after their last line.",
+    "expect": {"offer_from": 3},
+    "conversations": {
+      "client_panic": {
+        "source": "the Reflective panic conversation",
+        "expect": {"offer_by": 3},
+        "lines": [
+          "I feel like I might have a panic attack.",
+          "My chest feels tight, my thoughts are racing, and I feel like I'm losing control.",
+          "The feeling that I'm losing control."
+        ]
+      },
+      "client_overthinking": {
+        "source": "the Directive overthinking conversation",
+        "expect": {"offer_by": 4},
+        "lines": [
+          "I'm upset.",
+          "My best friend sent me a text and now I think she hates me.",
+          "She was really short with me and ended the conversation. Now I keep replaying it and wondering what I did wrong.",
+          "Yes. I can't stop thinking about it."
+        ]
+      },
+      "client_scrolling": {
+        "source": "the Directive scrolling conversation",
+        "expect": {"offer_by": 4},
+        "lines": [
+          "I cannot stop scrolling, but I need to.",
+          "I tell myself I'm going to put my phone down, but then I keep scrolling. I can lose an hour without even realizing it.",
+          "I don't even know. I just keep checking one more thing.",
+          "Yes. Exactly."
+        ]
+      },
+      "client_stress": {
+        "source": "the Directive stress conversation",
+        "expect": {"offer_by": 3},
+        "lines": [
+          "I'm stressed. I'm trying to balance work, family, and everything else, and I have a deadline coming up.",
+          "The deadline. I need to finish a presentation by Friday, but my kids need me, work keeps piling up, and I can't seem to focus.",
+          "I keep jumping from one thing to another."
+        ]
+      }
+    }
   }
 }

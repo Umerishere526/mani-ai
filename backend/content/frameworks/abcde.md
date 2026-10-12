@@ -6,11 +6,11 @@ display_order: 1
 phases: [offering, activate, belief, consequence, dispute, effective]
 activation:
   central_indication: >-
-    The person has described a situation, what they started believing it means, or how that
-    belief is affecting how they feel or what they do, such as feeling overwhelmed or anxious or
-    not handling things well. They do not have to have said what happened: step A asks for the
-    event when it is missing. ABCDE is the framework offered whenever one is appropriate, and the
-    only one offered right now.
+    ABCDE works on what they are telling themselves. It fits once their own words give you what it
+    would work on: a conclusion, worry or judgment, or how it is leaving them feeling. Test: you can
+    fill the offer's <what they are going through> from their words without adding a feeling or
+    belief they didn't give. What happened, on its own, does not; step A asks for it when it is
+    missing.
   to_find_out:
     - "what happened or has been happening that started these concerns"
     - "what they began telling themselves about it"
@@ -47,7 +47,7 @@ stages:
       directive: "Would you like to try it?"
     offer:
       directive: |-
-        There's a framework called ABCDE that helps you identify the thoughts behind <what they are going through, as a short noun phrase that reads naturally after "the thoughts behind", in their words, such as your anxiety, being left out of meetings, or what happened with your sister. When they describe someone's behaviour, name the situation, never the behaviour as a verb, so not your sister stopping talking to you but how things are with your sister. Never a whole sentence, never "the thought that", never a verb phrase like "wondering whether">, question whether they're true, and replace them with more realistic ones.
+        There's a framework called ABCDE that helps you identify the thoughts behind <what they are going through, as a short noun phrase in their words that reads naturally after "the thoughts behind">, question whether they're true, and replace them with more realistic ones.
       supportive: |-
         <A short warm line in your own words that shows you understood what they said, using their words, such as "Feeling overwhelmed can make you question how well you're handling things.">
         There's a framework called ABCDE that can help you understand the thoughts behind <what they are going through, the same short noun phrase>, see whether those thoughts are really true, and find a more helpful way to think about what's happening.

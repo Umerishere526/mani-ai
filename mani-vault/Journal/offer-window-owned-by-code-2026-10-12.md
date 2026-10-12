@@ -4,6 +4,7 @@ date: 2026-10-12
 tags: [journal, offers, cadence, design, lessons]
 ---
 > Superseded 2026-10-12 — see [[one-call-turns-at-low-effort-2026-10-12]] (an early offer is redrafted once, then stripped: the reply shape now has no way to make one)
+> Superseded 2026-10-12 — see [[general-judgment-over-case-patches-2026-10-12]] (due no longer forces the nearest fit, and `open` is no longer sent)
 
 # The offer window is owned by code (2026-10-12)
 

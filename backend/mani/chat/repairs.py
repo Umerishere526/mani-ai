@@ -70,10 +70,9 @@ _LAST_QUESTION = re.compile(r"(?:^|(?<=[.!?])[ \t]+|(?<=\n))([^.!?\n]*\?)\s*$")
 
 
 
-# The system's own words, which a person must never read (Loli's test, 2026-10-09: "the nearest
-# fit I have" reached the person in all three styles).
+# The system's own words, which a person must never read.
 _INTERNAL_WORDS = re.compile(
-    r"\b(nearest|closest)\s+fit\b|\bframework[_ ]id\b|\boffer_window\b|\bheading_toward\b"
+    r"\bframework[_ ]id\b|\boffer_window\b|\bheading_toward\b"
     r"|\bframework index\b|\bcooldown\b|\[/?ctx\]",
     re.IGNORECASE,
 )

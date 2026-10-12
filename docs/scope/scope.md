@@ -16,6 +16,8 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 12  | No offer before a real conversation (R1) | Now      | in-progress |
 | 13  | Faster turns (R2)                        | Now      | in-progress |
 | 14  | Styles from the client's document (R8, R9) | Now    | in-progress |
+| 15  | General judgment over case patches       | Now      | in-progress |
+| 16  | Structured reply fields in place of text parsing | Next | planned |
 
 ## Already built
 
@@ -69,6 +71,29 @@ Each style gets its own prompt file written from the client's behavior lists, an
 - [ ] Verify it: `/check verify styles from the client's document`
 - [ ] Test it: `/test styles from the client's document`
       Requirements [R8, R9](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12). Design in the approved plan of 2026-10-12: one style file in the system prompt after `response_format`, framework index for the chosen style only, the client's bullets plus two examples per style. code in backend/content/prompts/style_*.md, backend/mani/prompts/composer.py, backend/mani/chat/context.py, backend/supabase/migrations/019_conversation_style_directive.sql. A live run of the four client scenarios is owed (muhammad's yes).
+
+### 15. General judgment over case patches · in-progress
+
+Mani reads the person with the model's own judgment, from one general rule per idea. There are no per case prompt lines, and the eval checks behavior rather than collecting one scenario per bug.
+**Done when:** each fit rule lives in one place, using the slot test; the copies, word lists, case examples and paused framework rules are gone from the prompts; `[ctx]` no longer sends `open`; at `due` Mani checks understanding and never forces an offer; the dead imminent action and veto paths are deleted; scenarios are grouped by behavior with machine checked expectations (earliest and latest offer, must not offer); and a live run (after muhammad's yes) shows no offer from an event or behavior alone.
+
+- [x] Build it: `/develop general judgment over case patches`
+  - [x] Eval first: behavior groups with expectations, fix the line 3 blind spot, drop "closest" from the leak check (baseline run skipped by muhammad; "must not offer" not added, no conversation needs it yet)
+  - [x] Fit rule in one home (`abcde.md` `central_indication`, slot test wording), copies cut from `mani_base.md` and `response_format.md`
+  - [x] Prompt cuts: word lists, slot examples, paused framework rules, step 1 duplicates, "nearest", "Finding the fit" no longer "from their first message", schema case examples
+  - [x] Window: `open` line removed, `due` becomes check understanding; dead paths deleted; Decisions in force edited in place
+- [ ] Verify it: `/check verify general judgment over case patches`
+- [ ] Test it: `/test general judgment over case patches`
+      Requirements [R1, R3, R8](../client/requirements.md#requirements). No spec: the decisions were made in the /scope panel of 2026-10-12 (two features; `due` checks understanding and never forces; the slot test wording; dead paths deleted now). code in backend/content/prompts/, backend/content/frameworks/abcde.md, backend/mani/chat/context.py, backend/mani/chat/orchestrator.py, backend/scripts/scenario_check.py, backend/scripts/scenarios.json. The live run is owed (muhammad's yes).
+
+## Next
+
+### 16. Structured reply fields in place of text parsing · needs a decision
+
+The model reports what code currently guesses from text: its own offer line, where they feel it, whether they declined, and whether this reply ends the framework. Code then places the client's fixed text, and the regexes go.
+**Done when:** no regex or phrase list reads meaning from the person's or the model's words outside the safety screen, and every gate stays keyed on database state, never on these fields.
+
+- [ ] Design it (spec): `/architect structured reply fields`
 
 ## Legend
 

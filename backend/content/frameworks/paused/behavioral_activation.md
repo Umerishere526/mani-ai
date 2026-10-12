@@ -14,19 +14,6 @@ activation:
     - "whether they know what they could do but cannot begin"
     - "what gets in the way of beginning"
     - "whether anything physical or medical explains it, or whether this is early grief (then not this)"
-  # Said anywhere in the conversation, an offer of this framework is redrafted and then dropped:
-  # early grief is not the avoidance it treats. Whole phrases, matched as whole words.
-  never_offer_when_said:
-    - "died"
-    - "passed away"
-    - "passed on"
-    - "funeral"
-    - "put to sleep"
-    - "no longer with us"
-    - "bereaved"
-    - "bereavement"
-    - "grieving"
-    - "grief"
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, to_find_out, distinctions and contraindications.
   appropriate_when:

@@ -59,11 +59,6 @@ class Registry:
     def ids(self) -> list[str]:
         return list(self._by_id)
 
-    @property
-    def activations(self) -> dict[str, dict]:
-        """Every framework's activation data, keyed by id - what the veto check reads."""
-        return {fid: f.activation for fid, f in self._by_id.items()}
-
     def get(self, framework_id: str | None) -> Framework | None:
         return self._by_id.get(framework_id) if framework_id else None
 

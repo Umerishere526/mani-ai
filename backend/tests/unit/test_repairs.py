@@ -571,19 +571,6 @@ def test_the_first_clarification_is_left_alone(registry):
     assert fixed.text == first.text
 
 
-def test_the_nearest_fit_is_offered_with_the_same_buttons_as_a_confident_one(registry):
-    """An offer is an offer. The nearest fit carries no hedging label of its own, so a person
-    choosing it is not told they are settling (muhammad, 2026-10-08)."""
-    nearest = reply(
-        text="Would you like to try it?",
-        prompts=[SmartPrompt(label="Try it", technique="abcde"),
-                 SmartPrompt(label="Keep chatting", decline=True)],
-    )
-    fixed = fix(registry, nearest)
-    assert [p.label for p in fixed.prompts] == ["Try it", "Tell me more", "Keep chatting"]
-    assert fixed.prompts[0].technique == "abcde" and fixed.prompts[2].decline is True
-
-
 def test_tell_me_more_survives_beside_an_offer(registry):
     """Three buttons under an offer (muhammad, 2026-10-08): Try it, Tell me more, Keep chatting.
     The explain button used to be dropped here."""
@@ -637,10 +624,8 @@ def test_the_acknowledgement_before_a_question_is_the_replys_first_sentence():
 
 
 def test_internal_words_never_reach_the_person(registry):
-    """Loli's test, 2026-10-09: "the nearest fit I have" and "the closest fit I have" reached the
-    person in all three styles. A sentence carrying the system's own words is dropped; the
-    question stays."""
-    leaked = reply(text="This is the closest fit I have. What happened after that?")
+    """A sentence carrying the system's own words is dropped; the question stays."""
+    leaked = reply(text="That is what my offer_window allows. What happened after that?")
     fixed = fix(registry, leaked)
     assert fixed.text == "What happened after that?"
     assert any("internal" in note for note in fixed.notes)

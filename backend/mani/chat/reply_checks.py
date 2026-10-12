@@ -6,7 +6,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from mani.chat import eligibility
 from mani.chat.techniques import Registry
 from mani.llm.schema import NO_QUESTION_SHAPES, Reply
 from mani.models.rows import ENDING_STAGES, Framework
@@ -19,17 +18,6 @@ def offered(reply: Reply, registry: Registry) -> str | None:
         (p.technique for p in reply.prompts or [] if p.technique and registry.get(p.technique)),
         None,
     )
-
-
-def ruled_out(reply: Reply, user_texts: list[str], registry: Registry) -> str | None:
-    """The framework a draft offers when what the person has said rules it out: the phrases a
-    framework file lists under `never_offer_when_said` (early grief for Behavioral Activation).
-    A prompt rule alone did not hold, so this is checked in code."""
-    technique = offered(reply, registry)
-    activation = registry.activations.get(technique) if technique else None
-    if activation and eligibility.vetoes(activation, user_texts):
-        return technique
-    return None
 
 
 _QUESTION = re.compile(r"[^.!?\n]*\?")

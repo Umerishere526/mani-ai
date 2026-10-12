@@ -275,7 +275,7 @@ async def test_a_confident_offer_is_made_on_the_third_message(alice, model):
 
 @pytest.mark.parametrize("style", ["directive", "supportive", "reflective"])
 async def test_an_offer_made_by_the_fifth_message_is_plain_and_costs_one_call(alice, model, style):
-    """The best fit is due by the person's fifth message, the same in every style (2026-10-12)."""
+    """An offer made once the window is due is a plain offer, the same in every style."""
     from mani.models.rows import SupportStyle
 
     scripted = model(_offer("abcde"))
@@ -283,15 +283,14 @@ async def test_an_offer_made_by_the_fifth_message_is_plain_and_costs_one_call(al
     turn = await send(alice, thread.id, "i miss him and the flat is quiet")
 
     assert scripted.calls == 1
-    # The nearest fit is offered like any other: no label telling them they are settling.
     assert [p.label for p in turn.prompts] == ["Try it", "Tell me more", "Keep chatting"]
     assert [p.technique for p in turn.prompts if p.technique] == ["abcde"]
     assert turn.checks == []
 
 
 async def test_a_due_offer_that_is_not_made_is_logged_never_asked_for_again(alice, model):
-    """The prompt owes the offer by the fifth message; when the model leans somewhere and still
-    does not make it, the miss is counted and the person's reply stands as written."""
+    """At due the model offers only if a set fits. When it leans somewhere and does not offer,
+    that is counted, and the person's reply stands as written."""
     from mani.models.rows import SupportStyle
 
     scripted = model(Reply(text="What is the hardest part of the evenings?", heading_toward="abcde"))
@@ -303,11 +302,11 @@ async def test_a_due_offer_that_is_not_made_is_logged_never_asked_for_again(alic
     assert turn.content == "What is the hardest part of the evenings?"
 
 
-async def test_a_motive_they_believe_in_reaches_a_due_offer_with_no_offer_wording_handed_over(
+async def test_a_due_window_reaches_the_model_on_the_fifth_message(
     alice, model
 ):
-    """covers: AC-1, AC-2 - an offer is due on the fifth message. Code hands Mani no
-    candidate's offer wording: it chooses from the Framework Index (muhammad, 2026-10-08)."""
+    """covers: AC-1, AC-2 - an offer is due on the fifth message and [ctx] says so. Which set,
+    if any, is Mani's choice from the Framework Index (muhammad, 2026-10-08)."""
     from mani.models.rows import SupportStyle
 
     scripted = model(*[Reply(text="What was happening just then?")] * 5)
@@ -323,7 +322,6 @@ async def test_a_motive_they_believe_in_reaches_a_due_offer_with_no_offer_wordin
 
     final_prompt = scripted.last_messages[-1]["content"]
     assert "offer_window: due" in final_prompt
-    assert "offer_ask:" not in final_prompt
 
 
 async def test_typing_past_an_offer_is_keep_chatting_and_the_reply_cannot_offer_again(alice, model):
@@ -1036,17 +1034,6 @@ async def test_a_reply_that_repairs_empty_fails_cleanly_and_stores_nothing(alice
         await send(alice, thread.id, "hello")
     assert raised.value.retryable
     assert [m.role for m in await _history(alice, thread.id)] == ["mani"]  # the greeting only
-
-
-async def test_an_imminent_action_picks_nothing_while_the_framework_for_it_is_paused(alice, model):
-    """Only ABCDE is available, so the stop framework an imminent action points to is not
-    handed to Mani as a candidate, and nothing about the message is treated as urgent."""
-    scripted = model(Reply(text="What is making you want to send it?"))
-    thread = await start(alice)
-    await send(alice, thread.id, "I am furious and I am about to send a message I will regret")
-
-    sent = scripted.last_messages[-1]["content"]
-    assert "offer_ask" not in sent and "offer_window: not_yet" in sent
 
 
 async def test_a_new_chat_asks_how_the_person_wants_to_be_spoken_to(alice):

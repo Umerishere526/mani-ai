@@ -134,7 +134,7 @@ class Framework(Row):
     activation_conditions: str = ""
     phases: list[str]
     display_order: int = 0
-    # The activation data (central indication, distinctions, contraindications, vetoes) and the
+    # The activation data (central indication, distinctions, contraindications) and the
     # per-phase clinical content (purpose, listening cues, readiness, boundaries, the styled
     # `ask`). activation_conditions is left in place and simply stops being read for routing -
     # a flat string cannot hold either shape.

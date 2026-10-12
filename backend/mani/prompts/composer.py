@@ -99,9 +99,8 @@ def framework_index(registry: Registry, style: str) -> str | None:
     if never:
         lines += ["", "## Never offer one when", ""] + never
 
-    # What each one needs to know before it is the right offer. It is how a question can follow
-    # the person's feeling and still be heading somewhere: static, so it sits in the cached
-    # prefix with the rest of the index.
+    # What each one needs to know before it is the right offer, listened for rather than asked:
+    # static, so it sits in the cached prefix with the rest of the index.
     to_find_out = [
         f"- **{framework.name}**: {'; '.join(items)}"
         for framework in present
@@ -111,9 +110,8 @@ def framework_index(registry: Registry, style: str) -> str | None:
     if to_find_out:
         lines += [
             "", "## Finding the fit", "",
-            "From their first message, work out which of these they are heading toward, and let "
-            "your questions reach for what is still missing for it - in their words, about their "
-            "feeling, never as a checklist:", "",
+            "What each one needs before it is the right offer. Listen for these in what they tell "
+            "you; your questions follow their feeling, never this list:", "",
         ] + to_find_out
 
     # The client's own offer wording in this style. Mani writes its part of an offer in that

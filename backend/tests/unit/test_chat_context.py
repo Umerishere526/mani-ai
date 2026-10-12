@@ -49,10 +49,20 @@ def user(content: str) -> Message:
     )
 
 
-def test_a_thread_with_nothing_offered_by_their_fourth_message_has_the_window_open():
-    block = context.build(TurnContext(thread=thread(), profile=None, technique=None))
-    assert "offer_window: open" in block
+def test_an_open_window_is_not_sent_so_it_is_never_read_as_offer_now():
+    """muhammad's run, 2026-10-12: told "an offer may be made" every turn from their third message,
+    the model offered at the third every time, before it knew how it was for them."""
+    ctx = TurnContext(thread=thread(), profile=None, technique=None)
+    assert context.offer_window(ctx) == "open"
+    block = context.build(ctx)
+    assert "offer_window" not in block
     assert "since_last" not in block
+
+
+def test_a_due_window_never_forces_an_offer_that_does_not_fit():
+    block = context.build(_on_message(context.FIRST_OFFER_DUE, style="directive")).splitlines()
+    meaning = block[block.index("offer_window: due") + 1]
+    assert "If none fits yet, offer nothing" in meaning
 
 
 def test_a_recent_decline_holds_the_cooldown_closed():
@@ -105,9 +115,9 @@ def test_a_finished_framework_waits_longer_than_a_declined_one():
     assert "offer_window: not_yet" in context.build(
         TurnContext(thread=long_enough_for_a_decline, profile=None, technique=finished)
     )
-    assert "offer_window: open" in context.build(
+    assert context.offer_window(
         TurnContext(thread=long_enough_for_a_decline, profile=None, technique=declined)
-    )
+    ) == "open"
 
 
 def test_recent_styles_are_listed_by_shape_so_a_reply_can_avoid_repeating_one():
@@ -236,28 +246,6 @@ def framework() -> Framework:
     )
 
 
-def test_a_candidate_adds_its_offer_line_resolved_to_style():
-    profile = Profile(user_id=USER, support_style="directive")
-    block = context.build(
-        TurnContext(thread=thread(), profile=profile, technique=None),
-        candidate=framework(),
-    )
-    assert "offer_purpose: Offer the framework once the event and belief are understood." in block
-    assert "offer_ask: Would you like to work through it?" in block
-
-
-def test_the_model_is_never_handed_the_description_it_must_not_write():
-    """The backend adds the client's description to every offer (muhammad, 2026-09-24). Given
-    the text as well, the model copied it, and offers showed it twice."""
-    confident = framework().model_copy(update={"summary": "These questions help you see it clearly."})
-    block = context.build(
-        TurnContext(thread=thread(), profile=None, technique=None),
-        candidate=confident,
-    )
-    assert "offer_" in block, "the offer stage itself still reaches the model"
-    assert "These questions help you see it clearly." not in block
-
-
 def test_the_turn_a_framework_starts_says_so():
     """Observed: on Try it, Mani asked "which problem would help most to address first?" of
     someone who had just named it - the first stage's question, asked as written."""
@@ -293,21 +281,6 @@ def test_the_turn_a_framework_starts_shows_the_first_stage_and_the_second():
     assert "stage_ready_when: named" in starting
     assert "next_stage_ask: What is known?" in starting
     assert any(line.startswith("stage_note: They have just said yes") for line in starting)
-
-
-def test_an_offer_falling_due_hands_the_model_no_offer_content():
-    """Live, 2026-10-08: a weak guess made the candidate at the closest fit, and a friend who had
-    not replied got the practical questions. With no candidate Mani chooses by what they
-    described, from the Framework Index."""
-    block = context.build(
-        TurnContext(
-            thread=thread(message_count=11),
-            profile=Profile(user_id=USER, support_style="directive"),
-            technique=None,
-        ),
-    )
-    assert "offer_window: due" in block
-    assert "offer_ask" not in block
 
 
 def test_an_active_framework_carries_current_and_next_stage_resolved_to_style():
@@ -614,9 +587,8 @@ def _every_kind_of_block() -> list[str]:
     return [
         context.build(early, history=[mani("What happened then?")]),
         context.build(
-            TurnContext(thread=thread(message_count=10),
+            TurnContext(thread=thread(message_count=11),
                         profile=Profile(user_id=USER, support_style="directive"), technique=None),
-            candidate=framework(),
         ),
         context.build(TurnContext(thread=thread(message_count=10), profile=None,
                                   technique=declined, techniques_offered=["abcde"])),
@@ -644,7 +616,7 @@ def test_every_line_of_the_block_says_what_it_means_for_this_turn():
             if line.startswith("  "):
                 continue
             key = line.split(":", 1)[0]
-            if key in _SELF_EXPLAINED or key.startswith(("stage_", "next_stage_", "later_stage_", "offer_")):
+            if key in _SELF_EXPLAINED or key.startswith(("stage_", "next_stage_", "later_stage_")):
                 continue
             assert i + 1 < len(lines) and lines[i + 1].startswith("  means: "), key
 

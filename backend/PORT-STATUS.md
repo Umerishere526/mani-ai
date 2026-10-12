@@ -46,7 +46,7 @@ the same change as the work.**
   1. The deterministic safety screen (`safety.py`) runs before anything else. An explicit statement locks
      the thread with no model call. An indirect one (including passive ideation and "pills in my hand")
      is a concern: it suspends frameworks and offers without locking.
-  2. Code decides one thing about which framework: an imminent action (`eligibility.py`) makes DBT STOP the candidate, with its offering stage in `[ctx]`. Every other choice is the model's, from the Framework Index.
+  2. Which framework fits, and whether one fits yet, is the model's call from the Framework Index. Code owns only when an offer may come (`context.offer_window`) and the safety screen.
   3. `composer.py` builds the system prompt with the one style file the thread chose, and `context.py`
      builds the `[ctx]` block: style, offer timing, the stage in progress and the stages
      after it. Nothing in code classifies what the person said: whether a reply is vague, a correction or
@@ -62,8 +62,8 @@ the same change as the work.**
   (the client's ABCDE document of 2026-10-09). The other five are kept in `content/frameworks/paused/`; the seed
   sets their rows inactive (never deleted, since threads and exercises refer to them), and moving a file back up
   brings it back. ABCDE ends on E and then the shared body check-in below (muhammad, 2026-10-09: the check-in
-  is asked). The first offer may come from the person's third message and the nearest fit is due by
-  their fifth, in every style, offered like any other. The shared body check-in and practice come from `content/prompts/somatic.md`.
+  is asked). The first offer may come from the person's third message; from their fifth it is due, which asks
+  for an offer only if one fits, in every style. The shared body check-in and practice come from `content/prompts/somatic.md`.
   The body route is held in code (`orchestrator._body_route_step`): the check-in is asked once; whatever
   the person answers, the next reply asks where, with Chest / Head / Stomach / Somewhere else; "idk" asks
   again; a place gets the client's practice for that place and style, word for word, ending "How do you feel
@@ -116,19 +116,29 @@ the same change as the work.**
   asked for again, so how often each happens is known. The one scoped extra call is the exercise pick at the end
   of a framework, at the chat row's effort. `test_a_turn_costs_exactly_one_provider_call` and the
   `reply_checks` tests in `tests/integration/test_turn.py` hold it. Not yet measured live (needs muhammad's yes).
-- **The first offer waits for the person's third message and is due by their fifth, in every style**
-  (muhammad, 2026-10-12). Because the client rejected an offer on the first message (R1 in
-  `docs/client/requirements.md`) and their cadence puts about two to four exchanges between the issue and the
-  offer, the same in every style (2026-10-12). Code owns the window (`context.offer_window`: not_yet, open,
-  due) and `[ctx]` reports it; an offer made before it opens is stripped (the reply shape has no way to make one). After Keep
+- **The first offer waits for the person's third message; from their fifth it is due, which never forces an
+  offer that does not fit, in every style** (muhammad, 2026-10-12). Because the client rejected an offer on the
+  first message (R1 in `docs/client/requirements.md`), their cadence puts about two to four exchanges between
+  the issue and the offer and calls that "a range, not a required count" (styles document), and a forced offer
+  at the fifth always meant ABCDE, the only set (2026-10-12). Code owns the window (`context.offer_window`:
+  not_yet, open, due); `[ctx]` sends not_yet and due but never open, which the model read as "offer now"
+  (18 of 18 offers at the third message). At due, a set that fits is offered, and otherwise Mani checks its
+  understanding in one question. An offer made before the window opens is stripped (the reply shape has no way to make one). After Keep
   chatting it reopens six messages later and is never due. `test_offer_window_*` in
   `tests/unit/test_chat_context.py` hold it. Every
   reply before an offer asks one question, and what they say back about how it is for them is how the set
   is found. The set is chosen by what hurts, by its Use it when and
   Telling them apart; Structured Problem-Solving only once they say they want a decision or plan. No phrase
-  matching ranks or shortlists them: the model chooses, code only checks (cooldown, already offered, what they
-  said that rules one out) and owns the imminent action (muhammad, 2026-10-09; 2026-10-08: when a weak router
+  matching ranks or shortlists them: the model chooses, code only checks the cooldown and what was already
+  offered (muhammad, 2026-10-09; 2026-10-08: when a weak router
   guess stopped being the candidate, wrong SPS offers went from 4 of 10 live conversations to 0).
+- **A framework fits once its offer can be filled from their own words; each fit rule lives once, in the
+  framework's `central_indication`** (muhammad, 2026-10-12). Because rules written per case do not scale to what
+  people actually say, and three copies of ABCDE's fit rule had drifted apart; ABCDE was offered at message 3 to
+  someone who had only described what happened (2026-10-12). For ABCDE: what they are telling themselves, or how
+  it is leaving them feeling, not what happened alone; the event stays optional, as the client's ABCDE document
+  allows (its Situation 3). Scenario group `describes_only_what_happened` in `scripts/scenarios.json`. Not yet
+  measured live.
 - **Memory is per person**. Because Mani should learn each person's patterns across chats, while a new chat
   still starts with none of the last one's messages (2026-09-23).
 - **An offer is one short line that names its framework** (the word may be said). Because the client's offers
@@ -147,9 +157,8 @@ the same change as the work.**
   (`cache.REQUIRED_PROMPTS`), so seed before deploying. `test_only_the_chosen_style_reaches_the_system_prompt` and
   `test_a_missing_style_row_is_refused_when_the_prompts_load` in `tests/unit/test_composer.py` hold it.
 - **An offer carries the client's three buttons**, Try it, Tell me more, Keep chatting, set in `repairs.py`
-  whatever the model labels them. Because the client's offer has three choices, two after Tell me more, and
-  the internal "nearest fit" wording reached people (2026-10-08); after Tell me more it comes back with the other two. The nearest fit is
-  offered exactly like a confident one, with no label or wording that says it is the nearest.
+  whatever the model labels them. Because the client's offer has three choices, two after Tell me more
+  (2026-10-08); after Tell me more it comes back with the other two.
 - **An offer the window allows is never dropped for a question beside it; the question goes** (muhammad,
   2026-10-12). Because the old rule dropped the buttons whenever a `?` appeared before the permission question,
   and a reflection quoting their "Why me?" lost a valid ABCDE offer: no buttons, no offered row, and the yes
@@ -188,8 +197,7 @@ the same change as the work.**
   the numbered five steps in the person's style word for word (`stages.offering.explain`), the offer follows the
   client's pattern per style (`offer`), Keep chatting asks the client's question (`keep_chatting`), the permission
   question is "Would you like to try it?" in every style, and the body check-in is asked after E (muhammad
-  decided to keep it). An imminent action points to no framework while STOP is paused (`urgent` is false
-  unless `dbt_stop` is in the registry). Supportive inside a framework adds no extra reassurance, validation or
+  decided to keep it). Supportive inside a framework adds no extra reassurance, validation or
   questions.
 - **The stage ledger** (`stages_known`, written before the reply). Because what a stage needs is often half
   known already, so the question asks only for the missing part (2026-10-09). The ledger holds each stage with what they already said and a
@@ -202,8 +210,9 @@ the same change as the work.**
   (vague, unsure, correcting, wanting only to be heard), no list of feeling words, no list of self-judgments
   and no pain words. The rules for those live in the prompts, and a draft answers them itself: a reply that
   asks nothing says so by its shape (`schema.NO_QUESTION_SHAPES`). What code still checks is not about meaning:
-  the crisis screen, script and internal-word stripping, the `[ctx]` injection guard, the imminent-action
-  phrases, the body route's place and decline words, and `never_offer_when_said` in the framework files.
+  the crisis screen, script and internal-word stripping, the `[ctx]` injection guard, and the body route's
+  place and decline words (scope feature 16 replaces those with reply fields). A paused framework moved back
+  brings no phrase list with it; anything it needs to detect is designed when it returns (2026-10-12).
 - **Questions before an offer ask for what is still missing** (muhammad, 2026-10-09; cut 2026-10-12). Because
   Mani re-asked what they had said and walked them into worst cases (2026-10-09), while the client's own questions
   ask what made them think it, what feels most pressing, and open on their words (styles document, 2026-10-12).
