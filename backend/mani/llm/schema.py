@@ -39,8 +39,8 @@ SHAPES = (
 NO_QUESTION_SHAPES = ("mirror and hold", "presence only")
 
 
-class SmartPrompt(BaseModel):
-    """One tappable capsule under a reply."""
+class Button(BaseModel):
+    """What every tappable capsule carries."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -51,13 +51,6 @@ class SmartPrompt(BaseModel):
             "Set only when this button navigates to the library. Null otherwise. "
             f"One of: {_listed(LibrarySection)}. \"home\" is the library's front page: "
             "use it for a general Go to Library button."
-        ),
-    )
-    technique: str | None = Field(
-        default=None,
-        description=(
-            "The technique id this button offers, when the button is a technique offer. "
-            "Null otherwise."
         ),
     )
     decline: bool | None = Field(
@@ -74,6 +67,18 @@ class SmartPrompt(BaseModel):
         if isinstance(value, str):
             return value.strip().lower() not in {"", "false", "no", "0", "null", "none"}
         return value
+
+
+class SmartPrompt(Button):
+    """One tappable capsule under a reply."""
+
+    technique: str | None = Field(
+        default=None,
+        description=(
+            "The technique id this button offers, when the button is a technique offer. "
+            "Null otherwise."
+        ),
+    )
 
 
 class TechniqueState(BaseModel):
@@ -153,6 +158,25 @@ class StageKnown(BaseModel):
         return self
 
 
+def _prompts_description(*, offering: bool) -> str:
+    """What the model is told about its buttons. The offer sentence is left out of the shape
+    sent while no offer may be made, so the field it describes is not there either."""
+    return (
+        "Tappable button options if your response ends with a question that has "
+        "2-3 clear choices. Each prompt has a \"label\" field (required). "
+        + (
+            "ONLY include \"technique\" field when INITIALLY ASKING if user wants to try "
+            "a technique. "
+            if offering else ""
+        )
+        + "Include \"library\" ONLY on a button that opens the library. "
+        + ("Labels should be in USER voice (\"Try it\", \"Keep chatting\"). " if offering
+           else "Labels should be in USER voice. ")
+        + "Set to null if no buttons are appropriate "
+        "(e.g., open-ended questions). Two or three, never more."
+    )
+
+
 class Reply(BaseModel):
     """What one turn asks the model for. Optional fields come back null, not absent."""
 
@@ -197,15 +221,7 @@ class Reply(BaseModel):
     text: str = Field(description="Your conversational response to the user. Required.")
     prompts: list[SmartPrompt] | None = Field(
         default=None,
-        description=(
-            "Tappable button options if your response ends with a question that has "
-            "2-3 clear choices. Each prompt has a \"label\" field (required). "
-            "ONLY include \"technique\" field when INITIALLY ASKING if user wants to try "
-            "a technique. Include \"library\" ONLY on a button that opens the library. "
-            "Labels should be in USER voice (\"Try it\", "
-            "\"Keep chatting\"). Set to null if no buttons are appropriate "
-            "(e.g., open-ended questions). Two or three, never more."
-        ),
+        description=_prompts_description(offering=True),
     )
     title: str | None = Field(
         default=None,
@@ -246,6 +262,16 @@ class Reply(BaseModel):
     # holding the reading and none of the use. If a care-team surface is ever built, this
     # comes back together with the column, the retention rule and the access policy that
     # make storing it defensible.
+
+
+class ReplyWithoutOffer(Reply):
+    """The reply while no offer may be made: the same fields, and a button cannot name a
+    technique, so the model has no way to offer one. Field order is the parent's."""
+
+    prompts: list[Button] | None = Field(
+        default=None,
+        description=_prompts_description(offering=False),
+    )
 
 
 class Extraction(BaseModel):

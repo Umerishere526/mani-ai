@@ -59,7 +59,12 @@ def _usage_of(exc: BaseException) -> llm_calls.Usage:
     if usage is None:
         return llm_calls.Usage()
     return llm_calls.Usage(
-        input_tokens=usage.prompt_tokens or 0, output_tokens=usage.completion_tokens or 0
+        input_tokens=usage.prompt_tokens or 0,
+        output_tokens=usage.completion_tokens or 0,
+        cached_input_tokens=getattr(usage.prompt_tokens_details, "cached_tokens", None) or 0,
+        reasoning_tokens=(
+            getattr(usage.completion_tokens_details, "reasoning_tokens", None) or 0
+        ),
     )
 
 
@@ -202,14 +207,15 @@ async def complete[T: BaseModel](
 
     messages = _apply_model_quirks(messages, model)
 
-    started = time.perf_counter()
     usage = llm_calls.Usage()
     try:
         parsed = None
         for attempt in range(1, MAX_SCHEMA_ATTEMPTS + 1):
             # Reset per attempt, so an attempt that raises is never recorded with the tokens
-            # of the one before it.
+            # of the one before it, and each row's latency is that attempt's own time, not
+            # the attempts and the retry pause before it.
             usage = llm_calls.Usage()
+            started = time.perf_counter()
             try:
                 result = await runnable.ainvoke(messages)
             except _TRANSIENT as exc:
@@ -290,6 +296,7 @@ async def choose_exercise(
     *,
     model: str,
     purpose: llm_calls.Purpose,
+    reasoning_effort: str | None = None,
     said: Sequence[str] = (),
     current_issue: str | None = None,
     temperature: float = DEFAULT_TEMPERATURE,
@@ -317,7 +324,7 @@ async def choose_exercise(
 
     runnable = chain.build_tool_choice(
         tools.StartExercise, model=model, temperature=temperature, max_tokens=max_tokens,
-        routing=routing, settings=settings,
+        routing=routing, settings=settings, reasoning_effort=reasoning_effort,
     )
 
     listing = "\n".join(

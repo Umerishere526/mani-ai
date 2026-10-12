@@ -1,12 +1,12 @@
-# ABOUTME: Why a drafted reply is asked for again once: an offer not allowed, an offer ruled out, no question, a question asked again.
-# ABOUTME: Pure checks on the draft, so each reason is a unit test; the orchestrator makes the one extra call.
+# ABOUTME: Checks on the model's reply that cost no model call: the stage its own ledger says to ask, and what it missed.
+# ABOUTME: Pure functions, so each check is a unit test; the orchestrator corrects the step and logs the misses.
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 
-from mani.chat import eligibility, repairs
+from mani.chat import eligibility
 from mani.chat.techniques import Registry
 from mani.llm.schema import NO_QUESTION_SHAPES, Reply
 from mani.models.rows import ENDING_STAGES, Framework
@@ -14,7 +14,7 @@ from mani.models.rows import ENDING_STAGES, Framework
 
 def offered(reply: Reply, registry: Registry) -> str | None:
     """The framework a draft offers, if it carries an offer button for one that exists. An id the
-    registry does not know is repairs.apply's to remove, not worth another call."""
+    registry does not know is repairs.apply's to remove."""
     return next(
         (p.technique for p in reply.prompts or [] if p.technique and registry.get(p.technique)),
         None,
@@ -118,67 +118,36 @@ def ledger_view(reply: Reply, framework: Framework | None) -> list[dict]:
     return rows
 
 
-def reasons(
+def with_ledger_step(reply: Reply, framework: Framework, start: StageInForce) -> Reply:
+    """The reply with `state.step` set to the stage its own `stages_known` says to ask. The step
+    is written after the text, so a disagreement is a label the code can fix, not a question to
+    ask the model again. Unchanged when the reply has no ledger or reports no state."""
+    expected = ledger_stage(reply, framework, start)
+    state = reply.state
+    if not expected or state is None or state.technique != framework.id or state.step == expected:
+        return reply
+    return reply.model_copy(update={"state": state.model_copy(update={"step": expected})})
+
+
+def misses(
     reply: Reply,
-    user_texts: list[str],
     registry: Registry,
     *,
-    offer_not_allowed: bool,
-    offer_due: bool = False,
-    needs_question: bool = False,
-    stage_in_force: StageInForce | None = None,
-    last_mani_text: str | None = None,
+    offer_due: bool,
+    needs_question: bool,
+    last_mani_text: str | None,
 ) -> list[str]:
-    """What is wrong with the draft that only the model can fix, as lines for the model to read.
-    Empty when the draft stands."""
+    """What the draft got wrong that code cannot fix, named for the log. Empty when it stands.
+    None of these costs a second call: they are counted, so how often each happens is known."""
     notes: list[str] = []
-
-    framework = registry.get(stage_in_force.framework_id) if stage_in_force else None
-    expected = ledger_stage(reply, framework, stage_in_force) if framework else None
-    step = (
-        reply.state.step
-        if expected and reply.state and reply.state.technique == framework.id
-        else None
-    )
-    if expected and step != expected:
-        notes.append(
-            f"your stages_known says {expected} is the first stage not yet answered, but "
-            f"state.step is {step or 'missing'}; ask {expected}, only for what its known does not "
-            "already hold, and report it in state.step"
-        )
-
     technique = offered(reply, registry)
     if not technique and repeats(reply, last_mani_text):
-        notes.append(
-            "your draft asks the question you asked last turn, with the same choices; answer "
-            "what they just said first (a yes or a question of theirs counts), then move on: "
-            "if they asked you to choose, offer one small step as a draft they can accept or change"
-        )
+        notes.append("repeats the last question")
     chose_to_ask_nothing = bool(
         reply.style and reply.style.shape.strip().lower() in NO_QUESTION_SHAPES
     )
     if needs_question and not technique and "?" not in reply.text and not chose_to_ask_nothing:
-        notes.append(
-            "your draft asks no question; end with one short, plain question about one part of what "
-            "they just said, in their words"
-        )
-    if technique and offer_not_allowed:
-        notes.append(
-            "your draft offered a set of questions, and it is too early to offer; offer nothing "
-            "and ask one short, plain question about one part of what they just said, in their "
-            "words"
-        )
-    elif not technique and offer_due and reply.heading_toward:
-        notes.append(
-            "you have talked for several replies and not offered: offer the set of questions "
-            "that fits best now, by its name and plainly, the way you would one that fits "
-            "exactly"
-        )
-    elif technique and ruled_out(reply, user_texts, registry):
-        framework = registry.get(technique)
-        name = framework.name if framework else technique
-        notes.append(
-            f"your draft offered {name}, which does not fit what they have told you (see "
-            "'Never offer one when'); offer nothing and ask one question instead"
-        )
+        notes.append("asks no question")
+    if not technique and offer_due and reply.heading_toward:
+        notes.append("offer due and not made")
     return notes

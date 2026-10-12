@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from types import SimpleNamespace
 
@@ -269,7 +270,7 @@ async def test_a_provider_error_is_not_retried_by_the_schema_loop(monkeypatch, r
     assert [c["outcome"] for c in recorded] == [llm_calls.Outcome.PROVIDER_ERROR]
 
 
-def cut_off(output_tokens: int = 2048) -> openai.LengthFinishReasonError:
+def cut_off(output_tokens: int = 2048, reasoning: int = 0) -> openai.LengthFinishReasonError:
     """What the SDK raises from inside the model step when the reply hits max_tokens.
 
     Raised, not returned: with a response_format LangChain calls the SDK's parse(), which
@@ -282,13 +283,15 @@ def cut_off(output_tokens: int = 2048) -> openai.LengthFinishReasonError:
             usage=CompletionUsage(
                 prompt_tokens=100, completion_tokens=output_tokens,
                 total_tokens=100 + output_tokens,
+                prompt_tokens_details={"cached_tokens": 60},
+                completion_tokens_details={"reasoning_tokens": reasoning},
             ),
         )
     )
 
 
 async def test_a_reply_cut_off_by_the_token_limit_is_retried(monkeypatch, recorded):
-    runnable = FakeRunnable(cut_off(), valid("second try"))
+    runnable = FakeRunnable(cut_off(reasoning=1955), valid("second try"))
     install(monkeypatch, runnable)
 
     call = await client.complete(
@@ -300,8 +303,11 @@ async def test_a_reply_cut_off_by_the_token_limit_is_retried(monkeypatch, record
     assert runnable.calls == 2
     failed = recorded[0]
     assert failed["outcome"] is llm_calls.Outcome.SCHEMA_INVALID
-    # The cut-off attempt was generated and billed in full; recording 0 would hide it.
+    # The cut-off attempt was generated and billed in full; recording 0 would hide it, and the
+    # thinking that used the budget up is what the effort is chosen from.
     assert failed["usage"].output_tokens == 2048
+    assert failed["usage"].reasoning_tokens == 1955
+    assert failed["usage"].cached_input_tokens == 60
 
 
 async def test_a_failed_second_attempt_does_not_repeat_the_first_attempts_tokens(
@@ -321,6 +327,30 @@ async def test_a_failed_second_attempt_does_not_repeat_the_first_attempts_tokens
 
     assert recorded[-1]["outcome"] is llm_calls.Outcome.PROVIDER_ERROR
     assert recorded[-1]["usage"] == llm_calls.Usage()
+
+
+class SlowThenValid(FakeRunnable):
+    """The first attempt takes a while and fails to parse; the second answers at once."""
+
+    async def ainvoke(self, messages: list[dict]) -> dict:
+        if self.calls == 0:
+            await asyncio.sleep(0.3)
+        return await super().ainvoke(messages)
+
+
+async def test_a_retried_attempts_latency_is_its_own_not_the_attempts_before_it(
+    monkeypatch, recorded
+):
+    install(monkeypatch, SlowThenValid(invalid(), valid()))
+
+    await client.complete(
+        [{"role": "user", "content": "hi"}], Reply, model="m",
+        purpose=llm_calls.Purpose.CHAT, settings=settings(),
+    )
+
+    failed, succeeded = recorded
+    assert failed["latency_ms"] >= 300
+    assert succeeded["latency_ms"] < 150
 
 
 def provider_down(status: int = 503) -> openai.InternalServerError:

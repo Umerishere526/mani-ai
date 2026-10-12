@@ -570,15 +570,6 @@ def test_the_one_time_clarification_is_offered_only_before_it_has_been_used():
     assert "clarification_available" not in already_asked
 
 
-def test_the_redraft_notes_stay_inside_the_context_block_one_line_each():
-    block = context.with_rewrite_notes(
-        "[ctx]\nconversation_style: direct\n[/ctx]\n\n", ["used stressful", "offered too early"]
-    )
-    assert block.index("rewrite: used stressful") < block.index("rewrite: offered too early")
-    assert block.index("rewrite: offered too early") < block.index("[/ctx]")
-    assert block.endswith("[/ctx]\n\n")
-
-
 def _running_note(style: str, *, starting: bool = False) -> str:
     """The stage_note of a framework turn in one conversation style."""
     state = TechniqueState(
@@ -662,10 +653,6 @@ def _every_kind_of_block() -> list[str]:
         context.build(TurnContext(thread=thread(), profile=None, technique=None,
                                   techniques_offered=["abcde"]),
                       history=_finished_framework_history()),
-        context.with_rewrite_notes(
-            context.build(TurnContext(thread=thread(), profile=None, technique=None)),
-            ["your draft asks no question"],
-        ),
     ]
 
 
@@ -679,9 +666,6 @@ def test_every_line_of_the_block_says_what_it_means_for_this_turn():
                 continue
             key = line.split(":", 1)[0]
             if key in _SELF_EXPLAINED or key.startswith(("stage_", "next_stage_", "later_stage_", "offer_")):
-                continue
-            # Several rewrite reasons are one group, explained once after the last.
-            if i + 1 < len(lines) and lines[i + 1].startswith(f"{key}: "):
                 continue
             assert i + 1 < len(lines) and lines[i + 1].startswith("  means: "), key
 

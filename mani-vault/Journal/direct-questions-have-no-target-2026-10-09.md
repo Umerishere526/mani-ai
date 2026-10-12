@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-09
 tags: [journal, prompts, questions, direct, lessons]
 ---
+> Superseded 2026-10-12 — see [[one-call-turns-at-low-effort-2026-10-12]] (the redraft for a reply with no question: it is now counted in the logs, never asked for again)
 
 > Superseded 2026-10-12 — see [[offer-window-owned-by-code-2026-10-12]] (the offer timing part: "offered as soon as it fits, from the first message")
 

@@ -305,14 +305,49 @@ async def test_a_model_call_is_recorded_with_its_cost(users):
     from mani.db import pool
 
     async with pool.as_admin() as conn:
-        await llm_calls.record(
+        call_id = await llm_calls.record(
             conn, purpose=llm_calls.Purpose.CHAT, model="google/gemini-3-flash-preview",
             outcome=llm_calls.Outcome.OK, latency_ms=4200, user_id=ALICE,
-            usage=llm_calls.Usage(input_tokens=8230, output_tokens=385))
+            usage=llm_calls.Usage(input_tokens=8230, output_tokens=385, reasoning_tokens=300))
         spend = await llm_calls.spend_since(conn, ALICE)
+        thinking = await conn.fetchval(
+            "select reasoning_tokens from admin.llm_calls where id = $1", call_id
+        )
 
     assert spend["input_tokens"] == 8230
     assert spend["calls"] == 1
+    assert thinking == 300
+
+
+async def test_a_scenario_turn_is_billed_only_for_the_calls_it_made(users):
+    """The scenario check reads one thread's cost rows turn by turn, so a turn that redrafted or
+    picked an exercise shows its extra calls and the next turn does not inherit them."""
+    from mani.db import pool, threads
+    from scripts import scenario_check
+
+    async def call(thread_id, output: int, thinking: int) -> None:
+        async with pool.as_admin() as conn:
+            await llm_calls.record(
+                conn, purpose=llm_calls.Purpose.CHAT, model="m", outcome=llm_calls.Outcome.OK,
+                latency_ms=1, user_id=ALICE, thread_id=thread_id,
+                usage=llm_calls.Usage(
+                    input_tokens=1000, output_tokens=output, cached_input_tokens=800,
+                    reasoning_tokens=thinking,
+                ),
+            )
+
+    async with pool.as_admin() as conn:
+        thread, _ = await threads.create_or_reuse(conn, ALICE)
+    billed = [0]
+    await call(thread.id, 100, 60)
+    await call(thread.id, 50, 10)
+    first = await scenario_check._cost(thread.id, 1.5, billed)
+    await call(thread.id, 30, 0)
+    second = await scenario_check._cost(thread.id, 0.5, billed)
+
+    assert (first.calls, first.input_tokens, first.cached_tokens) == (2, 2000, 1600)
+    assert (first.output_tokens, first.reasoning_tokens, first.seconds) == (150, 70, 1.5)
+    assert (second.calls, second.output_tokens, second.reasoning_tokens) == (1, 30, 0)
 
 
 async def test_threads_needing_summary_lists_across_users(users):

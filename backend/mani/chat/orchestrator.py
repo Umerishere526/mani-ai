@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import context, eligibility, redraft, repairs, safety
+from mani.chat import context, eligibility, repairs, reply_checks, safety
 from mani.chat.greeting import (
     CHAT_MORE_LABEL,
     EXPLAIN_LABELS,
@@ -33,7 +33,7 @@ from mani.db import (
 )
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
-from mani.llm.schema import LibrarySection, Reply, SmartPrompt
+from mani.llm.schema import LibrarySection, Reply, ReplyWithoutOffer, SmartPrompt
 from mani.models.rows import (
     Exercise,
     Framework,
@@ -141,7 +141,7 @@ def _stage_in_force(
     technique: TechniqueState | None,
     *,
     accepted_this_turn: bool,
-) -> redraft.StageInForce | None:
+) -> reply_checks.StageInForce | None:
     """The stage this reply starts from, as [ctx] shows it: the first after the offer on the turn
     they say yes, otherwise the stage in force."""
     if framework is None or technique is None or not technique.phase:
@@ -156,7 +156,7 @@ def _stage_in_force(
         return None
     if not 0 < index < len(framework.phases):
         return None
-    return redraft.StageInForce(framework.id, framework.phases[index], asked)
+    return reply_checks.StageInForce(framework.id, framework.phases[index], asked)
 
 
 def _offered_handoff(history: list[Message]) -> bool:
@@ -185,6 +185,9 @@ class Turn:
     reasoning: str | None = None
     # The draft's stage ledger, as rows. Only with AI_DEBUG_MODE, like the reasoning.
     ledger: list[dict] | None = None
+    # What the reply missed that code cannot fix (reply_checks.misses), for the logs and the
+    # scenario check; never sent to a client.
+    checks: list[str] = field(default_factory=list)
     # Set only on the turn a framework completes, and only when the catalog has a
     # matching exercise. A row model, not the wire shape - the router builds ExerciseOut
     # (and signs the audio URL) when it serializes this.
@@ -426,7 +429,7 @@ async def send(
 
     # Which framework fits is the model's call, from the Framework Index. Code decides only the one
     # case it must not leave to the model: an imminent action is offered a pause now, with the
-    # offering stage in hand. repairs.apply and redraft still check whatever is offered.
+    # offering stage in hand. repairs.apply still checks whatever is offered.
     candidate = None
     # Only while the framework it points to is available; with that one paused, nothing is urgent.
     urgent = (
@@ -474,11 +477,22 @@ async def send(
                 user_message="You've reached today's message limit. Please come back tomorrow.",
             )
 
+    window = context.offer_window(ctx, urgent=urgent)
+    # They asked about the offer still open, by typing a question or tapping Tell me more. The
+    # reply answers and offers the same one again, which is not a new offer and waits for nothing.
+    asked_about_offer = offer is not None and (
+        (deferred and "?" in content)
+        or (tapped is not None and tapped.label.strip().lower() in EXPLAIN_LABELS)
+    )
+    # While no offer may be made, a button has no way to name a technique, so the model cannot
+    # offer early and the reply keeps the question it was asked to end on. The one offer made
+    # outside the window is the open one, put again when they asked about it.
+    may_offer = window != "not_yet" or asked_about_offer
     call = await client.complete(
         [{"role": "system", "content": system.text}]
         + _conversation(history)
         + [{"role": "user", "content": prefix + for_model}],
-        Reply,
+        Reply if may_offer else ReplyWithoutOffer,
         model=model,
         purpose=llm_calls.Purpose.CHAT,
         temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
@@ -490,62 +504,34 @@ async def send(
         prompt_version_id=None,
     )
     reply = call.value
-    window = context.offer_window(ctx, urgent=urgent)
     framework_going = ctx.technique is not None and ctx.technique.outcome is TechniqueOutcome.ACCEPTED
     # Every reply before an offer asks one question, so the conversation keeps moving. Not while
     # the questions run (each stage asks its own), not on a safety concern, and not when the draft
     # itself chose a shape that asks nothing, which is how it answers someone who only wants to be heard.
     needs_question = not framework_going and not assessment.blocks_framework
 
-    # They asked about the offer still open, by typing a question or tapping Tell me more. The
-    # reply answers and offers the same one again, which is not a new offer and waits for nothing.
-    asked_about_offer = offer is not None and (
-        (deferred and "?" in content)
-        or (tapped is not None and tapped.label.strip().lower() in EXPLAIN_LABELS)
+    # The step is written after the text, so where it disagrees with the draft's own ledger it is
+    # the label that is wrong; code sets it rather than asking the model again.
+    in_force = None if assessment.blocks_framework else _stage_in_force(
+        running_framework, technique, accepted_this_turn=accepted_this_turn,
     )
-
-    def _why(draft: Reply) -> list[str]:
-        return redraft.reasons(
-            draft, user_texts, config.registry,
-            # A typed reply to an offer already open is Keep chatting unless it asks about the
-            # offer, so offering again there waits for the window like any other offer; the
-            # repeat used to be dropped and leave no question.
-            offer_not_allowed=not asked_about_offer and window == "not_yet",
-            offer_due=window == "due" and not assessment.blocks_framework and not deferred,
-            needs_question=needs_question,
-            stage_in_force=None if assessment.blocks_framework else _stage_in_force(
-                running_framework, technique, accepted_this_turn=accepted_this_turn,
-            ),
-            last_mani_text=next(
-                (m.content for m in reversed(history) if m.role is MessageRole.MANI), None
-            ),
-        )
-
-    why = _why(reply)
-    attempts = 0
-    # A draft that names a feeling they never did, offers before it may, offers what they said
-    # rules out, or asks nothing gets one more try, told why; a missing question gets a second.
-    # What still fails is corrected by repairs.apply.
-    while why and attempts < 2 and (attempts == 0 or any("asks no question" in w for w in why)):
-        logger.info("thread %s redrafting: %s", ctx.thread.id, "; ".join(why))
-        again = await client.complete(
-            [{"role": "system", "content": system.text}]
-            + _conversation(history)
-            + [{"role": "user", "content": context.with_rewrite_notes(prefix, why) + for_model}],
-            Reply,
-            model=model,
-            purpose=llm_calls.Purpose.CHAT,
-            temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
-            max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
-            reasoning_effort=parameters.get("reasoning_effort"),
-            routing=routing,
-            user_id=user_id,
-            thread_id=ctx.thread.id,
-            prompt_version_id=None,
-        )
-        reply = again.value
-        attempts += 1
-        why = _why(reply)
+    stage_framework = config.registry.get(in_force.framework_id) if in_force else None
+    if stage_framework is not None:
+        stepped = reply_checks.with_ledger_step(reply, stage_framework, in_force)
+        if stepped is not reply:
+            logger.info(
+                "thread %s step %s set to %s from its own ledger",
+                ctx.thread.id, reply.state.step, stepped.state.step,
+            )
+            reply = stepped
+    checks = reply_checks.misses(
+        reply, config.registry,
+        offer_due=window == "due" and not assessment.blocks_framework and not deferred,
+        needs_question=needs_question,
+        last_mani_text=next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None),
+    )
+    if checks:
+        logger.info("thread %s reply checks: %s", ctx.thread.id, "; ".join(checks))
     if reply.heading_toward:
         # Read by the steering evals and by anyone asking why a question went where it did:
         # the id only, never a word of what the person said.
@@ -642,7 +628,7 @@ async def send(
         offer_allowed=(
             window != "not_yet"
             and outcome is not TechniqueOutcome.DECLINED
-            and not redraft.ruled_out(reply, user_texts, config.registry)
+            and not reply_checks.ruled_out(reply, user_texts, config.registry)
         ),
         conversation_style=context.resolve_style(ctx),
         wants_title=wants_title,
@@ -800,6 +786,7 @@ async def send(
         said = [m.content for m in history if m.role is MessageRole.USER][-2:] + [content]
         exercise = await _offer_exercise(
             conn, retiring_framework_id, config, model, routing, user_id, ctx.thread.id,
+            reasoning_effort=parameters.get("reasoning_effort"),
             said=said, current_issue=ctx.summary.current_issue if ctx.summary else None,
         )
 
@@ -820,8 +807,9 @@ async def send(
         llm_call_id=call.call_id,
         exercise=exercise,
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
+        checks=checks,
         ledger=(
-            redraft.ledger_view(
+            reply_checks.ledger_view(
                 reply, config.registry.get(reply.state.technique) if reply.state else running_framework,
             )
             if settings.ai_debug_mode and reply.stages_known
@@ -839,6 +827,7 @@ async def _offer_exercise(
     user_id: str,
     thread_id: uuid.UUID,
     *,
+    reasoning_effort: str | None,
     said: list[str],
     current_issue: str | None,
 ) -> Exercise | None:
@@ -869,6 +858,7 @@ async def _offer_exercise(
         framework.name if framework else framework_id,
         model=model,
         purpose=llm_calls.Purpose.EXERCISE_SELECT,
+        reasoning_effort=reasoning_effort,
         said=said,
         current_issue=current_issue,
         routing=routing,

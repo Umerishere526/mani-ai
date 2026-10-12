@@ -116,8 +116,8 @@ def clarification_used(history: list[Message] | None) -> bool:
 
 def offer_window(ctx: TurnContext, *, urgent: bool = False) -> str:
     """Whether an offer may be made in this reply: `not_yet`, `open`, or `due` when the first
-    offer is owed. [ctx] reports it, redraft and repairs.apply enforce it. After an earlier offer
-    it reopens once the cooldown has passed and is never due."""
+    offer is owed. [ctx] reports it, the reply schema and repairs.apply enforce it. After an
+    earlier offer it reopens once the cooldown has passed and is never due."""
     technique = ctx.technique
     if technique is not None:
         since = ctx.thread.message_count - technique.at_message_count
@@ -126,15 +126,6 @@ def offer_window(ctx: TurnContext, *, urgent: bool = False) -> str:
     if theirs >= FIRST_OFFER_DUE:
         return "due"
     return "open" if urgent or theirs >= FIRST_OFFER_OPENS else "not_yet"
-
-
-def with_rewrite_notes(prefix: str, reasons: list[str]) -> str:
-    """The same [ctx] block with a line per reason the draft cannot stand, so the model writes it
-    again. Said in the block the model already reads."""
-    lines = "\n".join(
-        [f"rewrite: {reason}" for reason in reasons] + _meaning("rewrite", reasons)
-    )
-    return prefix.replace("\n[/ctx]", f"\n{lines}\n[/ctx]", 1)
 
 
 def resolve_style(ctx: TurnContext) -> str:
@@ -289,10 +280,6 @@ _MEANING: dict[str, str | dict[str, str]] = {
     "after_framework_question": (
         "they kept chatting after the questions ended and are still on the same issue. Reflect "
         "what they said, then ask this question word for word."
-    ),
-    "rewrite": (
-        "your last draft could not stand, for the reason given. Write the reply again so it no "
-        "longer does that."
     ),
 }
 

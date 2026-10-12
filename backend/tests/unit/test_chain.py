@@ -57,12 +57,15 @@ def test_usage_is_read_from_langchains_own_metadata():
             "input_tokens": 8189,
             "output_tokens": 205,
             "input_token_details": {"cache_read": 3568},
+            "output_token_details": {"reasoning": 150},
         }
     )
     usage = chain.usage_from(raw)
     assert usage.input_tokens == 8189
     assert usage.output_tokens == 205
     assert usage.cached_input_tokens == 3568
+    # Thinking is part of the output, billed with it and never on top.
+    assert usage.reasoning_tokens == 150
 
 
 def test_usage_falls_back_to_the_providers_own_shape():
@@ -74,17 +77,20 @@ def test_usage_falls_back_to_the_providers_own_shape():
                 "prompt_tokens": 100,
                 "completion_tokens": 20,
                 "prompt_tokens_details": {"cached_tokens": 40},
+                "completion_tokens_details": {"reasoning_tokens": 12},
             }
         },
     )
     usage = chain.usage_from(raw)
     assert (usage.input_tokens, usage.output_tokens, usage.cached_input_tokens) == (100, 20, 40)
+    assert usage.reasoning_tokens == 12
 
 
 def test_a_missing_response_costs_nothing_rather_than_raising():
     """A failed call still writes its admin.llm_calls row; it must not fail on the way."""
     empty = chain.usage_from(None)
     assert (empty.input_tokens, empty.output_tokens, empty.cached_input_tokens) == (0, 0, 0)
+    assert empty.reasoning_tokens == 0
 
 
 def test_reply_asks_for_its_reasoning_and_style_before_its_text():

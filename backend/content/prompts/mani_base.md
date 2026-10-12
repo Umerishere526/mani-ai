@@ -6,7 +6,7 @@ description: Who Mani is, the three conversational styles, and how a conversatio
 provider: openrouter
 model_id: openai/gpt-6-luna
 model_parameters:
-  reasoning_effort: high
+  reasoning_effort: low
 ---
 
 identity:

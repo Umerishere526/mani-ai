@@ -25,12 +25,12 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 10 | Crisis decided by the model | Slice 4 | planned |
 | 11 | Thinking level and prompt tuning from measurements | Slice 5 | planned |
 | 12 | No offer before a real conversation (R1) | Now | in-progress |
-| 13 | Faster turns (R2) | Now | planned |
+| 13 | Faster turns (R2) | Now | in-progress |
 
 ## Already built
 
 ### A. Chat turn pipeline · existing
-One turn: safety screen, router shortlist, system prompt (base, framework index, response format), `[ctx]` block, model call, redraft, repairs. code in backend/mani/chat/, backend/mani/prompts/, backend/mani/llm/
+One turn: safety screen, router shortlist, system prompt (base, framework index, response format), `[ctx]` block, model call, repairs. code in backend/mani/chat/, backend/mani/prompts/, backend/mani/llm/
 
 ### B. Six frameworks and the body check in · existing
 ABCDE, Thought Reframe, Structured Problem Solving, ACT Choice Point, Behavioral Activation and DBT STOP, each 300 to 390 lines, plus the body check in merged into every framework at seed time. code in backend/content/, backend/scripts/seed.py
@@ -39,26 +39,26 @@ ABCDE, Thought Reframe, Structured Problem Solving, ACT Choice Point, Behavioral
 
 ### 12. No offer before a real conversation (R1) · in-progress
 Mani listens before it offers a framework. Code owns one offer window, the same in every style: it opens at the person's third message and the best fit is due at their fifth. The prompts follow the window and never decide timing themselves.
-**Done when:** no offer comes before their third message in any style, the best fit is offered by their fifth, a model offer before the window is redrafted and then stripped, and live runs in all three styles show it.
+**Done when:** no offer comes before their third message in any style, the best fit is offered by their fifth, a model offer before the window is stripped, and live runs in all three styles show it.
 - [x] Build it: `/develop no offer before a real conversation`
   - [x] `offer_window` in context.py replaces cooldown_passed, closest_fit and offer_fit, with its tests
   - [x] Prompt cuts in mani_base.md and response_format.md, reseeded
   - [x] scenario_check flags an early offer; resentful_coworker scenario added
-- [ ] Verify it: `/check verify no offer before a real conversation`
+- [x] Verify it: `/check verify no offer before a real conversation`
 - [ ] Test it: `/test no offer before a real conversation`
 Decision in [PORT-STATUS.md](../../backend/PORT-STATUS.md#decisions-in-force) (first offer window), requirement [R1](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12).
 
-### 13. Faster turns (R2)
+### 13. Faster turns (R2) · in-progress
 One chat call per turn at a low thinking level, with no redraft. Code shapes the reply instead of asking again: no offer field before the offer window opens, and the stage label is set from the model's own ledger.
 **Done when:** every turn makes one chat call, the chat call and exercise pick run at `low`, redraft is gone and its lost checks only log, scenario_check prints each turn's time, calls and tokens, and a measured run (after muhammad's yes) shows a median of 4 s or less and a slowest of 10 s or less in all three styles.
-- [ ] Build it: `/develop faster turns`
-  - [ ] Honest cost rows and per turn timing in scenario_check (feature 1's first milestone, slim)
-  - [ ] Effort `low` for the chat call and the exercise pick
-  - [ ] Reply schema per offer window, step from the ledger, redraft loop removed, lost checks logged
-  - [ ] PORT-STATUS decisions, journal, requirements row, and feature 12's Done when reads "stripped"
+- [x] Build it: `/develop faster turns`
+  - [x] Honest cost rows and per turn timing in scenario_check (feature 1's first milestone, slim)
+  - [x] Effort `low` for the chat call and the exercise pick
+  - [x] Reply schema per offer window, step from the ledger, redraft loop removed, lost checks logged
+  - [x] PORT-STATUS decisions, journal, requirements row, and feature 12's Done when reads "stripped"
 - [ ] Verify it: `/check verify faster turns`
 - [ ] Test it: `/test faster turns`
-Requirement [R2](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12); plan in `~/.claude/plans/please-read-r2-from-kind-gem.md`.
+Decision in [PORT-STATUS.md](../../backend/PORT-STATUS.md#decisions-in-force) (one chat call at effort `low`), requirement [R2](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12). code in backend/mani/chat/reply_checks.py, backend/mani/chat/orchestrator.py, backend/mani/llm/. A live run for the 4 s and 10 s target is owed (muhammad's yes).
 
 ## Foundations
 
@@ -67,7 +67,7 @@ A repeatable way to see what one turn costs before and after each change: input,
 **Done when:** one command runs the chosen scenarios and prints those numbers per turn, reasoning tokens are recorded, the numbers survive the eval's own cleanup, and today's numbers are written down as the baseline.
 - [x] Design it (spec): `/architect turn cost and latency baseline`
 - [ ] Build it: `/develop turn cost and latency baseline`
-  - [ ] Honest cost rows: reasoning tokens column (migration 018), both usage readers, latency per attempt (AC-3, AC-13)
+  - [x] Honest cost rows: reasoning tokens column (migration 018), both usage readers, latency per attempt (AC-3, AC-13)
   - [ ] One measured run writes a baseline file, with the local, column and abort guards and cleanup that always runs (AC-1, AC-2, AC-4, AC-5, AC-8, AC-9, AC-10, AC-12)
   - [ ] Repeated runs with scenario totals and medians, and the offline compare (AC-1, AC-5, AC-6, AC-7, AC-14)
   - [ ] Docs, the PORT-STATUS decision line, and the first `before-lean-prompts` baseline after muhammad's yes (AC-11)

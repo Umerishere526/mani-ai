@@ -7,9 +7,9 @@ the same change as the work.**
 ## Status, 2026-10-01
 
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
-- Tests: `pytest` runs 798 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
+- Tests: `pytest` runs 439 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
   JWKS-configured project).
-- Database: 10 migrations, 15 tables (8 `public`, 7 `admin`), 6 frameworks and 5 prompts seeded.
+- Database: 11 migrations (001 to 010 and 018), 15 tables (8 `public`, 7 `admin`), 6 frameworks and 5 prompts seeded.
   `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
   private `exercises` bucket (`scripts/seed_exercises.py`). A hosted project does not exist yet.
 - Models: `openai/gpt-6-luna` for chat and for summaries (`mani/config.py`), routed Azure first with
@@ -17,9 +17,9 @@ the same change as the work.**
   `reasoning_effort` instead, so `mani/llm/chain.py` sends the sampling parameters an ordinary
   chat model takes only to models that accept them. A prompt row names its own effort in
   `model_parameters.reasoning_effort` and `mani/config.py` holds the default for the calls that have
-  no row of their own; `mani_base`, `summarization` and `memory_fold` are all on `high`. Effort is
-  billed: measured against Azure, `high` spent 26 reasoning tokens where `low` spent 0, about three
-  times the cost of the same call. The fallback keeps `data_collection: deny`, so
+  no row of their own; `mani_base` is on `low` (2026-10-12) and so is the exercise pick that follows
+  it, while `summarization` and `memory_fold` are on `high`. Effort is billed: measured against Azure,
+  `high` spent 26 reasoning tokens where `low` spent 0, about three times the cost of the same call. The fallback keeps `data_collection: deny`, so
   training use stays refused, but a turn that cannot reach Azure is processed by a different company -
   a data protection question that is open, not settled.
 - Every call to OpenRouter carries the same provider order, data policy and reasoning effort, from
@@ -29,7 +29,9 @@ the same change as the work.**
 - A reasoning model's output budget covers its thinking and its reply together. Every caller sizes
   `max_tokens` for the reply alone, so `chain.sampling` adds `REASONING_ALLOWANCE_TOKENS` (8,192) on top.
   Without it, at effort high, 4 of 61 chat calls ran out of tokens while thinking and the turn failed
-  (2026-10-07). Measured at high: 12.6 s for an average turn, 41 s for the longest.
+  (2026-10-07). Measured at high: 12.6 s for an average turn, 41 s for the longest. Not measured at
+  low: the target is a median of 4 s and a slowest of 10 s, and `scripts/scenario_check.py` now prints each
+  turn's time, calls and tokens (`admin.llm_calls.reasoning_tokens`, migration 018) to check it.
 - `mani_base.md` and `response_format.md` are YAML rules rather than prose (ADR-012): about 10,600 tokens
   became 4,850. The Framework Index and the per-framework rules are not restructured yet.
 - Web and mobile do not call this API yet; they run on placeholder data.
@@ -50,9 +52,9 @@ the same change as the work.**
      a wish only to be listened to is the model's reading (`response_format.md`, reasoning).
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,
      `heading_toward`, then `text`. The order is deliberate.
-  5. `redraft.py` may ask once more (twice for a missing question): an
-     offer before it is allowed or one their words rule out, an offer that is due and missing, no
-     question (unless the draft chose a shape that asks nothing), or the last reply's question asked again.
+  5. `reply_checks.py` costs no call: it sets `state.step` from the reply's own ledger when they disagree,
+     and counts what code cannot fix (an offer that is due and missing, no question unless the draft chose a
+     shape that asks nothing, the last reply's question asked again) in the logs and in `Turn.checks`.
   6. `repairs.py` corrects what remains, in code: script leakage, buttons, an early offer.
   7. Crisis, the reply, the framework state and the summary are written together.
 - **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): only ABCDE is seeded and offered
@@ -104,15 +106,20 @@ the same change as the work.**
 
 ## Decisions in force
 
-- **A turn is one model call, or more when a draft is redrafted**. Because the port cut about 21 calls per
-  turn to one, and rules about what a reply may say only held once the model could redraft (2026-10-01).
-  The one scoped extra call is the exercise pick at the end of a framework. `test_a_turn_costs_exactly_one_provider_call` still
-  holds for a draft that needs no redraft.
+- **A turn is one chat call at effort `low`, never a second to fix a draft** (muhammad, 2026-10-12). Because the
+  client's R2 asks for no excessive latency, a turn waited on a reasoning model at `high` and up to two more
+  full calls whenever a draft broke a rule (a median of 12.6 s and 41 s at worst, 2026-10-07), and the reply
+  already carries its own written reasoning. Code shapes the reply instead of asking again: while no offer
+  may be made a button has no `technique` (`schema.ReplyWithoutOffer`), `state.step` is set from the draft's
+  ledger, and `repairs.apply` strips what remains. The checks that need another call to fix are logged, not
+  asked for again, so how often each happens is known. The one scoped extra call is the exercise pick at the end
+  of a framework, at the chat row's effort. `test_a_turn_costs_exactly_one_provider_call` and the
+  `reply_checks` tests in `tests/integration/test_turn.py` hold it. Not yet measured live (needs muhammad's yes).
 - **The first offer waits for the person's third message and is due by their fifth, in every style**
   (muhammad, 2026-10-12). Because the client rejected an offer on the first message (R1 in
   `docs/client/requirements.md`) and their cadence puts about two to four exchanges between the issue and the
   offer, the same in every style (2026-10-12). Code owns the window (`context.offer_window`: not_yet, open,
-  due) and `[ctx]` reports it; an offer drafted before it opens is redrafted once, then stripped. After Keep
+  due) and `[ctx]` reports it; an offer made before it opens is stripped (the reply shape has no way to make one). After Keep
   chatting it reopens six messages later and is never due. `test_offer_window_*` in
   `tests/unit/test_chat_context.py` hold it. Every
   reply before an offer asks one question, and what they say back about how it is for them is how the set
@@ -144,8 +151,8 @@ the same change as the work.**
   later stage up to the closing as `later_stage` (`ready_when` and the style's `ask`). Before the text the model fills
   `stages_known`: from the stage in force, each stage with what they already said for it, in their short words,
   and whether it is met, stopping at the first that is not; the question asks only for what that stage's known
-  does not hold. A draft whose `state.step` disagrees with its own ledger is redrafted once
-  (`redraft.ledger_stage`); a draft with no ledger is not judged by one. `Framework.may_skip`
+  does not hold. A draft whose `state.step` disagrees with its own ledger has the step set from it
+  (`reply_checks.with_ledger_step`); a draft with no ledger is not judged by one. `Framework.may_skip`
   decides what is never skipped, the closing and the body route, and `Registry.clamp` corrects a jump over
   them to the closing. This holds from the turn they say yes. No stage question carries a button: a
   "Not sure" button was added by mistake and removed (muhammad, 2026-10-09). The chosen style rides on every
@@ -224,7 +231,8 @@ the same change as the work.**
   PostgREST cannot do (2026-09-15); anything PostgREST exposes is reachable with the anon key (2026-09-15);
   a backend acting as `authenticated` let users forge Mani's replies (2026-09-16); the definer functions write
   rows no plain grant should allow (2026-09-15); a small model over-fires the crisis flag on ordinary
-  distress (2026-09-29); plain request and response is acceptable while turns stay short (2026-09-14).
+  distress (2026-09-29); plain request and response is acceptable while turns stay short (2026-09-14; turns are no longer short,
+  so muhammad to revisit streaming after the next measured run).
   In process routing no longer describes the code (`router.py` is gone and the model chooses the framework):
   muhammad to reword or drop it.
 
@@ -314,7 +322,7 @@ Ordered by what breaks first.
   designed, not built.
 - **`appropriate_when` and `not_when`** in the framework files are read by nothing (each file says so).
 - The words "worried", "concerned" and "a lot" still reach about 1 reply in 10 in some scenarios; repairs log
-  them. The feeling check now redrafts the ones in `repairs.FEELING_WORDS`.
+  them.
 
 ## Latest measurements
 
@@ -322,8 +330,9 @@ Taken 2026-10-01 with the earlier eval harness, since removed. `scripts/scenario
 run is the next baseline. Re-measure after any change to prompts, framework content or the offer rules.
 
 - Reached an offer: 36 of 36 conversations (grief had been 1 of 9). First offers at message 2 to 4.
-- Redrafts: 7% of replies across scenarios, 17 to 19% on the hardest chat (a colleague, an embarrassing
-  meeting). About 10% is the line to watch on real traffic.
+- Redrafts (the loop is gone since 2026-10-12): 7% of replies across scenarios, 17 to 19% on the hardest
+  chat (a colleague, an embarrassing meeting). Those are the turns that now go out as first written, and
+  `Turn.checks` counts the three kinds that matter; read it in the next `scenario_check` run.
 - Lost wallet chat (panic), three runs: the confirmation question after Try it went from 9 of 9 to 0 of 6;
   the bank step comes in the first or second reply. Three options at the first "I don't know" is
   still the minority.
