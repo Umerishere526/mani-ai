@@ -15,16 +15,12 @@ from mani.models.rows import ENDING_STAGES, Framework, Message, MessageRole, Tec
 # framework or a different one, whichever fits now (muhammad, 2026-09-24).
 COOLDOWN_AFTER_DECLINE = 6
 
-# No fixed count: a framework is offered as soon as it fits, from the person's first message
-# (muhammad, 2026-10-10). When it has not offered by then the closest fit is due, with Keep
-# chatting beside it: by the fourth message in Direct, which gets to the heart of it sooner, by
-# the sixth in Supportive and Reflective, which may take more turns to hear the person out.
-# Counted in the person's own messages.
-CLOSEST_FIT_AFTER = 4
-CLOSEST_FIT_AFTER_GENTLE = 6
-# After "Keep chatting" a confident offer may come back after two more exchanges; the closest
-# fit waits the full COOLDOWN_AFTER_DECLINE.
-CLEAR_COOLDOWN_AFTER_DECLINE = 4
+# The first offer waits for the person's third message and is due by their fifth, the same in
+# every style: the client's cadence puts about two to four exchanges between the issue and the
+# offer, and no framework comes after the first message (Lolly, 2026-10-12, R1). Counted in the
+# person's own messages.
+FIRST_OFFER_OPENS = 3
+FIRST_OFFER_DUE = 5
 # The greeting, the style they tapped, and that style's opener.
 OPENING_MESSAGES = 3
 COOLDOWN_AFTER_COMPLETE = 45
@@ -102,14 +98,6 @@ def cooldown_for(outcome: TechniqueOutcome) -> int:
     )
 
 
-def clear_cooldown_for(outcome: TechniqueOutcome) -> int:
-    return (
-        COOLDOWN_AFTER_COMPLETE
-        if outcome is TechniqueOutcome.ACCEPTED
-        else CLEAR_COOLDOWN_AFTER_DECLINE
-    )
-
-
 def _their_messages(ctx: TurnContext) -> int:
     """How many messages the person has sent. The reply to their Nth is written at 3 + 2(N - 1)."""
     return (ctx.thread.message_count - OPENING_MESSAGES) // 2 + 1
@@ -126,35 +114,18 @@ def clarification_used(history: list[Message] | None) -> bool:
     )
 
 
-def cooldown_passed(ctx: TurnContext) -> bool:
-    """Whether a confident offer may be made yet: [ctx] reports it, repairs.apply enforces it.
-    The first offer never waits; only one after an earlier offer does."""
+def offer_window(ctx: TurnContext, *, urgent: bool = False) -> str:
+    """Whether an offer may be made in this reply: `not_yet`, `open`, or `due` when the first
+    offer is owed. [ctx] reports it, redraft and repairs.apply enforce it. After an earlier offer
+    it reopens once the cooldown has passed and is never due."""
     technique = ctx.technique
-    if technique is None:
-        return True
-    return ctx.thread.message_count - technique.at_message_count >= clear_cooldown_for(
-        technique.outcome
-    )
-
-
-def closest_fit_ok(ctx: TurnContext, *, urgent: bool = False) -> bool:
-    """Whether the closest fit may be offered when nothing fits well."""
-    technique = ctx.technique
-    if technique is None:
-        return urgent or _their_messages(ctx) >= _closest_fit_after(ctx)
-    return ctx.thread.message_count - technique.at_message_count >= cooldown_for(
-        technique.outcome
-    )
-
-
-def closest_fit_due(ctx: TurnContext) -> bool:
-    """The first offer has not come in the turns this style allows: the closest fit is owed now."""
-    return ctx.technique is None and _their_messages(ctx) >= _closest_fit_after(ctx)
-
-
-def _closest_fit_after(ctx: TurnContext) -> int:
-    """The person's message by which the closest fit is owed, in the style in force."""
-    return CLOSEST_FIT_AFTER if resolve_style(ctx) == "direct" else CLOSEST_FIT_AFTER_GENTLE
+    if technique is not None:
+        since = ctx.thread.message_count - technique.at_message_count
+        return "open" if since >= cooldown_for(technique.outcome) else "not_yet"
+    theirs = _their_messages(ctx)
+    if theirs >= FIRST_OFFER_DUE:
+        return "due"
+    return "open" if urgent or theirs >= FIRST_OFFER_OPENS else "not_yet"
 
 
 def with_rewrite_notes(prefix: str, reasons: list[str]) -> str:
@@ -190,18 +161,17 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "Direct, for the whole conversation. Clear, concise and focused, never cold, abrupt, "
             "transactional or interrogative. Most replies are just the question; never open by "
             "restating what they said. A few plain words of your own come first only after "
-            "something painful or new. Get to the heart of it quickly, so the right set of "
-            "questions can come as soon as it fits."
+            "something painful or new. Get to the heart of it quickly."
         ),
         "supportive": (
             "Supportive, for the whole conversation. Warm, understanding and encouraging. A brief "
             "word in your own words that shows you are with them, never their sentence handed "
-            "back, then a gentle question. Take the turns this needs."
+            "back, then a gentle question."
         ),
         "reflective": (
             "Reflective, for the whole conversation. Help them look at what sits behind what they "
             "said, so the understanding is their own. Reflect the meaning when it opens "
-            "something, never their words. Take the turns this needs."
+            "something, never their words."
         ),
     },
     "conversation_phase": {
@@ -218,8 +188,7 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "them what they feel. One short question, about ten words, "
             "one thing at a time, in plain everyday words, no harder than the last. No two-part "
             "questions, no menu of choices, no advice and no suggestion hidden in a question. "
-            "What they say about how it is for them shows which set fits. As soon as one fits, "
-            "offer it."
+            "What they say about how it is for them shows which set fits."
         ),
         "framework": "the questions are running, so follow the stage.",
         "talking": (
@@ -260,18 +229,15 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "and offer nothing in this reply."
         ),
     },
-    "cooldown_passed": {
-        "yes": "an offer may be made in this reply, if one fits.",
-        "no": "offer nothing in this reply.",
-    },
-    "since_last": "how many messages have passed since the last offer.",
-    "closest_fit": {
+    "offer_window": {
+        "not_yet": "offer nothing in this reply.",
+        "open": "an offer may be made in this reply, if one fits.",
         "due": (
             "you have talked for several replies without offering, so offer the set that fits best "
             f"now. {_FIT_PLAINLY}"
         ),
-        "ok": f"you may offer the set that fits best. {_FIT_PLAINLY}",
     },
+    "since_last": "how many messages have passed since the last offer.",
     "this_thread": (
         "what was last offered in this conversation and how it went. One they declined may come "
         "back once the cooldown has passed, if it still fits. One they just finished may not. "
@@ -412,14 +378,9 @@ def build(
     if question:
         lines += _line("after_framework_question", question)
 
-    # Told to the model as it is enforced: a first offer used to read "yes" here whatever the
-    # count, and the code then dropped what the model had been told it could do.
-    lines += _line("cooldown_passed", "yes" if cooldown_passed(ctx) else "no")
-    if not safety_concern and not running:
-        if closest_fit_due(ctx):
-            lines += _line("closest_fit", "due")
-        elif closest_fit_ok(ctx, urgent=urgent):
-            lines += _line("closest_fit", "ok")
+    # Told to the model as it is enforced, so it is never told it may offer what code then drops.
+    window = "not_yet" if safety_concern else offer_window(ctx, urgent=urgent)
+    lines += _line("offer_window", window)
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
         lines += _line("since_last", since_last)
@@ -454,7 +415,7 @@ def build(
         quoted = ", ".join(f'"{o}"' for o in openers)
         lines += _line("recent_openers", quoted)
 
-    if candidate is not None and not safety_concern and cooldown_passed(ctx):
+    if candidate is not None and not safety_concern and window != "not_yet":
         # The client's description is not here: the backend adds it to the offer, and a
         # model given the text copied it, so offers showed it twice.
         offer = _stage_lines("offer", candidate, "offering", resolve_style(ctx))

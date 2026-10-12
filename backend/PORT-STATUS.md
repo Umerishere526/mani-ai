@@ -49,7 +49,7 @@ the same change as the work.**
      after it. Nothing in code classifies what the person said: whether a reply is vague, a correction or
      a wish only to be listened to is the model's reading (`response_format.md`, reasoning).
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,
-     `heading_toward`, `offer_fit`, then `text`. The order is deliberate.
+     `heading_toward`, then `text`. The order is deliberate.
   5. `redraft.py` may ask once more (twice for a missing question): an
      offer before it is allowed or one their words rule out, an offer that is due and missing, no
      question (unless the draft chose a shape that asks nothing), or the last reply's question asked again.
@@ -59,8 +59,8 @@ the same change as the work.**
   (the client's ABCDE document of 2026-10-09). The other five are kept in `content/frameworks/paused/`; the seed
   sets their rows inactive (never deleted, since threads and exercises refer to them), and moving a file back up
   brings it back. ABCDE ends on E and then the shared body check-in below (muhammad, 2026-10-09: the check-in
-  is asked). A framework is offered as soon as it fits, from the person's first message; the
-  nearest fit is due by the fourth (sixth in Supportive and Reflective), offered like any other. The shared body check-in and practice come from `content/prompts/somatic.md`.
+  is asked). The first offer may come from the person's third message and the nearest fit is due by
+  their fifth, in every style, offered like any other. The shared body check-in and practice come from `content/prompts/somatic.md`.
   The body route is held in code (`orchestrator._body_route_step`): the check-in is asked once; whatever
   the person answers, the next reply asks where, with Chest / Head / Stomach / Somewhere else; "idk" asks
   again; a place gets the client's practice for that place and style, word for word, ending "How do you feel
@@ -108,10 +108,13 @@ the same change as the work.**
   turn to one, and rules about what a reply may say only held once the model could redraft (2026-10-01).
   The one scoped extra call is the exercise pick at the end of a framework. `test_a_turn_costs_exactly_one_provider_call` still
   holds for a draft that needs no redraft.
-- **A framework is offered as soon as it fits, with no count to wait out**: from the person's first message
-  (muhammad, 2026-10-10; there is no `earliest_offer_message`). Because the client says two to four exchanges is
-  a range, not a count, and the person's first message often already holds the fit (2026-10-10).
-  The closest fit is due by their fourth message in Direct, their sixth in Supportive and Reflective. Every
+- **The first offer waits for the person's third message and is due by their fifth, in every style**
+  (muhammad, 2026-10-12). Because the client rejected an offer on the first message (R1 in
+  `docs/client/requirements.md`) and their cadence puts about two to four exchanges between the issue and the
+  offer, the same in every style (2026-10-12). Code owns the window (`context.offer_window`: not_yet, open,
+  due) and `[ctx]` reports it; an offer drafted before it opens is redrafted once, then stripped. After Keep
+  chatting it reopens six messages later and is never due. `test_offer_window_*` in
+  `tests/unit/test_chat_context.py` hold it. Every
   reply before an offer asks one question, and what they say back about how it is for them is how the set
   is found. The set is chosen by what hurts, by its Use it when and
   Telling them apart; Structured Problem-Solving only once they say they want a decision or plan. No phrase
@@ -265,7 +268,8 @@ Ordered by what breaks first.
   specification's "Yes, let's try it" / "I want to keep talking". Have them review the new lines.
 
 - Crisis resources, `PROTOCOLS` and `CLARIFICATION` wording (point 3 above).
-- Tell the client that offers now follow Mani's confidence, with the nearest fit due by the fourth message, which replaced their offer cadence, and have them read about five real
+- Tell the client what caused the first message offer (R1) and that the first offer now waits for the
+  third message and is due by the fifth in every style, and have them read about five real
   Supportive and Reflective transcripts.
 - Tell the client: when a person asks Mani to pick, it offers one small draft step to accept
   or change, which the Behavioral Activation specification's "must not choose the activity" does not allow

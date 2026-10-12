@@ -45,7 +45,7 @@ def fix(registry, model_reply, **overrides):
         "selected_label": None,
         "accepted_this_turn": False,
         "framework_running": False,
-        "cooldown_passed": True,
+        "offer_allowed": True,
         "conversation_style": "supportive",
         "wants_title": False,
     }
@@ -237,10 +237,10 @@ def test_a_technique_offered_before_the_cooldown_has_passed_is_dropped(registry)
     early = reply(
         prompts=[SmartPrompt(label="Try it", technique="abcde"), SmartPrompt(label="Not now")]
     )
-    fixed = fix(registry, early, cooldown_passed=False)
+    fixed = fix(registry, early, offer_allowed=False)
     # The button left behind answers an offer that is gone, and ordinary chat carries none.
     assert fixed.prompts == []
-    assert any("cooldown" in n for n in fixed.notes)
+    assert any("offer window" in n for n in fixed.notes)
 
 
 def test_the_offer_still_waiting_for_an_answer_is_not_held_to_its_own_cooldown(registry):
@@ -248,7 +248,7 @@ def test_the_offer_still_waiting_for_an_answer_is_not_held_to_its_own_cooldown(r
     offer the person has not answered yet would vanish on the very next turn."""
     pending = reply(prompts=[SmartPrompt(label="Yes, let's try", technique="abcde")])
     fixed = fix(
-        registry, pending, cooldown_passed=False,
+        registry, pending, offer_allowed=False,
         current_framework_id="abcde", current_phase="offering", already_offered=["abcde"],
     )
     assert [p.technique for p in fixed.prompts if p.technique] == ["abcde"]
@@ -294,7 +294,7 @@ def test_an_offer_refused_by_the_cooldown_takes_its_words_with_it(registry):
             SmartPrompt(label="Keep chatting", decline=True),
         ],
     )
-    fixed = fix(registry, early, cooldown_passed=False)
+    fixed = fix(registry, early, offer_allowed=False)
     assert fixed.prompts == []
     assert fixed.text == "You open the report and then move away from it."
 
@@ -313,7 +313,7 @@ def test_an_offer_in_any_wording_goes_with_its_button(registry, offer):
         prompts=[SmartPrompt(label="Try it", technique="abcde"),
                  SmartPrompt(label="Keep chatting", decline=True)],
     )
-    fixed = fix(registry, early, cooldown_passed=False)
+    fixed = fix(registry, early, offer_allowed=False)
     assert fixed.text == "You open the report and then move away from it."
 
 

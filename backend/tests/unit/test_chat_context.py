@@ -49,9 +49,9 @@ def user(content: str) -> Message:
     )
 
 
-def test_a_thread_with_no_technique_says_the_cooldown_has_passed():
+def test_a_thread_with_nothing_offered_by_their_fourth_message_has_the_window_open():
     block = context.build(TurnContext(thread=thread(), profile=None, technique=None))
-    assert "cooldown_passed: yes" in block
+    assert "offer_window: open" in block
     assert "since_last" not in block
 
 
@@ -61,7 +61,7 @@ def test_a_recent_decline_holds_the_cooldown_closed():
         at_message_count=8,
     )
     block = context.build(TurnContext(thread=thread(10), profile=None, technique=state))
-    assert "cooldown_passed: no" in block
+    assert "offer_window: not_yet" in block
     assert "since_last: 2" in block
     assert "this_thread: abcde (declined)" in block
 
@@ -84,7 +84,7 @@ def test_a_retired_technique_still_holds_the_cooldown_closed():
         phase=None, at_message_count=8,
     )
     block = context.build(TurnContext(thread=thread(10), profile=None, technique=state))
-    assert "cooldown_passed: no" in block
+    assert "offer_window: not_yet" in block
     assert "since_last: 2" in block
     assert "this_thread: abcde (accepted)" in block
     # Retired, so there is no phase to be in.
@@ -102,10 +102,10 @@ def test_a_finished_framework_waits_longer_than_a_declined_one():
     )
     declined = finished.model_copy(update={"outcome": TechniqueOutcome.DECLINED})
 
-    assert "cooldown_passed: no" in context.build(
+    assert "offer_window: not_yet" in context.build(
         TurnContext(thread=long_enough_for_a_decline, profile=None, technique=finished)
     )
-    assert "cooldown_passed: yes" in context.build(
+    assert "offer_window: open" in context.build(
         TurnContext(thread=long_enough_for_a_decline, profile=None, technique=declined)
     )
 
@@ -295,18 +295,18 @@ def test_the_turn_a_framework_starts_shows_the_first_stage_and_the_second():
     assert any(line.startswith("stage_note: They have just said yes") for line in starting)
 
 
-def test_the_closest_fit_falling_due_hands_the_model_no_offer_content():
+def test_an_offer_falling_due_hands_the_model_no_offer_content():
     """Live, 2026-10-08: a weak guess made the candidate at the closest fit, and a friend who had
     not replied got the practical questions. With no candidate Mani chooses by what they
     described, from the Framework Index."""
     block = context.build(
         TurnContext(
-            thread=thread(message_count=10),
+            thread=thread(message_count=11),
             profile=Profile(user_id=USER, support_style="direct"),
             technique=None,
         ),
     )
-    assert "closest_fit: due" in block
+    assert "offer_window: due" in block
     assert "offer_ask" not in block
 
 
@@ -526,42 +526,31 @@ def _on_message(person_message: int, technique=None, style: str | None = None):
 
 
 @pytest.mark.parametrize("style", ["direct", "supportive", "reflective"])
-def test_a_confident_offer_may_come_from_the_first_message_in_any_style(style):
-    """muhammad, 2026-10-10: a framework is offered as soon as it fits, with no count to wait out."""
-    assert context.cooldown_passed(_on_message(1, style=style))
+def test_the_first_offer_waits_for_their_third_message_and_is_due_by_their_fifth(style):
+    """Lolly, 2026-10-12 (R1): no framework after the first message. The client's cadence puts
+    about two to four exchanges between the issue and the offer, the same in every style."""
+    windows = [context.offer_window(_on_message(n, style=style)) for n in range(1, 7)]
+    assert windows == ["not_yet", "not_yet", "open", "open", "due", "due"]
 
 
-def test_direct_owes_the_closest_fit_by_the_fourth_message_and_not_before():
-    assert not context.closest_fit_ok(_on_message(3, style="direct"))
-    assert context.closest_fit_ok(_on_message(4, style="direct"))
-    assert context.closest_fit_due(_on_message(4, style="direct"))
-    assert not context.closest_fit_due(_on_message(3, style="direct"))
+def test_the_context_tells_the_model_the_window_the_code_enforces():
+    lines = context.build(_on_message(1, style="direct")).splitlines()
+    at = lines.index("offer_window: not_yet")
+    assert lines[at + 1].startswith("  means: ")
+    assert "offer_window: due" in context.build(_on_message(5, style="direct"))
 
 
-@pytest.mark.parametrize("style", ["supportive", "reflective"])
-def test_supportive_and_reflective_may_take_longer_before_the_closest_fit(style):
-    """muhammad, 2026-10-09: Supportive and Reflective may take more turns to hear the person out;
-    Direct gets there sooner."""
-    assert not context.closest_fit_due(_on_message(5, style=style))
-    assert context.closest_fit_due(_on_message(6, style=style))
-
-
-def test_the_context_tells_the_model_the_truth_about_the_first_offer():
-    """What [ctx] says about an offer is what the code then allows."""
-    first = context.build(_on_message(1, style="direct"))
-    assert "cooldown_passed: yes" in first and "closest_fit" not in first
-    assert "closest_fit: due" in context.build(_on_message(4, style="direct"))
-
-
-def test_after_keep_chatting_a_confident_offer_returns_sooner_than_the_closest_fit():
+def test_after_keep_chatting_the_window_reopens_and_is_never_due():
     state = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED,
         at_message_count=10,
     )
-    after_two = TurnContext(thread=thread(14), profile=None, technique=state)
-    after_three = TurnContext(thread=thread(16), profile=None, technique=state)
-    assert context.cooldown_passed(after_two) and not context.closest_fit_ok(after_two)
-    assert context.closest_fit_ok(after_three)
+    def window(message_count: int) -> str:
+        return context.offer_window(TurnContext(thread=thread(message_count), profile=None, technique=state))
+
+    assert window(10 + context.COOLDOWN_AFTER_DECLINE - 1) == "not_yet"
+    assert window(10 + context.COOLDOWN_AFTER_DECLINE) == "open"
+    assert window(60) == "open"
 
 
 def test_the_one_time_clarification_is_offered_only_before_it_has_been_used():

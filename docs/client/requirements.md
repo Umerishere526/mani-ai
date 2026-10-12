@@ -19,7 +19,7 @@ message that changed it. Rules for this folder are in [README.md](README.md).
 
 | ID | Requirement (client's terms) | Source | Status | Notes |
 | -- | ---------------------------- | ------ | ------ | ----- |
-| R1 | MANI listens, understands what the person is experiencing, and lets a natural conversation develop before deciding whether a framework is appropriate. No framework offer after the first user message. | [first message](messages/2026-10-12-framework-after-first-message.md), [urgency letter](messages/2026-10-12-urgency-and-wednesday-deadline.md) | open | Reproduced in the screenshot: Direct style, ABCDE offered on turn 1. Client blocked from testing until fixed. Also asked: what causes it and when it will be corrected. |
+| R1 | MANI listens, understands what the person is experiencing, and lets a natural conversation develop before deciding whether a framework is appropriate. No framework offer after the first user message. | [first message](messages/2026-10-12-framework-after-first-message.md), [urgency letter](messages/2026-10-12-urgency-and-wednesday-deadline.md) | in-progress | Reproduced in the screenshot: Direct style, ABCDE offered on turn 1. Client blocked from testing until fixed. Also asked: what causes it and when it will be corrected. Cause: our Decision in force of 2026-10-10 allowed an offer from the first message (see Conflicts). Fix: the first offer opens at the person's third message and is due at their fifth, in every style ([scope feature 12](../scope/scope.md)). Built 2026-10-12; live check (her message plus workplace_boundaries, 3 runs x 3 styles, 18 conversations): every first offer came at the person's third message, none earlier. Owed: `/check verify`, `/test`, and a deployment so she can test it (R10). |
 | R2 | No excessive latency. | [urgency letter](messages/2026-10-12-urgency-and-wednesday-deadline.md) | open | |
 | R3 | No repetitive or unnecessary language. | [urgency letter](messages/2026-10-12-urgency-and-wednesday-deadline.md) | open | |
 | R4 | MANI understands the user's actual issue. | [urgency letter](messages/2026-10-12-urgency-and-wednesday-deadline.md) | open | |
@@ -40,4 +40,7 @@ A newer client message beats an older spec or a Decision in force (see [README.m
 each conflict here with the message, the spec section or decision it overrides, and whether the spec
 or decision has been updated yet.
 
-None recorded yet.
+| Message | Overrides | Updated? |
+| ------- | --------- | -------- |
+| [first message](messages/2026-10-12-framework-after-first-message.md) (R1) | The Decision in force "A framework is offered as soon as it fits, from the person's first message" (muhammad, 2026-10-10), and the timing in [framework-abcde.md §23](../../backend/docs/specs/framework-abcde.md), whose example offers straight after the first message. | Yes, 2026-10-12: the decision now reads "The first offer waits for the person's third message"; §23 carries a note. |
+| [first message](messages/2026-10-12-framework-after-first-message.md) (R1), with [conversational-styles.md](../../backend/docs/specs/conversational-styles.md) "Same cadence" | Our per style offer windows (nearest fit due by the fourth message in Direct, the sixth in Supportive and Reflective). | Yes, 2026-10-12: one window for every style. |

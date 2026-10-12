@@ -184,14 +184,6 @@ class Reply(BaseModel):
             "the user."
         ),
     )
-    offer_fit: Literal["clear", "closest"] | None = Field(
-        default=None,
-        description=(
-            "Only when this reply offers a set of questions: \"clear\" when you are confident "
-            "it fits what they have told you, \"closest\" when nothing fits well and it is the "
-            "nearest. Null when you are not offering. Choose before writing text."
-        ),
-    )
     stages_known: list[StageKnown] | None = Field(
         default=None,
         description=(

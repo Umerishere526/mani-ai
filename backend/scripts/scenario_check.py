@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani.auth.jwt import Claims  # noqa: E402
-from mani.chat import orchestrator  # noqa: E402
+from mani.chat import context, orchestrator  # noqa: E402
 from mani.chat.greeting import KEEP_CHATTING_LABEL, TELL_ME_MORE_LABEL, TRY_IT_LABEL  # noqa: E402
 from mani.db import pool  # noqa: E402
 from mani.prompts import cache  # noqa: E402
@@ -23,7 +23,7 @@ from mani.prompts import cache  # noqa: E402
 SCENARIOS = pathlib.Path(__file__).with_name("scenarios.json")
 STYLES = ("direct", "supportive", "reflective")
 WORD = re.compile(r"[a-z']{4,}")
-INTERNAL = re.compile(r"\b(nearest|closest)\b|\bframework_id\b|\boffer_fit\b", re.IGNORECASE)
+INTERNAL = re.compile(r"\b(nearest|closest)\b|\bframework_id\b|\boffer_window\b", re.IGNORECASE)
 # The share of a reply's first sentence made of the person's own last words. Past ECHO it is their
 # sentence handed back; past OPENS_ON_THEM the reply opens by restating them.
 ECHO = 0.6
@@ -100,10 +100,12 @@ async def _converse(name: str, lines: list[str], style: str, registry) -> list[E
         await _send(claims, thread.id, style.capitalize())
         exchanges: list[Exchange] = []
         said: set[str] = set()
-        for text in lines:
+        for number, text in enumerate(lines, start=1):
             said |= _words(text)
             exchanges.append(await _exchange(claims, thread.id, text, registry, told_more=False, said=said))
             if exchanges[-1].offered:
+                if number < context.FIRST_OFFER_OPENS:
+                    exchanges[-1].flags.append(f"offered at their message {number}, before the window opens")
                 exchanges.append(
                     await _exchange(claims, thread.id, TELL_ME_MORE_LABEL, registry, told_more=True, said=said)
                 )
@@ -146,7 +148,11 @@ def _report(name: str, runs: dict[str, list[Exchange]]) -> int:
             mark = "  !! " + "; ".join(exchange.flags) if exchange.flags else ""
             print(f"    > {exchange.person[:60]}\n      {exchange.reply.splitlines()[0][:110]}{mark}")
     for turn in range(max(len(e) for e in runs.values())):
-        questions = {s: e[turn].question for s, e in runs.items() if turn < len(e) and e[turn].question}
+        # An offer and its Tell me more end on the client's permission question, the same in every style.
+        questions = {
+            s: e[turn].question for s, e in runs.items()
+            if turn < len(e) and e[turn].question and not e[turn].offered and e[turn].person != TELL_ME_MORE_LABEL
+        }
         pairs = [(a, b) for a in questions for b in questions if a < b]
         for a, b in pairs:
             shared = len(questions[a] & questions[b]) / len(questions[a] | questions[b])

@@ -17,13 +17,15 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 2 | Thinking level required on every call | Foundation | planned |
 | 3 | Short base prompt of general rules | Slice 1 | planned |
 | 4 | Framework in 8 lines, ABCDE first | Slice 1 | planned |
-| 5 | One model call, no redraft or repairs | Slice 1 | planned |
+| 5 | Reply repairs out | Slice 1 | planned |
 | 6 | The other five frameworks in 8 lines | Slice 2 | planned |
 | 7 | Body check in in the lean format | Slice 2 | planned |
 | 8 | Model facing text out of Python | Slice 3 | planned |
 | 9 | Reply text and numbers out of Python | Slice 3 | planned |
 | 10 | Crisis decided by the model | Slice 4 | planned |
 | 11 | Thinking level and prompt tuning from measurements | Slice 5 | planned |
+| 12 | No offer before a real conversation (R1) | Now | in-progress |
+| 13 | Faster turns (R2) | Now | planned |
 
 ## Already built
 
@@ -32,6 +34,31 @@ One turn: safety screen, router shortlist, system prompt (base, framework index,
 
 ### B. Six frameworks and the body check in · existing
 ABCDE, Thought Reframe, Structured Problem Solving, ACT Choice Point, Behavioral Activation and DBT STOP, each 300 to 390 lines, plus the body check in merged into every framework at seed time. code in backend/content/, backend/scripts/seed.py
+
+## Now: client blockers
+
+### 12. No offer before a real conversation (R1) · in-progress
+Mani listens before it offers a framework. Code owns one offer window, the same in every style: it opens at the person's third message and the best fit is due at their fifth. The prompts follow the window and never decide timing themselves.
+**Done when:** no offer comes before their third message in any style, the best fit is offered by their fifth, a model offer before the window is redrafted and then stripped, and live runs in all three styles show it.
+- [x] Build it: `/develop no offer before a real conversation`
+  - [x] `offer_window` in context.py replaces cooldown_passed, closest_fit and offer_fit, with its tests
+  - [x] Prompt cuts in mani_base.md and response_format.md, reseeded
+  - [x] scenario_check flags an early offer; resentful_coworker scenario added
+- [ ] Verify it: `/check verify no offer before a real conversation`
+- [ ] Test it: `/test no offer before a real conversation`
+Decision in [PORT-STATUS.md](../../backend/PORT-STATUS.md#decisions-in-force) (first offer window), requirement [R1](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12).
+
+### 13. Faster turns (R2)
+One chat call per turn at a low thinking level, with no redraft. Code shapes the reply instead of asking again: no offer field before the offer window opens, and the stage label is set from the model's own ledger.
+**Done when:** every turn makes one chat call, the chat call and exercise pick run at `low`, redraft is gone and its lost checks only log, scenario_check prints each turn's time, calls and tokens, and a measured run (after muhammad's yes) shows a median of 4 s or less and a slowest of 10 s or less in all three styles.
+- [ ] Build it: `/develop faster turns`
+  - [ ] Honest cost rows and per turn timing in scenario_check (feature 1's first milestone, slim)
+  - [ ] Effort `low` for the chat call and the exercise pick
+  - [ ] Reply schema per offer window, step from the ledger, redraft loop removed, lost checks logged
+  - [ ] PORT-STATUS decisions, journal, requirements row, and feature 12's Done when reads "stripped"
+- [ ] Verify it: `/check verify faster turns`
+- [ ] Test it: `/test faster turns`
+Requirement [R2](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12); plan in `~/.claude/plans/please-read-r2-from-kind-gem.md`.
 
 ## Foundations
 
@@ -46,7 +73,7 @@ A repeatable way to see what one turn costs before and after each change: input,
   - [ ] Docs, the PORT-STATUS decision line, and the first `before-lean-prompts` baseline after muhammad's yes (AC-11)
 - [ ] Verify it: `/check verify turn cost and latency baseline`
 - [ ] Test it: `/test turn cost and latency baseline`
-Spec [0002](../specs/0002-turn-cost-latency-baseline.md)
+Spec [0002](../specs/0002-turn-cost-latency-baseline.md). The first milestone and per turn timing in `scripts/scenario_check.py` are built under feature 13. The spec still targets `eval_replies.py`, which main deleted, so the later milestones wait on `/architect` amending it.
 
 ### 2. Thinking level required on every call · needs a decision
 Every model call names its own thinking level: chat, summary, memory fold, title and the exercise pick. A missing level is an error at seed time, never a silent fallback.
@@ -65,10 +92,10 @@ Define the 8 line framework format (when it starts, the words that trigger it, w
 **Done when:** abcde.md is about 8 lines of model facing content, the seed and the turn send only that, and a real ABCDE conversation runs from offer to end in each style.
 - [ ] Design it (spec): `/architect framework in 8 lines`
 
-### 5. One model call, no redraft or repairs · needs a decision
-Remove the redraft loop and the reply repairs: feeling word checks, repeated question checks, offer timing, closest fit pushes, button trimming and rewritten permission questions. The model's reply goes out as it wrote it, apart from schema validation. Crisis handling stays until feature 10.
-**Done when:** every turn makes exactly one chat call, redraft.py and the repairs are gone or reduced to schema shape, the tests that asserted those checks are removed or rewritten, and the ABCDE replay still completes.
-- [ ] Design it (spec): `/architect one model call no repairs`
+### 5. Reply repairs out · needs a decision
+Remove the reply repairs: feeling word checks, button trimming and rewritten permission questions. The model's reply goes out as it wrote it, apart from schema validation and the offer window from feature 12, which stays. The redraft loop is removed by feature 13. Crisis handling stays until feature 10.
+**Done when:** repairs.py is gone or reduced to schema shape and the offer window, no offer reaches the person before the window opens, the tests that asserted the removed repairs are removed or rewritten, and the ABCDE replay still completes.
+- [ ] Design it (spec): `/architect reply repairs out`
 
 ## Slice 2: Every framework lean
 

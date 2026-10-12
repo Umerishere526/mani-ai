@@ -4,6 +4,8 @@ date: 2026-10-09
 tags: [journal, prompts, questions, direct, lessons]
 ---
 
+> Superseded 2026-10-12 — see [[offer-window-owned-by-code-2026-10-12]] (the offer timing part: "offered as soon as it fits, from the first message")
+
 # Direct questions have no target (2026-10-09)
 
 muhammad's Direct chat (manager criticised them in front of the office, insulted them, threatened

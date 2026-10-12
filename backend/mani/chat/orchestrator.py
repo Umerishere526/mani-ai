@@ -490,8 +490,7 @@ async def send(
         prompt_version_id=None,
     )
     reply = call.value
-    clear_ok = context.cooldown_passed(ctx)
-    closest_ok = context.closest_fit_ok(ctx, urgent=urgent)
+    window = context.offer_window(ctx, urgent=urgent)
     framework_going = ctx.technique is not None and ctx.technique.outcome is TechniqueOutcome.ACCEPTED
     # Every reply before an offer asks one question, so the conversation keeps moving. Not while
     # the questions run (each stage asks its own), not on a safety concern, and not when the draft
@@ -508,14 +507,11 @@ async def send(
     def _why(draft: Reply) -> list[str]:
         return redraft.reasons(
             draft, user_texts, config.registry,
-            # A fit that is not clear waits for the closest fit's own window. A typed reply to an
-            # offer already open is Keep chatting unless it asks about the offer, so offering
-            # again there needs the same window; the repeat used to be dropped and leave no
-            # question.
-            offer_not_allowed=not asked_about_offer
-            and not (closest_ok if draft.offer_fit == "closest" else clear_ok),
-            closest_fit_due=context.closest_fit_due(ctx) and not assessment.blocks_framework
-            and not deferred,
+            # A typed reply to an offer already open is Keep chatting unless it asks about the
+            # offer, so offering again there waits for the window like any other offer; the
+            # repeat used to be dropped and leave no question.
+            offer_not_allowed=not asked_about_offer and window == "not_yet",
+            offer_due=window == "due" and not assessment.blocks_framework and not deferred,
             needs_question=needs_question,
             stage_in_force=None if assessment.blocks_framework else _stage_in_force(
                 running_framework, technique, accepted_this_turn=accepted_this_turn,
@@ -643,8 +639,8 @@ async def send(
         # stood open.
         # An offer a second draft still makes after what they said ruled it out is dropped the
         # way an early one is.
-        cooldown_passed=(
-            (closest_ok if reply.offer_fit == "closest" else clear_ok)
+        offer_allowed=(
+            window != "not_yet"
             and outcome is not TechniqueOutcome.DECLINED
             and not redraft.ruled_out(reply, user_texts, config.registry)
         ),

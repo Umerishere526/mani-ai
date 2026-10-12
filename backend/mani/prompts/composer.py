@@ -219,7 +219,7 @@ def techniques_used(offered: list[str]) -> str | None:
         "## Techniques Already Offered\n"
         "These have already been offered in this conversation:\n"
         f"{listed}\n\n"
-        "One they said no to may be offered again once `cooldown_passed: yes`, if it still "
+        "One they said no to may be offered again once `offer_window` is open, if it still "
         "fits best - or a different one, if what they have said since has changed what fits. "
         "One they have just finished may not be offered again."
     )

@@ -76,7 +76,7 @@ _LAST_QUESTION = re.compile(r"(?:^|(?<=[.!?])[ \t]+|(?<=\n))([^.!?\n]*\?)\s*$")
 # The system's own words, which a person must never read (Loli's test, 2026-10-09: "the nearest
 # fit I have" reached the person in all three styles).
 _INTERNAL_WORDS = re.compile(
-    r"\b(nearest|closest)\s+fit\b|\bframework[_ ]id\b|\boffer_fit\b|\bheading_toward\b"
+    r"\b(nearest|closest)\s+fit\b|\bframework[_ ]id\b|\boffer_window\b|\bheading_toward\b"
     r"|\bframework index\b|\bcooldown\b|\[/?ctx\]",
     re.IGNORECASE,
 )
@@ -311,7 +311,7 @@ def apply(
     selected_label: str | None,
     accepted_this_turn: bool,
     framework_running: bool,
-    cooldown_passed: bool,
+    offer_allowed: bool,
     conversation_style: str,
     wants_title: bool,
     last_mani_text: str | None = None,
@@ -410,9 +410,9 @@ def apply(
                 and current_framework_id is not None
                 and _normalize(prompt.technique) == _normalize(current_framework_id)
             )
-            if not cooldown_passed and not pending_offer:
+            if not offer_allowed and not pending_offer:
                 notes.append(
-                    f"dropped a technique offered before the cooldown passed: {prompt.technique}"
+                    f"dropped a technique offered before the offer window opened: {prompt.technique}"
                 )
                 continue
             # A model-supplied identifier is untrusted until it matches the registry.

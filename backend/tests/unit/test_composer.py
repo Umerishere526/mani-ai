@@ -204,7 +204,6 @@ def test_the_reply_commits_to_a_lean_before_it_writes_the_text():
     fields = list(Reply.model_fields)
     assert fields.index("heading_toward") < fields.index("text")
     assert fields.index("style") < fields.index("heading_toward")
-    assert fields.index("heading_toward") < fields.index("offer_fit") < fields.index("text")
     # The walk through the stages is written before the question it decides.
     assert fields.index("stages_known") < fields.index("text")
 

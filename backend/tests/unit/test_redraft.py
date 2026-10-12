@@ -90,7 +90,14 @@ def test_a_clean_question_stands():
 
 def test_an_offer_before_the_clients_cadence_allows_it_is_a_reason():
     why = redraft.reasons(offer("act_choice_point"), ["my dog died"], registry(), offer_not_allowed=True)
-    assert len(why) == 1 and "not allowed yet" in why[0]
+    assert len(why) == 1 and "too early to offer" in why[0]
+
+
+def test_an_early_offer_is_given_no_way_around_the_window():
+    """The note once told the model to relabel its offer as confident, and that label was all
+    the gate checked, so a first message offer got through (R1, 2026-10-12)."""
+    why = " ".join(redraft.reasons(offer("abcde"), ["my coworker"], registry(), offer_not_allowed=True))
+    assert "offer_fit" not in why and "confident" not in why
 
 
 def test_an_offer_what_they_said_rules_out_is_a_reason():
@@ -104,15 +111,15 @@ def test_the_same_offer_is_fine_when_nothing_rules_it_out():
     assert redraft.ruled_out(offer("act_choice_point"), ["my dog died"], registry()) is None
 
 
-def test_not_offering_when_the_closest_fit_is_due_is_a_reason_if_mani_leans_somewhere():
+def test_not_offering_when_an_offer_is_due_is_a_reason_if_mani_leans_somewhere():
     leaning = Reply(text="What is the hardest part?", heading_toward="act_choice_point")
-    why = redraft.reasons(leaning, ["my dog died"], registry(), offer_not_allowed=False, closest_fit_due=True)
+    why = redraft.reasons(leaning, ["my dog died"], registry(), offer_not_allowed=False, offer_due=True)
     assert len(why) == 1 and "offer the set of questions that fits best now" in why[0]
 
 
-def test_a_due_closest_fit_is_not_forced_when_mani_has_no_lean():
+def test_a_due_offer_is_not_forced_when_mani_has_no_lean():
     undecided = Reply(text="What is the hardest part?")
-    assert redraft.reasons(undecided, ["hi"], registry(), offer_not_allowed=False, closest_fit_due=True) == []
+    assert redraft.reasons(undecided, ["hi"], registry(), offer_not_allowed=False, offer_due=True) == []
 
 
 def test_a_comfort_with_no_question_is_a_reason_before_an_offer():
@@ -159,12 +166,12 @@ def test_a_different_question_after_an_answer_is_not_a_repeat():
     ) == []
 
 
-def test_a_due_closest_fit_is_never_asked_to_call_itself_the_nearest():
+def test_a_due_offer_is_never_asked_to_call_itself_the_nearest():
     """Loli's test, 2026-10-09: "the nearest fit I have ... though we can keep talking instead"
     reached the person in all three styles. This note told the model to say exactly that."""
     leaning = Reply(text="What happened next?", heading_toward="abcde")
     why = " ".join(redraft.reasons(leaning, ["my manager"], registry(), offer_not_allowed=False,
-                                   closest_fit_due=True))
+                                   offer_due=True))
     assert why
     assert "nearest" not in why and "closest" not in why
 

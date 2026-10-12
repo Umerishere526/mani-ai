@@ -124,7 +124,7 @@ def reasons(
     registry: Registry,
     *,
     offer_not_allowed: bool,
-    closest_fit_due: bool = False,
+    offer_due: bool = False,
     needs_question: bool = False,
     stage_in_force: StageInForce | None = None,
     last_mani_text: str | None = None,
@@ -164,16 +164,15 @@ def reasons(
         )
     if technique and offer_not_allowed:
         notes.append(
-            "your draft offered a set of questions, which is not allowed yet for a fit that is "
-            "not clear; if you are confident which set fits, set offer_fit to clear, otherwise "
-            "offer nothing and ask one short, plain question about one part of what they just "
-            "said, in their words"
+            "your draft offered a set of questions, and it is too early to offer; offer nothing "
+            "and ask one short, plain question about one part of what they just said, in their "
+            "words"
         )
-    elif not technique and closest_fit_due and reply.heading_toward:
+    elif not technique and offer_due and reply.heading_toward:
         notes.append(
             "you have talked for several replies and not offered: offer the set of questions "
             "that fits best now, by its name and plainly, the way you would one that fits "
-            "exactly, with offer_fit set as it really is"
+            "exactly"
         )
     elif technique and ruled_out(reply, user_texts, registry):
         framework = registry.get(technique)
