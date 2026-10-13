@@ -5,7 +5,7 @@ import pytest
 
 from mani.chat import repairs
 from mani.chat.techniques import Registry
-from mani.llm.schema import Moment, Offer, Reply, Style, TechniqueState
+from mani.llm.schema import Moment, Offer, Reply, Style
 from mani.models.rows import Framework
 from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
@@ -49,10 +49,6 @@ def fix(registry, model_reply, **overrides):
         "moment": Moment.CHATTING,
         "may_offer": True,
         "finished_framework_id": None,
-        "current_framework_id": None,
-        "current_phase": None,
-        "accepted_this_turn": False,
-        "framework_running": False,
         "conversation_style": "supportive",
         "wants_title": False,
     }
@@ -68,40 +64,6 @@ def test_leaked_script_metadata_is_stripped(registry):
     assert "Include prompts" not in fixed.text
     assert "Let's try something." in fixed.text
     assert fixed.notes
-
-
-def test_the_reply_that_starts_a_framework_may_ask_a_stage_several_in(registry):
-    """What they said before accepting answers the first stages, so the reply asks the first that
-    it does not answer, however far in."""
-    second = reply(state=TechniqueState(technique="abcde", step="belief"))
-    fixed = fix(registry, second, accepted_this_turn=True, framework_running=True,
-                current_framework_id="abcde", current_phase="offering")
-    assert fixed.phase == "belief"
-
-    third = reply(state=TechniqueState(technique="abcde", step="consequence"))
-    fixed = fix(registry, third, accepted_this_turn=True, framework_running=True,
-                current_framework_id="abcde", current_phase="offering")
-    assert fixed.phase == "consequence"
-    assert not fixed.notes
-
-
-def test_a_stage_that_must_be_asked_is_not_jumped_over_and_is_corrected_not_regenerated(registry):
-    jumped = reply(state=TechniqueState(technique="with_body_route", step="somatic_practice"))
-    fixed = fix(registry, jumped, framework_running=True, current_framework_id="with_body_route",
-                current_phase="two")
-    assert fixed.phase == "closing"
-    assert fixed.notes
-
-
-def test_a_technique_appearing_mid_flow_is_pulled_back_to_offering(registry):
-    straight_in = reply(state=TechniqueState(technique="abcde", step="belief"))
-    assert fix(registry, straight_in).phase == "offering"
-
-
-def test_state_for_an_unknown_technique_is_ignored(registry):
-    nonsense = reply(state=TechniqueState(technique="somatic_release", step="offering"))
-    fixed = fix(registry, nonsense)
-    assert fixed.framework_id is None and fixed.phase is None
 
 
 def test_a_long_title_is_trimmed_not_rejected(registry):
@@ -143,19 +105,6 @@ def test_an_off_list_shape_is_dropped_rather_than_failing_the_turn(registry):
     assert fixed.style is None
     assert fixed.text == "Thank you for telling me."
     assert fixed.notes
-
-
-def test_state_naming_a_different_framework_than_the_running_one_is_ignored(registry):
-    """Every framework ends on the same stage ids, so a transition check alone lets the model
-    record a framework the person never agreed to. Only the running one may be reported."""
-    # Both frameworks exist and both have "offering", so only the identity check can refuse.
-    swapped = reply(state=TechniqueState(technique="thought_reframing", step="surface"))
-    fixed = fix(
-        registry, swapped, framework_running=True,
-        current_framework_id="abcde", current_phase="offering",
-    )
-    assert fixed.framework_id is None
-    assert any("not the running one" in n for n in fixed.notes)
 
 
 @pytest.mark.parametrize("style", ["directive", "supportive", "reflective"])
@@ -261,7 +210,7 @@ def test_once_told_more_the_offer_comes_back_with_two_buttons():
 def test_the_slot_descriptions_are_the_clients_placeholders(client_abcde):
     directive = repairs.slots_for(Registry([client_abcde]), "directive", "abcde")
     assert directive.lead_line is None
-    assert directive.going_through.startswith("how they are feeling or what is worrying them, in their own words")
+    assert directive.going_through.startswith("their feeling from understanding as a short noun phrase")
     assert directive.their_words == "what they said they are struggling with, in their words"
     assert repairs.slots_for(Registry([client_abcde]), "supportive", None).lead_line.startswith(
         "A short warm line"

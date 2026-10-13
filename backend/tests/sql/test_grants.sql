@@ -97,6 +97,14 @@ select pg_temp.want('a user cannot reset their own vague streak',
 select pg_temp.want('the backend can move the vague streak',
   has_column_privilege('mani_service', 'public.threads', 'vague_streak', 'UPDATE'), true);
 
+-- Migration 022: what Mani understands so far is sent back in [ctx] every turn, so a user who
+-- could write it could write their own context block.
+select pg_temp.want('a user cannot write what Mani understands of them',
+  has_column_privilege('authenticated', 'public.threads', 'understanding', 'UPDATE'), false);
+
+select pg_temp.want('the backend can store what Mani understands',
+  has_column_privilege('mani_service', 'public.threads', 'understanding', 'UPDATE'), true);
+
 select pg_temp.want('a user can change their own nickname',
   has_column_privilege('authenticated', 'public.profiles', 'nickname', 'UPDATE'), true);
 

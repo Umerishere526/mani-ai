@@ -195,7 +195,7 @@ select
                                                    as recent_crisis,
   (select um.memory from admin.user_memory um
     where um.user_id = t.user_id)                  as memory
-from (select {COLUMNS} from public.threads
+from (select {COLUMNS}, understanding from public.threads
        where id = $1 and user_id = $2 and deleted_at is null) t
 """
 
@@ -244,6 +244,10 @@ class ThreadUpdates:
     style: ResponseStyle | None = None
     library_offered: bool = False
     conversation_style: SupportStyle | None = None
+    # The whole stage store, set only when this turn's merge changed it.
+    stages_known: dict | None = None
+    # What Mani understands of them, set only when this turn's merge changed it.
+    understanding: dict | None = None
 
     def __bool__(self) -> bool:
         # Each optional field is tested for presence, not for truth. A field whose
@@ -257,6 +261,8 @@ class ThreadUpdates:
             or self.style is not None
             or self.library_offered
             or self.conversation_style is not None
+            or self.stages_known is not None
+            or self.understanding is not None
         )
 
 
@@ -312,6 +318,22 @@ async def apply(
             """,
             thread_id, user_id, t.framework_id, t.outcome.value, t.phase,
             t.at_message_count, t.library_offered_since,
+        )
+
+    if updates.stages_known is not None:
+        # Its own statement after the upsert above, never part of it: a new offer row upserts over
+        # a retired one, and the store has to survive that.
+        await conn.execute(
+            "update public.thread_technique_state set stages_known = $1::jsonb "
+            "where thread_id = $2 and user_id = $3",
+            updates.stages_known, thread_id, user_id,
+        )
+
+    if updates.understanding is not None:
+        # Its own column grant, to mani_service only (migration 022).
+        await conn.execute(
+            "update public.threads set understanding = $1::jsonb where id = $2 and user_id = $3",
+            updates.understanding, thread_id, user_id,
         )
 
     if updates.offer_frameworks:

@@ -91,21 +91,6 @@ def framework_index(registry: Registry) -> str | None:
     if never:
         lines += ["", "## Never offer one when", ""] + never
 
-    # What each one needs to know before it is the right offer, listened for rather than asked:
-    # static, so it sits in the cached prefix with the rest of the index.
-    to_find_out = [
-        f"- **{framework.name}**: {'; '.join(items)}"
-        for framework in present
-        for items in [(framework.activation or {}).get("to_find_out") or []]
-        if items
-    ]
-    if to_find_out:
-        lines += [
-            "", "## Finding the fit", "",
-            "What each one needs before it is the right offer. Listen for these in what they tell "
-            "you; your questions follow their feeling, never this list:", "",
-        ] + to_find_out
-
     return "\n".join(lines)
 
 
@@ -187,8 +172,6 @@ def summary_layer(summary: ThreadSummary | None) -> str | None:
         return None
 
     lines = []
-    if summary.current_issue:
-        lines.append(f"**Current issue:** {summary.current_issue}")
     if summary.summary:
         lines.append(summary.summary)
     if summary.techniques_tried:

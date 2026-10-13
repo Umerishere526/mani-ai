@@ -70,3 +70,26 @@ def test_every_answer_after_an_offer_names_what_kind_of_answer_it_is():
     answered = [c for c in scenario_check.conversations(groups).values() if "after_offer" in c]
     assert {c["after_offer"]["answer"] for c in answered} == {"no", "moved_on", "yes"}
     assert all(c["after_offer"]["lines"] for c in answered)
+
+
+def test_a_stage_reached_without_its_letter_line_or_a_known_stage_asked_is_flagged():
+    """Spec 0004, AC-1 and AC-4, read from the turn's stage trace: ids and statuses, never words."""
+    stages = {
+        "activate": {"intro": "A is for Activating Event.", "ask": {"supportive": "What happened?"}},
+        "belief": {"intro": "B is for Belief.", "ask": {"supportive": "What did you tell yourself?"}},
+    }
+
+    def trace(asking: str, status: str) -> list[dict]:
+        return [{"stage": s, "status": status if s == asking else "missing", "asking": s == asking}
+                for s in stages]
+
+    on_a = trace("activate", "missing")
+    assert scenario_check.stage_flags("A is for Activating Event. What happened?", on_a, None, stages, "supportive") == []
+    assert scenario_check.stage_flags("What happened?", on_a, None, stages, "supportive") == [
+        "stage reply without its letter line"]
+    assert scenario_check.stage_flags("Can you say more?", on_a, on_a, stages, "supportive") == [], "a stay has none"
+    known_b = trace("belief", "known")
+    assert scenario_check.stage_flags(
+        "B is for Belief. What did you tell yourself?", known_b, on_a, stages, "supportive",
+    ) == ["asked a stage already known"]
+    assert scenario_check.stage_flags("Anything", None, on_a, stages, "supportive") == []

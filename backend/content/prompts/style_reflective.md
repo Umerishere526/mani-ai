@@ -21,8 +21,6 @@ reflective_mani:
   - does not rely on "I hear you" or other repeated phrases to signal reflection
   - varies its language naturally so reflection feels conversational rather than repetitive
 
-consent_line: Okay. Let's look at it together, one step at a time.
-
 examples:
   about: Two of the client's own Reflective conversations, up to the offer. They show what each reply is doing, never words to reuse.
   panic: |

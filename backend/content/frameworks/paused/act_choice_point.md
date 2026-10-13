@@ -14,8 +14,8 @@ activation:
     - "the thought, feeling or urge that stays with them"
     - "what it pulls them toward doing"
     - "whether they want help choosing how to respond, not solving or disproving it"
-  # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
+  # Documentation of the specification: nothing in mani/ reads to_find_out, appropriate_when or not_when.
+  # The prompt reads central_indication, distinctions and contraindications.
   appropriate_when:
     - "The user cannot fully control or resolve the situation"
     - "A thought cannot be proved or disproved"

@@ -90,6 +90,7 @@ def parse_framework(path: pathlib.Path) -> dict:
         "display_order": meta.get("display_order", 0),
         "activation": activation,
         "stages": meta.get("stages") or {},
+        "confirm_phrases": meta.get("confirm_phrases") or [],
     }
 
 
@@ -116,8 +117,8 @@ async def seed() -> None:
                     """
                     insert into admin.frameworks
                         (id, name, summary, body, activation_conditions, phases,
-                         display_order, activation, stages, is_active)
-                    values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, true)
+                         display_order, activation, stages, confirm_phrases, is_active)
+                    values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, true)
                     on conflict (id) do update set
                         is_active = true,
                         name = excluded.name,
@@ -127,7 +128,8 @@ async def seed() -> None:
                         phases = excluded.phases,
                         display_order = excluded.display_order,
                         activation = excluded.activation,
-                        stages = excluded.stages
+                        stages = excluded.stages,
+                        confirm_phrases = excluded.confirm_phrases
                     """,
                     framework["id"],
                     framework["name"],
@@ -138,6 +140,7 @@ async def seed() -> None:
                     framework["display_order"],
                     json.dumps(framework["activation"]),
                     json.dumps(framework["stages"]),
+                    framework["confirm_phrases"],
                 )
                 print(f"  {framework['name']:<28} {len(framework['stages'])} stages")
             seeded_ids = [parse_framework(path)["id"] for path in framework_files]

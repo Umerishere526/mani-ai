@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import context, repairs, reply_checks, safety
+from mani.chat import context, repairs, reply_checks, safety, understanding, walk
 from mani.chat.greeting import (
     CHAT_MORE_LABEL,
     EXPLAIN_LABELS,
@@ -117,27 +117,38 @@ def _body_route(
     return dataclasses.replace(fixed, prompts=_handoff()) if handoff else fixed
 
 
-def _stage_in_force(
-    framework: Framework | None,
-    technique: TechniqueState | None,
+def _walked(
+    fixed: repairs.Repaired,
+    reply: Reply,
+    framework: Framework,
+    stored: dict[str, dict],
     *,
-    accepted_this_turn: bool,
-) -> reply_checks.StageInForce | None:
-    """The stage this reply starts from, as [ctx] shows it: the first after the offer on the turn
-    they say yes, otherwise the stage in force."""
-    if framework is None or technique is None:
-        return None
-    if accepted_this_turn:
-        index = framework.phase_index(OFFERING) + 1
-        asked = False
-    elif technique.outcome is TechniqueOutcome.ACCEPTED and technique.phase:
-        index = framework.phase_index(technique.phase)
-        asked = True
+    start: bool,
+    in_force: str | None,
+    style: str,
+    thread_id: uuid.UUID,
+    body_answered: bool,
+    feeling: str | None,
+) -> tuple[repairs.Repaired, walk.Walked]:
+    """The walk's turn: what they said merged into the store, the step taken, and the reply that
+    opens the stage reached. Code decides all three; the model's text is used only where the branch
+    [ctx] named asks for it."""
+    before = {} if start else stored
+    if start:
+        walked = walk.start(framework, reply.stage_updates)
     else:
-        return None
-    if not 0 < index < len(framework.phases):
-        return None
-    return reply_checks.StageInForce(framework.id, framework.phases[index], asked)
+        walked = walk.advance(
+            framework, stored, reply.stage_updates, reply.stage_answer,
+            in_force=in_force, body_answered=body_answered,
+        )
+    text, notes = walk.reply_text(
+        framework, walked, before, text=fixed.text, style=style, thread_id=thread_id,
+        feeling=feeling if start else None,
+    )
+    return dataclasses.replace(
+        fixed, text=text, framework_id=framework.id, phase=walked.phase,
+        notes=fixed.notes + walked.notes + notes,
+    ), walked
 
 
 def _offered_handoff(history: list[Message]) -> bool:
@@ -164,11 +175,16 @@ class Turn:
     llm_call_id: uuid.UUID | None = None
     # Present only when AI_DEBUG_MODE is on; never sent to an ordinary client.
     reasoning: str | None = None
-    # The draft's stage ledger, as rows. Only with AI_DEBUG_MODE, like the reasoning.
+    # The stage store after this turn, as rows. Only with AI_DEBUG_MODE, like the reasoning.
     ledger: list[dict] | None = None
+    # Each content stage's id and stored status after this turn, and whether the reply is on it, for
+    # the scenario check; never their words, and never sent to a client.
+    stage_trace: list[dict] | None = None
     # What the reply missed that code cannot fix (reply_checks.misses), for the logs and the
     # scenario check; never sent to a client.
     checks: list[str] = field(default_factory=list)
+    # What Mani understands of them after this turn. Sent to a client only with AI_DEBUG_MODE.
+    understanding: dict | None = None
     # Set only on the turn a framework completes, and only when the catalog has a
     # matching exercise. A row model, not the wire shape - the router builds ExerciseOut
     # (and signs the audio URL) when it serializes this.
@@ -459,11 +475,28 @@ async def send(
     )
     model, parameters, routing = composer.model_settings(config)
 
+    # The framework this turn starts, when that is known before the reply: a Try it tap, or a yes
+    # whose turn was guarded, which left the row accepted at the offer. A typed yes sets it below.
+    starting: str | None = None
+    if accepted_this_turn:
+        starting = tapped.technique
+    elif technique is not None and outcome is TechniqueOutcome.ACCEPTED and technique.phase == OFFERING:
+        starting = technique.framework_id
+    declined_row = (
+        technique is None and ctx.technique is not None
+        and ctx.technique.outcome is TechniqueOutcome.DECLINED
+    )
     active_framework = config.registry.get(technique.framework_id) if technique else None
     prefix = context.build(
         ctx, framework=active_framework,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
-        framework_starting=accepted_this_turn,
+        starting=starting is not None,
+        # A typed yes to the open offer, or asking for the set they declined, starts it.
+        yes_framework=(
+            active_framework if deferred
+            else config.registry.get(ctx.technique.framework_id) if declined_row
+            else None
+        ),
     )
     for_model = (
         f'User tapped the button: "{tapped.label}".'
@@ -490,10 +523,6 @@ async def send(
     moment = context.moment(
         technique, outcome, retiring_framework_id, _awaiting_place(history), running_framework,
         concern=assessment.blocks_framework,
-    )
-    declined_row = (
-        technique is None and ctx.technique is not None
-        and ctx.technique.outcome is TechniqueOutcome.DECLINED
     )
     reply_shape = schema.reply_for(
         moment,
@@ -533,11 +562,11 @@ async def send(
         # Read by the steering evals and by anyone asking why a question went where it did:
         # the id only, never a word of what the person said.
         logger.info("thread %s heading toward %s", ctx.thread.id, reply.heading_toward)
-    if reply.stages_known:
-        # Which stages the model judged already answered: ids and verdicts only, never their words.
+    if reply.stage_updates:
+        # Which stages the reply reports words for: ids and statuses only, never their words.
         logger.info(
-            "thread %s stages known: %s", ctx.thread.id,
-            ", ".join(f"{e.stage}={'met' if e.met else 'open'}" for e in reply.stages_known),
+            "thread %s stage updates: %s", ctx.thread.id,
+            ", ".join(f"{u.stage}={u.status}" for u in reply.stage_updates),
         )
 
     # The model's own crisis judgment no longer locks the thread: a small model over-fires it
@@ -555,11 +584,19 @@ async def send(
     # A concern, from the screen or the model, comes before anything a reply field could do: no
     # client text is rendered from them and no row changes because of them (AC-12).
     guarded = assessment.blocks_framework or model_concern
+    # Nothing a concern turn reports is kept, so what they understand stays as stored (AC-11).
+    understood = (
+        ctx.thread.understanding if guarded
+        else understanding.merge(ctx.thread.understanding, reply.understanding_update)
+    )
+    if understood != ctx.thread.understanding:
+        updates.understanding = understood
     answer = _offer_answer(moment, tapped, reply, guarded=guarded)
     if moment is Moment.OFFER_OPEN and not (guarded and tapped is None):
         if answer == "yes":
             outcome = TechniqueOutcome.ACCEPTED
             accepted_this_turn = True
+            starting = technique.framework_id
             offered_now.append(technique.framework_id)
         elif answer != "asked":
             # Anything but a yes or a question about it is Keep chatting (muhammad, 2026-09-24),
@@ -571,23 +608,8 @@ async def send(
         technique = ctx.technique
         outcome = TechniqueOutcome.ACCEPTED
         accepted_this_turn = True
+        starting = technique.framework_id
         offered_now.append(technique.framework_id)
-
-    # The step is written after the text, so where it disagrees with the draft's own ledger it is
-    # the label that is wrong; code sets it rather than asking the model again.
-    in_force = None if guarded else _stage_in_force(
-        config.registry.get(technique.framework_id) if technique else None,
-        technique, accepted_this_turn=accepted_this_turn,
-    )
-    stage_framework = config.registry.get(in_force.framework_id) if in_force else None
-    if stage_framework is not None:
-        stepped = reply_checks.with_ledger_step(reply, stage_framework, in_force)
-        if stepped is not reply:
-            logger.info(
-                "thread %s step %s set to %s from its own ledger",
-                ctx.thread.id, reply.state.step, stepped.state.step,
-            )
-            reply = stepped
 
     fixed = repairs.apply(
         reply,
@@ -597,14 +619,6 @@ async def send(
         # Only the framework they have just finished is off the table. One they said no to
         # may come back once the cooldown has passed (muhammad, 2026-09-24).
         finished_framework_id=ctx.technique.framework_id if _finished(ctx.technique) else None,
-        current_framework_id=(
-            technique.framework_id
-            if technique and outcome is not TechniqueOutcome.DECLINED
-            else None
-        ),
-        current_phase=technique.phase if technique else None,
-        accepted_this_turn=accepted_this_turn,
-        framework_running=outcome is TechniqueOutcome.ACCEPTED,
         conversation_style=conversation_style,
         wants_title=wants_title,
         guarded=guarded,
@@ -627,6 +641,25 @@ async def send(
         # about a stage is applied, and it may not open a new one. The stored state is left
         # exactly as it was, so the framework resumes from there once the concern has passed.
         fixed = dataclasses.replace(fixed, framework_id=None, phase=None, prompts=[])
+    # The walk runs on the turn a framework starts and on each of its stages, never on a guarded
+    # turn: that leaves the store and the phase exactly as they were (AC-10).
+    stored_all = ctx.technique.stages_known if ctx.technique else {}
+    walking = (
+        config.registry.get(starting or technique.framework_id)
+        if not guarded and outcome is TechniqueOutcome.ACCEPTED else None
+    )
+    walked = None
+    if walking is not None and (starting or technique.phase in walk.content_stages(walking)):
+        fixed, walked = _walked(
+            fixed, reply, walking, stored_all.get(walking.id) or {},
+            start=starting is not None, in_force=None if starting else technique.phase,
+            style=conversation_style, thread_id=ctx.thread.id,
+            body_answered=moment is Moment.BODY and reply.body is not None
+            and repairs.body_answer_fits(reply.body, "closing", conversation_style),
+            feeling=understood.get("feeling"),
+        )
+        if walked.entries != (stored_all.get(walking.id) or {}):
+            updates.stages_known = {**stored_all, walking.id: walked.entries}
     if moment is Moment.BODY and not guarded:
         fixed = _body_route(
             fixed, reply.body, tapped, technique,
@@ -649,8 +682,8 @@ async def send(
         logger.info("thread %s reply checks: %s", ctx.thread.id, "; ".join(checks))
     # What the model judged this turn, as the closed values only: never a slot, which holds their words.
     logger.info(
-        "thread %s moment %s: offer_answer %s, body %s, offered %s",
-        ctx.thread.id, moment.value, answer, reply.body, offered,
+        "thread %s moment %s: offer_answer %s, body %s, stage_answer %s, offered %s",
+        ctx.thread.id, moment.value, answer, reply.body, reply.stage_answer, offered,
     )
     if not fixed.text.strip():
         # Nothing left to say once leaked metadata was stripped. Refused here as retryable,
@@ -674,9 +707,6 @@ async def send(
     )
 
     count_after = ctx.thread.message_count + 2
-    starting = None
-    if accepted_this_turn:
-        starting = tapped.technique if tapped and tapped.technique else technique.framework_id
     new_offer = next((p for p in fixed.prompts if p.technique), None)
     library_offer = next((p for p in fixed.prompts if p.library), None)
 
@@ -696,7 +726,7 @@ async def send(
             thread_id=ctx.thread.id,
             framework_id=decided,
             outcome=outcome,
-            # A framework starting this turn sits at the offer until the reply names a stage.
+            # A framework whose start was guarded sits at the offer, and the next turn starts it.
             phase=(
                 None if outcome is TechniqueOutcome.DECLINED
                 else fixed.phase or (OFFERING if starting else None)
@@ -726,10 +756,11 @@ async def send(
         exercise = await _offer_exercise(
             conn, retiring_framework_id, config, model, routing, user_id, ctx.thread.id,
             reasoning_effort=parameters.get("reasoning_effort"),
-            said=said, current_issue=ctx.summary.current_issue if ctx.summary else None,
+            said=said, issue=understood.get("issue"),
         )
 
     summarized = ctx.summary.summarized_message_count if ctx.summary else 0
+    ledger = walk.ledger_view(walking, walked.entries, walked.phase) if walked else None
     return Turn(
         message_id=pair.mani_message_id,
         content=fixed.text,
@@ -745,14 +776,13 @@ async def send(
         needs_summary=count_after - summarized >= SUMMARY_THRESHOLD,
         llm_call_id=call.call_id,
         exercise=exercise,
+        understanding=understood,
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
         checks=checks,
-        ledger=(
-            reply_checks.ledger_view(
-                reply, config.registry.get(reply.state.technique) if reply.state else running_framework,
-            )
-            if settings.ai_debug_mode and reply.stages_known
-            else None
+        ledger=ledger if settings.ai_debug_mode else None,
+        stage_trace=(
+            [{"stage": r["stage"], "status": r["status"], "asking": r["asking"]} for r in ledger]
+            if ledger is not None else None
         ),
     )
 
@@ -768,7 +798,7 @@ async def _offer_exercise(
     *,
     reasoning_effort: str | None,
     said: list[str],
-    current_issue: str | None,
+    issue: str | None,
 ) -> Exercise | None:
     """The exercise that follows a just-completed framework, chosen by a bound tool call.
 
@@ -799,7 +829,7 @@ async def _offer_exercise(
         purpose=llm_calls.Purpose.EXERCISE_SELECT,
         reasoning_effort=reasoning_effort,
         said=said,
-        current_issue=current_issue,
+        issue=issue,
         routing=routing,
         user_id=user_id,
         thread_id=thread_id,

@@ -186,5 +186,21 @@
         }
       }
     }
+  },
+  "names_a_feeling_first": {
+    "about": "They open with a feeling and then describe what is behind it. The feeling stays in view in the questions and fills the offer.",
+    "expect": {"offer_from": 3, "offer_by": 5},
+    "conversations": {
+      "frustrated_client_changes": {
+        "source": "muhammad's Directive tester run, thread 4ec47e15, 2026-10-13, the person's lines word for word",
+        "lines": [
+          "i am frustrated",
+          "my work",
+          "my client keeps changing the requirements and when i do make the changes he say that he does not like that and want to go to previous iternation",
+          "the complete back and forth, we are just moving in circles",
+          "that they need to decide on what they want before tell me to go back again and again"
+        ]
+      }
+    }
   }
 }

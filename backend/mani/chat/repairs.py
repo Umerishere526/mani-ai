@@ -56,7 +56,7 @@ _INTERNAL_WORDS = re.compile(
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
 
 
-def _without_sentences(text: str, drop: Callable[[str], bool]) -> str:
+def without_sentences(text: str, drop: Callable[[str], bool]) -> str:
     """The text with every sentence `drop` picks removed, paragraph by paragraph. Unchanged,
     spacing included, when it picks none."""
     paragraphs = []
@@ -72,7 +72,7 @@ def _without_sentences(text: str, drop: Callable[[str], bool]) -> str:
 
 def without_internal_words(text: str) -> str:
     """The text with every sentence that carries the system's own words dropped."""
-    return _without_sentences(text, lambda s: bool(_INTERNAL_WORDS.search(s)))
+    return without_sentences(text, lambda s: bool(_INTERNAL_WORDS.search(s)))
 
 
 def strip_script_leakage(text: str) -> tuple[str, list[str]]:
@@ -106,8 +106,9 @@ class Repaired:
     text: str
     prompts: list[SmartPrompt]
     title: str | None
-    framework_id: str | None
-    phase: str | None
+    # The framework and phase to record, set by the walk and the body route; never by the reply.
+    framework_id: str | None = None
+    phase: str | None = None
     style: Style | None = None
     # What was corrected, for the log and for a metric on how often the model needs it.
     notes: list[str] = field(default_factory=list)
@@ -342,10 +343,6 @@ def apply(
     moment: Moment,
     may_offer: bool,
     finished_framework_id: str | None,
-    current_framework_id: str | None,
-    current_phase: str | None,
-    accepted_this_turn: bool,
-    framework_running: bool,
     conversation_style: str,
     wants_title: bool,
     guarded: bool = False,
@@ -400,36 +397,6 @@ def apply(
             text = offer
             prompts = offer_buttons(reply.heading_toward, explained=False)
 
-    framework_id: str | None = None
-    phase: str | None = None
-    if reply.state is not None:
-        if reply.state.technique not in registry:
-            notes.append(f"ignored state for unknown technique: {reply.state.technique}")
-        elif framework_running and reply.state.technique != current_framework_id:
-            # Every framework shares stage ids like somatic and closing, so the transition
-            # check alone would let a reply record a framework the person never accepted.
-            notes.append(
-                f"ignored state for {reply.state.technique}, not the running one "
-                f"({current_framework_id})"
-            )
-        else:
-            framework_id = reply.state.technique
-            # Accepting an offer this turn means the phase being left is the offering one,
-            # whatever the stored row still says. What they told Mani before accepting may
-            # answer the first stages too, so the reply may be asking one several stages in.
-            previous = OFFERING if accepted_this_turn else current_phase
-            transition = registry.validate_transition(
-                framework_id, previous, reply.state.step
-            )
-            phase = registry.clamp(framework_id, previous, reply.state.step)
-            if not transition.ok:
-                notes.append(
-                    f"corrected phase {reply.state.step!r} to {phase!r} "
-                    f"({transition.reason})"
-                )
-            if phase is None:
-                framework_id = None
-
     title = clean_title(reply.title) if wants_title else None
 
     # Case and spacing are normalized before the check because a model reading a table of
@@ -448,8 +415,6 @@ def apply(
         text=text,
         prompts=prompts,
         title=title,
-        framework_id=framework_id,
-        phase=phase,
         style=style,
         notes=notes,
         offer_dropped=offer_dropped,

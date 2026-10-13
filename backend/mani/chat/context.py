@@ -5,7 +5,8 @@ from __future__ import annotations
 
 import re
 
-from mani.chat import repairs
+from mani.chat import repairs, understanding, walk
+from mani.chat.techniques import OFFERING
 from mani.config import get_settings
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
 from mani.db.threads import TurnContext
@@ -182,6 +183,12 @@ def resolve_style(ctx: TurnContext) -> str:
     return DEFAULT_STYLE
 
 
+# How a start turn uses what they said before the yes. Its text is code's, so only the fields count.
+_SEED = (
+    "The first stage is sent for you, so your text is not sent. In stage_updates report every stage "
+    "below that what they have said, here or in the Conversation Context, already answers."
+)
+
 # What each line of the block means, sent under the line itself and only for the value it has
 # this turn: a vague reply carries the vague guidance and nothing about being heard. Keeping the
 # meaning beside the value is also what keeps the two from drifting apart, which they did while
@@ -225,6 +232,10 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "none fits yet, offer nothing and check your understanding in one short question."
         ),
     },
+    "understanding": (
+        "what they have told you so far, kept for you. In understanding_update report only what their "
+        "message names or changes."
+    ),
     "since_last": "how many messages have passed since the last offer.",
     "this_thread": (
         "what was last offered in this conversation and how it went. One they declined may come "
@@ -251,19 +262,16 @@ _MEANING: dict[str, str | dict[str, str]] = {
     "recent_openers": (
         "the first words of your last few replies. Do not open your new reply the same way."
     ),
-    "framework_starting": {
-        "yes": "they just said yes. stage_note says how to use what they already told you.",
-    },
+    "framework_starting": {"yes": f"they just said yes. {_SEED}"},
+    "if_they_say_yes": f"only if their message says yes to this set: {_SEED}",
     "active_framework": (
-        "the set of questions running, with its stages in order. Then the stage you are on and, "
-        "unless it is the last, the one after, each with its purpose, what to listen for, when "
-        "it is done, its boundaries and what to do if unclear. The stages after those are listed "
-        "as later_stage, each with only when it is done and its question. Each ask is a model "
-        "question already in this style, so ask it as written, or only the part still missing."
+        "the set of questions running, with its stages in order. Then the stage you are on, with "
+        "its purpose, what to listen for, when it is done, its boundaries and what to do if "
+        "unclear. Its ask is a model question already in this style."
     ),
-    "later_stage": (
-        "a stage after the next one, shown only so you can tell whether what they have already "
-        "told you meets it. When it does, skip it too."
+    "stages_known": (
+        "what they have said for each stage, kept for you. Never ask for what a stage already "
+        "holds. In stage_updates report only what is new or changed in their message."
     ),
     "after_framework_question": (
         "they kept chatting after the questions ended and are still on the same issue. Reflect "
@@ -292,7 +300,8 @@ def build(
     history: list[Message] | None = None,
     safety_concern: bool = False,
     offer_waiting: bool = False,
-    framework_starting: bool = False,
+    starting: bool = False,
+    yes_framework: Framework | None = None,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -301,7 +310,8 @@ def build(
     `history` are what the framework content and the caller's own history add - both optional,
     so a turn with neither still formats exactly as before.
 
-    `framework` is the one already active; its current and next stage go in full.
+    `framework` is the one already active. `starting` is a turn that opens it, and `yes_framework`
+    the set a yes in this message would open; both ask the reply to report what they already said.
 
     `history` is the same window the caller already loads for the model's own conversation
     view - nothing new is fetched for it. Only Mani's own messages in it become recent_openers;
@@ -332,6 +342,9 @@ def build(
     else:
         phase = "talking"
     lines += _line("conversation_phase", phase)
+    understood = understanding.render(ctx.thread.understanding)
+    if understood:
+        lines += _line("understanding", understood)
     if not running and not clarification_used(history):
         lines += _line("clarification_available", "yes")
     if offer_waiting:
@@ -381,54 +394,62 @@ def build(
         lines += _line("recent_openers", quoted)
 
     if running:
-        style = resolve_style(ctx)
-        if framework_starting:
-            # They have just said yes. What they told Mani before this counts toward the first
-            # stage; the note below says how to use it.
-            lines += _line("framework_starting", "yes")
-        lines += _line("active_framework", framework.id)
-        lines.append(f"framework_stages: {', '.join(framework.phases)}")
-        stage = _stage_lines("stage", framework, technique.phase, style)
-        # The turn they say yes, a first stage their words already answer (by its ready_when) is
-        # said back and the second stage's question is asked; otherwise the first is asked.
-        index = framework.phase_index(technique.phase)
-        if offer_waiting:
-            # The offering stage's question is the offer they have just typed past.
-            stage = [line for line in stage if not line.startswith("stage_ask:")]
-        if framework_starting and technique.phase == "offering" and index + 1 < len(framework.phases):
-            index += 1
-            stage = _stage_lines("stage", framework, framework.phases[index], style)
-        lines.extend(stage)
-        lines.append(f"stage_note: {_stage_note(framework, starting=framework_starting)}")
-        if 0 <= index < len(framework.phases) - 1:
-            lines.extend(
-                _stage_lines("next_stage", framework, framework.phases[index + 1], style)
-            )
-            later = [p for p in framework.phases[index + 2 :]]
-            later = later[: next((i for i, p in enumerate(later) if p in ENDING_STAGES), len(later))]
-            for position, phase in enumerate(later):
-                lines.extend(_later_stage_lines(framework, phase, style, explain=position == 0))
+        lines += _running_lines(ctx, framework, offer_waiting=offer_waiting, starting=starting)
+    if yes_framework is not None and not safety_concern:
+        lines += _line("if_they_say_yes", yes_framework.id)
+        lines += _seed_lines(yes_framework)
 
     return "[ctx]\n" + "\n".join(lines) + "\n[/ctx]\n\n"
 
 
-# A stage their words already answer is left unasked, with no check and no mention, and so are the
-# stages after it that they answer too (muhammad, 2026-10-09). Which stages those are is the model's
-# reading of each stage's ready_when, so the guidance for the stages after the next is in the block.
-_WALK_THE_STAGES = (
-    "Go through the stages in order, starting with this one. A stage that what they have already "
-    "told you, here or in the Conversation Context, meets by its stage_ready_when is skipped "
-    "without a word: never ask it, never check it with them, never say it is done. Do the same "
-    "for the next stage and for each later_stage, until you reach one that is not met. Ask that "
-    "stage's question, only for the missing thing, and report that stage in state.step even when "
-    "it is several ahead. Write this walk in stages_known first: for each stage, what they "
-    "already said for it in their short words, and its status. known is not asked. partial asks "
-    "only for the gap. confirm "
-    "states what you have and asks whether it is right, only where the stage's own lines say to. "
-    "missing is asked. The question asks only for what the stage's known does not hold yet, so it "
-    "is precise: never ask again for a part they gave. Never say a stage's letter or name, and "
-    "never say a stage was skipped or is done."
-)
+def _running_lines(
+    ctx: TurnContext, framework: Framework, *, offer_waiting: bool, starting: bool
+) -> list[str]:
+    """The running set: on the turn it starts, what to report from before the yes; at the offer, the
+    offering stage; on a stage, that stage, what is stored for every stage and what this reply is
+    for. The next stage goes in full only when the reply needs it: partly answered, or the body route."""
+    technique, style = ctx.technique, resolve_style(ctx)
+    lines = _line("active_framework", framework.id)
+    lines.append(f"framework_stages: {', '.join(framework.phases)}")
+    if starting:
+        return lines + _line("framework_starting", "yes") + _seed_lines(framework)
+    stage = _stage_lines("stage", framework, technique.phase, style)
+    if offer_waiting:
+        # The offering stage's question is the offer they have just typed past.
+        stage = [line for line in stage if not line.startswith("stage_ask:")]
+    lines.extend(stage)
+    if technique.phase == OFFERING:
+        return lines
+    known = technique.stages_known.get(framework.id) or {}
+    lines += _line("stages_known", _stored(framework, known))
+    if technique.phase in walk.content_stages(framework):
+        lines.append(f"next: {walk.next_line(framework, known, technique.phase)}")
+        lines.append(f"two_tries: {_TWO_TRIES}")
+    index = framework.phase_index(technique.phase)
+    following = framework.phases[index + 1] if 0 <= index < len(framework.phases) - 1 else None
+    if following and (following in ENDING_STAGES or (known.get(following) or {}).get("status") == "partial"):
+        lines.extend(_stage_lines("next_stage", framework, following, style))
+    return lines
+
+
+def _stored(framework: Framework, known: dict[str, dict]) -> str:
+    """Every content stage with its stored status, and their words when there are some."""
+    parts = []
+    for stage in walk.content_stages(framework):
+        entry = known.get(stage) or {}
+        status = entry.get("status") or "missing"
+        said = entry.get("said")
+        parts.append(f'{stage} {status}: "{disarm(said)}"' if said else f"{stage} {status}")
+    return " | ".join(parts)
+
+
+def _seed_lines(framework: Framework) -> list[str]:
+    """The content stages, each with what to listen for, so a yes can report what is already answered."""
+    return [
+        f"stage_to_seed: {stage}: {(framework.stages.get(stage) or {}).get('listen_for', '')}".rstrip(": ")
+        for stage in walk.content_stages(framework)
+    ]
+
 
 # A stage is a step, not an exam: it never needs complete or certain answers, and a person asked
 # the same thing a third time feels interrogated (live, 2026-10-08: five times running).
@@ -436,31 +457,6 @@ _TWO_TRIES = (
     "If you have already asked for this stage's thing twice, take what they gave you and move to "
     "the next stage, unless stage_ready_when says to stay."
 )
-
-
-def _stage_note(framework: Framework, *, starting: bool) -> str:
-    """How to take the stage in force: walk past what they already answered, then ask."""
-    said = (
-        "They have just said yes, so what they told you before it counts toward every stage. "
-        if starting
-        else ""
-    )
-    never = f"{framework.closing} is never skipped. " if framework.closing else ""
-    return f"{said}{_WALK_THE_STAGES} {never}{_TWO_TRIES}"
-
-
-def _later_stage_lines(
-    framework: Framework, phase: str, style: str, *, explain: bool
-) -> list[str]:
-    """A stage after the next: when it is met and the question that asks for it. What the lines
-    mean is said once, on the first."""
-    stage = framework.stages.get(phase) or {}
-    lines = _line("later_stage", phase) if explain else [f"later_stage: {phase}"]
-    if stage.get("ready_when"):
-        lines.append(f"later_stage_ready_when: {stage['ready_when']}")
-    if ask := (stage.get("ask") or {}).get(style):
-        lines.append(f"later_stage_ask: {ask}")
-    return lines
 
 
 def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> list[str]:

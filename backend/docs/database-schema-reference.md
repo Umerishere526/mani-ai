@@ -9,7 +9,8 @@ Generated 2026-09-23 against local Supabase (`supabase_db_mani`), then hand upda
 migrations 006 to 010 (the call purpose enum, backend writes of prompt state, bounded profile topics, the
 memory table, the summary's current issue); the counts, `thread_summaries`, the privilege list and the RLS
 note below were checked against the live database that day. Regenerate from the queries at the bottom after
-the next schema change.
+the next schema change. Hand updated on 2026-10-13 for migrations 020 and 022 only (`stages_known`,
+`threads.understanding`, `thread_summaries.current_issue` dropped); 018, 019 and 021 are not reflected yet.
 
 The rest of this paragraph describes the original generation: Nothing here was typed
 from memory — every table, column, constraint, policy, and grant was queried directly from
@@ -100,6 +101,7 @@ One row per user, created automatically by the migration-004 trigger on signup.
 | 9 | `conversation_style` | text | optional 🔒 | `supportive` / `reflective` / `directive` (CHECK `threads_conversation_style_known`). Wins over `profiles.support_style` when set — see `mani/chat/context.py:resolve_style`. |
 | 10 | `vague_streak` | smallint | default `0`, 0–10 (CHECK) | Currently written by nothing (`PORT-STATUS.md` "Open" — the vague-reply pivot isn't built). |
 | 11 | `memory_folded_at` | timestamptz | optional | The last message folded into `admin.user_memory`; null means never. Only `mani_service` may write it (migration 009). |
+| 12 | `understanding` | jsonb | default `'{}'`, an object (CHECK `threads_understanding_object`) | `{feeling, issue}`, both optional, each at most 200 characters: their feeling word and their issue as Mani understands them so far. Merged by `mani/chat/understanding.py` after each reply, except on a concern turn, and sent back in `[ctx]`. Only `mani_service` may write it (migration 022). Loaded only for a turn, never in a thread list. |
 
 ### `public.messages`
 | # | Column | Type | Required | Purpose |
@@ -127,6 +129,7 @@ One row per thread — the currently (or most recently) active framework.
 | 6 | `at_message_count` | integer | required | Thread's `message_count` when this state was last written — the cooldown clock. |
 | 7 | `library_offered_since` | boolean | default `false` | Whether the library follow-up has been offered since acceptance. |
 | 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
+| 9 | `stages_known` | jsonb | default `'{}'`, an object (CHECK `thread_technique_state_stages_known_object`) | What they said per stage, keyed by framework id then stage id: `{said, status, tries}`. Merged and stepped by `mani/chat/walk.py`; kept when a run retires (migration 020). |
 
 ### `public.thread_techniques_offered`
 Frequency-limiting log — every framework ever offered in a thread.
@@ -161,7 +164,6 @@ Append-only log of the model's self-reported style per reply.
 | 6 | `summarized_message_count` | integer | default `0`, `>= 0` (CHECK) | |
 | 7 | `created_at` | timestamptz | default `now()` | |
 | 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
-| 9 | `current_issue` | text | optional | One line, replaced each run: what the person is working on right now. The composer puts it ahead of the prose summary on every turn a summary exists (migration 010). |
 
 ### `public.exercise_completions`
 | # | Column | Type | Required | Purpose |

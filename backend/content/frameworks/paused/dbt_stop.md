@@ -14,8 +14,8 @@ activation:
     - "whether it has already happened"
     - "whether it can safely wait a moment"
     - "whether anyone is at risk (then safety, not this)"
-  # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
+  # Documentation of the specification: nothing in mani/ reads to_find_out, appropriate_when or not_when.
+  # The prompt reads central_indication, distinctions and contraindications.
   appropriate_when:
     - "The user is close to acting impulsively"
     - "The action has not yet occurred"

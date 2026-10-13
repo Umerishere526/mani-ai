@@ -51,7 +51,6 @@ def test_the_layers_come_in_a_fixed_order(config):
         offered=["abcde"],
         summary=ThreadSummary(
             thread_id=THREAD, user_id=USER, summary="Talked about work.",
-            current_issue="Whether to raise a pattern of missed credit with their manager.",
             techniques_tried=[TechniqueTried(name="abcde", helpful=True)],
         ),
     )
@@ -59,8 +58,6 @@ def test_the_layers_come_in_a_fixed_order(config):
         "mani_base", "response_format", "style", "user_context", "title_generation",
         "techniques_used", "summary",
     ]
-    summary_text = dict(built.layers) and built.text
-    assert summary_text.index("Whether to raise a pattern") < summary_text.index("Talked about work.")
 
 
 def test_optional_layers_are_simply_absent(config):
@@ -256,29 +253,6 @@ def test_the_framework_index_carries_each_frameworks_contraindications():
     assert "**DBT STOP**: The action itself is protective - leaving, calling for help" in index
 
 
-def test_the_framework_index_says_what_each_one_needs_to_find_out():
-    """Questions can follow the person's feeling and still head somewhere only if the model
-    can see what each set of questions needs to learn before it is the right offer."""
-    act = Framework(
-        id="act_choice_point", name="ACT Choice Point", summary="s", body="b", phases=["offering"],
-        activation={
-            "central_indication": "cannot change it",
-            "to_find_out": ["what they cannot control", "what it pulls them toward"],
-        },
-    )
-    index = composer.framework_index(Registry([act]))
-    assert "## Finding the fit" in index
-    assert "- **ACT Choice Point**: what they cannot control; what it pulls them toward" in index
-
-
-def test_every_shipped_framework_says_what_it_needs_to_find_out():
-    from scripts.seed import FRAMEWORKS_DIR, parse_framework
-
-    for path in sorted(FRAMEWORKS_DIR.glob("*.md")):
-        found = parse_framework(path)["activation"].get("to_find_out") or []
-        assert len(found) >= 3, f"{path.name} needs at least three things to find out"
-
-
 def test_the_reply_commits_to_a_lean_before_it_writes_the_text():
     """Structured output is generated in schema order, so a lean declared after the text could
     only describe a reply already written."""
@@ -287,8 +261,10 @@ def test_the_reply_commits_to_a_lean_before_it_writes_the_text():
     fields = list(Reply.model_fields)
     assert fields.index("heading_toward") < fields.index("text")
     assert fields.index("style") < fields.index("heading_toward")
-    # The walk through the stages is written before the question it decides.
-    assert fields.index("stages_known") < fields.index("text")
+    # What their message names or changes about them, and how it answers the stage, are decided
+    # before the text written for it.
+    assert fields.index("style") < fields.index("understanding_update") < fields.index("text")
+    assert fields.index("stage_updates") < fields.index("stage_answer") < fields.index("text")
 
 
 def test_what_is_remembered_across_chats_reaches_the_prompt_after_the_static_layers(config):
@@ -325,16 +301,6 @@ def test_the_index_keeps_the_description_from_the_model():
     assert "separate what happened from what you told yourself about it" not in index
 
 
-def test_the_current_issue_stays_visible_even_without_a_prose_summary_yet():
-    """A thread just long enough for its first fold may have the issue but not much prose
-    yet - the issue is what must never go missing."""
-    layer = composer.summary_layer(
-        ThreadSummary(thread_id=THREAD, user_id=USER, current_issue="Freezing before a talk.")
-    )
-    assert layer is not None
-    assert "Freezing before a talk." in layer
-
-
 @pytest.mark.parametrize(
     "name", ["mani_base", "response_format", "style_directive", "style_supportive", "style_reflective"]
 )
@@ -352,3 +318,24 @@ def test_every_rule_in_a_prompt_file_is_a_sentence_not_a_yaml_mapping(name):
     for section, body in sections.items():
         if isinstance(body, list):
             assert all(isinstance(rule, str) for rule in body), section
+
+
+def test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_beside_it():
+    """Spec 0005, AC-9: a framework's checklist steered the questions toward its own needs, and the
+    bans kept the feeling they named out of them (live, 2026-10-13: the frustrated chat)."""
+    import pathlib
+
+    import yaml
+
+    from scripts.seed import parse_prompt
+
+    prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
+    base = yaml.safe_load(parse_prompt(prompts / "mani_base.md")["content"])
+    assert (
+        "Each question follows from their last answer and keeps the feeling and issue they came with "
+        "in view. Their feeling word may come back inside a question, never as a statement about them."
+    ) in base["rules"]
+    sent = "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in ("mani_base", "response_format"))
+    for cut in ("Build every question from", "Never hand their own words or feelings back",
+                "Am I saying back their own words or feelings"):
+        assert cut not in sent

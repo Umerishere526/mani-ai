@@ -21,8 +21,6 @@ directive_mani:
   - checks its understanding when interpreting what the user may be experiencing
   - allows the user to confirm, correct, or clarify before moving forward
 
-consent_line: Okay. I'll guide you through it one step at a time.
-
 examples:
   about: Two of the client's own Directive conversations, up to the offer. They show what each reply is doing, never words to reuse.
   overthinking: |

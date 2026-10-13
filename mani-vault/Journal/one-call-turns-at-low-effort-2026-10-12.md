@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-12
 tags: [journal, latency, redraft, effort, design, lessons]
 ---
+> Superseded 2026-10-13 (only the step set from the reply's ledger by `with_ledger_step`; code now steps the walk) — see [[abcde-walk-owned-by-code-2026-10-13]]
 
 # A turn is one call at low effort (2026-10-12)
 

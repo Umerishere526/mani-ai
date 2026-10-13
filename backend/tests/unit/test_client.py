@@ -175,7 +175,7 @@ async def test_the_pick_sees_the_whole_entry_and_what_the_person_said(monkeypatc
     await client.choose_exercise(
         candidates, "ABCDE", model="m", purpose=llm_calls.Purpose.EXERCISE_SELECT,
         said=["work has drained me for months", "that helped, thanks"],
-        current_issue="exhaustion from an unrelenting job",
+        issue="exhaustion from an unrelenting job",
         settings=settings(),
     )
 

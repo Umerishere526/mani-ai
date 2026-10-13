@@ -22,8 +22,6 @@ supportive_mani:
   - avoids repetitive reassurance or repeated phrases such as "I'm here for you," "That makes sense," or "I hear you"
   - keeps the language natural, warm, and conversational
 
-consent_line: Okay. We'll take it one step at a time together.
-
 examples:
   about: Two of the client's own Supportive conversations, up to the offer. They show what each reply is doing, never words to reuse.
   panic: |

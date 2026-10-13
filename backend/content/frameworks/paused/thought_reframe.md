@@ -14,8 +14,8 @@ activation:
     - "why that thought hurts"
     - "whether they want a brief look rather than a deep one"
     - "whether it could be tested against facts (a loss or a settled fact is not a thought to test)"
-  # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
+  # Documentation of the specification: nothing in mani/ reads to_find_out, appropriate_when or not_when.
+  # The prompt reads central_indication, distinctions and contraindications.
   appropriate_when:
     - "One specific thought is intensifying the user's difficulty"
     - "The thought contains an assumption, prediction, or broad conclusion"

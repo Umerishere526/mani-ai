@@ -15,8 +15,8 @@ activation:
     - "whether a decision or an action could change it"
     - "whether it is one problem or several"
     - "whether they do not know what to do, as opposed to knowing and not starting"
-  # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
+  # Documentation of the specification: nothing in mani/ reads to_find_out, appropriate_when or not_when.
+  # The prompt reads central_indication, distinctions and contraindications.
   appropriate_when:
     - "The user has a specific practical problem"
     - "The problem can be influenced through action"

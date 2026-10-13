@@ -68,14 +68,14 @@ class SendMessageIn(BaseModel):
 
 
 class LedgerRow(BaseModel):
-    """One stage of the running framework as the model read it this turn. Debug mode only."""
+    """One stage of the running framework as the stage store holds it after this turn. Debug mode only."""
 
     stage: str
     title: str | None = None
     status: str
     known: str | None = None
     action: str
-    # The stage this reply asks.
+    # The stage the walk is on after this reply.
     asking: bool = False
 
 
@@ -90,8 +90,10 @@ class TurnOut(BaseModel):
     was_duplicate: bool = False
     # Null unless AI_DEBUG_MODE is on.
     reasoning: str | None = None
-    # Null unless AI_DEBUG_MODE is on: what the model knew of each stage and what it did about it.
+    # Null unless AI_DEBUG_MODE is on: what is stored for each stage and what the walk does about it.
     ledger: list[LedgerRow] | None = None
+    # Null unless AI_DEBUG_MODE is on: their feeling word and their issue as Mani understands them.
+    understanding: dict[str, str] | None = None
     # Set only on the turn a framework completes, and only once the catalog has a
     # matching exercise.
     exercise: "ExerciseOut | None" = None

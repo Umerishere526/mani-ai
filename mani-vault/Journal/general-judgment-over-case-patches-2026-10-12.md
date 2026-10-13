@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-12
 tags: [journal, prompts, offers, design, lessons]
 ---
+> Superseded 2026-10-13 ("Finding the fit" and `to_find_out`: removed, one question rule instead) — see [[running-understanding-and-one-question-rule-2026-10-13]]
 
 # General judgment over case patches (2026-10-12)
 

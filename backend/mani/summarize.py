@@ -32,8 +32,6 @@ def existing_context(summary: ThreadSummary | None) -> str:
     if summary is None:
         return "No existing summary."
     parts = []
-    if summary.current_issue:
-        parts.append(f"Current issue: {summary.current_issue}")
     if summary.summary:
         parts.append(f"Previous summary: {summary.summary}")
     if summary.techniques_tried:
@@ -138,7 +136,6 @@ async def update(
         thread.id,
         user_id,
         summary=call.value.summary,
-        current_issue=call.value.current_issue,
         techniques_tried=merged,
         # A real message id, so the next run knows where it got to. The reference wrote
         # the summary row's own id into this column when the batch was empty, which is a

@@ -1,5 +1,5 @@
 # ABOUTME: Runs the client's test conversations through the real stack and model, in every style.
-# ABOUTME: Reports what the client checks by eye (asking again, the offer, its wording and timing) and each turn's cost.
+# ABOUTME: Reports what the client checks by eye (asking again, the offer and its timing, each letter) and each turn's cost.
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani.auth.jwt import Claims  # noqa: E402
 from mani.chat import context, orchestrator  # noqa: E402
-from mani.chat import repairs  # noqa: E402
+from mani.chat import repairs, reply_checks  # noqa: E402
 from mani.chat.greeting import KEEP_CHATTING_LABEL, TELL_ME_MORE_LABEL, TRY_IT_LABEL  # noqa: E402
 from mani.db import pool  # noqa: E402
 from mani.prompts import cache  # noqa: E402
@@ -64,6 +64,10 @@ class Exchange:
     question: set[str] = field(default_factory=set)
     cost: Cost = field(default_factory=Cost)
     checks: list[str] = field(default_factory=list)
+    # The stage ids and statuses after the turn, while a framework runs (orchestrator.Turn.stage_trace).
+    trace: list[dict] | None = None
+    # Their feeling word and their issue as stored after the turn (orchestrator.Turn.understanding).
+    understanding: dict | None = None
 
 
 def _words(text: str) -> set[str]:
@@ -93,13 +97,41 @@ def _offering(registry, framework_id: str | None, key: str, style: str) -> str |
     return (((framework.stages or {}).get("offering") or {}).get(key) or {}).get(style) if framework else None
 
 
-def _check(exchange: Exchange, registry, told_more: bool, said: set[str], style: str) -> None:
+def stage_flags(reply: str, trace: list[dict] | None, before: list[dict] | None, stages: dict, style: str) -> list[str]:
+    """Inside a framework: a stage reached opens with its letter line, and a stage stored as known or
+    possible is said back, never asked with the client's question (spec 0004)."""
+    asking = next((row for row in trace or [] if row["asking"]), None)
+    if asking is None:
+        return []
+    was = next((row["stage"] for row in before or [] if row["asking"]), None)
+    stage = stages.get(asking["stage"]) or {}
+    flags = []
+    if asking["stage"] != was and stage.get("intro") and not reply.startswith(stage["intro"]):
+        flags.append("stage reply without its letter line")
+    ask = (stage.get("ask") or {}).get(style)
+    if asking["status"] in ("known", "possible") and ask and ask in reply:
+        flags.append("asked a stage already known")
+    return flags
+
+
+def _check(
+    exchange: Exchange, registry, told_more: bool, said: set[str], style: str, previous: Exchange | None,
+    framework_id: str | None,
+) -> None:
     exchange.question = _question(exchange.reply)
+    framework = registry.get(framework_id)
+    if framework:
+        exchange.flags += stage_flags(
+            exchange.reply, exchange.trace, previous.trace if previous else None, framework.stages, style,
+        )
     if exchange.question and len(exchange.question & said) / len(exchange.question) >= ASKS_WHAT_THEY_SAID:
         exchange.flags.append("asks what they already said")
     if INTERNAL.search(exchange.reply):
         exchange.flags.append("internal words")
     if not exchange.offered:
+        # The text that was sent, which inside a framework is mostly code's, not the model's draft.
+        if previous and reply_checks.repeats(exchange.reply, previous.reply):
+            exchange.flags.append("sent text repeats the last question")
         if offer_words_in_text(exchange.reply, registry):
             exchange.flags.append(OFFER_WORDS_FLAG)
         return
@@ -159,6 +191,7 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
             said |= _words(text)
             exchanges.append(await _exchange(
                 claims, thread.id, text, registry, told_more=False, said=said, billed=billed, style=style,
+                previous=exchanges[-1] if exchanges else None, framework_id=None,
             ))
             if exchanges[-1].offered:
                 offered_at = number
@@ -166,7 +199,7 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
                 for answer in (after or {}).get("lines") or [TELL_ME_MORE_LABEL]:
                     exchanges.append(await _exchange(
                         claims, thread.id, answer, registry, told_more=answer == TELL_ME_MORE_LABEL,
-                        said=said, billed=billed, style=style,
+                        said=said, billed=billed, style=style, previous=exchanges[-1], framework_id=framework,
                     ))
                 if after and after.get("answer") == "no":
                     keep = _offering(registry, framework, "keep_chatting", style)
@@ -184,7 +217,7 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
 
 async def _exchange(
     claims: Claims, thread_id, text: str, registry, *, told_more: bool, said: set[str], billed: list[int],
-    style: str,
+    style: str, previous: Exchange | None, framework_id: str | None,
 ) -> Exchange:
     started = time.perf_counter()
     turn = await _send(claims, thread_id, text)
@@ -192,9 +225,10 @@ async def _exchange(
     exchange = Exchange(
         person=text, reply=turn.content, buttons=[p.label for p in turn.prompts],
         offered=next((p.technique for p in turn.prompts if p.technique), None),
-        cost=await _cost(thread_id, seconds, billed), checks=turn.checks,
+        cost=await _cost(thread_id, seconds, billed), checks=turn.checks, trace=turn.stage_trace,
+        understanding=turn.understanding,
     )
-    _check(exchange, registry, told_more, said, style)
+    _check(exchange, registry, told_more, said, style, previous, framework_id)
     return exchange
 
 
@@ -236,6 +270,10 @@ def _report(name: str, runs: dict[str, list[Exchange]]) -> int:
             print(f"    > {exchange.person[:60]}\n      {exchange.reply.splitlines()[0][:110]}{mark}{checked}\n"
                   f"      {cost.seconds:.1f} s, {cost.calls} call(s), {cost.input_tokens} in "
                   f"({cost.cached_tokens} cached), {cost.output_tokens} out ({cost.reasoning_tokens} thinking)")
+            if exchange.offered:
+                # Read side by side by a person: does the offer's slot hold the feeling they named?
+                feeling = (exchange.understanding or {}).get("feeling") or "-"
+                print(f"      feeling stored: {feeling}\n      offer: {' '.join(exchange.reply.split())}")
     return flagged
 
 

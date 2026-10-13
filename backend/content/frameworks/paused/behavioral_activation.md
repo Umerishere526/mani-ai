@@ -14,8 +14,8 @@ activation:
     - "whether they know what they could do but cannot begin"
     - "what gets in the way of beginning"
     - "whether anything physical or medical explains it, or whether this is early grief (then not this)"
-  # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
+  # Documentation of the specification: nothing in mani/ reads to_find_out, appropriate_when or not_when.
+  # The prompt reads central_indication, distinctions and contraindications.
   appropriate_when:
     - "The user knows something they want or need to do"
     - "The user is having difficulty beginning"

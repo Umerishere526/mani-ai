@@ -19,7 +19,8 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 15  | General judgment over case patches       | Now      | in-progress |
 | 16  | Structured reply fields in place of text parsing | Next | in-progress |
 | 17  | The offer shows the five steps (R11)     | Now      | in-progress |
-| 18  | The ABCDE walk names each letter and remembers (R6, R12) | Now | planned |
+| 18  | The ABCDE walk names each letter and remembers (R6, R12) | Now | in-progress |
+| 19  | Questions follow what the person said (R4, R6) | Now | in-progress |
 
 ## Already built
 
@@ -99,13 +100,39 @@ The ABCDE offer makes clear what A, B, C, D and E stand for before they decide. 
 - [ ] Test it: `/test the offer shows the five steps`
       Requirement [R11](../client/requirements.md#requirements). No spec: muhammad decided the shape on 2026-10-13 (list in the offer, Tell me more kept for the longer text). Spec 0003's offer section goes stale. code in backend/content/frameworks/abcde.md (`offering.steps`, the offer slots, `central_indication`), backend/mani/chat/repairs.py (`offer_template`, `_offer_text`), backend/scripts/scenario_check.py. A live run is owed (muhammad's yes).
 
-### 18. The ABCDE walk names each letter and remembers (R6, R12) · planned · needs a decision
+### 18. The ABCDE walk names each letter and remembers (R6, R12) · in-progress
 
-Once they say yes, each stage opens with its letter and name, as the client's ABCDE document shows. A stage they already answered is named with their words and not asked again, a possible one is confirmed once, and only a missing one is asked. What they said per stage is stored by code, so it is never asked twice and survives the history window.
-**Done when:** every stage opens with its letter and name; a stage already answered, before or during the framework, is named with what they said and not asked again; a possible one is confirmed once; what they said per stage is stored and still used after it leaves the 20 message window; every turn is still one model call.
+Once they say yes, Mani walks one stage per reply, and each stage opens with its letter and name, as the client's ABCDE document shows. A stage they already answered is said back in their words and confirmed once, and only a missing one is asked. What they said per stage is stored by code, so it is never asked twice and survives the history window.
+**Done when:** every stage opens with its letter and name; one stage per reply; a stage already answered, before or during the framework, is said back with their words and confirmed once, never asked; what they said per stage is stored and still used after it leaves the 20 message window; every turn is still one model call.
 
-- [ ] Design it (spec): `/architect abcde walk and memory`
-      Requirements [R6, R12](../client/requirements.md#requirements). Input for the spec: the approved plan of 2026-10-13 (the review of Version B: it stored nothing more, it used a second call and effort `high`; proposed design: a `stages_known` column owned by code, merged from per turn updates, seeded on the yes turn, never moving backwards except on a correction, their short words sent back in `[ctx]`, the letter line placed by code from a stage `intro`, `with_ledger_step` removed). Reverses the Decision in force "The chat never names a stage" (muhammad agreed 2026-10-13).
+- [x] Design it (spec): `/architect abcde walk and memory`
+      Requirements [R6, R12](../client/requirements.md#requirements). Spec [0004](../specs/0004-abcde-walk-and-memory/index.md). Reverses the Decisions in force "The chat never names a stage" and "a stage their words already answer is skipped" (muhammad agreed 2026-10-13). Confirming a known stage departs from the document's Situation 1 (see Conflicts in requirements.md).
+- [x] Build it: `/develop the abcde walk and memory`
+  - [x] Thin walk: migration 020, the stage reply fields, `intro` and client lines in `abcde.md`, the code owned one stage step, missing stages sent as the client's ask (AC-1, AC-2, AC-6, AC-10, AC-11)
+  - [x] Memory: the merge, seeding on the start turn, stored words and the branch line in `[ctx]` (AC-3, AC-9, AC-12)
+  - [x] Confirm and correct: known, possible and partial render, confirm phrases, fallbacks, corrections and the plain no (AC-4, AC-5, AC-7, AC-8)
+  - [x] Cleanup and docs: remove the ledger and skip walk, `ledger_view` on the store, rewrite the broken tests, scenario_check, Decisions in force in place (AC-13)
+      code in backend/mani/chat/walk.py, backend/mani/chat/context.py, backend/mani/chat/orchestrator.py, backend/mani/llm/schema.py, backend/mani/db/threads.py, backend/content/frameworks/abcde.md, backend/supabase/migrations/020_thread_stages_known.sql and 021_framework_confirm_phrases.sql. Built 2026-10-13, tested with a scripted model; a live seeded run is owed (muhammad's yes).
+  - [x] First live run fixes (2026-10-13): a yes to a check moves on (it stayed on A and sent B's sentence with no letter line); the letter line shares one paragraph with the stage's line; their words in A's slot start lowercase (AC-1, AC-2, AC-4)
+      Found live on thread ca968cbd: phase still activate, A known with tries 1. Cause: the field descriptions called the start turn "the turn they say yes", so a yes to a check came back with stage_answer null; reworded to "the turn they accept the offer" (/debug, 3 of 3 replays then moved on). The letter line now shares a paragraph, and their words in A's slot start lowercase (/develop).
+- [ ] Verify it: `/check verify the abcde walk and memory`
+- [ ] Test it: `/test the abcde walk and memory`
+
+### 19. Questions follow what the person said (R4, R6) · in-progress
+
+Every question, in the chat and inside a framework, builds on the thread so far: question 2 on answer 1, question 3 on answers 1 and 2, keeping what they came with (their feeling and their issue) in view. Code keeps a running understanding of the conversation, updated every turn and sent back on the next, and one positive question rule replaces the framework checklist ("Finding the fit") and the bans on using their feeling. muhammad chose this over OpenAI's conversation API (OpenRouter rejects stored state, and it would not change what the model is told to ask) and over a prompt rewrite alone, on 2026-10-13. Found live the same day: a Directive chat opened "i am frustrated", and after two questions Mani followed ABCDE's checklist instead and offered with their judgment about the client in place of their feeling.
+**Done when:** the running understanding is stored per thread, updated each turn, sent back the next turn and still used after the 20 message window; in a live run of the frustrated chat and the client scenarios, in all three styles, each question follows from their previous answers, the feeling they named comes back in a question or the offer, the offer slot holds their feeling word, and nothing is restated as a statement (R3); every turn is still one model call on OpenRouter; and the Decision in force "Questions before an offer ask for what is still missing" is edited in place.
+
+- [x] Design it (spec): `/architect questions follow what the person said`
+      Requirements [R4, R6](../client/requirements.md#requirements). Spec [0005](../specs/0005-questions-follow-what-they-said/index.md). The understanding holds their feeling and issue only (muhammad dropped the answers list, 2026-10-13); nothing is stored from a concern turn; it replaces `thread_summaries.current_issue` and spec 0004's yes turn `feeling`.
+- [x] Build it: `/develop questions follow what the person said`
+  - [x] The record end to end: migration 022 (column, `mani_service` grant, drop `current_issue`), the merge, `understanding_update` in every reply shape, the write, the `[ctx]` line (AC-1, AC-2, AC-4, AC-10, AC-11)
+  - [x] Its readers: A's missing slot from the stored feeling, the exercise pick from the issue, `current_issue` and the yes turn `feeling` removed with their tests (AC-7, AC-8)
+  - [x] The prompt: the one question rule in `rules`, the four cuts with "Finding the fit" and `to_find_out`, the three offer slot placeholders, reseed (AC-3, AC-6, AC-9)
+  - [x] Debug view, the frustrated chat scenario, Decisions in force and docs (AC-12, AC-13)
+      code in backend/mani/chat/understanding.py, backend/mani/chat/orchestrator.py, backend/mani/chat/context.py, backend/mani/llm/schema.py, backend/mani/db/threads.py, backend/mani/summarize.py, backend/mani/prompts/composer.py, backend/content/prompts/mani_base.md, backend/content/prompts/response_format.md, backend/content/frameworks/abcde.md, backend/supabase/migrations/022_thread_understanding.sql. The live run (AC-3, AC-5, AC-6) needs muhammad's yes.
+- [ ] Verify it: `/check verify questions follow what the person said`
+- [ ] Test it: `/test questions follow what the person said`
 
 ## Next
 

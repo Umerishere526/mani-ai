@@ -298,7 +298,7 @@ async def choose_exercise(
     purpose: llm_calls.Purpose,
     reasoning_effort: str | None = None,
     said: Sequence[str] = (),
-    current_issue: str | None = None,
+    issue: str | None = None,
     temperature: float = DEFAULT_TEMPERATURE,
     max_tokens: int = 200,
     routing: dict[str, Any] | None = None,
@@ -312,8 +312,9 @@ async def choose_exercise(
     Real tool-calling, not structured output - a deliberate, scoped exception to one call
     per turn, only reached when a framework just completed and the catalog is not empty.
     `candidates` is `[{"id", "title", "subtitle", "type", "category"}, ...]`, never free
-    text. `said` is the person's most recent messages and `current_issue` the thread
-    summary's, so the pick fits what they talked about rather than only the framework.
+    text. `said` is the person's most recent messages and `issue` what Mani understands
+    they are dealing with, so the pick fits what they talked about rather than only the
+    framework.
 
     Never raises. A failure here costs the exercise offer, not the turn - the caller falls
     back to the plain library offer the ordinary reply already makes.
@@ -344,7 +345,7 @@ async def choose_exercise(
         }
     ]
     # The person's own words go in a user message, never the system one: data, not orders.
-    context = ([f"What this conversation is about: {current_issue}"] if current_issue else []) + [
+    context = ([f"What this conversation is about: {issue}"] if issue else []) + [
         f"They said: {line}" for line in said
     ]
     if context:

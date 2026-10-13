@@ -308,11 +308,20 @@ else:
 
 with st.sidebar:
     st.divider()
-    # What Mani knew of each stage of the running framework on its last reply, and what the reply
-    # did about it. Sent by the backend only while AI_DEBUG_MODE is on.
+    # What the backend has stored for each stage of the running framework after the last reply, and
+    # what the walk does about it. Sent by the backend only while AI_DEBUG_MODE is on.
     st.subheader("🧾 What Mani knows")
+    # Their feeling word and their issue as the backend has stored them for this thread.
+    understood = (last_turn or {}).get("understanding")
+    if understood:
+        if understood.get("feeling"):
+            st.markdown(f"**Feeling:** {understood['feeling']}")
+        if understood.get("issue"):
+            st.markdown(f"**Issue:** {understood['issue']}")
+    else:
+        st.caption("Nothing understood yet, or AI_DEBUG_MODE is off in the backend.")
     LEDGER_ICONS = {
-        "known": "✅", "partial": "🟡", "confirm": "❓", "missing": "⬜", "done": "✔️", "not_reached": "⚪",
+        "known": "✅", "possible": "❓", "partial": "🟡", "missing": "⬜", "done": "✔️", "not_reached": "⚪",
     }
     ledger = (last_turn or {}).get("ledger")
     if ledger:
@@ -324,7 +333,7 @@ with st.sidebar:
             )
             if row.get("known"):
                 st.caption(f"knows: {row['known']}")
-        st.caption("✅ bypassed  🟡 partial  ❓ confirm  ⬜ missing  ✔️ done earlier  ▶ asked this reply")
+        st.caption("✅ known, confirm once  ❓ possible event  🟡 partial  ⬜ missing  ✔️ done  ▶ on it now")
     else:
         st.caption("Shown while a framework is running, with AI_DEBUG_MODE on in the backend.")
 

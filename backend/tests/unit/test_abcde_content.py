@@ -22,6 +22,7 @@ def as_framework(parsed: dict) -> Framework:
     return Framework(
         id=parsed["id"], name=parsed["name"], summary=parsed["summary"], body="b",
         phases=parsed["phases"], activation=parsed["activation"], stages=parsed["stages"],
+        confirm_phrases=parsed["confirm_phrases"],
     )
 
 
@@ -51,21 +52,31 @@ def test_tell_me_more_is_the_five_steps_in_the_selected_style(abcde):
         assert text.endswith("Would you like to try it?")
 
 
-def test_the_event_stage_confirms_only_a_possible_event_in_each_style(abcde):
-    branch = abcde["stages"]["activate"]["if_unclear"][0]
-    assert set(branch["reply"]) == set(STYLES)
-    assert all(reply.endswith("?") for reply in branch["reply"].values())
-
-
-def test_no_stage_letter_or_name_is_sent_for_the_chat_to_repeat(abcde):
-    framework = as_framework(abcde)
-    block = "\n".join(
-        context._stage_lines("stage", framework, "activate", "directive")
-        + context._later_stage_lines(framework, "dispute", "directive", explain=True)
+def test_the_event_stage_carries_the_clients_confirm_and_missing_lines_in_each_style(abcde):
+    """The document's three cases for A: an event said back and confirmed, and the event asked for
+    with their own word for the feeling (spec 0004, AC-4 and AC-6)."""
+    activate = abcde["stages"]["activate"]
+    assert activate["confirm"]["supportive"] == (
+        "You mentioned <the event, in their words>. Is that what started these feelings?"
     )
-    assert "title" not in block and "label" not in block and "Activating Event" not in block
-    note = context._stage_note(framework, starting=True)
-    assert "Never say a stage's letter or name" in note and "skipped without a word" in note
+    assert activate["missing"]["supportive"] == "What's been happening that's left you feeling so <their word for it>?"
+    for key in ("confirm", "missing"):
+        assert set(activate[key]) == set(STYLES)
+        assert all(line.endswith("?") and "<" in line for line in activate[key].values())
+
+
+def test_each_letter_opens_with_the_clients_intro_line(abcde):
+    """Spec 0004, AC-1 and AC-7: the document introduces each letter by its name as it is reached,
+    and a stage said back closes with one of four short phrases."""
+    intros = {stage: abcde["stages"][stage]["intro"] for stage in abcde["phases"][1:]}
+    assert intros == {
+        "activate": "A is for Activating Event.", "belief": "B is for Belief.",
+        "consequence": "C is for Consequences.", "dispute": "D is for Dispute.",
+        "effective": "E is for Effective New Belief.",
+    }
+    assert abcde["confirm_phrases"] == [
+        "Is that right?", "Do we have this right?", "Did I get that right?", "Does that sound right?",
+    ]
 
 
 def test_the_offer_follows_the_clients_pattern_with_a_slot_for_their_situation(abcde):
@@ -74,6 +85,8 @@ def test_the_offer_follows_the_clients_pattern_with_a_slot_for_their_situation(a
     for text in offer.values():
         assert "There's a framework called ABCDE" in text
         assert "<" in text and ">" in text and "?" not in text, "a slot to fill, and no question of its own"
+        # Spec 0005, AC-6: the feeling they named fills it; their worry only when they named none.
+        assert "<their feeling from understanding" in text and "only when they named no feeling>" in text
     assert "helps you identify the thoughts behind <" in offer["directive"]
     assert "question whether they're true, and replace them with more realistic ones." in offer["directive"]
 
@@ -162,7 +175,7 @@ def test_an_open_offer_turn_costs_less_prompt_than_before_the_structured_fields(
     offered = TechniqueState(thread_id=thread.id, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
                              phase="offering", at_message_count=11)
     block = context.build(TurnContext(thread=thread, profile=None, technique=offered), framework=framework,
-                          history=[], offer_waiting=True)
+                          history=[], offer_waiting=True, yes_framework=framework)
     shape = reply_for(Moment.OFFER_OPEN, slots=repairs.slots_for(registry, "supportive", "abcde"))
 
     total = len(system.text) + len(block) + len(json.dumps(shape.model_json_schema()))
