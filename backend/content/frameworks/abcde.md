@@ -8,7 +8,7 @@ activation:
   central_indication: >-
     ABCDE works on what they are telling themselves. It fits once their own words give you what it
     would work on: a conclusion, worry or judgment, or how it is leaving them feeling. Test: you can
-    fill the offer's <what they are going through> from their words without adding a feeling or
+    fill the offer's <how they are feeling or what is worrying them> from their words without adding a feeling or
     belief they didn't give. What happened, on its own, does not; step A asks for it when it is
     missing.
   to_find_out:
@@ -47,13 +47,19 @@ stages:
       directive: "Would you like to try it?"
     offer:
       directive: |-
-        There's a framework called ABCDE that helps you identify the thoughts behind <what they are going through, as a short noun phrase in their words that reads naturally after "the thoughts behind">, question whether they're true, and replace them with more realistic ones.
+        There's a framework called ABCDE that helps you identify the thoughts behind <how they are feeling or what is worrying them, in their own words, as a short noun phrase that reads naturally after "the thoughts behind", such as "your anxiety">, question whether they're true, and replace them with more realistic ones.
       supportive: |-
         <A short warm line in your own words that shows you understood what they said, using their words, such as "Feeling overwhelmed can make you question how well you're handling things.">
-        There's a framework called ABCDE that can help you understand the thoughts behind <what they are going through, the same short noun phrase>, see whether those thoughts are really true, and find a more helpful way to think about what's happening.
+        There's a framework called ABCDE that can help you understand the thoughts behind <how they are feeling or what is worrying them, in their own words, as a short noun phrase that reads naturally after "the thoughts behind", such as "your anxiety">, see whether those thoughts are really true, and find a more helpful way to think about what's happening.
       reflective: |-
         <A short line about how the way we interpret what is happening can make it feel harder, fitted to what they said, such as "Sometimes the way we interpret what's happening can make a difficult situation feel even harder.">
-        There's a framework called ABCDE that helps you examine what you're telling yourself about <what they are going through, the same short noun phrase>, understand how those thoughts affect you, and consider whether there's a more realistic way to see things.
+        There's a framework called ABCDE that helps you examine what you're telling yourself about <how they are feeling or what is worrying them, in their own words, as a short noun phrase that reads naturally after "what you're telling yourself about", such as "your anxiety">, understand how those thoughts affect you, and consider whether there's a more realistic way to see things.
+    steps: |-
+      - A: Activating Event. What happened or what is happening.
+      - B: Belief. What you began believing about it.
+      - C: Consequences. How that belief affected your feelings or actions.
+      - D: Dispute. What supports the belief and what might challenge it.
+      - E: Effective New Belief. A more realistic and helpful way to understand it.
     keep_chatting:
       directive: |-
         What's been happening that's making you feel like <what they said they are struggling with, in their words>?

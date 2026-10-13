@@ -6,19 +6,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from mani.chat.techniques import Registry
 from mani.llm.schema import NO_QUESTION_SHAPES, Reply
 from mani.models.rows import ENDING_STAGES, Framework
-
-
-def offered(reply: Reply, registry: Registry) -> str | None:
-    """The framework a draft offers, if it carries an offer button for one that exists. An id the
-    registry does not know is repairs.apply's to remove."""
-    return next(
-        (p.technique for p in reply.prompts or [] if p.technique and registry.get(p.technique)),
-        None,
-    )
-
 
 _QUESTION = re.compile(r"[^.!?\n]*\?")
 REPEAT_OVERLAP = 0.7
@@ -119,16 +108,20 @@ def with_ledger_step(reply: Reply, framework: Framework, start: StageInForce) ->
 
 def misses(
     reply: Reply,
-    registry: Registry,
     *,
+    offered: str | None,
+    offer_dropped: str | None,
     offer_due: bool,
     needs_question: bool,
     last_mani_text: str | None,
 ) -> list[str]:
     """What the draft got wrong that code cannot fix, named for the log. Empty when it stands.
-    None of these costs a second call: they are counted, so how often each happens is known."""
+    None of these costs a second call: they are counted, so how often each happens is known.
+    `offered` is the set the sent reply offers, as code rendered it."""
     notes: list[str] = []
-    technique = offered(reply, registry)
+    technique = offered
+    if offer_dropped:
+        notes.append(f"offer unusable: {offer_dropped}")
     if not technique and repeats(reply, last_mani_text):
         notes.append("repeats the last question")
     chose_to_ask_nothing = bool(

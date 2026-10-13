@@ -701,3 +701,34 @@ def test_the_stages_after_the_next_are_listed_so_several_can_be_skipped_at_once(
     assert "later_stage: somatic_checkin" not in lines, "the body route is run by code"
 
 
+
+
+def test_the_moment_is_read_from_the_database_and_the_safety_screen_alone():
+    """Spec 0003, AC-1: the reply shape is picked from what the database says is happening."""
+    from mani.llm.schema import Moment
+
+    body_route = Framework(
+        id="abcde", name="ABCDE", summary="s", body="b",
+        phases=["offering", "activate", "effective", "somatic_checkin", "somatic_practice"],
+    )
+
+    def row(outcome: TechniqueOutcome, phase: str | None) -> TechniqueState:
+        return TechniqueState(
+            thread_id=THREAD, framework_id="abcde", outcome=outcome, phase=phase, at_message_count=5,
+        )
+
+    def moment(technique, outcome=None, *, retiring=None, awaiting_place=False, concern=False):
+        outcome = outcome or (technique.outcome if technique else None)
+        return context.moment(technique, outcome, retiring, awaiting_place, body_route, concern=concern)
+
+    offered, accepted = TechniqueOutcome.OFFERED, TechniqueOutcome.ACCEPTED
+    assert moment(row(accepted, "activate"), concern=True) is Moment.CONCERN
+    assert moment(row(offered, "offering"), accepted) is Moment.IN_STAGES, "a Try it tap starts it"
+    assert moment(row(offered, "offering")) is Moment.OFFER_OPEN, "buttons showing or not"
+    assert moment(row(accepted, "activate")) is Moment.IN_STAGES
+    assert moment(row(accepted, "effective")) is Moment.BODY, "the closing"
+    assert moment(row(accepted, "somatic_checkin")) is Moment.BODY
+    assert moment(row(accepted, "somatic_practice"), awaiting_place=True) is Moment.BODY
+    assert moment(row(accepted, "somatic_practice")) is Moment.IN_STAGES, "no place buttons showing"
+    assert moment(None, retiring="abcde") is Moment.BODY
+    assert moment(None) is Moment.CHATTING

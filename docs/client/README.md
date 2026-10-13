@@ -35,3 +35,4 @@ conflict under "Conflicts" in [requirements.md](requirements.md) and update the 
 | 2026-10-12 | Lolly | [Urgency, unresolved issues and the Wednesday deadline](messages/2026-10-12-urgency-and-wednesday-deadline.md) |
 | 2026-10-12 | client | [Directive, Supportive, Reflective: the styles document](messages/2026-10-12-styles-document.md) |
 | 2026-10-12 | Lolly | [Job decision: testing feedback in all three styles](messages/2026-10-12-job-decision-testing-feedback.md) |
+| 2026-10-13 | Lolly | [Two chat versions, testing confusion, and ABCDE still not explained](messages/2026-10-13-two-versions-confusion.md) |

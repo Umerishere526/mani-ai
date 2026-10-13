@@ -17,7 +17,9 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 13  | Faster turns (R2)                        | Now      | in-progress |
 | 14  | Styles from the client's document (R8, R9) | Now    | in-progress |
 | 15  | General judgment over case patches       | Now      | in-progress |
-| 16  | Structured reply fields in place of text parsing | Next | planned |
+| 16  | Structured reply fields in place of text parsing | Next | in-progress |
+| 17  | The offer shows the five steps (R11)     | Now      | in-progress |
+| 18  | The ABCDE walk names each letter and remembers (R6, R12) | Now | planned |
 
 ## Already built
 
@@ -86,14 +88,41 @@ Mani reads the person with the model's own judgment, from one general rule per i
 - [ ] Test it: `/test general judgment over case patches`
       Requirements [R1, R3, R8](../client/requirements.md#requirements). No spec: the decisions were made in the /scope panel of 2026-10-12 (two features; `due` checks understanding and never forces; the slot test wording; dead paths deleted now). code in backend/content/prompts/, backend/content/frameworks/abcde.md, backend/mani/chat/context.py, backend/mani/chat/orchestrator.py, backend/scripts/scenario_check.py, backend/scripts/scenarios.json. The live run is owed (muhammad's yes).
 
+### 17. The offer shows the five steps (R11) · in-progress
+
+The ABCDE offer makes clear what A, B, C, D and E stand for before they decide. It is the style's client template with their feeling in the slot ("your anxiety"), then the permission question, then the client's short list of the five steps, reworded to "you". Tell me more keeps the longer per style explanation.
+**Done when:** every ABCDE offer, in all three styles, is the style's template with their feeling in the slot, then the permission question, then the five steps; Tell me more still sends the longer explanation and then shows only Try it and Keep chatting.
+
+- [x] Build it: `/develop the offer shows the five steps`
+  - [x] `offering.steps` and the feeling slot in `abcde.md`, `repairs.offer_template` shared by the offer and scenario_check, tests, Decision in force edited in place
+- [ ] Verify it: `/check verify the offer shows the five steps`
+- [ ] Test it: `/test the offer shows the five steps`
+      Requirement [R11](../client/requirements.md#requirements). No spec: muhammad decided the shape on 2026-10-13 (list in the offer, Tell me more kept for the longer text). Spec 0003's offer section goes stale. code in backend/content/frameworks/abcde.md (`offering.steps`, the offer slots, `central_indication`), backend/mani/chat/repairs.py (`offer_template`, `_offer_text`), backend/scripts/scenario_check.py. A live run is owed (muhammad's yes).
+
+### 18. The ABCDE walk names each letter and remembers (R6, R12) · planned · needs a decision
+
+Once they say yes, each stage opens with its letter and name, as the client's ABCDE document shows. A stage they already answered is named with their words and not asked again, a possible one is confirmed once, and only a missing one is asked. What they said per stage is stored by code, so it is never asked twice and survives the history window.
+**Done when:** every stage opens with its letter and name; a stage already answered, before or during the framework, is named with what they said and not asked again; a possible one is confirmed once; what they said per stage is stored and still used after it leaves the 20 message window; every turn is still one model call.
+
+- [ ] Design it (spec): `/architect abcde walk and memory`
+      Requirements [R6, R12](../client/requirements.md#requirements). Input for the spec: the approved plan of 2026-10-13 (the review of Version B: it stored nothing more, it used a second call and effort `high`; proposed design: a `stages_known` column owned by code, merged from per turn updates, seeded on the yes turn, never moving backwards except on a correction, their short words sent back in `[ctx]`, the letter line placed by code from a stage `intro`, `with_ledger_step` removed). Reverses the Decision in force "The chat never names a stage" (muhammad agreed 2026-10-13).
+
 ## Next
 
-### 16. Structured reply fields in place of text parsing · needs a decision
+### 16. Structured reply fields in place of text parsing · in-progress
 
 The model reports what code currently guesses from text: its own offer line, where they feel it, whether they declined, and whether this reply ends the framework. Code then places the client's fixed text, and the regexes go.
 **Done when:** no regex or phrase list reads meaning from the person's or the model's words outside the safety screen, and every gate stays keyed on database state, never on these fields.
 
-- [ ] Design it (spec): `/architect structured reply fields`
+- [x] Design it (spec): `/architect structured reply fields`
+- [ ] Build it: `/develop structured reply fields`
+  - [x] Offer thread: moment selection, schema factory, offer and Keep chatting from the client's templates, offer_answer, safety guard, prompt cuts (AC-1 to AC-4, AC-8 to AC-10, AC-12)
+  - [x] Body thread: branch ids in somatic.md, the body enum, handoff from the branch (AC-5, AC-6)
+  - [x] Cleanup: delete the regexes, `prompts` and `ReplyWithoutOffer`; Decisions in force edited in place (AC-7)
+  - [ ] Live run in all three styles after muhammad's yes (AC-11)
+- [ ] Verify it: `/check verify structured reply fields`
+- [ ] Test it: `/test structured reply fields`
+      Spec [0003](../specs/0003-structured-reply-fields/index.md). code in backend/mani/llm/schema.py, backend/mani/chat/context.py, backend/mani/chat/repairs.py, backend/mani/chat/reply_checks.py, backend/mani/chat/orchestrator.py, backend/mani/prompts/cache.py, backend/mani/prompts/composer.py, backend/scripts/scenario_check.py, backend/scripts/scenarios.json, backend/content/prompts/somatic.md, backend/content/prompts/mani_base.md, backend/content/prompts/response_format.md
 
 ## Legend
 

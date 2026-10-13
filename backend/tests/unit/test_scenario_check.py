@@ -41,3 +41,32 @@ def test_every_conversation_in_the_file_has_lines_and_expectations_that_can_be_m
         assert conversation["lines"], name
         assert earliest >= context.FIRST_OFFER_OPENS, name
         assert expect.get("offer_by", earliest) >= earliest, name
+
+
+def test_offer_wording_in_a_reply_of_the_models_own_is_flagged():
+    """Spec 0003, AC-11: an offer the model writes in its text is never sent as one, so the run
+    counts how often it happens."""
+    from mani.chat.techniques import Registry
+    from mani.models.rows import Framework
+
+    registry = Registry([Framework(id="abcde", name="ABCDE", summary="s", body="b", phases=["offering"])])
+    assert scenario_check.offer_words_in_text("There's a set of questions called ABCDE for this.", registry)
+    assert scenario_check.offer_words_in_text("A framework could help. Would you like to try it?", registry)
+    assert not scenario_check.offer_words_in_text("What happened after the meeting?", registry)
+
+
+def test_a_line_matches_the_clients_template_only_when_just_the_slots_changed():
+    template = "We can keep talking. What's been happening that's making things feel so <how they described it>?"
+    assert scenario_check.matches_template(
+        "We can keep talking. What's been happening that's making things feel so heavy?", template
+    )
+    assert not scenario_check.matches_template(
+        "We can keep talking. What has been happening that makes things feel so heavy?", template
+    )
+
+
+def test_every_answer_after_an_offer_names_what_kind_of_answer_it_is():
+    groups = json.loads(scenario_check.SCENARIOS.read_text())
+    answered = [c for c in scenario_check.conversations(groups).values() if "after_offer" in c]
+    assert {c["after_offer"]["answer"] for c in answered} == {"no", "moved_on", "yes"}
+    assert all(c["after_offer"]["lines"] for c in answered)

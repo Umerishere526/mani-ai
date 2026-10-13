@@ -9,7 +9,15 @@ from mani.chat import repairs
 from mani.config import get_settings
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
 from mani.db.threads import TurnContext
-from mani.models.rows import ENDING_STAGES, Framework, Message, MessageRole, TechniqueOutcome
+from mani.llm.schema import Moment
+from mani.models.rows import (
+    ENDING_STAGES,
+    Framework,
+    Message,
+    MessageRole,
+    TechniqueOutcome,
+    TechniqueState,
+)
 
 # How many messages must pass before a technique may be offered again.
 # After "Keep chatting", three of Mani's replies before it may check again - the same
@@ -132,6 +140,34 @@ def offer_window(ctx: TurnContext) -> str:
     return "open" if theirs >= FIRST_OFFER_OPENS else "not_yet"
 
 
+def moment(
+    technique: TechniqueState | None,
+    outcome: TechniqueOutcome | None,
+    retiring_framework_id: str | None,
+    awaiting_place: bool,
+    framework: Framework | None,
+    concern: bool,
+) -> Moment:
+    """What is happening this turn, from the database and the safety screen alone; the first that
+    matches wins. `technique` is the live row, offered or running, and `outcome` is its outcome,
+    accepted when a Try it tap starts it this turn."""
+    if concern:
+        return Moment.CONCERN
+    if retiring_framework_id is not None:
+        return Moment.BODY
+    if technique is None:
+        return Moment.CHATTING
+    if outcome is TechniqueOutcome.ACCEPTED:
+        phase = technique.phase
+        at_the_body = phase == "somatic_checkin" or (phase == "somatic_practice" and awaiting_place)
+        if at_the_body or (framework is not None and phase == framework.closing):
+            return Moment.BODY
+        return Moment.IN_STAGES
+    if outcome is TechniqueOutcome.OFFERED:
+        return Moment.OFFER_OPEN
+    return Moment.CHATTING
+
+
 def resolve_style(ctx: TurnContext) -> str:
     """The conversation style in force this turn: which style layer is composed, and which of a
     framework's style variants is surfaced.
@@ -178,10 +214,8 @@ _MEANING: dict[str, str | dict[str, str]] = {
     },
     "offer_waiting": {
         "yes": (
-            "your last reply offered and they typed instead of tapping. If they said yes, set "
-            "state.accepted to true and begin. If they asked what it involves, answer and offer "
-            "again. Anything else is Keep chatting, so set state.accepted to false, follow them, "
-            "and offer nothing in this reply."
+            "your last reply offered and they typed instead of tapping. On a yes, begin. "
+            "Otherwise follow them."
         ),
     },
     "offer_window": {
@@ -195,8 +229,7 @@ _MEANING: dict[str, str | dict[str, str]] = {
     "this_thread": (
         "what was last offered in this conversation and how it went. One they declined may come "
         "back once the cooldown has passed, if it still fits. One they just finished may not. "
-        "If they ask for one they declined, that is a yes at any time, so begin it and report "
-        "state.accepted as true."
+        "If they ask for one they declined, that is a yes at any time, so begin it."
     ),
     "history": "what was tried earlier in this conversation, and whether it helped.",
     "library_pending": {"yes": "offer the Library before anything new."},
@@ -448,7 +481,11 @@ def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> l
     if stage.get("boundaries"):
         lines.append(f"{prefix}_boundaries: " + "; ".join(stage["boundaries"]))
     if stage.get("if_unclear"):
-        rendered = " | ".join(f"if {e['when']}: {repairs.reply_for(e, style)}" for e in stage["if_unclear"])
+        # A body route branch is shown by its id, which the reply names in `body`: code sends its text.
+        rendered = " | ".join(
+            f"{e['id']}: {e['when']}" if e.get("id") else f"if {e['when']}: {repairs.reply_for(e, style)}"
+            for e in stage["if_unclear"]
+        )
         lines.append(f"{prefix}_if_unclear: {rendered}")
     ask = (stage.get("ask") or {}).get(style)
     if ask:

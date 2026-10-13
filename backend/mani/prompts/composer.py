@@ -30,7 +30,7 @@ class SystemPrompt:
         return len(self.text)
 
 
-def framework_index(registry: Registry, style: str) -> str | None:
+def framework_index(registry: Registry) -> str | None:
     """The catalogue of frameworks, built from the registry rather than written by hand.
 
     Every line here already exists as data on `admin.frameworks`, seeded from the framework
@@ -38,8 +38,7 @@ def framework_index(registry: Registry, style: str) -> str | None:
     first time somebody edits one and not the other. Generating it means adding a framework
     is a content change with no prompt edit, which is what the registry already claims.
 
-    Static across users and turns in one style, so it sits in the cached prefix after that
-    style's layer. Only that style's offer and Keep chatting wording is listed.
+    Static across users and turns, so it sits in the cached prefix after the style's layer.
     """
     frameworks = [registry.get(fid) for fid in registry.ids]
     present = [f for f in frameworks if f is not None]
@@ -81,13 +80,6 @@ def framework_index(registry: Registry, style: str) -> str | None:
     if rendered:
         lines += ["", "## Telling them apart", ""] + rendered
 
-    # The client's description of each is added by the backend when they ask to hear more, so
-    # it is not listed here: a model given the text copied it, and offers showed it twice.
-    lines += [
-        "", "When you offer one, say its name, as written above. Its description is added for "
-        "you if they ask to hear more. Never its id.",
-    ]
-
     # Only the contraindications, not every not_when line: most of those name a different
     # framework to use instead, which "Telling them apart" already says. These name a
     # situation where offering any of it would harm the person.
@@ -114,36 +106,7 @@ def framework_index(registry: Registry, style: str) -> str | None:
             "you; your questions follow their feeling, never this list:", "",
         ] + to_find_out
 
-    # The client's own offer wording in this style. Mani writes its part of an offer in that
-    # pattern and changes only what is in angle brackets, so it reads as a whole sentence.
-    patterns = _offering_lines(present, "offer", style)
-    keep_chatting = _offering_lines(present, "keep_chatting", style)
-    if patterns:
-        lines += [
-            "", "## How to word an offer", "",
-            "Write your part of an offer in this pattern. Keep every word as written, the whole "
-            "pattern and never shortened. Change only what is in angle brackets, to fit what they told "
-            "you, so the whole sentence reads naturally. The permission question is added after "
-            "your part.", "",
-        ] + patterns
-    if keep_chatting:
-        lines += [
-            "", "## When they choose Keep chatting", "",
-            "Carry on the conversation with this question, keeping its words and changing only what "
-            "is in angle brackets to fit what they said. Offer nothing in that reply.", "",
-        ] + keep_chatting
-
     return "\n".join(lines)
-
-
-def _offering_lines(frameworks: list, key: str, style: str) -> list[str]:
-    """Each framework's offering wording under `key`, in one style, headed by its name."""
-    return [
-        f"**{framework.name}**\n{' '.join(str(text).split())}"
-        for framework in frameworks
-        for text in [(((framework.stages or {}).get("offering") or {}).get(key) or {}).get(style)]
-        if text
-    ]
 
 
 def user_context(profile: Profile | None) -> str | None:
@@ -258,12 +221,12 @@ def compose(
 
     candidates: list[tuple[str, str | None]] = [
         # Who Mani is and how a conversation runs, then what a reply must satisfy: identical
-        # for every user and style. Then the chosen style and the catalogue in its wording,
-        # identical for every conversation in that style.
+        # for every user and style. Then the chosen style and the catalogue, identical for every
+        # conversation in that style.
         ("mani_base", config.require("mani_base").content),
         ("response_format", config.require("response_format").content),
         ("style", config.require(style_prompt(style)).content),
-        ("framework_index", framework_index(config.registry, style)),
+        ("framework_index", framework_index(config.registry)),
         ("user_context", user_context(profile)),
         ("user_memory", user_memory(memory)),
     ]

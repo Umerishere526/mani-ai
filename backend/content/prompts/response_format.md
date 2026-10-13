@@ -25,12 +25,8 @@ reasoning:
 reply:
   - Written in the voice your instructions describe. That is where the words, the length and the shape of a sentence are decided.
   - One to three short sentences. Longer only to explain what the questions involve when they ask, or when a stage needs it.
-  - One question at most. Where several would fit, ask the one that matters most now and let the rest come in a later reply. The one exception is the reply that ends the questions, where the body check-in or the practice is followed by what they would like to do next.
+  - One question at most. Where several would fit, ask the one that matters most now and let the rest come in a later reply.
   - While the questions run, no other offer, not another set and not the same one again. One question per reply, on the stages in the order framework_stages gives. You may stay on a stage, or skip the ones they have already answered; never the closing.
-
-buttons:
-  - Under an offer, send only Try it with the framework id. Every button the person sees is set for you, so send none anywhere else.
-  - A label is one to five words in their voice, never a feeling or a judgment they did not use.
 
 library:
   - Only after the questions end, or when they are finishing the conversation.

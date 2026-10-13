@@ -13,9 +13,10 @@ from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
 from mani.chat.repairs import PERMISSION_QUESTION
-from mani.llm.schema import Crisis, Reply, ReplyWithoutOffer, SmartPrompt, Style, TechniqueState
+from mani.llm.schema import Crisis, Offer, Reply, Style, TechniqueState
 from mani.models.rows import TechniqueOutcome, TechniqueState as TechniqueRow
 from tests.integration.cleanup import remove_test_users
+from tests.unit.test_repairs import FIVE_STEPS
 
 ALICE = uuid.UUID("a0000000-0000-4000-8000-0000000000d1")
 
@@ -46,7 +47,9 @@ class ScriptedModel:
         self.kwargs = kwargs
         reply = self._replies[min(self.calls - 1, len(self._replies) - 1)]
         return client.Call(
-            value=reply,
+            # Parsed in the shape this turn sent, as the real call is: a field the moment does not
+            # carry is dropped, however the script filled it.
+            value=schema.model_validate(reply.model_dump()),
             model="test/model",
             usage=llm_calls.Usage(input_tokens=100, output_tokens=20),
             latency_ms=1,
@@ -167,16 +170,11 @@ async def set_technique_outcome(
 async def test_a_turn_costs_exactly_one_provider_call(alice, model):
     scripted = model(
         Reply(
-            # Everything the six checks look at is wrong at once: leaked script text, a
-            # phase jumped to out of order, a duplicated label, and four buttons.
+            # Everything the checks look at is wrong at once: leaked script text, a phase
+            # jumped to out of order, and an offer for a set that does not exist.
             text="Here you go. What happened?\n\n**Mani:** breathe\n\n(Include prompts: yes/no)",
-            prompts=[
-                SmartPrompt(label="Tell me more"),
-                SmartPrompt(label="tell me more"),
-                SmartPrompt(label="Try it", technique="made_up_technique"),
-                SmartPrompt(label="Later"),
-                SmartPrompt(label="Not now"),
-            ],
+            heading_toward="made_up_technique",
+            offer=Offer(going_through="a hard day", lead_line="That sounds hard."),
             state=TechniqueState(technique="abcde", step="examine"),
             style=Style(shape="mirror and ask"),
         )
@@ -186,8 +184,7 @@ async def test_a_turn_costs_exactly_one_provider_call(alice, model):
 
     assert scripted.calls == 1
     assert "**Mani:**" not in turn.content
-    # "Tell me more" goes with the unknown technique it would have explained, and the rest go
-    # because ordinary chat carries no buttons.
+    # An offer for an unknown set is not made, and ordinary chat carries no buttons.
     assert turn.prompts == []
 
 
@@ -199,13 +196,23 @@ RESENTFUL = (
 )
 
 
-def _offer(technique: str) -> Reply:
+def _offer(technique: str = "abcde") -> Reply:
+    """An offer as the model makes one: the slots of the client's template, for the set it heads
+    toward. Its text is what goes when the offer cannot be made."""
     return Reply(
-        text="There are some questions we could go through together. Would you like to try it?",
-        prompts=[SmartPrompt(label="Try it", technique=technique),
-                 SmartPrompt(label="Keep chatting", decline=True)],
-        state=TechniqueState(technique=technique, step="offering"),
+        text="What happened at work after that?",
+        heading_toward=technique,
+        offer=Offer(lead_line="That sounds like a lot to carry.", going_through="what happened at work"),
     )
+
+
+# The client's supportive offer for ABCDE (abcde.md) with _offer's slots in it.
+SUPPORTIVE_OFFER = (
+    "That sounds like a lot to carry.\nThere's a framework called ABCDE that can help you understand "
+    "the thoughts behind what happened at work, see whether those thoughts are really true, and find "
+    "a more helpful way to think about what's happening.\n\nWould you like to try it?"
+    + FIVE_STEPS
+)
 
 
 async def _in_style(thread, style):
@@ -223,7 +230,7 @@ async def _in_style(thread, style):
 
 async def test_before_the_window_opens_the_model_is_given_no_way_to_name_a_technique(alice, model):
     """R1: no framework after the first message, however well it seems to fit. The shape of the
-    reply has no technique on a button, so the question the reply ends on is never traded for one."""
+    reply has no offer field, so the question the reply ends on is never traded for one."""
     from mani.models.rows import SupportStyle
 
     scripted = model(Reply(text="What has that been like for you this week?"))
@@ -231,8 +238,7 @@ async def test_before_the_window_opens_the_model_is_given_no_way_to_name_a_techn
     turn = await send(alice, thread.id, RESENTFUL)
 
     assert scripted.calls == 1
-    assert scripted.schemas == [ReplyWithoutOffer]
-    assert "technique" not in ReplyWithoutOffer.model_json_schema()["$defs"]["Button"]["properties"]
+    assert "offer" not in scripted.schemas[0].model_fields
     assert turn.prompts == []
     assert turn.content == "What has that been like for you this week?"
 
@@ -268,7 +274,9 @@ async def test_a_confident_offer_is_made_on_the_third_message(alice, model):
     turn = await send(alice, thread.id, "i need to decide what to do tonight")
 
     assert scripted.calls == 3
-    assert scripted.schemas == [ReplyWithoutOffer, ReplyWithoutOffer, Reply]
+    assert ["offer" in shape.model_fields for shape in scripted.schemas] == [False, False, True]
+    # The client's template word for word with the model's slots in it, never the model's text.
+    assert turn.content == SUPPORTIVE_OFFER
     assert [p.technique for p in turn.prompts if p.technique] == ["abcde"]
     assert [p.label for p in turn.prompts] == ["Try it", "Tell me more", "Keep chatting"]
 
@@ -325,8 +333,8 @@ async def test_a_due_window_reaches_the_model_on_the_fifth_message(
 
 
 async def test_typing_past_an_offer_is_keep_chatting_and_the_reply_cannot_offer_again(alice, model):
-    """Typing past an offer is Keep chatting, so the shape of the next reply has no technique and
-    it keeps its question; no second offer is stripped out from under it."""
+    """Typing past an offer is Keep chatting, so the shape of the next reply has no offer field and
+    it keeps its question."""
     scripted = model(
         _offer("abcde"),
         Reply(text="Which of those two would cost you less if it went wrong?"),
@@ -337,7 +345,7 @@ async def test_typing_past_an_offer_is_keep_chatting_and_the_reply_cannot_offer_
     turn = await send(alice, thread.id, "i could study everything or pick topics")
 
     assert scripted.calls == 2
-    assert scripted.schemas[-1] is ReplyWithoutOffer
+    assert "offer" not in scripted.schemas[-1].model_fields
     assert turn.content == "Which of those two would cost you less if it went wrong?"
     assert turn.prompts == []
 
@@ -380,17 +388,7 @@ async def test_a_reply_that_asks_nothing_and_chose_to_ask_something_is_logged(al
 
 
 async def test_the_turn_is_stored_and_the_thread_state_follows_it(alice, model):
-    model(
-        Reply(
-            text="Want to try something with me?",
-            prompts=[
-                SmartPrompt(label="Yes, let's try it", technique="abcde"),
-                SmartPrompt(label="Not right now", decline=True),
-            ],
-            state=TechniqueState(technique="abcde", step="offering"),
-            style=Style(shape="warmth lead"),
-        )
-    )
+    model(_offer().model_copy(update={"style": Style(shape="warmth lead")}))
     from mani.db import pool
 
     thread = await past_the_opening(await start(alice))
@@ -408,11 +406,7 @@ async def test_the_turn_is_stored_and_the_thread_state_follows_it(alice, model):
 
 async def test_tapping_the_offer_records_acceptance(alice, model):
     scripted = model(
-        Reply(
-            text="Want to try something?",
-            prompts=[SmartPrompt(label="Yes, let's try it", technique="abcde")],
-            state=TechniqueState(technique="abcde", step="offering"),
-        ),
+        _offer(),
         Reply(
             text="Good. What happened first?",
             state=TechniqueState(technique="abcde", step="activate"),
@@ -668,33 +662,23 @@ async def test_an_ordinary_turn_never_reaches_the_exercise_hand_off(
 
 
 async def test_asking_about_an_offer_leaves_it_open(alice, model):
-    """A question about the offer is answered and the offer made again, so it is still waiting
-    for their answer - unlike carrying on past it, which is Keep chatting."""
-    scripted = model(
-        Reply(
-            text="Want to try something?",
-            prompts=[SmartPrompt(label="Try it", technique="abcde")],
-            state=TechniqueState(technique="abcde", step="offering"),
-        ),
-        Reply(
-            text="We'd look at what happened and what you told yourself about it. Would you like to try it?",
-            prompts=[SmartPrompt(label="Try it", technique="abcde"),
-                     SmartPrompt(label="Keep chatting", decline=True)],
-            state=TechniqueState(technique="abcde", step="offering"),
-        ),
-    )
+    """A question about the offer is answered with the client's explanation and the offer made
+    again, so it is still waiting for their answer - unlike carrying on past it, which is Keep
+    chatting. The model's own text is not sent."""
+    model(_offer(), Reply(text="We'd look at what happened.", offer_answer="asked"))
     from mani.db import pool
 
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "I keep spiralling")
-    await send(alice, thread.id, "what would that involve?")
+    told = await send(alice, thread.id, "what would that involve?")
 
     async with pool.as_user(alice) as conn:
         ctx = await threads.load_turn_context(conn, thread.id, ALICE)
 
     assert ctx.technique.outcome is TechniqueOutcome.OFFERED
-    # The one offer made outside the window is the open one, put again when they asked about it.
-    assert scripted.schemas[-1] is Reply
+    framework = (await orchestrator.cache.load()).registry.get("abcde")
+    assert told.content == framework.stages["offering"]["explain"]["supportive"] + "\n\nWould you like to try it?"
+    assert [(p.label, p.technique) for p in told.prompts] == [("Try it", "abcde"), ("Keep chatting", None)]
 
 
 async def test_a_model_reported_crisis_does_not_lock_the_thread(alice, model):
@@ -865,13 +849,7 @@ async def test_starting_a_chat_after_speaking_makes_a_new_one(alice, model):
 async def test_buttons_are_returned_only_on_manis_newest_message(alice, model):
     """Buttons are presentation, not history. The reference kept them on old rows and
     cleaned up with an UPDATE, so a failed write left stale offers tappable."""
-    model(
-        Reply(
-            text="Want to try something?",
-            prompts=[SmartPrompt(label="Yes, let's try it", technique="abcde")],
-        ),
-        Reply(text="Good. What happened first?"),
-    )
+    model(_offer(), Reply(text="Good. What happened first?"))
     from mani.db import pool
     from mani.routers.serializers import to_messages
 
@@ -931,7 +909,6 @@ async def test_a_concern_pauses_a_running_framework_for_that_turn(alice, model):
     scripted = model(
         Reply(
             text="Thank you for telling me. I'm with you.",
-            prompts=[SmartPrompt(label="Try this", technique="abcde")],
             state=TechniqueState(technique="abcde", step="consequence"),
         )
     )
@@ -977,14 +954,7 @@ async def test_a_new_chat_after_a_crisis_carries_the_flag_but_not_the_lock(alice
 async def test_the_framework_just_finished_is_not_offered_again_right_after(alice, model):
     """Only ABCDE is available, so the one just finished is also the only one that could be offered:
     the row stays so the cooldown can be measured from it, and it stays off the table."""
-    scripted = model(
-        Reply(
-            text="Would you like to look at another way of seeing it?",
-            prompts=[SmartPrompt(label="Yes, let's try", technique="abcde")],
-            state=TechniqueState(technique="abcde", step="offering"),
-        ),
-        Reply(text="What has been on your mind about it since?"),
-    )
+    scripted = model(_offer())
     from mani.db import pool
 
     thread = await start(alice)
@@ -996,26 +966,21 @@ async def test_the_framework_just_finished_is_not_offered_again_right_after(alic
 
     turn = await send(alice, thread.id, "something else happened today")
     assert [p.technique for p in turn.prompts if p.technique] == []
-    assert scripted.calls >= 1
+    assert turn.content == "What happened at work after that?"
+    assert "offer unusable: they just finished it" in turn.checks
+    assert scripted.calls == 1
 
 
 async def test_tapping_decline_records_it_even_when_the_model_reports_no_state(alice, model):
     """After a decline there is no technique to report, so state: null is the model doing
     what the schema asks. The decline is the button's meaning, not the model's to confirm."""
-    model(
-        Reply(
-            text="Want to try something?",
-            prompts=[SmartPrompt(label="Yes, let's try it", technique="abcde"),
-                     SmartPrompt(label="Not right now", decline=True)],
-            state=TechniqueState(technique="abcde", step="offering"),
-        ),
-        Reply(text="That's fine. What would help most right now?"),
-    )
+    model(_offer(), Reply(text="That's fine. What would help most right now?", offer_answer="yes"))
     from mani.db import pool
 
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "I keep spiralling")
-    await send(alice, thread.id, "Not right now")
+    # The tap decides by itself, whatever the model reports.
+    await send(alice, thread.id, "Keep chatting")
 
     async with pool.as_user(alice) as conn:
         ctx = await threads.load_turn_context(conn, thread.id, ALICE)
@@ -1210,8 +1175,7 @@ async def test_a_crisis_is_still_answered_past_the_daily_limit(alice, model, mon
 async def test_finishing_a_framework_always_offers_chat_more_and_the_library(alice, model):
     """The client's cadence ends every framework on the same two choices. Left to the model
     they came back mislabeled ("Something else"), or not at all, on the reply that ends it."""
-    model(Reply(text="Your shoulders feel looser. Does that feel right? What would you like next?",
-                prompts=[SmartPrompt(label="Something else")]))
+    model(Reply(text="Your shoulders feel looser. Does that feel right? What would you like next?"))
     from mani.db import pool
 
     thread = await start(alice)
@@ -1232,8 +1196,6 @@ async def test_the_body_check_in_waits_for_their_answer_before_the_two_choices(a
     Library. Observed: the model put both on the check-in question, and they came again on the
     reply after it."""
     model(Reply(text="What are you noticing in your body now, compared with when we started?",
-                prompts=[SmartPrompt(label="Chat More"),
-                         SmartPrompt(label="Go to Library", library="home")],
                 state=TechniqueState(technique="abcde", step="somatic_checkin")))
     from mani.db import pool
 
@@ -1261,41 +1223,32 @@ async def _land_on(alice, thread_id, phase) -> None:
 PLACES = ["Chest", "Head", "Stomach", "Somewhere else"]
 
 
-async def test_a_body_they_already_described_is_asked_where_not_handed_off(alice, model):
+async def test_a_body_they_describe_at_the_closing_gets_the_practice_for_its_place(alice, model):
     """muhammad, 2026-10-02: "a bit lighter in my chest" reached Chat More / Go to Library with no
-    practice at all, and tapping Chat More asked about the body again. A body described before
-    the check-in is answered with where they feel it."""
-    model(
-        Reply(text="You feel a bit lighter. What would you like to do next?",
-              state=TechniqueState(technique="abcde", step="somatic_checkin")),
-        Reply(text="Your chest feels lighter. What would you like to do next?",
-              state=TechniqueState(technique="abcde", step="somatic_checkin")),
-    )
+    practice at all. A place named at the closing goes straight to its practice, word for word."""
+    model(Reply(text="Your chest feels lighter. What would you like to do next?", body="chest"))
     thread = await start(alice)
     await _land_on(alice, thread.id, "effective")
 
-    turn = await send(alice, thread.id, "a bit lighter")
-    assert turn.content.startswith("You feel a bit lighter.")
-    assert turn.content.endswith("Where are you feeling that most right now?")
-    assert [p.label for p in turn.prompts] == PLACES
-
-    named = await send(alice, thread.id, "in my chest")
-    assert "Place one hand on your chest." in named.content
+    turn = await send(alice, thread.id, "a bit lighter in my chest")
+    assert "Place one hand on your chest." in turn.content
+    assert not turn.content.startswith("Your chest feels lighter")
+    assert turn.prompts == []
+    assert (await _offered_row(alice, thread.id)).phase == "somatic_practice"
 
 
 async def test_the_body_is_asked_about_once_then_where_then_the_practice(alice, model):
     """muhammad, 2026-10-02: "yes" to the body check-in got the same question back, and "idk"
-    ended the chat on Chat More. Yes leads to where; idk leads to where again, with its buttons;
-    a place leads to its practice; and the two choices come only after the practice."""
+    ended the chat on Chat More. Each answer sends the client's branch for it; a tapped place
+    decides by itself; the two choices come only after the practice."""
     model(
         Reply(text="You were able to stay with the pause. How has it been?",
               state=TechniqueState(technique="abcde", step="somatic_checkin")),
-        Reply(text="It feels a little better. Would you like to notice what is happening in your body?",
-              state=TechniqueState(technique="abcde", step="somatic_checkin")),
-        Reply(text="It is not always easy to say where. Is it your chest or your shoulders?",
-              state=TechniqueState(technique="abcde", step="somatic_practice")),
-        Reply(text="Chest, I see.", state=TechniqueState(technique="abcde", step="somatic_practice")),
-        Reply(text="Panic comes in waves. Would you like the library?"),
+        Reply(text="That's good to hear. Shall we?", body="agreed"),
+        Reply(text="It is not always easy to say where. Is it your chest or your shoulders?", body="no_place"),
+        Reply(text="That's okay.", body="no_place"),
+        Reply(text="I'm sorry it hurts.", body="pain"),
+        Reply(text="Panic comes in waves. Would you like the library?", body="returned"),
     )
     thread = await start(alice)
     await _land_on(alice, thread.id, "effective")
@@ -1304,70 +1257,61 @@ async def test_the_body_is_asked_about_once_then_where_then_the_practice(alice, 
     assert checked_in.content.endswith("Would you like to notice what is happening in your body?")
 
     said_yes = await send(alice, thread.id, "yes")
-    assert said_yes.content.count("notice what is happening in your body") == 0
-    assert said_yes.content.endswith("Where are you feeling that most right now?")
-    assert [p.label for p in said_yes.prompts] == PLACES
+    assert said_yes.content == "That's good to hear.\n\nWhat do you notice in your body?"
 
     unsure = await send(alice, thread.id, "idk")
-    assert unsure.content.endswith("Where are you feeling that most right now?")
+    assert unsure.content == "It is not always easy to say where.\n\nWhere are you feeling that most right now?"
     assert [p.label for p in unsure.prompts] == PLACES
 
+    again = await send(alice, thread.id, "still not sure")
+    assert [p.label for p in again.prompts] == PLACES
+
     named = await send(alice, thread.id, "Chest")
-    assert "Place one hand on your chest." in named.content
+    assert "Place one hand on your chest." in named.content, "the tap wins over the reply's pain"
     assert named.prompts == []
 
     after = await send(alice, thread.id, "I feel calmer for a second, then it comes back")
+    assert after.content.startswith("That is very common. Panic often comes in waves.")
     assert [(p.label, p.library) for p in after.prompts] == [
         ("Chat More", None), ("Go to Library", "home"),
     ]
 
 
-async def test_declining_the_body_check_goes_to_the_two_choices(alice, model):
-    model(Reply(text="You would rather not check in. Would you like to keep chatting or go to the Library?",
-                state=TechniqueState(technique="abcde", step="somatic_checkin")))
+@pytest.mark.parametrize(("phase", "body", "starts"), [
+    ("somatic_checkin", "declined", "You'd rather not check in with your body right now."),
+    ("effective", "acting", "It sounds like you're ready to act on that."),
+])
+async def test_declining_or_knowing_what_to_do_goes_to_the_two_choices(alice, model, phase, body, starts):
+    model(Reply(text="Okay.", body=body))
     thread = await start(alice)
-    await _land_on(alice, thread.id, "effective")
+    await _land_on(alice, thread.id, phase)
 
-    turn = await send(alice, thread.id, "not now")
+    turn = await send(alice, thread.id, "I'd rather not, I'm going to call her now")
 
+    assert turn.content.startswith(starts)
     assert [(p.label, p.library) for p in turn.prompts] == [
         ("Chat More", None), ("Go to Library", "home"),
     ]
 
 
 async def test_a_choice_already_made_is_not_offered_again(alice, model):
-    """If they have already said Chat More, the ending reply just carries on talking."""
-    model(Reply(text="We can keep talking. What's on your mind now?"))
-    from mani.db import pool
-
+    """Once the two choices were shown, the reply that ends the framework carries on talking."""
+    model(Reply(text="Okay.", body="declined"), Reply(text="We can keep talking. What's on your mind now?"))
     thread = await start(alice)
-    async with pool.as_user(alice) as conn:
-        await set_technique_outcome(
-            conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=2, phase="somatic_practice",
-        )
+    await _land_on(alice, thread.id, "somatic_checkin")
+    await send(alice, thread.id, "not now")
 
     turn = await send(alice, thread.id, "Chat More")
     assert turn.prompts == []
+    assert (await _offered_row(alice, thread.id)).phase is None, "the framework retired"
 
 
 async def test_carrying_on_past_an_offer_is_keep_chatting(alice, model):
     """muhammad, 2026-09-24: someone who types on without answering the offer has chosen to keep
     chatting. Observed: "Would you like to try it?" came back on the very next reply, and the
-    one after."""
-    offer = Reply(
-        text="I have a sequence of questions that could help. Would you like to try it?",
-        prompts=[SmartPrompt(label="Try it", technique="abcde"),
-                 SmartPrompt(label="Tell me about this"),
-                 SmartPrompt(label="Keep chatting", decline=True)],
-        state=TechniqueState(technique="abcde", step="offering"),
-    )
-    # What the model actually does: reports no answer either way, and makes the offer again.
-    offered_again = offer.model_copy(update={
-        "text": "You pick the phone back up. I have a sequence of questions that could help. "
-                "Would you like to try it?",
-    })
-    model(offer, offered_again)
+    one after. The shape that answers an offer has no offer field, so it cannot be made again."""
+    offered_again = _offer().model_copy(update={"text": "You pick the phone back up."})
+    model(_offer(), offered_again)
     from mani.db import pool
 
     thread = await past_the_opening(await start(alice))
@@ -1383,15 +1327,8 @@ async def test_carrying_on_past_an_offer_is_keep_chatting(alice, model):
 
 async def test_an_offer_they_typed_past_is_flagged_then_closed(alice, model):
     """The model is told, on the turn itself, that its offer is waiting and they typed instead;
-    a reply that neither re-offers nor reports an answer has let it go, and so does the offer."""
-    offer = Reply(
-        text="I have a sequence of questions that could help. Would you like to try it?",
-        prompts=[SmartPrompt(label="Try it", technique="abcde"),
-                 SmartPrompt(label="Tell me about this"),
-                 SmartPrompt(label="Keep chatting", decline=True)],
-        state=TechniqueState(technique="abcde", step="offering"),
-    )
-    scripted = model(offer, Reply(text="You pick the phone back up. What happens right before?"))
+    a reply that reports no answer has let it go, and so does the offer."""
+    scripted = model(_offer(), Reply(text="You pick the phone back up. What happens right before?"))
     from mani.db import pool
 
     thread = await past_the_opening(await start(alice))
@@ -1411,18 +1348,11 @@ async def test_asking_for_a_declined_framework_themselves_starts_it(alice, model
     """Someone who carried on past an offer and then asks for that help themselves has said
     yes, even before the cooldown would let Mani offer it again. Observed: Mani began the
     questions in its own words while nothing was running."""
-    offer = Reply(
-        text="I have a sequence of questions that could help. Would you like to try it?",
-        prompts=[SmartPrompt(label="Try it", technique="abcde"),
-                 SmartPrompt(label="Tell me about this"),
-                 SmartPrompt(label="Keep chatting", decline=True)],
-        state=TechniqueState(technique="abcde", step="offering"),
-    )
     model(
-        offer,
-        Reply(text="You keep replaying it. Which part stays with you?"),
+        _offer(),
+        Reply(text="You keep replaying it. Which part stays with you?", offer_answer="moved_on"),
         Reply(text="Okay. We'll take it one step at a time together. What happened?",
-              state=TechniqueState(technique="abcde", step="activate", accepted=True)),
+              offer_answer="yes", state=TechniqueState(technique="abcde", step="activate")),
     )
     from mani.db import pool
 
@@ -1441,13 +1371,7 @@ async def test_asking_for_a_declined_framework_themselves_starts_it(alice, model
 async def test_a_declined_framework_can_be_offered_again_after_a_few_replies(alice, model):
     """muhammad, 2026-09-24: after "I want to keep talking", Mani checks again after a few
     more messages - the same framework if it still fits best."""
-    offer = Reply(
-        text="We could look at what happened and what you told yourself about it. Would you like to try?",
-        prompts=[SmartPrompt(label="Yes, let's try it", technique="abcde"),
-                 SmartPrompt(label="Tell me more"),
-                 SmartPrompt(label="I want to keep talking", decline=True)],
-        state=TechniqueState(technique="abcde", step="offering"),
-    )
+    offer = _offer()
     # Each reply asks something different: a question repeated word for word is redrafted.
     chats = [
         Reply(text=text) for text in (
@@ -1460,7 +1384,7 @@ async def test_a_declined_framework_can_be_offered_again_after_a_few_replies(ali
     model(offer, *chats, offer)
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "my manager criticized me in front of everyone")
-    await send(alice, thread.id, "I want to keep talking")
+    await send(alice, thread.id, "Keep chatting")
     for text in ("it keeps coming back", "I replay it at night", "I can't let it go"):
         await send(alice, thread.id, text)
 
@@ -1492,59 +1416,23 @@ async def test_the_body_check_in_is_sent_from_the_script_not_reworded(alice, mod
 async def test_an_offer_carries_the_clients_three_buttons_and_tell_me_more_offers_again(
     alice, model,
 ):
-    """The client's offer: Try it, Tell me more, Keep chatting, in their words whatever the model
-    wrote. Tell me more describes the questions and offers again with the other two, in the same
-    turn and with no second model call (muhammad, 2026-10-08)."""
-    own_words = Reply(
-        text="There are some questions we could go through together.",
-        prompts=[SmartPrompt(label="Yes let's do it", technique="abcde"),
-                 SmartPrompt(label="What is it?"),
-                 SmartPrompt(label="Not now", decline=True)],
-        state=TechniqueState(technique="abcde", step="offering"),
-    )
-    described = Reply(
-        text="They help you look at what happened and what you made it mean.",
-        prompts=[SmartPrompt(label="Try it", technique="abcde"),
-                 SmartPrompt(label="Tell me more"),
-                 SmartPrompt(label="Keep chatting", decline=True)],
-        state=TechniqueState(technique="abcde", step="offering"),
-    )
-    scripted = model(own_words, described)
+    """The client's offer: Try it, Tell me more, Keep chatting. Tell me more is answered with the
+    client's explanation and the offer again with the other two, in the same turn and with no
+    second model call, whatever the model wrote (muhammad, 2026-10-08)."""
+    described = Reply(text="They help you look at what happened and what you made it mean.", offer_answer="no")
+    scripted = model(_offer(), described)
     thread = await past_the_opening(await start(alice))
 
     offered = await send(alice, thread.id, "she criticized me in front of the team so i must be useless")
     assert [p.label for p in offered.prompts] == ["Try it", "Tell me more", "Keep chatting"]
     assert offered.prompts[0].technique == "abcde" and offered.prompts[2].decline is True
 
+    # The tap decides by itself: the model's no is ignored, and the row stays offered.
     told = await send(alice, thread.id, "Tell me more")
     assert scripted.calls == 2
     assert [p.label for p in told.prompts] == ["Try it", "Keep chatting"]
     assert told.prompts[0].technique == "abcde"
-
-
-def _sps_offer() -> Reply:
-    return Reply(
-        text="They take your work and the credit for it. There are some questions we could go through.",
-        prompts=[SmartPrompt(label="Try it", technique="abcde")],
-        state=TechniqueState(technique="abcde", step="offering"),
-    )
-
-
-async def test_tell_me_more_offers_again_even_when_the_model_only_explains(alice, model):
-    """Live, 2026-10-08: the reply to Tell me more explained the questions and stopped, so the
-    offer lost its buttons and the typed yes after it started nothing."""
-    explained = Reply(
-        text="They help you get clear on what happens, then look at your options and pick a first step.",
-        state=TechniqueState(technique="abcde", step="offering"),
-    )
-    model(_sps_offer(), explained)
-    thread = await past_the_opening(await start(alice))
-    await send(alice, thread.id, "my coworkers steal my work and take the credit")
-
-    told = await send(alice, thread.id, "Tell me more")
-    assert [p.label for p in told.prompts] == ["Try it", "Keep chatting"]
-    assert told.prompts[0].technique == "abcde"
-    assert told.content.endswith("?")
+    assert told.content.startswith("The ABCDE framework") and told.content.endswith("Would you like to try it?")
 
 
 async def test_a_yes_to_an_open_offer_starts_it_even_with_no_buttons_showing(alice, model):
@@ -1555,14 +1443,13 @@ async def test_a_yes_to_an_open_offer_starts_it_even_with_no_buttons_showing(ali
 
     asked_instead = Reply(
         text="They help you choose a first step. What part of it bothers you most?",
-        state=TechniqueState(technique="abcde", step="offering"),
         crisis=Crisis(reason="hopelessness"),
     )
     begins = Reply(
         text="Okay. I'll guide you through it one step at a time. What do you know for certain?",
-        state=TechniqueState(technique="abcde", step="activate", accepted=True),
+        offer_answer="yes", state=TechniqueState(technique="abcde", step="activate"),
     )
-    model(_sps_offer(), asked_instead, begins)
+    model(_offer(), asked_instead, begins)
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "my coworkers steal my work and take the credit")
     told = await send(alice, thread.id, "Tell me more")
@@ -1604,3 +1491,110 @@ async def test_a_second_message_waits_for_the_first_and_sees_its_reply(alice, mo
 
     assert slow.calls == 2
     assert "What thought comes up when you picture seeing them?" in slow.histories[1]
+
+
+async def _offered_row(alice, thread_id):
+    from mani.db import pool
+
+    async with pool.as_user(alice) as conn:
+        return (await threads.load_turn_context(conn, thread_id, ALICE)).technique
+
+
+async def test_a_typed_no_is_the_clients_keep_chatting_question_with_their_words(alice, model):
+    """Spec 0003, AC-4: the reply to a no is the client's Keep chatting line, only the slot changed.
+    Without their words for the slot the model's own text goes, and the miss is logged."""
+    model(
+        _offer(),
+        Reply(text="Okay.", offer_answer="no", their_words='"stuck".'),
+        _offer(),
+    )
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "I keep spiralling")
+    turn = await send(alice, thread.id, "no thanks")
+
+    assert turn.content == "We can keep talking. What's been happening that's making things feel so stuck?"
+    assert turn.prompts == []
+    assert (await _offered_row(alice, thread.id)).outcome is TechniqueOutcome.DECLINED
+
+
+@pytest.mark.parametrize("answer", ["moved_on", None, "perhaps"])
+async def test_any_answer_but_yes_or_asked_declines_and_keeps_the_models_text(alice, model, answer):
+    # Built without validation, so an off-list value reaches the turn's own parse as the model's would.
+    model(_offer(), Reply.model_construct(text="What happened next?", offer_answer=answer))
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "I keep spiralling")
+    turn = await send(alice, thread.id, "my sister called later")
+
+    assert turn.content == "What happened next?"
+    assert (await _offered_row(alice, thread.id)).outcome is TechniqueOutcome.DECLINED
+
+
+async def test_a_typed_yes_starts_it_at_the_stage_its_own_ledger_says(alice, model):
+    """The step is corrected from the reply's ledger on a typed yes too, not only on a tap."""
+    from mani.llm.schema import StageKnown
+
+    model(_offer(), Reply(
+        text="What did that come to mean for you?",
+        offer_answer="yes",
+        stages_known=[StageKnown(stage="activate", known="criticized in front of the team", met=True),
+                      StageKnown(stage="belief", met=False)],
+        state=TechniqueState(technique="abcde", step="consequence"),
+    ))
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "My manager criticized me in front of the team")
+    await send(alice, thread.id, "yes let's do it")
+
+    row = await _offered_row(alice, thread.id)
+    assert (row.outcome, row.phase) == (TechniqueOutcome.ACCEPTED, "belief")
+
+
+async def test_a_concern_reported_by_the_model_changes_no_row_and_renders_nothing(alice, model):
+    """Spec 0003, AC-12: on the model's crisis field, a yes to the open offer starts nothing and
+    only the model's text is sent."""
+    scripted = model(_offer(), Reply(
+        text="I'm here with you. What's happening right now?",
+        offer_answer="yes", crisis=Crisis(reason="hopelessness"),
+        state=TechniqueState(technique="abcde", step="activate"),
+    ))
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "I keep spiralling")
+    turn = await send(alice, thread.id, "yes, nothing matters anyway")
+
+    assert scripted.calls == 2
+    assert (turn.content, turn.prompts) == ("I'm here with you. What's happening right now?", [])
+    assert (await _offered_row(alice, thread.id)).outcome is TechniqueOutcome.OFFERED
+
+
+async def test_the_turn_log_names_the_moment_and_the_offer_and_never_their_words(alice, model, caplog):
+    """Spec 0003, AC-10: the judgments are countable in the logs, and slot text never reaches one."""
+    model(_offer())
+    thread = await past_the_opening(await start(alice))
+    with caplog.at_level("INFO", logger="mani"):
+        await send(alice, thread.id, "I keep spiralling")
+
+    assert "moment chatting: offer_answer None, body None, offered abcde" in caplog.text
+    assert "what happened at work" not in caplog.text
+    assert "a lot to carry" not in caplog.text
+
+
+async def test_the_two_choices_never_come_from_reading_the_reply(alice, model):
+    """Spec 0003, AC-6: a reply that only says "keep chatting or go to the library" on its own is
+    not a hand-off; the branch or the retirement decides."""
+    model(Reply(text="Would you like to keep chatting or go to the Library?"))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "somatic_checkin")
+
+    turn = await send(alice, thread.id, "hmm")
+    assert turn.prompts == []
+
+
+async def test_a_concern_on_the_body_route_sends_only_the_text_and_holds_the_stage(alice, model):
+    """Spec 0003, AC-12: the model's crisis field suppresses the practice the reply named."""
+    model(Reply(text="I'm here with you. Are you safe right now?", body="chest",
+                crisis=Crisis(reason="hopelessness")))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "somatic_checkin")
+
+    turn = await send(alice, thread.id, "my chest is tight and I don't see the point")
+    assert (turn.content, turn.prompts) == ("I'm here with you. Are you safe right now?", [])
+    assert (await _offered_row(alice, thread.id)).phase == "somatic_checkin"

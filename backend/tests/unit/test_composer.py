@@ -114,6 +114,37 @@ async def test_a_missing_style_row_is_refused_when_the_prompts_load(config, monk
         await cache._read()
 
 
+async def test_a_framework_seeded_without_body_branch_ids_is_refused_when_it_loads(config, monkeypatch):
+    """Spec 0003: code sends the body route's branches by id, so content seeded before the ids
+    existed would miss every branch. It is refused at load, naming what is missing."""
+    import mani.db.pool as pool_module
+    from scripts.seed import load_somatic_stages
+
+    stages = load_somatic_stages()
+    stages["somatic_practice"]["if_unclear"] = [
+        {k: v for k, v in branch.items() if k != "id"} for branch in stages["somatic_practice"]["if_unclear"]
+    ]
+    unseeded = Framework(id="abcde", name="ABCDE", summary="s", body="b",
+                         phases=["offering", *stages], stages=stages)
+
+    @asynccontextmanager
+    async def fake_as_admin():
+        yield object()
+
+    async def active_prompts(conn):
+        return list(config.prompts.values())
+
+    async def active_frameworks(conn):
+        return [unseeded]
+
+    monkeypatch.setattr(pool_module, "as_admin", fake_as_admin)
+    monkeypatch.setattr(cache.config_tables, "list_active_prompts", active_prompts)
+    monkeypatch.setattr(cache.config_tables, "list_active_frameworks", active_frameworks)
+
+    with pytest.raises(ServiceError, match="chest"):
+        await cache._read()
+
+
 def framework(id: str, name: str, indication: str, distinctions: dict) -> Framework:
     return Framework(
         id=id, name=name, summary="s", body="b", phases=["offering"],
@@ -131,7 +162,7 @@ def test_the_framework_index_is_built_from_the_registry_not_written_by_hand():
         framework("dbt_stop", "DBT STOP", "The user is about to act.", {}),
     ])
 
-    index = composer.framework_index(registry, "supportive")
+    index = composer.framework_index(registry)
 
     assert "| ABCDE | `abcde` | A specific event triggered a belief. |" in index
     assert "| DBT STOP | `dbt_stop` | The user is about to act. |" in index
@@ -155,7 +186,7 @@ def test_a_distinction_written_from_both_sides_is_emitted_once():
         }),
     ])
 
-    index = composer.framework_index(registry, "supportive")
+    index = composer.framework_index(registry)
 
     # The pair appears once, from whichever side was reached first - not twice.
     assert index.count("ABCDE or Thought Reframe") == 1
@@ -166,7 +197,7 @@ def test_a_distinction_written_from_both_sides_is_emitted_once():
 def test_a_framework_index_with_nothing_to_list_is_left_out_entirely():
     """An empty registry is already logged as a misconfiguration at load. The prompt should
     not carry an empty table announcing frameworks that do not exist."""
-    assert composer.framework_index(Registry([]), "supportive") is None
+    assert composer.framework_index(Registry([])) is None
 
 
 def test_the_generated_index_reaches_the_composed_prompt(config):
@@ -220,7 +251,7 @@ def test_the_framework_index_carries_each_frameworks_contraindications():
             "contraindications": ["The action itself is protective - leaving, calling for help"],
         },
     )
-    index = composer.framework_index(Registry([stop]), "supportive")
+    index = composer.framework_index(Registry([stop]))
     assert "Never offer one when" in index
     assert "**DBT STOP**: The action itself is protective - leaving, calling for help" in index
 
@@ -235,7 +266,7 @@ def test_the_framework_index_says_what_each_one_needs_to_find_out():
             "to_find_out": ["what they cannot control", "what it pulls them toward"],
         },
     )
-    index = composer.framework_index(Registry([act]), "supportive")
+    index = composer.framework_index(Registry([act]))
     assert "## Finding the fit" in index
     assert "- **ACT Choice Point**: what they cannot control; what it pulls them toward" in index
 
@@ -282,19 +313,16 @@ def test_an_empty_memory_adds_nothing(config):
     assert "user_memory" not in [name for name, _ in built.layers]
 
 
-def test_the_index_says_to_name_it_and_keeps_its_description_from_the_model():
-    """muhammad, 2026-10-09: an offer names its set of questions. The description is added by the
-    backend when they ask to hear more, so the index keeps it from the model, which copied it."""
+def test_the_index_keeps_the_description_from_the_model():
+    """The description is sent by code when they ask to hear more, so the index keeps it from the
+    model, which copied it."""
     helps = Framework(
         id="abcde", name="ABCDE", body="b", phases=["offering"],
         summary="This framework helps you separate what happened from what you told yourself about it.",
         activation={"central_indication": "a specific event"},
     )
-    index = composer.framework_index(Registry([helps]), "supportive")
+    index = composer.framework_index(Registry([helps]))
     assert "separate what happened from what you told yourself about it" not in index
-    assert "say its name" in index
-    assert "Never its id." in index
-    assert 'never the word "framework"' not in index
 
 
 def test_the_current_issue_stays_visible_even_without_a_prose_summary_yet():

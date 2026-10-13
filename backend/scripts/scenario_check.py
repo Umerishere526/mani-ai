@@ -1,5 +1,5 @@
 # ABOUTME: Runs the client's test conversations through the real stack and model, in every style.
-# ABOUTME: Reports what the client checks by eye (asking again, the offer and its timing) and what each turn cost.
+# ABOUTME: Reports what the client checks by eye (asking again, the offer, its wording and timing) and each turn's cost.
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani.auth.jwt import Claims  # noqa: E402
 from mani.chat import context, orchestrator  # noqa: E402
+from mani.chat import repairs  # noqa: E402
 from mani.chat.greeting import KEEP_CHATTING_LABEL, TELL_ME_MORE_LABEL, TRY_IT_LABEL  # noqa: E402
 from mani.db import pool  # noqa: E402
 from mani.prompts import cache  # noqa: E402
@@ -27,6 +28,10 @@ SCENARIOS = pathlib.Path(__file__).with_name("scenarios.json")
 STYLES = ("directive", "supportive", "reflective")
 WORD = re.compile(r"[a-z']{4,}")
 INTERNAL = re.compile(r"\bframework_id\b|\boffer_window\b", re.IGNORECASE)
+# Offer wording: the model offering in its own text instead of the offer field, which code never
+# sends as an offer. Eval tooling only; nothing at runtime reads it.
+OFFER_WORDS = re.compile(r"\bframework\b|would you like to try|\btry it\b", re.IGNORECASE)
+OFFER_WORDS_FLAG = "offer words in text"
 # A question made up almost wholly of words the person has already said is asking for what they said.
 ASKS_WHAT_THEY_SAID = 0.8
 # What a turn is held to (R2, muhammad 2026-10-12). Reported, never a failure: one run is noise.
@@ -70,20 +75,37 @@ def _question(text: str) -> set[str]:
     return _words(asked[-1]) if asked else set()
 
 
-def _check(exchange: Exchange, registry, told_more: bool, said: set[str]) -> None:
+def offer_words_in_text(text: str, registry) -> bool:
+    """Whether a reply that is not the client's offer still offers: a set's name, the word
+    framework, or the permission question, all of which only the rendered offer carries."""
+    names = [registry.get(fid).name for fid in registry.ids]
+    return bool(OFFER_WORDS.search(text) or any(name.lower() in text.lower() for name in names))
+
+
+def matches_template(text: str, template: str) -> bool:
+    """Whether a reply is the client's template word for word, with only its slots changed."""
+    fixed = [re.escape(part) for part in re.split(r"<[^<>]+>", template)]
+    return re.fullmatch(".+?".join(fixed), text) is not None
+
+
+def _offering(registry, framework_id: str | None, key: str, style: str) -> str | None:
+    framework = registry.get(framework_id)
+    return (((framework.stages or {}).get("offering") or {}).get(key) or {}).get(style) if framework else None
+
+
+def _check(exchange: Exchange, registry, told_more: bool, said: set[str], style: str) -> None:
     exchange.question = _question(exchange.reply)
     if exchange.question and len(exchange.question & said) / len(exchange.question) >= ASKS_WHAT_THEY_SAID:
         exchange.flags.append("asks what they already said")
     if INTERNAL.search(exchange.reply):
         exchange.flags.append("internal words")
     if not exchange.offered:
+        if offer_words_in_text(exchange.reply, registry):
+            exchange.flags.append(OFFER_WORDS_FLAG)
         return
-    framework = registry.get(exchange.offered)
-    letters = re.compile(r"[^a-z0-9]")
-    if framework and letters.sub("", framework.name.lower()) not in letters.sub("", exchange.reply.lower()):
-        exchange.flags.append("framework not named")
-    if framework and framework.summary and not told_more and framework.summary in exchange.reply:
-        exchange.flags.append("description in the offer")
+    template = repairs.offer_template(registry.get(exchange.offered), style)
+    if not told_more and template and not matches_template(exchange.reply, template):
+        exchange.flags.append("offer not the client's template")
     expected = [TRY_IT_LABEL, KEEP_CHATTING_LABEL] if told_more else [
         TRY_IT_LABEL, TELL_ME_MORE_LABEL, KEEP_CHATTING_LABEL]
     if exchange.buttons != expected:
@@ -115,8 +137,10 @@ def timing_flags(offered_at: int | None, lines: int, expect: dict) -> dict[int, 
     return {}
 
 
-async def _converse(name: str, lines: list[str], expect: dict, style: str, registry) -> list[Exchange]:
-    """One conversation in one style, up to the first offer and its Tell me more."""
+async def _converse(name: str, conversation: dict, style: str, registry) -> list[Exchange]:
+    """One conversation in one style, up to the first offer, then its Tell me more, or the answers
+    in `after_offer` when the conversation has them."""
+    lines, expect, after = conversation["lines"], conversation["expect"], conversation.get("after_offer")
     user = uuid.uuid4()
     claims = Claims(sub=str(user), raw={"sub": str(user), "role": "authenticated"})
     async with pool.as_admin() as conn:
@@ -133,14 +157,21 @@ async def _converse(name: str, lines: list[str], expect: dict, style: str, regis
         offered_at = None
         for number, text in enumerate(lines, start=1):
             said |= _words(text)
-            exchanges.append(
-                await _exchange(claims, thread.id, text, registry, told_more=False, said=said, billed=billed)
-            )
+            exchanges.append(await _exchange(
+                claims, thread.id, text, registry, told_more=False, said=said, billed=billed, style=style,
+            ))
             if exchanges[-1].offered:
                 offered_at = number
-                exchanges.append(await _exchange(
-                    claims, thread.id, TELL_ME_MORE_LABEL, registry, told_more=True, said=said, billed=billed
-                ))
+                framework = exchanges[-1].offered
+                for answer in (after or {}).get("lines") or [TELL_ME_MORE_LABEL]:
+                    exchanges.append(await _exchange(
+                        claims, thread.id, answer, registry, told_more=answer == TELL_ME_MORE_LABEL,
+                        said=said, billed=billed, style=style,
+                    ))
+                if after and after.get("answer") == "no":
+                    keep = _offering(registry, framework, "keep_chatting", style)
+                    if keep and not matches_template(exchanges[number].reply, keep):
+                        exchanges[number].flags.append("keep chatting not the client's template")
                 break
         for number, flag in timing_flags(offered_at, len(lines), expect).items():
             exchanges[number - 1].flags.append(flag)
@@ -152,7 +183,8 @@ async def _converse(name: str, lines: list[str], expect: dict, style: str, regis
 
 
 async def _exchange(
-    claims: Claims, thread_id, text: str, registry, *, told_more: bool, said: set[str], billed: list[int]
+    claims: Claims, thread_id, text: str, registry, *, told_more: bool, said: set[str], billed: list[int],
+    style: str,
 ) -> Exchange:
     started = time.perf_counter()
     turn = await _send(claims, thread_id, text)
@@ -162,7 +194,7 @@ async def _exchange(
         offered=next((p.technique for p in turn.prompts if p.technique), None),
         cost=await _cost(thread_id, seconds, billed), checks=turn.checks,
     )
-    _check(exchange, registry, told_more, said)
+    _check(exchange, registry, told_more, said, style)
     return exchange
 
 
@@ -226,7 +258,7 @@ async def main() -> int:
 
         async def gated(name: str, style: str) -> list[Exchange]:
             async with gate:
-                return await _converse(name, chosen[name]["lines"], chosen[name]["expect"], style, registry)
+                return await _converse(name, chosen[name], style, registry)
 
         results = await asyncio.gather(*(gated(name, style) for name, style in jobs))
     finally:
@@ -257,6 +289,8 @@ def _report_cost(exchanges: list[Exchange]) -> None:
           f"({sum(e.cost.reasoning_tokens for e in exchanges)} thinking)")
     missed = Counter(check for e in exchanges for check in e.checks)
     print("  reply checks missed: " + (", ".join(f"{n} x {c}" for c, n in missed.most_common()) or "none"))
+    worded = sum(OFFER_WORDS_FLAG in e.flags for e in exchanges)
+    print(f"  offer words in a reply's own text: {worded} of {len(exchanges)} replies")
 
 
 if __name__ == "__main__":

@@ -3,10 +3,15 @@
 
 from __future__ import annotations
 
+import functools
+import logging
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator, model_validator
+
+logger = logging.getLogger(__name__)
 
 
 class LibrarySection(StrEnum):
@@ -58,16 +63,6 @@ class Button(BaseModel):
         description="True when tapping this button declines the technique being offered.",
     )
 
-    @field_validator("decline", mode="before")
-    @classmethod
-    def _decline_written_as_a_word(cls, value: object) -> object:
-        """The model sometimes writes the word ("decline", "Keep chatting") where a boolean
-        belongs, and one such reply failed the whole turn. A word there means the button
-        declines; only an explicit no means it does not."""
-        if isinstance(value, str):
-            return value.strip().lower() not in {"", "false", "no", "0", "null", "none"}
-        return value
-
 
 class SmartPrompt(Button):
     """One tappable capsule under a reply."""
@@ -93,17 +88,6 @@ class TechniqueState(BaseModel):
             "several stages past the last one when what they said already answered those between. "
             "The closing and the body route are never skipped."
         )
-    )
-    accepted: bool | None = Field(
-        default=None,
-        description=(
-            "Set to true when the user accepts a technique offer in free text "
-            '(e.g., "yeah let\'s do it", "sure", "ok"), or asks for one they declined '
-            "earlier in this conversation. Set to false when they decline an offer in free "
-            "text, or carry on talking without answering it: that is Keep chatting. Set to "
-            "null when they asked about the offer itself, so it stays open, and on every "
-            "other turn."
-        ),
     )
 
 
@@ -158,29 +142,55 @@ class StageKnown(BaseModel):
         return self
 
 
-def _prompts_description(*, offering: bool) -> str:
-    """What the model is told about its buttons. The offer sentence is left out of the shape
-    sent while no offer may be made, so the field it describes is not there either."""
-    return (
-        "Tappable button options if your response ends with a question that has "
-        "2-3 clear choices. Each prompt has a \"label\" field (required). "
-        + (
-            "ONLY include \"technique\" field when INITIALLY ASKING if user wants to try "
-            "a technique. "
-            if offering else ""
-        )
-        + "Include \"library\" ONLY on a button that opens the library. "
-        + ("Labels should be in USER voice (\"Try it\", \"Keep chatting\"). " if offering
-           else "Labels should be in USER voice. ")
-        + "Set to null if no buttons are appropriate "
-        "(e.g., open-ended questions). Two or three, never more."
-    )
+OfferAnswer = Literal["yes", "no", "asked", "moved_on"]
+BodyBranch = Literal[
+    "chest", "head", "stomach", "elsewhere", "no_place", "agreed", "declined", "acting", "pain",
+    "returned",
+]
+_CLOSED_SETS = {"offer_answer": get_args(OfferAnswer), "body": get_args(BodyBranch)}
 
 
-class Reply(BaseModel):
-    """What one turn asks the model for. Optional fields come back null, not absent."""
+class Moment(StrEnum):
+    """What the database says is happening this turn. It picks the reply shape, so a field
+    exists only in the moment where it means something."""
+
+    CONCERN = "concern"
+    BODY = "body"
+    IN_STAGES = "in_stages"
+    OFFER_OPEN = "offer_open"
+    CHATTING = "chatting"
+
+
+class Offer(BaseModel):
+    """The model's part of an offer: the slots of the client's template, never its words."""
 
     model_config = ConfigDict(extra="ignore")
+
+    going_through: str | None = None
+    lead_line: str | None = None
+
+
+class _ReplyBase(BaseModel):
+    """What every reply shape shares: unknown fields are dropped, and an off-list value in a
+    closed set is read as null. A ValidationError there would cost a second call and could
+    lose the message, as the note on SHAPES says."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    @field_validator("offer_answer", "body", mode="before", check_fields=False)
+    @classmethod
+    def _off_list_is_null(cls, value: object, info) -> object:
+        if value is None or value in _CLOSED_SETS[info.field_name]:
+            return value
+        # The value itself is not logged: it is the model's words, which may carry theirs.
+        logger.info("off-list %s ignored", info.field_name)
+        return None
+
+
+class Reply(_ReplyBase):
+    """Every field a reply can carry. The model is sent only the subset for this turn's moment
+    (`reply_for`), and what it returns is read back into this record, so a field outside the
+    moment is always null here."""
 
     # reasoning and style come before text on purpose: structured output is generated in
     # schema order, so a field declared after text can only describe a reply already
@@ -208,21 +218,39 @@ class Reply(BaseModel):
             "the user."
         ),
     )
+    offer: Offer | None = Field(
+        default=None,
+        description=(
+            "Fill it to offer the set in heading_toward, when your reasoning says to offer; null "
+            "otherwise. The offer's words are the client's: you fill only these parts, in their "
+            "words. Your text is not sent when the offer is."
+        ),
+    )
+    offer_answer: OfferAnswer | None = Field(
+        default=None,
+        description=(
+            "How they answered the offer in your last reply: yes, no, asked (about it, or what "
+            "it involves), or moved_on (they talked about something else)."
+        ),
+    )
+    their_words: str | None = Field(default=None)
+    body: BodyBranch | None = Field(
+        default=None,
+        description=(
+            "The body route branch their message meets, by its id from [ctx]. returned: the "
+            "feeling came back after the practice. Null when none fits."
+        ),
+    )
     stages_known: list[StageKnown] | None = Field(
         default=None,
         description=(
-            "Only while the questions run (active_framework is in [ctx]); null otherwise. Fill "
-            "it before text. One entry per stage, in order, starting with the stage in force "
+            "Fill it before text. One entry per stage, in order, starting with the stage in force "
             "and stopping at the first that is not met. That stage is the one you ask, and "
             "state.step must name it. Your question asks only for what its known does not "
             "already hold. Not shown to the user."
         ),
     )
     text: str = Field(description="Your conversational response to the user. Required.")
-    prompts: list[SmartPrompt] | None = Field(
-        default=None,
-        description=_prompts_description(offering=True),
-    )
     title: str | None = Field(
         default=None,
         description=(
@@ -245,12 +273,7 @@ class Reply(BaseModel):
     )
     state: TechniqueState | None = Field(
         default=None,
-        description=(
-            "REQUIRED when you are offering or guiding a technique - you MUST populate "
-            "this field with the technique id and the stage you are on. This includes "
-            "offering a technique and every stage through the last one in framework_stages. "
-            "Only set to null when the conversation has no active technique."
-        ),
+        description="The set running and the stage this reply asks. Null when none is running.",
     )
     # There is no clinical_note field. The model was asked for three or four sentences of
     # clinical formulation on every turn, for a care team that has nowhere to read it: it
@@ -261,14 +284,76 @@ class Reply(BaseModel):
     # make storing it defensible.
 
 
-class ReplyWithoutOffer(Reply):
-    """The reply while no offer may be made: the same fields, and a button cannot name a
-    technique, so the model has no way to offer one. Field order is the parent's."""
+@dataclass(frozen=True)
+class Slots:
+    """What each slot of the client's templates asks for, in the thread's style: the text inside
+    its `<...>`. The client's own description of the slot is what the model reads."""
 
-    prompts: list[Button] | None = Field(
-        default=None,
-        description=_prompts_description(offering=False),
-    )
+    going_through: str | None = None
+    lead_line: str | None = None
+    their_words: str | None = None
+
+
+_CORE = ("reasoning", "style", "heading_toward", "text", "title", "crisis")
+_STAGES = ("stages_known", "state")
+
+
+@functools.cache
+def reply_for(
+    moment: Moment,
+    *,
+    may_offer: bool = False,
+    declined_row: bool = False,
+    on_closing: bool = False,
+    slots: Slots = Slots(),
+) -> type[BaseModel]:
+    """The reply shape sent this turn: the core fields plus what this moment needs. A field that
+    is not here cannot be filled, so the gate is the database that picked the moment."""
+    names = set(_CORE)
+    overrides: dict[str, tuple] = {}
+    if moment is Moment.BODY:
+        names |= {"body", *(_STAGES if on_closing else ())}
+    elif moment is Moment.IN_STAGES:
+        names |= set(_STAGES)
+    elif moment is Moment.OFFER_OPEN:
+        names |= {"offer_answer", *_STAGES}
+        if slots.their_words:
+            names.add("their_words")
+            overrides["their_words"] = (
+                str | None,
+                Field(default=None, description=f"Only on no, or when they chose Keep chatting: {slots.their_words}."),
+            )
+    elif moment is Moment.CHATTING:
+        if may_offer and slots.going_through:
+            names.add("offer")
+            overrides["offer"] = (_offer_model(slots.going_through, slots.lead_line) | None, Reply.model_fields["offer"])
+        if declined_row:
+            names |= {"offer_answer", *_STAGES}
+            overrides["offer_answer"] = (
+                OfferAnswer | None,
+                Field(default=None, description="yes when they ask for the set they declined; null otherwise."),
+            )
+    fields = {
+        name: overrides.get(name, (info.annotation, info))
+        for name, info in Reply.model_fields.items()
+        if name in names
+    }
+    return create_model("Reply", __base__=_ReplyBase, **fields)
+
+
+@functools.cache
+def _offer_model(going_through: str, lead_line: str | None) -> type[BaseModel]:
+    """The offer's slots in this style. lead_line exists only when the style's template opens
+    with a whole line of the model's own."""
+    fields: dict[str, tuple] = {"going_through": (str | None, Field(default=None, description=going_through))}
+    if lead_line:
+        fields["lead_line"] = (str | None, Field(default=None, description=lead_line))
+    return create_model("Offer", __config__=ConfigDict(extra="ignore"), **fields)
+
+
+def as_reply(parsed: BaseModel) -> Reply:
+    """A reply in this turn's shape, read into the full record, every absent field null."""
+    return Reply.model_validate(parsed.model_dump())
 
 
 class Extraction(BaseModel):

@@ -1,6 +1,8 @@
 # ABOUTME: Checks the one seeded framework, ABCDE, carries what the client's ABCDE document asks for.
 # ABOUTME: Read from the framework file itself, the same structure that is seeded, so no database is needed.
 
+import re
+
 import pytest
 
 from mani.chat import context, repairs
@@ -44,9 +46,8 @@ def test_every_letter_has_a_title_for_the_ledger_and_asks_in_all_three_styles(ab
 def test_tell_me_more_is_the_five_steps_in_the_selected_style(abcde):
     registry = Registry([as_framework(abcde)])
     for style in STYLES:
-        text = repairs._compose_offer("part", registry, "abcde", style, None, describe=True)
+        text = repairs.explanation(registry.get("abcde"), style)
         assert text.count("\n") >= 6 and "A: Activating Event" in text and "E: Effective New Belief" in text
-        assert "part" not in text.split("\n\n")[0], "Mani's own part is not added to the explanation"
         assert text.endswith("Would you like to try it?")
 
 
@@ -77,15 +78,23 @@ def test_the_offer_follows_the_clients_pattern_with_a_slot_for_their_situation(a
     assert "question whether they're true, and replace them with more realistic ones." in offer["directive"]
 
 
-def test_the_offer_pattern_of_the_chosen_style_alone_reaches_the_framework_index(abcde):
+def test_the_clients_offer_wording_reaches_the_person_but_never_the_framework_index(abcde):
+    """Code renders the offer, Keep chatting and Tell me more from these templates, so the model
+    is given none of them to copy (spec 0003)."""
     from mani.prompts import composer
 
-    index = composer.framework_index(Registry([as_framework(abcde)]), "directive")
-    assert "## How to word an offer" in index
-    assert "There's a framework called ABCDE that helps you identify the thoughts behind <" in index
-    # Supportive's pattern and Keep chatting question stay out of a Directive conversation.
-    assert "can help you understand the thoughts behind" not in index
-    assert "We can keep talking." not in index
+    index = composer.framework_index(Registry([as_framework(abcde)]))
+    for key in ("offer", "keep_chatting", "explain"):
+        for text in abcde["stages"]["offering"][key].values():
+            fixed = max(re.split(r"<[^>]*>", text), key=len).strip()
+            assert fixed[:40] not in index, key
+    assert abcde["stages"]["offering"]["steps"].splitlines()[0] not in index
+
+
+def test_the_offer_lists_the_five_steps_by_letter_and_the_clients_name(abcde):
+    lines = abcde["stages"]["offering"]["steps"].splitlines()
+    names = ["Activating Event", "Belief", "Consequences", "Dispute", "Effective New Belief"]
+    assert [line.split(".")[0] for line in lines] == [f"- {l}: {n}" for l, n in zip("ABCDE", names)]
 
 
 CLIENT_QUESTIONS = {
@@ -115,3 +124,46 @@ CLIENT_QUESTIONS = {
 def test_every_stage_asks_the_clients_own_question_in_each_style(abcde):
     for stage, asks in CLIENT_QUESTIONS.items():
         assert abcde["stages"][stage]["ask"] == asks, stage
+
+
+# Spec 0003, AC-9: the supportive ABCDE offer_open turn, measured before the change as the composed
+# system prompt plus [ctx] plus the JSON schema of the one Reply then sent (2026-10-12).
+CHARACTERS_BEFORE_STRUCTURED_FIELDS = 35752
+
+
+def test_an_open_offer_turn_costs_less_prompt_than_before_the_structured_fields(abcde):
+    import datetime as dt
+    import json
+    import time
+    import uuid
+
+    from mani.db.threads import TurnContext
+    from mani.llm.schema import Moment, reply_for
+    from mani.models.rows import Prompt, TechniqueOutcome, TechniqueState, Thread
+    from mani.prompts import composer
+    from mani.prompts.cache import Config
+    from scripts.seed import PROMPTS_DIR, load_somatic_stages, parse_prompt
+
+    somatic = load_somatic_stages()
+    framework = as_framework({**abcde, "phases": abcde["phases"] + list(somatic),
+                              "stages": {**abcde["stages"], **somatic}})
+    registry = Registry([framework])
+    prompts = {
+        name: Prompt(id=uuid.uuid4(), name=name, content=parse_prompt(PROMPTS_DIR / f"{name}.md")["content"])
+        for name in ("mani_base", "response_format", "style_supportive")
+    }
+    system = composer.compose(
+        Config(prompts=prompts, registry=registry, loaded_at=time.monotonic()), None,
+        style="supportive", offered=["abcde"],
+    )
+    now = dt.datetime.now(dt.UTC)
+    thread = Thread(id=uuid.uuid4(), user_id=uuid.uuid4(), message_count=11, conversation_style="supportive",
+                    created_at=now, last_message_at=now)
+    offered = TechniqueState(thread_id=thread.id, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
+                             phase="offering", at_message_count=11)
+    block = context.build(TurnContext(thread=thread, profile=None, technique=offered), framework=framework,
+                          history=[], offer_waiting=True)
+    shape = reply_for(Moment.OFFER_OPEN, slots=repairs.slots_for(registry, "supportive", "abcde"))
+
+    total = len(system.text) + len(block) + len(json.dumps(shape.model_json_schema()))
+    assert total < CHARACTERS_BEFORE_STRUCTURED_FIELDS

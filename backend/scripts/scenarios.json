@@ -127,5 +127,64 @@
         ]
       }
     }
+  },
+  "answering_the_offer": {
+    "about": "Spec 0003, AC-11: what follows the offer, written by Claude on 2026-10-12. The opening lines are resentful_coworker's; after_offer is sent once ABCDE is offered.",
+    "expect": {"offer_from": 3, "offer_by": 5},
+    "conversations": {
+      "says_no": {
+        "lines": [
+          "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
+          "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
+          "I keep thinking they only see me as someone useful, not as a colleague.",
+          "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
+          "I don't know how to handle it without making things awkward at work."
+        ],
+        "after_offer": {
+          "answer": "no",
+          "lines": [
+            "No thanks, I'd rather just talk about it.",
+            "I think I'm mostly tired of always being the one who gives."
+          ]
+        }
+      },
+      "moves_on": {
+        "lines": [
+          "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
+          "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
+          "I keep thinking they only see me as someone useful, not as a colleague.",
+          "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
+          "I don't know how to handle it without making things awkward at work."
+        ],
+        "after_offer": {
+          "answer": "moved_on",
+          "lines": [
+            "Actually, my manager just messaged me about the deadline and now I'm panicking about that."
+          ]
+        }
+      },
+      "says_yes_through_the_body_route": {
+        "lines": [
+          "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
+          "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
+          "I keep thinking they only see me as someone useful, not as a colleague.",
+          "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
+          "I don't know how to handle it without making things awkward at work."
+        ],
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Yes, let's try it.",
+            "I told myself they don't respect me and that I'm a pushover.",
+            "I felt hurt and then angry, and I snapped at them in the meeting.",
+            "Maybe it's not that they don't respect me. They might just be overwhelmed too.",
+            "I think I can help when I have time and say no when I don't, without it meaning anything about me.",
+            "Yes, I'd like to notice it.",
+            "It's tight in my chest.",
+            "A bit calmer now."
+          ]
+        }
+      }
+    }
   }
 }

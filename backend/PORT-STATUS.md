@@ -52,11 +52,16 @@ the same change as the work.**
      after it. Nothing in code classifies what the person said: whether a reply is vague, a correction or
      a wish only to be listened to is the model's reading (`response_format.md`, reasoning).
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, `style`,
-     `heading_toward`, then `text`. The order is deliberate.
+     `heading_toward`, then `text`. The order is deliberate. Its shape is picked from the database for the
+     turn's moment (`context.moment`, `schema.reply_for`): the offer's slots only while an offer may be made,
+     `offer_answer` only while one is open or was declined, `body` only on the body route.
   5. `reply_checks.py` costs no call: it sets `state.step` from the reply's own ledger when they disagree,
-     and counts what code cannot fix (an offer that is due and missing, no question unless the draft chose a
-     shape that asks nothing, the last reply's question asked again) in the logs and in `Turn.checks`.
-  6. `repairs.py` corrects what remains, in code: script leakage, buttons, an early offer.
+     and counts what code cannot fix (an offer that is due and missing or could not be rendered, no question
+     unless the draft chose a shape that asks nothing, the last reply's question asked again) in the logs and
+     in `Turn.checks`.
+  6. `repairs.py` corrects what remains, in code (script leakage, internal words), and renders the client's
+     fixed text from the reply's fields: the offer, Tell me more, Keep chatting and the body route's branches.
+     Every button is set by code.
   7. Crisis, the reply, the framework state and the summary are written together.
 - **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): only ABCDE is seeded and offered
   (the client's ABCDE document of 2026-10-09). The other five are kept in `content/frameworks/paused/`; the seed
@@ -110,9 +115,9 @@ the same change as the work.**
 - **A turn is one chat call at effort `low`, never a second to fix a draft** (muhammad, 2026-10-12). Because the
   client's R2 asks for no excessive latency, a turn waited on a reasoning model at `high` and up to two more
   full calls whenever a draft broke a rule (a median of 12.6 s and 41 s at worst, 2026-10-07), and the reply
-  already carries its own written reasoning. Code shapes the reply instead of asking again: while no offer
-  may be made a button has no `technique` (`schema.ReplyWithoutOffer`), `state.step` is set from the draft's
-  ledger, and `repairs.apply` strips what remains. The checks that need another call to fix are logged, not
+  already carries its own written reasoning. Code shapes the reply instead of asking again: the reply's shape
+  is picked from the database each turn (`schema.reply_for`), so while no offer may be made it has no offer
+  field, `state.step` is set from the draft's ledger, and `repairs.apply` strips what remains. The checks that need another call to fix are logged, not
   asked for again, so how often each happens is known. The one scoped extra call is the exercise pick at the end
   of a framework, at the chat row's effort. `test_a_turn_costs_exactly_one_provider_call` and the
   `reply_checks` tests in `tests/integration/test_turn.py` hold it. Not yet measured live (needs muhammad's yes).
@@ -141,10 +146,16 @@ the same change as the work.**
   measured live.
 - **Memory is per person**. Because Mani should learn each person's patterns across chats, while a new chat
   still starts with none of the last one's messages (2026-09-23).
-- **An offer is one short line that names its framework** (the word may be said). Because the client's offers
-  are one short mirror then the question, and the description belongs after Tell me more (2026-10-09); why
-  the word may be said: reason unknown, muhammad to confirm. The line builds on the newest thing they
-  said, then the client's permission question; the client's description is shown only when they ask to hear more.
+- **An offer is the client's template for its set, and the model fills only the slots** (spec 0003). Because
+  a line the model wrote drifted from the client's wording and needed regex repair, while rendering makes it
+  exact in every style (2026-10-12). The reply's `offer` carries `going_through`, and `lead_line` where the
+  style's template opens with a whole line, for the set in `heading_toward`; code sends `offering.offer[style]`
+  with them, the permission question, then `offering.steps`, and Try it, Tell me more and Keep chatting
+  (`repairs.offer_template`). The steps are the client's short list of A to E, so the offer itself says what
+  each letter stands for (muhammad, 2026-10-13, R11); `going_through` is their feeling or worry in their
+  words ("your anxiety"). Tell me more is the client's longer `offering.explain[style]`; a no is `offering.keep_chatting[style]` with `their_words`. An offer that cannot
+  be rendered is dropped, the model's text goes, and `offer unusable: <reason>` is logged.
+  `tests/unit/test_repairs.py`, `tests/integration/test_turn.py`.
 - **One style file per thread, in the system prompt, written from the client's behavior lists** (muhammad,
   2026-10-12). Because the client separates the styles by what each reply is trying to do, and our own recipe per
   style, under shared rules that contradicted their examples, drifted from it (styles document, 2026-10-12).
@@ -210,8 +221,9 @@ the same change as the work.**
   (vague, unsure, correcting, wanting only to be heard), no list of feeling words, no list of self-judgments
   and no pain words. The rules for those live in the prompts, and a draft answers them itself: a reply that
   asks nothing says so by its shape (`schema.NO_QUESTION_SHAPES`). What code still checks is not about meaning:
-  the crisis screen, script and internal-word stripping, the `[ctx]` injection guard, and the body route's
-  place and decline words (scope feature 16 replaces those with reply fields). A paused framework moved back
+  the crisis screen, script and internal-word stripping, and the `[ctx]` injection guard. The model reports
+  its own judgments in typed fields that exist only in the moment the database picks (spec 0003): the answer
+  to an offer (`offer_answer`), the offer's slots, and the body route branch (`body`). A paused framework moved back
   brings no phrase list with it; anything it needs to detect is designed when it returns (2026-10-12).
 - **Questions before an offer ask for what is still missing** (muhammad, 2026-10-09; cut 2026-10-12). Because
   Mani re-asked what they had said and walked them into worst cases (2026-10-09), while the client's own questions
@@ -241,7 +253,8 @@ the same change as the work.**
   without one.
 - **An open offer is read from the database, not from the buttons on screen.** Because an offer can stay open
   with no buttons showing, and a typed yes to it then started nothing (2026-10-09). A yes to it starts it either
-  way, and asking about it (Tell me more, or a typed question) is answered by offering it again.
+  way. A tap on its buttons decides by itself; otherwise the reply's `offer_answer` does (spec 0003). Asking
+  about it is answered with the client's explanation and the offer again; any other answer declines it.
 - **"It hit me so hard" is not violence.** Because the client's own ABCDE signal "why it hit me so hard" was
   read as violence and Mani asked if they were in danger (2026-10-08). `safety.screen` sets aside "hit me" when a thing is its subject
   (it, that, this, what); a person hitting them still asks.

@@ -3,28 +3,8 @@
 
 from mani.chat import reply_checks
 from mani.chat.techniques import Registry
-from mani.llm.schema import Reply, SmartPrompt, StageKnown, TechniqueState
+from mani.llm.schema import Reply, StageKnown, TechniqueState
 from mani.models.rows import Framework
-
-
-def registry() -> Registry:
-    return Registry([
-        Framework(
-            id="behavioral_activation", name="Behavioral Activation", summary="s", body="b",
-            phases=["offering"], activation={},
-        ),
-        Framework(
-            id="act_choice_point", name="ACT Choice Point", summary="s", body="b",
-            phases=["offering"], activation={},
-        ),
-    ])
-
-
-def offer(technique: str) -> Reply:
-    return Reply(
-        text="There are some questions we could go through. Would you like to try it?",
-        prompts=[SmartPrompt(label="Try it", technique=technique), SmartPrompt(label="Keep chatting", decline=True)],
-    )
 
 
 def stages() -> Registry:
@@ -90,28 +70,28 @@ def test_a_reply_with_no_ledger_or_no_state_keeps_its_step():
 def test_a_clean_question_stands():
     draft = Reply(text="What is the hardest part of the evenings?")
     assert reply_checks.misses(
-        draft, registry(), offer_due=False, needs_question=True, last_mani_text=None
+        draft, offered=None, offer_dropped=None, offer_due=False, needs_question=True, last_mani_text=None
     ) == []
 
 
 def test_not_offering_when_an_offer_is_due_is_missed_if_mani_leans_somewhere():
     leaning = Reply(text="What is the hardest part?", heading_toward="act_choice_point")
     assert reply_checks.misses(
-        leaning, registry(), offer_due=True, needs_question=False, last_mani_text=None
+        leaning, offered=None, offer_dropped=None, offer_due=True, needs_question=False, last_mani_text=None
     ) == ["offer due and not made"]
 
 
 def test_a_due_offer_is_not_missed_when_mani_has_no_lean():
     undecided = Reply(text="What is the hardest part?")
     assert reply_checks.misses(
-        undecided, registry(), offer_due=True, needs_question=False, last_mani_text=None
+        undecided, offered=None, offer_dropped=None, offer_due=True, needs_question=False, last_mani_text=None
     ) == []
 
 
 def test_a_comfort_with_no_question_is_missed_before_an_offer():
     comfort = Reply(text="It is okay to feel that way. I am here with you.")
     assert reply_checks.misses(
-        comfort, registry(), offer_due=False, needs_question=True, last_mani_text=None
+        comfort, offered=None, offer_dropped=None, offer_due=False, needs_question=True, last_mani_text=None
     ) == ["asks no question"]
 
 
@@ -119,14 +99,24 @@ def test_no_question_is_fine_when_it_is_not_needed():
     """While the questions run, on a safety concern, or when they asked only to be heard."""
     comfort = Reply(text="It is okay to feel that way. I am here with you.")
     assert reply_checks.misses(
-        comfort, registry(), offer_due=False, needs_question=False, last_mani_text=None
+        comfort, offered=None, offer_dropped=None, offer_due=False, needs_question=False, last_mani_text=None
     ) == []
 
 
 def test_an_offer_carries_its_own_permission_question():
+    """The sent reply is the client's offer, whatever the model wrote in text."""
+    draft = Reply(text="It sounds heavy.")
     assert reply_checks.misses(
-        offer("act_choice_point"), registry(), offer_due=False, needs_question=True, last_mani_text=None
+        draft, offered="abcde", offer_dropped=None, offer_due=True, needs_question=True, last_mani_text=None
     ) == []
+
+
+def test_an_offer_that_could_not_be_made_is_counted_by_its_reason():
+    draft = Reply(text="What happened next?")
+    assert reply_checks.misses(
+        draft, offered=None, offer_dropped="no going_through", offer_due=False, needs_question=True,
+        last_mani_text=None,
+    ) == ["offer unusable: no going_through"]
 
 
 FIRST = (
@@ -145,14 +135,14 @@ SAME_AGAIN = (
 def test_the_same_choices_asked_again_are_missed():
     """Observed: someone who asked Mani to pick got the same three options back, reworded, twice."""
     assert reply_checks.misses(
-        Reply(text=SAME_AGAIN), registry(), offer_due=False, needs_question=False, last_mani_text=FIRST
+        Reply(text=SAME_AGAIN), offered=None, offer_dropped=None, offer_due=False, needs_question=False, last_mani_text=FIRST
     ) == ["repeats the last question"]
 
 
 def test_a_different_question_after_an_answer_is_not_a_repeat():
     moved_on = Reply(text="Opening your laptop to look at one place sounds like a start. When will you do it?")
     assert reply_checks.misses(
-        moved_on, registry(), offer_due=False, needs_question=False, last_mani_text=FIRST
+        moved_on, offered=None, offer_dropped=None, offer_due=False, needs_question=False, last_mani_text=FIRST
     ) == []
 
 
@@ -165,7 +155,7 @@ def test_a_draft_that_chose_a_shape_asking_nothing_is_not_missing_a_question():
     none = Reply(text="That has been sitting with you.")
     for draft, expected in ((holding, []), (asking, ["asks no question"]), (none, ["asks no question"])):
         assert reply_checks.misses(
-            draft, registry(), offer_due=False, needs_question=True, last_mani_text=None
+            draft, offered=None, offer_dropped=None, offer_due=False, needs_question=True, last_mani_text=None
         ) == expected
 
 

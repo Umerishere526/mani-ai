@@ -29,8 +29,8 @@ def greeting(nickname: str | None, returning: bool) -> str:
     return f"{hello} {STYLE_QUESTION}"
 
 
-# The client's three buttons under an offer (muhammad, 2026-10-08), set by repairs whatever the
-# model labelled them. Tell me more is the one that asks what the questions involve.
+# The client's three buttons under an offer (muhammad, 2026-10-08), always set by code. Tell me
+# more is the one that asks what the questions involve.
 TRY_IT_LABEL = "Try it"
 TELL_ME_MORE_LABEL = "Tell me more"
 KEEP_CHATTING_LABEL = "Keep chatting"
