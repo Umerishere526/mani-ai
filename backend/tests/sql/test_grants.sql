@@ -105,6 +105,14 @@ select pg_temp.want('a user cannot write what Mani understands of them',
 select pg_temp.want('the backend can store what Mani understands',
   has_column_privilege('mani_service', 'public.threads', 'understanding', 'UPDATE'), true);
 
+-- Migration 023: the offer is made only on the turn right after Mani's check, so a user who
+-- could write when the check was made could open an offer for themselves.
+select pg_temp.want('a user cannot open a check for themselves',
+  has_column_privilege('authenticated', 'public.threads', 'check_at_message_count', 'UPDATE'), false);
+
+select pg_temp.want('the backend can record when Mani checked',
+  has_column_privilege('mani_service', 'public.threads', 'check_at_message_count', 'UPDATE'), true);
+
 select pg_temp.want('a user can change their own nickname',
   has_column_privilege('authenticated', 'public.profiles', 'nickname', 'UPDATE'), true);
 

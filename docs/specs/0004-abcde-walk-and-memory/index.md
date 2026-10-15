@@ -3,6 +3,12 @@
 **Date**: 2026-10-13
 **Status**: In Progress
 
+> Changed 2026-10-14: a stage reached as missing, B to E (and A with no feeling word), is asked with Mani's own question, the client's `ask` as written with what it refers to in their words; the client's `ask` is the logged fallback ("missing asks nothing"), and a stage reached unjudged still gets the client's line (thread 425f6a55; Decision in force on Mani's voice, PORT-STATUS). AC-6 and the render tables below are edited to match.
+
+> Changed 2026-10-14: the stage the walk reaches is judged in its own field, `next_stage` (known, possible, partial with a `gap`, or missing), on every turn that can start or move the walk, from the whole conversation about the issue they confirmed, before or after the check; a move with no judgement is logged as "reach unjudged" (thread 4b93d612; Decision in force "Inside a framework…", PORT-STATUS).
+
+> Changed 2026-10-13: a stage already answered is confirmed in Mani's own words after the client's letter line; A's client confirm line and `confirm_phrases` are only the fallback (Decision in force "Inside a framework…", PORT-STATUS).
+
 ## Summary
 
 Once someone says yes to ABCDE, Mani walks them through it one stage per reply. Each stage opens with its letter and name ("B is for Belief."). A stage they already talked about is said back in their words and confirmed once, and only a missing one is asked. What they said for each stage is now stored in the database by code (a small JSON record on the thread), so Mani still has it after it leaves the 20 message history, and every turn is still one model call.
@@ -20,21 +26,22 @@ Once someone says yes to ABCDE, Mani walks them through it one stage per reply. 
   - The reply's `stage_answer` for the stage in force: `agreed`, `answered`, `corrected` or `let_go` moves to the next phase in `framework.phases`. `not_yet`, null, or an answer that fails the validity rules stays.
   - The second `not_yet` in a row on one stage moves on as `let_go` (the code backstop).
   - No stage is ever skipped. Leaving `effective` enters the body route.
-- **AC-3**: The framework starts when the row is `accepted` with phase `offering` (from a typed yes, a Try it tap, Try it after Tell me more, or a yes to a declined offer). That turn's `stage_updates` report every content stage the conversation already answers. Code clears any earlier entry for this framework, stores the updates, and only then renders the first stage. On a turn where the offer is not accepted, `stage_updates` are dropped.
+- **AC-3**: The framework starts when the row is `accepted` with phase `offering` (from a typed yes, a Try it tap, Try it after Tell me more, or a yes to a declined offer). That turn's `next_stage` judges the first stage, which the walk reaches, from the whole conversation (changed 2026-10-13: every stage was seeded here, and the seed went stale; changed 2026-10-14: from `stage_updates` to `next_stage`). Code clears any earlier entry for this framework, stores it, and only then renders the first stage. Each later stage is judged in `next_stage` on the turn the walk reaches it. On a turn where the offer is not accepted, `stage_updates` and `next_stage` are dropped.
 - **AC-4**: Reaching a stage whose stored status is `known`, or `possible` (A only):
   - For `activate`, the reply is the intro line, then the client's `activate.confirm[style]` line with the stored `said` in its slot, word for word.
   - For `belief` to `effective` (`known` only), the reply is the intro line, then the model's one sentence naming their stored words, then one phrase from `confirm_phrases`.
 - **AC-5**: Reaching a stage whose stored status is `partial`, the reply is the intro line, then the model's question for only the missing part.
-- **AC-6**: Reaching a stage with nothing stored:
-  - For `belief` to `effective`, the reply is the intro line, then that stage's client `ask[style]` as written.
-  - For `activate`, the reply is the intro line, then `activate.missing[style]` with their feeling word in its slot when the start turn reported one, otherwise `activate.ask[style]`. (The feeling word now comes from `threads.understanding.feeling`, [spec 0005](../0005-questions-follow-what-they-said/index.md).)
+- **AC-6**: Reaching a stage judged missing:
+  - For `belief` to `effective`, the reply is the intro line, then Mani's own question: the stage's client `ask[style]` as written, with what it refers to in their words. When the model's text asks nothing, the client's `ask[style]`, logged `missing asks nothing`.
+  - For `activate`, the reply is the intro line, then `activate.missing[style]` with their feeling word in its slot when they named one, otherwise Mani's own question, falling back to `activate.ask[style]`.
+  - A stage reached with no judgement (`next_stage` null) gets the client's line, as before 2026-10-14. (The feeling word now comes from `threads.understanding.feeling`, [spec 0005](../0005-questions-follow-what-they-said/index.md).)
 - **AC-7**: The confirm phrase comes from `confirm_phrases` ("Is that right?", "Do we have this right?", "Did I get that right?", "Does that sound right?"). It is `confirm_phrases[(h(thread_id) + stage_index) % 4]`, where `h` is a stable hash and `stage_index` is the stage's position in `framework.phases`. So the same thread always gets the same phrase, and two neighbouring stages never get the same one. A has no pool phrase; its client line carries its own question.
 - **AC-8**: After a confirm:
   - A plain no (`not_yet`) keeps the stage. The reply is the model's text alone, which says it misunderstood and asks what would be more accurate.
   - A no that carries new words (`corrected`) replaces the stored words, and the walk moves on.
   - New words given while on a stage replace that stage's stored words.
   - A correction to an earlier stage replaces that stage's words, and the walk stays where it is.
-- **AC-9**: What they said per stage is stored in `thread_technique_state.stages_known` and merged by code under the invariants below. Each turn of a running framework, `[ctx]` carries the stored words and status of every content stage. A stage stored more than 20 messages ago is still confirmed, never asked again.
+- **AC-9**: What they said per stage is stored in `thread_technique_state.stages_known` and merged by code under the invariants below. Each turn of a running framework, `[ctx]` carries the stored words and status of every content stage. A stage said more than 20 messages ago is still confirmed when reached, never asked again: the model sees the whole thread within its budget (Decision in force "The transcript is the memory within a thread", 2026-10-13).
 - **AC-10**: The store is kept when a run retires and is deleted with the thread. On a guarded turn (the safety screen or a model reported crisis), nothing is merged, stepped or rendered, and nothing is written to the store or the phase.
 - **AC-11**: Every turn is still one chat call at effort `low` (`test_a_turn_costs_exactly_one_provider_call` stays green).
 - **AC-12**: Logs name stage ids, statuses, `stage_answer` values, ignored updates, and each named fallback, never the person's words.
@@ -89,6 +96,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 | Field | Type | Meaning |
 |---|---|---|
 | `stage_updates` | list of `{stage, said, status, corrected}` or null | Only the stages whose words were learned or changed this turn. `status` is `known` or `partial`, or `possible` for `activate`. `corrected` is true when they said earlier stored words are wrong. |
+| `next_stage` | `{status, said, gap}` or null | The stage the walk reaches if it moves this turn (A on a start): `known`, `possible` (A only), `partial` with `gap` the id of its missing part's `if_unclear` line, or `missing`. Applied only when the walk moves; null on a move is logged as "reach unjudged". Not in BODY on the closing stage, which the body route follows. Added 2026-10-14. |
 | `stage_answer` | `agreed`, `answered`, `corrected`, `let_go`, `not_yet` or null | How their message answers the stage in force. `agreed`: yes to a confirm. `answered`: gave what the stage needs, with an update for it. `corrected`: a no with new words, with an update for it. `let_go`: move on without words (asked twice already, or the question made them uneasy). `not_yet`: a plain no, unclear, or "I don't know" still being helped. Null on the start turn. |
 | `feeling` | string or null | Their own word for how they feel. Read only on the start turn, for `activate.missing`. Removed by [spec 0005](../0005-questions-follow-what-they-said/index.md), which keeps the feeling in `threads.understanding`. |
 | `text` | string | What `[ctx]` asks for in each branch (below). |
@@ -123,10 +131,11 @@ On a turn where a yes is possible (OFFER_OPEN, or CHATTING on a declined row), `
 | `known` or `possible`, `activate` | `intro` + `activate.confirm[style]` with `said` | `activate.ask[style]` when the slot cannot render |
 | `known`, other | `intro` + model `text` + confirm phrase | sentences ending in "?" are dropped; if none is left, "You mentioned {said}." |
 | `partial` | `intro` + model `text` | the stage's `ask[style]` when the text has no "?" |
-| absent, `activate` | `intro` + `activate.missing[style]` with `feeling` | `activate.ask[style]` when `feeling` is null |
-| absent, other | `intro` + the stage's `ask[style]` | none |
+| missing, `activate` | `intro` + `activate.missing[style]` with `feeling` | when `feeling` is null, the model's question, then `activate.ask[style]` |
+| missing, other | `intro` + the model's question about their situation | the stage's `ask[style]` when the text has no "?" (`missing asks nothing`) |
+| unjudged | `intro` + the client's line as above | none |
 
-When the step stays, the reply is the model's `text` with no intro. Leaving `effective` runs the body route as today (below). Each fallback is logged by name (`naming asks`, `gap asks nothing`, `slot empty`).
+When the step stays, the reply is the model's `text` with no intro. Leaving `effective` runs the body route as today (below). Each fallback is logged by name (`naming asks`, `gap asks nothing`, `missing asks nothing`, `slot empty`).
 
 **The closing stage and the body route**: after the move into `effective`, the next turn's moment is BODY (on the closing), which carries the same stage fields plus `body`. A `body` value that fits the transition table of spec 0003 wins, and `stage_answer` is then ignored and logged. Otherwise a move answer sets the phase to `somatic_checkin`, and the client's check in question is placed as `with_the_check_in` does today. `not_yet` stays on `effective` with the model's text.
 
@@ -148,16 +157,16 @@ When the step stays, the reply is the model's `text` with no intro. Leaving `eff
 | A known or possible | the event in their words | `stages_known.<fw>.activate.said` |
 | A known or possible | the client's line | `activate.confirm[style]` |
 | A missing | their feeling word | `threads.understanding.feeling` after the start turn's merge ([spec 0005](../0005-questions-follow-what-they-said/index.md)) |
-| A missing, no feeling word | the client's question | `activate.ask[style]` |
+| A missing, no feeling word | the question | the model's `text`, falling back to `activate.ask[style]` |
 | B to E known | the sentence naming their words | the model's `text`, guided by the branch line, with the "You mentioned {said}." fallback |
 | B to E known | the confirm phrase | `confirm_phrases`, by the AC-7 formula |
-| B to E missing | the client's question | stage `ask[style]` |
+| B to E missing | the question about their situation | the model's `text`, falling back to stage `ask[style]` |
 | Partial | the gap question | the model's `text`, falling back to `ask[style]` |
 | After a no | the follow up | the model's `text` |
 | What the model writes | which branch | the `[ctx]` branch line, computed from the stored status before the merge |
 | Style | Directive, Supportive or Reflective | `threads.conversation_style` (`resolve_style`) |
 | Stored words in `[ctx]` | every stage's `said` and status | `stages_known.<fw>` |
-| Seed | what was said before the yes | `stage_updates` on the start turn, from the history window and Conversation Context |
+| Reach | what was said for the stage reached | `next_stage` on the turn the walk reaches it, from the whole thread about the issue they confirmed, before or after the check |
 
 **Key invariants**:
 - Stage in force: an update replaces `said` (the latest words win), and its status never drops below what is stored.
@@ -179,7 +188,7 @@ When the step stays, the reply is the model's `text` with no intro. Leaving `eff
 **Configuration required**: none.
 
 **Critical test scenarios** (scripted model built from the real reply schema):
-- Nothing known: yes, then A to E in five replies, each opening with its letter line and the client's ask in the style, then the body check in. Verifies **AC-1**, **AC-2**, **AC-6**.
+- Nothing known: yes, then A to E in five replies, each opening with its letter line and Mani's own question about their situation, then the body check in. Verifies **AC-1**, **AC-2**, **AC-6**.
 - Seeded: the event and the belief said before the offer, then yes. A is the client's confirm line with the event. "yes" leads to B with their belief and the formula's confirm phrase. "yes" leads to C's ask. Run it for a typed yes, a Try it tap and a yes to a declined offer. Verifies **AC-3**, **AC-4**, **AC-7**.
 - A row left `accepted` at `offering` by a crisis turn: the next turn is the start turn. Verifies **AC-3**.
 - Plain no on B: no letter line, stays on B, `tries` is 1. Then their new words with `answered` lead to C, and B is `done` with those words. Verifies **AC-8**.
@@ -205,7 +214,7 @@ Tracer Bullet: a thin walk through every layer first, then memory, then correcti
 4. The thin thread:
    - the start turn from the row;
    - the code owned step (one phase, validity rules, the `tries` backstop) in the orchestrator, after `repairs.apply` and skipped when guarded, with the phase written from it;
-   - the render for absent stages (intro plus the client's ask);
+   - the render for missing stages (intro plus Mani's question, the client's ask as the fallback);
    - BODY at the closing.
    
    An integration test walks A to E. Satisfies **AC-1**, **AC-2**, **AC-6**, **AC-10**, **AC-11**.
@@ -239,7 +248,7 @@ Tracer Bullet: a thin walk through every layer first, then memory, then correcti
 - One stage per reply is slower than the skipping walk it replaces.
 - What they just said gets no acknowledgement when the walk moves on: the reply is the letter line and the next question (muhammad, 2026-10-13, following the client's examples and R3).
 - A wrong `agreed` or `answered` that passes the validity rules still moves on for good. Only reading transcripts catches it.
-- On turns where code sends the client's text (a missing stage, or A), the model's `text` is written and thrown away. That is a small output cost.
+- On turns where code sends the client's text (A with their feeling word, or a stage left unjudged), the model's `text` is written and thrown away. That is a small output cost.
 - Seeding five stages in one low effort call can over report (five confirms) or under report (repeats, breaking R6). Only a live seeded run shows which.
 - The store is new sensitive data on the thread.
 

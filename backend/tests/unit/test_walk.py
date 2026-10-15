@@ -6,7 +6,7 @@ import uuid
 import pytest
 
 from mani.chat import walk
-from mani.llm.schema import StageUpdate
+from mani.llm.schema import NextStage, StageUpdate
 from mani.models.rows import Framework
 from scripts.seed import FRAMEWORKS_DIR, load_somatic_stages, parse_framework
 
@@ -26,6 +26,11 @@ def abcde() -> Framework:
 
 def said(stage: str, words: str, status: str = "known", corrected: bool | None = None) -> StageUpdate:
     return StageUpdate(stage=stage, said=words, status=status, corrected=corrected)
+
+
+def judged(status: str, words: str | None = None, gap: str | None = None) -> NextStage:
+    """The reply's judgement of the stage the walk reaches next."""
+    return NextStage(status=status, said=words, gap=gap)
 
 
 def test_on_the_stage_in_force_the_latest_words_win_and_the_status_never_drops(abcde):
@@ -73,19 +78,56 @@ def test_their_words_are_kept_short_and_cut_at_a_word_boundary(abcde):
     assert len(stored) <= walk.SAID_LIMIT and stored.endswith("word") and "  " not in stored
 
 
-def test_the_start_turn_clears_the_old_run_and_opens_on_a(abcde):
-    """AC-3: a new start never shows an old run's done stages, and what they said before the yes seeds it."""
-    walked = walk.start(abcde, [said("belief", "I am useless")])
-    assert walked.entries == {"belief": {"said": "I am useless", "status": "known"}}
-    assert (walked.phase, walked.reached) == ("activate", "activate")
+def test_the_start_turn_clears_the_old_run_and_opens_on_a_judged_from_what_they_said(abcde):
+    """AC-3, 2026-10-13: a new start never shows an old run's stages; A is judged when the walk reaches
+    it, and nothing is stored for a later stage before the walk gets there."""
+    walked = walk.start(abcde, [said("belief", "I am useless")], judged("known", "left out of meetings"))
+    assert walked.entries == {"activate": {"said": "left out of meetings", "status": "known"}}
+    assert (walked.phase, walked.reached, walked.unjudged) == ("activate", "activate", False)
+    assert walked.notes == ["dropped update for belief"]
 
 
-def test_a_move_answer_moves_exactly_one_stage_and_marks_the_one_left_done(abcde):
-    stored = {"belief": {"said": "I am useless", "status": "known"},
-              "consequence": {"said": "I stopped going", "status": "known"}}
-    walked = walk.advance(abcde, stored, None, "agreed", in_force="belief")
-    assert (walked.phase, walked.reached) == ("consequence", "consequence"), "never skipped, though known"
+def test_a_move_answer_moves_exactly_one_stage_and_the_stage_reached_is_judged_then(abcde):
+    """2026-10-13: the stage reached is filled from this turn's next_stage judgement of it; stage updates
+    for a stage further on are dropped."""
+    stored = {"belief": {"said": "I am useless", "status": "known"}}
+    walked = walk.advance(abcde, stored, [said("dispute", "x")], "agreed", in_force="belief",
+                          report=judged("known", "I stopped going"))
+    assert (walked.phase, walked.reached, walked.unjudged) == ("consequence", "consequence", False)
     assert walked.entries["belief"] == {"said": "I am useless", "status": "done", "tries": 0}
+    assert walked.entries["consequence"] == {"said": "I stopped going", "status": "known"}
+    assert "dispute" not in walked.entries and "dropped update for dispute" in walked.notes
+
+
+def test_a_stage_reached_without_a_judgement_is_asked_and_reported_apart_from_one_judged_missing(abcde):
+    """Thread 4b93d612, 2026-10-14: a stage left unjudged gets the client's question, since the reply's
+    text was not written for it, and is flagged; one judged missing gets Mani's own question."""
+    stored = {"belief": {"said": "the timeline goes south", "status": "known"}}
+    own = "How did thinking the timeline would go south affect how you felt or what you did?"
+    unjudged = walk.advance(abcde, stored, None, "agreed", in_force="belief")
+    assert unjudged.unjudged and "consequence" not in unjudged.entries
+    assert render(abcde, unjudged, text=own, style="directive") == (
+        "C is for Consequences. How did that thought affect how you felt or what you did?", [],
+    )
+    missing = walk.advance(abcde, stored, None, "agreed", in_force="belief", report=judged("missing"))
+    assert not missing.unjudged and "consequence" not in missing.entries
+    assert render(abcde, missing, text=own, style="directive") == (f"C is for Consequences. {own}", [])
+
+
+def test_a_judgement_of_the_next_stage_on_a_turn_that_stays_is_neither_stored_nor_flagged(abcde):
+    stayed = walk.advance(abcde, {}, None, "not_yet", in_force="belief", report=judged("known", "frustrated"))
+    assert stayed.phase == "belief" and "consequence" not in stayed.entries
+    assert not stayed.unjudged and stayed.notes == []
+
+
+def test_on_a_second_try_the_stage_reached_is_said_back_from_the_judgement(abcde):
+    """Thread 4b93d612: on a second try the walk moves whatever they answer, and [ctx] says so, so the
+    reply's confirmation of the next stage is used."""
+    first = walk.advance(abcde, {}, None, "not_yet", in_force="belief")
+    second = walk.advance(abcde, first.entries, None, "not_yet", in_force="belief",
+                          report=judged("partial", "you felt frustrated"))
+    own = "You mentioned feeling frustrated. Is that how this belief has affected you?"
+    assert render(abcde, second, text=own, style="directive") == (f"C is for Consequences. {own}", [])
 
 
 def test_a_plain_no_stays_once_and_the_second_lets_the_stage_go(abcde):
@@ -117,36 +159,60 @@ def test_leaving_the_closing_enters_the_body_route_and_a_body_answer_wins(abcde)
     assert body.notes == ["stage answer not_yet ignored for a body answer"]
 
 
-def render(abcde, walked, before=None, text="", style="supportive", feeling=None):
-    return walk.reply_text(abcde, walked, before or {}, text=text, style=style, thread_id=THREAD, feeling=feeling)
+def render(abcde, walked, text="", style="supportive", feeling=None):
+    return walk.reply_text(abcde, walked, text=text, style=style, thread_id=THREAD, feeling=feeling)
 
 
-def test_a_missing_stage_is_its_letter_line_then_the_clients_question(abcde):
-    """AC-1, AC-6: code sends both, so nothing the model wrote comes before or instead of them."""
+def reached(entries: dict, stage: str) -> walk.Walked:
+    """A turn whose walk reaches `stage` with `entries` stored."""
+    return walk.Walked(entries, stage, stage)
+
+
+def test_a_missing_stage_is_its_letter_line_then_manis_own_question_about_their_situation(abcde):
+    """Thread 425f6a55, 2026-10-14: the client's bare question ("…about what was happening?") was met
+    with "regarding?". Mani asks it about their situation, as the client's document adapts D, after the
+    letter line code sends; a letter line the model wrote is dropped."""
+    own = "What did you start telling yourself when your manager gave you work outside your responsibilities?"
     reached = walk.Walked({}, "belief", "belief")
-    text, notes = render(abcde, reached, text="Thanks for telling me. What were you thinking?")
-    assert text == (
-        "B is for Belief. Sometimes when things are difficult, we start drawing conclusions about "
-        "ourselves or what's happening. What were you telling yourself about the situation?"
+    assert render(abcde, reached, text=own, style="directive") == (f"B is for Belief. {own}", [])
+    assert render(abcde, reached, text=f"B is for Belief. {own}", style="directive") == (
+        f"B is for Belief. {own}", ["dropped a letter line"],
     )
-    assert notes == []
+
+
+def test_a_missing_stage_whose_text_asks_nothing_falls_back_to_the_clients_question(abcde):
+    text, notes = render(abcde, walk.Walked({}, "belief", "belief"), text="Thanks for telling me.", style="directive")
+    assert text == "B is for Belief. What did you start telling yourself about what was happening?"
+    assert notes == ["missing asks nothing"]
 
 
 def test_a_missing_event_is_asked_with_their_own_word_for_the_feeling(abcde):
-    start = walk.start(abcde, None)
+    start = walk.start(abcde, None, judged("missing"))
     assert render(abcde, start, feeling="overwhelmed")[0] == (
         "A is for Activating Event. What's been happening that's left you feeling so overwhelmed?"
     )
     assert render(abcde, start) == (
-        "A is for Activating Event. What's been happening that's left things feeling so hard?", ["slot empty"],
+        "A is for Activating Event. What's been happening that's left things feeling so hard?",
+        ["slot empty", "missing asks nothing"],
     )
 
 
+def test_a_missing_event_keeps_the_clients_line_with_their_feeling_over_manis_question(abcde):
+    """The client's Situation 3 for A is already about them, through their feeling word; without one,
+    Mani's own question is used."""
+    start = walk.start(abcde, None, judged("missing"))
+    own = "What has been happening at work that you want to look at?"
+    assert render(abcde, start, text=own, feeling="overwhelmed")[0] == (
+        "A is for Activating Event. What's been happening that's left you feeling so overwhelmed?"
+    )
+    assert render(abcde, start, text=own) == (f"A is for Activating Event. {own}", ["slot empty"])
+
+
 @pytest.mark.parametrize("status", ["known", "possible"])
-def test_a_known_or_possible_event_is_the_clients_confirm_line_with_their_words(abcde, status):
-    """AC-4: muhammad chose to confirm a known event too, with the same client line."""
-    start = walk.start(abcde, [said("activate", "Being left out of meetings at work.", status)])
-    assert render(abcde, start, style="reflective")[0] == (
+def test_without_manis_own_confirmation_a_known_event_falls_back_to_the_clients_line(abcde, status):
+    """AC-4: when Mani's own confirmation cannot be used, the client's confirm line carries their words."""
+    start = walk.start(abcde, None, judged(status, "Being left out of meetings at work."))
+    assert render(abcde, start, text="Being left out of meetings.", style="reflective")[0] == (
         "A is for Activating Event. You've mentioned being left out of meetings at work. "
         "Is that where these concerns began?"
     )
@@ -155,41 +221,43 @@ def test_a_known_or_possible_event_is_the_clients_confirm_line_with_their_words(
 def test_their_words_inside_a_line_start_lowercase_except_i(abcde):
     """Live, 2026-10-13: "From what you've shared, The client changes..." (muhammad: lowercase the
     first word, except "I" and its contractions)."""
-    start = walk.start(abcde, [said("activate", "I'm left out of meetings", "possible")])
-    assert "You mentioned I'm left out of meetings. Is that" in render(abcde, start)[0]
-    assert render(abcde, walk.start(abcde, None), feeling="Overwhelmed")[0].endswith("feeling so overwhelmed?")
+    start = walk.start(abcde, None, judged("possible", "I'm left out of meetings"))
+    assert "You mentioned I'm left out of meetings. Is that" in render(abcde, start, text="Left out.")[0]
+    assert render(abcde, walk.start(abcde, None, judged("missing")), feeling="Overwhelmed")[0].endswith("feeling so overwhelmed?")
 
 
-def test_a_known_stage_is_their_words_said_back_then_one_confirm_phrase(abcde):
-    """AC-4, AC-7: the model names their words; a question it adds is dropped, since the phrase asks."""
-    stored = {"belief": {"said": "I am useless", "status": "known"}}
-    reached = walk.Walked(stored, "belief", "belief")
-    phrase = walk.confirm_phrase(abcde, "belief", THREAD)
-    text, notes = render(abcde, reached, before=stored, text="You said you feel useless. Is that it?")
-    assert text == f"B is for Belief. You said you feel useless. {phrase}"
-    assert notes == ["naming asks"]
-    assert render(abcde, reached, before=stored, text="What else?")[0] == (
-        f"B is for Belief. You mentioned I am useless. {phrase}"
+def test_a_known_stage_is_its_letter_line_then_manis_own_confirmation(abcde):
+    """muhammad's team lead, 2026-10-13: the model says back what they said and asks, in its own words,
+    whether it is right; no fixed phrase is added and its question is kept."""
+    own = "Here's what I understand: you've been telling yourself you're useless. Is that still how it feels?"
+    assert render(abcde, reached({"belief": {"said": "I am useless", "status": "known"}}, "belief"), text=own) == (
+        f"B is for Belief. {own}", [],
     )
 
 
-def test_text_written_for_another_branch_is_never_used_to_name_their_words(abcde):
-    """Their words for the next stage arrived this turn, after [ctx] told the model its text was not
-    sent, so the fixed naming sentence is used instead of whatever it wrote."""
-    after = {"belief": {"said": "I am useless", "status": "known"}}
-    reached = walk.Walked(after, "belief", "belief")
-    text, notes = render(abcde, reached, before={}, text="Thank you for sharing that.")
-    assert text.startswith("B is for Belief. You mentioned I am useless. ")
-    assert notes == ["branch changed"]
+def test_on_the_start_turn_a_is_manis_own_confirmation(abcde):
+    """The yes turn judges A as the walk reaches it and writes for it at once, so its text is used for A."""
+    start = walk.start(abcde, None, judged("known", "your boss criticized your work today"))
+    own = "So it started when your boss criticized your work today. Is that where this began for you?"
+    assert render(abcde, start, text=own) == (f"A is for Activating Event. {own}", [])
+
+
+def test_a_confirmation_that_asks_nothing_falls_back(abcde):
+    """Logged, so how often Mani's own confirmation cannot be used is known."""
+    stored = {"belief": {"said": "I am useless", "status": "known"}}
+    phrase = walk.confirm_phrase(abcde, "belief", THREAD)
+    assert render(abcde, reached(stored, "belief"), text="You've been telling yourself you're useless.") == (
+        f"B is for Belief. You mentioned I am useless. {phrase}", ["confirm text unusable"],
+    )
 
 
 def test_a_partial_stage_asks_only_the_gap_or_falls_back_to_the_clients_question(abcde):
     """AC-5."""
     stored = {"consequence": {"said": "I felt bad", "status": "partial"}}
-    reached = walk.Walked(stored, "consequence", "consequence")
+    on_c = reached(stored, "consequence")
     gap = "What did you do after that?"
-    assert render(abcde, reached, before=stored, text=gap) == (f"C is for Consequences. {gap}", [])
-    text, notes = render(abcde, reached, before=stored, text="That sounds hard.")
+    assert render(abcde, on_c, text=gap) == (f"C is for Consequences. {gap}", [])
+    text, notes = render(abcde, on_c, text="That sounds hard.")
     assert text.endswith("How did that belief affect how you felt or what you did?")
     assert notes == ["gap asks nothing"]
 
@@ -215,8 +283,71 @@ def test_the_ledger_view_reads_the_store_after_the_turn(abcde):
     stored = {"activate": {"said": "left out", "status": "done"},
               "dispute": {"said": "they never said why", "status": "partial"}}
     rows = walk.ledger_view(abcde, stored, "belief")
+    # Stored ahead by an earlier version, so not reached until the walk gets there.
     assert [(r["stage"], r["status"], r["asking"]) for r in rows] == [
         ("activate", "done", False), ("belief", "missing", True), ("consequence", "not_reached", False),
-        ("dispute", "partial", False), ("effective", "not_reached", False),
+        ("dispute", "not_reached", False), ("effective", "not_reached", False),
     ]
     assert rows[0]["title"] == "A: Activating Event" and rows[0]["known"] == "left out"
+
+
+# muhammad's Supportive runs, 2026-10-13: B seeded from the opening line and C from it (thread 7e3062ff),
+# then C, D and E asked again though the person had said them (thread 7d102554).
+SEEDED = {
+    "activate": {"said": "your boss wants you to work overtime as a senior", "status": "done"},
+    "belief": {"said": "you're questioning whether you're good at your job", "status": "known"},
+    "consequence": {"said": "you're frustrated and questioning your ability", "status": "known"},
+}
+
+
+def test_stages_stored_ahead_by_an_earlier_version_are_ignored_and_judged_when_reached(abcde):
+    """The stale C is never said back: the walk ignores it and judges C when it reaches it."""
+    moved = walk.advance(abcde, SEEDED, None, "agreed", in_force="belief",
+                         report=judged("known", "you and your team are paying for it"))
+    assert moved.entries["consequence"] == {"said": "you and your team are paying for it", "status": "known"}
+    assert "ignored stored ahead: consequence" in moved.notes
+    stayed = walk.advance(abcde, SEEDED, None, "not_yet", in_force="belief")
+    assert "consequence" not in stayed.entries
+
+
+def test_yes_with_more_added_is_agreement_and_moves_on(abcde):
+    """Thread 7d102554: "yes this weighing on my mind…" came back as answered with no new words for B."""
+    moved = walk.advance(abcde, SEEDED, None, "answered", in_force="belief")
+    assert moved.phase == "consequence"
+    assert moved.entries["belief"]["said"] == SEEDED["belief"]["said"]
+    assert "answered with no update read as agreed" in moved.notes
+
+
+def test_a_correction_to_an_earlier_stage_is_kept_while_on_a_later_one(abcde):
+    """Spec 0004, AC-8: the walk stays put and the earlier stage takes the new words."""
+    on_d = {**SEEDED, "belief": {**SEEDED["belief"], "status": "done"}, "consequence": {"said": "x", "status": "done"}}
+    fixed = walk.advance(abcde, on_d, [said("activate", "my manager moved my desk", "known", corrected=True)],
+                         "not_yet", in_force="dispute")
+    assert fixed.entries["activate"]["said"] == "my manager moved my desk"
+
+
+def test_d_reached_with_only_support_said_asks_only_the_challenge(abcde):
+    """Thread 4b93d612: they had said what supports the belief before D was reached. D is judged partial
+    with the challenge as its gap, and without Mani's own question the client's line for the challenge
+    is sent with their belief in it, never the whole D question again."""
+    on_c = {"belief": {"said": "Because of your bad decision, others have to pay for it.", "status": "done"},
+            "consequence": {"said": "you felt guilty", "status": "known"}}
+    moved = walk.advance(abcde, on_c, None, "agreed", in_force="consequence",
+                         report=judged("partial", "your team now works overtime too", gap="challenge"))
+    assert moved.entries["dispute"]["gap"] == "challenge"
+    text, notes = render(abcde, moved, text="That sounds hard.")
+    assert text == ("D is for Dispute. What might make you question the belief that because of your bad "
+                    "decision, others have to pay for it?")
+    assert notes == ["gap asks nothing"]
+
+
+def test_a_confirmation_let_go_without_their_words_stores_none(abcde):
+    """Words they did not agree to never stand as done, so D never disputes them."""
+    let_go = walk.advance(abcde, SEEDED, None, "let_go", in_force="belief")
+    assert let_go.entries["belief"] == {"said": "", "status": "done", "tries": 0}
+
+
+def test_once_they_add_to_a_partial_stage_its_gap_is_dropped(abcde):
+    partial = {"said": "your team works overtime too", "status": "partial", "gap": "challenge"}
+    full = walk.merge({"dispute": partial}, [said("dispute", "nothing really challenges it")], abcde, in_force="dispute")
+    assert "gap" not in full.entries["dispute"]

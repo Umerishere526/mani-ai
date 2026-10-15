@@ -99,8 +99,9 @@ class StageUpdate(BaseModel):
     stage: str = Field(description="The stage id, from framework_stages in [ctx].")
     said: str = Field(
         description=(
-            "Their own short words for this stage, never yours. For activate, a phrase that reads "
-            "after \"You mentioned\", such as \"being left out of meetings at work\"."
+            "What they said for this stage, in their words and said to them as you, such as "
+            "\"your boss criticized your work in front of the team\". One event or thought, a dozen "
+            "words at most. Never they or the user for them."
         )
     )
     status: str = Field(
@@ -115,10 +116,39 @@ class StageUpdate(BaseModel):
     )
 
 
+class NextStage(BaseModel):
+    """How the conversation answers the stage the walk reaches next. `status` and `gap` are checked
+    by code (walk.py), not typed, for the reason the note on SHAPES gives."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    status: str = Field(
+        description=(
+            "known: their words answer the stage. partial: part of it is there. possible: activate "
+            "only, an event that likely started this but they never said so. missing: nothing they "
+            "said answers it."
+        )
+    )
+    said: str | None = Field(
+        default=None,
+        description=(
+            "What they said for this stage, in their words and said to them as you, a dozen words at "
+            "most. Never they or the user for them. Null when missing."
+        ),
+    )
+    gap: str | None = Field(
+        default=None,
+        description=(
+            "partial only: which part of the stage they have not given yet, by the id of its line in "
+            "next_stage_if_unclear, such as challenge for dispute. Null otherwise."
+        ),
+    )
+
+
 # Merged into the thread's record by chat/understanding.py. The docstring is sent to the model.
 class UnderstandingUpdate(BaseModel):
-    """What their message names or changes about how they feel and what they are dealing with. A
-    null keeps what is already known."""
+    """What their message names or changes about how they feel, what they are dealing with, what
+    lies under it, and what is in their control. A null keeps what is already known."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -133,13 +163,56 @@ class UnderstandingUpdate(BaseModel):
     issue: str | None = Field(
         default=None,
         description=(
-            "What they are dealing with, in their words, only when this message first makes it clear "
-            "or moves to another. Null otherwise."
+            "The problem: what is actually happening to them, concrete (who, what, how often), in "
+            "their words and said to them as you, such as \"your boss says you're not doing enough\". "
+            "Never the feeling. Only when this message makes it clear or moves to another. A dozen words "
+            "at most. Null otherwise."
+        ),
+    )
+    core_issue: str | None = Field(
+        default=None,
+        description=(
+            "The core issue: what the problem comes down to for them underneath, such as what usually "
+            "happens next, what falls on them, or what keeps it going. Your understanding, "
+            "formed from their answers and said to them as you. Report it as soon as their answers show "
+            "it; they don't need to name it themselves. Never the feeling they opened with or the problem "
+            "reworded. A dozen words at most. Null otherwise."
+        ),
+    )
+    in_their_control: str | None = Field(
+        default=None,
+        description=(
+            "What they said they can do, influence or decide about it, said to them as you, or "
+            "\"you're not sure yet\" when they said they don't know. Only in answer to your question "
+            "about it. Null otherwise."
         ),
     )
 
 
+# Read by the orchestrator: a check with all its parts is written to the thread, and repairs sends its
+# parts in this order in place of the reply's text (spec 0006). The docstring is sent to the model.
+class Check(BaseModel):
+    """Your check of what you understand, filled only on the reply that checks it with them. Each part
+    is one sentence in your own words, said to them as you, from their words only. The parts are sent
+    in this order, in place of your text."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    problem: str | None = Field(default=None, description="One sentence: the problem, as you understand it.")
+    core_issue: str | None = Field(default=None, description="One sentence: the core issue under it.")
+    in_their_control: str | None = Field(
+        default=None,
+        description="One sentence: what they said is in their control, or that they're not sure yet, which is fine.",
+    )
+    comes_down_to: str | None = Field(
+        default=None,
+        description="One sentence: what it all seems to come down to for them, offered as your understanding.",
+    )
+    question: str | None = Field(default=None, description="Your one question asking whether you have it right.")
+
+
 OfferAnswer = Literal["yes", "no", "asked", "moved_on"]
+CheckAnswer = Literal["yes", "no"]
 BodyBranch = Literal[
     "chest", "head", "stomach", "elsewhere", "no_place", "agreed", "declined", "acting", "pain",
     "returned",
@@ -147,6 +220,7 @@ BodyBranch = Literal[
 StageAnswer = Literal["agreed", "answered", "corrected", "let_go", "not_yet"]
 _CLOSED_SETS = {
     "offer_answer": get_args(OfferAnswer),
+    "check_answer": get_args(CheckAnswer),
     "body": get_args(BodyBranch),
     "stage_answer": get_args(StageAnswer),
 }
@@ -160,6 +234,7 @@ class Moment(StrEnum):
     BODY = "body"
     IN_STAGES = "in_stages"
     OFFER_OPEN = "offer_open"
+    CHECK_OPEN = "check_open"
     CHATTING = "chatting"
 
 
@@ -179,7 +254,7 @@ class _ReplyBase(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    @field_validator("offer_answer", "body", "stage_answer", mode="before", check_fields=False)
+    @field_validator("offer_answer", "check_answer", "body", "stage_answer", mode="before", check_fields=False)
     @classmethod
     def _off_list_is_null(cls, value: object, info) -> object:
         if value is None or value in _CLOSED_SETS[info.field_name]:
@@ -194,9 +269,12 @@ class Reply(_ReplyBase):
     (`reply_for`), and what it returns is read back into this record, so a field outside the
     moment is always null here."""
 
-    # reasoning and style come before text on purpose: structured output is generated in
-    # schema order, so a field declared after text can only describe a reply already
-    # written, never shape it.
+    # Mani's text comes right after the reasoning and the answers that decide what moment this is, the
+    # stage answer before the stage updates and the next stage, so the text is written for what they
+    # report: structured output is generated in schema order, and the reading of the person (the
+    # understanding, the set heading toward, the shape) planned the reply as a case note while it came
+    # first (live, 2026-10-13). The stage fields still come before text, since the stage's words are
+    # code's and the text follows them; heading_toward still comes before offer.
     reasoning: str | None = Field(
         default=None,
         description=(
@@ -204,35 +282,12 @@ class Reply(_ReplyBase):
             "field' in your instructions. Not shown to the user."
         ),
     )
-    style: Style | None = Field(
+    check_answer: CheckAnswer | None = Field(
         default=None,
         description=(
-            "Choose before writing text: the response shape this reply will use. It may "
-            "repeat; the opening words may not."
-        ),
-    )
-    understanding_update: UnderstandingUpdate | None = Field(
-        default=None,
-        description=(
-            "Fill it before text: only what their message names or changes about their feeling or "
-            "their issue. Not shown to the user."
-        ),
-    )
-    heading_toward: str | None = Field(
-        default=None,
-        description=(
-            "Choose before writing text: the id from the Framework Index that this "
-            "conversation is most likely heading toward, or null when nothing has pointed "
-            "anywhere yet. It decides which set you offer, never what you ask. Not shown to "
-            "the user."
-        ),
-    )
-    offer: Offer | None = Field(
-        default=None,
-        description=(
-            "Fill it to offer the set in heading_toward, when your reasoning says to offer; null "
-            "otherwise. The offer's words are the client's: you fill only these parts, in their "
-            "words. Your text is not sent when the offer is."
+            "How they answered the check of your understanding in your last reply. yes only when "
+            "they clearly agree with all of it. no for anything else: a correction, an addition, "
+            "or talking about something else."
         ),
     )
     offer_answer: OfferAnswer | None = Field(
@@ -242,7 +297,6 @@ class Reply(_ReplyBase):
             "it involves), or moved_on (they talked about something else)."
         ),
     )
-    their_words: str | None = Field(default=None)
     body: BodyBranch | None = Field(
         default=None,
         description=(
@@ -250,25 +304,74 @@ class Reply(_ReplyBase):
             "feeling came back after the practice. Null when none fits."
         ),
     )
-    stage_updates: list[StageUpdate] | None = Field(
-        default=None,
-        description=(
-            "Fill it before text. Only the stages whose words you learned or that changed in their "
-            "message, never what stages_known in [ctx] already holds. On the turn they accept the offer, "
-            "every stage the conversation already answers. Null when there is none. Not shown to the user."
-        ),
-    )
     stage_answer: StageAnswer | None = Field(
         default=None,
         description=(
             "How their message answers the stage in force. agreed: yes to your check of what they "
-            "said. answered: they gave what the stage needs, with an update for it. corrected: a no "
+            "said, even with more added. answered: they gave what the stage needs, with an update for it. corrected: a no "
             "with new words, with an update for it. let_go: move on without words, because it was "
             "asked twice already or the question made them uneasy. not_yet: a plain no, unclear, or "
             "I don't know while you still help."
         ),
     )
-    text: str = Field(description="Your conversational response to the user. Required.")
+    stage_updates: list[StageUpdate] | None = Field(
+        default=None,
+        description=(
+            "Fill it before text. The stage in force, from their message, and an earlier stage they "
+            "correct. Never what stages_known already holds unchanged. Null when there is none. Not "
+            "shown to the user."
+        ),
+    )
+    next_stage: NextStage | None = Field(
+        default=None,
+        description=(
+            "Fill it before text, every time: how this conversation answers the stage named next_stage "
+            "in [ctx], judged by next_stage_ready_when and next_stage_reach from everything they have "
+            "said about the issue they confirmed, before or after your check, the latest words for "
+            "each part. Used only if the walk reaches that stage this turn. Not shown to the user."
+        ),
+    )
+    text: str = Field(
+        description="What Mani says to them, sounding like Mani in the example. Required."
+    )
+    understanding_update: UnderstandingUpdate | None = Field(
+        default=None,
+        description=(
+            "Only what their message names or changes about their feeling, their "
+            "issue, what lies under it, or what is in their control. Not shown to the user."
+        ),
+    )
+    heading_toward: str | None = Field(
+        default=None,
+        description=(
+            "The id from the Framework Index that this "
+            "conversation is most likely heading toward, or null when nothing has pointed "
+            "anywhere yet. It decides which set you offer, never what you ask. Not shown to "
+            "the user."
+        ),
+    )
+    style: Style | None = Field(
+        default=None,
+        description=(
+            "The response shape this reply used."
+        ),
+    )
+    check: Check | None = Field(
+        default=None,
+        description=(
+            "Fill it only when this reply checks your understanding with them, once the problem and "
+            "what lies under it are clear from their words. Null otherwise. Not shown to the user."
+        ),
+    )
+    offer: Offer | None = Field(
+        default=None,
+        description=(
+            "Fill it only when check_answer is yes: the set in heading_toward, closest to what they "
+            "confirmed. Null otherwise. The offer's words are the client's: you fill only these "
+            "parts, in their words. Your text is not sent when the offer is."
+        ),
+    )
+    their_words: str | None = Field(default=None)
     title: str | None = Field(
         default=None,
         description=(
@@ -310,13 +413,16 @@ class Slots:
 
 _CORE = ("reasoning", "style", "understanding_update", "heading_toward", "text", "title", "crisis")
 _STAGES = ("stage_updates", "stage_answer")
+# The stage the walk may reach this turn, judged on every turn that can start or move the walk. Not at
+# the closing, which the body route follows.
+_REACH = ("next_stage",)
 
 
 @functools.cache
 def reply_for(
     moment: Moment,
     *,
-    may_offer: bool = False,
+    may_check: bool = False,
     declined_row: bool = False,
     on_closing: bool = False,
     slots: Slots = Slots(),
@@ -328,28 +434,39 @@ def reply_for(
     if moment is Moment.BODY:
         names |= {"body", *(_STAGES if on_closing else ())}
     elif moment is Moment.IN_STAGES:
-        names |= set(_STAGES)
+        names |= {*_STAGES, *_REACH}
     elif moment is Moment.OFFER_OPEN:
-        names |= {"offer_answer", *_STAGES}
+        names |= {"offer_answer", *_STAGES, *_REACH}
         if slots.their_words:
             names.add("their_words")
             overrides["their_words"] = (
                 str | None,
                 Field(default=None, description=f"Only on no, or when they chose Keep chatting: {slots.their_words}."),
             )
-    elif moment is Moment.CHATTING:
-        if may_offer and slots.going_through:
+    elif moment is Moment.CHECK_OPEN:
+        names.add("check_answer")
+        if slots.going_through:
             names.add("offer")
             overrides["offer"] = (_offer_model(slots.going_through, slots.lead_line) | None, Reply.model_fields["offer"])
-        if declined_row:
-            names |= {"offer_answer", *_STAGES}
-            overrides["offer_answer"] = (
-                OfferAnswer | None,
-                Field(default=None, description="yes when they ask for the set they declined; null otherwise."),
-            )
+    elif moment is Moment.CHATTING and may_check:
+        names.add("check")
+    if declined_row and moment in (Moment.CHECK_OPEN, Moment.CHATTING):
+        names |= {"offer_answer", *_STAGES, *_REACH}
+        overrides["offer_answer"] = (
+            OfferAnswer | None,
+            Field(default=None, description="yes when they ask for the set they declined; null otherwise."),
+        )
+    order = list(Reply.model_fields)
+    if moment is Moment.CHECK_OPEN:
+        # On the answer to a check a yes is the client's offer, which replaces the text, so the set and
+        # its slots are filled before the text; written after it, the slots were left empty (live,
+        # 2026-10-13: "offer unusable: no lead_line" in Supportive and Reflective).
+        order = [n for n in order if n not in ("heading_toward", "offer")]
+        at = order.index("check_answer") + 1
+        order[at:at] = ["heading_toward", "offer"]
     fields = {
-        name: overrides.get(name, (info.annotation, info))
-        for name, info in Reply.model_fields.items()
+        name: overrides.get(name, (Reply.model_fields[name].annotation, Reply.model_fields[name]))
+        for name in order
         if name in names
     }
     return create_model("Reply", __base__=_ReplyBase, **fields)

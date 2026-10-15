@@ -1,34 +1,26 @@
-# ABOUTME: The scenario check's expectations: when an offer may come, and the shape of scenarios.json.
+# ABOUTME: The scenario check's expectations: when Mani's check may come, and the shape of scenarios.json.
 # ABOUTME: No model and no database; the live run itself is scripts/scenario_check.py.
 
 from __future__ import annotations
 
 import json
 
-from mani.chat import context
 from scripts import scenario_check
 
 
-def test_an_offer_before_the_conversation_says_how_it_is_is_flagged_on_that_message():
+def test_a_check_before_the_conversation_says_how_it_is_is_flagged_on_that_message():
     """muhammad's run, 2026-10-12: an offer at line 3 of a conversation that only says how it is at
-    line 4. The window alone could not see it."""
-    assert scenario_check.timing_flags(3, 5, {"offer_from": 4, "offer_by": 5}) == {
-        3: "offered at their message 3, expected from 4"
+    line 4. Mani's check now comes where that offer did (spec 0006)."""
+    assert scenario_check.timing_flags(3, 5, {"check_from": 4, "check_by": 5}) == {
+        3: "checked at their message 3, expected from 4"
     }
-    assert scenario_check.timing_flags(4, 5, {"offer_from": 4, "offer_by": 5}) == {}
+    assert scenario_check.timing_flags(4, 5, {"check_from": 4, "check_by": 5}) == {}
 
 
-def test_a_missing_offer_is_flagged_only_when_the_conversation_reaches_its_latest_message():
-    assert scenario_check.timing_flags(None, 5, {"offer_by": 5}) == {5: "no offer by their message 5"}
-    assert scenario_check.timing_flags(None, 3, {"offer_by": 5}) == {}
-    assert scenario_check.timing_flags(5, 5, {"offer_by": 4}) == {5: "offered at their message 5, expected by 4"}
-
-
-def test_without_its_own_earliest_message_a_conversation_waits_for_the_window():
-    early = context.FIRST_OFFER_OPENS - 1
-    assert scenario_check.timing_flags(early, 5, {}) == {
-        early: f"offered at their message {early}, expected from {context.FIRST_OFFER_OPENS}"
-    }
+def test_a_missing_check_is_flagged_by_the_last_line_unless_the_conversation_names_another():
+    assert scenario_check.timing_flags(None, 5, {}) == {5: "no check by their message 5"}
+    assert scenario_check.timing_flags(None, 3, {"check_by": 5}) == {}
+    assert scenario_check.timing_flags(5, 5, {"check_by": 4}) == {5: "checked at their message 5, expected by 4"}
 
 
 def test_every_conversation_in_the_file_has_lines_and_expectations_that_can_be_met():
@@ -37,10 +29,19 @@ def test_every_conversation_in_the_file_has_lines_and_expectations_that_can_be_m
     assert len(every) == sum(len(g["conversations"]) for g in groups.values()), "a name is used twice"
     for name, conversation in every.items():
         expect = conversation["expect"]
-        earliest = expect.get("offer_from", context.FIRST_OFFER_OPENS)
+        earliest = expect.get("check_from", scenario_check.EARLIEST_CHECK)
         assert conversation["lines"], name
-        assert earliest >= context.FIRST_OFFER_OPENS, name
-        assert expect.get("offer_by", earliest) >= earliest, name
+        assert earliest >= scenario_check.EARLIEST_CHECK, name
+        assert expect.get("check_by", len(conversation["lines"])) >= earliest, name
+
+
+def test_mani_talking_about_the_person_instead_of_to_them_is_flagged():
+    """muhammad's Directive run, 2026-10-13: a third person note pasted into A's client line."""
+    said_about = ("A is for Activating Event. From what you've shared, their boss criticized their client "
+                  "communication seems to be what started these concerns. Is that right?")
+    said_to = said_about.replace("their boss criticized their", "your boss criticized your")
+    assert scenario_check.TALKS_ABOUT_THEM.search(said_about)
+    assert not scenario_check.TALKS_ABOUT_THEM.search(said_to)
 
 
 def test_offer_wording_in_a_reply_of_the_models_own_is_flagged():
@@ -93,3 +94,43 @@ def test_a_stage_reached_without_its_letter_line_or_a_known_stage_asked_is_flagg
         "B is for Belief. What did you tell yourself?", known_b, on_a, stages, "supportive",
     ) == ["asked a stage already known"]
     assert scenario_check.stage_flags("Anything", None, on_a, stages, "supportive") == []
+
+
+# Mani's five replies in the client's way of communication sample, word for word (2026-10-13).
+SAMPLE_REPLIES = (
+    "I'm listening. What's frustrating you?",
+    "When everything feels frustrating, sometimes it's because several things have been building up for a "
+    "while. I don't want to assume that's what's happening to you.",
+    "That's a lot of frustration coming from every direction at work. I want to understand something before "
+    "we go further.",
+    "That would be frustrating, especially when other people's lack of follow-through creates additional work "
+    "for you. But I want to understand the pattern rather than assume everyone is the problem.",
+    "So your ability to do your job depends on other people fulfilling their responsibilities. When they "
+    "don't, your work gets held up, and you're left dealing with the consequences.",
+)
+
+
+def test_explaining_people_is_flagged_and_the_clients_sample_never_is():
+    """muhammad's run, 2026-10-13: the reply explained how criticism works on people instead of finding out."""
+    explained = ("Being criticized by your boss can make it hard to separate one piece of feedback from what you "
+                 "think it says about your ability.")
+    assert scenario_check.EXPLAINS_PEOPLE.search(explained)
+    assert not any(scenario_check.EXPLAINS_PEOPLE.search(reply) for reply in SAMPLE_REPLIES)
+
+
+def test_the_examples_details_are_flagged_only_when_the_person_never_said_them():
+    reply = "When vendors don't follow through, what happens next?"
+    assert scenario_check.borrowed_from_the_example(reply, {"boss", "work"}) == ["vendors", "follow through"]
+    assert scenario_check.borrowed_from_the_example(reply, {"vendors", "follow", "through"}) == []
+
+
+def test_a_stage_reached_otherwise_than_expected_is_flagged_once():
+    """Thread 7d102554: C was reached as missing and asked though they had said it."""
+    seen: set[str] = set()
+    trace = [{"stage": "consequence", "status": "missing", "asking": True}]
+    assert scenario_check.reached_flags(trace, {"consequence": "said back"}, seen) == [
+        "reached consequence as missing, expected said back"
+    ]
+    assert scenario_check.reached_flags(trace, {"consequence": "said back"}, seen) == [], "only when first reached"
+    partial = [{"stage": "dispute", "status": "partial", "asking": True}]
+    assert scenario_check.reached_flags(partial, {"dispute": "said back"}, seen) == []

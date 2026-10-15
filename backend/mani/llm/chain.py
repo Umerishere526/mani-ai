@@ -171,6 +171,14 @@ def build_tool_choice(
     return chat.bind_tools([tool], tool_choice=tool.__name__)
 
 
+def generation_id_from(raw: Any) -> str | None:
+    """OpenRouter's id for the call, which its /generation endpoint resolves to the provider
+    that served it. LangChain keeps it in the metadata and drops the provider field itself."""
+    if raw is None:
+        return None
+    return (getattr(raw, "response_metadata", None) or {}).get("id")
+
+
 def usage_from(raw: Any) -> llm_calls.Usage:
     """Token counts off the provider's response, whichever shape LangChain hands back."""
     if raw is None:

@@ -6,6 +6,8 @@ import uuid
 
 import pytest
 
+from mani.config import get_settings
+
 from mani import memory
 from mani.chat import orchestrator
 from mani.db import llm_calls, threads
@@ -128,7 +130,7 @@ async def test_the_new_chat_itself_is_never_folded_and_carries_no_old_messages(b
     from mani.db import messages as messages_db, pool
 
     async with pool.as_user(bea) as conn:
-        history = await messages_db.recent_for_context(conn, second.id, bea.user_id)
+        history = (await messages_db.for_context(conn, second.id, bea.user_id, budget_chars=get_settings().context_budget_chars)).messages
     assert all("Sunday" not in m.content for m in history)
     assert await _folded_at(second.id) is None
 

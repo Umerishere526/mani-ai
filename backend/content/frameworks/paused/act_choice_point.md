@@ -6,9 +6,7 @@ display_order: 5
 phases: [offering, situation, present, pull, matters, toward, action, closing]
 activation:
   central_indication: >-
-    The user may not be able to change or resolve the situation, but does not want it deciding
-    how they act - the focus shifts from making the thought or feeling go away to choosing how
-    to respond while it is present.
+    The user knows what matters to them but is allowing difficult thoughts or emotions to prevent meaningful action.
   to_find_out:
     - "what part of the situation they cannot change or control"
     - "the thought, feeling or urge that stays with them"

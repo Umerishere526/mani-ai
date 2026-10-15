@@ -5,8 +5,8 @@ _Steps derived from spec 0004 acceptance criteria. `/check verify` runs these; `
 Run in the chat tester against the local backend (`cd chat-tester && streamlit run app.py`) after `python scripts/seed.py`, with `AI_DEBUG_MODE` on so the sidebar shows "What Mani knows". These spend the client's credit, so only with muhammad's yes.
 
 - [ ] Directive. Say only how you feel for three messages, then accept the offer → "A is for Activating Event." then the client's missing line with your feeling word → AC-1, AC-6
-- [ ] Answer A with an event → the next reply opens "B is for Belief." then the client's B question as written; no letter line before it, nothing before it → AC-1, AC-2
-- [ ] Supportive. Before the offer, say the event and what you started telling yourself; accept → A is the client's Supportive confirm line with your event; the sidebar shows activate and belief stored → AC-3, AC-4
+- [ ] Answer A with an event → the next reply opens "B is for Belief." then Mani's B question, the client's question with what it refers to in your words; no letter line before it, nothing before it → AC-1, AC-2, AC-6
+- [ ] Supportive. Before the offer, say the event and what you started telling yourself; accept → A is the client's Supportive confirm line with your event; the sidebar shows activate stored, belief not reached; accept A → B confirmed from your earlier words → AC-3, AC-4
 - [ ] Reply "yes" → "B is for Belief.", one sentence with your belief, then one of the four confirm phrases → AC-4, AC-7
 - [ ] Reply "no" → no letter line, Mani says it misunderstood and asks; reply with a new belief → "C is for Consequences." → AC-8
 - [ ] On C, answer "I don't know" twice → the second moves on to D with D's letter line → AC-2
@@ -33,16 +33,16 @@ One step per row of the spec's Value sourcing table, each varying the source so 
 - [ ] Set the row to `accepted` at `offering` with SQL, send anything → the reply is A's letter line and the stage is `activate` → Start turn
 - [ ] Send `agreed` on a stage reached as an ask → the stage stays and the log says `stage answer invalid: agreed`; two `not_yet` in a row → it moves → The step
 - [ ] Seed A as `possible`, then as `known`, in each of the three styles → the same client `confirm` line for that style, with the stored words in the slot → A known or possible (event and client line)
-- [ ] Accept with a feeling word, then without one → `missing` with the word, then `ask` for the style, logged `slot empty` → A missing (feeling word and its fallback)
+- [ ] Accept with a feeling word, then without one → `missing` with the word, then Mani's own question about the event (or `ask` for the style when it asks nothing), logged `slot empty` → A missing (feeling word and its fallback)
 - [ ] B known with a model sentence that ends in "?" → the question is dropped and the phrase follows; with no usable sentence → "You mentioned {said}." → B to E known, the naming sentence
 - [ ] Two threads reaching B, C and D → each thread keeps its own phrase per stage, and B, C and D never repeat back to back → The confirm phrase
-- [ ] Reach C with nothing stored, in each style → C's `ask` for that style, word for word → B to E missing
+- [ ] Reach C judged missing, in each style → C's question for that style about your situation, never the bare `ask`; a reply asking nothing falls back to the `ask`, logged `missing asks nothing` → B to E missing
 - [ ] Seed D as `partial`: a gap question with "?" is sent; a text with none falls back to D's `ask`, logged `gap asks nothing` → Partial
 - [ ] Say "no" to a confirm → the model's own follow up, no letter line → After a no
 - [ ] Read the `[ctx]` `next:` line before and after a turn that stores B as known → it names B's branch from the store before the turn; the render logs `branch changed` when the turn itself changed it → What the model writes
 - [ ] Switch the thread's style (PATCH `conversation_style`) mid walk → the next stage's client lines come in the new style → Style
 - [ ] Store a stage, then send 25 messages with no updates → `[ctx]` still lists its words and status → Stored words in [ctx]
-- [ ] Put the event only in the thread summary (older than the 20 message window), then accept → A is the confirm line with that event (live run; it checks how seeding over or under reports) → Seed
+- [ ] Say the event 25 or more messages before accepting → A is confirmed with that event; the whole thread is in view within the budget → Reach
 
 ## First live run fixes (added by /debug and /develop, 2026-10-13)
 From muhammad's Directive run on thread ca968cbd, where a yes to A's check stayed on A.

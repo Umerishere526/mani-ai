@@ -1,4 +1,4 @@
-# ABOUTME: The rolling thread summary that gives Mani memory beyond the recent window.
+# ABOUTME: The rolling thread summary that covers what has left the model's view of a long thread.
 # ABOUTME: The checkpoint is a message id, enforced by a foreign key.
 
 import uuid
@@ -70,9 +70,10 @@ def merge_techniques(
 
 
 async def due_for_summary(
-    conn: asyncpg.Connection, *, threshold: int, limit: int
+    conn: asyncpg.Connection, *, budget_chars: int, block: int, limit: int
 ) -> list[dict]:
-    """Threads whose message count has outrun their last summary by the threshold.
+    """Threads too long for the model's budget whose summary is a block or more behind, so some of
+    what has left the model's view may be in no summary yet.
 
     Cross-user, so admin-only - the same reconciliation a per-turn trigger does for one
     thread, run here as a batch for whichever ones the per-turn trigger missed (the
@@ -83,10 +84,12 @@ async def due_for_summary(
         select t.id as thread_id, t.user_id
           from public.threads t
           left join public.thread_summaries s on s.thread_id = t.id
-         where t.message_count - coalesce(s.summarized_message_count, 0) >= $1
+         where t.message_count - coalesce(s.summarized_message_count, 0) >= $2
+           and (select coalesce(sum(length(m.content)), 0) from public.messages m
+                 where m.thread_id = t.id) > $1
          order by t.last_message_at
-         limit $2
+         limit $3
         """,
-        threshold, limit,
+        budget_chars, block, limit,
     )
     return [dict(r) for r in rows]

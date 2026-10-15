@@ -44,25 +44,27 @@ async def record(
     message_id: uuid.UUID | str | None = None,
     prompt_version_id: uuid.UUID | str | None = None,
     error_message: str | None = None,
+    generation_id: str | None = None,
 ) -> uuid.UUID:
     """Write one row per provider call, successful or not.
 
     Failures are recorded too - a turn that cost money and produced nothing is exactly
     what you want to see when a bill or a latency graph moves. `error_message` carries
-    the provider's reason, never the conversation.
+    the provider's reason, never the conversation. `generation_id` is OpenRouter's id for
+    the call, which tells which endpoint served it.
     """
     return await conn.fetchval(
         """
         insert into admin.llm_calls
             (thread_id, user_id, message_id, prompt_version_id, purpose, model,
              input_tokens, output_tokens, cached_input_tokens, reasoning_tokens,
-             latency_ms, outcome, error_message)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             latency_ms, outcome, error_message, generation_id)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         returning id
         """,
         thread_id, user_id, message_id, prompt_version_id, purpose.value, model,
         usage.input_tokens, usage.output_tokens, usage.cached_input_tokens,
-        usage.reasoning_tokens, latency_ms, outcome.value, error_message,
+        usage.reasoning_tokens, latency_ms, outcome.value, error_message, generation_id,
     )
 
 

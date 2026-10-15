@@ -49,20 +49,46 @@ def user(content: str) -> Message:
     )
 
 
-def test_an_open_window_is_not_sent_so_it_is_never_read_as_offer_now():
-    """muhammad's run, 2026-10-12: told "an offer may be made" every turn from their third message,
-    the model offered at the third every time, before it knew how it was for them."""
-    ctx = TurnContext(thread=thread(), profile=None, technique=None)
-    assert context.offer_window(ctx) == "open"
-    block = context.build(ctx)
-    assert "offer_window" not in block
-    assert "since_last" not in block
+# The three steps before a check, all found (spec 0006).
+FOUND = {
+    "issue": "your boss says you're not doing enough",
+    "core_issue": "your sense of being enough rests on his view of you",
+    "in_their_control": "you could ask him what he expects",
+}
 
 
-def test_a_due_window_never_forces_an_offer_that_does_not_fit():
-    block = context.build(_on_message(context.FIRST_OFFER_DUE, style="directive")).splitlines()
-    meaning = block[block.index("offer_window: due") + 1]
-    assert "If none fits yet, offer nothing" in meaning
+def found(on: Thread) -> Thread:
+    """A thread where Mani has found the problem, its core issue and what is in their control."""
+    return on.model_copy(update={"understanding": FOUND})
+
+
+def checked_at(at: int, now: int) -> Thread:
+    """A thread whose latest check by Mani was made when it held `at` messages, now holding `now`."""
+    return found(thread(now)).model_copy(update={"check_at_message_count": at})
+
+
+def test_a_check_is_answered_on_the_next_turn_only_and_then_waits_its_cooldown():
+    """Spec 0006, AC-4, AC-5: the turn right after the check reads their answer. Any later turn finds
+    it used, whatever happened, so no state can strand the thread; the next check waits three replies."""
+    answering = TurnContext(thread=checked_at(10, 10), profile=None, technique=None)
+    assert context.check_open(answering) and not context.may_check(answering)
+    block = context.build(answering).splitlines()
+    assert "A clear yes always brings the offer" in block[block.index("check: open") + 1]
+
+    after = [context.may_check(TurnContext(thread=checked_at(10, n), profile=None, technique=None))
+             for n in (12, 10 + context.COOLDOWN_AFTER_DECLINE - 1, 10 + context.COOLDOWN_AFTER_DECLINE)]
+    assert after == [False, False, True]
+    assert not context.check_open(TurnContext(thread=checked_at(10, 12), profile=None, technique=None))
+
+
+def test_no_check_is_open_or_made_while_a_framework_is_live():
+    running = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+        phase="belief", at_message_count=4,
+    )
+    ctx = TurnContext(thread=checked_at(10, 10), profile=None, technique=running)
+    assert not context.check_open(ctx) and not context.may_check(ctx)
+    assert "check:" not in context.build(ctx)
 
 
 def test_a_recent_decline_holds_the_cooldown_closed():
@@ -71,7 +97,7 @@ def test_a_recent_decline_holds_the_cooldown_closed():
         at_message_count=8,
     )
     block = context.build(TurnContext(thread=thread(10), profile=None, technique=state))
-    assert "offer_window: not_yet" in block
+    assert "check:" not in block
     assert "since_last: 2" in block
     assert "this_thread: abcde (declined)" in block
 
@@ -94,7 +120,7 @@ def test_a_retired_technique_still_holds_the_cooldown_closed():
         phase=None, at_message_count=8,
     )
     block = context.build(TurnContext(thread=thread(10), profile=None, technique=state))
-    assert "offer_window: not_yet" in block
+    assert "check:" not in block
     assert "since_last: 2" in block
     assert "this_thread: abcde (accepted)" in block
     # Retired, so there is no phase to be in.
@@ -105,19 +131,19 @@ def test_a_finished_framework_waits_longer_than_a_declined_one():
     """45 messages against 20. The longer wait was unreachable while completion deleted
     the row it is measured from."""
     started_at = 10
-    long_enough_for_a_decline = thread(started_at + context.COOLDOWN_AFTER_DECLINE)
+    long_enough_for_a_decline = found(thread(started_at + context.COOLDOWN_AFTER_DECLINE))
     finished = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
         phase=None, at_message_count=started_at,
     )
     declined = finished.model_copy(update={"outcome": TechniqueOutcome.DECLINED})
 
-    assert "offer_window: not_yet" in context.build(
-        TurnContext(thread=long_enough_for_a_decline, profile=None, technique=finished)
-    )
-    assert context.offer_window(
-        TurnContext(thread=long_enough_for_a_decline, profile=None, technique=declined)
-    ) == "open"
+    assert not context.may_check(TurnContext(thread=long_enough_for_a_decline, profile=None, technique=finished))
+    assert context.may_check(TurnContext(thread=long_enough_for_a_decline, profile=None, technique=declined))
+    # Finished, then a new confirmed check may offer it again: nothing refuses the set just done.
+    assert context.may_check(TurnContext(
+        thread=found(thread(started_at + context.COOLDOWN_AFTER_COMPLETE)), profile=None, technique=finished,
+    ))
 
 
 def test_recent_styles_are_listed_by_shape_so_a_reply_can_avoid_repeating_one():
@@ -133,62 +159,6 @@ def test_recent_styles_are_listed_by_shape_so_a_reply_can_avoid_repeating_one():
         )
     )
     assert "recent_styles: mirror and ask → presence only" in block
-
-
-def test_recent_openers_are_extracted_from_manis_own_replies():
-    history = [
-        mani("Your manager gave you that feedback while the team watched."),
-        user("She said two recommendations weren't supported."),
-        mani("That sounds like a hard moment to sit with."),
-    ]
-    block = context.build(
-        TurnContext(thread=thread(), profile=None, technique=None), history=history
-    )
-    assert 'recent_openers: "your manager", "that sounds"' in block
-
-
-def test_recent_openers_list_is_bounded():
-    history = [
-        mani("One thing you said stood out."),
-        mani("Two things came up for you."),
-        mani("Three moments felt different."),
-        mani("Four steps got you here."),
-    ]
-    block = context.build(
-        TurnContext(thread=thread(), profile=None, technique=None), history=history
-    )
-    assert '"one thing"' not in block
-    assert '"two things"' in block
-    assert '"three moments"' in block
-    assert '"four steps"' in block
-
-
-def test_recent_openers_carry_no_user_text():
-    """A user message never becomes an opener, even when it is the most recent message and
-    even when it would otherwise be within the window - only role=mani messages qualify."""
-    history = [
-        user("I have a presentation tomorrow and I keep going over it"),
-        mani("Tell me what happened next."),
-        user("I keep thinking I'll freeze halfway through"),
-    ]
-    block = context.build(
-        TurnContext(thread=thread(), profile=None, technique=None), history=history
-    )
-    assert '"tell me"' in block
-    assert '"i have"' not in block
-    assert '"i keep"' not in block
-
-
-def test_no_recent_replies_means_no_recent_openers_line():
-    block = context.build(TurnContext(thread=thread(), profile=None, technique=None))
-    assert "recent_openers" not in block
-
-    only_user_messages = [user("I have a presentation tomorrow")]
-    block = context.build(
-        TurnContext(thread=thread(), profile=None, technique=None),
-        history=only_user_messages,
-    )
-    assert "recent_openers" not in block
 
 
 def test_a_context_block_can_be_stripped_back_out():
@@ -249,9 +219,9 @@ def framework() -> Framework:
 TONES = ("directive", "supportive", "reflective")
 
 
-def test_the_turn_a_framework_starts_asks_for_what_they_already_said():
-    """Spec 0004, AC-3: the first stage is sent by code on the start turn, so the reply is asked only
-    for what the conversation already answers per stage."""
+def test_the_turn_a_framework_starts_reaches_only_its_first_stage():
+    """Spec 0004, AC-3, 2026-10-13: on the start turn the walk reaches A; the reply judges A by its own
+    test in next_stage, and later stages are judged when reached."""
     offered = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
         phase="offering", at_message_count=8,
@@ -259,8 +229,10 @@ def test_the_turn_a_framework_starts_asks_for_what_they_already_said():
     ctx = TurnContext(thread=thread(), profile=None, technique=offered)
     starting = context.build(ctx, framework=framework(), starting=True).splitlines()
     assert "framework_starting: yes" in starting
-    assert "stage_to_seed: activate: What happened." in starting
-    assert "stage_to_seed: belief" in starting
+    assert "next_stage: activate" in starting and "next_stage_ready_when: The event is clear." in starting
+    assert any(line.startswith("next: the walk reaches activate: your text follows what you report for "
+                               "activate in next_stage") for line in starting)
+    assert not any(line.startswith("next_stage: belief") for line in starting)
     assert not any(line.startswith("stage_ask") for line in starting), "the first stage is code's"
     assert "framework_starting" not in context.build(ctx, framework=framework())
 
@@ -271,13 +243,15 @@ def test_what_mani_understands_is_sent_with_its_meaning_only_once_something_is_s
     assert "understanding:" not in empty
     stored = thread().model_copy(update={"understanding": {"feeling": "frustrated"}})
     lines = context.build(TurnContext(thread=stored, profile=None, technique=None)).splitlines()
-    at = lines.index("understanding: feeling: frustrated")
+    at = lines.index(
+        "understanding: feeling: frustrated; issue: missing; core_issue: missing; in_their_control: missing"
+    )
     assert lines[at + 1].startswith("  means: what they have told you so far")
 
 
-def test_a_turn_where_a_yes_is_possible_asks_what_a_yes_would_seed():
+def test_a_turn_where_a_yes_is_possible_shows_the_first_stage_it_would_reach():
     """Spec 0004, AC-3: a typed yes to the open offer, or asking for the set they declined, starts
-    it, so the reply that may carry the yes is told which stages to report."""
+    it, so the reply that may carry the yes is shown A to judge, on both paths."""
     offered = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
         phase="offering", at_message_count=8,
@@ -289,7 +263,7 @@ def test_a_turn_where_a_yes_is_possible_asks_what_a_yes_would_seed():
             offer_waiting=row is offered, yes_framework=framework(),
         ).splitlines()
         assert "if_they_say_yes: abcde" in block
-        assert "stage_to_seed: activate: What happened." in block
+        assert "next_stage: activate" in block and "next_stage_ready_when: The event is clear." in block
 
 
 def test_an_active_framework_carries_its_stage_resolved_to_style():
@@ -308,21 +282,20 @@ def test_an_active_framework_carries_its_stage_resolved_to_style():
     assert "stage_boundaries: must not assume a motive; must not merge events" in block
     assert "stage_if_unclear: if too broad: Which event?" in block
     assert "stage_ask: State the facts." in block
-    # The next stage's question is sent by code, so a missing next stage is not shown in full.
-    assert "next_stage" not in block
+    # The next stage is shown in full, since the reply judges it when the walk reaches it (2026-10-13).
+    assert "next_stage: belief" in block
 
 
-def test_the_next_stage_is_shown_in_full_only_when_the_reply_writes_for_it():
-    """Spec 0004: the reply writes the question for a partly answered next stage, and the body route
-    ids at the closing; otherwise code sends the next stage's lines and they are not sent here."""
-    partial = {"abcde": {"belief": {"said": "I am useless", "status": "partial"}}}
-    block = context.build(_running_at("activate", partial), framework=_five_stage_framework()).splitlines()
+def test_the_next_stage_is_always_shown_in_full_so_the_reply_can_judge_it_when_reached():
+    """2026-10-13: a stage is judged when the walk reaches it, from the whole conversation, by its own
+    test, so its lines are in [ctx] on every stage turn; the body route ids at the closing."""
+    block = context.build(_running_at("activate"), framework=_five_stage_framework()).splitlines()
     assert "next_stage: belief" in block
     assert "next_stage_ask: What did it mean?" in block
-    assert "next_stage" not in context.build(_running_at("activate"), framework=_five_stage_framework())
     closing = context.build(_running_at("closing"), framework=_five_stage_framework()).splitlines()
     assert "next_stage: somatic_checkin" in closing
     assert any(line.startswith("next: ") and "the questions end" in line for line in closing)
+    assert not any("since the check" in line for line in block + closing), "thread 4b93d612: the whole conversation counts"
     body = context.build(_running_at("somatic_practice"), framework=_five_stage_framework())
     assert "next_stage" not in body and "\nnext: " not in body, "the body route is run by code"
 
@@ -377,24 +350,6 @@ def test_style_falls_back_to_supportive_with_no_profile_or_choice():
         TurnContext(thread=thread(), profile=None, technique=state), framework=framework(),
     )
     assert "stage_ask: What happened?" in block
-
-
-def test_recent_openers_survive_a_summary_naming_techniques():
-    """Both lines are built from different sources and must not interfere.
-
-    The framework history line and the opener line are independent signals; a thread far
-    enough along to have a summary is exactly the thread most likely to repeat an opener.
-    """
-    summary = ThreadSummary(
-        thread_id=THREAD, user_id=USER,
-        techniques_tried=[TechniqueTried(name="ABCDE", helpful=True)],
-    )
-    block = context.build(
-        TurnContext(thread=thread(), profile=None, technique=None, summary=summary),
-        history=[mani("Your manager gave you that feedback while the team watched.")],
-    )
-    assert "history: ABCDE (helpful)" in block
-    assert 'recent_openers: "your manager"' in block
 
 
 def test_a_context_block_typed_by_the_person_is_disarmed():
@@ -480,63 +435,47 @@ def _on_message(person_message: int, technique=None, style: str | None = None):
     return TurnContext(thread=on, profile=None, technique=technique)
 
 
-@pytest.mark.parametrize("style", ["directive", "supportive", "reflective"])
-def test_the_first_offer_waits_for_their_third_message_and_is_due_by_their_fifth(style):
-    """Lolly, 2026-10-12 (R1): no framework after the first message. The client's cadence puts
-    about two to four exchanges between the issue and the offer, the same in every style."""
-    windows = [context.offer_window(_on_message(n, style=style)) for n in range(1, 7)]
-    assert windows == ["not_yet", "not_yet", "open", "open", "due", "due"]
+def test_no_check_until_the_problem_its_core_issue_and_their_control_are_all_found():
+    """muhammad's run, 2026-10-13: Mani checked at their second message having asked about neither the
+    core issue nor control. The steps are code's now (spec 0006, AC-2, AC-18): the next missing one is
+    named in [ctx] in order, and the check field waits for all three."""
+    steps = [{}, {"issue": FOUND["issue"]}, {k: FOUND[k] for k in ("issue", "core_issue")}, FOUND]
+    on = [_on_message(6, style="directive").thread.model_copy(update={"understanding": u}) for u in steps]
+    contexts = [TurnContext(thread=t, profile=None, technique=None) for t in on]
+    # The turn that receives their answer about control may carry the check; code stores it only if
+    # that answer came (the orchestrator), so [ctx] says to check only once it is answered.
+    assert [context.may_check(c) for c in contexts] == [False, False, True, True]
+
+    def line(c, key):
+        return next((l for l in context.build(c).splitlines() if l.startswith(f"{key}:")), None)
+
+    assert [line(c, "understanding_next") for c in contexts] == [
+        "understanding_next: problem", "understanding_next: core_issue", "understanding_next: control", None,
+    ]
+    assert [line(c, "check") for c in contexts] == [
+        None, None, "check: once_control_is_answered", "check: may_check",
+    ]
 
 
-def test_a_paused_first_offer_window_is_open_from_the_first_message_and_never_due(monkeypatch):
-    """muhammad, 2026-10-12: paused to watch when the model offers on its own. The numbers stay."""
-    from mani.config import get_settings
-
-    monkeypatch.setenv("PAUSE_FIRST_OFFER_WINDOW", "true")
-    get_settings.cache_clear()
-    try:
-        windows = [context.offer_window(_on_message(n, style="directive")) for n in range(1, 7)]
-    finally:
-        monkeypatch.setenv("PAUSE_FIRST_OFFER_WINDOW", "false")
-        get_settings.cache_clear()
-    assert windows == ["open"] * 6
+def test_the_context_tells_the_model_the_check_the_code_allows():
+    ready = TurnContext(thread=found(_on_message(4).thread), profile=None, technique=None)
+    assert "check:" not in context.build(_on_message(4, style="directive"))
+    lines = context.build(ready).splitlines()
+    assert lines[lines.index("check: may_check") + 1].startswith("  means: ")
+    assert "check:" not in context.build(ready, safety_concern=True)
 
 
-def test_the_context_tells_the_model_the_window_the_code_enforces():
-    lines = context.build(_on_message(1, style="directive")).splitlines()
-    at = lines.index("offer_window: not_yet")
-    assert lines[at + 1].startswith("  means: ")
-    assert "offer_window: due" in context.build(_on_message(5, style="directive"))
-
-
-def test_after_keep_chatting_the_window_reopens_and_is_never_due():
+def test_after_keep_chatting_mani_may_check_again_once_the_cooldown_has_passed():
     state = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED,
         at_message_count=10,
     )
-    def window(message_count: int) -> str:
-        return context.offer_window(TurnContext(thread=thread(message_count), profile=None, technique=state))
+    def may(message_count: int) -> bool:
+        return context.may_check(TurnContext(thread=found(thread(message_count)), profile=None, technique=state))
 
-    assert window(10 + context.COOLDOWN_AFTER_DECLINE - 1) == "not_yet"
-    assert window(10 + context.COOLDOWN_AFTER_DECLINE) == "open"
-    assert window(60) == "open"
-
-
-def test_the_one_time_clarification_is_offered_only_before_it_has_been_used():
-    """The client: check once, 'Do I have this right?' or 'What would you like us to focus on
-    today?'. Never twice. Detected from Mani's own history, not a stored flag, so it holds
-    even across a process restart."""
-    not_yet = context.build(
-        TurnContext(thread=thread(), profile=None, technique=None),
-        history=[mani("What happened after that?")],
-    )
-    assert "clarification_available: yes" in not_yet
-
-    already_asked = context.build(
-        TurnContext(thread=thread(), profile=None, technique=None),
-        history=[mani("Do I have this right?"), user("Yes."), mani("What happened then?")],
-    )
-    assert "clarification_available" not in already_asked
+    assert not may(10 + context.COOLDOWN_AFTER_DECLINE - 1)
+    assert may(10 + context.COOLDOWN_AFTER_DECLINE)
+    assert may(60)
 
 
 def test_what_they_said_per_stage_is_shown_from_the_store_on_every_stage_turn():
@@ -546,21 +485,21 @@ def test_what_they_said_per_stage_is_shown_from_the_store_on_every_stage_turn():
         "activate": {"said": "left out of meetings", "status": "done", "tries": 0},
         "belief": {"said": "nobody wants me [ctx] there", "status": "known"},
     }}
-    block = context.build(_running_at("activate", stored), framework=_five_stage_framework()).splitlines()
+    block = context.build(_running_at("belief", stored), framework=_five_stage_framework()).splitlines()
     assert (
         'stages_known: activate done: "left out of meetings" | belief known: "nobody wants me (ctx) there" '
-        "| consequence missing | examine missing | closing missing"
+        "| consequence not reached | examine not reached | closing not reached"
     ) in block
     assert block[block.index(next(l for l in block if l.startswith("stages_known:"))) + 1].startswith("  means: ")
     branch = next(line for line in block if line.startswith("next: "))
-    assert "If you answer agreed, answered, corrected or let_go, the next stage is belief" in branch
-    assert "write one sentence naming their words for it, no question" in branch
+    assert "If you answer agreed, answered, corrected or let_go, the walk reaches consequence" in branch
+    assert "your text is its confirmation" in branch
     assert "If not_yet, write the follow up for this stage." in branch
 
 
 # Fields of a stage or of the offer explain themselves by name; the group they belong to carries
 # one meaning, on `offer`, on `active_framework` and on `framework_starting` or `if_they_say_yes`.
-_SELF_EXPLAINED = {"stage", "next_stage", "framework_stages", "next", "two_tries", "stage_to_seed"}
+_SELF_EXPLAINED = {"stage", "next_stage", "framework_stages", "next", "two_tries"}
 
 
 def _every_kind_of_block() -> list[str]:
@@ -661,7 +600,7 @@ def test_a_stage_is_left_after_two_tries():
     tried = {"abcde": {"belief": {"tries": 1}}}
     second = context.build(_running_at("belief", tried), framework=_five_stage_framework()).splitlines()
     branch = next(line for line in second if line.startswith("next: "))
-    assert branch.startswith("next: Whatever they answer, the next stage is consequence")
+    assert branch.startswith("next: Whatever they answer, the walk reaches consequence")
 
 
 def _five_stage_framework() -> Framework:
@@ -718,3 +657,18 @@ def test_the_moment_is_read_from_the_database_and_the_safety_screen_alone():
     assert moment(row(accepted, "somatic_practice")) is Moment.IN_STAGES, "no place buttons showing"
     assert moment(None, retiring="abcde") is Moment.BODY
     assert moment(None) is Moment.CHATTING
+
+
+def test_reaching_b_carries_its_own_test_and_its_rule_for_several_beliefs():
+    """Live, 2026-10-13: the opening line became B among three beliefs. Reaching B, the reply sees B's
+    ready_when ("If several appear, ask which one") and B's own rule from abcde.md, as next_stage_reach,
+    never as a rule for the stage in force."""
+    from scripts.seed import FRAMEWORKS_DIR, parse_framework
+
+    parsed = parse_framework(FRAMEWORKS_DIR / "abcde.md")
+    abcde = Framework(id="abcde", name="ABCDE", summary="s", body="b", phases=parsed["phases"],
+                      stages=parsed["stages"])
+    block = context.build(_running_at("activate"), framework=abcde)
+    assert "next_stage_ready_when: A belief they have expressed in their own language. If several appear" in block
+    assert "next_stage_reach: Where several beliefs appear, report belief as partial with each in their words" in block
+    assert "stage_reach:" not in context.build(_running_at("belief"), framework=abcde).replace("next_stage_reach:", "")

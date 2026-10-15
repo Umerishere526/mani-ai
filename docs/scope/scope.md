@@ -21,6 +21,8 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 17  | The offer shows the five steps (R11)     | Now      | in-progress |
 | 18  | The ABCDE walk names each letter and remembers (R6, R12) | Now | in-progress |
 | 19  | Questions follow what the person said (R4, R6) | Now | in-progress |
+| 20  | Mani's voice from the client's sample (R13) | Now | in-progress |
+| 21  | Pinpoint, confirm, then offer (R14, R15) | Now | in-progress |
 
 ## Already built
 
@@ -133,6 +135,37 @@ Every question, in the chat and inside a framework, builds on the thread so far:
       code in backend/mani/chat/understanding.py, backend/mani/chat/orchestrator.py, backend/mani/chat/context.py, backend/mani/llm/schema.py, backend/mani/db/threads.py, backend/mani/summarize.py, backend/mani/prompts/composer.py, backend/content/prompts/mani_base.md, backend/content/prompts/response_format.md, backend/content/frameworks/abcde.md, backend/supabase/migrations/022_thread_understanding.sql. The live run (AC-3, AC-5, AC-6) needs muhammad's yes.
 - [ ] Verify it: `/check verify questions follow what the person said`
 - [ ] Test it: `/test questions follow what the person said`
+
+### 20. Mani's voice from the client's sample (R13) · in-progress
+
+Mani talks the way the client's sample conversation does. That means a few short sentences in short paragraphs, a direct answer to a direct ask, concrete options when they give almost nothing, and an interpretation offered only for them to confirm or correct. It never adds a fact they did not give. The tone sections of `mani_base.md` are rewritten from the sample, coming out shorter than today, and the rules the sample contradicts are cut.
+**Done when:** `mani_base.md` and `response_format.md` carry no rule the client's sample breaks, except "nothing they did not tell you". Each changed rule has a Conflicts row in requirements.md. The prompts are shorter than before. A live run of the client's sample conversation, in all three styles, after muhammad's yes, sounds like the sample and invents nothing.
+
+- [x] Build it: `/develop mani's voice from the client's sample`
+  - [x] Tone sections of `mani_base.md` rewritten from the sample, reply length in `response_format.md`, the menu of choices ban cut from `[ctx]`, reseeded
+  - [x] Decisions in force (questions, plain language) and requirements Conflicts edited in place
+  - [x] Rewritten from scratch after muhammad's live run of 2026-10-13: `mani_base.md` around the client's sample (`sounds_like`), `response_format.md`, stored words said to them as you, style examples removed, `scenario_check` flags talking about them
+  - [x] The sample as the spec (2026-10-13): its five replies in `mani_base.md` `example`, the rules that banned its moves deleted, the text written before the reading of the person, `recent_openers` gone, a clear yes always brings the offer; 39 live conversations
+- [ ] Verify it: `/check verify mani's voice from the client's sample`
+- [ ] Test it: `/test mani's voice from the client's sample`
+      Requirement [R13](../client/requirements.md#requirements). No spec: the rule table is in the approved plan of 2026-10-13. code in backend/content/prompts/mani_base.md, backend/content/prompts/response_format.md, backend/mani/chat/context.py. A live run of the client's sample in all three styles is owed (muhammad's yes).
+
+### 21. Pinpoint, confirm, then offer (R14, R15) · in-progress
+
+Before any offer, Mani pinpoints the problem, then its core issue, then what is in their control. Not knowing what is in their control is fine and is never pressed. Mani then checks its understanding in its own words, using only theirs. A yes gets the offer, and a no keeps the conversation going toward the root cause. The confirmed check replaces the message count as the offer gate. The framework is chosen from the active sets by the client's selection guide, which means ABCDE for now, with no framework named in code, so the other five come back as content.
+**Done when:** no offer comes without a confirmed check, and no check before their 2nd message. The check is database state, and a yes gives the offer in the same reply, still one call per turn. The count window and the history phrase match are deleted. The running understanding holds the problem, the core issue and what is in their control past the 20 message window. Seed refuses an incomplete active framework. A live run of the client's sample and the cheat sheet's Example 1 lines, in all three styles, after muhammad's yes, reaches a check and then ABCDE.
+
+- [x] Design it (spec): `/architect pinpoint confirm then offer`
+      Requirements [R14, R15](../client/requirements.md#requirements). Spec [0006](../specs/0006-pinpoint-confirm-then-offer/index.md). Cross checked on another model; its simpler one column design replaced a state machine that could strand a thread.
+- [x] Build it: `/develop pinpoint confirm then offer`
+  - [x] The check end to end: migration 023, `Check`, `check_answer`, `CHECK_OPEN`, `may_check`, the write, the merge and the offer on a yes (AC-1 to AC-5, AC-9)
+  - [x] Cooldowns, the set fallback, concern turns, and the deletions (window, clarification, finished rule, pause setting) (AC-6 to AC-8, AC-10, AC-11)
+  - [x] Content: `before_the_check`, "Check or not", `central_indication` from the cheat sheet in ABCDE and the paused files, the seed contract (AC-12 to AC-14)
+  - [x] Tests, scenarios and records (AC-16)
+  - [x] The three steps owned by code after muhammad's live run of 2026-10-13 (AC-17, AC-18), verified live in 15 conversations; the check's order is code's (AC-19), its words the model's
+- [ ] Verify it: `/check verify pinpoint confirm then offer`
+- [ ] Test it: `/test pinpoint confirm then offer`
+      code in backend/supabase/migrations/023_thread_check_at_message_count.sql, backend/mani/chat/context.py (`live`, `check_open`, `may_check`), backend/mani/llm/schema.py (`Check`, `CHECK_OPEN`), backend/mani/chat/understanding.py, backend/mani/chat/orchestrator.py, backend/mani/chat/repairs.py (`offer_framework`), backend/mani/chat/reply_checks.py, backend/scripts/seed.py (`missing_for_activation`), backend/scripts/scenario_check.py, backend/scripts/scenarios.json, backend/content/, chat-tester/app.py. Built 2026-10-13, tested with a scripted model; the live run (AC-15) needs muhammad's yes.
 
 ## Next
 

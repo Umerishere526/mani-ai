@@ -60,7 +60,7 @@ Query: `select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid
 | `public` | `thread_technique_state` | Which framework is active in a thread, and its current phase. |
 | `public` | `thread_techniques_offered` | Frequency-limiting: which frameworks have already been offered in a thread. |
 | `public` | `thread_response_styles` | The model's self-reported response shape/voice per reply — anti-repetition signal. |
-| `public` | `thread_summaries` | The rolling summary of a long thread, refreshed every 20 messages (the history window). Written by the backend only (migration 007). |
+| `public` | `thread_summaries` | The rolling summary of a thread too long for the model's budget, refreshed once messages have left its view (`CONTEXT_BUDGET_CHARS`). Written by the backend only (migration 007). |
 | `public` | `exercise_completions` | Whether a user found a completed exercise helpful. |
 
 `admin.*` is **invisible to PostgREST** — `supabase/config.toml`'s `[api] schemas` lists

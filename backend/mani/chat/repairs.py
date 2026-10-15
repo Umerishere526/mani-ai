@@ -8,13 +8,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from mani.chat.greeting import (
-    CLARIFICATION_QUESTIONS,
     KEEP_CHATTING_LABEL,
     TELL_ME_MORE_LABEL,
     TRY_IT_LABEL,
 )
 from mani.chat.techniques import OFFERING, Registry
-from mani.llm.schema import SHAPES, Moment, Offer, Reply, Slots, SmartPrompt, Style
+from mani.llm.schema import SHAPES, Check, Moment, Offer, Reply, Slots, SmartPrompt, Style
 from mani.models.rows import Framework
 
 MAX_TITLE_LENGTH = 100
@@ -49,7 +48,7 @@ _LAST_QUESTION = re.compile(r"(?:^|(?<=[.!?])[ \t]+|(?<=\n))([^.!?\n]*\?)\s*$")
 
 # The system's own words, which a person must never read.
 _INTERNAL_WORDS = re.compile(
-    r"\bframework[_ ]id\b|\boffer_window\b|\bheading_toward\b"
+    r"\bframework[_ ]id\b|\bmay_check\b|\bcheck_answer\b|\bheading_toward\b"
     r"|\bframework index\b|\bcooldown\b|\[/?ctx\]",
     re.IGNORECASE,
 )
@@ -68,6 +67,41 @@ def without_sentences(text: str, drop: Callable[[str], bool]) -> str:
         if kept:
             paragraphs.append(" ".join(kept))
     return "\n\n".join(paragraphs) if dropped else text
+
+
+# Where one sentence ends and the next begins, for laying a reply out: after . ! or ?, perhaps
+# inside a closing quote or bracket, before a capital. Never after a title or an initial.
+_LAYOUT_BREAK = re.compile(
+    r"(?<!\bMr\.)(?<!\bMs\.)(?<!\bMrs\.)(?<!\bDr\.)(?<!\bSt\.)(?<!\bProf\.)(?<!\b[A-Za-z]\.)"
+    r"(?:(?<=[.!?])|(?<=[.!?][\"'”’)]))\s+(?=[\"'“‘(]?[A-Z])"
+)
+_LINE_BREAKS = re.compile(r"[ \t]*\n\s*")
+_CLOSERS = "\"'”’)"
+
+# Fewer words than this before the closing question and the reply stays one line, as the client's
+# "I'm listening. What's frustrating you?" does.
+MIN_LEAD_WORDS = 8
+
+
+def _as_paragraphs(text: str) -> str:
+    """The text with every line break a paragraph break, which every client shows as one."""
+    return _LINE_BREAKS.sub("\n\n", text.strip())
+
+
+def laid_out(text: str) -> str:
+    """The reply as the client's way of communication document lays it out: the closing
+    questions in a paragraph of their own, after what Mani says back and wants to understand."""
+    text = _as_paragraphs(text)
+    head, _, last = text.rpartition("\n\n")
+    sentences = _LAYOUT_BREAK.split(last)
+    asked = len(sentences)
+    while asked and sentences[asked - 1].rstrip(_CLOSERS).endswith("?"):
+        asked -= 1
+    lead = " ".join(sentences[:asked])
+    if asked == len(sentences) or len(lead.split()) < MIN_LEAD_WORDS:
+        return text
+    paragraph = f"{lead}\n\n{' '.join(sentences[asked:])}"
+    return f"{head}\n\n{paragraph}" if head else paragraph
 
 
 def without_internal_words(text: str) -> str:
@@ -114,14 +148,6 @@ class Repaired:
     notes: list[str] = field(default_factory=list)
     # Why the reply's offer could not be made, when it carried one; the model's text went instead.
     offer_dropped: str | None = None
-
-
-def _without_clarification(text: str) -> str:
-    """The reply without a repeated ask of the client's fixed clarifying question."""
-    match = _LAST_QUESTION.search(text)
-    if match and match.group(1).strip().lower().rstrip("?") + "?" in CLARIFICATION_QUESTIONS:
-        return text[: match.start(1)].rstrip()
-    return text
 
 
 def _without_their_name(text: str, name: str, *, keep_one: bool) -> str:
@@ -288,30 +314,52 @@ def slots_for(registry: Registry, style: str, offered_id: str | None) -> Slots:
     )
 
 
+def offer_framework(heading_toward: str | None, registry: Registry) -> str | None:
+    """The set an offer is for: the one the reply heads toward when it is active, otherwise the
+    only active set when there is just one, otherwise none (spec 0006, AC-8)."""
+    if heading_toward in registry:
+        return heading_toward
+    return registry.ids[0] if len(registry) == 1 else None
+
+
 def _offer_text(
     offer: Offer, framework_id: str | None, registry: Registry, style: str, *,
-    may_offer: bool, finished_framework_id: str | None,
+    confirmed: bool, feeling: str | None,
 ) -> tuple[str | None, str | None]:
-    """The client's offer for the set the reply heads toward, with its slots filled. Otherwise
-    None and why it could not be made."""
+    """The client's offer for the set, with its slots filled, the feeling they named standing in
+    for an empty going_through. Otherwise None and why it could not be made."""
     framework = registry.get(framework_id)
     template = offer_template(framework, style)
     whole, _ = template_slots(template) if template else (None, None)
-    if not may_offer:
-        reason = "the window is closed"
+    going_through = offer.going_through if _slot_value(offer.going_through) else feeling
+    if not confirmed:
+        reason = "no yes to the check"
     elif framework is None:
-        reason = "unknown framework" if framework_id else "no framework"
-    elif framework.id == finished_framework_id:
-        reason = "they just finished it"
+        reason = "no framework"
     elif template is None:
         reason = "no template"
-    elif not _slot_value(offer.going_through):
+    elif not _slot_value(going_through):
         reason = "no going_through"
     elif whole and not _slot_value(offer.lead_line, sentence=True):
         reason = "no lead_line"
     else:
-        return render_template(template, lead_line=offer.lead_line, slot=offer.going_through), None
+        return render_template(template, lead_line=offer.lead_line, slot=going_through), None
     return None, reason
+
+
+def _sentence(value: str | None, end: str = ".") -> str:
+    """One of a check's parts as a sentence: on one line, ending in punctuation."""
+    cleaned = " ".join((value or "").split())
+    return cleaned if not cleaned or cleaned[-1] in ".!?" else cleaned + end
+
+
+def check_text(check: Check) -> str:
+    """Mani's check in the client's order, the problem, the core issue, what is in their control and what
+    it comes down to, then its question on a line of its own. Every word is the model's; only the order
+    is code's (spec 0006)."""
+    parts = (check.problem, check.core_issue, check.in_their_control, check.comes_down_to)
+    understood = " ".join(sentence for part in parts if (sentence := _sentence(part)))
+    return f"{understood}\n\n{_sentence(check.question, '?')}"
 
 
 def keep_chatting(framework: Framework | None, style: str, their_words: str | None) -> str | None:
@@ -341,17 +389,20 @@ def apply(
     registry: Registry,
     *,
     moment: Moment,
-    may_offer: bool,
-    finished_framework_id: str | None,
+    confirmed: bool,
     conversation_style: str,
     wants_title: bool,
     guarded: bool = False,
     nickname: str | None = None,
     name_said_before: bool = False,
-    clarification_already_used: bool = False,
+    feeling: str | None = None,
+    check: Check | None = None,
+    lay_out: bool = False,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again, and the client's
-    offer when the reply makes one.
+    offer when they said yes to Mani's check (`confirmed`). `check` is a check stored this turn, whose
+    parts are sent in their order in place of the reply's text. `lay_out` is Mani's own text before a
+    framework, which goes out in the client's paragraphs.
 
     The implementation this replaces answered each of these by re-calling the provider,
     up to six extra generations for one user message. They are all deterministic checks
@@ -360,21 +411,15 @@ def apply(
     """
     notes: list[str] = []
 
-    text, leaked = strip_script_leakage(reply.text.strip())
+    text, leaked = strip_script_leakage((check_text(check) if check else reply.text).strip())
     if leaked:
         notes.append(f"stripped script metadata: {', '.join(leaked)}")
+    if lay_out:
+        text = _as_paragraphs(text)
     spoken = without_internal_words(text)
     if spoken != text:
         notes.append("dropped a sentence with internal words")
         text = spoken
-
-    if clarification_already_used:
-        # The client's one-time check, backstopped in code: [ctx] already told the model not
-        # to ask again, this is what makes "never twice" true regardless.
-        stripped = _without_clarification(text)
-        if stripped != text:
-            notes.append("removed a repeated one-time clarification")
-            text = stripped
 
     if nickname:
         # Their name at most once in a conversation, never as the first word: observed in two
@@ -383,19 +428,22 @@ def apply(
         if named != text:
             notes.append("removed their name, already used or said first")
             text = named
+    if lay_out:
+        text = laid_out(text)
 
-    # The offer is the client's template with the model's slots in it, for the set the reply
-    # heads toward; the model's own text is what goes when it cannot be made (AC-3).
+    # The offer is the client's template with the model's slots in it, made only on a yes to the
+    # check; the model's own text is what goes when it cannot be made (spec 0006, AC-1, AC-8).
     prompts: list[SmartPrompt] = []
     offer_dropped: str | None = None
-    if moment is Moment.CHATTING and reply.offer is not None and not guarded:
+    if moment is Moment.CHECK_OPEN and (confirmed or reply.offer is not None) and not guarded:
+        framework_id = offer_framework(reply.heading_toward, registry)
         offer, offer_dropped = _offer_text(
-            reply.offer, reply.heading_toward, registry, conversation_style,
-            may_offer=may_offer, finished_framework_id=finished_framework_id,
+            reply.offer or Offer(), framework_id, registry, conversation_style,
+            confirmed=confirmed, feeling=feeling,
         )
         if offer is not None:
             text = offer
-            prompts = offer_buttons(reply.heading_toward, explained=False)
+            prompts = offer_buttons(framework_id, explained=False)
 
     title = clean_title(reply.title) if wants_title else None
 

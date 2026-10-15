@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-12
 tags: [journal, prompts, styles, directive, supportive, reflective, lessons]
 ---
+> Superseded 2026-10-13 (the two client example conversations per style file: removed, the voice now comes from `mani_base.md` `sounds_like`) — see [[client-sample-voice-and-confirmed-check-2026-10-13]]
 > Superseded 2026-10-12 — see [[restating-is-not-reflecting-2026-10-12]] (keeping "never ask about something that has not happened yet": the client now asks "What would making the wrong choice mean to you?")
 
 # Styles from the client's document (2026-10-12)

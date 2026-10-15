@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-12
 tags: [journal, offers, abcde, prompts, lessons]
 ---
+> Superseded 2026-10-13 (the window and its `open` and `due` values are gone; [ctx] sends `check: may_check` or `check: open`) — see [[client-sample-voice-and-confirmed-check-2026-10-13]]
 > Superseded 2026-10-12 — see [[general-judgment-over-case-patches-2026-10-12]] (the fit wording and the scenario: replaced by the slot test and the behavior groups)
 
 # An open window was read as "offer now" (2026-10-12)

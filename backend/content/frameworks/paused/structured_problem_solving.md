@@ -6,9 +6,7 @@ display_order: 4
 phases: [offering, problem, facts, control, outcome, options, compare, select, first_action, closing]
 activation:
   central_indication: >-
-    A specific, practical problem exists and the user does not know what to do next - the
-    situation can be influenced through a decision or action, and the user wants a direct
-    solution rather than reflection alone.
+    The user faces a practical problem and needs help determining what to do.
   to_find_out:
     - "the practical problem, in one sentence"
     - "that they want a decision or a plan for it, not to understand it or to feel differently about it"

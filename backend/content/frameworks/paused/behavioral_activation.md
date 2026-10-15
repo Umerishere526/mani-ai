@@ -6,9 +6,7 @@ display_order: 3
 phases: [offering, stopped, matters, choose, manageable, begin, barrier, closing]
 activation:
   central_indication: >-
-    The user knows what they could do but cannot get themselves to begin - low mood,
-    discouragement, or withdrawal has interrupted something that matters, and they need help
-    selecting and beginning one manageable action, not a thought examined or a decision made.
+    The user has withdrawn, stopped participating in activities, or lost motivation and needs help taking one manageable action.
   to_find_out:
     - "what they have stopped doing or are avoiding"
     - "whether they know what they could do but cannot begin"

@@ -80,11 +80,16 @@ async def current(user: CurrentUser, conn: UserConn) -> StartOut:
     )
 
 
+# How many of a thread's newest messages the app is sent on opening it; older ones page in from
+# the messages route. The app's own number, apart from how much of the thread the model sees.
+OPENING_TAIL = 20
+
+
 async def _history(conn, thread_id: uuid.UUID, user_id: str) -> list[MessageOut]:
-    """A thread's tail, with buttons live only on Mani's newest message."""
-    history = await messages_db.recent_for_context(conn, thread_id, user_id)
+    """A thread's tail, oldest first, with buttons live only on Mani's newest message."""
+    page = await messages_db.list_for_thread(conn, thread_id, user_id, limit=OPENING_TAIL)
     live = await messages_db.latest_mani_id(conn, thread_id, user_id)
-    return to_messages(history, live)
+    return to_messages(list(reversed(page.messages)), live)
 
 
 @router.get("/{thread_id}", response_model=ThreadOut)

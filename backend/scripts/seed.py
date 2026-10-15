@@ -12,7 +12,10 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
+from mani.chat.repairs import template_slots  # noqa: E402
+from mani.chat.techniques import OFFERING  # noqa: E402
 from mani.config import get_settings  # noqa: E402
+from mani.models.rows import ENDING_STAGES, SupportStyle  # noqa: E402
 
 # Authored content, not code: markdown is the input this script loads, and once loaded the
 # database is what the application reads. Kept outside the `mani` package for that reason -
@@ -94,6 +97,33 @@ def parse_framework(path: pathlib.Path) -> dict:
     }
 
 
+def missing_for_activation(framework: dict) -> list[str]:
+    """What an active framework lacks of the content the chat reads, named by its path in the
+    file. Empty when it can be seeded active, so a paused framework moved back fails here, not in
+    a live chat (spec 0006, AC-13)."""
+    stages = framework["stages"]
+    offering = stages.get(OFFERING) or {}
+    missing = []
+    for style in SupportStyle:
+        offer = (offering.get("offer") or {}).get(style.value)
+        if not offer or template_slots(offer)[1] is None:
+            missing.append(f"stages.offering.offer.{style.value} with a <going_through> slot")
+        for key in ("keep_chatting", "explain"):
+            if not (offering.get(key) or {}).get(style.value):
+                missing.append(f"stages.offering.{key}.{style.value}")
+    if not offering.get("steps"):
+        missing.append("stages.offering.steps")
+    for phase in framework["phases"]:
+        if phase == OFFERING or phase in ENDING_STAGES:
+            continue
+        stage = stages.get(phase) or {}
+        if not stage.get("intro"):
+            missing.append(f"stages.{phase}.intro")
+        missing += [f"stages.{phase}.ask.{style.value}" for style in SupportStyle
+                    if not (stage.get("ask") or {}).get(style.value)]
+    return missing
+
+
 async def seed() -> None:
     settings = get_settings()
     conn = await asyncpg.connect(settings.database_url)
@@ -108,6 +138,9 @@ async def seed() -> None:
 
             for path in framework_files:
                 framework = parse_framework(path)
+                missing = missing_for_activation(framework)
+                if missing:
+                    raise SystemExit(f"{path.name} cannot be active, it lacks: {', '.join(missing)}")
                 # Append the shared somatic route after each framework's own phases. The files
                 # end at `closing`, and this is rebuilt from the file every run, so appending is
                 # idempotent - there is nothing to dedupe.

@@ -253,20 +253,6 @@ def test_the_framework_index_carries_each_frameworks_contraindications():
     assert "**DBT STOP**: The action itself is protective - leaving, calling for help" in index
 
 
-def test_the_reply_commits_to_a_lean_before_it_writes_the_text():
-    """Structured output is generated in schema order, so a lean declared after the text could
-    only describe a reply already written."""
-    from mani.llm.schema import Reply
-
-    fields = list(Reply.model_fields)
-    assert fields.index("heading_toward") < fields.index("text")
-    assert fields.index("style") < fields.index("heading_toward")
-    # What their message names or changes about them, and how it answers the stage, are decided
-    # before the text written for it.
-    assert fields.index("style") < fields.index("understanding_update") < fields.index("text")
-    assert fields.index("stage_updates") < fields.index("stage_answer") < fields.index("text")
-
-
 def test_what_is_remembered_across_chats_reaches_the_prompt_after_the_static_layers(config):
     """After the per-user context, never before the static layers: the cached prefix has to
     stay byte-identical for everyone."""
@@ -334,7 +320,7 @@ def test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_b
     assert (
         "Each question follows from their last answer and keeps the feeling and issue they came with "
         "in view. Their feeling word may come back inside a question, never as a statement about them."
-    ) in base["rules"]
+    ) in base["understanding_them"]
     sent = "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in ("mani_base", "response_format"))
     for cut in ("Build every question from", "Never hand their own words or feelings back",
                 "Am I saying back their own words or feelings"):

@@ -6,9 +6,7 @@ display_order: 6
 phases: [offering, stop, pause, observe, proceed, closing]
 activation:
   central_indication: >-
-    The user is about to act - send, post, call, confront, decide - and needs help pausing
-    before the action, not analysis of the underlying problem. Time-critical: this overrides
-    whatever else the conversation was scoring toward.
+    The user is emotionally overwhelmed and needs to pause before reacting impulsively.
   to_find_out:
     - "what they are about to do"
     - "whether it has already happened"

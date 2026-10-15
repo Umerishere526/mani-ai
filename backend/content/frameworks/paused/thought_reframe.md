@@ -6,8 +6,7 @@ display_order: 2
 phases: [offering, thought, significance, facts, alternative, reframe, closing]
 activation:
   central_indication: >-
-    One specific painful thought or interpretation is intensifying distress, and the user wants
-    a brief shift in perspective rather than a deep event-by-event examination.
+    The user struggles with one persistent, painful thought that needs a more balanced interpretation.
   to_find_out:
     - "the exact thought going round, in their words"
     - "the situation it is attached to"

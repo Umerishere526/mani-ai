@@ -28,13 +28,19 @@ def misses(
     *,
     offered: str | None,
     offer_dropped: str | None,
-    offer_due: bool,
     needs_question: bool,
     last_mani_text: str | None,
+    check_unusable: bool = False,
+    check_too_early: bool = False,
+    no_check_by: int | None = None,
+    reach_unjudged: bool = False,
 ) -> list[str]:
     """What the draft got wrong that code cannot fix, named for the log. Empty when it stands.
     None of these costs a second call: they are counted, so how often each happens is known.
-    `offered` is the set the sent reply offers, as code rendered it."""
+    `offered` is the set the sent reply offers, as code rendered it. `check_unusable` is a check that
+    lacked one of its parts, `check_too_early` one sent before the three steps were found, and
+    `no_check_by` their message number when it passes with no check ever made (spec 0006).
+    `reach_unjudged` is a stage the walk reached that the reply left without a next_stage judgement."""
     notes: list[str] = []
     technique = offered
     if offer_dropped:
@@ -46,6 +52,12 @@ def misses(
     )
     if needs_question and not technique and "?" not in reply.text and not chose_to_ask_nothing:
         notes.append("asks no question")
-    if not technique and offer_due and reply.heading_toward:
-        notes.append("offer due and not made")
+    if check_unusable:
+        notes.append("check unusable")
+    if check_too_early:
+        notes.append("check before the three steps")
+    if no_check_by is not None:
+        notes.append(f"no check by message {no_check_by}")
+    if reach_unjudged:
+        notes.append("reach unjudged")
     return notes

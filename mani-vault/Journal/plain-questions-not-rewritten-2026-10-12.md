@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-12
 tags: [journal, prompts, voice, stages, lessons]
 ---
+> Superseded 2026-10-14 (sending the stage question as written) — see [[stage-questions-from-the-conversation-2026-10-14]]
 
 # Stage questions are asked as written, not reworded (2026-10-12)
 

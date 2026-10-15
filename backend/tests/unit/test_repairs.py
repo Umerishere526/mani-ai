@@ -5,7 +5,7 @@ import pytest
 
 from mani.chat import repairs
 from mani.chat.techniques import Registry
-from mani.llm.schema import Moment, Offer, Reply, Style
+from mani.llm.schema import Check, Moment, Offer, Reply, Style
 from mani.models.rows import Framework
 from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
@@ -47,8 +47,7 @@ def reply(**overrides) -> Reply:
 def fix(registry, model_reply, **overrides):
     defaults = {
         "moment": Moment.CHATTING,
-        "may_offer": True,
-        "finished_framework_id": None,
+        "confirmed": False,
         "conversation_style": "supportive",
         "wants_title": False,
     }
@@ -140,8 +139,13 @@ def offering(**slots) -> Reply:
     return reply(text="Model's own words.", heading_toward="abcde", offer=Offer(**slots))
 
 
+def yes_to_the_check(registry, model_reply, **overrides):
+    """The reply to a clear yes to Mani's check, the only turn an offer can be made on (spec 0006)."""
+    return fix(registry, model_reply, **({"moment": Moment.CHECK_OPEN, "confirmed": True} | overrides))
+
+
 def test_an_offer_is_the_clients_template_word_for_word_with_only_the_slots_filled(client_abcde):
-    fixed = fix(
+    fixed = yes_to_the_check(
         Registry([client_abcde]),
         offering(
             lead_line="Feeling overwhelmed can make you question how well you're handling things.",
@@ -157,7 +161,7 @@ def test_an_offer_is_the_clients_template_word_for_word_with_only_the_slots_fill
 
 
 def test_a_slot_loses_its_quotes_and_trailing_punctuation_and_keeps_its_case(client_abcde):
-    fixed = fix(
+    fixed = yes_to_the_check(
         Registry([client_abcde]), offering(going_through='"Feeling used by Sam."'),
         conversation_style="directive",
     )
@@ -169,30 +173,53 @@ def test_a_slot_loses_its_quotes_and_trailing_punctuation_and_keeps_its_case(cli
 
 
 @pytest.mark.parametrize(("change", "reason"), [
-    ({"heading_toward": None}, "no framework"),
-    ({"heading_toward": "box_breathing"}, "unknown framework"),
     ({"offer": Offer(going_through="  ")}, "no going_through"),
     ({"offer": Offer(going_through="feeling used")}, "no lead_line"),
 ])
 def test_an_offer_that_cannot_be_made_sends_the_models_text_alone(client_abcde, change, reason):
     unusable = offering(lead_line="A line.", going_through="feeling used").model_copy(update=change)
-    fixed = fix(Registry([client_abcde]), unusable)
+    fixed = yes_to_the_check(Registry([client_abcde]), unusable)
     assert (fixed.text, fixed.prompts, fixed.offer_dropped) == ("Model's own words.", [], reason)
 
 
-def test_no_offer_for_the_set_just_finished_one_without_a_template_or_a_closed_window(client_abcde):
+@pytest.mark.parametrize("heading_toward", [None, "box_breathing"])
+def test_with_one_active_set_a_yes_offers_it_whatever_the_reply_heads_toward(client_abcde, heading_toward):
+    """Spec 0006, AC-8: no framework id in code. With one set active, a yes to the check offers it."""
+    unsure = offering(going_through="feeling used").model_copy(update={"heading_toward": heading_toward})
+    fixed = yes_to_the_check(Registry([client_abcde]), unsure, conversation_style="directive")
+    assert fixed.offer_dropped is None
+    assert fixed.prompts[0].technique == "abcde"
+
+
+def test_with_several_active_sets_an_offer_needs_the_one_the_reply_heads_toward(client_abcde):
+    unsure = offering(going_through="feeling used").model_copy(update={"heading_toward": None})
+    fixed = yes_to_the_check(Registry([client_abcde, REFRAMING]), unsure, conversation_style="directive")
+    assert (fixed.text, fixed.offer_dropped) == ("Model's own words.", "no framework")
+
+
+def test_an_empty_going_through_is_filled_from_the_feeling_they_named(client_abcde):
+    """Spec 0006, AC-8: the offer is not dropped for a slot the stored understanding can fill,
+    nor when the yes turn's reply forgot the offer field altogether."""
+    for model_reply in (offering(going_through=" "), reply(text="Model's own words.", heading_toward="abcde")):
+        fixed = yes_to_the_check(
+            Registry([client_abcde]), model_reply, conversation_style="directive", feeling="your frustration",
+        )
+        assert "the thoughts behind your frustration," in fixed.text, model_reply
+
+
+def test_no_offer_without_a_yes_to_the_check_or_for_a_set_without_a_template(client_abcde):
     both = Registry([client_abcde, REFRAMING])
     slots = {"lead_line": "A line.", "going_through": "feeling used"}
-    assert fix(both, offering(**slots), finished_framework_id="abcde").offer_dropped == "they just finished it"
-    assert fix(both, offering(**slots), may_offer=False).offer_dropped == "the window is closed"
+    unconfirmed = fix(both, offering(**slots), moment=Moment.CHECK_OPEN)
+    assert (unconfirmed.text, unconfirmed.offer_dropped) == ("Model's own words.", "no yes to the check")
     no_template = offering(**slots).model_copy(update={"heading_toward": "thought_reframing"})
-    assert fix(both, no_template).offer_dropped == "no template"
+    assert yes_to_the_check(both, no_template).offer_dropped == "no template"
 
 
-def test_an_offer_field_outside_the_chatting_moment_or_on_a_concern_does_nothing(client_abcde):
+def test_an_offer_field_outside_the_answer_to_a_check_or_on_a_concern_does_nothing(client_abcde):
     slots = {"lead_line": "A line.", "going_through": "feeling used"}
-    for overrides in ({"moment": Moment.IN_STAGES}, {"guarded": True}):
-        fixed = fix(Registry([client_abcde]), offering(**slots), **overrides)
+    for overrides in ({"moment": Moment.IN_STAGES}, {"moment": Moment.CHATTING}, {"guarded": True}):
+        fixed = yes_to_the_check(Registry([client_abcde]), offering(**slots), **overrides)
         assert (fixed.text, fixed.prompts, fixed.offer_dropped) == ("Model's own words.", [], None)
 
 
@@ -250,21 +277,6 @@ def test_a_check_in_already_word_for_word_is_left_alone():
     assert repairs.with_the_check_in(exact, CHECK_IN) == exact
 
 
-def test_a_repeated_clarification_never_reaches_the_person(registry):
-    """Code enforces the 'never twice' half of the client's one-time check, regardless of
-    what the model does: the [ctx] line already told it not to, this is the backstop."""
-    twice = reply(text="Right, that makes sense. What would you like us to focus on today?")
-    fixed = fix(registry, twice, clarification_already_used=True)
-    assert fixed.text == "Right, that makes sense."
-    assert any("clarification" in n for n in fixed.notes)
-
-
-def test_the_first_clarification_is_left_alone(registry):
-    first = reply(text="A few things came up there. Do I have this right?")
-    fixed = fix(registry, first, clarification_already_used=False)
-    assert fixed.text == first.text
-
-
 def test_the_acknowledgement_before_a_question_is_the_replys_first_sentence():
     text = "It is okay not to know where. Try bringing gentle attention there. Where is it?"
     assert repairs.first_sentence(text) == "It is okay not to know where."
@@ -273,7 +285,7 @@ def test_the_acknowledgement_before_a_question_is_the_replys_first_sentence():
 
 def test_internal_words_never_reach_the_person(registry):
     """A sentence carrying the system's own words is dropped; the question stays."""
-    leaked = reply(text="That is what my offer_window allows. What happened after that?")
+    leaked = reply(text="That is what my check_answer says. What happened after that?")
     fixed = fix(registry, leaked)
     assert fixed.text == "What happened after that?"
     assert any("internal" in note for note in fixed.notes)
@@ -340,3 +352,65 @@ def test_pain_gets_the_clients_safety_line_and_no_practice(body_stages):
     assert (pain.text, pain.labels, pain.handoff) == (
         "Let's not do a breathing practice then. I'm here with you. What would help right now?", [], False,
     )
+
+
+def test_a_stored_check_goes_out_in_the_clients_order_whatever_order_the_model_wrote(registry):
+    """Spec 0006, muhammad's choice of 2026-10-13: live, the check opened with their control answer in
+    every run though the prompt asked twice for the problem first. The words are the model's; the order
+    is code's, and a missing part leaves no gap."""
+    check = Check(
+        problem="  Your boss says you're not doing enough", core_issue="Nothing you do feels like enough for him.",
+        in_their_control="You're not sure yet what you can do.", question="Do I have that right",
+    )
+    model_text = reply(text="You're not sure yet what you can do. Your boss says you're not doing enough?")
+    fixed = fix(registry, model_text, check=check)
+    assert fixed.text == (
+        "Your boss says you're not doing enough. Nothing you do feels like enough for him. You're not sure yet "
+        "what you can do.\n\nDo I have that right?"
+    )
+    assert fix(registry, model_text).text == model_text.text, "without a stored check the reply goes as written"
+
+
+# Mani's replies from the client's way of communication document, each as the client lays it out.
+CLIENT_LAYOUT = [
+    "I'm listening. What's frustrating you?",
+    "When everything feels frustrating, sometimes it's because several things have been building up for a "
+    "while. I don't want to assume that's what's happening to you.\n\nTell me, are you frustrated with the "
+    "people around you, the circumstances you're dealing with, or how you're feeling about your life right now?",
+    "That would be frustrating, especially when other people's lack of follow-through creates additional work "
+    "for you. But I want to understand the pattern rather than assume everyone is the problem.\n\nWhen people "
+    "fail to deliver, what typically happens next? Do you confront them, take over the work yourself, or end up "
+    "chasing them until they do what they promised?",
+    "So your ability to do your job depends on other people fulfilling their responsibilities. When they don't, "
+    "your work gets held up, and you're left dealing with the consequences.\n\nHere's what I want to understand: "
+    "When people fail to follow through, do they face any consequences, or does the responsibility for getting "
+    "things back on track fall on you?",
+]
+
+
+@pytest.mark.parametrize("laid", CLIENT_LAYOUT)
+def test_manis_own_text_goes_out_as_the_client_lays_it_out(registry, laid):
+    """The client's document (R13): what Mani says back and wants to understand, then the closing
+    questions together on their own line. A short reply stays one line."""
+    written = laid.replace("\n\n", " ")
+    assert fix(registry, reply(text=written), lay_out=True).text == laid
+
+
+@pytest.mark.parametrize("text, laid", [
+    ("You said the review is at the 9 a.m. meeting with your manager tomorrow. Did Dr. Lee say anything?",
+     "You said the review is at the 9 a.m. meeting with your manager tomorrow.\n\nDid Dr. Lee say anything?"),
+    ('You told them "I cannot keep doing this with the whole team." What happened then?',
+     'You told them "I cannot keep doing this with the whole team."\n\nWhat happened then?'),
+    ("Your boss criticized your work today.\nWhat did your boss criticize?",
+     "Your boss criticized your work today.\n\nWhat did your boss criticize?"),
+    ("That sounds like a lot to carry at work right now. Take your time.",
+     "That sounds like a lot to carry at work right now. Take your time."),
+])
+def test_the_layout_breaks_only_between_sentences_and_keeps_the_models_own_lines(registry, text, laid):
+    assert fix(registry, reply(text=text), lay_out=True).text == laid
+
+
+def test_a_reply_not_laid_out_goes_as_written(registry):
+    """A stage reply keeps the one paragraph the client's ABCDE document writes."""
+    written = CLIENT_LAYOUT[1].replace("\n\n", " ")
+    assert fix(registry, reply(text=written)).text == written

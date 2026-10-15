@@ -10,8 +10,6 @@ ENV_FILE = pathlib.Path(__file__).resolve().parent.parent / ".env"
 # watch a conversation, which must not change what the tests expect, and the environment wins over
 # .env, so it is pinned off here.
 os.environ["AI_DEBUG_MODE"] = "false"
-# The same for pausing the first offer window, which a developer turns on to watch the flow.
-os.environ["PAUSE_FIRST_OFFER_WINDOW"] = "false"
 
 if not ENV_FILE.exists():
     # Only a fallback, for a machine with no .env - enough for the unit suite to import

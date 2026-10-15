@@ -407,3 +407,79 @@ async def test_a_timeout_is_not_retried(monkeypatch, recorded):
             purpose=llm_calls.Purpose.CHAT, settings=settings(),
         )
     assert runnable.calls == 1
+
+
+async def test_a_chat_reply_past_its_deadline_fails_as_too_slow_and_is_recorded(monkeypatch, recorded):
+    """2026-10-14: a provider kept the connection open and replied after 102 s, past the per read timeout
+    and the chat tester's 90 s. A chat call now has a deadline for the whole call; a resend is safe."""
+    class Stalled:
+        calls = 0
+
+        async def ainvoke(self, messages):
+            Stalled.calls += 1
+            await asyncio.sleep(10)
+
+    install(monkeypatch, Stalled())
+    quick = settings().model_copy(update={"chat_deadline_seconds": 0.05})
+    with pytest.raises(ServiceError) as raised:
+        await client.complete(
+            [{"role": "user", "content": "hi"}], Reply, model="m",
+            purpose=llm_calls.Purpose.CHAT, settings=quick,
+        )
+    assert raised.value.retryable and raised.value.user_message == "Mani took too long to answer. Please try again."
+    assert Stalled.calls == 1, "never retried: the wait already happened"
+    assert [r["outcome"] for r in recorded] == [llm_calls.Outcome.TIMEOUT]
+    assert recorded[0]["generation_id"] is None, "no reply came back, so there is no id to trace"
+
+
+def openrouter_body(content: str, generation_id: str, finish_reason: str = "stop") -> dict:
+    """A chat completion as OpenRouter sends it: its own id, and the provider that served it."""
+    return {
+        "id": generation_id,
+        "object": "chat.completion",
+        "created": 1_760_400_000,
+        "model": "openai/gpt-6-luna",
+        "provider": "Azure",
+        "choices": [{
+            "index": 0,
+            "finish_reason": finish_reason,
+            "message": {"role": "assistant", "content": content},
+        }],
+        "usage": {"prompt_tokens": 7000, "completion_tokens": 300, "total_tokens": 7300},
+    }
+
+
+def over_openrouter(monkeypatch, *bodies: dict) -> None:
+    """The real LangChain model and OpenAI SDK, with only the HTTP replies scripted."""
+    import httpx
+    from langchain_openai import ChatOpenAI
+
+    replies = iter(bodies)
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=next(replies)))
+    model = ChatOpenAI(
+        model="openai/gpt-6-luna", base_url="https://openrouter.ai/api/v1",
+        api_key="sk-test-not-a-real-key", max_retries=0,
+        http_async_client=httpx.AsyncClient(transport=transport),
+    )
+    install(monkeypatch, model.with_structured_output(Reply, method="json_schema", include_raw=True))
+
+
+async def test_each_call_records_the_generation_that_served_it(monkeypatch, recorded):
+    """2026-10-14: a slow turn could not be traced to the endpoint that served it. The id is what
+    OpenRouter resolves to that endpoint, so a cut off attempt and its retry each keep their own."""
+    over_openrouter(
+        monkeypatch,
+        openrouter_body('{"text": "cut', "gen-cut-off", finish_reason="length"),
+        openrouter_body('{"text": "second try"}', "gen-answered"),
+    )
+
+    call = await client.complete(
+        [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+        purpose=llm_calls.Purpose.CHAT, settings=settings(),
+    )
+
+    assert call.value.text == "second try"
+    assert [(r["outcome"], r["generation_id"]) for r in recorded] == [
+        (llm_calls.Outcome.SCHEMA_INVALID, "gen-cut-off"),
+        (llm_calls.Outcome.OK, "gen-answered"),
+    ]

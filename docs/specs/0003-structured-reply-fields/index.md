@@ -1,6 +1,8 @@
 # 0003. Structured reply fields in place of text parsing
 
 **Date**: 2026-10-12
+> Changed 2026-10-13: at the closing stage, `acting` skips the body check-in only once the stage has their words or one try (muhammad); a plan is not the new belief.
+
 **Status**: In Progress
 
 ## Summary

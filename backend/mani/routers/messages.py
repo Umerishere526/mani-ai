@@ -83,5 +83,6 @@ async def send(
         reasoning=turn.reasoning,
         ledger=turn.ledger,
         understanding=turn.understanding if get_settings().ai_debug_mode else None,
+        check_at_message_count=turn.check_at_message_count if get_settings().ai_debug_mode else None,
         exercise=exercise,
     )

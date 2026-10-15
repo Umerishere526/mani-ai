@@ -43,7 +43,7 @@ async def test_a_transcript_goes_only_to_the_providers_chat_may_use(monkeypatch)
     """Unrouted, OpenRouter may send it to any provider serving the model, under that
     provider's own terms - which is exactly what the chat path refuses."""
     provider = (await translate(monkeypatch))["extra_body"]["provider"]
-    assert provider["order"] == settings().openrouter_provider_order
+    assert provider["only"] == settings().openrouter_providers
     assert provider["data_collection"] == "deny"
 
 

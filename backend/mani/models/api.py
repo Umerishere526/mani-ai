@@ -92,8 +92,10 @@ class TurnOut(BaseModel):
     reasoning: str | None = None
     # Null unless AI_DEBUG_MODE is on: what is stored for each stage and what the walk does about it.
     ledger: list[LedgerRow] | None = None
-    # Null unless AI_DEBUG_MODE is on: their feeling word and their issue as Mani understands them.
+    # Null unless AI_DEBUG_MODE is on: what Mani understands of them (spec 0005, spec 0006).
     understanding: dict[str, str] | None = None
+    # Null unless AI_DEBUG_MODE is on: when Mani's latest check of its understanding was made.
+    check_at_message_count: int | None = None
     # Set only on the turn a framework completes, and only once the catalog has a
     # matching exercise.
     exercise: "ExerciseOut | None" = None

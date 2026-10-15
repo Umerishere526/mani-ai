@@ -1,4 +1,4 @@
-# ABOUTME: Refreshes a thread's rolling summary so Mani remembers past the recent window.
+# ABOUTME: Refreshes a thread's rolling summary of what has left the model's view of a long thread.
 # ABOUTME: Runs after a turn has been answered, never in the path of one.
 
 from __future__ import annotations
@@ -162,7 +162,7 @@ async def update_quietly(claims, thread_id: uuid.UUID | str) -> None:
         logger.exception("summarization failed for thread %s", thread_id)
 
 
-async def reconcile_due(*, threshold: int = 20, limit: int = 200) -> int:
+async def reconcile_due(*, limit: int = 200) -> int:
     """Catch up every thread whose summary has fallen behind, across every user.
 
     The per-turn trigger (`update_quietly`) is the fast path and covers almost every
@@ -176,7 +176,10 @@ async def reconcile_due(*, threshold: int = 20, limit: int = 200) -> int:
     from mani.db import pool, summaries
 
     async with pool.as_admin() as conn:
-        due = await summaries.due_for_summary(conn, threshold=threshold, limit=limit)
+        due = await summaries.due_for_summary(
+            conn, budget_chars=get_settings().context_budget_chars,
+            block=messages_db.CONTEXT_DROP_BLOCK, limit=limit,
+        )
 
     done = 0
     for row in due:

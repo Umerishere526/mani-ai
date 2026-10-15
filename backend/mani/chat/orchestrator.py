@@ -52,11 +52,6 @@ logger = logging.getLogger(__name__)
 # one message rather than two - moved the count past 3 and the thread was never titled.
 TITLE_AFTER_MESSAGES = 3
 
-# How many new messages accumulate before the rolling summary is refreshed. Tied to the
-# history window rather than set beside it: any value above the window leaves messages that
-# have scrolled out of the history the model sees and are not yet in the summary either.
-SUMMARY_THRESHOLD = messages_db.CONTEXT_WINDOW
-
 _HANDOFF_LABELS = {CHAT_MORE_LABEL.lower(), GO_TO_LIBRARY_LABEL.lower()}
 
 def _handoff() -> list[SmartPrompt]:
@@ -72,6 +67,16 @@ def _awaiting_place(history: list[Message]) -> bool:
     return bool(last and any(
         str(o.get("label", "")) in repairs.PLACE_LABELS for o in (last.prompt_options or [])
     ))
+
+
+def _closing_unanswered(
+    technique: TechniqueState | None, framework: Framework | None, stored_all: dict[str, dict],
+) -> bool:
+    """Whether the framework is on its closing stage with nothing said for it and no try yet."""
+    if technique is None or framework is None or technique.phase != framework.closing:
+        return False
+    entry = (stored_all.get(framework.id) or {}).get(technique.phase) or {}
+    return not entry.get("said") and not entry.get("tries")
 
 
 def _body_route(
@@ -131,18 +136,17 @@ def _walked(
     feeling: str | None,
 ) -> tuple[repairs.Repaired, walk.Walked]:
     """The walk's turn: what they said merged into the store, the step taken, and the reply that
-    opens the stage reached. Code decides all three; the model's text is used only where the branch
-    [ctx] named asks for it."""
-    before = {} if start else stored
+    opens the stage reached, from the reply's judgement of that stage in next_stage. Code decides all
+    three."""
     if start:
-        walked = walk.start(framework, reply.stage_updates)
+        walked = walk.start(framework, reply.stage_updates, reply.next_stage)
     else:
         walked = walk.advance(
             framework, stored, reply.stage_updates, reply.stage_answer,
-            in_force=in_force, body_answered=body_answered,
+            in_force=in_force, report=reply.next_stage, body_answered=body_answered,
         )
     text, notes = walk.reply_text(
-        framework, walked, before, text=fixed.text, style=style, thread_id=thread_id,
+        framework, walked, text=fixed.text, style=style, thread_id=thread_id,
         feeling=feeling if start else None,
     )
     return dataclasses.replace(
@@ -185,6 +189,8 @@ class Turn:
     checks: list[str] = field(default_factory=list)
     # What Mani understands of them after this turn. Sent to a client only with AI_DEBUG_MODE.
     understanding: dict | None = None
+    # When Mani's latest check was made, after this turn (spec 0006). Sent only with AI_DEBUG_MODE.
+    check_at_message_count: int | None = None
     # Set only on the turn a framework completes, and only when the catalog has a
     # matching exercise. A row model, not the wire shape - the router builds ExerciseOut
     # (and signs the audio URL) when it serializes this.
@@ -299,11 +305,6 @@ def _answered_offer(
     return fixed
 
 
-def _finished(technique: TechniqueState | None) -> bool:
-    """A framework they completed: accepted, with its phase cleared on retirement."""
-    return bool(technique and technique.outcome is TechniqueOutcome.ACCEPTED and not technique.phase)
-
-
 def _conversation(history: list[Message]) -> list[dict[str, str]]:
     return [
         {
@@ -389,7 +390,12 @@ async def send(
         )
 
     config = await cache.load()
-    history = await messages_db.recent_for_context(conn, thread_id, user_id)
+    # The whole thread within the budget: the model sees what they said earlier, instead of a store
+    # guessing it ahead of time (2026-10-13).
+    window = await messages_db.for_context(
+        conn, thread_id, user_id, budget_chars=settings.context_budget_chars,
+    )
+    history = window.messages
     updates = threads.ThreadUpdates()
 
     style = chosen_style(history, content)
@@ -419,11 +425,7 @@ async def send(
     # awaiting an answer, or accepted and mid-way. A row that is finished (phase cleared) or
     # declined stays in the snapshot, because [ctx] measures the cooldown from it - but it
     # is not running, so it is not the live row.
-    if technique is not None and (
-        technique.phase is None
-        or technique.outcome not in (TechniqueOutcome.OFFERED, TechniqueOutcome.ACCEPTED)
-    ):
-        technique = None
+    technique = context.live(technique)
 
     tapped = find_tapped_prompt(history, content)
     offer = pending_offer(history)
@@ -470,7 +472,8 @@ async def send(
         style=conversation_style,
         should_generate_title=wants_title,
         offered=offered_now,
-        summary=ctx.summary,
+        # Only once messages have left the window, so it never repeats what the model reads raw.
+        summary=ctx.summary if window.dropped else None,
         memory=ctx.memory,
     )
     model, parameters, routing = composer.model_settings(config)
@@ -516,17 +519,16 @@ async def send(
                 user_message="You've reached today's message limit. Please come back tomorrow.",
             )
 
-    window = context.offer_window(ctx)
-    # The reply's shape is chosen from the database: while no offer may be made there is no offer
-    # field, so the model cannot offer early, and an answer to an offer exists only while one is
-    # open or was declined.
+    # The reply's shape is chosen from the database: the offer field exists only on the answer to
+    # Mani's check, so the model cannot offer before they confirm its understanding, and an answer
+    # to an offer exists only while one is open or was declined (spec 0006).
     moment = context.moment(
         technique, outcome, retiring_framework_id, _awaiting_place(history), running_framework,
-        concern=assessment.blocks_framework,
+        concern=assessment.blocks_framework, check_open=context.check_open(ctx),
     )
     reply_shape = schema.reply_for(
         moment,
-        may_offer=window != "not_yet",
+        may_check=context.may_check(ctx),
         declined_row=declined_row,
         on_closing=bool(
             running_framework and technique and technique.phase == running_framework.closing
@@ -568,6 +570,8 @@ async def send(
             "thread %s stage updates: %s", ctx.thread.id,
             ", ".join(f"{u.stage}={u.status}" for u in reply.stage_updates),
         )
+    if reply.next_stage:
+        logger.info("thread %s next stage judged %s", ctx.thread.id, reply.next_stage.status)
 
     # The model's own crisis judgment no longer locks the thread: a small model over-fires it
     # on ordinary distress, pain or injury. Only the deterministic screen (safety.screen, above)
@@ -584,13 +588,6 @@ async def send(
     # A concern, from the screen or the model, comes before anything a reply field could do: no
     # client text is rendered from them and no row changes because of them (AC-12).
     guarded = assessment.blocks_framework or model_concern
-    # Nothing a concern turn reports is kept, so what they understand stays as stored (AC-11).
-    understood = (
-        ctx.thread.understanding if guarded
-        else understanding.merge(ctx.thread.understanding, reply.understanding_update)
-    )
-    if understood != ctx.thread.understanding:
-        updates.understanding = understood
     answer = _offer_answer(moment, tapped, reply, guarded=guarded)
     if moment is Moment.OFFER_OPEN and not (guarded and tapped is None):
         if answer == "yes":
@@ -611,25 +608,58 @@ async def send(
         starting = technique.framework_id
         offered_now.append(technique.framework_id)
 
+    # Nothing a concern turn reports is kept, so what they understand stays as stored. A check is
+    # merged first and their own words after it, so their words win (spec 0006, AC-9). The steps are
+    # judged against the record as this turn began, so each takes an exchange of its own (AC-17).
+    # Mani's check is stored, so the next turn reads their answer to it, only once their own words
+    # (understanding_update, or what is stored) give all three steps; a check whose control comes only
+    # from the check itself opens nothing (spec 0006, AC-3, AC-7, AC-18).
+    with_check = not guarded and starting is None and understanding.usable(reply.check)
+    understood = ctx.thread.understanding
+    check_written = False
+    if not guarded:
+        before = ctx.thread.understanding
+        theirs = understanding.merge(before, reply.understanding_update, before=before)
+        check_written = with_check and understanding.next_step(theirs) is None
+        understood = (
+            understanding.merge(
+                understanding.merge_check(before, reply.check), reply.understanding_update, before=before,
+            )
+            if check_written else theirs
+        )
+    if understood != ctx.thread.understanding:
+        updates.understanding = understood
+    if check_written:
+        updates.check_at_message_count = ctx.thread.message_count + 2
+    # A clear yes to the check is the only way to an offer (spec 0006, AC-1, AC-4).
+    confirmed = (
+        moment is Moment.CHECK_OPEN and not guarded and starting is None
+        and reply.check_answer == "yes"
+    )
+
     fixed = repairs.apply(
         reply,
         config.registry,
         moment=moment,
-        may_offer=window != "not_yet",
-        # Only the framework they have just finished is off the table. One they said no to
-        # may come back once the cooldown has passed (muhammad, 2026-09-24).
-        finished_framework_id=ctx.technique.framework_id if _finished(ctx.technique) else None,
+        confirmed=confirmed,
         conversation_style=conversation_style,
         wants_title=wants_title,
         guarded=guarded,
         nickname=ctx.profile.nickname if ctx.profile else None,
-        # The greeting says their name by design; the model's own replies count from there.
+        # The greeting says their name by design; the model's own replies count from there. The
+        # greeting is the first message in view only while nothing has left the window.
         name_said_before=bool(
             ctx.profile and ctx.profile.nickname
             and any(ctx.profile.nickname in m.content
-                    for m in [m for m in history if m.role is MessageRole.MANI][1:])
+                    for m in [m for m in history if m.role is MessageRole.MANI][0 if window.dropped else 1:])
         ),
-        clarification_already_used=context.clarification_used(history),
+        feeling=understood.get("feeling"),
+        check=reply.check if check_written else None,
+        # A stage reply stays one paragraph, as the client's ABCDE document writes it.
+        lay_out=(
+            moment in (Moment.CHATTING, Moment.CHECK_OPEN, Moment.OFFER_OPEN)
+            and starting is None and not guarded
+        ),
     )
     if moment is Moment.OFFER_OPEN and not guarded:
         fixed = _answered_offer(
@@ -649,20 +679,26 @@ async def send(
         if not guarded and outcome is TechniqueOutcome.ACCEPTED else None
     )
     walked = None
+    body = reply.body
+    if body == "acting" and _closing_unanswered(technique, running_framework, stored_all):
+        # A plan at the closing stage is not its answer: the stage is asked once before "ready to act"
+        # may skip the body check-in (muhammad, 2026-10-13).
+        body = None
+        fixed = dataclasses.replace(fixed, notes=fixed.notes + ["acting held until the closing stage is answered"])
     if walking is not None and (starting or technique.phase in walk.content_stages(walking)):
         fixed, walked = _walked(
             fixed, reply, walking, stored_all.get(walking.id) or {},
             start=starting is not None, in_force=None if starting else technique.phase,
             style=conversation_style, thread_id=ctx.thread.id,
-            body_answered=moment is Moment.BODY and reply.body is not None
-            and repairs.body_answer_fits(reply.body, "closing", conversation_style),
+            body_answered=moment is Moment.BODY and body is not None
+            and repairs.body_answer_fits(body, "closing", conversation_style),
             feeling=understood.get("feeling"),
         )
         if walked.entries != (stored_all.get(walking.id) or {}):
             updates.stages_known = {**stored_all, walking.id: walked.entries}
     if moment is Moment.BODY and not guarded:
         fixed = _body_route(
-            fixed, reply.body, tapped, technique,
+            fixed, body, tapped, technique,
             config.registry.get(technique.framework_id if technique else retiring_framework_id),
             history, conversation_style,
         )
@@ -674,16 +710,24 @@ async def send(
         reply,
         offered=offered,
         offer_dropped=fixed.offer_dropped,
-        offer_due=window == "due" and not assessment.blocks_framework and not deferred,
         needs_question=needs_question,
         last_mani_text=last_mani_text,
+        check_unusable=not guarded and reply.check is not None and not understanding.usable(reply.check),
+        check_too_early=with_check and not check_written,
+        reach_unjudged=walked is not None and walked.unjudged,
+        no_check_by=(
+            context.CHECK_EXPECTED_BY
+            if context.their_messages(ctx) == context.CHECK_EXPECTED_BY
+            and ctx.thread.check_at_message_count is None and not check_written
+            else None
+        ),
     )
     if checks:
         logger.info("thread %s reply checks: %s", ctx.thread.id, "; ".join(checks))
     # What the model judged this turn, as the closed values only: never a slot, which holds their words.
     logger.info(
-        "thread %s moment %s: offer_answer %s, body %s, stage_answer %s, offered %s",
-        ctx.thread.id, moment.value, answer, reply.body, reply.stage_answer, offered,
+        "thread %s moment %s: check_answer %s, offer_answer %s, body %s, stage_answer %s, offered %s",
+        ctx.thread.id, moment.value, reply.check_answer, answer, reply.body, reply.stage_answer, offered,
     )
     if not fixed.text.strip():
         # Nothing left to say once leaked metadata was stripped. Refused here as retryable,
@@ -770,13 +814,17 @@ async def send(
         crisis_detected=False,
         crisis_blocks_chat=settings.crisis_blocks_chat,
         was_duplicate=pair.was_duplicate,
-        # Both sides of the comparison are thread message counts. The reference compared
-        # a thread count against a running total of summarized messages, so the trigger
-        # fired on two different units and drifted further apart with every summary.
-        needs_summary=count_after - summarized >= SUMMARY_THRESHOLD,
+        # A summary is needed only for messages that have left the model's view and that no summary
+        # covers yet. Both sides are thread message counts.
+        needs_summary=window.dropped > summarized,
         llm_call_id=call.call_id,
         exercise=exercise,
         understanding=understood,
+        check_at_message_count=(
+            updates.check_at_message_count
+            if updates.check_at_message_count is not None
+            else ctx.thread.check_at_message_count
+        ),
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
         checks=checks,
         ledger=ledger if settings.ai_debug_mode else None,

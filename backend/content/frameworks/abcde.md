@@ -4,15 +4,12 @@ name: ABCDE
 summary: "These questions help you see what happened, what you started believing about it, and how that belief has affected you, then look at whether it is true and find a more realistic and helpful way to see it."
 display_order: 1
 phases: [offering, activate, belief, consequence, dispute, effective]
-# Closes a stage said back to them in their words, B to E. A carries its own question.
+# Used only when Mani's own confirmation of a stage cannot be: closes their words said back, B to E.
+# A falls back to its own confirm line.
 confirm_phrases: ["Is that right?", "Do we have this right?", "Did I get that right?", "Does that sound right?"]
 activation:
   central_indication: >-
-    ABCDE works on what they are telling themselves. It fits once their own words give you what it
-    would work on: a conclusion, worry or judgment, or how it is leaving them feeling. Test: you can
-    fill the offer's <how they are feeling or what is worrying them> from their words without adding a feeling or
-    belief they didn't give. What happened, on its own, does not; step A asks for it when it is
-    missing.
+    The user connects a specific event to a troubling belief and emotional reaction.
   # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
   # The prompt reads central_indication, distinctions and contraindications.
   appropriate_when:
@@ -32,7 +29,7 @@ activation:
       framework, or does not want to examine the belief.
 stages:
   offering:
-    purpose: "Offer ABCDE once there is enough understanding to say what it would help with, and receive explicit agreement before proceeding."
+    purpose: "Offer ABCDE once they have said yes to Mani's check of its understanding, and receive explicit agreement before proceeding."
     boundaries:
       - "must not combine the three tones in one offer"
       - "the offer says what ABCDE would help them do, in their situation, then asks if they would like to try it"
@@ -47,7 +44,7 @@ stages:
       directive: |-
         There's a framework called ABCDE that helps you identify the thoughts behind <their feeling from understanding as a short noun phrase that reads naturally after "the thoughts behind", such as "your frustration"; what is worrying them only when they named no feeling>, question whether they're true, and replace them with more realistic ones.
       supportive: |-
-        <A short warm line in your own words that shows you understood what they said, using their words, such as "Feeling overwhelmed can make you question how well you're handling things.">
+        <A short warm line in your own words about what they're facing and what they've decided, never about doubting themselves, such as "That's a lot to carry for you and your team, and it takes something to decide to speak up.">
         There's a framework called ABCDE that can help you understand the thoughts behind <their feeling from understanding as a short noun phrase that reads naturally after "the thoughts behind", such as "your frustration"; what is worrying them only when they named no feeling>, see whether those thoughts are really true, and find a more helpful way to think about what's happening.
       reflective: |-
         <A short line about how the way we interpret what is happening can make it feel harder, fitted to what they said, such as "Sometimes the way we interpret what's happening can make a difficult situation feel even harder.">
@@ -125,6 +122,8 @@ stages:
     title: "B: Belief"
     intro: "B is for Belief."
     purpose: "Identify what the person began believing about the event, in their own words."
+    # Sent as next_stage_reach on the stage before, where the reply judges this stage for the walk.
+    reach: "Where several beliefs appear, report belief as partial with each in their words, so your text asks which affected them most. A belief is what they concluded about themselves or what it means for them, never whether how they were treated was real or fair."
     listen_for: "The conclusion, prediction, expectation or judgment they attached to what happened."
     ready_when: "A belief they have expressed in their own language. If several appear, ask which one affected them most."
     boundaries:
@@ -145,6 +144,7 @@ stages:
     title: "C: Consequences"
     intro: "C is for Consequences."
     purpose: "Identify how believing that affected what they felt, did or avoided."
+    reach: "Report consequence as known where they tied a feeling or an action to that belief. Where they described feelings or actions that may follow from it but never tied them, report it as partial with those words, so your text says them back and asks whether that is how the belief has affected them."
     listen_for: "A change in feeling or behaviour after they believed it, such as anxiety, withdrawing or avoiding."
     ready_when: "A feeling or a behaviour they identified themselves as following from the belief. Do not introduce a consequence they did not name."
     boundaries:
@@ -175,7 +175,10 @@ stages:
     if_unclear:
       - when: "nothing challenges the belief - \"Nothing suggests otherwise.\""
         reply: "Nothing comes to mind. Do you have enough information to know it is true?"
-      - when: "what supports the belief has been said and what challenges it has not been asked"
+      - id: challenge
+        # The stage whose words fill the reply's slot.
+        slot: belief
+        when: "what supports the belief has been said and what challenges it has not been asked"
         reply: "What might make you question the belief that <their belief, in their words>?"
     ask:
       directive: "What makes you believe this is true, and what makes you question it?"
@@ -185,6 +188,7 @@ stages:
     title: "E: Effective New Belief"
     intro: "E is for Effective New Belief."
     purpose: "Help them reach a more realistic and helpful understanding from what they have looked at, in their own words."
+    reach: "A plan or an action, such as raising it with someone, is not a new belief, so report effective as missing. When they answer effective with a plan, acknowledge the plan and ask for the new way of seeing it."
     listen_for: "A conclusion that separates what they know from what they assumed, such as not knowing why something happened and wanting more information."
     ready_when: "They have a more realistic and helpful understanding in their own words, or have looked at the belief and have no different one. If they do not reach a different belief, accept that and never make one up."
     boundaries:
@@ -207,7 +211,8 @@ actions. It does not try to convince them their belief is wrong. It helps them e
 their own conclusion.
 
 Source: the ABCDE framework document sent by the client on 2026-10-09 (Direct, Supportive and
-Reflective cadences, and the implementation requirements). One MANI personality, three
+Reflective cadences, and the implementation requirements). When it fits comes from the client's
+Framework Selection Cheat Sheet of 2026-10-13. One MANI personality, three
 communication styles, one ABCDE methodology, and a conversation that remembers what the person has
 already said. Each letter and its name is said when the stage is reached. A stage the conversation
 already answers is said back with what they said for it and confirmed once, never asked again. It

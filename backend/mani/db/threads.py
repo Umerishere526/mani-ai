@@ -195,7 +195,7 @@ select
                                                    as recent_crisis,
   (select um.memory from admin.user_memory um
     where um.user_id = t.user_id)                  as memory
-from (select {COLUMNS}, understanding from public.threads
+from (select {COLUMNS}, understanding, check_at_message_count from public.threads
        where id = $1 and user_id = $2 and deleted_at is null) t
 """
 
@@ -248,6 +248,8 @@ class ThreadUpdates:
     stages_known: dict | None = None
     # What Mani understands of them, set only when this turn's merge changed it.
     understanding: dict | None = None
+    # When Mani's check of its understanding was made, set only on the turn whose reply is one.
+    check_at_message_count: int | None = None
 
     def __bool__(self) -> bool:
         # Each optional field is tested for presence, not for truth. A field whose
@@ -263,6 +265,7 @@ class ThreadUpdates:
             or self.conversation_style is not None
             or self.stages_known is not None
             or self.understanding is not None
+            or self.check_at_message_count is not None
         )
 
 
@@ -334,6 +337,13 @@ async def apply(
         await conn.execute(
             "update public.threads set understanding = $1::jsonb where id = $2 and user_id = $3",
             updates.understanding, thread_id, user_id,
+        )
+
+    if updates.check_at_message_count is not None:
+        # Its own column grant, to mani_service only (migration 023).
+        await conn.execute(
+            "update public.threads set check_at_message_count = $1 where id = $2 and user_id = $3",
+            updates.check_at_message_count, thread_id, user_id,
         )
 
     if updates.offer_frameworks:

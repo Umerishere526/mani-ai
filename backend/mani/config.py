@@ -55,10 +55,19 @@ class Settings(BaseSettings):
     openrouter_api_key: str = Field(default="", repr=False)
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     llm_timeout_seconds: float = 60.0
+    # The longest a chat reply may take in all. The timeout above bounds each wait for data, not the
+    # call: a provider that keeps the connection open sent a reply after 102 s (2026-10-14), past
+    # the chat tester's 90. A reply past this fails as "took too long", and a resend is safe.
+    chat_deadline_seconds: float = 30.0
 
     # Used when a prompt row names no model of its own.
     default_chat_model: str = "openai/gpt-6-luna"
     default_summary_model: str = "openai/gpt-6-luna"
+
+    # How much of a thread the model is shown, in characters of message content. Within it the
+    # whole thread is sent, so nothing said earlier has to be guessed into a store ahead of time
+    # (2026-10-13). Lowering it is the way back to a short window.
+    context_budget_chars: int = 40_000
 
     # How hard a reasoning model thinks before it answers. Sent only to models that read
     # it; the rest reject the key. Costs reasoning tokens on every turn at the output rate.
@@ -73,23 +82,28 @@ class Settings(BaseSettings):
     # rather than relying on a provider's default terms.
     openrouter_data_collection: Literal["deny", "allow"] = "deny"
 
-    # Pin the upstream provider and refuse fallbacks. Without this OpenRouter may route
-    # a conversation to any provider serving the model, under whatever terms that
-    # provider applies. Defaults carried from the previous system's provider row; a
-    # prompt row's `routing` column overrides them when it needs to.
-    openrouter_provider_order: list[str] = Field(
+    # The only companies a conversation may go to. Without this OpenRouter may route it to any
+    # provider serving the model, under whatever terms that provider applies. A base slug
+    # matches every region of that provider and never a tier endpoint such as `openai/flex`.
+    # A prompt row's `routing` column overrides these when it needs to.
+    openrouter_providers: list[str] = Field(
         default_factory=lambda: ["azure", "openai"]
     )
-    # A turn that cannot reach Azure goes to OpenAI rather than failing. data_collection
-    # stays "deny" on the fallback, so training use is refused there too, but the request
-    # is processed by a different company - which is a data protection question, not only
-    # an availability one.
+    # Among those, the fastest endpoint by OpenRouter's recent measurements goes first. A
+    # pinned order sent turns to whichever endpoint it named, however slow it was at the time,
+    # and two of the three Azure regions had a tail over two minutes (2026-10-14).
+    openrouter_sort: Literal["latency", "throughput", "price"] = "latency"
+    # A turn the first endpoint cannot serve goes to the next rather than failing.
+    # data_collection stays "deny" on every one, so training use is refused there too, but
+    # either company may process the request - a data protection question, not only an
+    # availability one.
     openrouter_allow_fallbacks: bool = True
 
     def routing(self, overrides: dict | None = None) -> dict:
         """OpenRouter `provider` options for a call, with per-prompt overrides applied."""
         base = {
-            "order": self.openrouter_provider_order,
+            "only": self.openrouter_providers,
+            "sort": self.openrouter_sort,
             "allow_fallbacks": self.openrouter_allow_fallbacks,
             "data_collection": self.openrouter_data_collection,
         }
@@ -129,11 +143,6 @@ class Settings(BaseSettings):
 
     # When false the crisis panel still appears but the user can keep chatting.
     crisis_blocks_chat: bool = True
-
-    # Pauses the first offer window, for conversation testing: the first offer may come from
-    # the first message and is never due, so the model alone decides when. Off by default,
-    # because the client rejected an offer on the first message (R1).
-    pause_first_offer_window: bool = False
 
     # Paid replies one person may get in 24 hours. 0 turns it off. muhammad's number is 300,
     # off for now so testing is not capped; set it before real traffic. Only turns that call
