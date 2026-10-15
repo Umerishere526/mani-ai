@@ -9,26 +9,19 @@ from mani.chat import repairs
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
 from mani.chat.safety import normalize
 from mani.db.threads import TurnContext
+from mani.llm.schema import WorkingRead
 from mani.models.rows import ENDING_STAGES, Framework, Message, MessageRole, TechniqueOutcome
 
-# How many messages must pass before a technique may be offered again.
-# After "Keep chatting", three of Mani's replies before it may check again - the same
-# framework or a different one, whichever fits now (muhammad, 2026-09-24).
-COOLDOWN_AFTER_DECLINE = 6
-
-# No fixed count: a framework is offered as soon as it fits, from the person's first message
-# (muhammad, 2026-10-10). When it has not offered by then the closest fit is due, with Keep
-# chatting beside it: by the fourth message in Direct, which gets to the heart of it sooner, by
-# the sixth in Supportive and Reflective, which may take more turns to hear the person out.
-# Counted in the person's own messages.
-CLOSEST_FIT_AFTER = 4
-CLOSEST_FIT_AFTER_GENTLE = 6
-# After "Keep chatting" a confident offer may come back after two more exchanges; the closest
-# fit waits the full COOLDOWN_AFTER_DECLINE.
-CLEAR_COOLDOWN_AFTER_DECLINE = 4
-# The greeting, the style they tapped, and that style's opener.
-OPENING_MESSAGES = 3
+# How many messages must pass before a technique may be offered again. After "Keep chatting"
+# no offer comes in that reply or the two after it - the same framework or a different one,
+# whichever fits then (muhammad, 2026-09-24). After a finished framework the wait is longer.
+# The first offer never waits.
+COOLDOWN_AFTER_DECLINE = 4
 COOLDOWN_AFTER_COMPLETE = 45
+
+# How many replies may ask one stage before the questions move on, whatever was answered. A
+# stage is a step, not an exam: a person who cannot answer it is never asked it a third time.
+MAX_STAGE_ASKS = 2
 
 # The default when neither the conversation nor the profile has chosen a style yet.
 # `conversation_style` is set per-thread by PATCH /v1/threads/{id} and wins over
@@ -41,12 +34,44 @@ RECENT_OPENERS_WORDS = 2
 # How many of Mani's own past replies to surface. Small on purpose: this is a nudge against
 # an immediate repeat, not a transcript.
 RECENT_OPENERS_WINDOW = 3
+# How many of Mani's own recent questions are shown back to it. The model cannot count what it
+# has asked, so asking the same thing in new words ran for several turns (2026-10-13: 33 of 36
+# scripted conversations); seen in front of it, a question already asked is not asked again.
+RECENT_QUESTIONS_WINDOW = 4
 
 
 def _opener(text: str) -> str:
     """The first couple of words of a reply, lowercased - enough to name a repeated opening
     without exposing the reply itself in [ctx]."""
     return " ".join(text.split()[:RECENT_OPENERS_WORDS]).lower()
+
+def _closing_question(text: str) -> str | None:
+    """The last question a reply asked, as written, or None when it asked nothing."""
+    asked = re.findall(r"[^.!?\n]*\?", text)
+    return " ".join(asked[-1].split()) if asked else None
+
+
+# How much of what they said back is shown beside each question: enough to carry the answer, not
+# their whole message again.
+ANSWER_SNIPPET_CHARS = 90
+
+
+def _asked_and_answered(history: list[Message]) -> list[str]:
+    """Mani's last few closing questions, each followed by what they typed in reply. The newest
+    question has no reply in `history`: it is the message being answered this turn, which the
+    model already has in front of it. A question answered with a button shows no answer: what
+    they typed after the tap answers the next question, not this one."""
+    pairs: list[str] = []
+    for position, message in enumerate(history):
+        question = _closing_question(message.content) if message.role is MessageRole.MANI else None
+        if not question:
+            continue
+        reply = next((m for m in history[position + 1 :] if m.role is MessageRole.USER), None)
+        typed = reply if reply and not reply.selected_prompt else None
+        said = disarm(" ".join(typed.content.split()))[:ANSWER_SNIPPET_CHARS] if typed else None
+        pairs.append(f'{question} (they said: "{said}")' if said else question)
+    return pairs[-RECENT_QUESTIONS_WINDOW:]
+
 
 _CTX_BLOCK = re.compile(r"^\[ctx\].*?\[/ctx\]\s*", re.DOTALL)
 
@@ -103,19 +128,6 @@ def cooldown_for(outcome: TechniqueOutcome) -> int:
     )
 
 
-def clear_cooldown_for(outcome: TechniqueOutcome) -> int:
-    return (
-        COOLDOWN_AFTER_COMPLETE
-        if outcome is TechniqueOutcome.ACCEPTED
-        else CLEAR_COOLDOWN_AFTER_DECLINE
-    )
-
-
-def _their_messages(ctx: TurnContext) -> int:
-    """How many messages the person has sent. The reply to their Nth is written at 3 + 2(N - 1)."""
-    return (ctx.thread.message_count - OPENING_MESSAGES) // 2 + 1
-
-
 def clarification_used(history: list[Message] | None) -> bool:
     """Whether Mani has already asked the client's one-time clarifying question in this
     conversation. Read from history rather than a stored flag, so it holds even if a process
@@ -128,34 +140,14 @@ def clarification_used(history: list[Message] | None) -> bool:
 
 
 def cooldown_passed(ctx: TurnContext) -> bool:
-    """Whether a confident offer may be made yet: [ctx] reports it, repairs.apply enforces it.
-    The first offer never waits; only one after an earlier offer does."""
+    """Whether an offer may be made yet: the first never waits; after Keep chatting none comes
+    in that reply or the two after it. [ctx] reports it, repairs.apply enforces it."""
     technique = ctx.technique
     if technique is None:
         return True
-    return ctx.thread.message_count - technique.at_message_count >= clear_cooldown_for(
-        technique.outcome
-    )
-
-
-def closest_fit_ok(ctx: TurnContext, *, urgent: bool = False) -> bool:
-    """Whether the closest fit may be offered when nothing fits well."""
-    technique = ctx.technique
-    if technique is None:
-        return urgent or _their_messages(ctx) >= _closest_fit_after(ctx)
     return ctx.thread.message_count - technique.at_message_count >= cooldown_for(
         technique.outcome
     )
-
-
-def closest_fit_due(ctx: TurnContext) -> bool:
-    """The first offer has not come in the turns this style allows: the closest fit is owed now."""
-    return ctx.technique is None and _their_messages(ctx) >= _closest_fit_after(ctx)
-
-
-def _closest_fit_after(ctx: TurnContext) -> int:
-    """The person's message by which the closest fit is owed, in the style in force."""
-    return CLOSEST_FIT_AFTER if resolve_style(ctx) == "direct" else CLOSEST_FIT_AFTER_GENTLE
 
 
 def with_rewrite_notes(prefix: str, reasons: list[str]) -> str:
@@ -184,15 +176,12 @@ def resolve_style(ctx: TurnContext) -> str:
 # this turn: a vague reply carries the vague guidance and nothing about being heard. Keeping the
 # meaning beside the value is also what keeps the two from drifting apart, which they did while
 # the meanings lived in response_format.md (2026-10-08).
-_FIT_PLAINLY = "Offer it plainly, the way you would one that fits exactly."
 _MEANING: dict[str, str | dict[str, str]] = {
     "conversation_style": {
         "direct": (
             "Direct, for the whole conversation. Clear, concise and focused, never cold, abrupt, "
-            "transactional or interrogative. Most replies are just the question; never open by "
-            "restating what they said. A few plain words of your own come first only after "
-            "something painful or new. Get to the heart of it quickly, so the right set of "
-            "questions can come as soon as it fits."
+            "transactional or interrogative. A short line of your own that shows you got the "
+            "point, then the question, never their sentence handed back. Get to the heart of it."
         ),
         "supportive": (
             "Supportive, for the whole conversation. Warm, understanding and encouraging. A brief "
@@ -207,20 +196,19 @@ _MEANING: dict[str, str | dict[str, str]] = {
     },
     "conversation_phase": {
         "understanding": (
-"nothing has been offered yet. Your questions come from listening, the way a "
-            "specialist listens. In reasoning, first write what they have told you, then choose "
-            "the one part of it that matters most to them, the part they gave the most weight or "
-            "said last. If you do not know what happened in that part, ask once, in a few words. "
-            "Once you do, stop asking what happened and ask about something real and present in "
-            "it that they have not said yet, in their words: what they have noticed since, or how "
-            "they are with it today. Never ask for something their message already answers, "
-            "including why they think something when they said what led them to it. Never a hypothetical such as what would it mean or what would it be like if. "
-            "Asking how something they said is affecting them is fine, in their words. Never tell "
-            "them what they feel. One short question, about ten words, "
-            "one thing at a time, in plain everyday words, no harder than the last. No two-part "
-            "questions, no menu of choices, no advice and no suggestion hidden in a question. "
-            "What they say about how it is for them shows which set fits. As soon as one fits, "
-            "offer it."
+            "nothing has been offered yet. Work out what is going on for them. In reasoning, "
+            "write what they have told you, then what you think is underneath if they have given "
+            "you enough to build on, then the one thing it would help most to know next. Ask the "
+            "one question a thoughtful listener would ask here, about the situation, the feeling, "
+            "what it means to them, or what they do or hope for, whichever you know least. When "
+            "they have said almost nothing, ask one gentle open question and make no guess yet. "
+            "Say what you make of it before you ask only once you have something to say, as a "
+            "possibility, and put a choice between two readings only when both come from what "
+            "they said and the answer would tell you something you need. Never ask for something "
+            "their message already answers, never a hypothetical such as what would it mean, and "
+            "never tell them what they feel as a fact. A set that fits is offered only when "
+            "another question would not change what you understand, and that is your next_move, "
+            "never a count of messages."
         ),
         "framework": "the questions are running, so follow the stage.",
         "talking": (
@@ -230,19 +218,19 @@ _MEANING: dict[str, str | dict[str, str]] = {
     },
     "question_focus": {
         "the heart of it": (
-            "ask about the one part that matters most to them: what they have noticed since, or "
-            "how they are with it now, in a few plain words, never what they already said. Never dig for more facts about the "
-            "event or the other people in it."
+            "your open question is about what they want and what is in their way: what they would "
+            "want to be different, or what they have already tried. Plain and short, never more "
+            "facts about the event for their own sake."
         ),
         "how it is for them": (
-            "ask gently how they are with that one part today, in their words, so they can find "
-            "the word for it themselves, never what made them think it. Once their concern is "
-            "clear, never ask what is at stake."
+            "your open question is about how this particular thing is for them: what it has "
+            "changed in their days or their work, or what they make of how the other person acts. "
+            "Gently, in their words, about the particulars. Never a general how is this affecting "
+            "you, which the feeling they named already answers."
         ),
         "what sits behind it": (
-            "ask what sits behind that one part, why it matters to them or what it says to them, "
-            "in plain words, never what made them think it. Never ask what is at stake, and never "
-            "the same question twice in other words."
+            "your open question is about meaning: what the feeling says to them, or why it matters "
+            "as much as it does. In plain words, and never the same question in other words."
         ),
     },
     "clarification_available": {
@@ -262,17 +250,13 @@ _MEANING: dict[str, str | dict[str, str]] = {
         ),
     },
     "cooldown_passed": {
-        "yes": "an offer may be made in this reply, if one fits.",
+        "yes": (
+            "an offer may be made in this reply, when one fits and another question would not "
+            "change what you understand."
+        ),
         "no": "offer nothing in this reply.",
     },
     "since_last": "how many messages have passed since the last offer.",
-    "closest_fit": {
-        "due": (
-            "you have talked for several replies without offering, so offer the set that fits best "
-            f"now. {_FIT_PLAINLY}"
-        ),
-        "ok": f"you may offer the set that fits best. {_FIT_PLAINLY}",
-    },
     "this_thread": (
         "what was last offered in this conversation and how it went. One they declined may come "
         "back once the cooldown has passed, if it still fits. One they just finished may not. "
@@ -296,6 +280,46 @@ _MEANING: dict[str, str | dict[str, str]] = {
         ),
     },
     "recent_styles": "the shapes of your last few replies. A shape may come back.",
+    "working_read": (
+        "what you made of them as of your last reply, slot by slot in the lines below. Whatever a "
+        "read_ line holds is known: never ask for it again, in any words. read_feeling "
+        "is their own word for how they feel, and it stays part of the read: tie it to what in "
+        "their situation explains it when that helps, and bring it back when it does, not in every "
+        "reply. read_since is how long it has gone on, as they said it; when it says not said, "
+        "never assume it is recent and never add today or right now, and ask whether it is new or "
+        "has been going on a while only when that would change the read. read_impact is what it "
+        "is doing to them, read_response what they do about it and read_wants what they hope "
+        "for, each only as they said it. A slot that is missing is something to listen for, "
+        "never a question to put because it is empty: ask for one only when having it would "
+        "change what you do next, one at a time, in plain words. read_underneath and "
+        "read_unknown are yours and may be wrong. Take them further with what they just said, "
+        "narrow them where they ruled a reading out, drop them where they said you are wrong. "
+        "Never start a fresh read, and never open as though this turn were the first. When they "
+        "answer with little, such as everything or I don't know, the read stays where it was, so "
+        "go one layer under it rather than putting the same two readings to them again."
+    ),
+    "read_so_far": {
+        "nothing yet": (
+            "you have no read of them yet, so this is where you start. If what they have said is "
+            "only a feeling or a few words, ask one gentle open question about what is behind it "
+            "and make no guess. If they have told you a situation, a person or an event, you have "
+            "something to build on and may say what you make of it, as a possibility."
+        ),
+    },
+    "support_check": {
+        "yes": (
+            "you have a read of what is going on and have not yet asked whether they want to be "
+            "heard or want help working it out. Ask it once, plainly and in your own words, when "
+            "it fits, and set support to asked in that reply. Never again, and never when they "
+            "have already said which."
+        ),
+    },
+    "asked_and_answered": (
+        "the questions you asked in your last few replies, newest last, each with what they said "
+        "back. Each one is spent: do not ask it again, and do not ask it in other words, which is "
+        "the same question. What they said back is known. Take it, and if they answered little or "
+        "declined, go one layer under it to something you have not asked."
+    ),
     "recent_openers": (
         "the first words of your last few replies. Do not open your new reply the same way."
     ),
@@ -317,9 +341,21 @@ _MEANING: dict[str, str | dict[str, str]] = {
         "question already in this style, so ask what it asks, in their words, about their "
         "situation, never word for word."
     ),
+    "stage_asked": {
+        "twice": (
+            "you have asked this stage twice. Take what they gave you, even partial, loose or "
+            "I don't know, and ask the next stage now."
+        ),
+    },
+    "said_before_yes": (
+        "what they told you before saying yes, in their words. Read every stage against it "
+        "first: a stage it answers is said back as a possibility and checked, as stage_note "
+        "says; a stage it partly answers asks only for the gap."
+    ),
     "later_stage": (
         "a stage after the next one, shown only so you can tell whether what they have already "
-        "told you meets it. When it does, skip it too."
+        "told you answers it. When it does, that stage is checked with them when you reach it, "
+        "one stage in a reply."
     ),
     "after_framework_question": (
         "they kept chatting after the questions ended and are still on the same issue. Reflect "
@@ -354,7 +390,6 @@ def build(
     safety_concern: bool = False,
     offer_waiting: bool = False,
     framework_starting: bool = False,
-    urgent: bool = False,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -399,7 +434,13 @@ def build(
     else:
         phase = "talking"
     lines += _line("conversation_phase", phase)
-    if not running and not clarification_used(history):
+    if not running and not safety_concern and not (ctx.summary and ctx.summary.working_read):
+        lines += _line("read_so_far", "nothing yet")
+    # The client's focus line is for before Mani has any reading of them. Once it has one, the
+    # line restarts the conversation instead of moving it on ("work and my life and everything"
+    # was answered with "What would you like us to focus on today?", 2026-10-13).
+    has_read = bool(ctx.summary and ctx.summary.working_read)
+    if not running and not has_read and not clarification_used(history):
         lines += _line("clarification_available", "yes")
     if not running:
         # What the question is about while no stage decides it (muhammad, 2026-09-24): said
@@ -415,12 +456,8 @@ def build(
 
     # Told to the model as it is enforced: a first offer used to read "yes" here whatever the
     # count, and the code then dropped what the model had been told it could do.
-    lines += _line("cooldown_passed", "yes" if cooldown_passed(ctx) else "no")
-    if not safety_concern and not running:
-        if closest_fit_due(ctx):
-            lines += _line("closest_fit", "due")
-        elif closest_fit_ok(ctx, urgent=urgent):
-            lines += _line("closest_fit", "ok")
+    offer_ok = cooldown_passed(ctx)
+    lines += _line("cooldown_passed", "yes" if offer_ok else "no")
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
         lines += _line("since_last", since_last)
@@ -444,6 +481,9 @@ def build(
         styles = " → ".join(s.shape for s in ctx.recent_styles)
         lines += _line("recent_styles", styles)
 
+    if not safety_concern:
+        lines += _read_lines(ctx.summary.working_read if ctx.summary else None)
+
     # A separate signal from recent_styles: that is the abstract shape, this is the
     # literal words a reply opened with - two replies can vary in shape while still starting
     # the same way, which is what "recent_styles" alone cannot catch.
@@ -454,8 +494,22 @@ def build(
     if openers:
         quoted = ", ".join(f'"{o}"' for o in openers)
         lines += _line("recent_openers", quoted)
+    current = WorkingRead.stored(ctx.summary.working_read if ctx.summary else None)
+    if (
+        # Only once there is a picture and not just a topic: what it is doing to them. A
+        # conclusion alone is not enough ("everything" is one), and neither is what they do about
+        # it: "they make the changes" is a fact of the situation, and asking heard-or-help on it
+        # cut the questions off on the third reply. On the first mention of a feeling the question
+        # is an intake line, asked before Mani has anything to be helped or heard about.
+        current and current.situation and current.impact
+        and current.support == "not_asked" and not running and not safety_concern
+    ):
+        lines += _line("support_check", "yes")
+    asked = _asked_and_answered(history or [])
+    if asked and not running:
+        lines += _line("asked_and_answered", " | ".join(asked))
 
-    if candidate is not None and not safety_concern and cooldown_passed(ctx):
+    if candidate is not None and not safety_concern and offer_ok:
         # The client's description is not here: the backend adds it to the offer, and a
         # model given the text copied it, so offers showed it twice.
         offer = _stage_lines("offer", candidate, "offering", resolve_style(ctx))
@@ -467,11 +521,14 @@ def build(
             # They have just said yes. What they told Mani before this counts toward the first
             # stage; the note below says how to use it.
             lines += _line("framework_starting", "yes")
+            said = _said_before_yes(history or [])
+            if said:
+                lines += _line("said_before_yes", said)
         lines += _line("active_framework", framework.id)
         lines.append(f"framework_stages: {', '.join(framework.phases)}")
         stage = _stage_lines("stage", framework, technique.phase, style)
         # The turn they say yes, a first stage their words already answer (by its ready_when) is
-        # said back and the second stage's question is asked; otherwise the first is asked.
+        # said back as a possibility and checked with them; otherwise its question is asked.
         index = framework.phase_index(technique.phase)
         if offer_waiting:
             # The offering stage's question is the offer they have just typed past.
@@ -480,6 +537,15 @@ def build(
             index += 1
             stage = _stage_lines("stage", framework, framework.phases[index], style)
         lines.extend(stage)
+        if (
+            not framework_starting
+            and technique.stage_asks >= MAX_STAGE_ASKS
+            and framework.may_skip(technique.phase)
+        ):
+            lines += _line("stage_asked", "twice")
+        checks = (((framework.stages.get("offering") or {}).get("check") or {}).get(style)) or []
+        if checks:
+            lines.append(f"stage_check: {' | '.join(checks)}")
         lines.append(f"stage_note: {_stage_note(framework, style, starting=framework_starting)}")
         if 0 <= index < len(framework.phases) - 1:
             lines.extend(
@@ -493,30 +559,33 @@ def build(
     return "[ctx]\n" + "\n".join(lines) + "\n[/ctx]\n\n"
 
 
-# A stage their words already answer is left unasked, with no check and no mention, and so are the
-# stages after it that they answer too (muhammad, 2026-10-09). Which stages those are is the model's
-# reading of each stage's ready_when, so the guidance for the stages after the next is in the block.
+# A stage their words already answer is said back as a possibility and checked with them, one stage
+# in a reply (muhammad, 2026-10-14). Which stages those are is the model's reading of each stage's
+# ready_when, so the guidance for the stages after the next is in the block.
 _WALK_THE_STAGES = (
-    "Go through the stages in order, starting with this one. A stage that what they have already "
-    "told you, here or in the Conversation Context, meets by its stage_ready_when is skipped "
-    "without a word: never ask it, never check it with them, never say it is done. Do the same "
-    "for the next stage and for each later_stage, until you reach one that is not met. Ask that "
-    "stage's question, built from what they said in their own words so that it asks for the "
-    "missing thing, and report that stage in state.step even when it is several ahead. Write "
-    "this walk in stages_known first: for each stage, what they already said for it in their "
-    "short words, and its status. known is not asked. partial asks only for the gap. confirm "
-    "states what you have and asks whether it is right, only where the stage's own lines say to. "
-    "missing is asked. The question asks only for what the stage's known does not hold yet, so it "
-    "is precise: never ask again for a part they gave. Never say a stage's letter or name, and "
-    "never say a stage was skipped or is done. Ask the question in your own tone, as the "
-    "conversation flows, so it reads as the next natural thing to ask."
+    "Go through the stages in order, starting with this one. For each, work out what they have "
+    "already told you for it, here, in the read_ lines or in the Conversation Context. A stage you "
+    "have an answer for is not skipped and not asked for again: say what you understand for it, in "
+    "your own plain words from what they said, as a possibility using the stage_confirm pattern, "
+    "then check it with one of the stage_check lines, a different one each time, and set that "
+    "stage's status to confirm. Never put it as settled and never as something you knew already. "
+    "A stage you have nothing for is asked, built from what they said so that it asks for the "
+    "missing thing, with status missing. Only ever one stage in a reply, the first not yet "
+    "confirmed, and report it in state.step. Write this walk in stages_known first: for each "
+    "stage, what they already said for it in their short words, and its status. known means they "
+    "have confirmed it, so you go on to the next stage; confirm means you have an answer and are "
+    "checking it now; partial asks only for the gap; missing is asked. The stage's own label is "
+    "added for you ahead of your words, so never write it yourself. Never ask for a part they "
+    "gave. Say it in your own tone, as the next natural thing to say."
 )
 
 # A stage is a step, not an exam: it never needs complete or certain answers, and a person asked
 # the same thing a third time feels interrogated (live, 2026-10-08: five times running).
 _TWO_TRIES = (
-    "If you have already asked for this stage's thing twice, take what they gave you and move to "
-    "the next stage, unless stage_ready_when says to stay."
+    "A loose or partial answer is enough: when what they gave touches this stage's thing, ask at "
+    "most one more question for a fuller answer, then move on. If you have asked for this "
+    "stage's thing twice, or they said they do not know, take what they gave you and move to the "
+    "next stage."
 )
 
 # Mani keeps the chosen style inside a framework: the stage decides what is asked, the style
@@ -544,6 +613,53 @@ _QUESTION_FOCUS = {
 }
 
 
+def _read_lines(stored: str | None) -> list[str]:
+    """The read carried from the last reply, one labelled line per slot, so the feeling they
+    named and how long it has gone on are in front of the model every turn. A read stored
+    before it had slots is shown as it was written. Disarmed: the slots hold their own words."""
+    if not stored:
+        return []
+    read = WorkingRead.stored(stored)
+    if read is None:
+        return _line("working_read", disarm(" ".join(stored.split())))
+    lines = _line("working_read", "carried from your last reply")
+    slots = (
+        ("read_situation", read.situation),
+        ("read_feeling", ", ".join(read.feeling) if read.feeling else "none they named"),
+        ("read_meaning", read.meaning),
+        ("read_since", read.since or "not said"),
+        ("read_impact", read.impact),
+        ("read_response", read.response),
+        ("read_wants", read.wants),
+        ("read_support", {"not_asked": None, "asked": "asked, not answered yet"}.get(
+            read.support, read.support)),
+        ("read_underneath", read.underneath),
+        ("read_unknown", read.unknown),
+    )
+    return lines + [f"{key}: {disarm(' '.join(str(value).split()))}" for key, value in slots if value]
+
+
+# Their own messages before the yes, put beside the stages on the turn the questions start, so
+# what they already said is judged against each stage rather than left far back in the history.
+SAID_BEFORE_YES_MESSAGES = 6
+
+
+def _said_before_yes(history: list[Message]) -> str:
+    """Their last few messages before they said yes, oldest first, each disarmed like any of
+    their words placed in the block.
+
+    A tap is stored as a message whose content is the label, so the buttons they pressed are
+    left out: "Direct" and "Try it" are not things the person said about their situation, and
+    put beside the stages they read as if they were.
+    """
+    said = [
+        disarm(" ".join(m.content.split()))
+        for m in history
+        if m.role is MessageRole.USER and m.content.strip() and not m.selected_prompt
+    ]
+    return " | ".join(said[-SAID_BEFORE_YES_MESSAGES:])
+
+
 def _stage_note(framework: Framework, style: str, *, starting: bool) -> str:
     """How to take the stage in force: walk past what they already answered, then ask."""
     said = (
@@ -552,6 +668,11 @@ def _stage_note(framework: Framework, style: str, *, starting: bool) -> str:
         else "Put the question in terms of what they have told you, in their words; never send it bare. "
     )
     never = f"{framework.closing} is never skipped. " if framework.closing else ""
+    said += (
+        "The read_ lines are part of what they have already told you: read_situation answers an "
+        "event, read_meaning a belief, and read_impact and read_response what followed from it. "
+        "A stage they answer is checked with them and then gone on from, never asked for again. "
+    )
     return f"{said}{_WALK_THE_STAGES} {never}{_TWO_TRIES} {_IN_STYLE[style]}"
 
 
@@ -589,6 +710,9 @@ def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> l
     if stage.get("if_unclear"):
         rendered = " | ".join(f"if {e['when']}: {repairs.reply_for(e, style)}" for e in stage["if_unclear"])
         lines.append(f"{prefix}_if_unclear: {rendered}")
+    confirm = (stage.get("confirm") or {}).get(style)
+    if confirm:
+        lines.append(f"{prefix}_confirm: {confirm}")
     ask = (stage.get("ask") or {}).get(style)
     if ask:
         lines.append(f"{prefix}_ask: {ask}")

@@ -158,6 +158,56 @@ async def test_the_composed_read_returns_the_whole_turn(alice):
     assert ctx.summary.techniques_tried[0].name == "abcde"
 
 
+async def test_the_read_a_turn_writes_survives_the_summary_run_and_reads_back(alice):
+    """The turn and the background summary share one row and never a column. A summary run after
+    the read was written leaves it in place, and both readers of the row see it."""
+    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    read = '{"situation":"the client keeps changing requirements","feeling":["frustrated"]}'
+    await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates(working_read=read))
+    await summaries.upsert(
+        alice, thread.id, ALICE, summary="Talked about work.", techniques_tried=[],
+        summarized_through_message_id=None, summarized_message_count=2)
+
+    assert (await summaries.get(alice, thread.id)).working_read == read
+    ctx = await threads.load_turn_context(alice, thread.id, ALICE)
+    assert ctx.summary.working_read == read and ctx.summary.summary == "Talked about work."
+
+
+async def test_stage_asks_count_the_replies_on_one_stage_of_one_framework(users):
+    """One more for each reply on the same stage of the same framework, back to one on a new stage
+    or a new framework's offer, which shares the stage name 'offering'."""
+    from mani.db import pool
+
+    # A second framework of the test's own, inactive, removed with everything that refers to it.
+    second = "test_second_framework"
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "insert into admin.frameworks (id, name, summary, body, phases, is_active) "
+            "values ($1, 'Second', 's', 'b', '{offering}', false) on conflict (id) do nothing",
+            second,
+        )
+    try:
+        async with pool.as_user(claims_for(ALICE)) as alice:
+            thread, _ = await threads.create_or_reuse(alice, ALICE)
+
+            async def write(framework_id: str, phase: str) -> int:
+                await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates(
+                    technique=TechniqueState(
+                        thread_id=thread.id, framework_id=framework_id,
+                        outcome=TechniqueOutcome.ACCEPTED, phase=phase, at_message_count=2)))
+                return (await threads.load_turn_context(alice, thread.id, ALICE)).technique.stage_asks
+
+            assert await write("abcde", "activate") == 1
+            assert await write("abcde", "activate") == 2
+            assert await write("abcde", "belief") == 1
+            assert await write("abcde", "offering") == 1
+            assert await write(second, "offering") == 1
+    finally:
+        async with pool.as_admin() as conn:
+            await remove_test_users(conn, ALICE)
+            await conn.execute("delete from admin.frameworks where id = $1", second)
+
+
 async def test_a_conversation_style_survives_the_round_trip(alice):
     """The only thing that catches a missing column grant. `grant update (...)` in 001 is
     column-scoped, so a new column inherits nothing and fails at runtime with 42501 -
@@ -299,6 +349,15 @@ async def test_the_library_listing_is_the_whole_catalog_home_items_included(alic
             await conn.execute(
                 "delete from admin.exercises where id = any($1::uuid[])", [home, shelf]
             )
+
+
+async def test_completing_an_exercise_that_does_not_exist_records_nothing(alice):
+    """The id comes from the client. One the catalog never had is a request for nothing, not a
+    server error, and the rest of the request's transaction is still usable afterwards."""
+    from mani.db import exercises
+
+    assert await exercises.record_completion(alice, ALICE, uuid.uuid4()) is None
+    assert await exercises.list_completions(alice, ALICE) == []
 
 
 async def test_a_model_call_is_recorded_with_its_cost(users):

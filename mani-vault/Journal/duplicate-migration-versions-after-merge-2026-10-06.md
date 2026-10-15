@@ -19,3 +19,7 @@ Then `supabase db reset --local --yes --no-seed` on project `mani` (port 54342) 
 The hosted project (`heqenombgkihfeggrxqc`) had stopped at `010` and its content was last seeded on Oct 2. Live turns failed with `UndefinedColumnError` on `llm_calls.decision`, and live ran `gemini-3.1-flash-lite` while local ran `gemini-3.8-flash`. Fixed with `supabase db push` (011–017) and `scripts/seed.py` using `.env.hosted`'s `DATABASE_URL`. **A merge that touches `migrations/` or `content/` is not live until both are run against hosted.** Vercel only ships code.
 
 `SEMANTIC_ROUTER` was `true` in local `.env` and unset on Vercel (so `false`). That is a third source of local/live drift.
+
+By 2026-10-14 those branches were reverted and hosted was back to `001`–`010`, with none of the 011–017 columns: the
+`011` and `012` now in the repo (`technique_stage_asks`, `thread_summary_working_read`) are different files that reuse
+the numbers. See [[local-audit-before-merge-2026-10-14]].

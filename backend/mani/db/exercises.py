@@ -98,12 +98,20 @@ async def record_completion(
     user_id: uuid.UUID | str,
     exercise_id: uuid.UUID | str,
     helpful: bool | None = None,
-) -> Completion:
-    row = await conn.fetchrow(
-        "insert into public.exercise_completions (user_id, exercise_id, helpful) "
-        "values ($1, $2, $3) returning id, exercise_id, helpful, completed_at",
-        user_id, exercise_id, helpful,
-    )
+) -> Completion | None:
+    """None when the catalog has no such exercise. The insert runs in a savepoint so that case
+    leaves the caller's transaction usable."""
+    try:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                "insert into public.exercise_completions (user_id, exercise_id, helpful) "
+                "values ($1, $2, $3) returning id, exercise_id, helpful, completed_at",
+                user_id, exercise_id, helpful,
+            )
+    except asyncpg.ForeignKeyViolationError as missing:
+        if missing.constraint_name != "exercise_completions_exercise_id_fkey":
+            raise
+        return None
     return Completion.model_validate(dict(row))
 
 

@@ -9,13 +9,23 @@ from dataclasses import dataclass, field
 
 from mani.chat.greeting import (
     CLARIFICATION_QUESTIONS,
+    CONSENT_LINES,
     EXPLAIN_LABELS,
     KEEP_CHATTING_LABEL,
     TELL_ME_MORE_LABEL,
     TRY_IT_LABEL,
 )
 from mani.chat.techniques import OFFERING, Registry
-from mani.llm.schema import SHAPES, LibrarySection, Reply, SmartPrompt, Style
+from mani.llm.schema import (
+    SHAPES,
+    THEIR_SLOTS,
+    LibrarySection,
+    Reply,
+    SmartPrompt,
+    Style,
+    TechniqueState,
+    WorkingRead,
+)
 from mani.models.rows import ENDING_STAGES
 
 MAX_PROMPTS = 3
@@ -82,6 +92,51 @@ _INTERNAL_WORDS = re.compile(
     re.IGNORECASE,
 )
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
+
+
+def _their_word(word: str, said: str) -> bool:
+    """Whether a feeling word is one they used, allowing for its other endings: frustrated is
+    theirs when they wrote frustrating or frustration. Matched at the start of a word."""
+    word = word.strip().lower()
+    if not word:
+        return False
+    stem = word[: max(5, len(word) - 3)] if len(word) > 5 else word
+    return re.search(rf"\b{re.escape(stem)}", said) is not None
+
+
+def grounded_read(read: WorkingRead, user_texts: list[str]) -> tuple[WorkingRead, list[str]]:
+    """The read with every feeling word they did not use themselves taken out, and the words taken.
+
+    The read is carried to every later turn, so a feeling the model supplied once ("angry", when
+    they said frustrated) would be treated as theirs from then on. Checked against their own
+    messages only: what they said, not a list of what feelings are.
+    """
+    said = " ".join(user_texts).lower()
+    kept = [w for w in read.feeling if _their_word(w, said)]
+    dropped = [w for w in read.feeling if w not in kept]
+    return read.model_copy(update={"feeling": kept}), dropped
+
+
+def carried_read(previous: WorkingRead | None, read: WorkingRead) -> WorkingRead:
+    """The read with what they already told Mani kept wherever this one left it empty.
+
+    The stored read is replaced every turn, so a reply that sends a slot empty would otherwise
+    lose it, and the next turn would treat it as never said. What they said is kept until a read
+    says something else for it; Mani's own possibility (`underneath`, `unknown`) is this read's
+    to keep or drop. Once the heard-or-help question has been put, it is never not asked again.
+    """
+    if previous is None:
+        return read
+    update: dict[str, object] = {
+        slot: getattr(previous, slot)
+        for slot in THEIR_SLOTS
+        if not getattr(read, slot) and getattr(previous, slot)
+    }
+    if not read.feeling and previous.feeling:
+        update["feeling"] = previous.feeling
+    if read.support == "not_asked" and previous.support != "not_asked":
+        update["support"] = previous.support
+    return read.model_copy(update=update) if update else read
 
 
 def without_internal_words(text: str) -> str:
@@ -285,7 +340,26 @@ def _compose_offer(
         description = " ".join(framework.summary.split())
         if description in shown:
             description = ""
-    return "\n\n".join(p for p in (part, description, PERMISSION_QUESTIONS[style]) if p)
+    text = "\n\n".join(p for p in (part, description, PERMISSION_QUESTIONS[style]) if p)
+    # The stages come after the question, once: not when Tell me more has just shown them, and not
+    # when the last reply already listed them.
+    stages = ((framework.stages.get("offering") or {}).get("stage_list") or "") if framework else ""
+    if stages and not describe and stages.splitlines()[0] not in " ".join((last_mani_text or "").split()):
+        text = f"{text}\n\n{stages}"
+    return text
+
+
+def with_stage_label(text: str, label: str, consent: str | None) -> str:
+    """A stage's own label ahead of its question, with the consent line ahead of both when a
+    framework has just started. Each stage says what it is, so the person knows they are following
+    a framework (the client's document). The label is not added twice, and a consent line the model
+    wrote itself is replaced by this one so it is never said twice or after the label."""
+    body = text.strip()
+    if consent and body.startswith(consent):
+        body = body[len(consent):].lstrip()
+    if label not in body:
+        body = f"{label} {body}".strip()
+    return f"{consent}\n\n{body}" if consent else body
 
 
 def _offer_buttons(framework_id: str, *, explained: bool) -> list[SmartPrompt]:
@@ -320,6 +394,7 @@ def apply(
     name_said_before: bool = False,
     clarification_already_used: bool = False,
     offer_asked_about: bool = False,
+    stage_exhausted: bool = False,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again.
 
@@ -473,33 +548,70 @@ def apply(
 
     framework_id: str | None = None
     phase: str | None = None
-    if reply.state is not None:
-        if reply.state.technique not in registry:
-            notes.append(f"ignored state for unknown technique: {reply.state.technique}")
-        elif framework_running and reply.state.technique != current_framework_id:
+    state = reply.state
+    if (
+        state is None and framework_running and not accepted_this_turn
+        and current_framework_id is not None and current_phase is not None
+    ):
+        # Only a reply that records the framework writes its row, and the row counts the asks on
+        # a stage. A reply inside a running framework asks the stage in force whatever it reports.
+        state = TechniqueState(technique=current_framework_id, step=current_phase)
+        notes.append(f"took a reply with no state as asking {current_phase!r}")
+    if state is not None:
+        if state.technique not in registry:
+            notes.append(f"ignored state for unknown technique: {state.technique}")
+        elif framework_running and state.technique != current_framework_id:
             # Every framework shares stage ids like somatic and closing, so the transition
             # check alone would let a reply record a framework the person never accepted.
             notes.append(
-                f"ignored state for {reply.state.technique}, not the running one "
+                f"ignored state for {state.technique}, not the running one "
                 f"({current_framework_id})"
             )
         else:
-            framework_id = reply.state.technique
+            framework_id = state.technique
             # Accepting an offer this turn means the phase being left is the offering one,
             # whatever the stored row still says. What they told Mani before accepting may
             # answer the first stages too, so the reply may be asking one several stages in.
             previous = OFFERING if accepted_this_turn else current_phase
             transition = registry.validate_transition(
-                framework_id, previous, reply.state.step
+                framework_id, previous, state.step
             )
-            phase = registry.clamp(framework_id, previous, reply.state.step)
+            phase = registry.clamp(framework_id, previous, state.step)
             if not transition.ok:
                 notes.append(
-                    f"corrected phase {reply.state.step!r} to {phase!r} "
+                    f"corrected phase {state.step!r} to {phase!r} "
                     f"({transition.reason})"
                 )
             if phase is None:
                 framework_id = None
+            framework = registry.get(framework_id)
+            if (
+                stage_exhausted and framework_running and framework is not None
+                and phase == current_phase and framework.may_skip(phase)
+                and framework.phase_index(phase) + 1 < len(framework.phases)
+            ):
+                # Asked twice already, and even a redraft told so stayed: the questions move on,
+                # so their next answer is taken toward the next stage rather than a third ask.
+                phase = framework.phases[framework.phase_index(phase) + 1]
+                notes.append(f"moved past {current_phase!r}, already asked twice")
+                ask = ((framework.stages.get(phase) or {}).get("ask") or {}).get(conversation_style)
+                if ask and phase not in ENDING_STAGES:
+                    text = with_the_check_in(text, ask)
+                    notes.append(f"replaced a third ask of {current_phase!r} with {phase!r}")
+
+    if framework_running and framework_id is not None and phase is not None:
+        # A stage is named the first time it is asked, not on a re-ask: the phase has moved since the
+        # last reply, or the framework has just begun and the reply is its first stage.
+        before = OFFERING if accepted_this_turn else current_phase
+        named = registry.get(framework_id)
+        label = (((named.stages if named else None) or {}).get(phase) or {}).get("label")
+        if label and phase != before:
+            labelled = with_stage_label(
+                text, label, CONSENT_LINES.get(conversation_style) if accepted_this_turn else None
+            )
+            if labelled != text:
+                notes.append(f"put the stage's own label ahead of its question: {phase}")
+                text = labelled
 
     at_the_end = framework_running and (phase or current_phase) in ENDING_STAGES
     if kept and not at_the_end and not any(p.technique for p in kept):

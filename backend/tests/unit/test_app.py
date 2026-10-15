@@ -3,13 +3,14 @@
 
 import logging
 
+import asyncpg
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
 
-from mani.errors import ErrorCategory, ServiceError
 from main import create_app
+from mani.errors import ErrorCategory, ServiceError
 
 
 @pytest.fixture
@@ -129,6 +130,23 @@ def test_operation_ids_are_unique_and_readable(client):
     assert "send" in ids and "list_threads" in ids
 
 
+@pytest.mark.parametrize(
+    ("constraint", "status"),
+    [("threads_user_id_fkey", 401), ("messages_thread_id_fkey", 500)],
+)
+def test_only_a_write_for_an_account_that_is_gone_is_told_to_sign_in(constraint, status):
+    """A missing account is the person's to fix by signing in again. Any other missing row is a
+    fault of ours, and must not be passed off to them as an expired session."""
+    app = create_app()
+
+    @app.post("/write")
+    def write():
+        raise asyncpg.ForeignKeyViolationError.new({"C": "23503", "M": "violates", "n": constraint})
+
+    response = TestClient(app, raise_server_exceptions=False).post("/write")
+    assert response.status_code == status
+
+
 def test_internal_message_is_not_sent_to_the_client(client):
     app: FastAPI = client.app
 
@@ -139,3 +157,63 @@ def test_internal_message_is_not_sent_to_the_client(client):
     response = client.get("/leak")
     assert response.status_code == 500
     assert "secret" not in response.text
+
+
+def test_an_unhandled_exception_still_gets_the_shaped_error(client):
+    """FastAPI's default for anything that isn't caught is `{"detail": "Internal Server
+    Error"}` - a shape no client here branches on."""
+    app: FastAPI = client.app
+
+    @app.get("/crash")
+    def crash():
+        raise ValueError("boom, not a ServiceError")
+
+    response = TestClient(app, raise_server_exceptions=False).get("/crash")
+    assert response.status_code == 500
+    assert response.json() == {
+        "error": {
+            "category": "unknown",
+            "message": "Something went wrong on our end. Please try again.",
+            "retryable": True,
+        }
+    }
+
+
+def test_a_service_error_is_not_caught_by_the_catch_all(client):
+    """The catch-all is registered last; FastAPI must still dispatch to the more
+    specific ServiceError handler first."""
+    app: FastAPI = client.app
+
+    @app.get("/boom")
+    def boom():
+        raise ServiceError("provider refused the request", ErrorCategory.RATE_LIMITED)
+
+    response = client.get("/boom")
+    assert response.json()["error"]["category"] == "rate_limited"
+
+
+def test_a_validation_error_is_not_caught_by_the_catch_all(client):
+    app: FastAPI = client.app
+
+    class Body(BaseModel):
+        n: int
+
+    @app.post("/probe2")
+    def probe2(b: Body):
+        return {"ok": True}
+
+    response = client.post("/probe2", json={"n": "not-a-number"})
+    assert response.json()["error"]["category"] == "invalid_request"
+
+
+def test_a_foreign_key_violation_is_not_caught_by_the_catch_all():
+    app = create_app()
+
+    @app.post("/write2")
+    def write2():
+        raise asyncpg.ForeignKeyViolationError.new(
+            {"C": "23503", "M": "violates", "n": "threads_user_id_fkey"}
+        )
+
+    response = TestClient(app, raise_server_exceptions=False).post("/write2")
+    assert response.json()["error"]["category"] == "unauthenticated"

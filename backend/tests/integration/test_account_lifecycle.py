@@ -183,6 +183,12 @@ def test_signup_through_deletion_is_one_working_system(gotrue, model):
             deletion = client.delete("/v1/account", headers=headers)
             assert deletion.status_code == 204
 
+            # The token outlives the account until it expires. What it writes now belongs to
+            # no one, so it is told to sign in rather than handed a server error.
+            after = client.post("/v1/threads", json={}, headers=headers)
+            assert after.status_code == 401
+            assert after.json()["error"]["category"] == "unauthenticated"
+
         for table in (
             "public.profiles", "public.threads", "public.messages", "admin.user_memory",
         ):

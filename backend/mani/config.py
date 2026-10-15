@@ -168,9 +168,14 @@ class Settings(BaseSettings):
         at CORS silently only ever allowing localhost. Failing at import is the difference
         between a deploy that never goes live and one that looks healthy while serving
         nothing.
+
+        Debug mode is refused for the opposite reason: everything works, and every reply also
+        carries the model's reasoning about the person.
         """
         if self.environment != "production":
             return self
+        if self.ai_debug_mode:
+            raise ValueError("production refuses AI_DEBUG_MODE=true")
         missing = [
             name
             for name, value in (

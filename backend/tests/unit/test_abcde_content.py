@@ -56,7 +56,9 @@ def test_the_event_stage_confirms_only_a_possible_event_in_each_style(abcde):
     assert all(reply.endswith("?") for reply in branch["reply"].values())
 
 
-def test_no_stage_letter_or_name_is_sent_for_the_chat_to_repeat(abcde):
+def test_the_stage_label_is_added_by_the_backend_and_never_sent_for_the_chat_to_write(abcde):
+    """The label ahead of each stage's question is put there by repairs.with_stage_label, so the
+    model is not sent it to repeat or to leave out."""
     framework = as_framework(abcde)
     block = "\n".join(
         context._stage_lines("stage", framework, "activate", "direct")
@@ -64,7 +66,33 @@ def test_no_stage_letter_or_name_is_sent_for_the_chat_to_repeat(abcde):
     )
     assert "title" not in block and "label" not in block and "Activating Event" not in block
     note = context._stage_note(framework, "direct", starting=True)
-    assert "Never say a stage's letter or name" in note and "skipped without a word" in note
+    assert "added for you ahead of your words" in note and "never write it yourself" in note
+
+
+def test_every_stage_has_the_clients_label_and_the_offer_lists_the_five_stages(abcde):
+    labels = {stage: abcde["stages"][stage]["label"] for stage in abcde["phases"] if stage != "offering"}
+    assert labels == {
+        "activate": "A is for Activating Event.", "belief": "B is for Belief.",
+        "consequence": "C is for Consequences.", "dispute": "D is for Dispute.",
+        "effective": "E is for Effective New Belief.",
+    }
+    listed = abcde["stages"]["offering"]["stage_list"]
+    assert listed.splitlines()[0] == "There are five stages in ABCDE:"
+    assert [line for line in listed.splitlines() if line.startswith("- ")] == [
+        "- A: Activating Event", "- B: Belief", "- C: Consequences", "- D: Dispute",
+        "- E: Effective New Belief",
+    ]
+
+
+def test_a_known_stage_is_confirmed_in_a_pattern_per_style_and_the_check_is_varied(abcde):
+    for stage in ("activate", "belief", "consequence"):
+        confirm = abcde["stages"][stage]["confirm"]
+        assert set(confirm) == set(STYLES)
+        assert all("<" in line and "?" not in line for line in confirm.values())
+    checks = abcde["stages"]["offering"]["check"]
+    assert set(checks) == set(STYLES)
+    for style in STYLES:
+        assert len(set(checks[style])) >= 4 and all(line.endswith("?") for line in checks[style])
 
 
 def test_the_offer_follows_the_clients_pattern_with_a_slot_for_their_situation(abcde):

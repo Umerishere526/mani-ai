@@ -1,55 +1,151 @@
 {
-  "workplace_boundaries": {
-    "source": "Loli's testing, 2026-10-09, the same messages in all three styles",
-    "lines": [
-      "I keep agreeing to take on more work even when I already have too much to do. I know I need to start saying no, but I'm worried about how my manager will react.",
-      "I'm afraid he'll think I'm not committed to my job or that I can't handle my responsibilities.",
-      "I'm worried it could affect how he sees me professionally and whether he considers me for future opportunities.",
-      "He hasn't actually reacted negatively before. I think I'm just afraid of what might happen if I start saying no."
-    ]
-  },
-  "job_decision": {
-    "source": "Loli's testing, 2026-10-08",
-    "lines": [
-      "I'm facing an important decision, and I keep going back and forth. Every time I think I've made up my mind, I start questioning myself again. I'm frustrated because I don't understand why I can't just decide.",
-      "I'm trying to decide whether to accept a new job opportunity or stay where I am. There are good reasons for both, and I'm afraid of making the wrong choice.",
-      "The new job offers better pay and more responsibility, but I've been at my current company for years. I know the people, I'm comfortable there, and I'm worried I might regret leaving"
-    ]
-  },
-  "big_brother": {
-    "source": "muhammad's testing, 2026-10-09",
-    "lines": [
-      "i think i am not good enough",
-      "i think i am not good enough as a big brother as i was not able to provide for my little brother",
-      "i mean i wanted to be aperfect role model for him but i failed i am not someone good enough he can look upto"
-    ]
-  },
-  "embarrassed_at_work": {
-    "source": "muhammad's testing, 2026-10-09",
-    "lines": [
-      "i was embarassed in front of the whole office",
-      "my manger did this to me",
-      "he blamed his wrong work on me and insulted me which made me feeling like this",
-      "i have been constantly in a state i cant describe now i fear how would i face my colleagues",
-      "idk yet"
-    ]
-  },
-  "manager_threat": {
-    "source": "muhammad's testing, 2026-10-09: Mani asked again for what they had told it",
-    "lines": [
-      "i feel embarassed, my manager critisized my work infront of everyone",
-      "he critisized my work in front o f thw hole office",
-      "It has been happening for quite a bit time but this time it was way too much. He insulted me and said I would be fired.",
-      "No, but he seems like he wants to get me fired because he's been constantly pointing out errors in my work that are even irrelevant or small mistakes. And this time he had me feel too embarrassed",
-      "Nothing much, it's just that I was too embarrassed and I have this feeling that my colleagues will be laughing at me because it was a too embarrassing moment. It had never been done before to anyone, so that's my concern right now."
-    ]
-  },
-  "left_out_of_meetings": {
-    "source": "muhammad's testing, 2026-10-09",
-    "lines": [
-      "i have been left out of a few important meeting lately, i am starting to wonder if the role on the team is changing.",
-      "just told you not being invited to meetingd",
-      "i think i might be getting fired"
-    ]
-  }
+ "workplace_boundaries": {
+  "source": "Loli's testing, 2026-10-09, the same messages in all three styles",
+  "lines": [
+   "I keep agreeing to take on more work even when I already have too much to do. I know I need to start saying no, but I'm worried about how my manager will react.",
+   "I'm afraid he'll think I'm not committed to my job or that I can't handle my responsibilities.",
+   "I'm worried it could affect how he sees me professionally and whether he considers me for future opportunities.",
+   "He hasn't actually reacted negatively before. I think I'm just afraid of what might happen if I start saying no.",
+   "It's been like this for about a year, and every time I say yes I regret it by the evening.",
+   "Last month I skipped lunch for a week to finish things that weren't even mine.",
+   "yes, let's try it",
+   "Honestly nothing he's said, I think it's just me assuming the worst.",
+   "I don't know, maybe it is a more realistic way to think about it instead of expecting the worst.",
+   "chest",
+   "a bit calmer actually"
+  ]
+ },
+ "job_decision": {
+  "source": "Loli's testing, 2026-10-08",
+  "lines": [
+   "I'm facing an important decision, and I keep going back and forth. Every time I think I've made up my mind, I start questioning myself again. I'm frustrated because I don't understand why I can't just decide.",
+   "I'm trying to decide whether to accept a new job opportunity or stay where I am. There are good reasons for both, and I'm afraid of making the wrong choice.",
+   "The new job offers better pay and more responsibility, but I've been at my current company for years. I know the people, I'm comfortable there, and I'm worried I might regret leaving",
+   "My partner says it's my call, which somehow makes it harder.",
+   "I think I'm scared I'll regret whichever one I pick."
+  ]
+ },
+ "big_brother": {
+  "source": "muhammad's testing, 2026-10-09",
+  "lines": [
+   "i think i am not good enough",
+   "i think i am not good enough as a big brother as i was not able to provide for my little brother",
+   "i mean i wanted to be aperfect role model for him but i failed i am not someone good enough he can look upto",
+   "he's eleven, and he asked me for help with something and i just couldn't afford it",
+   "i feel like if i were better he wouldn't have to go without",
+   "yeah okay let's try it",
+   "i guess not being able to afford what he needs makes me feel like i'm failing him, like i'm not enough",
+   "i stopped picking up his calls as much because i feel too guilty to talk to him",
+   "he never actually said i let him down, he just asked for help like he always does",
+   "i don't know, maybe being there for him matters more than being able to buy him things",
+   "head",
+   "a little lighter, yeah"
+  ]
+ },
+ "embarrassed_at_work": {
+  "source": "muhammad's testing, 2026-10-09",
+  "lines": [
+   "i was embarassed in front of the whole office",
+   "my manger did this to me",
+   "he blamed his wrong work on me and insulted me which made me feeling like this",
+   "i have been constantly in a state i cant describe now i fear how would i face my colleagues",
+   "idk yet"
+  ]
+ },
+ "manager_threat": {
+  "source": "muhammad's testing, 2026-10-09: Mani asked again for what they had told it",
+  "lines": [
+   "i feel embarassed, my manager critisized my work infront of everyone",
+   "he critisized my work in front o f thw hole office",
+   "It has been happening for quite a bit time but this time it was way too much. He insulted me and said I would be fired.",
+   "No, but he seems like he wants to get me fired because he's been constantly pointing out errors in my work that are even irrelevant or small mistakes. And this time he had me feel too embarrassed",
+   "Nothing much, it's just that I was too embarrassed and I have this feeling that my colleagues will be laughing at me because it was a too embarrassing moment. It had never been done before to anyone, so that's my concern right now."
+  ]
+ },
+ "left_out_of_meetings": {
+  "source": "muhammad's testing, 2026-10-09",
+  "lines": [
+   "i have been left out of a few important meeting lately, i am starting to wonder if the role on the team is changing.",
+   "just told you not being invited to meetingd",
+   "i think i might be getting fired",
+   "it started about a month ago, before that I was in everything",
+   "my manager just says it's scheduling and changes the subject"
+  ]
+ },
+ "reference_frustration": {
+  "source": "Lolly's ChatGPT conversation, attached by muhammad 2026-10-13: the target behaviour",
+  "lines": [
+   "I am frustrated",
+   "everything",
+   "my boss, my coworkers, our vendors, our consultants, our customers everything",
+   "people over promise and under deliver, do not take responsibility or accountability and it makes my job harder",
+   "I cannot do the work unless they do their work",
+   "yes I need help"
+  ]
+ },
+ "detailed_first_message": {
+  "source": "audit matrix 1, 2026-10-13: everything in the first message",
+  "lines": [
+   "My sister stopped replying to my messages two weeks ago after I missed her birthday dinner, and I keep thinking she's decided I'm a terrible person. I've been avoiding calling her because I'm scared she'll confirm it. I just want things to be okay between us again.",
+   "Yeah, that's pretty much it.",
+   "I don't know, I guess I just feel stuck.",
+   "I keep replaying it at night.",
+   "Honestly I just want her to know I didn't mean to hurt her.",
+   "okay, yes, let's try it",
+   "it's made me avoid my phone entirely, I don't even want to see her name pop up",
+   "she hasn't actually said any of that, she's just gone quiet, and she's done that before when she's busy with work",
+   "maybe she's just hurt and needs time, not that she's written me off completely",
+   "stomach",
+   "a little better, less tight"
+  ]
+ },
+ "practical_request": {
+  "source": "audit matrix 9, 2026-10-13: asks what to do",
+  "lines": [
+   "My landlord says I have to move out in 30 days and I have nowhere lined up.",
+   "I've looked at a few places but they're all too expensive.",
+   "Can we just work out what to do?",
+   "It's not just the money, I've lived here six years and my whole life is nearby.",
+   "I don't even know where to start, can you just tell me what to do?"
+  ]
+ },
+ "correction": {
+  "source": "audit matrix 7, 2026-10-13: corrects Mani",
+  "lines": [
+   "My best friend didn't invite me to her wedding.",
+   "No, I'm not angry. That's not it at all.",
+   "I just keep wondering what I did wrong.",
+   "Maybe she thinks I'm not really her friend anymore.",
+   "No, it's not that she doesn't like me, it's that she didn't even tell me herself.",
+   "I found out from someone else, which is what really stung."
+  ]
+ },
+ "boundary": {
+  "source": "audit matrix 8, 2026-10-13: a topic they will not discuss",
+  "lines": [
+   "Things at home have been really tense and I can't focus at work.",
+   "I don't want to talk about my dad.",
+   "I just feel like I'm failing at everything lately.",
+   "My manager said my work has slipped and I think he's going to let me go.",
+   "Okay. Work is where it's hitting me hardest anyway.",
+   "It's been about three months since it started to slip."
+  ]
+ },
+ "minimal_replies": {
+  "source": "audit matrix 4 and 5, 2026-10-13: short and unsure answers",
+  "lines": [
+   "I feel off today.",
+   "idk",
+   "work I guess",
+   "my team lead keeps redoing my work and I think he thinks I'm useless",
+   "it's been going on for months, I just don't say anything",
+   "I don't want to make it a big deal",
+   "sure, let's try it",
+   "it's made me stop speaking up in meetings, i just let him redo things now",
+   "he's never actually said i'm useless, he just redoes stuff without asking me first",
+   "maybe he's just particular about how things are done, not that i'm bad at my job",
+   "stomach",
+   "a little less tense"
+  ]
+ }
 }

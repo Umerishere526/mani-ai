@@ -92,6 +92,10 @@ class TurnOut(BaseModel):
     reasoning: str | None = None
     # Null unless AI_DEBUG_MODE is on: what the model knew of each stage and what it did about it.
     ledger: list[LedgerRow] | None = None
+    # Null unless AI_DEBUG_MODE is on: Mani's read of the person on this reply, by slot, and what
+    # the backend did to it before storing it.
+    working_read: dict | None = None
+    read_notes: list[str] | None = None
     # Set only on the turn a framework completes, and only once the catalog has a
     # matching exercise.
     exercise: "ExerciseOut | None" = None

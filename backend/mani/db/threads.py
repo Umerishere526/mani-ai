@@ -246,6 +246,7 @@ class ThreadUpdates:
     style: ResponseStyle | None = None
     library_offered: bool = False
     conversation_style: SupportStyle | None = None
+    working_read: str | None = None
 
     def __bool__(self) -> bool:
         # Each optional field is tested for presence, not for truth. A field whose
@@ -259,6 +260,7 @@ class ThreadUpdates:
             or self.style is not None
             or self.library_offered
             or self.conversation_style is not None
+            or self.working_read is not None
         )
 
 
@@ -310,7 +312,16 @@ async def apply(
                 outcome              = excluded.outcome,
                 phase                = excluded.phase,
                 at_message_count     = excluded.at_message_count,
-                library_offered_since = excluded.library_offered_since
+                library_offered_since = excluded.library_offered_since,
+                -- Counted per framework as well as per phase: every framework's offer sits in
+                -- a phase called 'offering', so on phase alone a second framework's offer
+                -- reads as a third ask of the first one's.
+                stage_asks           = case
+                    when thread_technique_state.phase is not distinct from excluded.phase
+                     and thread_technique_state.framework_id = excluded.framework_id
+                    then least(thread_technique_state.stage_asks + 1, 32767)
+                    else 1
+                end
             """,
             thread_id, user_id, t.framework_id, t.outcome.value, t.phase,
             t.at_message_count, t.library_offered_since,
@@ -340,6 +351,18 @@ async def apply(
             "update public.thread_technique_state set library_offered_since = true "
             "where thread_id = $1 and user_id = $2",
             thread_id, user_id,
+        )
+
+    if updates.working_read is not None:
+        # Named on its own, so it never blanks the summary the background run writes to the
+        # same row, and that run never blanks this. The two writers share the row and no column.
+        await conn.execute(
+            """
+            insert into public.thread_summaries (thread_id, user_id, working_read)
+            values ($1, $2, $3)
+            on conflict (thread_id) do update set working_read = excluded.working_read
+            """,
+            thread_id, user_id, updates.working_read,
         )
 
 

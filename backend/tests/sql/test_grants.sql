@@ -210,6 +210,22 @@ select pg_temp.want('the backend can write summaries and technique state',
   and has_table_privilege('mani_service', 'public.thread_technique_state', 'INSERT')
   and has_table_privilege('mani_service', 'public.thread_technique_state', 'UPDATE'), true);
 
+-- Written by the backend on every turn (migrations 011 and 012), so a column-scoped grant
+-- added later that left either out would fail every turn rather than one feature.
+select pg_temp.want('the backend can write the read of the person and the stage ask count',
+  has_column_privilege('mani_service', 'public.thread_summaries', 'working_read', 'INSERT')
+  and has_column_privilege('mani_service', 'public.thread_summaries', 'working_read', 'UPDATE')
+  and has_column_privilege('mani_service', 'public.thread_technique_state', 'stage_asks', 'UPDATE'),
+  true);
+
+-- The count decides when a stage stops being asked; zero or below would mean a stage never asked.
+select pg_temp.want('a stage ask count below one cannot be stored',
+  exists (
+    select 1 from pg_constraint
+     where conname = 'thread_technique_state_stage_asks_positive'
+       and pg_get_constraintdef(oid) = 'CHECK ((stage_asks >= 1))'
+  ), true);
+
 -- Topics are written by the person and pasted into every system prompt.
 select pg_temp.want('profile topics are bounded in the database, not only in the API',
   exists (select 1 from pg_constraint where conname = 'profiles_topics_bounded'), true);

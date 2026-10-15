@@ -34,7 +34,11 @@ def reply(**overrides) -> Reply:
 
 
 # Where buttons are allowed besides an offer, for the tests about what a button may say.
-AT_THE_END = {"framework_running": True, "current_phase": "somatic_practice", "current_framework_id": "abcde"}
+AT_THE_END = {
+    "framework_running": True, "current_phase": "somatic_practice",
+    "current_framework_id": "with_body_route",
+}
+STILL_AT_THE_END = TechniqueState(technique="with_body_route", step="somatic_practice")
 
 
 def fix(registry, model_reply, **overrides):
@@ -179,6 +183,7 @@ def test_a_clean_reply_is_left_alone(registry):
     clean = reply(
         prompts=[SmartPrompt(label="Tell me more")],
         style=Style(shape="mirror and ask"),
+        state=STILL_AT_THE_END,
     )
     fixed = fix(registry, clean, **AT_THE_END)
     assert fixed.notes == []
@@ -224,7 +229,8 @@ def test_a_library_section_the_model_cased_differently_is_kept_and_corrected(reg
     """A client navigates on this string exactly, so a value that matches loosely still has
     to leave repaired at the one spelling that string will actually match against."""
     lowercased = reply(
-        prompts=[SmartPrompt(label="Read more", library="emotionalintelligence")]
+        prompts=[SmartPrompt(label="Read more", library="emotionalintelligence")],
+        state=STILL_AT_THE_END,
     )
     fixed = fix(registry, lowercased, **AT_THE_END)
     assert [p.library for p in fixed.prompts] == ["EmotionalIntelligence"]
@@ -642,3 +648,175 @@ def test_a_feeling_that_comes_back_is_told_from_one_that_only_eased():
     assert repairs.comes_back("I feel calmer for a second, then it comes back")
     assert repairs.comes_back("it came back again")
     assert not repairs.comes_back("I feel calmer now")
+
+
+def test_a_stage_asked_twice_moves_on_even_when_the_reply_stays(registry):
+    """The last resort after a redraft still stays: the next answer counts toward the next stage."""
+    first, second = ABCDE.phases[1], ABCDE.phases[2]
+    stays = reply(text="What else?", state=TechniqueState(technique="abcde", step=first))
+    kept = fix(registry, stays, current_framework_id="abcde", current_phase=first,
+               framework_running=True, stage_exhausted=True)
+    assert kept.phase == second
+    unchanged = fix(registry, stays, current_framework_id="abcde", current_phase=first,
+                    framework_running=True)
+    assert unchanged.phase == first
+
+
+def test_an_exhausted_stage_reaches_the_person_as_the_next_stage_question():
+    asking = Framework(
+        id="abcde", name="ABCDE", summary="s", body="b",
+        phases=["offering", "dispute", "effective", "closing"],
+        stages={"effective": {"ask": {"direct": "What changed once you saw it that way?"}}},
+    )
+    draft = reply(text="That's hard to know.\n\nWhat makes you believe it?",
+                  state=TechniqueState(technique="abcde", step="dispute"))
+    fixed = fix(Registry([asking]), draft, current_framework_id="abcde", current_phase="dispute",
+                framework_running=True, conversation_style="direct", stage_exhausted=True)
+    assert fixed.phase == "effective"
+    assert fixed.text == "That's hard to know.\n\nWhat changed once you saw it that way?"
+    assert any("third ask" in note for note in fixed.notes)
+
+
+def test_a_framework_reply_that_reports_no_state_is_still_an_ask_of_the_stage_in_force():
+    """Only a reply that records the framework writes its row, and the row is what counts the asks
+    on a stage. A reply inside a running framework that sent no state still asked that stage, so
+    it is counted, and a third one moves on like any other."""
+    asking = Framework(
+        id="abcde", name="ABCDE", summary="s", body="b",
+        phases=["offering", "dispute", "effective", "closing"],
+        stages={"effective": {"ask": {"direct": "What changed once you saw it that way?"}}},
+    )
+    silent = reply(text="That's hard to know.\n\nWhat makes you believe it?")
+    counted = fix(Registry([asking]), silent, current_framework_id="abcde", current_phase="dispute",
+                  framework_running=True, conversation_style="direct")
+    assert (counted.framework_id, counted.phase) == ("abcde", "dispute")
+    moved = fix(Registry([asking]), silent, current_framework_id="abcde", current_phase="dispute",
+                framework_running=True, conversation_style="direct", stage_exhausted=True)
+    assert moved.phase == "effective"
+    assert moved.text == "That's hard to know.\n\nWhat changed once you saw it that way?"
+
+
+def test_a_feeling_they_never_named_is_taken_out_of_the_read():
+    """The read is carried to every later turn, so a feeling the model supplied would be treated
+    as theirs from then on. Other endings of their own word still count."""
+    from mani.llm.schema import WorkingRead
+
+    read, dropped = repairs.grounded_read(
+        WorkingRead(feeling=["frustrated", "angry"]),
+        ["i'm frustrating myself with this", "people over promise and under deliver"],
+    )
+    assert read.feeling == ["frustrated"]
+    assert dropped == ["angry"]
+
+
+def test_a_read_that_leaves_a_slot_empty_keeps_what_they_said_before():
+    """The read replaces the stored one every turn, so a reply that sends only the situation would
+    otherwise wipe their feeling, what it costs them, and the heard-or-help answer, and the next
+    turn would ask for them again. A slot they fill differently is still replaced."""
+    from mani.llm.schema import WorkingRead
+
+    stored = WorkingRead(
+        situation="the client keeps changing requirements", feeling=["frustrated"],
+        impact="working late", support="help", underneath="no control over the work",
+    )
+    sparse = WorkingRead(situation="the client changed it again today")
+    carried = repairs.carried_read(stored, sparse)
+    assert carried.situation == "the client changed it again today"
+    assert carried.feeling == ["frustrated"]
+    assert carried.impact == "working late"
+    assert carried.support == "help"
+    assert carried.underneath is None, "Mani's own possibility is the new read's to keep or drop"
+    assert repairs.carried_read(None, sparse) == sparse
+
+
+# The stage list in the offer, and the stage's own label ahead of its question.
+
+def _abcde_with_stages() -> Registry:
+    from scripts.seed import FRAMEWORKS_DIR, parse_framework
+
+    parsed = parse_framework(FRAMEWORKS_DIR / "abcde.md")
+    return Registry([Framework(
+        id="abcde", name="ABCDE", summary=parsed["summary"], body="b",
+        phases=parsed["phases"], activation=parsed["activation"], stages=parsed["stages"],
+    )])
+
+
+def _offer_reply(text: str = "It sounds like it keeps landing on you.") -> Reply:
+    return Reply(
+        text=text, prompts=[SmartPrompt(label="Try it", technique="abcde")],
+        state=TechniqueState(technique="abcde", step="offering"),
+    )
+
+
+def test_the_offer_lists_the_five_stages_after_the_permission_question():
+    fixed = fix(_abcde_with_stages(), _offer_reply(), conversation_style="direct")
+    assert fixed.text.index("Would you like to try it?") < fixed.text.index("There are five stages in ABCDE:")
+    assert fixed.text.rstrip().endswith("- E: Effective New Belief")
+    assert [p.label for p in fixed.prompts] == ["Try it", "Tell me more", "Keep chatting"]
+
+
+def test_the_list_is_not_shown_again_when_tell_me_more_has_just_shown_the_steps_or_it_was_listed():
+    registry = _abcde_with_stages()
+    told = fix(registry, _offer_reply(), selected_label="Tell me more", offer_asked_about=True,
+               conversation_style="direct")
+    assert "There are five stages in ABCDE:" not in told.text
+    first = fix(registry, _offer_reply(), conversation_style="direct")
+    again = fix(registry, _offer_reply(), conversation_style="direct", last_mani_text=first.text)
+    assert "There are five stages in ABCDE:" not in again.text
+
+
+def test_the_first_stage_gets_the_consent_line_then_its_label_and_a_typed_yes_gets_the_same():
+    from mani.chat.greeting import CONSENT_LINES
+
+    registry = _abcde_with_stages()
+    asked = Reply(
+        text="You mentioned the client changing things. Does that sound right?",
+        state=TechniqueState(technique="abcde", step="activate"),
+    )
+    for typed in (False, True):
+        fixed = fix(
+            registry, asked, accepted_this_turn=True, framework_running=True,
+            current_framework_id="abcde", current_phase="offering",
+            selected_label=None if typed else "Try it", conversation_style="direct",
+        )
+        assert fixed.text.startswith(CONSENT_LINES["direct"] + "\n\nA is for Activating Event. You mentioned")
+
+
+def test_a_consent_line_the_model_wrote_is_not_said_twice_and_a_label_is_not_added_twice():
+    from mani.chat.greeting import CONSENT_LINES
+
+    registry = _abcde_with_stages()
+    said = f"{CONSENT_LINES['supportive']} A is for Activating Event. You mentioned X. Does that feel true to you?"
+    fixed = fix(
+        registry, Reply(text=said, state=TechniqueState(technique="abcde", step="activate")),
+        accepted_this_turn=True, framework_running=True, current_framework_id="abcde",
+        current_phase="offering",
+    )
+    assert fixed.text.count(CONSENT_LINES["supportive"]) == 1
+    assert fixed.text.count("A is for Activating Event.") == 1
+
+
+def test_a_later_stage_is_named_the_first_time_it_is_asked_and_not_on_a_re_ask():
+    registry = _abcde_with_stages()
+    to_belief = Reply(
+        text="What did you start telling yourself about it?",
+        state=TechniqueState(technique="abcde", step="belief"),
+    )
+    first = fix(registry, to_belief, framework_running=True, current_framework_id="abcde",
+                current_phase="activate")
+    assert first.text.startswith("B is for Belief. What did you start telling yourself")
+    again = fix(registry, to_belief, framework_running=True, current_framework_id="abcde",
+                current_phase="belief")
+    assert "B is for Belief." not in again.text
+
+
+def test_the_consent_lines_in_code_are_the_ones_the_prompt_carries():
+    import pathlib
+
+    import yaml
+
+    from mani.chat.greeting import CONSENT_LINES
+    from scripts.seed import parse_prompt
+
+    path = pathlib.Path(__file__).parents[2] / "content/prompts/mani_base.md"
+    assert yaml.safe_load(parse_prompt(path)["content"])["consent_lines"] == CONSENT_LINES

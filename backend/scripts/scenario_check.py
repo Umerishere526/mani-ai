@@ -35,6 +35,15 @@ ASKS_WHAT_THEY_SAID = 0.8
 # Conversations run at once. A turn holds a pool connection while client.complete records its cost
 # row on a second, so more than half of MAX_POOL_SIZE at once can leave every turn waiting forever.
 AT_ONCE = 4
+# These scenarios script lines past the first offer (acceptance, stages, body route) on purpose, so
+# their conversation keeps going instead of stopping at the offer's Tell me more like the rest do.
+RUNS_PAST_OFFER = {"workplace_boundaries", "big_brother", "detailed_first_message", "minimal_replies"}
+# A time frame is something they have to give: Mani saying today or right now when they never did
+# assumes the issue is recent. Measurement only, like the other flags here.
+TIME_FRAMES = re.compile(r"\b(today|right now|lately|this week|this morning|tonight)\b", re.IGNORECASE)
+# Two of Mani's own questions in one conversation that share this much of their words are the same
+# question put twice, which is what leaves a person feeling they are going in circles.
+SAME_QUESTION_AGAIN = 0.6
 
 
 @dataclass
@@ -43,6 +52,7 @@ class Exchange:
     reply: str
     buttons: list[str]
     offered: str | None
+    exercise: str | None = None
     flags: list[str] = field(default_factory=list)
     opens_on_them: bool = False
     question: set[str] = field(default_factory=set)
@@ -61,9 +71,12 @@ def _question(text: str) -> set[str]:
     return _words(asked[-1]) if asked else set()
 
 
-def _check(exchange: Exchange, registry, told_more: bool, said: set[str]) -> None:
-    said, opening = _words(exchange.person), _words(_first_sentence(exchange.reply))
-    echo = len(opening & said) / len(opening) if opening else 0.0
+def _check(
+    exchange: Exchange, registry, told_more: bool, said: set[str],
+    spoken: str = "", earlier: list[set[str]] | None = None,
+) -> None:
+    last, opening = _words(exchange.person), _words(_first_sentence(exchange.reply))
+    echo = len(opening & last) / len(opening) if opening else 0.0
     exchange.opens_on_them = echo >= OPENS_ON_THEM
     exchange.question = _question(exchange.reply)
     if echo >= ECHO:
@@ -72,6 +85,15 @@ def _check(exchange: Exchange, registry, told_more: bool, said: set[str]) -> Non
         exchange.flags.append("asks what they already said")
     if INTERNAL.search(exchange.reply):
         exchange.flags.append("internal words")
+    if TIME_FRAMES.search(exchange.reply) and not TIME_FRAMES.search(spoken):
+        exchange.flags.append("adds a time frame they never gave")
+    if exchange.question and any(
+        len(exchange.question & before) / min(len(exchange.question), len(before)) >= SAME_QUESTION_AGAIN
+        for before in earlier or [] if before
+    ):
+        exchange.flags.append("asks a question it already asked")
+    if not exchange.question and not exchange.offered and exchange.person != TELL_ME_MORE_LABEL:
+        exchange.flags.append("asks nothing")
     if not exchange.offered:
         return
     framework = registry.get(exchange.offered)
@@ -100,13 +122,26 @@ async def _converse(name: str, lines: list[str], style: str, registry) -> list[E
         await _send(claims, thread.id, style.capitalize())
         exchanges: list[Exchange] = []
         said: set[str] = set()
-        for text in lines:
+        spoken = ""
+        offered_once = False
+        keep_going = name in RUNS_PAST_OFFER
+        for i, text in enumerate(lines):
             said |= _words(text)
-            exchanges.append(await _exchange(claims, thread.id, text, registry, told_more=False, said=said))
+            spoken += f" {text}"
+            exchanges.append(await _exchange(
+                claims, thread.id, text, registry, told_more=False, said=said,
+                spoken=spoken, earlier=[e.question for e in exchanges],
+            ))
             if exchanges[-1].offered:
+                if offered_once:
+                    break
+                offered_once = True
                 exchanges.append(
                     await _exchange(claims, thread.id, TELL_ME_MORE_LABEL, registry, told_more=True, said=said)
                 )
+                if not keep_going or i == len(lines) - 1:
+                    break
+            if exchanges[-1].exercise:
                 break
         return exchanges
     finally:
@@ -116,14 +151,16 @@ async def _converse(name: str, lines: list[str], style: str, registry) -> list[E
 
 
 async def _exchange(
-    claims: Claims, thread_id, text: str, registry, *, told_more: bool, said: set[str]
+    claims: Claims, thread_id, text: str, registry, *, told_more: bool, said: set[str],
+    spoken: str = "", earlier: list[set[str]] | None = None,
 ) -> Exchange:
     turn = await _send(claims, thread_id, text)
     exchange = Exchange(
         person=text, reply=turn.content, buttons=[p.label for p in turn.prompts],
         offered=next((p.technique for p in turn.prompts if p.technique), None),
+        exercise=turn.exercise.title if turn.exercise else None,
     )
-    _check(exchange, registry, told_more, said)
+    _check(exchange, registry, told_more, said, spoken, earlier)
     return exchange
 
 

@@ -47,7 +47,7 @@ class Claims(BaseModel):
         return json.dumps(self.raw)
 
 
-def _unauthorized(message: str) -> ServiceError:
+def unauthorized(message: str) -> ServiceError:
     return ServiceError(
         message,
         ErrorCategory.UNAUTHENTICATED,
@@ -66,7 +66,7 @@ def verify_token(token: str, settings: Settings | None = None) -> Claims:
     settings = settings or get_settings()
 
     if not token:
-        raise _unauthorized("no token supplied")
+        raise unauthorized("no token supplied")
 
     try:
         if settings.supabase_jwt_secret:
@@ -87,16 +87,16 @@ def verify_token(token: str, settings: Settings | None = None) -> Claims:
                 options={"require": ["exp", "sub"]},
             )
     except jwt.ExpiredSignatureError as exc:
-        raise _unauthorized("token expired") from exc
+        raise unauthorized("token expired") from exc
     except jwt.InvalidAudienceError as exc:
-        raise _unauthorized("token is for a different audience") from exc
+        raise unauthorized("token is for a different audience") from exc
     except jwt.PyJWTError as exc:
         # Covers a bad signature, a malformed token, and a missing required claim.
-        raise _unauthorized(f"token rejected: {exc}") from exc
+        raise unauthorized(f"token rejected: {exc}") from exc
 
     subject = payload.get("sub")
     if not subject:
-        raise _unauthorized("token carries no subject")
+        raise unauthorized("token carries no subject")
 
     return Claims(
         sub=subject,

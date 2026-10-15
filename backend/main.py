@@ -5,6 +5,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import asyncpg
 import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -13,14 +14,15 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
 from mani import auth_admin, storage, stt
+from mani.auth.jwt import unauthorized
 from mani.config import get_settings
 from mani.db import pool
 from mani.errors import ErrorCategory, ServiceError
 from mani.routers import (
     account,
     admin,
-    cron,
     crisis,
+    cron,
     exercises,
     health,
     messages,
@@ -76,6 +78,10 @@ def create_app() -> FastAPI:
             # Conversation content is special-category health data and must not leave
             # the process attached to an error report.
             send_default_pii=False,
+            # The two places it would leave anyway: send_default_pii does not cover either,
+            # and the SDK attaches request bodies and stack frame variables by default.
+            max_request_body_size="never",
+            include_local_variables=False,
         )
 
     app = FastAPI(
@@ -109,6 +115,19 @@ def create_app() -> FastAPI:
             content=error_body(exc.category, exc.user_message, exc.retryable),
         )
 
+    @app.exception_handler(asyncpg.ForeignKeyViolationError)
+    async def missing_user_handler(
+        request: Request, exc: asyncpg.ForeignKeyViolationError
+    ) -> JSONResponse:
+        """A token outlives its account until it expires, and reads by it find nothing. A write
+        names the account in `user_id`, whose foreign key to auth.users is then the one check
+        that the person still exists."""
+        if not (exc.constraint_name or "").endswith("_user_id_fkey"):
+            raise exc
+        return await service_error_handler(
+            request, unauthorized(f"account behind the token is gone ({exc.constraint_name})")
+        )
+
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(
         _: Request, exc: RequestValidationError
@@ -131,6 +150,20 @@ def create_app() -> FastAPI:
                 ErrorCategory.INVALID_REQUEST,
                 "That request was not valid. Please try again.",
                 False,
+            ),
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(_: Request, exc: Exception) -> JSONResponse:
+        """Anything that reaches here skipped ServiceError, so no one decided its
+        category or its user-facing text. Give it the same shape anyway rather than
+        let FastAPI's default `{"detail": "Internal Server Error"}` through - a client
+        branching on `error.category` must never see an unrecognized shape."""
+        logger.error("unhandled exception", exc_info=exc)
+        return JSONResponse(
+            status_code=500,
+            content=error_body(
+                ErrorCategory.UNKNOWN, "Something went wrong on our end. Please try again.", True
             ),
         )
 

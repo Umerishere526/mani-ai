@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from types import SimpleNamespace
 
@@ -13,7 +14,7 @@ from openai.types.chat import ChatCompletion
 
 from mani.config import Settings
 from mani.db import llm_calls
-from mani.errors import ServiceError
+from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
 from mani.llm.schema import Reply
 
@@ -377,3 +378,40 @@ async def test_a_timeout_is_not_retried(monkeypatch, recorded):
             purpose=llm_calls.Purpose.CHAT, settings=settings(),
         )
     assert runnable.calls == 1
+
+
+async def test_a_call_that_never_finishes_is_cut_off(monkeypatch, recorded):
+    """The SDK only times out a silent connection; a provider that stalls mid-answer must still
+    end at the budget, or a turn with a redraft outlasts the client waiting on it."""
+
+    class Stalled:
+        async def ainvoke(self, messages: list[dict]) -> dict:
+            await asyncio.sleep(10)
+
+    install(monkeypatch, Stalled())
+    short = settings().model_copy(update={"llm_timeout_seconds": 0.05})
+
+    with pytest.raises(ServiceError) as failed:
+        await client.complete(
+            [{"role": "user", "content": "hi"}], Reply, model="m",
+            purpose=llm_calls.Purpose.CHAT, settings=short,
+        )
+    assert failed.value.category is ErrorCategory.LLM_TIMEOUT
+    assert recorded[0]["outcome"] is llm_calls.Outcome.TIMEOUT
+
+
+async def test_a_call_given_less_time_than_the_default_is_cut_at_that(monkeypatch, recorded):
+    """A redraft gets only what is left of the turn's budget, which is shorter than a call's own."""
+
+    class Stalled:
+        async def ainvoke(self, messages: list[dict]) -> dict:
+            await asyncio.sleep(10)
+
+    install(monkeypatch, Stalled())
+    with pytest.raises(ServiceError) as failed:
+        await client.complete(
+            [{"role": "user", "content": "hi"}], Reply, model="m",
+            purpose=llm_calls.Purpose.CHAT, settings=settings(), timeout_seconds=0.05,
+        )
+    assert failed.value.category is ErrorCategory.LLM_TIMEOUT
+    assert recorded[0]["outcome"] is llm_calls.Outcome.TIMEOUT

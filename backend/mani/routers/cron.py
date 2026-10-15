@@ -1,6 +1,7 @@
 # ABOUTME: Endpoints a scheduler calls, never a person - guarded by a shared secret, not a JWT.
 # ABOUTME: GET, because Vercel Cron always triggers its configured path with GET.
 
+import hmac
 import logging
 
 from fastapi import APIRouter, Header, HTTPException
@@ -20,7 +21,10 @@ def _check_secret(authorization: str | None) -> None:
     mean "open". Runs before anything else in the handler, on every call.
     """
     secret = get_settings().cron_secret
-    if not secret or authorization != f"Bearer {secret}":
+    # Compared in constant time, so the time a refusal takes says nothing about the secret.
+    if not secret or not hmac.compare_digest(
+        (authorization or "").encode(), f"Bearer {secret}".encode()
+    ):
         raise HTTPException(status_code=401, detail="unauthorized")
 
 

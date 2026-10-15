@@ -14,6 +14,8 @@ def settings() -> Settings:
         supabase_url="https://example.supabase.co",
         supabase_jwt_secret="secret",
         openrouter_api_key="sk-test-not-a-real-key",
+        # Named here so a developer's own .env, which may set another effort, cannot change it.
+        reasoning_effort="high",
     )
 
 

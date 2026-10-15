@@ -204,7 +204,8 @@ def test_the_reply_commits_to_a_lean_before_it_writes_the_text():
     fields = list(Reply.model_fields)
     assert fields.index("heading_toward") < fields.index("text")
     assert fields.index("style") < fields.index("heading_toward")
-    assert fields.index("heading_toward") < fields.index("offer_fit") < fields.index("text")
+    assert fields.index("heading_toward") < fields.index("next_move") < fields.index("text")
+    assert "offer_fit" not in fields
     # The walk through the stages is written before the question it decides.
     assert fields.index("stages_known") < fields.index("text")
 
@@ -267,7 +268,14 @@ def test_every_rule_in_a_prompt_file_is_a_sentence_not_a_yaml_mapping(name):
     from scripts.seed import parse_prompt
 
     path = pathlib.Path(__file__).parents[2] / f"content/prompts/{name}.md"
-    sections = yaml.safe_load(parse_prompt(path)["content"])
-    for section, body in sections.items():
+
+    def rules(where: str, body) -> list[tuple[str, object]]:
         if isinstance(body, list):
-            assert all(isinstance(rule, str) for rule in body), section
+            return [(where, rule) for rule in body]
+        if isinstance(body, dict):
+            return [found for key, value in body.items() for found in rules(f"{where}.{key}", value)]
+        return []
+
+    sections = yaml.safe_load(parse_prompt(path)["content"])
+    mappings = [where for where, rule in rules(name, sections) if not isinstance(rule, str)]
+    assert mappings == []

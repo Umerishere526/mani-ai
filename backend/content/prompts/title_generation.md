@@ -7,6 +7,6 @@ description: Instruction added on 4th message to generate thread title
 
 # Thread Title
 
-Generate a short, descriptive title (3-6 words) for this conversation. Include it in a "title" field in your response.
+Generate a short, descriptive title (3-6 words) for this conversation and include it in a "title" field in your response. Name what they are dealing with, in plain words. Never a feeling they did not name and never a technique name.
 
 Example: "Work stress and boundaries"

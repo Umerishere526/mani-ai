@@ -9,23 +9,11 @@ activation:
     The person has described a situation, what they started believing it means, or how that
     belief is affecting how they feel or what they do, such as feeling overwhelmed or anxious or
     not handling things well. They do not have to have said what happened: step A asks for the
-    event when it is missing. ABCDE is the framework offered whenever one is appropriate, and the
-    only one offered right now.
+    event when it is missing.
   to_find_out:
     - "what happened or has been happening that started these concerns"
     - "what they began telling themselves about it"
     - "how that belief has affected what they felt or did"
-  # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
-  appropriate_when:
-    - "A situation, what the person believes it means, or how that belief is affecting them has come up"
-    - "The person wants to understand their thinking rather than only talk"
-    - "The issue has been identified well enough to say what ABCDE would help with"
-  not_when:
-    - "The user wants to continue chatting without a framework"
-    - "The issue has not been identified"
-    - "The user cannot take part in reflective questions"
-    - "A safety concern requires the approved safety protocol"
   contraindications:
     - "The only thing left to examine would be whether abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger was real or as serious as it felt. What they came to believe about themselves after it may still be examined; the event itself is never questioned or reinterpreted as harmless"
   distinctions:
@@ -45,6 +33,30 @@ stages:
       supportive: "Would you like to try it?"
       reflective: "Would you like to try it?"
       direct: "Would you like to try it?"
+    stage_list: |-
+      There are five stages in ABCDE:
+
+      - A: Activating Event
+      - B: Belief
+      - C: Consequences
+      - D: Dispute
+      - E: Effective New Belief
+    check:
+      direct:
+        - "Does that match what's been going on?"
+        - "Have I understood that the way you mean it?"
+        - "Is that close to how it is?"
+        - "Did I get that right?"
+      supportive:
+        - "Does that sound like how it's been for you?"
+        - "Is that close to what you've been going through?"
+        - "Have I understood that the way you mean it?"
+        - "Does that feel true to you?"
+      reflective:
+        - "Does that fit how you see it?"
+        - "Is that close to how it sits with you?"
+        - "Have I caught that the way you'd put it?"
+        - "Does that seem true to you, or is something different?"
     offer:
       direct: |-
         There's a framework called ABCDE that helps you identify the thoughts behind <what they are going through, as a short noun phrase that reads naturally after "the thoughts behind", in their words, such as your anxiety, being left out of meetings, or what happened with your sister. When they describe someone's behaviour, name the situation, never the behaviour as a verb, so not your sister stopping talking to you but how things are with your sister. Never a whole sentence, never "the thought that", never a verb phrase like "wondering whether">, question whether they're true, and replace them with more realistic ones.
@@ -65,29 +77,31 @@ stages:
       direct: |-
         The ABCDE framework has five steps:
 
-        1. A: Activating Event: What happened or what has been happening?
-        2. B: Belief: What did you start telling yourself about it?
-        3. C: Consequences: How did that thought affect how you felt or what you did?
-        4. D: Dispute: What makes you believe it's true, and what makes you question it?
-        5. E: Effective New Belief: What's a more realistic and helpful way to think about it?
+        - A: Activating Event: What happened or what has been happening?
+        - B: Belief: What did you start telling yourself about it?
+        - C: Consequences: How did that thought affect how you felt or what you did?
+        - D: Dispute: What makes you believe it's true, and what makes you question it?
+        - E: Effective New Belief: What's a more realistic and helpful way to think about it?
       supportive: |-
         The ABCDE framework has five steps. Each one helps you understand what happened, what you started believing about it, and how those thoughts may be affecting you.
 
-        1. A: Activating Event: What happened or what has been happening that brought up these feelings?
-        2. B: Belief: What did you begin telling yourself about the situation?
-        3. C: Consequences: How did that belief affect how you felt or what you did?
-        4. D: Dispute: What makes you believe that thought is true, and is there anything that might suggest otherwise?
-        5. E: Effective New Belief: What's a more realistic and helpful way to think about what happened?
+        - A: Activating Event: What happened or what has been happening that brought up these feelings?
+        - B: Belief: What did you begin telling yourself about the situation?
+        - C: Consequences: How did that belief affect how you felt or what you did?
+        - D: Dispute: What makes you believe that thought is true, and is there anything that might suggest otherwise?
+        - E: Effective New Belief: What's a more realistic and helpful way to think about what happened?
       reflective: |-
         The ABCDE framework has five steps that help you examine how your interpretation of an experience influences what you believe and how you respond.
 
-        1. A: Activating Event: What happened or what has been happening that started these concerns?
-        2. B: Belief: What meaning did you give to what happened?
-        3. C: Consequences: How did that belief influence your feelings or actions?
-        4. D: Dispute: What supports your interpretation, and what might suggest a different understanding?
-        5. E: Effective New Belief: What's a more accurate and helpful way to understand the situation?
+        - A: Activating Event: What happened or what has been happening that started these concerns?
+        - B: Belief: What meaning did you give to what happened?
+        - C: Consequences: How did that belief influence your feelings or actions?
+        - D: Dispute: What supports your interpretation, and what might suggest a different understanding?
+        - E: Effective New Belief: What's a more accurate and helpful way to understand the situation?
   activate:
     title: "A: Activating Event"
+    label: "A is for Activating Event."
+    read_slots: [situation]
     purpose: "Identify the activating event from the conversation, confirming it or asking for it only when it is not already clear."
     listen_for: "What happened or has been happening, what was said or done, and whether the person is describing what they observed or what they inferred."
     ready_when: "The event is clear from what they have already said. If it is only a possible event, confirm it once, in the line below. If there is none, ask for it."
@@ -114,12 +128,18 @@ stages:
         reply: "Several things went wrong. Which one do you want to look at?"
       - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
         reply: "What happened sounds serious, and I am not going to ask you to see it differently. What would be most helpful to talk through?"
+    confirm:
+      direct: "From what you've shared, <the event, in their words> seems to be what started these concerns."
+      supportive: "You mentioned <the event, in their words>. We can use that as our starting point."
+      reflective: "You've mentioned <the event, in their words>. We can use that as a place to start."
     ask:
       direct: "What's been happening that's behind this?"
       supportive: "What's been happening that's left things feeling so hard?"
       reflective: "What's been happening that seems connected to it?"
   belief:
     title: "B: Belief"
+    label: "B is for Belief."
+    read_slots: [meaning]
     purpose: "Identify what the person began believing about the event, in their own words."
     listen_for: "The conclusion, prediction, expectation or judgment they attached to what happened."
     ready_when: "A belief they have expressed in their own language. If several appear, ask which one affected them most."
@@ -133,12 +153,18 @@ stages:
         reply: "You felt embarrassed. What were you telling yourself at that point?"
       - when: "several beliefs at once"
         reply: "Several thoughts came at once. Which one affected you most?"
+    confirm:
+      direct: "It sounds like you've started to believe <what they began believing, in their words>."
+      supportive: "I'm hearing that you've begun to think <what they began believing, in their words>."
+      reflective: "It seems the way you've come to see it is <what they began believing, in their words>."
     ask:
       direct: "What did you start telling yourself about what was happening?"
       supportive: "Sometimes when things are difficult, we start drawing conclusions about ourselves or what's happening. What were you telling yourself about the situation?"
       reflective: "When that happened, what did you begin believing about yourself or the situation?"
   consequence:
     title: "C: Consequences"
+    label: "C is for Consequences."
+    read_slots: [impact, response]
     purpose: "Identify how believing that affected what they felt, did or avoided."
     listen_for: "A change in feeling or behaviour after they believed it, such as anxiety, withdrawing or avoiding."
     ready_when: "A feeling or a behaviour they identified themselves as following from the belief. Do not introduce a consequence they did not name."
@@ -150,15 +176,20 @@ stages:
     if_unclear:
       - when: "consequence unclear - \"It affected everything.\""
         reply: "It affected everything. What changed first?"
+    confirm:
+      direct: "It sounds like this has meant <how it has affected them, in their words>."
+      supportive: "From what you've told me, this has meant <how it has affected them, in their words>."
+      reflective: "It seems this has shown up for you as <how it has affected them, in their words>."
     ask:
       direct: "How did that thought affect how you felt or what you did?"
       supportive: "Our thoughts can affect how we feel and respond. How did that belief affect how you felt or what you did?"
       reflective: "When you believed that thought, how did it influence your feelings or the way you responded?"
   dispute:
     title: "D: Dispute"
+    label: "D is for Dispute."
     purpose: "Help them look at what supports the belief and what may challenge it, and tell what they know from what they assume, without trying to prove the belief wrong."
     listen_for: "What they have observed, what supports the belief, what may suggest a different understanding, and what they do not yet know."
-    ready_when: "The belief has been meaningfully looked at. They have said what supports it and what might challenge it, or have considered whether they have enough information to know it is true. They do not have to disprove it."
+    ready_when: "The belief has been meaningfully looked at. They have said what supports it and what might challenge it, or have considered whether they have enough information to know it is true, or said they do not know once asked. A partial answer is enough. They do not have to disprove it."
     boundaries:
       - "must not argue with them or try to prove the belief wrong"
       - "must take information that supports the belief seriously and never answer it with a contradiction"
@@ -171,12 +202,15 @@ stages:
         reply: "Nothing comes to mind. Do you have enough information to know it is true?"
       - when: "what supports the belief has been said and what challenges it has not been asked"
         reply: "What might make you question the belief that <their belief, in their words>?"
+      - when: "what they have said, across the conversation, shows they have no way to know what the other person actually thinks or decided, only guesses or an absence of feedback"
+        reply: "From what you've said, <the gap, grounded in their words, such as \"your manager hasn't told you anything\">, this may not be something you can know for certain either way right now. What do you know for sure, and what are you assuming?"
     ask:
       direct: "What makes you believe this is true, and what makes you question it?"
       supportive: "Let's look at that belief together. What makes you think it's true? Is there anything that suggests otherwise?"
       reflective: "As you think about that belief, what seems to support it, and what might suggest a different explanation?"
   effective:
     title: "E: Effective New Belief"
+    label: "E is for Effective New Belief."
     purpose: "Help them reach a more realistic and helpful understanding from what they have looked at, in their own words."
     listen_for: "A conclusion that separates what they know from what they assumed, such as not knowing why something happened and wanting more information."
     ready_when: "They have a more realistic and helpful understanding in their own words, or have looked at the belief and have no different one. If they do not reach a different belief, accept that and never make one up."

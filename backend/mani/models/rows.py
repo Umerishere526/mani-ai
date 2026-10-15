@@ -92,6 +92,8 @@ class TechniqueState(Row):
     phase: str | None = None
     at_message_count: int
     library_offered_since: bool = False
+    # How many replies have asked the stage in `phase`, counted by the database on each write.
+    stage_asks: int = 1
 
 
 class ResponseStyle(Row):
@@ -117,6 +119,9 @@ class ThreadSummary(Row):
     techniques_tried: list[TechniqueTried] = Field(default_factory=list)
     summarized_through_message_id: uuid.UUID | None = None
     summarized_message_count: int = 0
+    # What Mani makes of the person as of its last reply. Written every turn, unlike the two
+    # fields above, which the background summarization writes once a thread is long enough.
+    working_read: str | None = None
 
 
 # The body route that ends every framework, and the one stage a practice may be run from. Code runs

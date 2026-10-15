@@ -59,7 +59,7 @@ Query: `select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid
 | `public` | `thread_technique_state` | Which framework is active in a thread, and its current phase. |
 | `public` | `thread_techniques_offered` | Frequency-limiting: which frameworks have already been offered in a thread. |
 | `public` | `thread_response_styles` | The model's self-reported response shape/voice per reply — anti-repetition signal. |
-| `public` | `thread_summaries` | The rolling summary of a long thread, refreshed every 20 messages (the history window). Written by the backend only (migration 007). |
+| `public` | `thread_summaries` | The rolling summary of a long thread, refreshed every 20 messages (the history window), and Mani's read of the person, written every turn. Written by the backend only (migration 007). |
 | `public` | `exercise_completions` | Whether a user found a completed exercise helpful. |
 
 `admin.*` is **invisible to PostgREST** — `supabase/config.toml`'s `[api] schemas` lists
@@ -127,6 +127,7 @@ One row per thread — the currently (or most recently) active framework.
 | 6 | `at_message_count` | integer | required | Thread's `message_count` when this state was last written — the cooldown clock. |
 | 7 | `library_offered_since` | boolean | default `false` | Whether the library follow-up has been offered since acceptance. |
 | 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
+| 9 | `stage_asks` | smallint | default `1`, check `>= 1` | How many replies have asked the stage in `phase` of this `framework_id`, a reply that reports no state included; reset to 1 when either changes (`threads.apply`'s upsert). The backend moves on after two (migration 011). |
 
 ### `public.thread_techniques_offered`
 Frequency-limiting log — every framework ever offered in a thread.
@@ -162,6 +163,7 @@ Append-only log of the model's self-reported style per reply.
 | 7 | `created_at` | timestamptz | default `now()` | |
 | 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
 | 9 | `current_issue` | text | optional | One line, replaced each run: what the person is working on right now. The composer puts it ahead of the prose summary on every turn a summary exists (migration 010). |
+| 10 | `working_read` | text | optional | Mani's read of the person as of its last reply, a `WorkingRead` as JSON (`mani/llm/schema.py`). Written every turn by the backend inside the turn's transaction, so a row can exist before any summary does; the summary run never writes this column and the turn never writes the others (migration 012). |
 
 ### `public.exercise_completions`
 | # | Column | Type | Required | Purpose |

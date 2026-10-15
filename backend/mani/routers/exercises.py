@@ -46,6 +46,12 @@ async def complete(
     completion = await exercises_db.record_completion(
         conn, user.user_id, body.exercise_id, body.helpful
     )
+    if completion is None:
+        raise ServiceError(
+            f"exercise {body.exercise_id} not found",
+            ErrorCategory.NOT_FOUND,
+            user_message="That exercise is not available.",
+        )
     return to_completion(completion)
 
 

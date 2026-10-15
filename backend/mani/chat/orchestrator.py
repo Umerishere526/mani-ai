@@ -34,7 +34,7 @@ from mani.db import (
 )
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
-from mani.llm.schema import LibrarySection, Reply, SmartPrompt
+from mani.llm.schema import LibrarySection, Reply, SmartPrompt, WorkingRead
 from mani.models.rows import (
     Exercise,
     Framework,
@@ -68,6 +68,14 @@ _ASKS_WHAT_NEXT = re.compile(
     r"what would you like to do (next|now)|keep chatting or go to the library", re.IGNORECASE
 )
 
+# The somatic stage's own safety condition, word for word: "they mention pain, trouble
+# breathing, or feeling faint". Checked against the user's own message, never the model's
+# drafted text - a place name like "Stomach" must not be mistaken for this.
+_MENTIONS_PAIN = re.compile(
+    r"\bpain\b|\bhurts?\b|\baches?\b|breath(e|ing)|\bfaint\b|\bdizzy\b|\blightheaded\b",
+    re.IGNORECASE,
+)
+
 
 def _handoff() -> list[SmartPrompt]:
     return [
@@ -84,6 +92,17 @@ def _awaiting_place(history: list[Message]) -> bool:
     ))
 
 
+def _checkin_asked_in(history: list[Message]) -> bool:
+    """Whether the conversation history actually contains a turn where Mani asked the body
+    check-in question - the real flow having reached it, not just the model's current text
+    claiming so."""
+    return any(
+        m.role is MessageRole.MANI
+        and any(str(o.get("label", "")) == repairs.PLACE_LABELS[0] for o in (m.prompt_options or []))
+        for m in history
+    )
+
+
 def _body_route_step(
     fixed: repairs.Repaired,
     framework_id: str,
@@ -92,6 +111,8 @@ def _body_route_step(
     content: str,
     previous_phase: str | None,
     awaiting_place: bool,
+    checkin_asked: bool,
+    describes_body_improvement: bool,
 ) -> repairs.Repaired:
     """The turn after a body question the person has answered: where they feel it, and then
     the practice for that place. The body is asked about once; the choice of Chat More / Go to
@@ -107,6 +128,15 @@ def _body_route_step(
         previous_phase not in ("somatic_checkin", "somatic_practice")
         and fixed.phase == "somatic_checkin"
         and _ASKS_WHAT_NEXT.search(fixed.text) is not None
+        # The model's own text matching the handoff phrase is not proof the check-in
+        # actually happened - require the real flow to have reached it, or the user's own
+        # message to independently describe their body (a place), or the model's own
+        # drafted reply judging that the user's message described an improvement.
+        and (
+            checkin_asked
+            or repairs.named_place(content) is not None
+            or describes_body_improvement
+        )
     )
     if not (answering or described_early) or repairs.declines_or_acts(content):
         return fixed
@@ -115,7 +145,7 @@ def _body_route_step(
         (repairs.reply_for(b, style) for b in stage.get("if_unclear") or [] if "pain" in b.get("when", "")),
         None,
     )
-    if safety_reply and safety_reply in fixed.text:
+    if safety_reply and safety_reply in fixed.text and _MENTIONS_PAIN.search(content):
         return fixed
     place = repairs.named_place(content)
     text, labels = fixed.text, []
@@ -150,14 +180,14 @@ def _stage_in_force(
     index = framework.phase_index(technique.phase)
     if accepted_this_turn and technique.phase == OFFERING:
         index += 1
-        asked = False
+        asked, asks = False, 0
     elif technique.outcome is TechniqueOutcome.ACCEPTED:
-        asked = True
+        asked, asks = True, technique.stage_asks
     else:
         return None
     if not 0 < index < len(framework.phases):
         return None
-    return redraft.StageInForce(framework.id, framework.phases[index], asked)
+    return redraft.StageInForce(framework.id, framework.phases[index], asked, asks)
 
 
 def _offered_handoff(history: list[Message]) -> bool:
@@ -186,6 +216,10 @@ class Turn:
     reasoning: str | None = None
     # The draft's stage ledger, as rows. Only with AI_DEBUG_MODE, like the reasoning.
     ledger: list[dict] | None = None
+    # What Mani made of them on this reply, slot by slot, exactly as stored for the next turn, and
+    # what code did to it on the way. Only with AI_DEBUG_MODE, so the read can be watched turn by turn.
+    working_read: dict | None = None
+    read_notes: list[str] | None = None
     # Set only on the turn a framework completes, and only when the catalog has a
     # matching exercise. A row model, not the wire shape - the router builds ExerciseOut
     # (and signs the audio URL) when it serializes this.
@@ -424,6 +458,14 @@ async def send(
     # Read by the imminent-action check below and by the capsule repair further down, which needs
     # everything they have said rather than only this turn.
     user_texts = [m.content for m in history if m.role is MessageRole.USER] + [content]
+    # Mani's own earlier replies, which the offer gate reads: a set of questions may not be
+    # offered until one of them has put an understanding to the person and they have answered it.
+    mani_texts = [m.content for m in history if m.role is MessageRole.MANI]
+    # Their names, so an earlier offer's own words are not read as an understanding of the person.
+    previous_read = WorkingRead.stored(ctx.summary.working_read if ctx.summary else None)
+    framework_names = tuple(
+        f.name for f in (config.registry.get(fid) for fid in config.registry.ids) if f
+    )
 
     # Which framework fits is the model's call, from the Framework Index. Code decides only the one
     # case it must not leave to the model: an imminent action is offered a pause now, with the
@@ -455,7 +497,7 @@ async def send(
     prefix = context.build(
         ctx, framework=active_framework, candidate=candidate,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
-        framework_starting=accepted_this_turn, urgent=urgent,
+        framework_starting=accepted_this_turn,
     )
     for_model = (
         f'User tapped the button: "{tapped.label}".'
@@ -492,69 +534,126 @@ async def send(
     )
     reply = call.value
     clear_ok = context.cooldown_passed(ctx)
-    closest_ok = context.closest_fit_ok(ctx, urgent=urgent)
     framework_going = ctx.technique is not None and ctx.technique.outcome is TechniqueOutcome.ACCEPTED
     # Every reply before an offer asks one question, so the conversation keeps moving. Not while
     # the questions run (each stage asks its own), not on a safety concern, and not when the draft
     # itself chose a shape that asks nothing, which is how it answers someone who only wants to be heard.
     needs_question = not framework_going and not assessment.blocks_framework
 
-    # They asked about the offer still open, by typing a question or tapping Tell me more. The
-    # reply answers and offers the same one again, which is not a new offer and waits for nothing.
-    asked_about_offer = offer is not None and (
-        (deferred and "?" in content)
-        or (tapped is not None and tapped.label.strip().lower() in EXPLAIN_LABELS)
-    )
+    # They asked about the offer still open, by tapping Tell me more or typing a question the
+    # draft itself reports as about the offer. The reply answers and offers the same one again,
+    # which is not a new offer and waits for nothing.
+    def _asked_about(draft: Reply) -> bool:
+        """They asked about the open offer: Tell me more, or a typed question the draft itself
+        reports as about the offer (state names it, accepted left null)."""
+        if offer is None:
+            return False
+        if tapped is not None and tapped.label.strip().lower() in EXPLAIN_LABELS:
+            return True
+        return bool(
+            deferred and draft.state is not None
+            and draft.state.technique == offer.technique and draft.state.accepted is None
+        )
+
+    def _accepts(draft: Reply) -> bool:
+        """A yes typed to the offer still open, which the draft itself reports and the outcome
+        below is read from."""
+        return (
+            tapped is None and technique is not None and technique.outcome is TechniqueOutcome.OFFERED
+            and draft.state is not None and draft.state.accepted is True
+        )
 
     def _why(draft: Reply) -> list[str]:
         return redraft.reasons(
             draft, user_texts, config.registry,
-            # A fit that is not clear waits for the closest fit's own window. A typed reply to an
-            # offer already open is Keep chatting unless it asks about the offer, so offering
-            # again there needs the same window; the repeat used to be dropped and leave no
-            # question.
-            offer_not_allowed=not asked_about_offer
-            and not (closest_ok if draft.offer_fit == "closest" else clear_ok),
-            closest_fit_due=context.closest_fit_due(ctx) and not assessment.blocks_framework
+            # A typed reply to an offer already open is Keep chatting unless it asks about the
+            # offer, so offering again there waits out the cooldown; the repeat used to be dropped
+            # and leave no question.
+            offer_not_allowed=not _asked_about(draft) and not clear_ok,
+            may_offer=clear_ok and not assessment.blocks_framework and not framework_going
             and not deferred,
             needs_question=needs_question,
             stage_in_force=None if assessment.blocks_framework else _stage_in_force(
-                running_framework, technique, accepted_this_turn=accepted_this_turn,
+                running_framework, technique, accepted_this_turn=accepted_this_turn or _accepts(draft),
             ),
             last_mani_text=next(
                 (m.content for m in reversed(history) if m.role is MessageRole.MANI), None
             ),
+            mani_texts=mani_texts,
+            framework_names=framework_names,
+            urgent=urgent,
+            previous_read=previous_read,
         )
 
     why = _why(reply)
     attempts = 0
+    spent_ms = call.latency_ms
     # A draft that names a feeling they never did, offers before it may, offers what they said
-    # rules out, or asks nothing gets one more try, told why; a missing question gets a second.
-    # What still fails is corrected by repairs.apply.
-    while why and attempts < 2 and (attempts == 0 or any("asks no question" in w for w in why)):
+    # rules out, or asks nothing gets one more try, told why; a missing question, a confusion
+    # read as an answer, a question moved on from unanswered, or an under-answered multi-question
+    # message gets a second. What still fails is corrected by repairs.apply.
+    while why and attempts < 2 and (attempts == 0 or any(
+        "asks no question" in w
+        or "is confusion, not an answer" in w
+        or "you moved on from" in w
+        or "questions in that message and you answered" in w
+        for w in why
+    )):
+        left = redraft.redraft_seconds(spent_ms)
+        if left is None:
+            # A slow provider makes every call slow, so a redraft would double a turn that has
+            # already kept them waiting. The draft in hand stands and repairs.apply corrects it.
+            logger.warning(
+                "thread %s skipping redraft after %d ms: %s", ctx.thread.id, spent_ms, "; ".join(why)
+            )
+            break
         logger.info("thread %s redrafting: %s", ctx.thread.id, "; ".join(why))
-        again = await client.complete(
-            [{"role": "system", "content": system.text}]
-            + _conversation(history)
-            + [{"role": "user", "content": context.with_rewrite_notes(prefix, why) + for_model}],
-            Reply,
-            model=model,
-            purpose=llm_calls.Purpose.CHAT,
-            temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
-            max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
-            reasoning_effort=parameters.get("reasoning_effort"),
-            routing=routing,
-            user_id=user_id,
-            thread_id=ctx.thread.id,
-            prompt_version_id=None,
-        )
+        try:
+            again = await client.complete(
+                [{"role": "system", "content": system.text}]
+                + _conversation(history)
+                + [{"role": "user", "content": context.with_rewrite_notes(prefix, why) + for_model}],
+                Reply,
+                model=model,
+                purpose=llm_calls.Purpose.CHAT,
+                temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
+                max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
+                reasoning_effort=parameters.get("reasoning_effort"),
+                routing=routing,
+                user_id=user_id,
+                thread_id=ctx.thread.id,
+                prompt_version_id=None,
+                timeout_seconds=left,
+            )
+        except ServiceError as failed:
+            if failed.category not in (ErrorCategory.LLM_TIMEOUT, ErrorCategory.LLM_UNAVAILABLE):
+                raise
+            # The draft already in hand is a whole reply and repairs.apply corrects what it can;
+            # losing the person's message because the second try stalled costs more than a
+            # draft that was only flagged.
+            logger.warning("thread %s redraft failed (%s); keeping the first draft", ctx.thread.id, failed.category)
+            break
         reply = again.value
+        spent_ms += again.latency_ms
         attempts += 1
         why = _why(reply)
+    asked_about_offer = _asked_about(reply)
     if reply.heading_toward:
         # Read by the steering evals and by anyone asking why a question went where it did:
         # the id only, never a word of what the person said.
         logger.info("thread %s heading toward %s", ctx.thread.id, reply.heading_toward)
+    if reply.next_move == "offer" or redraft.offered(reply, config.registry):
+        # What the draft claimed about having put an understanding to them, against what its own
+        # earlier replies bear out. Two words, so a model that claims it without having done it
+        # can be counted rather than only read about in a transcript.
+        logger.info(
+            "thread %s offering with understanding_said=%s, borne out: %s",
+            ctx.thread.id, reply.understanding_said,
+            redraft.stated_understanding(mani_texts, user_texts, framework_names),
+        )
+    if framework_going and not reply.stages_known and not assessment.blocks_framework:
+        # Counted to decide whether a missing ledger needs its own redraft: ids only.
+        logger.warning("thread %s framework turn without stages_known", ctx.thread.id)
     if reply.stages_known:
         # Which stages the model judged already answered: ids and verdicts only, never their words.
         logger.info(
@@ -591,7 +690,7 @@ async def send(
             # Carrying on past the offer is Keep chatting (muhammad, 2026-09-24), held here
             # rather than left to the model, which kept asking again. The one exception is a
             # question the reply answers by making the offer again: they asked about it.
-            asked_about_it = "?" in content and any(p.technique for p in reply.prompts or [])
+            asked_about_it = asked_about_offer
             if not asked_about_it or (reply.state is not None and reply.state.accepted is False):
                 outcome = TechniqueOutcome.DECLINED
     elif (
@@ -644,10 +743,17 @@ async def send(
         # stood open.
         # An offer a second draft still makes after what they said ruled it out is dropped the
         # way an early one is.
+        # An offer that a second draft still makes without having put an understanding to them
+        # is dropped here, the way one made before the cooldown is. Otherwise the redraft is the
+        # only thing standing between a premature offer and the person reading it.
         cooldown_passed=(
-            (closest_ok if reply.offer_fit == "closest" else clear_ok)
+            clear_ok
             and outcome is not TechniqueOutcome.DECLINED
             and not redraft.ruled_out(reply, user_texts, config.registry)
+            # An imminent action is the one offer that cannot wait to be understood first.
+            and (urgent or redraft.understanding_ok(
+                reply, mani_texts, user_texts, framework_names
+            ))
         ),
         conversation_style=context.resolve_style(ctx),
         wants_title=wants_title,
@@ -662,6 +768,10 @@ async def send(
         ),
         clarification_already_used=context.clarification_used(history),
         offer_asked_about=asked_about_offer,
+        stage_exhausted=(
+            technique is not None and not accepted_this_turn
+            and technique.stage_asks >= context.MAX_STAGE_ASKS
+        ),
     )
     if assessment.blocks_framework or model_concern:
         # A concern pauses the framework rather than ending it: nothing this reply reports
@@ -677,6 +787,8 @@ async def send(
             + ([f"dropped a technique offered on a safety-concern turn: {', '.join(paused)}"]
                if paused else []),
         )
+    checkin_asked = _checkin_asked_in(history)
+    describes_body_improvement = reply.describes_body_improvement is True
     if technique is not None and not (assessment.blocks_framework or model_concern):
         fixed = _body_route_step(
             fixed,
@@ -686,8 +798,23 @@ async def send(
             content,
             technique.phase,
             _awaiting_place(history),
+            checkin_asked,
+            describes_body_improvement,
         )
-    if fixed.phase == "somatic_checkin" and fixed.framework_id is not None and not _ASKS_WHAT_NEXT.search(fixed.text):
+    # The model's own text matching the handoff phrase is not proof the check-in actually
+    # happened: the real flow must have asked it, or the user's own message must independently
+    # describe their body. Otherwise the text is trusted as fresh model prose and the
+    # mandatory check-in script still runs.
+    checkin_satisfied = (
+        checkin_asked
+        or repairs.named_place(content) is not None
+        or describes_body_improvement
+        or repairs.declines_or_acts(content)
+    )
+    if (
+        fixed.phase == "somatic_checkin" and fixed.framework_id is not None
+        and not (checkin_satisfied and _ASKS_WHAT_NEXT.search(fixed.text))
+    ):
         # The client's flow (2026-09-24): the body check-in is fixed content, sent word for
         # word, never reworded. Skipped when they already described their body and this
         # reply moves straight to the two choices instead of asking again.
@@ -711,7 +838,10 @@ async def send(
         ]
         fixed = dataclasses.replace(
             fixed,
-            prompts=_handoff() if _ASKS_WHAT_NEXT.search(fixed.text) else without_handoff,
+            prompts=(
+                _handoff() if checkin_satisfied and _ASKS_WHAT_NEXT.search(fixed.text)
+                else without_handoff
+            ),
         )
     if retiring_framework_id is not None and repairs.comes_back(content):
         # The client's words for a feeling that returns after the practice, sent as written.
@@ -729,6 +859,16 @@ async def send(
         # The reply that ends a framework offers the client's two choices, always and
         # exactly. Left to the model they came back mislabeled or missing. Skipped when
         # they have already chosen one, or were just offered both.
+        fixed = dataclasses.replace(fixed, prompts=_handoff())
+    elif (
+        technique is None
+        and retiring_framework_id is None
+        and _ASKS_WHAT_NEXT.search(fixed.text) is not None
+    ):
+        # No framework is live this turn, and none just retired - but the model wrote the
+        # "keep chatting or go to the Library" sentence on its own initiative anyway (e.g. on
+        # a later turn, well after a framework's state row was retired). The sentence still
+        # means the same two choices, so it still gets the same buttons.
         fixed = dataclasses.replace(fixed, prompts=_handoff())
     if not fixed.text.strip():
         # Nothing left to say once leaked metadata was stripped. Refused here as retryable,
@@ -795,6 +935,29 @@ async def send(
         updates.library_offered = True
     if fixed.style is not None:
         updates.style = ResponseStyle(shape=fixed.style.shape)
+    read_notes: list[str] = []
+    if (
+        not redraft.offered(reply, config.registry) and not framework_going
+        and (asked_known := redraft.asks_what_is_known(reply, previous_read, mani_texts))
+    ):
+        read_notes.append(f"still asks for something it already has ({asked_known}), even after a redraft")
+    if redraft.same_unknown(previous_read, reply):
+        read_notes.append("still trying to find out the same thing as last reply")
+        logger.info("thread %s read still after the same unknown as last reply", ctx.thread.id)
+    stored_read: WorkingRead | None = None
+    if reply.working_read and not assessment.blocks_framework:
+        # Carried to the next turn so the reading goes forward rather than being formed again
+        # from nothing. Not on a safety turn: the reply there is not the work of a reading. A
+        # feeling they never named is taken out first, or it would be read as theirs from then on.
+        read, invented = repairs.grounded_read(reply.working_read, user_texts)
+        if invented:
+            read_notes.append(f"dropped feeling word(s) they never used: {', '.join(invented)}")
+            logger.info(
+                "thread %s dropped %d feeling word(s) they did not use from the read",
+                ctx.thread.id, len(invented),
+            )
+        stored_read = repairs.carried_read(previous_read, read)
+        updates.working_read = stored_read.model_dump_json()
     if fixed.title:
         updates.title = fixed.title
 
@@ -825,11 +988,15 @@ async def send(
         llm_call_id=call.call_id,
         exercise=exercise,
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
+        working_read=stored_read.model_dump() if settings.ai_debug_mode and stored_read else None,
+        read_notes=read_notes if settings.ai_debug_mode else None,
         ledger=(
             redraft.ledger_view(
-                reply, config.registry.get(reply.state.technique) if reply.state else running_framework,
+                reply,
+                config.registry.get(reply.state.technique) if reply.state else running_framework,
+                fixed.phase or (technique.phase if technique else None),
             )
-            if settings.ai_debug_mode and reply.stages_known
+            if settings.ai_debug_mode and (reply.stages_known or framework_going)
             else None
         ),
     )

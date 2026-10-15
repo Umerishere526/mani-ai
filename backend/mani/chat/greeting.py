@@ -53,3 +53,12 @@ AFTER_FRAMEWORK_QUESTIONS = (
 # The client's own check, asked at most once per conversation when several things have come
 # up and it is unclear which matters most (muhammad, 2026-09-24: "never a new loop").
 CLARIFICATION_QUESTIONS = ("do i have this right?", "what would you like us to focus on today?")
+
+# The line that opens a framework once they say yes, in each style. It is said by the backend so it
+# always comes first, ahead of the stage's own label, and the prompt (`consent_lines` in
+# mani_base.md) carries the same words; a test holds the two together.
+CONSENT_LINES = {
+    "direct": "Okay. I'll guide you through it one step at a time.",
+    "supportive": "Okay. We'll take it one step at a time together.",
+    "reflective": "Okay. Let's look at it together, one step at a time.",
+}

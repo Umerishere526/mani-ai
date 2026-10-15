@@ -74,7 +74,7 @@ def _as_service_error(exc: Exception) -> tuple[ServiceError, llm_calls.Outcome]:
             ),
             llm_calls.Outcome.PROVIDER_ERROR,
         )
-    if isinstance(exc, openai.APITimeoutError):
+    if isinstance(exc, (openai.APITimeoutError, TimeoutError)):
         return (
             ServiceError(
                 f"provider timed out: {exc}",
@@ -174,15 +174,18 @@ async def complete[T: BaseModel](
     thread_id: uuid.UUID | str | None = None,
     prompt_version_id: uuid.UUID | str | None = None,
     settings: Settings | None = None,
+    timeout_seconds: float | None = None,
 ) -> Call[T]:
     """Ask the model for one structured reply.
 
     OpenRouter is the only provider. LangChain composes the call and parses the reply into
     the schema; the base_url points at OpenRouter, so it is one protocol and one bill, not a
     second provider. One provider call, plus at most one retry when the reply does not
-    parse - each attempt billed and recorded on its own row.
+    parse - each attempt billed and recorded on its own row. `timeout_seconds` cuts each attempt
+    sooner than `llm_timeout_seconds`, for a call that has only part of a turn left to run in.
     """
     settings = settings or get_settings()
+    limit = timeout_seconds if timeout_seconds is not None else settings.llm_timeout_seconds
     if not settings.openrouter_api_key:
         raise ServiceError(
             "OPENROUTER_API_KEY is not set",
@@ -211,7 +214,10 @@ async def complete[T: BaseModel](
             # of the one before it.
             usage = llm_calls.Usage()
             try:
-                result = await runnable.ainvoke(messages)
+                # The SDK's timeout applies to each read, not to the whole call, so a provider
+                # that holds the connection open without finishing is never cut off by it.
+                async with asyncio.timeout(limit):
+                    result = await runnable.ainvoke(messages)
             except _TRANSIENT as exc:
                 if isinstance(exc, openai.APITimeoutError) or attempt == MAX_SCHEMA_ATTEMPTS:
                     raise

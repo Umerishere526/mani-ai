@@ -81,5 +81,7 @@ async def send(
         was_duplicate=turn.was_duplicate,
         reasoning=turn.reasoning,
         ledger=turn.ledger,
+        working_read=turn.working_read,
+        read_notes=turn.read_notes,
         exercise=exercise,
     )

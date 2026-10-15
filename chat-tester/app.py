@@ -313,6 +313,7 @@ with st.sidebar:
     st.subheader("🧾 What Mani knows")
     LEDGER_ICONS = {
         "known": "✅", "partial": "🟡", "confirm": "❓", "missing": "⬜", "done": "✔️", "not_reached": "⚪",
+        "unreported": "🔸",
     }
     ledger = (last_turn or {}).get("ledger")
     if ledger:
@@ -324,9 +325,32 @@ with st.sidebar:
             )
             if row.get("known"):
                 st.caption(f"knows: {row['known']}")
-        st.caption("✅ bypassed  🟡 partial  ❓ confirm  ⬜ missing  ✔️ done earlier  ▶ asked this reply")
+        st.caption("✅ confirmed  🟡 partial  ❓ confirm  ⬜ missing  ✔️ done earlier  🔸 no ledger sent  ▶ asked this reply")
     else:
         st.caption("Shown while a framework is running, with AI_DEBUG_MODE on in the backend.")
+
+    if developer:
+        # Mani's read of the person on its last reply, slot by slot. It is carried to the next
+        # turn, so this is what the next reply starts from. Sent only while AI_DEBUG_MODE is on.
+        st.divider()
+        st.subheader("🧠 Mani's read")
+        read = (last_turn or {}).get("working_read")
+        if read:
+            st.markdown(f"**Situation**  \n{read.get('situation') or '—'}")
+            feelings = ", ".join(read.get("feeling") or []) or "none they named"
+            st.markdown(f"**Their feeling**  \n{feelings}")
+            st.markdown(f"**What they concluded**  \n{read.get('meaning') or '—'}")
+            st.markdown(f"**How long**  \n{read.get('since') or 'not said'}")
+            st.markdown(f"**What it is doing to them**  \n{read.get('impact') or '—'}")
+            st.markdown(f"**What they do about it**  \n{read.get('response') or '—'}")
+            st.markdown(f"**What they want**  \n{read.get('wants') or '—'}")
+            st.markdown(f"**Heard or help?**  \n{read.get('support', 'not_asked').replace('_', ' ')}")
+            st.markdown(f"**Underneath (Mani's guess)**  \n{read.get('underneath') or '—'}")
+            st.markdown(f"**Still to find out**  \n{read.get('unknown') or '—'}")
+            for note in (last_turn or {}).get("read_notes") or []:
+                st.warning(note)
+        else:
+            st.caption("Shown after Mani's first reply, with AI_DEBUG_MODE on in the backend.")
 
     st.divider()
     # The person's conversations, newest activity first. Tapping one opens it to continue; the

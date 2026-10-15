@@ -7,7 +7,7 @@ provider: openrouter
 model_id: openai/gpt-6-luna
 model_parameters:
   maxTokens: 800
-  reasoning_effort: high
+  reasoning_effort: low
 ---
 
 # Task

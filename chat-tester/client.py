@@ -178,7 +178,7 @@ class ManiClient:
             "Content-Type": "application/json",
         }
         return requests.request(
-            method, f"{self.base_url}{path}", headers=headers, timeout=90, **kwargs
+            method, f"{self.base_url}{path}", headers=headers, timeout=150, **kwargs
         )
 
     def _call(self, method: str, path: str, **kwargs) -> dict[str, Any]:

@@ -91,6 +91,14 @@ def test_production_refuses_to_start_without_the_secrets_it_needs(blank, expecte
         build(environment="production", **blank)
 
 
+def test_production_refuses_to_start_in_debug_mode():
+    """Debug mode puts the model's reasoning about the person, and their read slot by slot, in
+    every reply and a debug layer in every prompt. That is for the chat tester against a local
+    backend; a production process carrying it is a misconfiguration, not a choice."""
+    with pytest.raises(ValidationError, match="AI_DEBUG_MODE"):
+        build(environment="production", ai_debug_mode=True)
+
+
 def test_production_accepts_jwks_in_place_of_the_shared_secret():
     """Supabase signs with either. Requiring both would refuse a valid configuration."""
     settings = build(

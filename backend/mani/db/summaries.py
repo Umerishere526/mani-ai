@@ -9,7 +9,7 @@ from mani.models.rows import TechniqueTried, ThreadSummary
 
 COLUMNS = (
     "thread_id, user_id, summary, current_issue, techniques_tried, "
-    "summarized_through_message_id, summarized_message_count"
+    "summarized_through_message_id, summarized_message_count, working_read"
 )
 
 
