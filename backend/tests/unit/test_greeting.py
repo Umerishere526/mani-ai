@@ -17,13 +17,13 @@ def test_a_returning_person_is_welcomed_back():
 
 
 def test_the_greeting_offers_exactly_the_three_styles():
-    assert [o["label"] for o in greeting.STYLE_OPTIONS] == ["Direct", "Supportive", "Reflective"]
-    assert [o["style"] for o in greeting.STYLE_OPTIONS] == ["direct", "supportive", "reflective"]
+    assert [o["label"] for o in greeting.STYLE_OPTIONS] == ["Directive", "Supportive", "Reflective"]
+    assert [o["style"] for o in greeting.STYLE_OPTIONS] == ["directive", "supportive", "reflective"]
 
 
 def test_each_style_opens_with_its_own_question():
     assert greeting.OPENERS == {
-        "direct": "How can I help you today?",
+        "directive": "How can I help you today?",
         "supportive": "How can I support you today?",
         "reflective": "What's on your mind today?",
     }

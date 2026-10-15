@@ -171,24 +171,38 @@ def build_tool_choice(
     return chat.bind_tools([tool], tool_choice=tool.__name__)
 
 
+def generation_id_from(raw: Any) -> str | None:
+    """OpenRouter's id for the call, which its /generation endpoint resolves to the provider
+    that served it. LangChain keeps it in the metadata and drops the provider field itself."""
+    if raw is None:
+        return None
+    return (getattr(raw, "response_metadata", None) or {}).get("id")
+
+
 def usage_from(raw: Any) -> llm_calls.Usage:
     """Token counts off the provider's response, whichever shape LangChain hands back."""
     if raw is None:
         return llm_calls.Usage()
 
+    # OpenRouter reports the thinking as `completion_tokens_details.reasoning_tokens`, and
+    # langchain-openai copies it into `usage_metadata.output_token_details.reasoning`.
     metadata = getattr(raw, "usage_metadata", None) or {}
     if metadata:
         details = metadata.get("input_token_details") or {}
+        output_details = metadata.get("output_token_details") or {}
         return llm_calls.Usage(
             input_tokens=metadata.get("input_tokens", 0) or 0,
             output_tokens=metadata.get("output_tokens", 0) or 0,
             cached_input_tokens=details.get("cache_read", 0) or 0,
+            reasoning_tokens=output_details.get("reasoning", 0) or 0,
         )
 
     token_usage = (getattr(raw, "response_metadata", None) or {}).get("token_usage") or {}
     prompt_details = token_usage.get("prompt_tokens_details") or {}
+    completion_details = token_usage.get("completion_tokens_details") or {}
     return llm_calls.Usage(
         input_tokens=token_usage.get("prompt_tokens", 0) or 0,
         output_tokens=token_usage.get("completion_tokens", 0) or 0,
         cached_input_tokens=prompt_details.get("cached_tokens", 0) or 0,
+        reasoning_tokens=completion_details.get("reasoning_tokens", 0) or 0,
     )

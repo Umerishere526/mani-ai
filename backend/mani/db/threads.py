@@ -6,7 +6,6 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
 
 import asyncpg
 
@@ -15,7 +14,6 @@ from mani.models.rows import (
     Profile,
     ResponseStyle,
     SupportStyle,
-    TechniqueOutcome,
     TechniqueState,
     Thread,
     ThreadSummary,
@@ -197,7 +195,7 @@ select
                                                    as recent_crisis,
   (select um.memory from admin.user_memory um
     where um.user_id = t.user_id)                  as memory
-from (select {COLUMNS} from public.threads
+from (select {COLUMNS}, understanding, check_at_message_count from public.threads
        where id = $1 and user_id = $2 and deleted_at is null) t
 """
 
@@ -246,6 +244,12 @@ class ThreadUpdates:
     style: ResponseStyle | None = None
     library_offered: bool = False
     conversation_style: SupportStyle | None = None
+    # The whole stage store, set only when this turn's merge changed it.
+    stages_known: dict | None = None
+    # What Mani understands of them, set only when this turn's merge changed it.
+    understanding: dict | None = None
+    # When Mani's check of its understanding was made, set only on the turn whose reply is one.
+    check_at_message_count: int | None = None
 
     def __bool__(self) -> bool:
         # Each optional field is tested for presence, not for truth. A field whose
@@ -259,6 +263,9 @@ class ThreadUpdates:
             or self.style is not None
             or self.library_offered
             or self.conversation_style is not None
+            or self.stages_known is not None
+            or self.understanding is not None
+            or self.check_at_message_count is not None
         )
 
 
@@ -316,6 +323,29 @@ async def apply(
             t.at_message_count, t.library_offered_since,
         )
 
+    if updates.stages_known is not None:
+        # Its own statement after the upsert above, never part of it: a new offer row upserts over
+        # a retired one, and the store has to survive that.
+        await conn.execute(
+            "update public.thread_technique_state set stages_known = $1::jsonb "
+            "where thread_id = $2 and user_id = $3",
+            updates.stages_known, thread_id, user_id,
+        )
+
+    if updates.understanding is not None:
+        # Its own column grant, to mani_service only (migration 022).
+        await conn.execute(
+            "update public.threads set understanding = $1::jsonb where id = $2 and user_id = $3",
+            updates.understanding, thread_id, user_id,
+        )
+
+    if updates.check_at_message_count is not None:
+        # Its own column grant, to mani_service only (migration 023).
+        await conn.execute(
+            "update public.threads set check_at_message_count = $1 where id = $2 and user_id = $3",
+            updates.check_at_message_count, thread_id, user_id,
+        )
+
     if updates.offer_frameworks:
         # One statement. The previous version read the whole row, merged in
         # JavaScript and wrote it back, losing an entry whenever two turns overlapped.
@@ -352,26 +382,4 @@ async def mark_crisis(
     """Flag the thread and record the event. There is no matching unflag."""
     return await conn.fetchval(
         "select public.mark_thread_crisis($1, $2, $3)", thread_id, reason, message_id
-    )
-
-
-async def set_technique_outcome(
-    conn: asyncpg.Connection,
-    thread_id: uuid.UUID | str,
-    user_id: uuid.UUID | str,
-    framework_id: str,
-    outcome: TechniqueOutcome,
-    at_message_count: int,
-    phase: str | None = None,
-) -> None:
-    """Convenience for the common single-field change."""
-    await apply(
-        conn, thread_id, user_id,
-        ThreadUpdates(technique=TechniqueState(
-            thread_id=thread_id if isinstance(thread_id, uuid.UUID) else uuid.UUID(str(thread_id)),
-            framework_id=framework_id,
-            outcome=outcome,
-            phase=phase,
-            at_message_count=at_message_count,
-        )),
     )

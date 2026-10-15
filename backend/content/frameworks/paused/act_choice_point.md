@@ -6,16 +6,14 @@ display_order: 5
 phases: [offering, situation, present, pull, matters, toward, action, closing]
 activation:
   central_indication: >-
-    The user may not be able to change or resolve the situation, but does not want it deciding
-    how they act - the focus shifts from making the thought or feeling go away to choosing how
-    to respond while it is present.
+    The user knows what matters to them but is allowing difficult thoughts or emotions to prevent meaningful action.
   to_find_out:
     - "what part of the situation they cannot change or control"
     - "the thought, feeling or urge that stays with them"
     - "what it pulls them toward doing"
     - "whether they want help choosing how to respond, not solving or disproving it"
-  # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
+  # Documentation of the specification: nothing in mani/ reads to_find_out, appropriate_when or not_when.
+  # The prompt reads central_indication, distinctions and contraindications.
   appropriate_when:
     - "The user cannot fully control or resolve the situation"
     - "A thought cannot be proved or disproved"
@@ -79,7 +77,7 @@ stages:
     ask:
       supportive: "You cannot control their decision, but you still have a choice in how you respond. Would it help to look at that together?"
       reflective: "You cannot resolve the uncertainty, but you can decide how you want to meet it. Would it help to look at that choice?"
-      direct: "The outcome is outside your control. Would you like to identify the response that best reflects what matters to you?"
+      directive: "The outcome is outside your control. Would you like to identify the response that best reflects what matters to you?"
   situation:
     purpose: "Identify the specific situation or uncertainty the user cannot fully control."
     listen_for: "The specific circumstance, outcome, decision, or uncertainty outside the user's control."
@@ -101,7 +99,7 @@ stages:
     ask:
       supportive: "Which part of this is out of your hands?"
       reflective: "When you look at it, which part can you not change?"
-      direct: "What part of this can you not control?"
+      directive: "What part of this can you not control?"
   present:
     purpose: "Identify the thought, feeling, memory, physical experience, or urge, using only the user's language."
     listen_for: "The user's own words for the thought, feeling, memory, physical experience, or urge."
@@ -119,7 +117,7 @@ stages:
     ask:
       supportive: "When you think about it, what comes up for you?"
       reflective: "What is showing up for you when you think about it?"
-      direct: "What comes up when you think about it?"
+      directive: "What comes up when you think about it?"
   pull:
     purpose: "Recognize what the internal experience is pulling the user toward doing or avoiding."
     listen_for: "The action, reaction, avoidance, or pattern the experience is encouraging."
@@ -140,7 +138,7 @@ stages:
     ask:
       supportive: "What does that make you want to do?"
       reflective: "What do you notice it pulling you toward, or away from?"
-      direct: "What is that pulling you toward doing?"
+      directive: "What is that pulling you toward doing?"
   matters:
     purpose: "Clarify how the user wants to act and what they want their response to represent."
     listen_for: "The quality, principle, relationship, responsibility, or way of acting the user values here."
@@ -166,7 +164,7 @@ stages:
     ask:
       supportive: "Whatever happens, how would you like to respond?"
       reflective: "What would you want your response to show about what matters to you?"
-      direct: "What matters to you in how you respond?"
+      directive: "What matters to you in how you respond?"
   toward:
     purpose: "Identify a response that moves toward what the user said matters."
     listen_for: "A behaviour that reflects what the user identified as important."
@@ -192,7 +190,7 @@ stages:
     ask:
       supportive: "What could you do that moves you toward that?"
       reflective: "What response would bring you closer to that?"
-      direct: "What response would move you toward that?"
+      directive: "What response would move you toward that?"
   action:
     purpose: "Turn the chosen direction into one manageable action."
     listen_for: "A specific, safe, realistic action within the user's control."
@@ -210,7 +208,7 @@ stages:
     ask:
       supportive: "What is one small thing you could do?"
       reflective: "What would one step toward that look like?"
-      direct: "What is one action you can take?"
+      directive: "What is one action you can take?"
   closing:
     purpose: "Confirm completion in the user's own terms, without claiming the thought or feeling has changed."
     ready_when: >-
@@ -226,7 +224,7 @@ stages:
     ask:
       supportive: "You chose an action that reflects what matters to you. How is that choice sitting with you?"
       reflective: "The thought may remain, but it no longer has to make the decision. What changes when you see that choice?"
-      direct: "You identified what matters and the action that supports it. Is that action realistic?"
+      directive: "You identified what matters and the action that supports it. Is that action realistic?"
 ---
 
 # ACT Choice Point

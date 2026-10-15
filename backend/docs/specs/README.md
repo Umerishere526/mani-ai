@@ -9,6 +9,9 @@ against these specs, but where a spec's tone lines carry scenario text ("her sil
 content uses each stage's primary question instead: `tests/evals/test_negative_set.py` rejects an ask that
 names someone or hands over a feeling word.
 
+Requirements the client sent after these specs, and the messages they came from, are in
+[`docs/client/`](../../../docs/client/README.md). A newer client message beats an older spec.
+
 | File | Source | What it carries |
 |---|---|---|
 | `conversational-styles.md` | *Direct. Supportive. Reflective.* | The three styles, the full conversation cadence, the greeting and style-selection flow, the somatic check-in wording, per-style behaviour inside a framework, worked scenarios across all three styles |

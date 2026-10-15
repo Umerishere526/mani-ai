@@ -92,7 +92,7 @@ async def test_a_turn_writes_both_sides_and_is_idempotent(alice):
     assert again.was_duplicate is True
     assert again.user_message_id == first.user_message_id
 
-    history = await messages.recent_for_context(alice, thread.id, ALICE)
+    history = (await messages.for_context(alice, thread.id, ALICE, budget_chars=get_settings().context_budget_chars)).messages
     assert [m.role for m in history] == ["user", "mani"]
     assert history[1].prompt_options == [{"label": "Tell me more"}]
 
@@ -169,14 +169,14 @@ async def test_a_conversation_style_survives_the_round_trip(alice):
 
     await threads.apply(
         alice, thread.id, ALICE,
-        threads.ThreadUpdates(conversation_style=SupportStyle.DIRECT),
+        threads.ThreadUpdates(conversation_style=SupportStyle.DIRECTIVE),
     )
 
     reread = await threads.get(alice, thread.id, ALICE)
-    assert reread.conversation_style is SupportStyle.DIRECT
+    assert reread.conversation_style is SupportStyle.DIRECTIVE
 
     ctx = await threads.load_turn_context(alice, thread.id, ALICE)
-    assert ctx.thread.conversation_style is SupportStyle.DIRECT
+    assert ctx.thread.conversation_style is SupportStyle.DIRECTIVE
 
 
 async def test_the_composed_read_refuses_another_users_thread(alice, users):
@@ -206,7 +206,7 @@ async def test_a_turn_keeps_its_halves_in_order(alice):
     for n in range(5):
         await messages.create_pair(alice, thread.id, f"user {n}", f"mani {n}")
 
-    history = await messages.recent_for_context(alice, thread.id, ALICE, limit=10)
+    history = (await messages.for_context(alice, thread.id, ALICE, budget_chars=get_settings().context_budget_chars)).messages
     assert [m.content for m in history] == [
         c for n in range(5) for c in (f"user {n}", f"mani {n}")
     ]
@@ -305,14 +305,51 @@ async def test_a_model_call_is_recorded_with_its_cost(users):
     from mani.db import pool
 
     async with pool.as_admin() as conn:
-        await llm_calls.record(
+        call_id = await llm_calls.record(
             conn, purpose=llm_calls.Purpose.CHAT, model="google/gemini-3-flash-preview",
             outcome=llm_calls.Outcome.OK, latency_ms=4200, user_id=ALICE,
-            usage=llm_calls.Usage(input_tokens=8230, output_tokens=385))
+            usage=llm_calls.Usage(input_tokens=8230, output_tokens=385, reasoning_tokens=300),
+            generation_id="gen-1760400000-abc")
         spend = await llm_calls.spend_since(conn, ALICE)
+        thinking, generation = await conn.fetchrow(
+            "select reasoning_tokens, generation_id from admin.llm_calls where id = $1", call_id
+        )
 
     assert spend["input_tokens"] == 8230
     assert spend["calls"] == 1
+    assert thinking == 300
+    assert generation == "gen-1760400000-abc"
+
+
+async def test_a_scenario_turn_is_billed_only_for_the_calls_it_made(users):
+    """The scenario check reads one thread's cost rows turn by turn, so a turn that redrafted or
+    picked an exercise shows its extra calls and the next turn does not inherit them."""
+    from mani.db import pool, threads
+    from scripts import scenario_check
+
+    async def call(thread_id, output: int, thinking: int) -> None:
+        async with pool.as_admin() as conn:
+            await llm_calls.record(
+                conn, purpose=llm_calls.Purpose.CHAT, model="m", outcome=llm_calls.Outcome.OK,
+                latency_ms=1, user_id=ALICE, thread_id=thread_id,
+                usage=llm_calls.Usage(
+                    input_tokens=1000, output_tokens=output, cached_input_tokens=800,
+                    reasoning_tokens=thinking,
+                ),
+            )
+
+    async with pool.as_admin() as conn:
+        thread, _ = await threads.create_or_reuse(conn, ALICE)
+    billed = [0]
+    await call(thread.id, 100, 60)
+    await call(thread.id, 50, 10)
+    first = await scenario_check._cost(thread.id, 1.5, billed)
+    await call(thread.id, 30, 0)
+    second = await scenario_check._cost(thread.id, 0.5, billed)
+
+    assert (first.calls, first.input_tokens, first.cached_tokens) == (2, 2000, 1600)
+    assert (first.output_tokens, first.reasoning_tokens, first.seconds) == (150, 70, 1.5)
+    assert (second.calls, second.output_tokens, second.reasoning_tokens) == (1, 30, 0)
 
 
 async def test_threads_needing_summary_lists_across_users(users):
@@ -325,6 +362,11 @@ async def test_threads_needing_summary_lists_across_users(users):
     async with pool.as_admin() as conn:
         thread_a, _ = await threads.create_or_reuse(conn, ALICE)
         thread_b, _ = await threads.create_or_reuse(conn, BOB)
+        for thread, user in ((thread_a, ALICE), (thread_b, BOB)):
+            await conn.execute(
+                "insert into public.messages (thread_id, user_id, role, content) values ($1, $2, 'user', $3)",
+                thread.id, user, "a message longer than the budget",
+            )
         await conn.execute(
             "update public.threads set message_count = 25 where id = any($1)",
             [thread_a.id, thread_b.id],
@@ -335,9 +377,25 @@ async def test_threads_needing_summary_lists_across_users(users):
             summarized_message_count=24,
         )
         # A large limit: this local database carries threads from other test runs already
-        # past the threshold, and the point here is inclusion/exclusion, not the limit.
-        due = await summaries.due_for_summary(conn, threshold=20, limit=10_000)
+        # past the threshold, and the point here is inclusion/exclusion, not the limit. Both
+        # threads are past a tiny budget; only the one whose summary lags a block is due.
+        due = await summaries.due_for_summary(conn, budget_chars=10, block=20, limit=10_000)
 
     ids = {(row["thread_id"], row["user_id"]) for row in due}
     assert (thread_a.id, ALICE) in ids
     assert (thread_b.id, BOB) not in ids
+
+
+async def test_the_model_sees_the_whole_thread_until_the_budget_then_loses_whole_blocks(alice):
+    """2026-10-13: within the budget nothing is left out, so what they said early is still there when
+    a later stage needs it; past it the oldest messages go a block at a time, so what is shown stays
+    the same between drops."""
+    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    for n in range(30):
+        await messages.create_pair(alice, thread.id, f"user {n:02d} " + "x" * 90, f"mani {n:02d} " + "y" * 90)
+    whole = await messages.for_context(alice, thread.id, ALICE, budget_chars=1_000_000)
+    assert whole.dropped == 0 and whole.messages[0].content.startswith("user 00")
+    tight = await messages.for_context(alice, thread.id, ALICE, budget_chars=4_000)
+    assert tight.dropped % messages.CONTEXT_DROP_BLOCK == 0 and tight.dropped > 0
+    assert sum(len(m.content) for m in tight.messages) <= 4_000
+    assert len(tight.messages) + tight.dropped == len(whole.messages)

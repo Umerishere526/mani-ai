@@ -1,55 +1,385 @@
 {
-  "workplace_boundaries": {
-    "source": "Loli's testing, 2026-10-09, the same messages in all three styles",
-    "lines": [
-      "I keep agreeing to take on more work even when I already have too much to do. I know I need to start saying no, but I'm worried about how my manager will react.",
-      "I'm afraid he'll think I'm not committed to my job or that I can't handle my responsibilities.",
-      "I'm worried it could affect how he sees me professionally and whether he considers me for future opportunities.",
-      "He hasn't actually reacted negatively before. I think I'm just afraid of what might happen if I start saying no."
-    ]
+  "says_how_it_is_early": {
+    "about": "They say how it is for them (a feeling, a worry, or what they tell themselves) in their first messages. Mani checks its understanding within the client's two to four exchanges after the issue, and a yes brings the offer.",
+    "expect": {
+      "check_by": 5
+    },
+    "conversations": {
+      "resentful_coworker": {
+        "source": "Lolly's Directive test, 2026-10-12 (R1): line 1 is her message word for word; lines 2 to 5 are muhammad's test lines",
+        "lines": [
+          "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
+          "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
+          "I keep thinking they only see me as someone useful, not as a colleague.",
+          "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
+          "I don't know how to handle it without making things awkward at work."
+        ]
+      },
+      "workplace_boundaries": {
+        "source": "Loli's testing, 2026-10-09, the same messages in all three styles",
+        "lines": [
+          "I keep agreeing to take on more work even when I already have too much to do. I know I need to start saying no, but I'm worried about how my manager will react.",
+          "I'm afraid he'll think I'm not committed to my job or that I can't handle my responsibilities.",
+          "I'm worried it could affect how he sees me professionally and whether he considers me for future opportunities.",
+          "He hasn't actually reacted negatively before. I think I'm just afraid of what might happen if I start saying no."
+        ]
+      },
+      "job_decision": {
+        "source": "Loli's testing, 2026-10-08",
+        "lines": [
+          "I'm facing an important decision, and I keep going back and forth. Every time I think I've made up my mind, I start questioning myself again. I'm frustrated because I don't understand why I can't just decide.",
+          "I'm trying to decide whether to accept a new job opportunity or stay where I am. There are good reasons for both, and I'm afraid of making the wrong choice.",
+          "The new job offers better pay and more responsibility, but I've been at my current company for years. I know the people, I'm comfortable there, and I'm worried I might regret leaving"
+        ]
+      },
+      "big_brother": {
+        "source": "muhammad's testing, 2026-10-09",
+        "lines": [
+          "i think i am not good enough",
+          "i think i am not good enough as a big brother as i was not able to provide for my little brother",
+          "i mean i wanted to be aperfect role model for him but i failed i am not someone good enough he can look upto"
+        ]
+      },
+      "embarrassed_at_work": {
+        "source": "muhammad's testing, 2026-10-09",
+        "lines": [
+          "i was embarassed in front of the whole office",
+          "my manger did this to me",
+          "he blamed his wrong work on me and insulted me which made me feeling like this",
+          "i have been constantly in a state i cant describe now i fear how would i face my colleagues",
+          "idk yet"
+        ]
+      },
+      "manager_threat": {
+        "source": "muhammad's testing, 2026-10-09: Mani asked again for what they had told it",
+        "lines": [
+          "i feel embarassed, my manager critisized my work infront of everyone",
+          "he critisized my work in front o f thw hole office",
+          "It has been happening for quite a bit time but this time it was way too much. He insulted me and said I would be fired.",
+          "No, but he seems like he wants to get me fired because he's been constantly pointing out errors in my work that are even irrelevant or small mistakes. And this time he had me feel too embarrassed",
+          "Nothing much, it's just that I was too embarrassed and I have this feeling that my colleagues will be laughing at me because it was a too embarrassing moment. It had never been done before to anyone, so that's my concern right now."
+        ]
+      },
+      "left_out_of_meetings": {
+        "source": "muhammad's testing, 2026-10-09",
+        "lines": [
+          "i have been left out of a few important meeting lately, i am starting to wonder if the role on the team is changing.",
+          "just told you not being invited to meetingd",
+          "i think i might be getting fired"
+        ]
+      }
+    }
   },
-  "job_decision": {
-    "source": "Loli's testing, 2026-10-08",
-    "lines": [
-      "I'm facing an important decision, and I keep going back and forth. Every time I think I've made up my mind, I start questioning myself again. I'm frustrated because I don't understand why I can't just decide.",
-      "I'm trying to decide whether to accept a new job opportunity or stay where I am. There are good reasons for both, and I'm afraid of making the wrong choice.",
-      "The new job offers better pay and more responsibility, but I've been at my current company for years. I know the people, I'm comfortable there, and I'm worried I might regret leaving"
-    ]
+  "describes_only_what_happened": {
+    "about": "Their first messages give only what happened or what they keep doing, with no feeling or belief. No check until they say how it is for them.",
+    "expect": {
+      "check_from": 4,
+      "check_by": 5
+    },
+    "conversations": {
+      "coworker_in_fragments": {
+        "source": "muhammad's chat-tester run, 2026-10-12: lines 1 to 3 word for word (ABCDE was offered on line 3); lines 4 and 5 written by Claude to say how it is for them",
+        "lines": [
+          "I have a coworker who is always asking me for help",
+          "I usually say yes.",
+          "i end updoing the majority of their work",
+          "It's starting to make me resentful.",
+          "I think they only see me as someone useful."
+        ]
+      }
+    }
   },
-  "big_brother": {
-    "source": "muhammad's testing, 2026-10-09",
-    "lines": [
-      "i think i am not good enough",
-      "i think i am not good enough as a big brother as i was not able to provide for my little brother",
-      "i mean i wanted to be aperfect role model for him but i failed i am not someone good enough he can look upto"
-    ]
+  "client_documents": {
+    "about": "The person's lines from the client's styles document of 2026-10-12, word for word. In the document the offer comes right after their last line; Mani now checks its understanding there, and a yes brings the offer.",
+    "expect": {},
+    "conversations": {
+      "client_panic": {
+        "source": "the Reflective panic conversation",
+        "expect": {
+          "check_by": 3
+        },
+        "lines": [
+          "I feel like I might have a panic attack.",
+          "My chest feels tight, my thoughts are racing, and I feel like I'm losing control.",
+          "The feeling that I'm losing control."
+        ]
+      },
+      "client_overthinking": {
+        "source": "the Directive overthinking conversation",
+        "expect": {
+          "check_by": 4
+        },
+        "lines": [
+          "I'm upset.",
+          "My best friend sent me a text and now I think she hates me.",
+          "She was really short with me and ended the conversation. Now I keep replaying it and wondering what I did wrong.",
+          "Yes. I can't stop thinking about it."
+        ]
+      },
+      "client_scrolling": {
+        "source": "the Directive scrolling conversation",
+        "expect": {
+          "check_by": 4
+        },
+        "lines": [
+          "I cannot stop scrolling, but I need to.",
+          "I tell myself I'm going to put my phone down, but then I keep scrolling. I can lose an hour without even realizing it.",
+          "I don't even know. I just keep checking one more thing.",
+          "Yes. Exactly."
+        ]
+      },
+      "client_stress": {
+        "source": "the Directive stress conversation",
+        "expect": {
+          "check_by": 3
+        },
+        "lines": [
+          "I'm stressed. I'm trying to balance work, family, and everything else, and I have a deadline coming up.",
+          "The deadline. I need to finish a presentation by Friday, but my kids need me, work keeps piling up, and I can't seem to focus.",
+          "I keep jumping from one thing to another."
+        ]
+      }
+    }
   },
-  "embarrassed_at_work": {
-    "source": "muhammad's testing, 2026-10-09",
-    "lines": [
-      "i was embarassed in front of the whole office",
-      "my manger did this to me",
-      "he blamed his wrong work on me and insulted me which made me feeling like this",
-      "i have been constantly in a state i cant describe now i fear how would i face my colleagues",
-      "idk yet"
-    ]
+  "answering_the_offer": {
+    "about": "Spec 0003, AC-11: what follows the offer, written by Claude on 2026-10-12. The opening lines are resentful_coworker's; Mani's check is answered yes, and after_offer is sent once ABCDE is offered.",
+    "expect": {
+      "check_by": 5
+    },
+    "conversations": {
+      "says_no": {
+        "lines": [
+          "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
+          "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
+          "I keep thinking they only see me as someone useful, not as a colleague.",
+          "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
+          "I don't know how to handle it without making things awkward at work."
+        ],
+        "after_offer": {
+          "answer": "no",
+          "lines": [
+            "No thanks, I'd rather just talk about it.",
+            "I think I'm mostly tired of always being the one who gives."
+          ]
+        }
+      },
+      "moves_on": {
+        "lines": [
+          "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
+          "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
+          "I keep thinking they only see me as someone useful, not as a colleague.",
+          "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
+          "I don't know how to handle it without making things awkward at work."
+        ],
+        "after_offer": {
+          "answer": "moved_on",
+          "lines": [
+            "Actually, my manager just messaged me about the deadline and now I'm panicking about that."
+          ]
+        }
+      },
+      "says_yes_through_the_body_route": {
+        "lines": [
+          "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
+          "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
+          "I keep thinking they only see me as someone useful, not as a colleague.",
+          "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
+          "I don't know how to handle it without making things awkward at work."
+        ],
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Yes, let's try it.",
+            "I told myself they don't respect me and that I'm a pushover.",
+            "I felt hurt and then angry, and I snapped at them in the meeting.",
+            "Maybe it's not that they don't respect me. They might just be overwhelmed too.",
+            "I think I can help when I have time and say no when I don't, without it meaning anything about me.",
+            "Yes, I'd like to notice it.",
+            "It's tight in my chest.",
+            "A bit calmer now."
+          ]
+        }
+      }
+    }
   },
-  "manager_threat": {
-    "source": "muhammad's testing, 2026-10-09: Mani asked again for what they had told it",
-    "lines": [
-      "i feel embarassed, my manager critisized my work infront of everyone",
-      "he critisized my work in front o f thw hole office",
-      "It has been happening for quite a bit time but this time it was way too much. He insulted me and said I would be fired.",
-      "No, but he seems like he wants to get me fired because he's been constantly pointing out errors in my work that are even irrelevant or small mistakes. And this time he had me feel too embarrassed",
-      "Nothing much, it's just that I was too embarrassed and I have this feeling that my colleagues will be laughing at me because it was a too embarrassing moment. It had never been done before to anyone, so that's my concern right now."
-    ]
+  "names_a_feeling_first": {
+    "about": "They open with a feeling and then describe what is behind it. The feeling stays in view in the questions and fills the offer.",
+    "expect": {
+      "check_by": 5
+    },
+    "conversations": {
+      "frustrated_client_changes": {
+        "source": "muhammad's Directive tester run, thread 4ec47e15, 2026-10-13, the person's lines word for word",
+        "lines": [
+          "i am frustrated",
+          "my work",
+          "my client keeps changing the requirements and when i do make the changes he say that he does not like that and want to go to previous iternation",
+          "the complete back and forth, we are just moving in circles",
+          "that they need to decide on what they want before tell me to go back again and again"
+        ]
+      }
+    }
   },
-  "left_out_of_meetings": {
-    "source": "muhammad's testing, 2026-10-09",
-    "lines": [
-      "i have been left out of a few important meeting lately, i am starting to wonder if the role on the team is changing.",
-      "just told you not being invited to meetingd",
-      "i think i might be getting fired"
-    ]
+  "pinpoint_and_check": {
+    "about": "Spec 0006: Mani pinpoints the problem and its core issue, then checks its understanding in its own words, using only theirs. A yes brings the offer; anything else keeps the conversation going. Every set offered is ABCDE while it is the only active one.",
+    "expect": {},
+    "conversations": {
+      "client_sample": {
+        "source": "the person's lines from the client's way of communication document, 2026-10-13, word for word",
+        "lines": [
+          "I am frustrated",
+          "everything",
+          "my boss, my coworkers, our vendors, our consultants, our customers everything",
+          "people over promise and under deliver, do not take responsibility or accountability and it makes my job harder",
+          "I cannot do the work unless they do their work",
+          "yes I need help"
+        ]
+      },
+      "cheat_sheet_abcde": {
+        "source": "the client's Framework Selection Cheat Sheet, Example 1, its opening and its ABCDE line, word for word; lines 3 and 4 written by Claude on 2026-10-13 to answer the core issue and control questions",
+        "lines": [
+          "I'm frustrated at work.",
+          "I'm frustrated because my boss criticized my work today, and now I'm questioning whether I'm actually good at my job.",
+          "It makes me feel like all the effort I put in doesn't count for anything.",
+          "I'm not sure what I can do about it."
+        ]
+      },
+      "cheat_sheet_problem_solving": {
+        "source": "the client's Framework Selection Cheat Sheet, Example 1, its opening and its Structured Problem-Solving line, word for word; ABCDE is offered for now (muhammad, 2026-10-13); lines 3 and 4 written by Claude on 2026-10-13 to answer the core issue and control questions",
+        "lines": [
+          "I'm frustrated at work.",
+          "My coworkers keep missing deadlines, and I end up doing their work. I don't know how to change this.",
+          "It feels like I'm the only one who cares whether things get done.",
+          "I could talk to my manager about it, but I don't know if it would change anything."
+        ]
+      },
+      "check_not_confirmed": {
+        "source": "the client's sample lines, with an answer to the check written by Claude on 2026-10-13",
+        "lines": [
+          "I am frustrated",
+          "everything",
+          "my boss, my coworkers, our vendors, our consultants, our customers everything",
+          "people over promise and under deliver, do not take responsibility or accountability and it makes my job harder",
+          "I cannot do the work unless they do their work",
+          "yes I need help"
+        ],
+        "check_answer": "Not really. It's more that I'm always the one who ends up fixing it.",
+        "expect": {
+          "check_confirms": false
+        }
+      },
+      "boss_not_enough": {
+        "source": "muhammad's Directive tester run, thread 9974cd41, 2026-10-13: lines 1 and 2 word for word, Mani checked after line 2 having asked about neither the core issue nor control; lines 3 and 4 written by Claude",
+        "lines": [
+          "I'm frustrated because my boss criticized my work today, and now I'm questioning whether I'm actually good at my job",
+          "he said that i'm not doing enough even though i'm handling 2 projects and working and leading the teams on both projects and after this criticize i feel like i'm not enough.",
+          "it's not the first time, whatever i do he finds something missing and it makes me feel like nothing i do will ever be enough for him",
+          "i don't know, maybe i could ask him what he actually expects from me"
+        ],
+        "expect": {
+          "check_from": 3
+        }
+      },
+      "boss_vented": {
+        "source": "muhammad's Directive tester run, thread 5bbf2b5f, 2026-10-13, the person's lines word for word; A then read \"their boss criticized their client communication\"",
+        "lines": [
+          "I'm frustrated because my boss criticized my work today, and now I'm questioning whether I'm actually good at my job",
+          "i believe he was in a bad mood and he just vented out his anger on me",
+          "His mood was off due to a client cancelling a projects agreement. he fired all the workers working on that project too. and then he vented his anger on everyone and anyone he found.",
+          "that i'm not focusing on the client requirements, i need to communicate with the more and he said that i should found more clients too even though that not in my job requirements. and i do communicate with client efficiently and even send the end of day report.",
+          "that i don't communicate with the client. he just said that without looking into what my achievements are"
+        ],
+        "expect": {
+          "check_from": 3
+        }
+      },
+      "overtime_boss": {
+        "source": "muhammad's Supportive tester run, thread 7e3062ff, 2026-10-13, the person's lines word for word; B was then seeded from the opening line and C from the rejected belief",
+        "lines": [
+          "I'm frustrated because my boss criticized my work today, and now I'm questioning whether I'm actually good at my job",
+          "he said the i should take on more work and even work after working hour as i'm a senior and i should set the example for others by leading",
+          "I usually say nothing but then i talk about overtime pay he says that i'm short sighted and i show look and work for the company benefit.",
+          "yes i have been doing the overtime for the past month and my team has also started doing overtime.",
+          "i think i going to rise this concern with him and involve the HR department as well. this is work abuse i was wrong to have started this culture and my team and i are paying for it."
+        ],
+        "expect": {
+          "check_from": 3
+        },
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Yes, let's try it.",
+            "yes"
+          ]
+        }
+      },
+      "overtime_full": {
+        "source": "muhammad's Supportive tester run, thread 7d102554, 2026-10-13, the person's lines word for word; C, D and E were asked again though they had said them",
+        "lines": [
+          "I'm frustrated because my boss criticized my work today, and now I'm questioning whether I'm actually good at my job",
+          "he said the i should take on more work and even work after working hour as i'm a senior and i should set the example for others by leading",
+          "I usually say nothing but then i talk about overtime pay he says that i'm short sighted and i show look and work for the company benefit.",
+          "yes i have been doing the overtime for the past month and my team has also started doing overtime.",
+          "i think i going to rise this concern with him and involve the HR department as well. this is work abuse i was wrong to have started this culture and my team and i are paying for it."
+        ],
+        "expect": {
+          "check_from": 3
+        },
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Yes, let's try it.",
+            "yes",
+            "yes this weighing on my mind that because of my bad decision other have to pay for it.",
+            "i've already mentioned that i'm think i going to rise this concern with him and involve the HR department as well. this is work abuse i was wrong to have started this culture and my team and i are paying for it.",
+            "as mentioned my coworkers have also started doing overtime",
+            "no",
+            "i have also mentioned what is helpful way  rise this concern with him and involve the HR department as well"
+          ],
+          "stages": {
+            "consequence": "said back",
+            "dispute": "said back",
+            "effective": "asked"
+          }
+        }
+      },
+      "frustrated_work_full": {
+        "source": "muhammad's Directive tester run, thread 4b93d612, 2026-10-14, the person's lines word for word; C and D were asked with the client's question though their feeling and what supports the belief came before the check",
+        "lines": [
+          "I am frustrated.",
+          "everything!",
+          "work.",
+          "i guess, people promising work but not following through.",
+          "I cant complete my work till do their half",
+          "both of those situations",
+          "everything falls on me.",
+          "i cant sit with them 24/7 to make sure they are completing their work right? so that is not in my control"
+        ],
+        "check_answer": "bulls eye",
+        "expect": {
+          "check_from": 6
+        },
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Tell me more",
+            "Try it",
+            "yes",
+            "that my work gets delayed.",
+            "everything that is expected to happen next goes south and the overall timeline gets backtracked",
+            "it made me feel frustrated",
+            "i dont understand this",
+            "in all my past experiences with the team, i have seen this constant pattern",
+            "i am not sure",
+            "that the delays cause me problems and i am still unsure on how can i eliminate them."
+          ],
+          "stages": {
+            "consequence": "said back",
+            "dispute": "said back",
+            "effective": "asked"
+          }
+        }
+      }
+    }
   }
 }

@@ -53,13 +53,23 @@ _SCHEMA_FAILURES = (
 )
 
 
+def _generation_id_of(exc: BaseException) -> str | None:
+    """OpenRouter's id for a failed attempt, when the SDK kept the completion."""
+    return getattr(getattr(exc, "completion", None), "id", None)
+
+
 def _usage_of(exc: BaseException) -> llm_calls.Usage:
     """The tokens a failed attempt was billed for, when the SDK kept the completion."""
     usage = getattr(getattr(exc, "completion", None), "usage", None)
     if usage is None:
         return llm_calls.Usage()
     return llm_calls.Usage(
-        input_tokens=usage.prompt_tokens or 0, output_tokens=usage.completion_tokens or 0
+        input_tokens=usage.prompt_tokens or 0,
+        output_tokens=usage.completion_tokens or 0,
+        cached_input_tokens=getattr(usage.prompt_tokens_details, "cached_tokens", None) or 0,
+        reasoning_tokens=(
+            getattr(usage.completion_tokens_details, "reasoning_tokens", None) or 0
+        ),
     )
 
 
@@ -74,10 +84,10 @@ def _as_service_error(exc: Exception) -> tuple[ServiceError, llm_calls.Outcome]:
             ),
             llm_calls.Outcome.PROVIDER_ERROR,
         )
-    if isinstance(exc, openai.APITimeoutError):
+    if isinstance(exc, (openai.APITimeoutError, TimeoutError)):
         return (
             ServiceError(
-                f"provider timed out: {exc}",
+                f"provider timed out: {exc or 'past the chat deadline'}",
                 ErrorCategory.LLM_TIMEOUT,
                 retryable=True,
                 user_message="Mani took too long to answer. Please try again.",
@@ -131,6 +141,7 @@ async def _record(
     thread_id: uuid.UUID | str | None,
     prompt_version_id: uuid.UUID | str | None,
     error_message: str | None,
+    generation_id: str | None = None,
 ) -> uuid.UUID | None:
     """Write the cost row for a call, successful or not.
 
@@ -154,6 +165,7 @@ async def _record(
                 thread_id=thread_id,
                 prompt_version_id=prompt_version_id,
                 error_message=error_message,
+                generation_id=generation_id,
             )
     except Exception:
         logger.exception("failed to record llm call")
@@ -202,21 +214,29 @@ async def complete[T: BaseModel](
 
     messages = _apply_model_quirks(messages, model)
 
-    started = time.perf_counter()
     usage = llm_calls.Usage()
+    generation_id: str | None = None
     try:
         parsed = None
         for attempt in range(1, MAX_SCHEMA_ATTEMPTS + 1):
             # Reset per attempt, so an attempt that raises is never recorded with the tokens
-            # of the one before it.
+            # of the one before it, and each row's latency is that attempt's own time, not
+            # the attempts and the retry pause before it.
             usage = llm_calls.Usage()
+            generation_id = None
+            started = time.perf_counter()
             try:
-                result = await runnable.ainvoke(messages)
+                # A chat reply has a deadline for the whole call; the per read timeout alone let one
+                # run for 102 s. The background calls (summaries, the memory fold) keep only that.
+                if purpose is llm_calls.Purpose.CHAT:
+                    result = await asyncio.wait_for(runnable.ainvoke(messages), settings.chat_deadline_seconds)
+                else:
+                    result = await runnable.ainvoke(messages)
             except _TRANSIENT as exc:
                 if isinstance(exc, openai.APITimeoutError) or attempt == MAX_SCHEMA_ATTEMPTS:
                     raise
-                # The provider was briefly unavailable - seen live, 1 call in 265, from the one
-                # upstream the routing pins. It billed nothing, so one retry costs nothing and
+                # The provider was briefly unavailable - seen live, 1 call in 265, from one
+                # upstream. It billed nothing, so one retry costs nothing and
                 # keeps a blip from reaching the person as an error. Recorded as its own row.
                 await _record(
                     purpose=purpose, model=model, outcome=llm_calls.Outcome.PROVIDER_ERROR,
@@ -233,8 +253,10 @@ async def complete[T: BaseModel](
                 # parsing_error. It is the same failure, so it gets the same one retry.
                 result = {"raw": None, "parsed": None, "parsing_error": exc}
                 usage = _usage_of(exc)
+                generation_id = _generation_id_of(exc)
             else:
                 usage = chain.usage_from(result.get("raw"))
+                generation_id = chain.generation_id_from(result.get("raw"))
             parsed = result.get("parsed")
             failure = result.get("parsing_error")
             if failure is None and parsed is not None:
@@ -249,6 +271,7 @@ async def complete[T: BaseModel](
                 usage=usage, latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
                 prompt_version_id=prompt_version_id,
                 error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}: {failure or 'empty'}",
+                generation_id=generation_id,
             )
             if attempt == MAX_SCHEMA_ATTEMPTS:
                 raise ServiceError(
@@ -270,6 +293,7 @@ async def complete[T: BaseModel](
             purpose=purpose, model=model, outcome=outcome, usage=usage,
             latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
             prompt_version_id=prompt_version_id, error_message=str(exc),
+            generation_id=generation_id,
         )
         raise error from exc
 
@@ -277,7 +301,7 @@ async def complete[T: BaseModel](
     call_id = await _record(
         purpose=purpose, model=model, outcome=llm_calls.Outcome.OK, usage=usage,
         latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-        prompt_version_id=prompt_version_id, error_message=None,
+        prompt_version_id=prompt_version_id, error_message=None, generation_id=generation_id,
     )
     return Call(
         value=parsed, model=model, usage=usage, latency_ms=latency_ms, call_id=call_id
@@ -290,8 +314,9 @@ async def choose_exercise(
     *,
     model: str,
     purpose: llm_calls.Purpose,
+    reasoning_effort: str | None = None,
     said: Sequence[str] = (),
-    current_issue: str | None = None,
+    issue: str | None = None,
     temperature: float = DEFAULT_TEMPERATURE,
     max_tokens: int = 200,
     routing: dict[str, Any] | None = None,
@@ -305,8 +330,9 @@ async def choose_exercise(
     Real tool-calling, not structured output - a deliberate, scoped exception to one call
     per turn, only reached when a framework just completed and the catalog is not empty.
     `candidates` is `[{"id", "title", "subtitle", "type", "category"}, ...]`, never free
-    text. `said` is the person's most recent messages and `current_issue` the thread
-    summary's, so the pick fits what they talked about rather than only the framework.
+    text. `said` is the person's most recent messages and `issue` what Mani understands
+    they are dealing with, so the pick fits what they talked about rather than only the
+    framework.
 
     Never raises. A failure here costs the exercise offer, not the turn - the caller falls
     back to the plain library offer the ordinary reply already makes.
@@ -317,7 +343,7 @@ async def choose_exercise(
 
     runnable = chain.build_tool_choice(
         tools.StartExercise, model=model, temperature=temperature, max_tokens=max_tokens,
-        routing=routing, settings=settings,
+        routing=routing, settings=settings, reasoning_effort=reasoning_effort,
     )
 
     listing = "\n".join(
@@ -337,7 +363,7 @@ async def choose_exercise(
         }
     ]
     # The person's own words go in a user message, never the system one: data, not orders.
-    context = ([f"What this conversation is about: {current_issue}"] if current_issue else []) + [
+    context = ([f"What this conversation is about: {issue}"] if issue else []) + [
         f"They said: {line}" for line in said
     ]
     if context:
@@ -379,5 +405,6 @@ async def choose_exercise(
         purpose=purpose, model=model, outcome=outcome, usage=usage,
         latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
         prompt_version_id=prompt_version_id, error_message=error_message,
+        generation_id=chain.generation_id_from(message),
     )
     return exercise_id

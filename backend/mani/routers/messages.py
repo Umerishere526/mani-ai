@@ -9,6 +9,7 @@ from fastapi import APIRouter, Query
 from mani.auth.deps import CurrentUser
 from mani.background import fire_and_forget
 from mani.chat import orchestrator
+from mani.config import get_settings
 from mani.db import messages as messages_db
 from mani.db.deps import UserConn
 from mani.models.api import MessageListOut, SendMessageIn, TurnOut
@@ -81,5 +82,7 @@ async def send(
         was_duplicate=turn.was_duplicate,
         reasoning=turn.reasoning,
         ledger=turn.ledger,
+        understanding=turn.understanding if get_settings().ai_debug_mode else None,
+        check_at_message_count=turn.check_at_message_count if get_settings().ai_debug_mode else None,
         exercise=exercise,
     )

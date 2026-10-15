@@ -1,9 +1,9 @@
-# ABOUTME: Checks the phase machine refuses what it cannot recognise.
-# ABOUTME: The implementation this replaces returned valid for anything unknown.
+# ABOUTME: Checks the framework registry: its closed set of ids, and where each framework finishes.
+# ABOUTME: Nothing it does not recognise counts as a framework or as finished.
 
 import pytest
 
-from mani.chat.techniques import OFFERING, Registry, Verdict
+from mani.chat.techniques import Registry
 from mani.models.rows import Framework
 
 REFRAMING = Framework(
@@ -31,87 +31,6 @@ WITH_BODY_ROUTE = Framework(
 @pytest.fixture
 def registry() -> Registry:
     return Registry([REFRAMING, ABCDE, STOP, WITH_BODY_ROUTE])
-
-
-def test_the_opening_move_is_offering(registry):
-    assert registry.validate_transition("thought_reframing", None, OFFERING).ok
-
-
-def test_one_step_forward_is_allowed(registry):
-    assert registry.validate_transition("thought_reframing", "offering", "surface").ok
-
-
-def test_holding_on_a_phase_is_allowed(registry):
-    # A person may need more than one turn in the same place.
-    assert registry.validate_transition("thought_reframing", "surface", "surface").ok
-
-
-def test_stepping_back_is_allowed(registry):
-    assert registry.validate_transition("thought_reframing", "explore", "surface").ok
-
-
-def test_jumping_over_stages_their_words_already_answered_is_allowed(registry):
-    """muhammad, 2026-10-09: a stage the conversation already answers is skipped, and so are the
-    ones after it that it answers too."""
-    assert registry.validate_transition("thought_reframing", "offering", "explore").ok
-    assert registry.validate_transition("with_body_route", "offering", "closing").ok
-    assert registry.validate_transition("with_body_route", "one", "three").ok
-
-
-def test_the_closing_and_the_body_route_cannot_be_jumped_over(registry):
-    t = registry.validate_transition("with_body_route", "two", "somatic_practice")
-    assert t.verdict is Verdict.SKIPPED_PHASES
-    assert t.skipped == ["closing", "somatic_checkin"]
-    assert t.expected_next == "closing"
-    assert registry.validate_transition("thought_reframing", "land", "ground").ok, "the last stage is landed on, not jumped"
-
-
-def test_starting_mid_technique_is_refused(registry):
-    t = registry.validate_transition("thought_reframing", None, "explore")
-    assert t.verdict is Verdict.MISSING_OFFERING
-    assert t.expected_next == OFFERING
-
-
-# The two that were backwards. Both previously returned valid, which meant one
-# hallucinated identifier disabled the guard and was then written to the database.
-
-def test_an_unknown_framework_fails_closed(registry):
-    t = registry.validate_transition("somatic_breathing", "offering", "surface")
-    assert not t.ok
-    assert t.verdict is Verdict.UNKNOWN_FRAMEWORK
-
-
-def test_an_unknown_phase_fails_closed(registry):
-    t = registry.validate_transition("thought_reframing", "offering", "vibing")
-    assert not t.ok
-    assert t.verdict is Verdict.UNKNOWN_PHASE
-
-
-@pytest.mark.parametrize("attack", ["constructor", "__class__", "toString", "valueOf"])
-def test_prototype_style_keys_are_just_unknown(registry, attack):
-    """In JavaScript these returned a truthy non-array and crashed on .indexOf."""
-    assert registry.validate_transition(attack, None, OFFERING).verdict is Verdict.UNKNOWN_FRAMEWORK
-    assert registry.validate_transition("abcde", None, attack).verdict is Verdict.UNKNOWN_PHASE
-
-
-def test_phases_belong_to_their_own_framework(registry):
-    # 'belief' is an ABCDE phase; thought_reframing must not accept it.
-    assert registry.validate_transition("thought_reframing", "offering", "belief").verdict \
-        is Verdict.UNKNOWN_PHASE
-    assert registry.validate_transition("abcde", "activate", "belief").ok
-
-
-def test_clamp_corrects_instead_of_discarding_the_turn(registry):
-    # A skip over a stage that must be asked is worth a corrected field, not another paid model call.
-    assert registry.clamp("with_body_route", "three", "somatic_practice") == "closing"
-    assert registry.clamp("thought_reframing", "offering", "explore") == "explore"
-    assert registry.clamp("thought_reframing", None, "explore") == OFFERING
-    assert registry.clamp("thought_reframing", "offering", "surface") == "surface"
-
-
-def test_clamp_records_nothing_when_nothing_is_trustworthy(registry):
-    assert registry.clamp("made_up", "offering", "surface") is None
-    assert registry.clamp("abcde", "activate", "made_up") is None
 
 
 def test_registry_membership_is_the_closed_set(registry):

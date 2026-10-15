@@ -9,112 +9,185 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 
 ## At a glance
 
-| # | Feature | Phase | Status |
-|---|---------|-------|--------|
-| A | Chat turn pipeline | Existing | existing |
-| B | Six frameworks and the body check in | Existing | existing |
-| 1 | Turn cost and latency baseline | Foundation | in-progress |
-| 2 | Thinking level required on every call | Foundation | planned |
-| 3 | Short base prompt of general rules | Slice 1 | planned |
-| 4 | Framework in 8 lines, ABCDE first | Slice 1 | planned |
-| 5 | One model call, no redraft or repairs | Slice 1 | planned |
-| 6 | The other five frameworks in 8 lines | Slice 2 | planned |
-| 7 | Body check in in the lean format | Slice 2 | planned |
-| 8 | Model facing text out of Python | Slice 3 | planned |
-| 9 | Reply text and numbers out of Python | Slice 3 | planned |
-| 10 | Crisis decided by the model | Slice 4 | planned |
-| 11 | Thinking level and prompt tuning from measurements | Slice 5 | planned |
+| #   | Feature                                  | Phase    | Status      |
+| --- | ---------------------------------------- | -------- | ----------- |
+| A   | Chat turn pipeline                       | Existing | existing    |
+| B   | Six frameworks and the body check in     | Existing | existing    |
+| 12  | No offer before a real conversation (R1) | Now      | in-progress |
+| 13  | Faster turns (R2)                        | Now      | in-progress |
+| 14  | Styles from the client's document (R8, R9) | Now    | in-progress |
+| 15  | General judgment over case patches       | Now      | in-progress |
+| 16  | Structured reply fields in place of text parsing | Next | in-progress |
+| 17  | The offer shows the five steps (R11)     | Now      | in-progress |
+| 18  | The ABCDE walk names each letter and remembers (R6, R12) | Now | in-progress |
+| 19  | Questions follow what the person said (R4, R6) | Now | in-progress |
+| 20  | Mani's voice from the client's sample (R13) | Now | in-progress |
+| 21  | Pinpoint, confirm, then offer (R14, R15) | Now | in-progress |
 
 ## Already built
 
 ### A. Chat turn pipeline · existing
-One turn: safety screen, router shortlist, system prompt (base, framework index, response format), `[ctx]` block, model call, redraft, repairs. code in backend/mani/chat/, backend/mani/prompts/, backend/mani/llm/
+
+One turn: safety screen, router shortlist, system prompt (base, framework index, response format), `[ctx]` block, model call, repairs. code in backend/mani/chat/, backend/mani/prompts/, backend/mani/llm/
 
 ### B. Six frameworks and the body check in · existing
+
 ABCDE, Thought Reframe, Structured Problem Solving, ACT Choice Point, Behavioral Activation and DBT STOP, each 300 to 390 lines, plus the body check in merged into every framework at seed time. code in backend/content/, backend/scripts/seed.py
 
-## Foundations
+## Now: client blockers
 
-### 1. Turn cost and latency baseline · in-progress
-A repeatable way to see what one turn costs before and after each change: input, cached, output and reasoning tokens, latency, and model calls per turn, for a fixed set of conversations. Without it, "faster" and "cheaper" are guesses, and one eval run is noise (three before, three after).
-**Done when:** one command runs the chosen scenarios and prints those numbers per turn, reasoning tokens are recorded, the numbers survive the eval's own cleanup, and today's numbers are written down as the baseline.
-- [x] Design it (spec): `/architect turn cost and latency baseline`
-- [ ] Build it: `/develop turn cost and latency baseline`
-  - [ ] Honest cost rows: reasoning tokens column (migration 018), both usage readers, latency per attempt (AC-3, AC-13)
-  - [ ] One measured run writes a baseline file, with the local, column and abort guards and cleanup that always runs (AC-1, AC-2, AC-4, AC-5, AC-8, AC-9, AC-10, AC-12)
-  - [ ] Repeated runs with scenario totals and medians, and the offline compare (AC-1, AC-5, AC-6, AC-7, AC-14)
-  - [ ] Docs, the PORT-STATUS decision line, and the first `before-lean-prompts` baseline after muhammad's yes (AC-11)
-- [ ] Verify it: `/check verify turn cost and latency baseline`
-- [ ] Test it: `/test turn cost and latency baseline`
-Spec [0002](../specs/0002-turn-cost-latency-baseline.md)
+### 12. No offer before a real conversation (R1) · in-progress
 
-### 2. Thinking level required on every call · needs a decision
-Every model call names its own thinking level: chat, summary, memory fold, title and the exercise pick. A missing level is an error at seed time, never a silent fallback.
-**Done when:** seeding fails for a prompt row with no level or an unknown one, no model call goes out without an explicit level, and the config fallback is gone.
-- [ ] Design it (spec): `/architect thinking level required`
+Mani listens before it offers a framework. Code owns one offer window, the same in every style: it opens at the person's third message and the best fit is due at their fifth. The prompts follow the window and never decide timing themselves.
+**Done when:** no offer comes before their third message in any style, the best fit is offered by their fifth, a model offer before the window is stripped, and live runs in all three styles show it.
 
-## Slice 1: ABCDE through the lean path
+- [x] Build it: `/develop no offer before a real conversation`
+  - [x] `offer_window` in context.py replaces cooldown_passed, closest_fit and offer_fit, with its tests
+  - [x] Prompt cuts in mani_base.md and response_format.md, reseeded
+  - [x] scenario_check flags an early offer; resentful_coworker scenario added
+- [x] Verify it: `/check verify no offer before a real conversation`
+- [ ] Test it: `/test no offer before a real conversation`
+      Decision in [PORT-STATUS.md](../../backend/PORT-STATUS.md#decisions-in-force) (first offer window), requirement [R1](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12).
 
-### 3. Short base prompt of general rules · needs a decision
-Rewrite `mani_base` as a short set of general rules: who Mani is, how it replies, the three styles, how a conversation moves. No scripted lines, no example conversations, no banned word lists, and each rule stated once across the base prompt, the response format and the schema descriptions.
-**Done when:** the base prompt and the response format together fit a line budget set in the spec, contain no line the model must say word for word, repeat no rule, and the ABCDE replay conversation still reads well in all three styles.
-- [ ] Design it (spec): `/architect short base prompt`
+### 13. Faster turns (R2) · in-progress
 
-### 4. Framework in 8 lines, ABCDE first · needs a decision
-Define the 8 line framework format (when it starts, the words that trigger it, when to skip it, the stages in one line, when it ends, what never happens) using Hussnain's rule, and convert ABCDE to it. The model writes each stage question itself in the chosen style. The unused body, lists and per stage blocks go.
-**Done when:** abcde.md is about 8 lines of model facing content, the seed and the turn send only that, and a real ABCDE conversation runs from offer to end in each style.
-- [ ] Design it (spec): `/architect framework in 8 lines`
+One chat call per turn at a low thinking level, with no redraft. Code shapes the reply instead of asking again: no offer field before the offer window opens, and the stage label is set from the model's own ledger.
+**Done when:** every turn makes one chat call, the chat call and exercise pick run at `low`, redraft is gone and its lost checks only log, scenario_check prints each turn's time, calls and tokens, and a measured run (after muhammad's yes) shows a median of 4 s or less and a slowest of 10 s or less in all three styles.
 
-### 5. One model call, no redraft or repairs · needs a decision
-Remove the redraft loop and the reply repairs: feeling word checks, repeated question checks, offer timing, closest fit pushes, button trimming and rewritten permission questions. The model's reply goes out as it wrote it, apart from schema validation. Crisis handling stays until feature 10.
-**Done when:** every turn makes exactly one chat call, redraft.py and the repairs are gone or reduced to schema shape, the tests that asserted those checks are removed or rewritten, and the ABCDE replay still completes.
-- [ ] Design it (spec): `/architect one model call no repairs`
+- [x] Build it: `/develop faster turns`
+  - [x] Honest cost rows and per turn timing in scenario_check (feature 1's first milestone, slim)
+  - [x] Effort `low` for the chat call and the exercise pick
+  - [x] Reply schema per offer window, step from the ledger, redraft loop removed, lost checks logged
+  - [x] PORT-STATUS decisions, journal, requirements row, and feature 12's Done when reads "stripped"
+- [ ] Verify it: `/check verify faster turns`
+- [ ] Test it: `/test faster turns`
+      Decision in [PORT-STATUS.md](../../backend/PORT-STATUS.md#decisions-in-force) (one chat call at effort `low`), requirement [R2](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12). code in backend/mani/chat/reply_checks.py, backend/mani/chat/orchestrator.py, backend/mani/llm/. A live run for the 4 s and 10 s target is owed (muhammad's yes).
 
-## Slice 2: Every framework lean
+### 14. Styles from the client's document (R8, R9)
 
-### 6. The other five frameworks in 8 lines
-Convert Thought Reframe, Structured Problem Solving, ACT Choice Point, Behavioral Activation and DBT STOP to the format from feature 4, including how each is told apart from its neighbours.
-**Done when:** each is about 8 lines, a real conversation reaches each one's offer and end, and the router picks the right one for the client's example lines.
-- [ ] Build it: `/develop other five frameworks in 8 lines`
+Each style gets its own prompt file written from the client's behavior lists, and only the chosen one reaches the model. Rules shared by every style that contradict the client's document are cut, and the stored value becomes `directive`.
+**Done when:** the system prompt carries exactly one style file, chosen from the thread; no style rules remain in `mani_base.md`, `context.py` or `response_format.md`; `direct` is renamed `directive` everywhere (DB, code, content, tests, tester); the contradicting base rules are cut, and a measured run (after muhammad's yes) in all three styles shows Directive leading, Supportive accompanying, Reflective mirroring then asking.
 
-### 7. Body check in in the lean format · needs a decision
-The ending (completion question, body check in, exercise, Chat More or Go to Library) as short rules the model follows, not verbatim text enforced in code, and no code that matches words inside the content.
-**Done when:** every framework ends with the body check in, the four places get a fitting exercise, no code reads `when` text, and the client's flow holds in all three styles.
-- [ ] Design it (spec): `/architect body check in lean format`
+- [x] Build it: `/develop styles from the client's document`
+  - [x] Rename `direct` to `directive` (migration 019, code, content, tests)
+  - [x] Three style prompt files, one composed per thread; framework index prints only the chosen style
+  - [x] Cut the contradicting rules in mani_base, `[ctx]` and response_format; scenario_check measures behavior, not shared words
+  - [x] Client document recorded, requirements conflict rows, PORT-STATUS decisions edited in place
+- [ ] Verify it: `/check verify styles from the client's document`
+- [ ] Test it: `/test styles from the client's document`
+      Requirements [R8, R9](../client/requirements.md#requirements). No spec, by muhammad's choice (2026-10-12). Design in the approved plan of 2026-10-12: one style file in the system prompt after `response_format`, framework index for the chosen style only, the client's bullets plus two examples per style. code in backend/content/prompts/style_*.md, backend/mani/prompts/composer.py, backend/mani/chat/context.py, backend/supabase/migrations/019_conversation_style_directive.sql. A live run of the four client scenarios is owed (muhammad's yes).
 
-## Slice 3: Nothing hardcoded
+### 15. General judgment over case patches · in-progress
 
-### 8. Model facing text out of Python · needs a decision
-The instruction text Python adds to the prompt (index headings, `stage_note`, memory and summary wrappers, schema field descriptions, the exercise picker prompt, phrase lists naming framework ids) moves into seeded content, so changing it never needs a code change.
-**Done when:** no sentence the model reads is written in backend/mani/, and changing any of them needs only a reseed.
-- [ ] Design it (spec): `/architect model facing text out of python`
+Mani reads the person with the model's own judgment, from one general rule per idea. There are no per case prompt lines, and the eval checks behavior rather than collecting one scenario per bug.
+**Done when:** each fit rule lives in one place, using the slot test; the copies, word lists, case examples and paused framework rules are gone from the prompts; `[ctx]` no longer sends `open`; at `due` Mani checks understanding and never forces an offer; the dead imminent action and veto paths are deleted; scenarios are grouped by behavior with machine checked expectations (earliest and latest offer, must not offer); and a live run (after muhammad's yes) shows no offer from an event or behavior alone.
 
-### 9. Reply text and numbers out of Python · needs a decision
-Text sent straight to the person (greeting, style question, openers, after framework questions, button labels, crisis reply) and the timing numbers (cooldowns, offer windows, router weights, summary threshold) move into seeded content or config.
-**Done when:** no user facing sentence or behaviour number is a Python constant, and each can change with a reseed or config change.
-- [ ] Design it (spec): `/architect reply text and numbers out of python`
+- [x] Build it: `/develop general judgment over case patches`
+  - [x] Eval first: behavior groups with expectations, fix the line 3 blind spot, drop "closest" from the leak check (baseline run skipped by muhammad; "must not offer" not added, no conversation needs it yet)
+  - [x] Fit rule in one home (`abcde.md` `central_indication`, slot test wording), copies cut from `mani_base.md` and `response_format.md`
+  - [x] Prompt cuts: word lists, slot examples, paused framework rules, step 1 duplicates, "nearest", "Finding the fit" no longer "from their first message", schema case examples
+  - [x] Window: `open` line removed, `due` becomes check understanding; dead paths deleted; Decisions in force edited in place
+- [ ] Verify it: `/check verify general judgment over case patches`
+- [ ] Test it: `/test general judgment over case patches`
+      Requirements [R1, R3, R8](../client/requirements.md#requirements). No spec: the decisions were made in the /scope panel of 2026-10-12 (two features; `due` checks understanding and never forces; the slot test wording; dead paths deleted now). code in backend/content/prompts/, backend/content/frameworks/abcde.md, backend/mani/chat/context.py, backend/mani/chat/orchestrator.py, backend/scripts/scenario_check.py, backend/scripts/scenarios.json. The live run is owed (muhammad's yes).
 
-## Slice 4: Crisis
+### 17. The offer shows the five steps (R11) · in-progress
 
-### 10. Crisis decided by the model · needs a decision · GA
-Remove the keyword crisis and concern screen. The model's own `crisis` field becomes the only detector. The thread lock and the crisis reply still follow when it fires. This is the riskiest change in the scope, so it comes last and carries the highest rigour.
-**Done when:** safety.py's phrase lists are gone, every crisis eval scenario (direct, indirect, misspelt, mixed with other topics) locks the thread and sends the crisis reply, and no ordinary conversation triggers it.
-- [ ] Design it (spec): `/architect crisis decided by the model`
+The ABCDE offer makes clear what A, B, C, D and E stand for before they decide. It is the style's client template with their feeling in the slot ("your anxiety"), then the permission question, then the client's short list of the five steps, reworded to "you". Tell me more keeps the longer per style explanation.
+**Done when:** every ABCDE offer, in all three styles, is the style's template with their feeling in the slot, then the permission question, then the five steps; Tell me more still sends the longer explanation and then shows only Try it and Keep chatting.
 
-## Slice 5: Keep improving
+- [x] Build it: `/develop the offer shows the five steps`
+  - [x] `offering.steps` and the feeling slot in `abcde.md`, `repairs.offer_template` shared by the offer and scenario_check, tests, Decision in force edited in place
+- [ ] Verify it: `/check verify the offer shows the five steps`
+- [ ] Test it: `/test the offer shows the five steps`
+      Requirement [R11](../client/requirements.md#requirements). No spec: muhammad decided the shape on 2026-10-13 (list in the offer, Tell me more kept for the longer text). Spec 0003's offer section goes stale. code in backend/content/frameworks/abcde.md (`offering.steps`, the offer slots, `central_indication`), backend/mani/chat/repairs.py (`offer_template`, `_offer_text`), backend/scripts/scenario_check.py. A live run is owed (muhammad's yes).
 
-### 11. Thinking level and prompt tuning from measurements · needs a decision
-Use the baseline from feature 1 to choose the thinking level per call and to compare each prompt change, three runs before and three after, so the prompts keep improving as models get faster.
-**Done when:** each call's level is backed by numbers recorded in PORT-STATUS.md, and the tuning loop is a documented command anyone can run again.
-- [ ] Design it (spec): `/architect thinking level and prompt tuning`
+### 18. The ABCDE walk names each letter and remembers (R6, R12) · in-progress
 
-## Open questions
-- Hussnain's 7 to 8 line rule: get the exact format before `/architect framework in 8 lines`.
-- The client's wording for each style, stage and body exercise goes away under the 8 line format. muhammad has allowed rewording to fix comprehension. Confirm the client is fine with the model writing these itself.
+Once they say yes, Mani walks one stage per reply, and each stage opens with its letter and name, as the client's ABCDE document shows. A stage they already answered is said back in their words and confirmed once, and only a missing one is asked. What they said per stage is stored by code, so it is never asked twice and survives the history window.
+**Done when:** every stage opens with its letter and name; one stage per reply; a stage already answered, before or during the framework, is said back with their words and confirmed once, never asked; what they said per stage is stored and still used after it leaves the 20 message window; every turn is still one model call.
+
+- [x] Design it (spec): `/architect abcde walk and memory`
+      Requirements [R6, R12](../client/requirements.md#requirements). Spec [0004](../specs/0004-abcde-walk-and-memory/index.md). Reverses the Decisions in force "The chat never names a stage" and "a stage their words already answer is skipped" (muhammad agreed 2026-10-13). Confirming a known stage departs from the document's Situation 1 (see Conflicts in requirements.md).
+- [x] Build it: `/develop the abcde walk and memory`
+  - [x] Thin walk: migration 020, the stage reply fields, `intro` and client lines in `abcde.md`, the code owned one stage step, missing stages sent as the client's ask (AC-1, AC-2, AC-6, AC-10, AC-11)
+  - [x] Memory: the merge, seeding on the start turn, stored words and the branch line in `[ctx]` (AC-3, AC-9, AC-12)
+  - [x] Confirm and correct: known, possible and partial render, confirm phrases, fallbacks, corrections and the plain no (AC-4, AC-5, AC-7, AC-8)
+  - [x] Cleanup and docs: remove the ledger and skip walk, `ledger_view` on the store, rewrite the broken tests, scenario_check, Decisions in force in place (AC-13)
+      code in backend/mani/chat/walk.py, backend/mani/chat/context.py, backend/mani/chat/orchestrator.py, backend/mani/llm/schema.py, backend/mani/db/threads.py, backend/content/frameworks/abcde.md, backend/supabase/migrations/020_thread_stages_known.sql and 021_framework_confirm_phrases.sql. Built 2026-10-13, tested with a scripted model; a live seeded run is owed (muhammad's yes).
+  - [x] First live run fixes (2026-10-13): a yes to a check moves on (it stayed on A and sent B's sentence with no letter line); the letter line shares one paragraph with the stage's line; their words in A's slot start lowercase (AC-1, AC-2, AC-4)
+      Found live on thread ca968cbd: phase still activate, A known with tries 1. Cause: the field descriptions called the start turn "the turn they say yes", so a yes to a check came back with stage_answer null; reworded to "the turn they accept the offer" (/debug, 3 of 3 replays then moved on). The letter line now shares a paragraph, and their words in A's slot start lowercase (/develop).
+- [ ] Verify it: `/check verify the abcde walk and memory`
+- [ ] Test it: `/test the abcde walk and memory`
+
+### 19. Questions follow what the person said (R4, R6) · in-progress
+
+Every question, in the chat and inside a framework, builds on the thread so far: question 2 on answer 1, question 3 on answers 1 and 2, keeping what they came with (their feeling and their issue) in view. Code keeps a running understanding of the conversation, updated every turn and sent back on the next, and one positive question rule replaces the framework checklist ("Finding the fit") and the bans on using their feeling. muhammad chose this over OpenAI's conversation API (OpenRouter rejects stored state, and it would not change what the model is told to ask) and over a prompt rewrite alone, on 2026-10-13. Found live the same day: a Directive chat opened "i am frustrated", and after two questions Mani followed ABCDE's checklist instead and offered with their judgment about the client in place of their feeling.
+**Done when:** the running understanding is stored per thread, updated each turn, sent back the next turn and still used after the 20 message window; in a live run of the frustrated chat and the client scenarios, in all three styles, each question follows from their previous answers, the feeling they named comes back in a question or the offer, the offer slot holds their feeling word, and nothing is restated as a statement (R3); every turn is still one model call on OpenRouter; and the Decision in force "Questions before an offer ask for what is still missing" is edited in place.
+
+- [x] Design it (spec): `/architect questions follow what the person said`
+      Requirements [R4, R6](../client/requirements.md#requirements). Spec [0005](../specs/0005-questions-follow-what-they-said/index.md). The understanding holds their feeling and issue only (muhammad dropped the answers list, 2026-10-13); nothing is stored from a concern turn; it replaces `thread_summaries.current_issue` and spec 0004's yes turn `feeling`.
+- [x] Build it: `/develop questions follow what the person said`
+  - [x] The record end to end: migration 022 (column, `mani_service` grant, drop `current_issue`), the merge, `understanding_update` in every reply shape, the write, the `[ctx]` line (AC-1, AC-2, AC-4, AC-10, AC-11)
+  - [x] Its readers: A's missing slot from the stored feeling, the exercise pick from the issue, `current_issue` and the yes turn `feeling` removed with their tests (AC-7, AC-8)
+  - [x] The prompt: the one question rule in `rules`, the four cuts with "Finding the fit" and `to_find_out`, the three offer slot placeholders, reseed (AC-3, AC-6, AC-9)
+  - [x] Debug view, the frustrated chat scenario, Decisions in force and docs (AC-12, AC-13)
+      code in backend/mani/chat/understanding.py, backend/mani/chat/orchestrator.py, backend/mani/chat/context.py, backend/mani/llm/schema.py, backend/mani/db/threads.py, backend/mani/summarize.py, backend/mani/prompts/composer.py, backend/content/prompts/mani_base.md, backend/content/prompts/response_format.md, backend/content/frameworks/abcde.md, backend/supabase/migrations/022_thread_understanding.sql. The live run (AC-3, AC-5, AC-6) needs muhammad's yes.
+- [ ] Verify it: `/check verify questions follow what the person said`
+- [ ] Test it: `/test questions follow what the person said`
+
+### 20. Mani's voice from the client's sample (R13) · in-progress
+
+Mani talks the way the client's sample conversation does. That means a few short sentences in short paragraphs, a direct answer to a direct ask, concrete options when they give almost nothing, and an interpretation offered only for them to confirm or correct. It never adds a fact they did not give. The tone sections of `mani_base.md` are rewritten from the sample, coming out shorter than today, and the rules the sample contradicts are cut.
+**Done when:** `mani_base.md` and `response_format.md` carry no rule the client's sample breaks, except "nothing they did not tell you". Each changed rule has a Conflicts row in requirements.md. The prompts are shorter than before. A live run of the client's sample conversation, in all three styles, after muhammad's yes, sounds like the sample and invents nothing.
+
+- [x] Build it: `/develop mani's voice from the client's sample`
+  - [x] Tone sections of `mani_base.md` rewritten from the sample, reply length in `response_format.md`, the menu of choices ban cut from `[ctx]`, reseeded
+  - [x] Decisions in force (questions, plain language) and requirements Conflicts edited in place
+  - [x] Rewritten from scratch after muhammad's live run of 2026-10-13: `mani_base.md` around the client's sample (`sounds_like`), `response_format.md`, stored words said to them as you, style examples removed, `scenario_check` flags talking about them
+  - [x] The sample as the spec (2026-10-13): its five replies in `mani_base.md` `example`, the rules that banned its moves deleted, the text written before the reading of the person, `recent_openers` gone, a clear yes always brings the offer; 39 live conversations
+- [ ] Verify it: `/check verify mani's voice from the client's sample`
+- [ ] Test it: `/test mani's voice from the client's sample`
+      Requirement [R13](../client/requirements.md#requirements). No spec: the rule table is in the approved plan of 2026-10-13. code in backend/content/prompts/mani_base.md, backend/content/prompts/response_format.md, backend/mani/chat/context.py. A live run of the client's sample in all three styles is owed (muhammad's yes).
+
+### 21. Pinpoint, confirm, then offer (R14, R15) · in-progress
+
+Before any offer, Mani pinpoints the problem, then its core issue, then what is in their control. Not knowing what is in their control is fine and is never pressed. Mani then checks its understanding in its own words, using only theirs. A yes gets the offer, and a no keeps the conversation going toward the root cause. The confirmed check replaces the message count as the offer gate. The framework is chosen from the active sets by the client's selection guide, which means ABCDE for now, with no framework named in code, so the other five come back as content.
+**Done when:** no offer comes without a confirmed check, and no check before their 2nd message. The check is database state, and a yes gives the offer in the same reply, still one call per turn. The count window and the history phrase match are deleted. The running understanding holds the problem, the core issue and what is in their control past the 20 message window. Seed refuses an incomplete active framework. A live run of the client's sample and the cheat sheet's Example 1 lines, in all three styles, after muhammad's yes, reaches a check and then ABCDE.
+
+- [x] Design it (spec): `/architect pinpoint confirm then offer`
+      Requirements [R14, R15](../client/requirements.md#requirements). Spec [0006](../specs/0006-pinpoint-confirm-then-offer/index.md). Cross checked on another model; its simpler one column design replaced a state machine that could strand a thread.
+- [x] Build it: `/develop pinpoint confirm then offer`
+  - [x] The check end to end: migration 023, `Check`, `check_answer`, `CHECK_OPEN`, `may_check`, the write, the merge and the offer on a yes (AC-1 to AC-5, AC-9)
+  - [x] Cooldowns, the set fallback, concern turns, and the deletions (window, clarification, finished rule, pause setting) (AC-6 to AC-8, AC-10, AC-11)
+  - [x] Content: `before_the_check`, "Check or not", `central_indication` from the cheat sheet in ABCDE and the paused files, the seed contract (AC-12 to AC-14)
+  - [x] Tests, scenarios and records (AC-16)
+  - [x] The three steps owned by code after muhammad's live run of 2026-10-13 (AC-17, AC-18), verified live in 15 conversations; the check's order is code's (AC-19), its words the model's
+- [ ] Verify it: `/check verify pinpoint confirm then offer`
+- [ ] Test it: `/test pinpoint confirm then offer`
+      code in backend/supabase/migrations/023_thread_check_at_message_count.sql, backend/mani/chat/context.py (`live`, `check_open`, `may_check`), backend/mani/llm/schema.py (`Check`, `CHECK_OPEN`), backend/mani/chat/understanding.py, backend/mani/chat/orchestrator.py, backend/mani/chat/repairs.py (`offer_framework`), backend/mani/chat/reply_checks.py, backend/scripts/seed.py (`missing_for_activation`), backend/scripts/scenario_check.py, backend/scripts/scenarios.json, backend/content/, chat-tester/app.py. Built 2026-10-13, tested with a scripted model; the live run (AC-15) needs muhammad's yes.
+
+## Next
+
+### 16. Structured reply fields in place of text parsing · in-progress
+
+The model reports what code currently guesses from text: its own offer line, where they feel it, whether they declined, and whether this reply ends the framework. Code then places the client's fixed text, and the regexes go.
+**Done when:** no regex or phrase list reads meaning from the person's or the model's words outside the safety screen, and every gate stays keyed on database state, never on these fields.
+
+- [x] Design it (spec): `/architect structured reply fields`
+- [ ] Build it: `/develop structured reply fields`
+  - [x] Offer thread: moment selection, schema factory, offer and Keep chatting from the client's templates, offer_answer, safety guard, prompt cuts (AC-1 to AC-4, AC-8 to AC-10, AC-12)
+  - [x] Body thread: branch ids in somatic.md, the body enum, handoff from the branch (AC-5, AC-6)
+  - [x] Cleanup: delete the regexes, `prompts` and `ReplyWithoutOffer`; Decisions in force edited in place (AC-7)
+  - [ ] Live run in all three styles after muhammad's yes (AC-11)
+- [ ] Verify it: `/check verify structured reply fields`
+- [ ] Test it: `/test structured reply fields`
+      Spec [0003](../specs/0003-structured-reply-fields/index.md). code in backend/mani/llm/schema.py, backend/mani/chat/context.py, backend/mani/chat/repairs.py, backend/mani/chat/reply_checks.py, backend/mani/chat/orchestrator.py, backend/mani/prompts/cache.py, backend/mani/prompts/composer.py, backend/scripts/scenario_check.py, backend/scripts/scenarios.json, backend/content/prompts/somatic.md, backend/content/prompts/mani_base.md, backend/content/prompts/response_format.md
 
 ## Legend
 
 **The decision box.** Every feature carries one sub task ending in `(spec)`. Skills find it by that suffix.
+
 - **Next step** is the first unticked box.
 - **needs a decision** means run `/architect` first. The tag drops once the spec is captured.
 - **Status** goes `planned`, `in-progress`, `done`, plus `existing` (built before this workflow) and `dropped`.

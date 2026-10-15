@@ -4,6 +4,7 @@ date: 2026-09-14
 apps: [mobile]
 tags: [journal, mobile, design-system, port]
 ---
+> Superseded 2026-10-12 (the NativewindReanimatedSpike paragraph: the spike was deleted) — see [[knip-false-positives]]
 
 # Porting mani-app's mobile UI into mobile/ (UI layer only, no API)
 

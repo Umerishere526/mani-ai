@@ -124,25 +124,28 @@ def test_cors_origins_still_accepts_a_json_array_from_the_environment(monkeypatc
     assert settings.cors_origins == ["https://a.example.com"]
 
 
-def test_routing_pins_the_upstream_provider_by_default():
-    # Unpinned, OpenRouter may send a conversation to any provider serving the model.
-    # Azure is preferred and OpenAI catches an Azure outage; a turn reaches no one else.
+def test_routing_sends_a_turn_only_to_azure_or_openai_fastest_first():
+    # Unrestricted, OpenRouter may send a conversation to any provider serving the model.
+    # A pinned order waited out whichever endpoint it named, however slow it was at the time.
     routing = build().routing()
-    assert routing["order"] == ["azure", "openai"]
+    assert routing["only"] == ["azure", "openai"]
+    assert routing["sort"] == "latency"
+    assert "order" not in routing
     assert routing["data_collection"] == "deny"
 
 
 def test_a_fallback_never_loosens_the_data_policy():
-    """The fallback exists so an Azure outage does not take chat down. It must not become a
-    route to a provider that may train on the conversation."""
+    """The fallback exists so one slow or down endpoint does not take chat down. It must not
+    become a route to a provider that may train on the conversation."""
     routing = build().routing()
     assert routing["allow_fallbacks"] is True
     assert routing["data_collection"] == "deny"
 
 
 def test_a_prompt_can_override_routing_without_losing_the_data_policy():
-    routing = build().routing({"order": ["vertex"]})
-    assert routing["order"] == ["vertex"]
+    routing = build().routing({"sort": "throughput"})
+    assert routing["sort"] == "throughput"
+    assert routing["only"] == ["azure", "openai"]
     assert routing["data_collection"] == "deny"
 
 

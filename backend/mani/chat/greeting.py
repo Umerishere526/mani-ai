@@ -10,14 +10,14 @@ STYLE_QUESTION = "How would you like me to speak with you today?"
 # The greeting's buttons. `style` is read back by the backend when one is tapped; the client
 # only ever sends the label, exactly as it does for every other button.
 STYLE_OPTIONS = [
-    {"label": "Direct", "style": "direct"},
+    {"label": "Directive", "style": "directive"},
     {"label": "Supportive", "style": "supportive"},
     {"label": "Reflective", "style": "reflective"},
 ]
 
 # What Mani says once a style is chosen - fixed wording from the same spec.
 OPENERS = {
-    "direct": "How can I help you today?",
+    "directive": "How can I help you today?",
     "supportive": "How can I support you today?",
     "reflective": "What's on your mind today?",
 }
@@ -29,8 +29,8 @@ def greeting(nickname: str | None, returning: bool) -> str:
     return f"{hello} {STYLE_QUESTION}"
 
 
-# The client's three buttons under an offer (muhammad, 2026-10-08), set by repairs whatever the
-# model labelled them. Tell me more is the one that asks what the questions involve.
+# The client's three buttons under an offer (muhammad, 2026-10-08), always set by code. Tell me
+# more is the one that asks what the questions involve.
 TRY_IT_LABEL = "Try it"
 TELL_ME_MORE_LABEL = "Tell me more"
 KEEP_CHATTING_LABEL = "Keep chatting"
@@ -49,7 +49,3 @@ AFTER_FRAMEWORK_QUESTIONS = (
     "What do you think you need to do differently from here?",
     "How could you take one small step toward that?",
 )
-
-# The client's own check, asked at most once per conversation when several things have come
-# up and it is unclear which matters most (muhammad, 2026-09-24: "never a new loop").
-CLARIFICATION_QUESTIONS = ("do i have this right?", "what would you like us to focus on today?")

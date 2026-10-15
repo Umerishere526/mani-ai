@@ -15,7 +15,7 @@ python scripts/seed.py     # loads content/ into admin.frameworks and admin.prom
 python scripts/seed_exercises.py  # uploads content/exercises/ audio to the private `exercises` bucket and upserts admin.exercises
 fastapi dev main.py        # dev server with reload on :8000
 fastapi run main.py        # production mode
-pytest                     # the whole suite: unit, evals and integration (integration skips without a database)
+pytest                     # the whole suite: unit and integration (integration skips without a database)
 python scripts/scenario_check.py [--scenario <name>] [--style <style>]   # the client's test conversations from scripts/scenarios.json, in every style, against the real model; removes its own users
 ./scripts/test_db.sh       # schema + RLS against a throwaway Postgres (needs Docker)
 ```
@@ -33,8 +33,8 @@ Without activating, call the venv binaries directly — `./.venv/bin/python`, `.
 ## Layout
 
 - `main.py` — `create_app()` plus the module-level `app`. Sentry init and the `ServiceError` handler live here; routes do not.
-- `mani/` — the application package, and the only thing that runs. `config.py`, `errors.py`, `routers/`, `auth/`, `models/`, and the `chat/`, `prompts/`, `llm/` and `db/` layers, plus `memory.py`, `summarize.py`, `background.py`, `storage.py` and `auth_admin.py`. `chat/` is the turn: `orchestrator.py` runs it, `eligibility.py` decides the two things code owns, an imminent action and what rules a framework out, `safety.py` screens, `context.py` builds the `[ctx]` block and the offer timing, `redraft.py` decides when a draft is asked for again, `repairs.py` corrects what remains. **It never reads the filesystem for content** — prompts and frameworks come from the database.
-- `content/` — authored markdown, seeded into the `admin` schema by `scripts/seed.py` and never read at runtime. `content/prompts/*.md` become `admin.prompts` (except `somatic.md`, which `seed.py` merges into every framework as the last two stages); `content/frameworks/*.md` (only ABCDE now; the rest are in `paused/`) become `admin.frameworks`, carrying each framework's per-stage content and its activation data (`central_indication`, `signals`, `to_find_out`, `never_offer_when_said`, `contraindications`; `appropriate_when` and `not_when` are read by nothing). Editing one of these changes nothing until it is re-seeded. Kept outside `mani/` because it is input to the database, not code — the same relationship a migration has to the schema.
+- `mani/` — the application package, and the only thing that runs. `config.py`, `errors.py`, `routers/`, `auth/`, `models/`, and the `chat/`, `prompts/`, `llm/` and `db/` layers, plus `memory.py`, `summarize.py`, `background.py`, `storage.py` and `auth_admin.py`. `chat/` is the turn: `orchestrator.py` runs it, `safety.py` screens, `context.py` builds the `[ctx]` block and when Mani may check its understanding (the only way to an offer, spec 0006), `walk.py` merges what they said per stage into the thread's stage store and steps a framework one stage at a time, `understanding.py` merges their feeling, the problem, its core issue and what is in their control into the thread's running understanding, `reply_checks.py` counts what the reply missed, `repairs.py` corrects what remains. **It never reads the filesystem for content** — prompts and frameworks come from the database.
+- `content/` — authored markdown, seeded into the `admin` schema by `scripts/seed.py` and never read at runtime. `content/prompts/*.md` become `admin.prompts` (except `somatic.md`, which `seed.py` merges into every framework as the last two stages); `content/frameworks/*.md` (only ABCDE now; the rest are in `paused/`) become `admin.frameworks`, carrying each framework's per-stage content and its activation data (`central_indication`, `signals`, `contraindications`; `to_find_out`, `appropriate_when` and `not_when` are read by nothing). Editing one of these changes nothing until it is re-seeded. Kept outside `mani/` because it is input to the database, not code — the same relationship a migration has to the schema.
 - `supabase/migrations/` — the schema. `test_harness.sql` stubs what Supabase adds (`auth.users`, `auth.uid()`, the three roles) so the schema can be tested on plain Postgres.
 - `tests/unit/` — deterministic logic. `tests/integration/` — whole turns against a live database with a scripted model. `tests/sql/` — schema, RLS and privilege assertions run by `scripts/test_db.sh`.
 - `scripts/` — `seed.py`, `seed_exercises.py` (the library: `content/exercises/exercises.json` plus its MP3s, compressed to 64 kbps mono), `scenario_check.py` with `scenarios.json`, `fold_idle_threads.py` (memory folding, also reachable as `GET /internal/cron/fold-summaries` behind `CRON_SECRET`), `test_db.sh`.
@@ -54,7 +54,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 
 ## Conventions
 
-- Use Pydantic models for request and response bodies rather than raw dicts — `pydantic` 2.13 is already installed, as are `pydantic-settings` and `email-validator`.
+- Use Pydantic models for request and response bodies rather than raw dicts — `pydantic` 2.13 is already installed, as is `pydantic-settings`.
 - Read configuration through `pydantic-settings` and a `.env` file (`python-dotenv` is installed). Never commit secrets or inline them in `main.py`.
 - As routes grow past a handful, split them into `APIRouter` modules and include them from `main.py` — don't let `main.py` become a dumping ground.
 - `sentry-sdk` is initialised in `create_app()` when `SENTRY_DSN` is set, with `send_default_pii=False` — conversation content is special-category health data and must not ride along on an error report.

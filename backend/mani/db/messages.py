@@ -16,8 +16,11 @@ COLUMNS = (
 )
 
 DEFAULT_PAGE = 50
-# How much raw history the model sees. Matches the previous system's window.
-CONTEXT_WINDOW = 20
+# Past the budget, the oldest messages leave the model's view this many at a time, so what it is
+# shown stays the same, and its cached prefix with it, until the next block leaves.
+CONTEXT_DROP_BLOCK = 20
+# A bound on what one turn reads, far past any thread the budget would show whole.
+CONTEXT_MAX_ROWS = 1_000
 
 
 @dataclass(frozen=True)
@@ -58,17 +61,27 @@ async def list_for_thread(
     return Page(messages=page, next_cursor=next_cursor)
 
 
-async def recent_for_context(
+@dataclass(frozen=True)
+class History:
+    # What the model is shown, oldest first.
+    messages: list[Message]
+    # How many of the thread's oldest messages were left out to fit the budget.
+    dropped: int
+
+
+async def for_context(
     conn: asyncpg.Connection,
     thread_id: uuid.UUID | str,
     user_id: uuid.UUID | str,
-    limit: int = CONTEXT_WINDOW,
-) -> list[Message]:
-    """The tail of a thread, oldest first, for the model's view of the conversation.
+    *,
+    budget_chars: int,
+) -> History:
+    """The thread for the model's view of the conversation: all of it while it fits the budget,
+    then without its oldest messages, dropped CONTEXT_DROP_BLOCK at a time.
 
-    Bounded unconditionally. The previous implementation dropped its limit once a
-    summary existed, so a thread with a stale checkpoint resent every message after it
-    on every turn.
+    Bounded unconditionally by CONTEXT_MAX_ROWS. The previous implementation dropped its limit
+    once a summary existed, so a thread with a stale checkpoint resent every message after it on
+    every turn.
     """
     rows = await conn.fetch(
         f"""
@@ -79,9 +92,23 @@ async def recent_for_context(
              limit $3
         ) recent order by created_at
         """,
-        thread_id, user_id, limit,
+        thread_id, user_id, CONTEXT_MAX_ROWS,
     )
-    return Message.from_records(rows)
+    messages = Message.from_records(rows)
+    unread = 0
+    if len(messages) == CONTEXT_MAX_ROWS:
+        total = await conn.fetchval(
+            "select count(*) from public.messages where thread_id = $1 and user_id = $2",
+            thread_id, user_id,
+        )
+        unread = total - len(messages)
+    size = sum(len(m.content) for m in messages)
+    dropped = 0
+    while size > budget_chars and dropped < len(messages):
+        block = messages[dropped:dropped + CONTEXT_DROP_BLOCK]
+        size -= sum(len(m.content) for m in block)
+        dropped += len(block)
+    return History(messages[dropped:], unread + dropped)
 
 
 async def latest_mani_id(

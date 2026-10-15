@@ -7,21 +7,30 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
+from typing import get_args
 
+from mani.chat.repairs import BODY_STAGES
 from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.db import config_tables, pool
 from mani.errors import ErrorCategory, ServiceError
-from mani.models.rows import Prompt
+from mani.llm.schema import BodyBranch
+from mani.models.rows import Prompt, SupportStyle
 
 logger = logging.getLogger(__name__)
+
+
+def style_prompt(style: str) -> str:
+    """The prompt row that holds one conversation style."""
+    return f"style_{style}"
+
 
 # The layers a turn cannot be composed without. The implementation this replaces pushed
 # each layer only `if (prompt)`, so a prompt renamed or deactivated in the portal simply
 # vanished from the system prompt and Mani quietly changed personality.
-# Two authored layers. The framework catalogue between them is generated from the registry
-# rather than stored as a prompt, so it is not listed here and cannot go missing.
-REQUIRED_PROMPTS = ("mani_base", "response_format")
+# Two authored layers and one per style. The framework catalogue is generated from the
+# registry rather than stored as a prompt, so it is not listed here and cannot go missing.
+REQUIRED_PROMPTS = ("mani_base", "response_format") + tuple(style_prompt(s) for s in SupportStyle)
 
 # Used by particular paths rather than every turn, but still misconfiguration if absent.
 EXPECTED_PROMPTS = REQUIRED_PROMPTS + ("title_generation", "summarization")
@@ -73,6 +82,21 @@ async def _read() -> Config:
         logger.warning("prompts missing or inactive: %s", ", ".join(absent))
     if not frameworks:
         logger.warning("no active frameworks; technique offers will be refused")
+    for framework in frameworks:
+        # Code sends the body route's branches by id. Content seeded without them would miss every
+        # branch, so it is refused here rather than discovered mid-conversation.
+        ids = {
+            branch.get("id")
+            for stage in BODY_STAGES
+            for branch in (framework.stages.get(stage) or {}).get("if_unclear") or []
+        }
+        if missing := sorted(set(get_args(BodyBranch)) - ids):
+            raise ServiceError(
+                f"framework {framework.id} has no body route branch for {', '.join(missing)}; "
+                "run scripts/seed.py",
+                ErrorCategory.CONFIG_ERROR,
+                user_message="Mani is not available right now.",
+            )
 
     return Config(
         prompts=by_name, registry=Registry(frameworks), loaded_at=time.monotonic()

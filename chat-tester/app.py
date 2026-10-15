@@ -7,6 +7,7 @@ import asyncio
 import json
 import os
 
+import requests
 import streamlit as st
 
 import client as mani
@@ -23,7 +24,7 @@ st.set_page_config(page_title="Mani chat tester", page_icon="🧠", layout="cent
 
 # The greeting's style buttons, by the label the person taps - used only to show which
 # style the conversation is in.
-STYLES = {"direct": "Direct", "supportive": "Supportive", "reflective": "Reflective"}
+STYLES = {"directive": "Directive", "supportive": "Supportive", "reflective": "Reflective"}
 
 # Where Mani's reply will appear, while it is on its way: three dots pulsing in a pill.
 # Colours are .streamlit/config.toml's secondaryBackgroundColor, borderColor and primaryColor.
@@ -216,6 +217,14 @@ def deliver(content: str) -> None:
         # an st.error before anyone could read it, and a failed send would look like nothing.
         st.session_state.send_error = str(exc)
         return
+    except requests.exceptions.RequestException:
+        # No answer at all within the request timeout, or the backend unreachable. The turn may still
+        # finish on the backend, so reopening the chat can show its reply.
+        st.session_state.send_error = (
+            f"No reply within {mani.REQUEST_TIMEOUT_SECONDS} seconds, or the backend is not reachable. "
+            "Reopen the chat to see whether the reply arrived before sending again."
+        )
+        return
     st.session_state.messages.append({"role": "user", "content": content, "prompts": []})
     st.session_state.messages.append(
         {"role": "mani", "content": turn["content"], "prompts": turn.get("prompts") or []}
@@ -308,11 +317,26 @@ else:
 
 with st.sidebar:
     st.divider()
-    # What Mani knew of each stage of the running framework on its last reply, and what the reply
-    # did about it. Sent by the backend only while AI_DEBUG_MODE is on.
+    # What the backend has stored for each stage of the running framework after the last reply, and
+    # what the walk does about it. Sent by the backend only while AI_DEBUG_MODE is on.
     st.subheader("🧾 What Mani knows")
+    # What Mani understands of them as the backend has stored it for this thread (spec 0005, 0006).
+    understood = (last_turn or {}).get("understanding")
+    if understood:
+        for key, label in (
+            ("feeling", "Feeling"), ("issue", "Problem"), ("core_issue", "Core issue"),
+            ("in_their_control", "In their control"),
+        ):
+            if understood.get(key):
+                st.markdown(f"**{label}:** {understood[key]}")
+    else:
+        st.caption("Nothing understood yet, or AI_DEBUG_MODE is off in the backend.")
+    # When Mani last checked its understanding with them; the next message answers it.
+    check_at = (last_turn or {}).get("check_at_message_count")
+    if check_at is not None:
+        st.caption(f"Mani's last check: after message {check_at}")
     LEDGER_ICONS = {
-        "known": "✅", "partial": "🟡", "confirm": "❓", "missing": "⬜", "done": "✔️", "not_reached": "⚪",
+        "known": "✅", "possible": "❓", "partial": "🟡", "missing": "⬜", "done": "✔️", "not_reached": "⚪",
     }
     ledger = (last_turn or {}).get("ledger")
     if ledger:
@@ -324,7 +348,7 @@ with st.sidebar:
             )
             if row.get("known"):
                 st.caption(f"knows: {row['known']}")
-        st.caption("✅ bypassed  🟡 partial  ❓ confirm  ⬜ missing  ✔️ done earlier  ▶ asked this reply")
+        st.caption("✅ known, confirm once  ❓ possible event  🟡 partial  ⬜ missing  ✔️ done  ▶ on it now")
     else:
         st.caption("Shown while a framework is running, with AI_DEBUG_MODE on in the backend.")
 

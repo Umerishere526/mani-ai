@@ -319,6 +319,10 @@ or go to the Library?"
 
 ## 23. Complete worked example — reflection tone
 
+> The offer here follows the first message. The client's message of 2026-10-12 overrides that
+> timing (R1 in [requirements.md](../../../docs/client/requirements.md)): no offer before the
+> person's third message. The example still holds for the offer wording and the stages.
+
 ```
 User:  My manager criticized my presentation. Now I keep thinking I am incompetent.
 

@@ -22,6 +22,11 @@ SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
 
+# Above the backend's own deadline for a chat reply (chat_deadline_seconds, 30), so a slow turn comes back
+# as the backend's "took too long" error rather than this tool giving up first.
+REQUEST_TIMEOUT_SECONDS = 90
+
+
 class ApiError(Exception):
     """What the backend actually said, in its own error shape."""
 
@@ -178,7 +183,7 @@ class ManiClient:
             "Content-Type": "application/json",
         }
         return requests.request(
-            method, f"{self.base_url}{path}", headers=headers, timeout=90, **kwargs
+            method, f"{self.base_url}{path}", headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs
         )
 
     def _call(self, method: str, path: str, **kwargs) -> dict[str, Any]:

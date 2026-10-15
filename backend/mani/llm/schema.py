@@ -3,10 +3,15 @@
 
 from __future__ import annotations
 
+import functools
+import logging
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
+
+logger = logging.getLogger(__name__)
 
 
 class LibrarySection(StrEnum):
@@ -39,8 +44,8 @@ SHAPES = (
 NO_QUESTION_SHAPES = ("mirror and hold", "presence only")
 
 
-class SmartPrompt(BaseModel):
-    """One tappable capsule under a reply."""
+class Button(BaseModel):
+    """What every tappable capsule carries."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -53,51 +58,20 @@ class SmartPrompt(BaseModel):
             "use it for a general Go to Library button."
         ),
     )
-    technique: str | None = Field(
-        default=None,
-        description=(
-            "The technique id this button offers, when the button is a technique offer. "
-            "Null otherwise."
-        ),
-    )
     decline: bool | None = Field(
         default=None,
         description="True when tapping this button declines the technique being offered.",
     )
 
-    @field_validator("decline", mode="before")
-    @classmethod
-    def _decline_written_as_a_word(cls, value: object) -> object:
-        """The model sometimes writes the word ("decline", "Keep chatting") where a boolean
-        belongs, and one such reply failed the whole turn. A word there means the button
-        declines; only an explicit no means it does not."""
-        if isinstance(value, str):
-            return value.strip().lower() not in {"", "false", "no", "0", "null", "none"}
-        return value
 
+class SmartPrompt(Button):
+    """One tappable capsule under a reply."""
 
-class TechniqueState(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    technique: str = Field(
-        description="The framework id, exactly as listed in the Framework Index."
-    )
-    step: str = Field(
-        description=(
-            "The stage you are asking in this reply, from framework_stages in [ctx]. It may be "
-            "several stages past the last one when what they said already answered those between. "
-            "The closing and the body route are never skipped."
-        )
-    )
-    accepted: bool | None = Field(
+    technique: str | None = Field(
         default=None,
         description=(
-            "Set to true when the user accepts a technique offer in free text "
-            '(e.g., "yeah let\'s do it", "sure", "ok"), or asks for one they declined '
-            "earlier in this conversation. Set to false when they decline an offer in free "
-            "text, or carry on talking without answering it: that is Keep chatting. Set to "
-            "null when they asked about the offer itself, so it stays open, and on every "
-            "other turn."
+            "The technique id this button offers, when the button is a technique offer. "
+            "Null otherwise."
         ),
     )
 
@@ -116,51 +90,191 @@ class Style(BaseModel):
     )
 
 
-class StageKnown(BaseModel):
-    """One stage of the running framework, and what the conversation already holds for it."""
+class StageUpdate(BaseModel):
+    """What they said this turn for one stage. `status` is checked by code (walk.py), not typed,
+    for the reason the note on SHAPES gives."""
 
     model_config = ConfigDict(extra="ignore")
 
     stage: str = Field(description="The stage id, from framework_stages in [ctx].")
-    known: str | None = Field(
-        default=None,
+    said: str = Field(
         description=(
-            "What they have already said, here or in the Conversation Context, that this stage "
-            "asks for, in their own short words. Part of it is fine. Null when they have said "
-            "nothing for it."
-        ),
+            "What they said for this stage, in their words and said to them as you, such as "
+            "\"your boss criticized your work in front of the team\". One event or thought, a dozen "
+            "words at most. Never they or the user for them."
+        )
     )
-    status: Literal["known", "partial", "confirm", "missing"] | None = Field(
-        default=None,
+    status: str = Field(
         description=(
-            "known: what they said already meets the stage's ready_when, so it is not asked. "
-            "partial: they said some of it, so ask only for the gap. confirm: you have a possible "
-            "answer they did not state, and the stage's own lines say to confirm it. missing: "
-            "they said nothing for it, so ask it."
-        ),
+            "known: their words answer the stage. partial: half of it is there. possible: "
+            "activate only, an event that likely started this but they never said so."
+        )
     )
-    met: bool | None = Field(
+    corrected: bool | None = Field(
         default=None,
-        description="Optional. True when status is known.",
+        description="True when they said words stored for this stage earlier are wrong.",
     )
 
-    @model_validator(mode="after")
-    def _status_and_met_agree(self) -> "StageKnown":
-        """Either field may be given; the other follows, so a ledger is always read one way."""
-        if self.status is None:
-            self.status = "known" if self.met else ("partial" if self.known else "missing")
-        self.met = self.status == "known"
-        return self
 
-
-class Reply(BaseModel):
-    """What one turn asks the model for. Optional fields come back null, not absent."""
+class NextStage(BaseModel):
+    """How the conversation answers the stage the walk reaches next. `status` and `gap` are checked
+    by code (walk.py), not typed, for the reason the note on SHAPES gives."""
 
     model_config = ConfigDict(extra="ignore")
 
-    # reasoning and style come before text on purpose: structured output is generated in
-    # schema order, so a field declared after text can only describe a reply already
-    # written, never shape it.
+    status: str = Field(
+        description=(
+            "known: their words answer the stage. partial: part of it is there. possible: activate "
+            "only, an event that likely started this but they never said so. missing: nothing they "
+            "said answers it."
+        )
+    )
+    said: str | None = Field(
+        default=None,
+        description=(
+            "What they said for this stage, in their words and said to them as you, a dozen words at "
+            "most. Never they or the user for them. Null when missing."
+        ),
+    )
+    gap: str | None = Field(
+        default=None,
+        description=(
+            "partial only: which part of the stage they have not given yet, by the id of its line in "
+            "next_stage_if_unclear, such as challenge for dispute. Null otherwise."
+        ),
+    )
+
+
+# Merged into the thread's record by chat/understanding.py. The docstring is sent to the model.
+class UnderstandingUpdate(BaseModel):
+    """What their message names or changes about how they feel, what they are dealing with, what
+    lies under it, and what is in their control. A null keeps what is already known."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    feeling: str | None = Field(
+        default=None,
+        description=(
+            "Their own word for how they feel, only when this message names it or changes it, in the "
+            "form that reads after \"feeling\", such as \"frustrated\". Never one they did not use. "
+            "Null otherwise."
+        ),
+    )
+    issue: str | None = Field(
+        default=None,
+        description=(
+            "The problem: what is actually happening to them, concrete (who, what, how often), in "
+            "their words and said to them as you, such as \"your boss says you're not doing enough\". "
+            "Never the feeling. Only when this message makes it clear or moves to another. A dozen words "
+            "at most. Null otherwise."
+        ),
+    )
+    core_issue: str | None = Field(
+        default=None,
+        description=(
+            "The core issue: what the problem comes down to for them underneath, such as what usually "
+            "happens next, what falls on them, or what keeps it going. Your understanding, "
+            "formed from their answers and said to them as you. Report it as soon as their answers show "
+            "it; they don't need to name it themselves. Never the feeling they opened with or the problem "
+            "reworded. A dozen words at most. Null otherwise."
+        ),
+    )
+    in_their_control: str | None = Field(
+        default=None,
+        description=(
+            "What they said they can do, influence or decide about it, said to them as you, or "
+            "\"you're not sure yet\" when they said they don't know. Only in answer to your question "
+            "about it. Null otherwise."
+        ),
+    )
+
+
+# Read by the orchestrator: a check with all its parts is written to the thread, and repairs sends its
+# parts in this order in place of the reply's text (spec 0006). The docstring is sent to the model.
+class Check(BaseModel):
+    """Your check of what you understand, filled only on the reply that checks it with them. Each part
+    is one sentence in your own words, said to them as you, from their words only. The parts are sent
+    in this order, in place of your text."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    problem: str | None = Field(default=None, description="One sentence: the problem, as you understand it.")
+    core_issue: str | None = Field(default=None, description="One sentence: the core issue under it.")
+    in_their_control: str | None = Field(
+        default=None,
+        description="One sentence: what they said is in their control, or that they're not sure yet, which is fine.",
+    )
+    comes_down_to: str | None = Field(
+        default=None,
+        description="One sentence: what it all seems to come down to for them, offered as your understanding.",
+    )
+    question: str | None = Field(default=None, description="Your one question asking whether you have it right.")
+
+
+OfferAnswer = Literal["yes", "no", "asked", "moved_on"]
+CheckAnswer = Literal["yes", "no"]
+BodyBranch = Literal[
+    "chest", "head", "stomach", "elsewhere", "no_place", "agreed", "declined", "acting", "pain",
+    "returned",
+]
+StageAnswer = Literal["agreed", "answered", "corrected", "let_go", "not_yet"]
+_CLOSED_SETS = {
+    "offer_answer": get_args(OfferAnswer),
+    "check_answer": get_args(CheckAnswer),
+    "body": get_args(BodyBranch),
+    "stage_answer": get_args(StageAnswer),
+}
+
+
+class Moment(StrEnum):
+    """What the database says is happening this turn. It picks the reply shape, so a field
+    exists only in the moment where it means something."""
+
+    CONCERN = "concern"
+    BODY = "body"
+    IN_STAGES = "in_stages"
+    OFFER_OPEN = "offer_open"
+    CHECK_OPEN = "check_open"
+    CHATTING = "chatting"
+
+
+class Offer(BaseModel):
+    """The model's part of an offer: the slots of the client's template, never its words."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    going_through: str | None = None
+    lead_line: str | None = None
+
+
+class _ReplyBase(BaseModel):
+    """What every reply shape shares: unknown fields are dropped, and an off-list value in a
+    closed set is read as null. A ValidationError there would cost a second call and could
+    lose the message, as the note on SHAPES says."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    @field_validator("offer_answer", "check_answer", "body", "stage_answer", mode="before", check_fields=False)
+    @classmethod
+    def _off_list_is_null(cls, value: object, info) -> object:
+        if value is None or value in _CLOSED_SETS[info.field_name]:
+            return value
+        # The value itself is not logged: it is the model's words, which may carry theirs.
+        logger.info("off-list %s ignored", info.field_name)
+        return None
+
+
+class Reply(_ReplyBase):
+    """Every field a reply can carry. The model is sent only the subset for this turn's moment
+    (`reply_for`), and what it returns is read back into this record, so a field outside the
+    moment is always null here."""
+
+    # Mani's text comes right after the reasoning and the answers that decide what moment this is, the
+    # stage answer before the stage updates and the next stage, so the text is written for what they
+    # report: structured output is generated in schema order, and the reading of the person (the
+    # understanding, the set heading toward, the shape) planned the reply as a case note while it came
+    # first (live, 2026-10-13). The stage fields still come before text, since the stage's words are
+    # code's and the text follows them; heading_toward still comes before offer.
     reasoning: str | None = Field(
         default=None,
         description=(
@@ -168,53 +282,96 @@ class Reply(BaseModel):
             "field' in your instructions. Not shown to the user."
         ),
     )
-    style: Style | None = Field(
+    check_answer: CheckAnswer | None = Field(
         default=None,
         description=(
-            "Choose before writing text: the response shape this reply will use. It may "
-            "repeat; the opening words may not."
+            "How they answered the check of your understanding in your last reply. yes only when "
+            "they clearly agree with all of it. no for anything else: a correction, an addition, "
+            "or talking about something else."
+        ),
+    )
+    offer_answer: OfferAnswer | None = Field(
+        default=None,
+        description=(
+            "How they answered the offer in your last reply: yes, no, asked (about it, or what "
+            "it involves), or moved_on (they talked about something else)."
+        ),
+    )
+    body: BodyBranch | None = Field(
+        default=None,
+        description=(
+            "The body route branch their message meets, by its id from [ctx]. returned: the "
+            "feeling came back after the practice. Null when none fits."
+        ),
+    )
+    stage_answer: StageAnswer | None = Field(
+        default=None,
+        description=(
+            "How their message answers the stage in force. agreed: yes to your check of what they "
+            "said, even with more added. answered: they gave what the stage needs, with an update for it. corrected: a no "
+            "with new words, with an update for it. let_go: move on without words, because it was "
+            "asked twice already or the question made them uneasy. not_yet: a plain no, unclear, or "
+            "I don't know while you still help."
+        ),
+    )
+    stage_updates: list[StageUpdate] | None = Field(
+        default=None,
+        description=(
+            "Fill it before text. The stage in force, from their message, and an earlier stage they "
+            "correct. Never what stages_known already holds unchanged. Null when there is none. Not "
+            "shown to the user."
+        ),
+    )
+    next_stage: NextStage | None = Field(
+        default=None,
+        description=(
+            "Fill it before text, every time: how this conversation answers the stage named next_stage "
+            "in [ctx], judged by next_stage_ready_when and next_stage_reach from everything they have "
+            "said about the issue they confirmed, before or after your check, the latest words for "
+            "each part. Used only if the walk reaches that stage this turn. Not shown to the user."
+        ),
+    )
+    text: str = Field(
+        description="What Mani says to them, sounding like Mani in the example. Required."
+    )
+    understanding_update: UnderstandingUpdate | None = Field(
+        default=None,
+        description=(
+            "Only what their message names or changes about their feeling, their "
+            "issue, what lies under it, or what is in their control. Not shown to the user."
         ),
     )
     heading_toward: str | None = Field(
         default=None,
         description=(
-            "Choose before writing text: the id from the Framework Index that this "
+            "The id from the Framework Index that this "
             "conversation is most likely heading toward, or null when nothing has pointed "
             "anywhere yet. It decides which set you offer, never what you ask. Not shown to "
             "the user."
         ),
     )
-    offer_fit: Literal["clear", "closest"] | None = Field(
+    style: Style | None = Field(
         default=None,
         description=(
-            "Only when this reply offers a set of questions: \"clear\" when you are confident "
-            "it fits what they have told you, \"closest\" when nothing fits well and it is the "
-            "nearest. Null when you are not offering. Choose before writing text."
+            "The response shape this reply used."
         ),
     )
-    stages_known: list[StageKnown] | None = Field(
+    check: Check | None = Field(
         default=None,
         description=(
-            "Only while the questions run (active_framework is in [ctx]); null otherwise. Fill "
-            "it before text. One entry per stage, in order, starting with the stage in force "
-            "and stopping at the first that is not met. That stage is the one you ask, and "
-            "state.step must name it. Your question asks only for what its known does not "
-            "already hold. Not shown to the user."
+            "Fill it only when this reply checks your understanding with them, once the problem and "
+            "what lies under it are clear from their words. Null otherwise. Not shown to the user."
         ),
     )
-    text: str = Field(description="Your conversational response to the user. Required.")
-    prompts: list[SmartPrompt] | None = Field(
+    offer: Offer | None = Field(
         default=None,
         description=(
-            "Tappable button options if your response ends with a question that has "
-            "2-3 clear choices. Each prompt has a \"label\" field (required). "
-            "ONLY include \"technique\" field when INITIALLY ASKING if user wants to try "
-            "a technique. Include \"library\" ONLY on a button that opens the library. "
-            "Labels should be in USER voice (\"Try it\", "
-            "\"Keep chatting\"). Set to null if no buttons are appropriate "
-            "(e.g., open-ended questions). Two or three, never more."
+            "Fill it only when check_answer is yes: the set in heading_toward, closest to what they "
+            "confirmed. Null otherwise. The offer's words are the client's: you fill only these "
+            "parts, in their words. Your text is not sent when the offer is."
         ),
     )
+    their_words: str | None = Field(default=None)
     title: str | None = Field(
         default=None,
         description=(
@@ -229,22 +386,10 @@ class Reply(BaseModel):
             "Set when the person shows a genuine safety concern - suicidal thoughts, an intent "
             "to self-harm, or a wish to die. This does NOT cut off the conversation; it flags "
             "the moment so the framework pauses and the reply stays with them. Do NOT set it "
-            "for ordinary sadness or frustration, hopelessness or exhaustion (\"I can not do "
-            "this anymore\"), physical pain or injury (\"I broke my arm\", \"I fell and hurt "
-            "myself\"), or an ambiguous \"I need help\". For a physical injury, ask whether they "
-            "have been able to get it seen to and how it is affecting them, then support the "
-            "emotional side. For anything else ambiguous, ask one gentle question to learn "
-            "whether they are in danger or hurting emotionally first. Set to null when there is "
-            "no safety concern."
-        ),
-    )
-    state: TechniqueState | None = Field(
-        default=None,
-        description=(
-            "REQUIRED when you are offering or guiding a technique - you MUST populate "
-            "this field with the technique id and the stage you are on. This includes "
-            "offering a technique and every stage through the last one in framework_stages. "
-            "Only set to null when the conversation has no active technique."
+            "for ordinary sadness or frustration, hopelessness or exhaustion, physical pain or "
+            "injury, or an ambiguous request for help. For anything ambiguous, ask one gentle "
+            "question to learn whether they are in danger or hurting emotionally first. Set to "
+            "null when there is no safety concern."
         ),
     )
     # There is no clinical_note field. The model was asked for three or four sentences of
@@ -256,19 +401,97 @@ class Reply(BaseModel):
     # make storing it defensible.
 
 
+@dataclass(frozen=True)
+class Slots:
+    """What each slot of the client's templates asks for, in the thread's style: the text inside
+    its `<...>`. The client's own description of the slot is what the model reads."""
+
+    going_through: str | None = None
+    lead_line: str | None = None
+    their_words: str | None = None
+
+
+_CORE = ("reasoning", "style", "understanding_update", "heading_toward", "text", "title", "crisis")
+_STAGES = ("stage_updates", "stage_answer")
+# The stage the walk may reach this turn, judged on every turn that can start or move the walk. Not at
+# the closing, which the body route follows.
+_REACH = ("next_stage",)
+
+
+@functools.cache
+def reply_for(
+    moment: Moment,
+    *,
+    may_check: bool = False,
+    declined_row: bool = False,
+    on_closing: bool = False,
+    slots: Slots = Slots(),
+) -> type[BaseModel]:
+    """The reply shape sent this turn: the core fields plus what this moment needs. A field that
+    is not here cannot be filled, so the gate is the database that picked the moment."""
+    names = set(_CORE)
+    overrides: dict[str, tuple] = {}
+    if moment is Moment.BODY:
+        names |= {"body", *(_STAGES if on_closing else ())}
+    elif moment is Moment.IN_STAGES:
+        names |= {*_STAGES, *_REACH}
+    elif moment is Moment.OFFER_OPEN:
+        names |= {"offer_answer", *_STAGES, *_REACH}
+        if slots.their_words:
+            names.add("their_words")
+            overrides["their_words"] = (
+                str | None,
+                Field(default=None, description=f"Only on no, or when they chose Keep chatting: {slots.their_words}."),
+            )
+    elif moment is Moment.CHECK_OPEN:
+        names.add("check_answer")
+        if slots.going_through:
+            names.add("offer")
+            overrides["offer"] = (_offer_model(slots.going_through, slots.lead_line) | None, Reply.model_fields["offer"])
+    elif moment is Moment.CHATTING and may_check:
+        names.add("check")
+    if declined_row and moment in (Moment.CHECK_OPEN, Moment.CHATTING):
+        names |= {"offer_answer", *_STAGES, *_REACH}
+        overrides["offer_answer"] = (
+            OfferAnswer | None,
+            Field(default=None, description="yes when they ask for the set they declined; null otherwise."),
+        )
+    order = list(Reply.model_fields)
+    if moment is Moment.CHECK_OPEN:
+        # On the answer to a check a yes is the client's offer, which replaces the text, so the set and
+        # its slots are filled before the text; written after it, the slots were left empty (live,
+        # 2026-10-13: "offer unusable: no lead_line" in Supportive and Reflective).
+        order = [n for n in order if n not in ("heading_toward", "offer")]
+        at = order.index("check_answer") + 1
+        order[at:at] = ["heading_toward", "offer"]
+    fields = {
+        name: overrides.get(name, (Reply.model_fields[name].annotation, Reply.model_fields[name]))
+        for name in order
+        if name in names
+    }
+    return create_model("Reply", __base__=_ReplyBase, **fields)
+
+
+@functools.cache
+def _offer_model(going_through: str, lead_line: str | None) -> type[BaseModel]:
+    """The offer's slots in this style. lead_line exists only when the style's template opens
+    with a whole line of the model's own."""
+    fields: dict[str, tuple] = {"going_through": (str | None, Field(default=None, description=going_through))}
+    if lead_line:
+        fields["lead_line"] = (str | None, Field(default=None, description=lead_line))
+    return create_model("Offer", __config__=ConfigDict(extra="ignore"), **fields)
+
+
+def as_reply(parsed: BaseModel) -> Reply:
+    """A reply in this turn's shape, read into the full record, every absent field null."""
+    return Reply.model_validate(parsed.model_dump())
+
+
 class Extraction(BaseModel):
     """What summarization asks for. Schema-validated rather than parsed out of prose."""
 
     model_config = ConfigDict(extra="ignore")
 
-    current_issue: str = Field(
-        description=(
-            "One line, in plain terms: what the person is actually working through right "
-            "now. Replaced each run to match the newest messages, even where the fuller "
-            "summary still carries older history. Never a technique name, never a feeling "
-            "alone - the situation or question they came with."
-        )
-    )
     summary: str = Field(
         description=(
             "A 2-4 sentence prose summary of what was discussed: the main concern, key "

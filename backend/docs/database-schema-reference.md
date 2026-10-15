@@ -9,7 +9,8 @@ Generated 2026-09-23 against local Supabase (`supabase_db_mani`), then hand upda
 migrations 006 to 010 (the call purpose enum, backend writes of prompt state, bounded profile topics, the
 memory table, the summary's current issue); the counts, `thread_summaries`, the privilege list and the RLS
 note below were checked against the live database that day. Regenerate from the queries at the bottom after
-the next schema change.
+the next schema change. Hand updated on 2026-10-13 for migrations 020 and 022 only (`stages_known`,
+`threads.understanding`, `thread_summaries.current_issue` dropped); 018, 019 and 021 are not reflected yet.
 
 The rest of this paragraph describes the original generation: Nothing here was typed
 from memory — every table, column, constraint, policy, and grant was queried directly from
@@ -59,7 +60,7 @@ Query: `select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid
 | `public` | `thread_technique_state` | Which framework is active in a thread, and its current phase. |
 | `public` | `thread_techniques_offered` | Frequency-limiting: which frameworks have already been offered in a thread. |
 | `public` | `thread_response_styles` | The model's self-reported response shape/voice per reply — anti-repetition signal. |
-| `public` | `thread_summaries` | The rolling summary of a long thread, refreshed every 20 messages (the history window). Written by the backend only (migration 007). |
+| `public` | `thread_summaries` | The rolling summary of a thread too long for the model's budget, refreshed once messages have left its view (`CONTEXT_BUDGET_CHARS`). Written by the backend only (migration 007). |
 | `public` | `exercise_completions` | Whether a user found a completed exercise helpful. |
 
 `admin.*` is **invisible to PostgREST** — `supabase/config.toml`'s `[api] schemas` lists
@@ -81,7 +82,7 @@ One row per user, created automatically by the migration-004 trigger on signup.
 | 1 | `user_id` | uuid | **PK**, FK→`auth.users(id)` cascade | Same id as the Auth user. Deleting the auth user deletes this row. |
 | 2 | `nickname` | text | optional | 1–40 chars if set (CHECK `profiles_nickname_sane`). |
 | 3 | `topics` | text[] | default `'{}'` | Free-text topics from onboarding. At most 10, 600 chars in total (CHECK `profiles_topics_bounded`, migration 008) - pasted into every system prompt. |
-| 4 | `support_style` | text | optional 🔒 | `supportive` / `reflective` / `direct` (CHECK `profiles_support_style_known`). Matches `mani.models.rows.SupportStyle`. The onboarding default; a thread's own `conversation_style` overrides it. |
+| 4 | `support_style` | text | optional 🔒 | `supportive` / `reflective` / `directive` (CHECK `profiles_support_style_known`). Matches `mani.models.rows.SupportStyle`. The onboarding default; a thread's own `conversation_style` overrides it. |
 | 5 | `age_bracket` | text | optional | **Not constrained** — see §6. |
 | 6 | `created_at` | timestamptz | default `now()` | |
 | 7 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
@@ -97,9 +98,10 @@ One row per user, created automatically by the migration-004 trigger on signup.
 | 6 | `created_at` | timestamptz | default `now()` | |
 | 7 | `last_message_at` | timestamptz | default `now()` | Maintained by the same trigger as `message_count`. |
 | 8 | `deleted_at` | timestamptz | optional | Soft-delete marker. |
-| 9 | `conversation_style` | text | optional 🔒 | `supportive` / `reflective` / `direct` (CHECK `threads_conversation_style_known`). Wins over `profiles.support_style` when set — see `mani/chat/context.py:resolve_style`. |
+| 9 | `conversation_style` | text | optional 🔒 | `supportive` / `reflective` / `directive` (CHECK `threads_conversation_style_known`). Wins over `profiles.support_style` when set — see `mani/chat/context.py:resolve_style`. |
 | 10 | `vague_streak` | smallint | default `0`, 0–10 (CHECK) | Currently written by nothing (`PORT-STATUS.md` "Open" — the vague-reply pivot isn't built). |
 | 11 | `memory_folded_at` | timestamptz | optional | The last message folded into `admin.user_memory`; null means never. Only `mani_service` may write it (migration 009). |
+| 12 | `understanding` | jsonb | default `'{}'`, an object (CHECK `threads_understanding_object`) | `{feeling, issue}`, both optional, each at most 200 characters: their feeling word and their issue as Mani understands them so far. Merged by `mani/chat/understanding.py` after each reply, except on a concern turn, and sent back in `[ctx]`. Only `mani_service` may write it (migration 022). Loaded only for a turn, never in a thread list. |
 
 ### `public.messages`
 | # | Column | Type | Required | Purpose |
@@ -127,6 +129,7 @@ One row per thread — the currently (or most recently) active framework.
 | 6 | `at_message_count` | integer | required | Thread's `message_count` when this state was last written — the cooldown clock. |
 | 7 | `library_offered_since` | boolean | default `false` | Whether the library follow-up has been offered since acceptance. |
 | 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
+| 9 | `stages_known` | jsonb | default `'{}'`, an object (CHECK `thread_technique_state_stages_known_object`) | What they said per stage, keyed by framework id then stage id: `{said, status, tries}`. Merged and stepped by `mani/chat/walk.py`; kept when a run retires (migration 020). |
 
 ### `public.thread_techniques_offered`
 Frequency-limiting log — every framework ever offered in a thread.
@@ -161,7 +164,6 @@ Append-only log of the model's self-reported style per reply.
 | 6 | `summarized_message_count` | integer | default `0`, `>= 0` (CHECK) | |
 | 7 | `created_at` | timestamptz | default `now()` | |
 | 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
-| 9 | `current_issue` | text | optional | One line, replaced each run: what the person is working on right now. The composer puts it ahead of the prose summary on every turn a summary exists (migration 010). |
 
 ### `public.exercise_completions`
 | # | Column | Type | Required | Purpose |
@@ -186,7 +188,7 @@ Append-only log of the model's self-reported style per reply.
 | 9 | `created_at` | timestamptz | default `now()` | |
 | 10 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
 | 11 | `stages` | jsonb | default `'{}'`, must be a JSON object (CHECK) | Per-phase content: purpose, listen_for, ready_when, boundaries, `ask.{style}`. |
-| 12 | `activation` | jsonb | default `'{}'`, must be a JSON object (CHECK) | `central_indication`/`distinctions`/`contraindications`/`never_offer_when_said` — what the prompt and `mani/chat/eligibility.py` read. |
+| 12 | `activation` | jsonb | default `'{}'`, must be a JSON object (CHECK) | `central_indication`/`to_find_out`/`distinctions`/`contraindications` — what the prompt reads. |
 
 ### `admin.prompts`
 | # | Column | Type | Required | Purpose |
@@ -325,7 +327,7 @@ These are real business rules, not values that should be dynamic. Each is enforc
 
 | Value | DB constraint | Code | Values |
 |---|---|---|---|
-| Conversation style | `profiles_support_style_known`, `threads_conversation_style_known` | `mani.models.rows.SupportStyle` | `supportive`, `reflective`, `direct` |
+| Conversation style | `profiles_support_style_known`, `threads_conversation_style_known` | `mani.models.rows.SupportStyle` | `supportive`, `reflective`, `directive` |
 | Response shape | `response_styles_shape_known` | `SHAPES` in `mani/llm/schema.py` | 6 values (warmth lead, honor and follow, mirror and ask, mirror and hold, gentle follow, presence only) |
 | Mirroring voice | `response_styles_voice_known` | none (`VOICES` was removed; the column is no longer written) | naming, receiving, quoting, transitional, observing |
 
@@ -339,7 +341,7 @@ If either side of one of these pairs is ever changed, the other must change with
 
 ### Written but never read — not a hardcoding problem, but adjacent
 
-`admin.frameworks.body` and `.activation_conditions` are written by `scripts/seed.py` on every seed run and read by nothing (the prompt and `mani/chat/eligibility.py` read the `activation` jsonb column instead, per migration 002's own comment). Not incorrect, just a standing cost — every seed writes text nothing will ever load.
+`admin.frameworks.body` and `.activation_conditions` are written by `scripts/seed.py` on every seed run and read by nothing (the prompt reads the `activation` jsonb column instead, per migration 002's own comment). Not incorrect, just a standing cost — every seed writes text nothing will ever load.
 
 ## How to regenerate this document
 

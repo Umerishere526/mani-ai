@@ -6,16 +6,14 @@ display_order: 6
 phases: [offering, stop, pause, observe, proceed, closing]
 activation:
   central_indication: >-
-    The user is about to act - send, post, call, confront, decide - and needs help pausing
-    before the action, not analysis of the underlying problem. Time-critical: this overrides
-    whatever else the conversation was scoring toward.
+    The user is emotionally overwhelmed and needs to pause before reacting impulsively.
   to_find_out:
     - "what they are about to do"
     - "whether it has already happened"
     - "whether it can safely wait a moment"
     - "whether anyone is at risk (then safety, not this)"
-  # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, to_find_out, distinctions and contraindications.
+  # Documentation of the specification: nothing in mani/ reads to_find_out, appropriate_when or not_when.
+  # The prompt reads central_indication, distinctions and contraindications.
   appropriate_when:
     - "The user is close to acting impulsively"
     - "The action has not yet occurred"
@@ -68,7 +66,7 @@ stages:
     ask:
       supportive: "You want to respond right now. Would it help to pause here with me before you act?"
       reflective: "The urge to respond is moving quickly. Would it help to pause here with me and notice what is happening?"
-      direct: "You are about to send the message. Would you like to pause it and stay with me while we work through the urge?"
+      directive: "You are about to send the message. Would you like to pause it and stay with me while we work through the urge?"
   stop:
     purpose: "Interrupt the intended action before it occurs."
     listen_for: "Whether the text, email, call, post, argument, purchase, or decision has been stopped before completion."
@@ -91,7 +89,7 @@ stages:
     ask:
       supportive: "Can you hold off on it for now, here with me?"
       reflective: "Can you notice the urge without acting on it yet?"
-      direct: "Can you stop the action before it happens?"
+      directive: "Can you stop the action before it happens?"
   pause:
     purpose: "Enter Pause Mode and remain with MANI without returning to the action."
     listen_for: "Whether the action remains paused and the user remains engaged with MANI."
@@ -115,7 +113,7 @@ stages:
     ask:
       supportive: "You have stopped before acting. Can you remain paused here with me?"
       reflective: "You interrupted the immediate reaction. Can you stay with the pause and notice what is happening?"
-      direct: "The action is paused. Can you keep it paused while we continue?"
+      directive: "The action is paused. Can you keep it paused while we continue?"
   observe:
     purpose: "Notice what is happening internally and externally without acting on it."
     listen_for: "What the user notices in thoughts, urges, physical experience, and immediate situation, using only their language."
@@ -139,7 +137,7 @@ stages:
     ask:
       supportive: "You are staying with the pause. What do you notice right now?"
       reflective: "You are no longer acting immediately. What is present for you right now?"
-      direct: "The action remains paused. What are the facts right now?"
+      directive: "The action remains paused. What are the facts right now?"
   proceed:
     purpose: "Choose whether to wait, act, or respond differently."
     listen_for: "Whether the user chooses to wait, act, or respond differently, and what they want that response to accomplish."
@@ -170,7 +168,7 @@ stages:
     ask:
       supportive: "What would help you right now, rather than make this harder?"
       reflective: "What response would help, rather than add to this?"
-      direct: "What response would help rather than intensify this?"
+      directive: "What response would help rather than intensify this?"
   closing:
     purpose: "Confirm completion in the user's own terms, without claiming the user has calmed down or made the correct decision."
     ready_when: >-
@@ -185,7 +183,7 @@ stages:
     ask:
       supportive: "You chose to leave the message unsent for now. How is that choice sitting with you?"
       reflective: "The urge remains, but you are choosing how to respond. What changes when the action is no longer immediate?"
-      direct: "Is that your next step?"
+      directive: "Is that your next step?"
 ---
 
 # DBT STOP

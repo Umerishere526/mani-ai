@@ -5,27 +5,26 @@ from __future__ import annotations
 
 import re
 
-from mani.chat import repairs
-from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CLARIFICATION_QUESTIONS, CHAT_MORE_LABEL
-from mani.chat.safety import normalize
+from mani.chat import repairs, understanding, walk
+from mani.chat.techniques import OFFERING
+from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CHAT_MORE_LABEL
 from mani.db.threads import TurnContext
-from mani.models.rows import ENDING_STAGES, Framework, Message, MessageRole, TechniqueOutcome
+from mani.llm.schema import Moment
+from mani.models.rows import (
+    Framework,
+    Message,
+    MessageRole,
+    TechniqueOutcome,
+    TechniqueState,
+)
 
-# How many messages must pass before a technique may be offered again.
-# After "Keep chatting", three of Mani's replies before it may check again - the same
-# framework or a different one, whichever fits now (muhammad, 2026-09-24).
+# How many messages must pass after a declined offer, or a check they did not confirm, before
+# Mani may check its understanding again: three of its replies (muhammad, 2026-09-24).
 COOLDOWN_AFTER_DECLINE = 6
 
-# No fixed count: a framework is offered as soon as it fits, from the person's first message
-# (muhammad, 2026-10-10). When it has not offered by then the closest fit is due, with Keep
-# chatting beside it: by the fourth message in Direct, which gets to the heart of it sooner, by
-# the sixth in Supportive and Reflective, which may take more turns to hear the person out.
-# Counted in the person's own messages.
-CLOSEST_FIT_AFTER = 4
-CLOSEST_FIT_AFTER_GENTLE = 6
-# After "Keep chatting" a confident offer may come back after two more exchanges; the closest
-# fit waits the full COOLDOWN_AFTER_DECLINE.
-CLEAR_COOLDOWN_AFTER_DECLINE = 4
+# The message by which a check is expected, "two to four exchanges" in the client's cadence. Only
+# logged when it passes without one, never sent to the model (spec 0006, AC-11).
+CHECK_EXPECTED_BY = 5
 # The greeting, the style they tapped, and that style's opener.
 OPENING_MESSAGES = 3
 COOLDOWN_AFTER_COMPLETE = 45
@@ -34,19 +33,6 @@ COOLDOWN_AFTER_COMPLETE = 45
 # `conversation_style` is set per-thread by PATCH /v1/threads/{id} and wins over
 # profile.support_style, which holds the onboarding answer.
 DEFAULT_STYLE = "supportive"
-
-# How many of a reply's own leading words count as its "opener" for repetition purposes.
-# Matches the threshold the eval harness already uses to call two openers the same one.
-RECENT_OPENERS_WORDS = 2
-# How many of Mani's own past replies to surface. Small on purpose: this is a nudge against
-# an immediate repeat, not a transcript.
-RECENT_OPENERS_WINDOW = 3
-
-
-def _opener(text: str) -> str:
-    """The first couple of words of a reply, lowercased - enough to name a repeated opening
-    without exposing the reply itself in [ctx]."""
-    return " ".join(text.split()[:RECENT_OPENERS_WORDS]).lower()
 
 _CTX_BLOCK = re.compile(r"^\[ctx\].*?\[/ctx\]\s*", re.DOTALL)
 
@@ -78,9 +64,9 @@ def _after_framework_question(history: list[Message]) -> str | None:
     """The next of the client's three questions, once a framework has ended.
 
     A framework ends on the reply that offers Chat More. The questions asked since, that reply
-    included, are read from Mani's own replies, so they come in order and none twice. Once that
-    reply has scrolled out of the history window the conversation has moved on, and none are
-    offered.
+    included, are read from Mani's own replies, so they come in order and none twice. Once Mani
+    has replied as many times as there are questions, or has made an offer since, the
+    conversation has moved on and none are offered.
     """
     mani = [m for m in history if m.role is MessageRole.MANI]
     ended = next(
@@ -90,6 +76,11 @@ def _after_framework_question(history: list[Message]) -> str | None:
         None,
     )
     if ended is None:
+        return None
+    since_ended = mani[ended + 1:]
+    if len(since_ended) >= len(AFTER_FRAMEWORK_QUESTIONS) or any(
+        o.get("technique") for m in since_ended for o in (m.prompt_options or [])
+    ):
         return None
     since = " ".join(m.content.lower() for m in mani[ended:])
     return next((q for q in AFTER_FRAMEWORK_QUESTIONS if q.lower().rstrip("?") not in since), None)
@@ -103,72 +94,78 @@ def cooldown_for(outcome: TechniqueOutcome) -> int:
     )
 
 
-def clear_cooldown_for(outcome: TechniqueOutcome) -> int:
-    return (
-        COOLDOWN_AFTER_COMPLETE
-        if outcome is TechniqueOutcome.ACCEPTED
-        else CLEAR_COOLDOWN_AFTER_DECLINE
-    )
-
-
-def _their_messages(ctx: TurnContext) -> int:
+def their_messages(ctx: TurnContext) -> int:
     """How many messages the person has sent. The reply to their Nth is written at 3 + 2(N - 1)."""
     return (ctx.thread.message_count - OPENING_MESSAGES) // 2 + 1
 
 
-def clarification_used(history: list[Message] | None) -> bool:
-    """Whether Mani has already asked the client's one-time clarifying question in this
-    conversation. Read from history rather than a stored flag, so it holds even if a process
-    restart drops anything else about how the turn was built."""
-    return any(
-        m.role is MessageRole.MANI
-        and any(q in m.content.lower() for q in CLARIFICATION_QUESTIONS)
-        for m in (history or [])
-    )
+def live(technique: TechniqueState | None) -> TechniqueState | None:
+    """The framework that is live on this turn, offered and awaiting an answer or accepted and
+    mid-way, or None. A finished row (phase cleared) or a declined one stays stored, because the
+    cooldowns are measured from it, but it is not live."""
+    if technique is None or technique.phase is None:
+        return None
+    if technique.outcome not in (TechniqueOutcome.OFFERED, TechniqueOutcome.ACCEPTED):
+        return None
+    return technique
 
 
-def cooldown_passed(ctx: TurnContext) -> bool:
-    """Whether a confident offer may be made yet: [ctx] reports it, repairs.apply enforces it.
-    The first offer never waits; only one after an earlier offer does."""
+def check_open(ctx: TurnContext) -> bool:
+    """Whether Mani's last reply checked its understanding, so this message answers the check.
+    Any later turn finds it used, whatever happened on this one (spec 0006)."""
+    at = ctx.thread.check_at_message_count
+    return at is not None and at == ctx.thread.message_count and live(ctx.technique) is None
+
+
+def may_check(ctx: TurnContext) -> bool:
+    """Whether this reply may check Mani's understanding: once the problem and its core issue are
+    stored and what is in their control is stored or is what this message answers, which takes at
+    least three of their messages, with no framework live and no check waiting for its answer, and
+    once the cooldowns after the last check and the last offer have passed. The orchestrator stores a
+    check only when all three are found after this turn. The only way to an offer (spec 0006)."""
+    if understanding.next_step(ctx.thread.understanding) not in (None, "control"):
+        return False
+    if live(ctx.technique) is not None or check_open(ctx):
+        return False
+    count, at = ctx.thread.message_count, ctx.thread.check_at_message_count
+    if at is not None and count - at < COOLDOWN_AFTER_DECLINE:
+        return False
     technique = ctx.technique
+    return technique is None or count - technique.at_message_count >= cooldown_for(technique.outcome)
+
+
+def moment(
+    technique: TechniqueState | None,
+    outcome: TechniqueOutcome | None,
+    retiring_framework_id: str | None,
+    awaiting_place: bool,
+    framework: Framework | None,
+    concern: bool,
+    check_open: bool = False,
+) -> Moment:
+    """What is happening this turn, from the database and the safety screen alone; the first that
+    matches wins. `technique` is the live row, offered or running, and `outcome` is its outcome,
+    accepted when a Try it tap starts it this turn. `check_open` is a check in Mani's last reply."""
+    if concern:
+        return Moment.CONCERN
+    if retiring_framework_id is not None:
+        return Moment.BODY
     if technique is None:
-        return True
-    return ctx.thread.message_count - technique.at_message_count >= clear_cooldown_for(
-        technique.outcome
-    )
-
-
-def closest_fit_ok(ctx: TurnContext, *, urgent: bool = False) -> bool:
-    """Whether the closest fit may be offered when nothing fits well."""
-    technique = ctx.technique
-    if technique is None:
-        return urgent or _their_messages(ctx) >= _closest_fit_after(ctx)
-    return ctx.thread.message_count - technique.at_message_count >= cooldown_for(
-        technique.outcome
-    )
-
-
-def closest_fit_due(ctx: TurnContext) -> bool:
-    """The first offer has not come in the turns this style allows: the closest fit is owed now."""
-    return ctx.technique is None and _their_messages(ctx) >= _closest_fit_after(ctx)
-
-
-def _closest_fit_after(ctx: TurnContext) -> int:
-    """The person's message by which the closest fit is owed, in the style in force."""
-    return CLOSEST_FIT_AFTER if resolve_style(ctx) == "direct" else CLOSEST_FIT_AFTER_GENTLE
-
-
-def with_rewrite_notes(prefix: str, reasons: list[str]) -> str:
-    """The same [ctx] block with a line per reason the draft cannot stand, so the model writes it
-    again. Said in the block the model already reads."""
-    lines = "\n".join(
-        [f"rewrite: {reason}" for reason in reasons] + _meaning("rewrite", reasons)
-    )
-    return prefix.replace("\n[/ctx]", f"\n{lines}\n[/ctx]", 1)
+        return Moment.CHECK_OPEN if check_open else Moment.CHATTING
+    if outcome is TechniqueOutcome.ACCEPTED:
+        phase = technique.phase
+        at_the_body = phase == "somatic_checkin" or (phase == "somatic_practice" and awaiting_place)
+        if at_the_body or (framework is not None and phase == framework.closing):
+            return Moment.BODY
+        return Moment.IN_STAGES
+    if outcome is TechniqueOutcome.OFFERED:
+        return Moment.OFFER_OPEN
+    return Moment.CHATTING
 
 
 def resolve_style(ctx: TurnContext) -> str:
-    """Which of the framework's three `ask` variants to surface this turn.
+    """The conversation style in force this turn: which style layer is composed, and which of a
+    framework's style variants is surfaced.
 
     The conversation's own choice wins over the profile's, which is the point of having
     both: onboarding sets a default, and a thread may differ from it without changing it.
@@ -184,43 +181,15 @@ def resolve_style(ctx: TurnContext) -> str:
 # this turn: a vague reply carries the vague guidance and nothing about being heard. Keeping the
 # meaning beside the value is also what keeps the two from drifting apart, which they did while
 # the meanings lived in response_format.md (2026-10-08).
-_FIT_PLAINLY = "Offer it plainly, the way you would one that fits exactly."
 _MEANING: dict[str, str | dict[str, str]] = {
-    "conversation_style": {
-        "direct": (
-            "Direct, for the whole conversation. Clear, concise and focused, never cold, abrupt, "
-            "transactional or interrogative. Most replies are just the question; never open by "
-            "restating what they said. A few plain words of your own come first only after "
-            "something painful or new. Get to the heart of it quickly, so the right set of "
-            "questions can come as soon as it fits."
-        ),
-        "supportive": (
-            "Supportive, for the whole conversation. Warm, understanding and encouraging. A brief "
-            "word in your own words that shows you are with them, never their sentence handed "
-            "back, then a gentle question. Take the turns this needs."
-        ),
-        "reflective": (
-            "Reflective, for the whole conversation. Help them look at what sits behind what they "
-            "said, so the understanding is their own. Reflect the meaning when it opens "
-            "something, never their words. Take the turns this needs."
-        ),
-    },
+    "conversation_style": (
+        "the style they chose, for the whole conversation. conversation_style in your instructions "
+        "says what each reply is trying to do in it."
+    ),
     "conversation_phase": {
         "understanding": (
-"nothing has been offered yet. Your questions come from listening, the way a "
-            "specialist listens. In reasoning, first write what they have told you, then choose "
-            "the one part of it that matters most to them, the part they gave the most weight or "
-            "said last. If you do not know what happened in that part, ask once, in a few words. "
-            "Once you do, stop asking what happened and ask about something real and present in "
-            "it that they have not said yet, in their words: what they have noticed since, or how "
-            "they are with it today. Never ask for something their message already answers, "
-            "including why they think something when they said what led them to it. Never a hypothetical such as what would it mean or what would it be like if. "
-            "Asking how something they said is affecting them is fine, in their words. Never tell "
-            "them what they feel. One short question, about ten words, "
-            "one thing at a time, in plain everyday words, no harder than the last. No two-part "
-            "questions, no menu of choices, no advice and no suggestion hidden in a question. "
-            "What they say about how it is for them shows which set fits. As soon as one fits, "
-            "offer it."
+            "nothing has been offered yet. Take in what they said, then ask for what you still "
+            "need: the problem, the core issue under it, or what is in their control."
         ),
         "framework": "the questions are running, so follow the stage.",
         "talking": (
@@ -228,56 +197,57 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "what they say."
         ),
     },
-    "question_focus": {
-        "the heart of it": (
-            "ask about the one part that matters most to them: what they have noticed since, or "
-            "how they are with it now, in a few plain words, never what they already said. Never dig for more facts about the "
-            "event or the other people in it."
-        ),
-        "how it is for them": (
-            "ask gently how they are with that one part today, in their words, so they can find "
-            "the word for it themselves, never what made them think it. Once their concern is "
-            "clear, never ask what is at stake."
-        ),
-        "what sits behind it": (
-            "ask what sits behind that one part, why it matters to them or what it says to them, "
-            "in plain words, never what made them think it. Never ask what is at stake, and never "
-            "the same question twice in other words."
-        ),
-    },
-    "clarification_available": {
-        "yes": (
-            "if several distinct things have come up and you cannot tell which matters most, "
-            "you may ask one of the client's two lines, word for word, \"Do I have this right?\" "
-            "or \"What would you like us to focus on today?\" Then follow their answer. Once "
-            "asked, never again."
-        ),
-    },
     "offer_waiting": {
         "yes": (
-            "your last reply offered and they typed instead of tapping. If they said yes, set "
-            "state.accepted to true and begin. If they asked what it involves, answer and offer "
-            "again. Anything else is Keep chatting, so set state.accepted to false, follow them, "
-            "and offer nothing in this reply."
+            "your last reply offered and they typed instead of tapping. On a yes, begin. "
+            "Otherwise follow them."
         ),
     },
-    "cooldown_passed": {
-        "yes": "an offer may be made in this reply, if one fits.",
-        "no": "offer nothing in this reply.",
+    "check": {
+        "once_control_is_answered": (
+            "if their message answers what is in their control, even with I don't know, report it and "
+            "check your understanding in this reply by filling check, from their words only. If it does "
+            "not, ask about control and leave check empty."
+        ),
+        "may_check": (
+            "the problem, its core issue and what is in their control are all found. Check your "
+            "understanding with them now by filling check, from their words only. Never add anything "
+            "they did not say."
+        ),
+        "open": (
+            "your last reply checked your understanding. Set check_answer. A clear yes always brings the "
+            "offer: fill offer for the set closest to what they confirmed, even when its Use it when "
+            "does not fit exactly. Anything else, follow what they said toward the root of it."
+        ),
+    },
+    "understanding": (
+        "what they have told you so far, kept for you. A step marked missing is still to be found. In "
+        "understanding_update report only what their message names or changes."
+    ),
+    "understanding_next": {
+        "problem": (
+            "the problem is not pinned down yet. Help them narrow it to what actually happens: who, "
+            "what, how often, what is expected of them. If their message already gives it, report it "
+            "and ask about the core issue under it."
+        ),
+        "core_issue": (
+            "the problem is clear, what lies under it is not. Ask plainly: what usually happens next, "
+            "what falls on them, or what keeps it going. A feeling, such as not being enough, is not yet "
+            "the core issue: ask what makes them feel it or what keeps it going. Once their answers show "
+            "the core issue, offer it in your reply as your understanding, report it, and ask what is in "
+            "their control. They don't need to name it themselves."
+        ),
+        "control": (
+            "the problem and its core issue are clear. Ask what is in their control: what they could "
+            "do, influence or decide about it, once, never twice in other words. If they say they don't "
+            "know, that is their answer: report in_their_control as \"you're not sure yet\"."
+        ),
     },
     "since_last": "how many messages have passed since the last offer.",
-    "closest_fit": {
-        "due": (
-            "you have talked for several replies without offering, so offer the set that fits best "
-            f"now. {_FIT_PLAINLY}"
-        ),
-        "ok": f"you may offer the set that fits best. {_FIT_PLAINLY}",
-    },
     "this_thread": (
         "what was last offered in this conversation and how it went. One they declined may come "
         "back once the cooldown has passed, if it still fits. One they just finished may not. "
-        "If they ask for one they declined, that is a yes at any time, so begin it and report "
-        "state.accepted as true."
+        "If they ask for one they declined, that is a yes at any time, so begin it."
     ),
     "history": "what was tried earlier in this conversation, and whether it helped.",
     "library_pending": {"yes": "offer the Library before anything new."},
@@ -296,38 +266,25 @@ _MEANING: dict[str, str | dict[str, str]] = {
         ),
     },
     "recent_styles": "the shapes of your last few replies. A shape may come back.",
-    "recent_openers": (
-        "the first words of your last few replies. Do not open your new reply the same way."
-    ),
-    "offer": (
-        "the offering stage of the set for pausing before an action they are about to take, in the "
-        "lines below. Use them to judge whether it fits. offer_ask is the permission question "
-        "added after your part, so never write it yourself. It is the backend's pick from their "
-        "words, so if what they described fits another set better by Telling them apart, offer "
-        "that one instead."
-    ),
     "framework_starting": {
-        "yes": "they just said yes. stage_note says how to use what they already told you.",
+        "yes": "they just said yes, so the walk reaches its first stage: next says what your text is for.",
     },
-    "active_framework": (
-        "the set of questions running, with its stages in order. Then the stage you are on and, "
-        "unless it is the last, the one after, each with its purpose, what to listen for, when "
-        "it is done, its boundaries and what to do if unclear. The stages after those are listed "
-        "as later_stage, each with only when it is done and its question. Each ask is a model "
-        "question already in this style, so ask what it asks, in their words, about their "
-        "situation, never word for word."
+    "if_they_say_yes": (
+        "only if their message says yes to this set, the walk reaches its first stage, and next says "
+        "what your text is for. Otherwise follow them."
     ),
-    "later_stage": (
-        "a stage after the next one, shown only so you can tell whether what they have already "
-        "told you meets it. When it does, skip it too."
+    "active_framework": (
+        "the set of questions running, with its stages in order. Then the stage you are on, with "
+        "its purpose, what to listen for, when it is done, its boundaries and what to do if "
+        "unclear. Its ask is a model question already in this style."
+    ),
+    "stages_known": (
+        "what they have said for each stage the walk has reached, kept for you. Never ask for what a "
+        "stage already holds. In stage_updates report the stage in force from their message."
     ),
     "after_framework_question": (
         "they kept chatting after the questions ended and are still on the same issue. Reflect "
         "what they said, then ask this question word for word."
-    ),
-    "rewrite": (
-        "your last draft could not stand, for the reason given. Write the reply again so it no "
-        "longer does that."
     ),
 }
 
@@ -349,30 +306,24 @@ def build(
     ctx: TurnContext,
     *,
     framework: Framework | None = None,
-    candidate: Framework | None = None,
     history: list[Message] | None = None,
     safety_concern: bool = False,
     offer_waiting: bool = False,
-    framework_starting: bool = False,
-    urgent: bool = False,
+    starting: bool = False,
+    yes_framework: Framework | None = None,
 ) -> str:
     """Format the metadata header for this turn.
 
     Every value is read from the composed turn snapshot, so the block describes what the
-    database holds rather than what an in-memory copy was mutated to mid-request. `framework`,
-    `candidate` and `recent_mani_replies` are what the framework content and the caller's own
-    history add - all optional, so a turn with none of them still
-    formats exactly as before.
+    database holds rather than what an in-memory copy was mutated to mid-request. `framework` and
+    `history` are what the framework content and the caller's own history add - both optional,
+    so a turn with neither still formats exactly as before.
 
-    `framework` is the one already active; its current and next stage go in full. `candidate`
-    is the framework code picks for the model, the one for an imminent action - its offer line
-    goes in, so the offer draws on authored language rather than being improvised from the
-    Framework Index's one-liner alone. Never both at once: a framework is
-    either running or being considered, not both.
+    `framework` is the one already active. `starting` is a turn that opens it, and `yes_framework`
+    the set a yes in this message would open; both ask the reply to report what they already said.
 
     `history` is the same window the caller already loads for the model's own conversation
-    view - nothing new is fetched for it. Only Mani's own messages in it become recent_openers;
-    the person's messages are read here but never surfaced back to the model as an "opener".
+    view - nothing new is fetched for it.
     """
     technique = ctx.technique
     # Named first because every stage_ask and offer_ask below is resolved from it, and named
@@ -399,13 +350,12 @@ def build(
     else:
         phase = "talking"
     lines += _line("conversation_phase", phase)
-    if not running and not clarification_used(history):
-        lines += _line("clarification_available", "yes")
-    if not running:
-        # What the question is about while no stage decides it (muhammad, 2026-09-24): said
-        # here, next to the message, because the style rule in the long prompt alone did not hold.
-        focus = _QUESTION_FOCUS[resolve_style(ctx)]
-        lines += _line("question_focus", focus)
+    understood = understanding.render(ctx.thread.understanding)
+    if understood:
+        lines += _line("understanding", understood)
+    step = understanding.next_step(ctx.thread.understanding)
+    if step and live(ctx.technique) is None and not safety_concern:
+        lines += _line("understanding_next", step)
     if offer_waiting:
         # Mani's last reply was an offer, and they typed rather than tapped.
         lines += _line("offer_waiting", "yes")
@@ -413,14 +363,14 @@ def build(
     if question:
         lines += _line("after_framework_question", question)
 
-    # Told to the model as it is enforced: a first offer used to read "yes" here whatever the
-    # count, and the code then dropped what the model had been told it could do.
-    lines += _line("cooldown_passed", "yes" if cooldown_passed(ctx) else "no")
-    if not safety_concern and not running:
-        if closest_fit_due(ctx):
-            lines += _line("closest_fit", "due")
-        elif closest_fit_ok(ctx, urgent=urgent):
-            lines += _line("closest_fit", "ok")
+    # Told to the model as the reply shape enforces it: a check only where the shape has the field,
+    # and an offer only on the answer to one (spec 0006).
+    if not safety_concern:
+        if check_open(ctx):
+            lines += _line("check", "open")
+        elif may_check(ctx):
+            waiting = understanding.next_step(ctx.thread.understanding) == "control"
+            lines += _line("check", "once_control_is_answered" if waiting else "may_check")
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
         lines += _line("since_last", since_last)
@@ -444,130 +394,73 @@ def build(
         styles = " → ".join(s.shape for s in ctx.recent_styles)
         lines += _line("recent_styles", styles)
 
-    # A separate signal from recent_styles: that is the abstract shape, this is the
-    # literal words a reply opened with - two replies can vary in shape while still starting
-    # the same way, which is what "recent_styles" alone cannot catch.
-    mani_replies = [m.content for m in (history or []) if m.role is MessageRole.MANI]
-    openers = [
-        _opener(text) for text in mani_replies[-RECENT_OPENERS_WINDOW:] if text.strip()
-    ]
-    if openers:
-        quoted = ", ".join(f'"{o}"' for o in openers)
-        lines += _line("recent_openers", quoted)
-
-    if candidate is not None and not safety_concern and cooldown_passed(ctx):
-        # The client's description is not here: the backend adds it to the offer, and a
-        # model given the text copied it, so offers showed it twice.
-        offer = _stage_lines("offer", candidate, "offering", resolve_style(ctx))
-        lines += [offer[0], *_meaning("offer", "offering"), *offer[1:]]
-
     if running:
-        style = resolve_style(ctx)
-        if framework_starting:
-            # They have just said yes. What they told Mani before this counts toward the first
-            # stage; the note below says how to use it.
-            lines += _line("framework_starting", "yes")
-        lines += _line("active_framework", framework.id)
-        lines.append(f"framework_stages: {', '.join(framework.phases)}")
-        stage = _stage_lines("stage", framework, technique.phase, style)
-        # The turn they say yes, a first stage their words already answer (by its ready_when) is
-        # said back and the second stage's question is asked; otherwise the first is asked.
-        index = framework.phase_index(technique.phase)
-        if offer_waiting:
-            # The offering stage's question is the offer they have just typed past.
-            stage = [line for line in stage if not line.startswith("stage_ask:")]
-        if framework_starting and technique.phase == "offering" and index + 1 < len(framework.phases):
-            index += 1
-            stage = _stage_lines("stage", framework, framework.phases[index], style)
-        lines.extend(stage)
-        lines.append(f"stage_note: {_stage_note(framework, style, starting=framework_starting)}")
-        if 0 <= index < len(framework.phases) - 1:
-            lines.extend(
-                _stage_lines("next_stage", framework, framework.phases[index + 1], style)
-            )
-            later = [p for p in framework.phases[index + 2 :]]
-            later = later[: next((i for i, p in enumerate(later) if p in ENDING_STAGES), len(later))]
-            for position, phase in enumerate(later):
-                lines.extend(_later_stage_lines(framework, phase, style, explain=position == 0))
+        lines += _running_lines(ctx, framework, offer_waiting=offer_waiting, starting=starting)
+    if yes_framework is not None and not safety_concern:
+        lines += _line("if_they_say_yes", yes_framework.id)
+        lines += _start_lines(yes_framework, resolve_style(ctx))
 
     return "[ctx]\n" + "\n".join(lines) + "\n[/ctx]\n\n"
 
 
-# A stage their words already answer is left unasked, with no check and no mention, and so are the
-# stages after it that they answer too (muhammad, 2026-10-09). Which stages those are is the model's
-# reading of each stage's ready_when, so the guidance for the stages after the next is in the block.
-_WALK_THE_STAGES = (
-    "Go through the stages in order, starting with this one. A stage that what they have already "
-    "told you, here or in the Conversation Context, meets by its stage_ready_when is skipped "
-    "without a word: never ask it, never check it with them, never say it is done. Do the same "
-    "for the next stage and for each later_stage, until you reach one that is not met. Ask that "
-    "stage's question, built from what they said in their own words so that it asks for the "
-    "missing thing, and report that stage in state.step even when it is several ahead. Write "
-    "this walk in stages_known first: for each stage, what they already said for it in their "
-    "short words, and its status. known is not asked. partial asks only for the gap. confirm "
-    "states what you have and asks whether it is right, only where the stage's own lines say to. "
-    "missing is asked. The question asks only for what the stage's known does not hold yet, so it "
-    "is precise: never ask again for a part they gave. Never say a stage's letter or name, and "
-    "never say a stage was skipped or is done. Ask the question in your own tone, as the "
-    "conversation flows, so it reads as the next natural thing to ask."
-)
+def _running_lines(
+    ctx: TurnContext, framework: Framework, *, offer_waiting: bool, starting: bool
+) -> list[str]:
+    """The running set: on the turn it starts, the first stage it reaches; at the offer, the offering
+    stage; on a stage, that stage, what is stored for each stage, what this reply is for and the next
+    stage in full, which the reply judges when the walk reaches it (2026-10-13)."""
+    technique, style = ctx.technique, resolve_style(ctx)
+    lines = _line("active_framework", framework.id)
+    lines.append(f"framework_stages: {', '.join(framework.phases)}")
+    if starting:
+        return lines + _line("framework_starting", "yes") + _start_lines(framework, style)
+    stage = _stage_lines("stage", framework, technique.phase, style)
+    if offer_waiting:
+        # The offering stage's question is the offer they have just typed past.
+        stage = [line for line in stage if not line.startswith("stage_ask:")]
+    lines.extend(stage)
+    if technique.phase == OFFERING:
+        return lines
+    known = technique.stages_known.get(framework.id) or {}
+    lines += _line("stages_known", _stored(framework, known, technique.phase))
+    if technique.phase in walk.content_stages(framework):
+        lines.append(f"next: {walk.next_line(framework, known, technique.phase)}")
+        lines.append(f"two_tries: {_TWO_TRIES}")
+    index = framework.phase_index(technique.phase)
+    following = framework.phases[index + 1] if 0 <= index < len(framework.phases) - 1 else None
+    if following:
+        lines.extend(_stage_lines("next_stage", framework, following, style))
+    return lines
+
+
+def _stored(framework: Framework, known: dict[str, dict], phase: str) -> str:
+    """Every content stage with its stored status, and their words when there are some. A stage after
+    the one in force is not reached yet, whatever an earlier version stored for it."""
+    at = framework.phase_index(phase)
+    parts = []
+    for stage in walk.content_stages(framework):
+        ahead = framework.phase_index(stage) > at
+        entry = {} if ahead and (known.get(stage) or {}).get("status") != "done" else known.get(stage) or {}
+        status = entry.get("status") or ("not reached" if ahead else "missing")
+        said = entry.get("said")
+        parts.append(f'{stage} {status}: "{disarm(said)}"' if said else f"{stage} {status}")
+    return " | ".join(parts)
+
 
 # A stage is a step, not an exam: it never needs complete or certain answers, and a person asked
 # the same thing a third time feels interrogated (live, 2026-10-08: five times running).
 _TWO_TRIES = (
     "If you have already asked for this stage's thing twice, take what they gave you and move to "
-    "the next stage, unless stage_ready_when says to stay."
+    "the next stage."
 )
 
-# Mani keeps the chosen style inside a framework: the stage decides what is asked, the style
-# decides how it sounds.
-_IN_STYLE = {
-    "direct": "You are still Mani in Direct here: lead, keep it short and clear, and move them on.",
-    "supportive": (
-        "You are still Mani in Supportive here: warm and understanding, with no excessive "
-        "reassurance, no repeated validation and no extra questions. Respond to what is "
-        "meaningful in what they said, never their sentence handed back, then ask gently."
-    ),
-    "reflective": (
-        "You are still Mani in Reflective here: help them look at what sits behind their answer, "
-        "and reflect its meaning only when that opens something."
-    ),
-}
 
-# What each style's question is about while no stage decides it. All three are about how one part
-# is for the person (muhammad, 2026-10-09); the three differ in how far each reaches into it, so the
-# styles do not ask the same question (Loli's test, 2026-10-09: two of them shared one).
-_QUESTION_FOCUS = {
-    "direct": "the heart of it",
-    "supportive": "how it is for them",
-    "reflective": "what sits behind it",
-}
-
-
-def _stage_note(framework: Framework, style: str, *, starting: bool) -> str:
-    """How to take the stage in force: walk past what they already answered, then ask."""
-    said = (
-        "They have just said yes, so what they told you before it counts toward every stage. "
-        if starting
-        else "Put the question in terms of what they have told you, in their words; never send it bare. "
-    )
-    never = f"{framework.closing} is never skipped. " if framework.closing else ""
-    return f"{said}{_WALK_THE_STAGES} {never}{_TWO_TRIES} {_IN_STYLE[style]}"
-
-
-def _later_stage_lines(
-    framework: Framework, phase: str, style: str, *, explain: bool
-) -> list[str]:
-    """A stage after the next: when it is met and the question that asks for it. What the lines
-    mean is said once, on the first."""
-    stage = framework.stages.get(phase) or {}
-    lines = _line("later_stage", phase) if explain else [f"later_stage: {phase}"]
-    if stage.get("ready_when"):
-        lines.append(f"later_stage_ready_when: {stage['ready_when']}")
-    if ask := (stage.get("ask") or {}).get(style):
-        lines.append(f"later_stage_ask: {ask}")
-    return lines
-
+def _start_lines(framework: Framework, style: str) -> list[str]:
+    """On a turn that can start the set: what the reply does with the first stage, which the walk
+    reaches, and that stage in full to judge it by."""
+    first = walk.content_stages(framework)[0]
+    return [f"next: the walk reaches {first}: {walk.reach_line(first)}",
+            *_stage_lines("next_stage", framework, first, style)]
 
 def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> list[str]:
     """One stage's full guidance - current or next - resolved to one conversation style.
@@ -584,10 +477,17 @@ def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> l
     for field in ("purpose", "listen_for", "ready_when"):
         if stage.get(field):
             lines.append(f"{prefix}_{field}: {stage[field]}")
+    if prefix == "next_stage" and stage.get("reach"):
+        # How the stage is judged when the walk reaches it, beside its ready_when.
+        lines.append(f"{prefix}_reach: {stage['reach']}")
     if stage.get("boundaries"):
         lines.append(f"{prefix}_boundaries: " + "; ".join(stage["boundaries"]))
     if stage.get("if_unclear"):
-        rendered = " | ".join(f"if {e['when']}: {repairs.reply_for(e, style)}" for e in stage["if_unclear"])
+        # A body route branch is shown by its id, which the reply names in `body`: code sends its text.
+        rendered = " | ".join(
+            f"{e['id']}: {e['when']}" if e.get("id") else f"if {e['when']}: {repairs.reply_for(e, style)}"
+            for e in stage["if_unclear"]
+        )
         lines.append(f"{prefix}_if_unclear: {rendered}")
     ask = (stage.get("ask") or {}).get(style)
     if ask:

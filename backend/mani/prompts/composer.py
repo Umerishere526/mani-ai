@@ -9,7 +9,7 @@ from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.llm.schema import Memory
 from mani.models.rows import Profile, ThreadSummary
-from mani.prompts.cache import Config
+from mani.prompts.cache import Config, style_prompt
 
 DEBUG_LAYER = (
     "# Debug\n"
@@ -38,7 +38,7 @@ def framework_index(registry: Registry) -> str | None:
     first time somebody edits one and not the other. Generating it means adding a framework
     is a content change with no prompt edit, which is what the registry already claims.
 
-    Static across users and turns, so it sits in the cached prefix with the other layers.
+    Static across users and turns, so it sits in the cached prefix after the style's layer.
     """
     frameworks = [registry.get(fid) for fid in registry.ids]
     present = [f for f in frameworks if f is not None]
@@ -80,13 +80,6 @@ def framework_index(registry: Registry) -> str | None:
     if rendered:
         lines += ["", "## Telling them apart", ""] + rendered
 
-    # The client's description of each is added by the backend when they ask to hear more, so
-    # it is not listed here: a model given the text copied it, and offers showed it twice.
-    lines += [
-        "", "When you offer one, say its name, as written above. Its description is added for "
-        "you if they ask to hear more. Never its id.",
-    ]
-
     # Only the contraindications, not every not_when line: most of those name a different
     # framework to use instead, which "Telling them apart" already says. These name a
     # situation where offering any of it would harm the person.
@@ -98,57 +91,6 @@ def framework_index(registry: Registry) -> str | None:
     if never:
         lines += ["", "## Never offer one when", ""] + never
 
-    # What each one needs to know before it is the right offer. It is how a question can follow
-    # the person's feeling and still be heading somewhere: static, so it sits in the cached
-    # prefix with the rest of the index.
-    to_find_out = [
-        f"- **{framework.name}**: {'; '.join(items)}"
-        for framework in present
-        for items in [(framework.activation or {}).get("to_find_out") or []]
-        if items
-    ]
-    if to_find_out:
-        lines += [
-            "", "## Finding the fit", "",
-            "From their first message, work out which of these they are heading toward, and let "
-            "your questions reach for what is still missing for it - in their words, about their "
-            "feeling, never as a checklist:", "",
-        ] + to_find_out
-
-    # The client's own offer wording, one pattern per style. Mani writes its part of an offer in
-    # that pattern and changes only what is in angle brackets, so it reads as a whole sentence.
-    patterns = [
-        f"**{framework.name}**\n" + "\n".join(
-            f"- {style}: {' '.join(str(text).split())}" for style, text in offer.items()
-        )
-        for framework in present
-        for offer in [((framework.stages or {}).get("offering") or {}).get("offer") or {}]
-        if offer
-    ]
-    keep_chatting = [
-        f"**{framework.name}**\n" + "\n".join(
-            f"- {style}: {' '.join(str(text).split())}" for style, text in lines_by_style.items()
-        )
-        for framework in present
-        for lines_by_style in [((framework.stages or {}).get("offering") or {}).get("keep_chatting") or {}]
-        if lines_by_style
-    ]
-    if patterns:
-        lines += [
-            "", "## How to word an offer", "",
-            "Write your part of an offer in the pattern for the conversation style in force. Keep "
-            "every word as written, the whole pattern and never shortened. Change only what is in angle brackets, to fit what they told "
-            "you, so the whole sentence reads naturally. The permission question is added after "
-            "your part.", "",
-        ] + patterns
-    if keep_chatting:
-        lines += [
-            "", "## When they choose Keep chatting", "",
-            "Carry on the conversation with this question for the style in force, keeping its words "
-            "and changing only what is in angle brackets to fit what they said. Offer nothing in "
-            "that reply.", "",
-        ] + keep_chatting
-
     return "\n".join(lines)
 
 
@@ -159,9 +101,8 @@ def user_context(profile: Profile | None) -> str | None:
     topics it had collected, so onboarding shaped nothing.
 
     The support style is deliberately absent. It is resolved per turn from the conversation
-    first and the profile second, and named in the [ctx] block, which is where mani_base.md
-    tells the model to read it. A second copy here would be the profile's answer contradicting
-    a conversation that had chosen differently.
+    first and the profile second, and composed as its own layer. A second copy here would be
+    the profile's answer contradicting a conversation that had chosen differently.
     """
     if profile is None:
         return None
@@ -219,9 +160,8 @@ def techniques_used(offered: list[str]) -> str | None:
         "## Techniques Already Offered\n"
         "These have already been offered in this conversation:\n"
         f"{listed}\n\n"
-        "One they said no to may be offered again once `cooldown_passed: yes`, if it still "
-        "fits best - or a different one, if what they have said since has changed what fits. "
-        "One they have just finished may not be offered again."
+        "Another offer, of one of these or a different one, comes only after they confirm your "
+        "understanding again."
     )
 
 
@@ -231,8 +171,6 @@ def summary_layer(summary: ThreadSummary | None) -> str | None:
         return None
 
     lines = []
-    if summary.current_issue:
-        lines.append(f"**Current issue:** {summary.current_issue}")
     if summary.summary:
         lines.append(summary.summary)
     if summary.techniques_tried:
@@ -249,6 +187,7 @@ def compose(
     config: Config,
     profile: Profile | None,
     *,
+    style: str,
     should_generate_title: bool = False,
     offered: list[str] | None = None,
     summary: ThreadSummary | None = None,
@@ -257,19 +196,19 @@ def compose(
     """Build the system prompt for one turn.
 
     Order is fixed and identical every turn, which is what lets the provider cache the
-    static prefix - identity and the technique library are by far the largest layers and
-    never vary.
+    static prefix: one shared by every style, then one per style. `style` is the conversation
+    style resolved for this turn; only its own layer is sent.
     """
     settings = get_settings()
 
     candidates: list[tuple[str, str | None]] = [
-        # Two authored layers with the generated catalogue between them: who Mani is and
-        # how a conversation runs, then what may be offered, then what a reply must
-        # satisfy. All three are identical for every user and every turn, which is what
-        # lets the provider cache the prefix.
+        # Who Mani is and how a conversation runs, then what a reply must satisfy: identical
+        # for every user and style. Then the chosen style and the catalogue, identical for every
+        # conversation in that style.
         ("mani_base", config.require("mani_base").content),
-        ("framework_index", framework_index(config.registry)),
         ("response_format", config.require("response_format").content),
+        ("style", config.require(style_prompt(style)).content),
+        ("framework_index", framework_index(config.registry)),
         ("user_context", user_context(profile)),
         ("user_memory", user_memory(memory)),
     ]

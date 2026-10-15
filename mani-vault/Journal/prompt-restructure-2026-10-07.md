@@ -3,6 +3,8 @@ type: journal
 date: 2026-10-07
 tags: [journal, prompts, frameworks, decisions]
 ---
+> Superseded 2026-10-13 (`questions` steering toward Finding the fit) — see [[running-understanding-and-one-question-rule-2026-10-13]]
+> Superseded 2026-10-09 (Choosing a framework, Synonyms) — see [[router-removed-model-chooses-the-framework-2026-10-09]]
 
 # Prompt restructure: what muhammad decided (2026-10-07)
 

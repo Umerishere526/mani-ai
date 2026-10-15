@@ -44,7 +44,7 @@ class TechniqueOutcome(StrEnum):
 class SupportStyle(StrEnum):
     SUPPORTIVE = "supportive"
     REFLECTIVE = "reflective"
-    DIRECT = "direct"
+    DIRECTIVE = "directive"
 
 
 class Profile(Row):
@@ -67,6 +67,13 @@ class Thread(Row):
     # Chosen per conversation. Null means this thread has not chosen, and the profile's
     # support_style stands as the default - the same closed set, deliberately.
     conversation_style: SupportStyle | None = None
+    # What Mani understands of them so far: feeling, issue, core issue, what is in their control
+    # (chat/understanding.py).
+    # Loaded only for a turn, never in a thread list.
+    understanding: dict[str, str] = Field(default_factory=dict)
+    # The message_count after the turn whose reply was Mani's latest check of its understanding
+    # (spec 0006). Loaded only for a turn, never in a thread list.
+    check_at_message_count: int | None = None
 
 
 class Message(Row):
@@ -92,6 +99,9 @@ class TechniqueState(Row):
     phase: str | None = None
     at_message_count: int
     library_offered_since: bool = False
+    # What they said per stage, by framework id then stage id. Kept when a run retires, so a
+    # framework that comes back can read it; a new start of one framework clears only its own.
+    stages_known: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class ResponseStyle(Row):
@@ -113,7 +123,6 @@ class ThreadSummary(Row):
     thread_id: uuid.UUID
     user_id: uuid.UUID
     summary: str | None = None
-    current_issue: str | None = None
     techniques_tried: list[TechniqueTried] = Field(default_factory=list)
     summarized_through_message_id: uuid.UUID | None = None
     summarized_message_count: int = 0
@@ -134,12 +143,15 @@ class Framework(Row):
     activation_conditions: str = ""
     phases: list[str]
     display_order: int = 0
-    # The activation data (central indication, distinctions, contraindications, vetoes) and the
+    # The activation data (central indication, distinctions, contraindications) and the
     # per-phase clinical content (purpose, listening cues, readiness, boundaries, the styled
     # `ask`). activation_conditions is left in place and simply stops being read for routing -
     # a flat string cannot hold either shape.
     activation: dict[str, Any] = Field(default_factory=dict)
     stages: dict[str, Any] = Field(default_factory=dict)
+    # The short phrases that close a stage said back to them ("Is that right?"), one pool for the
+    # whole framework.
+    confirm_phrases: list[str] = Field(default_factory=list)
 
     def phase_index(self, phase: str | None) -> int:
         """Position in the sequence, or -1 for nothing started / unknown."""
@@ -157,11 +169,6 @@ class Framework(Row):
     def closing(self) -> str | None:
         """The last stage before the body route: where the person says whether it helped."""
         return next((p for p in reversed(self.phases) if p not in ENDING_STAGES), None)
-
-    def may_skip(self, phase: str) -> bool:
-        """Whether a stage may be left unasked because what the person said already answers it.
-        The closing stage and the body route are always run: they are theirs to answer."""
-        return phase != self.closing and phase not in ENDING_STAGES
 
 
 class Prompt(Row):

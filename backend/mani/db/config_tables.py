@@ -21,7 +21,7 @@ PROMPT_COLUMNS = (
 )
 FRAMEWORK_COLUMNS = (
     "id, name, summary, body, activation_conditions, phases, display_order, "
-    "activation, stages"
+    "activation, stages, confirm_phrases"
 )
 
 

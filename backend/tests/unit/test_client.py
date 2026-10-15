@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from types import SimpleNamespace
 
@@ -174,7 +175,7 @@ async def test_the_pick_sees_the_whole_entry_and_what_the_person_said(monkeypatc
     await client.choose_exercise(
         candidates, "ABCDE", model="m", purpose=llm_calls.Purpose.EXERCISE_SELECT,
         said=["work has drained me for months", "that helped, thanks"],
-        current_issue="exhaustion from an unrelenting job",
+        issue="exhaustion from an unrelenting job",
         settings=settings(),
     )
 
@@ -269,7 +270,7 @@ async def test_a_provider_error_is_not_retried_by_the_schema_loop(monkeypatch, r
     assert [c["outcome"] for c in recorded] == [llm_calls.Outcome.PROVIDER_ERROR]
 
 
-def cut_off(output_tokens: int = 2048) -> openai.LengthFinishReasonError:
+def cut_off(output_tokens: int = 2048, reasoning: int = 0) -> openai.LengthFinishReasonError:
     """What the SDK raises from inside the model step when the reply hits max_tokens.
 
     Raised, not returned: with a response_format LangChain calls the SDK's parse(), which
@@ -282,13 +283,15 @@ def cut_off(output_tokens: int = 2048) -> openai.LengthFinishReasonError:
             usage=CompletionUsage(
                 prompt_tokens=100, completion_tokens=output_tokens,
                 total_tokens=100 + output_tokens,
+                prompt_tokens_details={"cached_tokens": 60},
+                completion_tokens_details={"reasoning_tokens": reasoning},
             ),
         )
     )
 
 
 async def test_a_reply_cut_off_by_the_token_limit_is_retried(monkeypatch, recorded):
-    runnable = FakeRunnable(cut_off(), valid("second try"))
+    runnable = FakeRunnable(cut_off(reasoning=1955), valid("second try"))
     install(monkeypatch, runnable)
 
     call = await client.complete(
@@ -300,8 +303,11 @@ async def test_a_reply_cut_off_by_the_token_limit_is_retried(monkeypatch, record
     assert runnable.calls == 2
     failed = recorded[0]
     assert failed["outcome"] is llm_calls.Outcome.SCHEMA_INVALID
-    # The cut-off attempt was generated and billed in full; recording 0 would hide it.
+    # The cut-off attempt was generated and billed in full; recording 0 would hide it, and the
+    # thinking that used the budget up is what the effort is chosen from.
     assert failed["usage"].output_tokens == 2048
+    assert failed["usage"].reasoning_tokens == 1955
+    assert failed["usage"].cached_input_tokens == 60
 
 
 async def test_a_failed_second_attempt_does_not_repeat_the_first_attempts_tokens(
@@ -321,6 +327,30 @@ async def test_a_failed_second_attempt_does_not_repeat_the_first_attempts_tokens
 
     assert recorded[-1]["outcome"] is llm_calls.Outcome.PROVIDER_ERROR
     assert recorded[-1]["usage"] == llm_calls.Usage()
+
+
+class SlowThenValid(FakeRunnable):
+    """The first attempt takes a while and fails to parse; the second answers at once."""
+
+    async def ainvoke(self, messages: list[dict]) -> dict:
+        if self.calls == 0:
+            await asyncio.sleep(0.3)
+        return await super().ainvoke(messages)
+
+
+async def test_a_retried_attempts_latency_is_its_own_not_the_attempts_before_it(
+    monkeypatch, recorded
+):
+    install(monkeypatch, SlowThenValid(invalid(), valid()))
+
+    await client.complete(
+        [{"role": "user", "content": "hi"}], Reply, model="m",
+        purpose=llm_calls.Purpose.CHAT, settings=settings(),
+    )
+
+    failed, succeeded = recorded
+    assert failed["latency_ms"] >= 300
+    assert succeeded["latency_ms"] < 150
 
 
 def provider_down(status: int = 503) -> openai.InternalServerError:
@@ -377,3 +407,79 @@ async def test_a_timeout_is_not_retried(monkeypatch, recorded):
             purpose=llm_calls.Purpose.CHAT, settings=settings(),
         )
     assert runnable.calls == 1
+
+
+async def test_a_chat_reply_past_its_deadline_fails_as_too_slow_and_is_recorded(monkeypatch, recorded):
+    """2026-10-14: a provider kept the connection open and replied after 102 s, past the per read timeout
+    and the chat tester's 90 s. A chat call now has a deadline for the whole call; a resend is safe."""
+    class Stalled:
+        calls = 0
+
+        async def ainvoke(self, messages):
+            Stalled.calls += 1
+            await asyncio.sleep(10)
+
+    install(monkeypatch, Stalled())
+    quick = settings().model_copy(update={"chat_deadline_seconds": 0.05})
+    with pytest.raises(ServiceError) as raised:
+        await client.complete(
+            [{"role": "user", "content": "hi"}], Reply, model="m",
+            purpose=llm_calls.Purpose.CHAT, settings=quick,
+        )
+    assert raised.value.retryable and raised.value.user_message == "Mani took too long to answer. Please try again."
+    assert Stalled.calls == 1, "never retried: the wait already happened"
+    assert [r["outcome"] for r in recorded] == [llm_calls.Outcome.TIMEOUT]
+    assert recorded[0]["generation_id"] is None, "no reply came back, so there is no id to trace"
+
+
+def openrouter_body(content: str, generation_id: str, finish_reason: str = "stop") -> dict:
+    """A chat completion as OpenRouter sends it: its own id, and the provider that served it."""
+    return {
+        "id": generation_id,
+        "object": "chat.completion",
+        "created": 1_760_400_000,
+        "model": "openai/gpt-6-luna",
+        "provider": "Azure",
+        "choices": [{
+            "index": 0,
+            "finish_reason": finish_reason,
+            "message": {"role": "assistant", "content": content},
+        }],
+        "usage": {"prompt_tokens": 7000, "completion_tokens": 300, "total_tokens": 7300},
+    }
+
+
+def over_openrouter(monkeypatch, *bodies: dict) -> None:
+    """The real LangChain model and OpenAI SDK, with only the HTTP replies scripted."""
+    import httpx
+    from langchain_openai import ChatOpenAI
+
+    replies = iter(bodies)
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=next(replies)))
+    model = ChatOpenAI(
+        model="openai/gpt-6-luna", base_url="https://openrouter.ai/api/v1",
+        api_key="sk-test-not-a-real-key", max_retries=0,
+        http_async_client=httpx.AsyncClient(transport=transport),
+    )
+    install(monkeypatch, model.with_structured_output(Reply, method="json_schema", include_raw=True))
+
+
+async def test_each_call_records_the_generation_that_served_it(monkeypatch, recorded):
+    """2026-10-14: a slow turn could not be traced to the endpoint that served it. The id is what
+    OpenRouter resolves to that endpoint, so a cut off attempt and its retry each keep their own."""
+    over_openrouter(
+        monkeypatch,
+        openrouter_body('{"text": "cut', "gen-cut-off", finish_reason="length"),
+        openrouter_body('{"text": "second try"}', "gen-answered"),
+    )
+
+    call = await client.complete(
+        [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+        purpose=llm_calls.Purpose.CHAT, settings=settings(),
+    )
+
+    assert call.value.text == "second try"
+    assert [(r["outcome"], r["generation_id"]) for r in recorded] == [
+        (llm_calls.Outcome.SCHEMA_INVALID, "gen-cut-off"),
+        (llm_calls.Outcome.OK, "gen-answered"),
+    ]
