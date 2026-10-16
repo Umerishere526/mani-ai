@@ -726,6 +726,14 @@ async def send(
         )
         if walked.entries != (stored_all.get(walking.id) or {}):
             updates.stages_known = {**stored_all, walking.id: walked.entries}
+        if walked.stopped:
+            # They ended the questions: recorded as a decline, so the next check waits the short
+            # cooldown, and the two choices follow their own words (spec 0007, AC-3).
+            outcome = TechniqueOutcome.DECLINED
+            fixed = dataclasses.replace(
+                fixed, framework_id=None, phase=None, prompts=_handoff(),
+                notes=fixed.notes + ["questions stopped by them"],
+            )
     if moment is Moment.BODY and not guarded:
         fixed = _body_route(
             fixed, body, tapped, technique,

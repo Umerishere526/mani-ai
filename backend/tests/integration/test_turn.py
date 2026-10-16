@@ -1348,6 +1348,28 @@ async def _land_on(alice, thread_id, phase, stages_known: dict | None = None) ->
         )
 
 
+async def test_stopping_the_questions_keeps_what_was_said_and_offers_the_two_choices(alice, model):
+    """Spec 0007, AC-3: the person ends the questions; the run is recorded as declined so the next check
+    waits the short cooldown, and what they said stays stored."""
+    model(Reply(text="We can stop the questions here.", stage_answer="stopped"))
+    from mani.db import pool
+
+    thread = await start(alice)
+    known = {"abcde": {"activate": {"said": "the list", "status": "done", "tries": 0},
+                       "belief": {"said": "I won't get it all done", "status": "known", "tries": 4}}}
+    await _land_on(alice, thread.id, "belief", known)
+
+    turn = await send(alice, thread.id, "I don't want to keep doing this")
+
+    assert turn.content == "We can stop the questions here."
+    assert [p.label for p in turn.prompts] == ["Chat More", "Go to Library"]
+    async with pool.as_user(alice) as conn:
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+    assert (ctx.technique.outcome, ctx.technique.phase) == (TechniqueOutcome.DECLINED, None)
+    assert ctx.technique.stages_known == known
+    assert context.live(ctx.technique) is None
+
+
 PLACES = ["Chest", "Head", "Stomach", "Somewhere else"]
 
 
