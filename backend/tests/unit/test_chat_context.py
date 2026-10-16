@@ -4,8 +4,6 @@
 import datetime as dt
 import uuid
 
-import pytest
-
 from mani.chat import context
 from mani.chat.orchestrator import find_tapped_prompt, pending_offer
 from mani.db.threads import TurnContext
@@ -19,8 +17,8 @@ from mani.models.rows import (
     TechniqueOutcome,
     TechniqueState,
     TechniqueTried,
-    ThreadSummary,
     Thread,
+    ThreadSummary,
 )
 
 USER = uuid.UUID("a0000000-0000-4000-8000-00000000000a")
@@ -492,14 +490,14 @@ def test_what_they_said_per_stage_is_shown_from_the_store_on_every_stage_turn():
     ) in block
     assert block[block.index(next(l for l in block if l.startswith("stages_known:"))) + 1].startswith("  means: ")
     branch = next(line for line in block if line.startswith("next: "))
-    assert "If you answer agreed, answered, corrected or let_go, the walk reaches consequence" in branch
+    assert "If agreed to your say-back of a known stage, the walk reaches consequence" in branch
     assert "your text is its confirmation" in branch
-    assert "If not_yet, write the follow up for this stage." in branch
+    assert "If not_yet, write the follow up for this stage, helped by stage_when_stuck when they don't know." in branch
 
 
 # Fields of a stage or of the offer explain themselves by name; the group they belong to carries
 # one meaning, on `offer`, on `active_framework` and on `framework_starting` or `if_they_say_yes`.
-_SELF_EXPLAINED = {"stage", "next_stage", "framework_stages", "next", "two_tries"}
+_SELF_EXPLAINED = {"stage", "next_stage", "framework_stages", "next"}
 
 
 def _every_kind_of_block() -> list[str]:
@@ -563,10 +561,11 @@ def test_every_line_of_the_block_says_what_it_means_for_this_turn():
 
 
 def test_the_block_is_weighed_with_the_conversation_never_instead_of_it():
-    from scripts.seed import parse_prompt
     import pathlib
 
     import yaml
+
+    from scripts.seed import parse_prompt
 
     rules = yaml.safe_load(parse_prompt(
         pathlib.Path(__file__).parents[2] / "content/prompts/response_format.md")["content"])
@@ -589,18 +588,6 @@ def test_a_stage_question_is_asked_as_the_client_wrote_it():
     assert "stage_ask: State the facts." in block
     for rewrite in ("bare", "word for word", "own tone"):
         assert rewrite not in block, rewrite
-
-
-def test_a_stage_is_left_after_two_tries():
-    """Live, 2026-10-08: Reflective asked what the thought meant five times running while the
-    person kept offering evidence. Two tries, then what they gave is taken and the stage moves:
-    after one not_yet, the reply is told both ways move on (spec 0004, AC-2)."""
-    first = context.build(_running_at("belief"), framework=_five_stage_framework()).splitlines()
-    assert any(line.startswith("two_tries: ") and "twice" in line for line in first)
-    tried = {"abcde": {"belief": {"tries": 1}}}
-    second = context.build(_running_at("belief", tried), framework=_five_stage_framework()).splitlines()
-    branch = next(line for line in second if line.startswith("next: "))
-    assert branch.startswith("next: Whatever else they answer, the walk reaches consequence")
 
 
 def test_a_finished_framework_keeps_what_they_found_in_view():

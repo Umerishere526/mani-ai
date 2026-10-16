@@ -19,8 +19,14 @@ STATUSES = ("partial", "possible", "known", "done")
 _REPORTED = frozenset({"partial", "possible", "known"})
 # A stage stored with one of these is said back and confirmed once, never asked.
 CONFIRMED = frozenset({"known", "possible"})
-# How their message may answer the stage in force and move the walk on.
-MOVES = frozenset({"agreed", "answered", "corrected", "let_go"})
+# What moves the walk on: their yes to Mani's say-back of a known stage, or their wish to skip it.
+# answered and corrected store their words and wait for that yes (spec 0007, decision 6).
+MOVES = frozenset({"agreed", "let_go"})
+# They want the questions to stop altogether; the walk stays and the orchestrator records a decline.
+STOPPED = "stopped"
+# Once a stage has held this many replies, the reply offers the choice to keep going, skip or stop.
+# No count ever moves a stage by itself (spec 0007, AC-1, AC-2).
+STALL_LIMIT = 4
 # How many questions or push-backs hold a stage without counting as a try; past that, an
 # answer of asked counts as not_yet, so no stage is held for ever.
 HELD_FOR_QUESTIONS = 2
@@ -110,7 +116,8 @@ def merge(
         elif STATUSES.index(status) > _rank(stored):
             merged[stage] = {**(stored or {}), "said": said, "status": status}
         elif update.corrected:
-            merged[stage] = {**stored, "said": said}
+            # The replaced words are kept, so a change is named from what it changed (spec 0007, AC-16).
+            merged[stage] = {**stored, "said": said, "was": (stored.get("was") or [])[-2:] + [stored["said"]]}
         else:
             notes.append(f"ignored update for {stage}: {status} is not above {stored['status']}")
             continue
@@ -131,6 +138,8 @@ class Walked:
     # A stage was reached and the reply did not judge it, so its text was not written for it and the
     # client's question is sent: logged apart from a stage judged missing, which Mani asks itself.
     unjudged: bool = False
+    # They asked for the questions to stop; the store is untouched and the orchestrator records it.
+    stopped: bool = False
 
 
 def _reach(
@@ -168,7 +177,7 @@ def _counts(answer: str, before: dict, updated: bool) -> bool:
     """Whether the stage answer can be true of the stage in force. agreed answers a check of their
     words, so only a stage reached as one; answered and corrected bring words for it."""
     if answer == "agreed":
-        return before.get("status") in CONFIRMED
+        return before.get("status") in CONFIRMED and not before.get("gap")
     if answer in ("answered", "corrected"):
         return updated
     return True
@@ -186,8 +195,11 @@ def advance(
 ) -> Walked:
     """A turn on the stage in force: merge what they said for it and any correction to an earlier
     stage, move at most one phase, then merge the stage reached from this turn's `report` of it,
-    which is ignored when the walk stays. A second not_yet in a row moves on as let_go. A question or
-    push-back (asked) holds the stage without a try, up to HELD_FOR_QUESTIONS times.
+    which is ignored when the walk stays. Only their yes to the say-back of a known stage (agreed) or
+    a skip (let_go) moves the walk; answered and corrected store their words and wait for that yes,
+    a correction to an earlier stage holds this one while Mani asks about it, a question or push-back
+    (asked) holds it without a try up to HELD_FOR_QUESTIONS times, and stopped leaves everything as
+    it was. No count ever moves a stage; the stall is offered as a choice in next_line.
     `body_answered` is a body route answer at the closing, which wins over the stage answer. Nothing
     is stored for a stage before it is reached, and an entry stored ahead by an earlier version is
     ignored, so no stale words are said back."""
@@ -222,10 +234,14 @@ def advance(
             stored = merged.entries
             stored[in_force] = {**stored.get(in_force, {}), "asked": held + 1}
             return Walked(stored, in_force, None, notes)
+        if answer == STOPPED:
+            return Walked(merged.entries, in_force, None, notes + [f"{in_force} stopped by them"], stopped=True)
+        if any(u.stage != in_force for u in now):
+            return Walked(merged.entries, in_force, None,
+                          notes + ["earlier stage corrected: clarified before moving"])
+        if answer in ("answered", "corrected"):
+            return Walked(merged.entries, in_force, None, notes + [f"{in_force} answered: said back for their yes"])
         moved = answer in MOVES
-        if not moved and tries >= 1:
-            notes.append(f"{in_force} let go after a second not_yet")
-            moved = True
     stored = merged.entries
     if not moved:
         stored[in_force] = {**stored.get(in_force, {}), "tries": tries + 1}
@@ -358,8 +374,9 @@ def reach_line(stage: str) -> str:
 
 def next_line(framework: Framework, entries: dict[str, dict], phase: str) -> str:
     """What the reply's text is for, in each way their message can answer the stage in force, from
-    the store before this turn. On the second try both ways move on; a question holds the stage until
-    it has held it HELD_FOR_QUESTIONS times."""
+    the store before this turn. A question holds the stage until it has held it HELD_FOR_QUESTIONS
+    times; past STALL_LIMIT replies on one stage the text offers the choice to keep going, skip or
+    stop, and nothing moves without their answer."""
     following = framework.phases[framework.phase_index(phase) + 1]
     if following in ENDING_STAGES:
         moved = "the questions end, and the body check-in is sent after your text: write one short sentence, no question."
@@ -370,11 +387,21 @@ def next_line(framework: Framework, entries: dict[str, dict], phase: str) -> str
         " If asked, answer them plainly, then ask this stage's question again."
         if entry.get("asked", 0) < HELD_FOR_QUESTIONS else ""
     )
-    if entry.get("tries", 0) >= 1:
-        return f"Whatever else they answer, {moved}{asked}"
+    tries = entry.get("tries", 0)
+    prefix = (
+        f"They have stayed on {phase} for {tries} replies. Your text offers the choice: keep going with "
+        "it, skip it (answer let_go), or stop the questions here (answer stopped). "
+        if tries >= STALL_LIMIT else ""
+    )
     return (
-        f"If you answer agreed, answered, corrected or let_go, {moved} If not_yet, write the follow up for "
-        f"this stage.{asked}"
+        f"{prefix}If they give what this stage needs (answered or corrected), report it in stage_updates "
+        "and your text says back what you now have for it in their words, as what you understand, and "
+        "asks whether that is right; nothing moves until their yes. If agreed to your say-back of a "
+        f"known stage, {moved} If agreed while the stage is still partial, ask only the gap. If not_yet, "
+        "write the follow up for this stage, helped by stage_when_stuck when they don't know. If they "
+        "correct an earlier stage, report it corrected: your text names the change in one sentence from "
+        "their words and asks one question to be sure of it, and this stage waits. If let_go, "
+        f"{moved} If stopped, say in one sentence that they can stop here; the two choices follow.{asked}"
     )
 
 

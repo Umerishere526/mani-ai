@@ -235,7 +235,7 @@ BodyBranch = Literal[
     "chest", "head", "stomach", "elsewhere", "no_place", "agreed", "declined", "acting", "pain",
     "returned", "asked", "moved_on", "eased",
 ]
-StageAnswer = Literal["agreed", "answered", "corrected", "let_go", "not_yet", "asked"]
+StageAnswer = Literal["agreed", "answered", "corrected", "let_go", "not_yet", "asked", "stopped"]
 _CLOSED_SETS = {
     "offer_answer": get_args(OfferAnswer),
     "check_answer": get_args(CheckAnswer),
@@ -327,13 +327,15 @@ class Reply(_ReplyBase):
     stage_answer: StageAnswer | None = Field(
         default=None,
         description=(
-            "How their message answers the stage in force. agreed: yes to your check of what they "
-            "said, even with more added. answered: they gave what the stage needs, with an update for it. corrected: a no "
-            "with new words, with an update for it. let_go: move on without words, because it was "
-            "asked twice already or the question made them uneasy and they want to skip it. not_yet: a "
-            "plain no, unclear, or I don't know while you still help. asked: instead of answering, they "
-            "asked you something or pushed back on the question; answer them and ask the stage's question "
-            "again. A question or push-back is always asked, never agreed or let_go."
+            "How their message answers the stage in force. agreed: yes to your say-back of what you "
+            "have for this stage, with more or not. answered: they gave what the stage needs, with an "
+            "update for it; your text says it back and asks whether that is right. corrected: a no "
+            "with new words for this stage, or new words for an earlier stage, with an update for it. "
+            "let_go: they want to skip this stage, or a question made them uneasy. not_yet: a plain "
+            "no, unclear, or I don't know while you still help. asked: they asked you something or "
+            "pushed back instead of answering; answer them and ask again. stopped: they want to stop "
+            "the questions altogether, never a plain no or I don't know. A question or push-back is "
+            "always asked, never agreed or let_go."
         ),
     )
     stage_updates: list[StageUpdate] | None = Field(
@@ -447,10 +449,11 @@ def reply_for(
     may_check: bool = False,
     declined_row: bool = False,
     on_closing: bool = False,
-    slots: Slots = Slots(),
+    slots: Slots | None = None,
 ) -> type[BaseModel]:
     """The reply shape sent this turn: the core fields plus what this moment needs. A field that
     is not here cannot be filled, so the gate is the database that picked the moment."""
+    slots = slots or Slots()
     names = set(_CORE)
     overrides: dict[str, tuple] = {}
     if moment is Moment.BODY:
@@ -521,7 +524,7 @@ class Extraction(BaseModel):
             'with...").'
         )
     )
-    techniques_tried: list["ExtractedTechnique"] = Field(
+    techniques_tried: list[ExtractedTechnique] = Field(
         default_factory=list,
         description="Coping techniques or exercises discussed or practised. May be empty.",
     )

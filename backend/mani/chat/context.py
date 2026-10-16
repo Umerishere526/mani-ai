@@ -435,7 +435,6 @@ def _running_lines(
     lines += _line("stages_known", _stored(framework, known, technique.phase))
     if technique.phase in walk.content_stages(framework):
         lines.append(f"next: {walk.next_line(framework, known, technique.phase)}")
-        lines.append(f"two_tries: {_TWO_TRIES}")
     index = framework.phase_index(technique.phase)
     following = framework.phases[index + 1] if 0 <= index < len(framework.phases) - 1 else None
     if following:
@@ -455,14 +454,6 @@ def _stored(framework: Framework, known: dict[str, dict], phase: str) -> str:
         said = entry.get("said")
         parts.append(f'{stage} {status}: "{disarm(said)}"' if said else f"{stage} {status}")
     return " | ".join(parts)
-
-
-# A stage is a step, not an exam: it never needs complete or certain answers, and a person asked
-# the same thing a third time feels interrogated (live, 2026-10-08: five times running).
-_TWO_TRIES = (
-    "If you have already asked for this stage's thing twice, take what they gave you and move to "
-    "the next stage."
-)
 
 
 def _start_lines(framework: Framework, style: str) -> list[str]:
