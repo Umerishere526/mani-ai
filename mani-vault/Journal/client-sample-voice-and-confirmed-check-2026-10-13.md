@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-13
 tags: [journal, prompts, offers, client, lessons]
 ---
+> Superseded 2026-10-16 — see [[reply-moves-forward-not-recipe-2026-10-16]] (the sample as the example to copy, and the check sent as four sentences in code's order)
 
 # The client's sample voice, and a confirmed check as the offer gate (2026-10-13)
 

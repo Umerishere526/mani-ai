@@ -120,7 +120,7 @@ def test_an_ordinary_chat_model_still_gets_its_sampling_parameters():
 def test_the_reasoning_effort_rides_with_a_reasoning_model_only():
     """A model that does not read a reasoning effort rejects the key."""
     s = settings()
-    assert chain._reasoning("openai/gpt-6-luna", s) == {"reasoning": {"effort": "high"}}
+    assert chain._reasoning("openai/gpt-6-luna", s) == {"reasoning": {"effort": "low"}}
     assert chain._reasoning("google/gemini-3.1-flash-lite", s) == {}
 
 
@@ -135,7 +135,7 @@ def test_a_prompt_row_can_name_its_own_reasoning_effort():
 
 def test_a_prompt_without_an_effort_falls_back_to_the_configured_one():
     assert chain._reasoning("openai/gpt-6-luna", settings(), None) == {
-        "reasoning": {"effort": "high"}
+        "reasoning": {"effort": "low"}
     }
 
 

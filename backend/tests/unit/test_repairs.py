@@ -308,6 +308,15 @@ def body_stages() -> dict:
     return load_somatic_stages()
 
 
+def test_the_check_in_asks_about_what_they_said_of_their_body_and_otherwise_is_the_plain_one(body_stages):
+    """Asked about the sensation they named earlier, in the client's line, else her plain check-in."""
+    known = repairs.check_in_script(body_stages, "directive", "your chest getting tight")
+    assert known == "Earlier you mentioned your chest getting tight. Is that still there now?"
+    plain = body_stages["somatic_checkin"]["ask"]["directive"]
+    assert repairs.check_in_script(body_stages, "directive", None) == plain
+    assert repairs.check_in_script(body_stages, "directive", "  ") == plain
+
+
 @pytest.mark.parametrize(("body", "at", "style", "fits"), [
     ("chest", "closing", "directive", True),
     ("chest", "retiring", "directive", False),
@@ -354,20 +363,17 @@ def test_pain_gets_the_clients_safety_line_and_no_practice(body_stages):
     )
 
 
-def test_a_stored_check_goes_out_in_the_clients_order_whatever_order_the_model_wrote(registry):
-    """Spec 0006, muhammad's choice of 2026-10-13: live, the check opened with their control answer in
-    every run though the prompt asked twice for the problem first. The words are the model's; the order
-    is code's, and a missing part leaves no gap."""
+def test_a_stored_check_says_only_what_it_comes_down_to_then_asks(registry):
+    """The client, 2026-10-16: the problem, core issue, control and what it comes down to, sent as four
+    sentences, read as a case summary of what they had already said. The first three are kept, never said."""
     check = Check(
-        problem="  Your boss says you're not doing enough", core_issue="Nothing you do feels like enough for him.",
-        in_their_control="You're not sure yet what you can do.", question="Do I have that right",
+        problem="Your boss says you're not doing enough", core_issue="Nothing you do feels like enough for him.",
+        in_their_control="You're not sure yet what you can do.",
+        comes_down_to="  It comes down to never knowing what would count as enough for him", question="Have you been able to talk to them about it",
     )
-    model_text = reply(text="You're not sure yet what you can do. Your boss says you're not doing enough?")
+    model_text = reply(text="Your boss says you're not doing enough. Nothing you do feels like enough for him?")
     fixed = fix(registry, model_text, check=check)
-    assert fixed.text == (
-        "Your boss says you're not doing enough. Nothing you do feels like enough for him. You're not sure yet "
-        "what you can do.\n\nDo I have that right?"
-    )
+    assert fixed.text == "It comes down to never knowing what would count as enough for him.\n\nHave you been able to talk to them about it?"
     assert fix(registry, model_text).text == model_text.text, "without a stored check the reply goes as written"
 
 

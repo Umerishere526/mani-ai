@@ -17,12 +17,16 @@ from dataclasses import dataclass, field
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from mani.auth.jwt import Claims  # noqa: E402
-from mani.chat import orchestrator  # noqa: E402
-from mani.chat import repairs, reply_checks, understanding  # noqa: E402
-from mani.chat.greeting import KEEP_CHATTING_LABEL, TELL_ME_MORE_LABEL, TRY_IT_LABEL  # noqa: E402
-from mani.db import pool  # noqa: E402
-from mani.prompts import cache  # noqa: E402
+from mani.auth.jwt import Claims
+from mani.chat import (
+    orchestrator,
+    repairs,
+    reply_checks,
+    understanding,
+)
+from mani.chat.greeting import KEEP_CHATTING_LABEL, TELL_ME_MORE_LABEL, TRY_IT_LABEL
+from mani.db import pool
+from mani.prompts import cache
 
 SCENARIOS = pathlib.Path(__file__).with_name("scenarios.json")
 STYLES = ("directive", "supportive", "reflective")
@@ -38,7 +42,13 @@ EXPLAINS_PEOPLE = re.compile(
     re.IGNORECASE,
 )
 # The example conversation's own people and details, which belong to someone else.
-BORROWED = ("vendors", "consultants", "over promise", "follow-through", "follow through")
+BORROWED = ("flatmate", "turned into a fight", "keeps things smooth", "lands for you")
+# Mani announcing that it is trying to understand instead of showing it ("I want to understand what keeps
+# that pattern going", "Have I understood that right?"; the client, 2026-10-16). Eval tooling only.
+ANNOUNCES = re.compile(
+    r"\bI want to understand\b|\bI don'?t want to assume\b|\bhave I understood\b", re.IGNORECASE,
+)
+
 
 def borrowed_from_the_example(reply: str, said: set[str]) -> list[str]:
     """The example's details in a reply when the person never used them."""
@@ -125,17 +135,14 @@ def _offering(registry, framework_id: str | None, key: str, style: str) -> str |
     return (((framework.stages or {}).get("offering") or {}).get(key) or {}).get(style) if framework else None
 
 
-def stage_flags(reply: str, trace: list[dict] | None, before: list[dict] | None, stages: dict, style: str) -> list[str]:
-    """Inside a framework: a stage reached opens with its letter line, and a stage stored as known or
-    possible is said back, never asked with the client's question (spec 0004)."""
+def stage_flags(reply: str, trace: list[dict] | None, stages: dict, style: str) -> list[str]:
+    """Inside a framework: a stage stored as known or possible is said back, never asked with the
+    client's question (spec 0004). No letter line is expected (spec 0007, decision 5)."""
     asking = next((row for row in trace or [] if row["asking"]), None)
     if asking is None:
         return []
-    was = next((row["stage"] for row in before or [] if row["asking"]), None)
     stage = stages.get(asking["stage"]) or {}
     flags = []
-    if asking["stage"] != was and stage.get("intro") and not reply.startswith(stage["intro"]):
-        flags.append("stage reply without its letter line")
     ask = (stage.get("ask") or {}).get(style)
     if asking["status"] in ("known", "possible") and ask and ask in reply:
         flags.append("asked a stage already known")
@@ -149,9 +156,7 @@ def _check(
     exchange.question = _question(exchange.reply)
     framework = registry.get(framework_id)
     if framework:
-        exchange.flags += stage_flags(
-            exchange.reply, exchange.trace, previous.trace if previous else None, framework.stages, style,
-        )
+        exchange.flags += stage_flags(exchange.reply, exchange.trace, framework.stages, style)
     # A stage said back to confirm it reuses their words on purpose, so it is not asking for them again.
     confirming = any(row["asking"] and row["status"] in ("known", "possible", "partial") for row in exchange.trace or [])
     if (not confirming and exchange.question
@@ -252,6 +257,8 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
                 previous=previous, framework_id=framework_id,
             )
             exchange.checked = exchange.check_at is not None and exchange.check_at != (previous.check_at if previous else None)
+            if not exchange.offered and ANNOUNCES.search(exchange.reply):
+                exchange.flags.append("announces understanding")
             exchanges.append(exchange)
             return exchange
 
@@ -364,11 +371,13 @@ def _report(name: str, runs: dict[str, list[Exchange]], *, full: bool = False) -
 
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scenario", help="run only this conversation, or this group, from scenarios.json")
+    parser.add_argument("--scenarios", type=pathlib.Path, default=SCENARIOS,
+                        help="the scenarios file to run, scenarios.json by default")
+    parser.add_argument("--scenario", help="run only this conversation, or this group, from the scenarios file")
     parser.add_argument("--style", choices=STYLES, help="run only this style")
     parser.add_argument("--full", action="store_true", help="print every line whole, as a transcript")
     args = parser.parse_args()
-    scenarios = conversations(json.loads(SCENARIOS.read_text()))
+    scenarios = conversations(json.loads(args.scenarios.read_text()))
     chosen = {
         name: c for name, c in scenarios.items()
         if not args.scenario or args.scenario in (name, c["group"])

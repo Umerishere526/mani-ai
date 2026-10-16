@@ -6,11 +6,12 @@ from __future__ import annotations
 import re
 
 from mani.chat import repairs, understanding, walk
-from mani.chat.techniques import OFFERING
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CHAT_MORE_LABEL
+from mani.chat.techniques import OFFERING
 from mani.db.threads import TurnContext
 from mani.llm.schema import Moment
 from mani.models.rows import (
+    ENDING_STAGES,
     Framework,
     Message,
     MessageRole,
@@ -118,12 +119,12 @@ def check_open(ctx: TurnContext) -> bool:
 
 
 def may_check(ctx: TurnContext) -> bool:
-    """Whether this reply may check Mani's understanding: once the problem and its core issue are
-    stored and what is in their control is stored or is what this message answers, which takes at
-    least three of their messages, with no framework live and no check waiting for its answer, and
-    once the cooldowns after the last check and the last offer have passed. The orchestrator stores a
-    check only when all three are found after this turn. The only way to an offer (spec 0006)."""
-    if understanding.next_step(ctx.thread.understanding) not in (None, "control"):
+    """Whether this reply may check Mani's understanding: once the problem, its core issue and what
+    is in their control are all stored, which takes at least four of their messages, so the reply
+    that receives the control answer is an ordinary one (spec 0007, AC-10); with no framework live
+    and no check waiting for its answer, and once the cooldowns after the last check and the last
+    offer have passed. The only way to an offer (spec 0006)."""
+    if understanding.next_step(ctx.thread.understanding) is not None:
         return False
     if live(ctx.technique) is not None or check_open(ctx):
         return False
@@ -138,7 +139,6 @@ def moment(
     technique: TechniqueState | None,
     outcome: TechniqueOutcome | None,
     retiring_framework_id: str | None,
-    awaiting_place: bool,
     framework: Framework | None,
     concern: bool,
     check_open: bool = False,
@@ -154,8 +154,7 @@ def moment(
         return Moment.CHECK_OPEN if check_open else Moment.CHATTING
     if outcome is TechniqueOutcome.ACCEPTED:
         phase = technique.phase
-        at_the_body = phase == "somatic_checkin" or (phase == "somatic_practice" and awaiting_place)
-        if at_the_body or (framework is not None and phase == framework.closing):
+        if phase in ENDING_STAGES or (framework is not None and phase == framework.closing):
             return Moment.BODY
         return Moment.IN_STAGES
     if outcome is TechniqueOutcome.OFFERED:
@@ -204,25 +203,25 @@ _MEANING: dict[str, str | dict[str, str]] = {
         ),
     },
     "check": {
-        "once_control_is_answered": (
-            "if their message answers what is in their control, even with I don't know, report it and "
-            "check your understanding in this reply by filling check, from their words only. If it does "
-            "not, ask about control and leave check empty."
-        ),
         "may_check": (
-            "the problem, its core issue and what is in their control are all found. Check your "
-            "understanding with them now by filling check, from their words only. Never add anything "
-            "they did not say."
+            "the problem, its core issue and what is in their control are all found. Give your reading "
+            "now by filling check, from their words only, and ask the one question that moves forward. "
+            "Never ask whether you have it right, and never ask for what is already clear."
         ),
         "open": (
-            "your last reply checked your understanding. Set check_answer. A clear yes always brings the "
-            "offer: fill offer for the set closest to what they confirmed, even when its Use it when "
-            "does not fit exactly. Anything else, follow what they said toward the root of it."
+            "your last reply gave your reading. Set check_answer for the reading, not for your question. "
+            "Going along with it, even by answering your question with no or not yet, always brings the offer: fill offer for the set closest to what "
+            "they told you, even when its Use it when does not fit exactly. Anything else, follow what "
+            "they said toward the root of it."
         ),
     },
     "understanding": (
         "what they have told you so far, kept for you. A step marked missing is still to be found. In "
         "understanding_update report only what their message names or changes."
+    ),
+    "feeling_change": (
+        "your last reply asked whether their feeling has moved from the first word to the second. Set "
+        "feeling_answer from how they take that, then go on with what the rest of this block says."
     ),
     "understanding_next": {
         "problem": (
@@ -252,6 +251,10 @@ _MEANING: dict[str, str | dict[str, str]] = {
     "history": "what was tried earlier in this conversation, and whether it helped.",
     "library_pending": {"yes": "offer the Library before anything new."},
     "current_phase": "the stage the questions are on, as last recorded.",
+    "finished_framework": (
+        "what they found in the framework they finished, stage by stage in their words. Use it when they "
+        "ask about it or say it did not help. Never summarise it unasked."
+    ),
     "safety": {
         "concern": (
             "something they said may mean they are not safe. No stage question and no offer. "
@@ -311,6 +314,7 @@ def build(
     offer_waiting: bool = False,
     starting: bool = False,
     yes_framework: Framework | None = None,
+    finished: Framework | None = None,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -321,6 +325,7 @@ def build(
 
     `framework` is the one already active. `starting` is a turn that opens it, and `yes_framework`
     the set a yes in this message would open; both ask the reply to report what they already said.
+    `finished` is the framework of the thread's finished row, whose stages stay in view after it ends.
 
     `history` is the same window the caller already loads for the model's own conversation
     view - nothing new is fetched for it.
@@ -353,6 +358,9 @@ def build(
     understood = understanding.render(ctx.thread.understanding)
     if understood:
         lines += _line("understanding", understood)
+    pending = ctx.thread.understanding.get(understanding.PENDING)
+    if pending:
+        lines += _line("feeling_change", f"{disarm(ctx.thread.understanding.get('feeling', ''))} -> {disarm(pending)}")
     step = understanding.next_step(ctx.thread.understanding)
     if step and live(ctx.technique) is None and not safety_concern:
         lines += _line("understanding_next", step)
@@ -369,8 +377,7 @@ def build(
         if check_open(ctx):
             lines += _line("check", "open")
         elif may_check(ctx):
-            waiting = understanding.next_step(ctx.thread.understanding) == "control"
-            lines += _line("check", "once_control_is_answered" if waiting else "may_check")
+            lines += _line("check", "may_check")
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
         lines += _line("since_last", since_last)
@@ -382,6 +389,9 @@ def build(
             lines += _line("library_pending", "yes")
         if technique.phase:
             lines += _line("current_phase", technique.phase)
+        elif finished is not None and technique.outcome is TechniqueOutcome.ACCEPTED:
+            known = technique.stages_known.get(finished.id) or {}
+            lines += _line("finished_framework", f"{finished.id}: {_stored(finished, known, finished.closing)}")
 
     if ctx.summary and ctx.summary.techniques_tried:
         tried = ", ".join(
@@ -425,7 +435,6 @@ def _running_lines(
     lines += _line("stages_known", _stored(framework, known, technique.phase))
     if technique.phase in walk.content_stages(framework):
         lines.append(f"next: {walk.next_line(framework, known, technique.phase)}")
-        lines.append(f"two_tries: {_TWO_TRIES}")
     index = framework.phase_index(technique.phase)
     following = framework.phases[index + 1] if 0 <= index < len(framework.phases) - 1 else None
     if following:
@@ -447,14 +456,6 @@ def _stored(framework: Framework, known: dict[str, dict], phase: str) -> str:
     return " | ".join(parts)
 
 
-# A stage is a step, not an exam: it never needs complete or certain answers, and a person asked
-# the same thing a third time feels interrogated (live, 2026-10-08: five times running).
-_TWO_TRIES = (
-    "If you have already asked for this stage's thing twice, take what they gave you and move to "
-    "the next stage."
-)
-
-
 def _start_lines(framework: Framework, style: str) -> list[str]:
     """On a turn that can start the set: what the reply does with the first stage, which the walk
     reaches, and that stage in full to judge it by."""
@@ -465,16 +466,16 @@ def _start_lines(framework: Framework, style: str) -> list[str]:
 def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> list[str]:
     """One stage's full guidance - current or next - resolved to one conversation style.
 
-    Purpose, listening cues, readiness and boundaries are clinical rather than tonal and do
-    not vary; `ask` is the one leaf a style changes, so only the resolved style's variant is
-    sent rather than all three.
+    Purpose, listening cues, readiness, the help when they are stuck and boundaries are clinical
+    rather than tonal and do not vary; `ask` is the one leaf a style changes, so only the resolved
+    style's variant is sent rather than all three.
     """
     stage = framework.stages.get(phase)
     if not stage:
         return [f"{prefix}: {phase}"]
 
     lines = [f"{prefix}: {phase}"]
-    for field in ("purpose", "listen_for", "ready_when"):
+    for field in ("purpose", "listen_for", "ready_when", "when_stuck"):
         if stage.get(field):
             lines.append(f"{prefix}_{field}: {stage[field]}")
     if prefix == "next_stage" and stage.get("reach"):
@@ -489,7 +490,7 @@ def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> l
             for e in stage["if_unclear"]
         )
         lines.append(f"{prefix}_if_unclear: {rendered}")
-    ask = (stage.get("ask") or {}).get(style)
+    ask = repairs.styled(stage.get("ask"), style)
     if ask:
         lines.append(f"{prefix}_ask: {ask}")
     return lines

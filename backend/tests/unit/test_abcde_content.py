@@ -65,15 +65,10 @@ def test_the_event_stage_carries_the_clients_confirm_and_missing_lines_in_each_s
         assert all(line.endswith("?") and "<" in line for line in activate[key].values())
 
 
-def test_each_letter_opens_with_the_clients_intro_line(abcde):
-    """Spec 0004, AC-1 and AC-7: the document introduces each letter by its name as it is reached,
-    and a stage said back closes with one of four short phrases."""
-    intros = {stage: abcde["stages"][stage]["intro"] for stage in abcde["phases"][1:]}
-    assert intros == {
-        "activate": "A is for Activating Event.", "belief": "B is for Belief.",
-        "consequence": "C is for Consequences.", "dispute": "D is for Dispute.",
-        "effective": "E is for Effective New Belief.",
-    }
+def test_no_stage_carries_a_letter_line_and_the_confirm_phrases_are_the_four(abcde):
+    """muhammad, 2026-10-16 (spec 0007, decision 5): the stage is shown in the ledger at the side, never
+    said; a stage said back closes with one of four short phrases only as the logged fallback."""
+    assert not any("intro" in abcde["stages"][stage] for stage in abcde["phases"][1:])
     assert abcde["confirm_phrases"] == [
         "Is that right?", "Do we have this right?", "Did I get that right?", "Does that sound right?",
     ]

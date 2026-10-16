@@ -71,7 +71,7 @@ class Settings(BaseSettings):
 
     # How hard a reasoning model thinks before it answers. Sent only to models that read
     # it; the rest reject the key. Costs reasoning tokens on every turn at the output rate.
-    reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"] = "high"
+    reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"] = "low"
 
     # Speech-to-text goes through OpenRouter too, via its separate /audio/transcriptions
     # endpoint - same key, same base_url, same bill as chat. Not a second provider.

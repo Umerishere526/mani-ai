@@ -224,6 +224,16 @@
     "about": "Spec 0006: Mani pinpoints the problem and its core issue, then checks its understanding in its own words, using only theirs. A yes brings the offer; anything else keeps the conversation going. Every set offered is ABCDE while it is the only active one.",
     "expect": {},
     "conversations": {
+      "coworker_bad_mood": {
+        "source": "the person's lines from the client's Directive feedback, 2026-10-16, word for word. Held out: not in the prompt, so it shows whether Mani learned the moves her better replies make",
+        "lines": [
+          "my co worker is always in a bad mood and it affects the team morale",
+          "they all walk on eggshells around him and are not as productive because most of them are fearful",
+          "they are fearful in ways that makes them quiet, makes them apprehensive, makes them not go the extra mile they do the bear minimum because they dont wnat to be scolded.",
+          "frankly i do not know i wish i did. I tell them all the time his mood should not become their mood"
+        ],
+        "check_answer": "no, I haven't. he's senior to me so I don't know how he'd take it"
+      },
       "client_sample": {
         "source": "the person's lines from the client's way of communication document, 2026-10-13, word for word",
         "lines": [
@@ -378,6 +388,182 @@
             "dispute": "said back",
             "effective": "asked"
           }
+        }
+      }
+    }
+  },
+  "off_script_after_e": {
+    "about": "After the offer is taken they go off script: a body sensation named early, a question or push-back at E, questions at the body check-in, still upset after the practice, a new problem after Chat More. Read by eye: the sensation is asked about at the check-in, each question is answered while the stage holds, and nothing gets stuck.",
+    "conversations": {
+      "chest_named_at_b": {
+        "source": "muhammad, 2026-10-16: a sensation named early is what the check-in asks about",
+        "lines": [
+          "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
+          "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
+          "I keep thinking they only see me as someone useful, not as a colleague.",
+          "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
+          "I don't know how to handle it without making things awkward at work."
+        ],
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Yes, let's try it.",
+            "I told myself they don't respect me and that I'm a pushover, and my chest gets tight every time I think about it.",
+            "I felt hurt and then angry, and I snapped at them in the meeting.",
+            "Maybe it's not that they don't respect me. They might just be overwhelmed too.",
+            "I think I can help when I have time and say no when I don't, without it meaning anything about me.",
+            "Yes, it's still there.",
+            "A bit calmer now."
+          ]
+        }
+      },
+      "asks_the_point_at_e": {
+        "source": "muhammad, 2026-10-16: a question at E is answered and E held",
+        "lines": [
+          "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
+          "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
+          "I keep thinking they only see me as someone useful, not as a colleague.",
+          "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
+          "I don't know how to handle it without making things awkward at work."
+        ],
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Yes, let's try it.",
+            "I told myself they don't respect me and that I'm a pushover.",
+            "I felt hurt and then angry, and I snapped at them in the meeting.",
+            "Maybe it's not that they don't respect me. They might just be overwhelmed too.",
+            "What was the point of all that?",
+            "I think I can help when I have time and say no when I don't, without it meaning anything about me.",
+            "Yes, I'd like to notice it.",
+            "It's tight in my chest."
+          ]
+        }
+      },
+      "pushes_back_at_e": {
+        "source": "muhammad, 2026-10-16: push-back at E",
+        "lines": [
+          "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
+          "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
+          "I keep thinking they only see me as someone useful, not as a colleague.",
+          "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
+          "I don't know how to handle it without making things awkward at work."
+        ],
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Yes, let's try it.",
+            "I told myself they don't respect me and that I'm a pushover.",
+            "I felt hurt and then angry, and I snapped at them in the meeting.",
+            "Maybe it's not that they don't respect me. They might just be overwhelmed too.",
+            "That doesn't feel true to me.",
+            "I think I can help when I have time and say no when I don't, without it meaning anything about me.",
+            "No thanks."
+          ]
+        }
+      },
+      "questions_at_the_check_in": {
+        "source": "muhammad, 2026-10-16: the check-in never holds them",
+        "lines": [
+          "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
+          "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
+          "I keep thinking they only see me as someone useful, not as a colleague.",
+          "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
+          "I don't know how to handle it without making things awkward at work."
+        ],
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Yes, let's try it.",
+            "I told myself they don't respect me and that I'm a pushover.",
+            "I felt hurt and then angry, and I snapped at them in the meeting.",
+            "Maybe it's not that they don't respect me. They might just be overwhelmed too.",
+            "I think I can help when I have time and say no when I don't, without it meaning anything about me.",
+            "What do you mean?",
+            "What do you mean by that?",
+            "ok"
+          ]
+        }
+      },
+      "still_upset_after_the_practice": {
+        "source": "muhammad, 2026-10-16: still upset at the end",
+        "lines": [
+          "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
+          "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
+          "I keep thinking they only see me as someone useful, not as a colleague.",
+          "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
+          "I don't know how to handle it without making things awkward at work."
+        ],
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Yes, let's try it.",
+            "I told myself they don't respect me and that I'm a pushover.",
+            "I felt hurt and then angry, and I snapped at them in the meeting.",
+            "Maybe it's not that they don't respect me. They might just be overwhelmed too.",
+            "I think I can help when I have time and say no when I don't, without it meaning anything about me.",
+            "Yes, I'd like to notice it.",
+            "It's tight in my chest.",
+            "It didn't help, I'm still upset.",
+            "What was my new belief again?"
+          ]
+        }
+      },
+      "new_problem_after_chat_more": {
+        "source": "muhammad, 2026-10-16: a new problem after the framework",
+        "lines": [
+          "I have a coworker who is always asking me for help, and I usually say yes. But whenever I need something, they're never available. I'm starting to feel resentful, and I don't like feeling this way.",
+          "It's been going on for months. Last week I stayed late to help them, and the next day they ignored my message when I needed one quick answer.",
+          "I keep thinking they only see me as someone useful, not as a colleague.",
+          "Now I avoid them in the kitchen and I'm short with them in meetings, and I don't like who I'm becoming.",
+          "I don't know how to handle it without making things awkward at work."
+        ],
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Yes, let's try it.",
+            "I told myself they don't respect me and that I'm a pushover.",
+            "I felt hurt and then angry, and I snapped at them in the meeting.",
+            "Maybe it's not that they don't respect me. They might just be overwhelmed too.",
+            "I think I can help when I have time and say no when I don't, without it meaning anything about me.",
+            "No thanks.",
+            "Chat More",
+            "Actually my manager just told me I'm being moved to another team and I'm scared."
+          ]
+        }
+      }
+    }
+  },
+  "two_styles_2026_10_16": {
+    "about": "Lolly's Reflective and Directive runs of 2026-10-16, the same answers in both. Read by eye: the reply to her control answer engages it and the check comes the turn after; each stage is said back and moves on her yes, takes as many exchanges as it needs, I don't know gets help, a rejected new belief is worked on, and E is verified before the body check-in. Her lines are kept word for word, so they carry no yes to a say-back and land a stage early or late.",
+    "expect": {},
+    "conversations": {
+      "anxious_long_day": {
+        "source": "Lolly, 2026-10-16, her lines word for word (the Reflective chat before the check; the Directive chat's framework answers, which add 'not sure')",
+        "lines": [
+          "I had a really long day and i am feeling anxious.",
+          "I am not sure it could be so many things but I just compartmentalize too much to identify the one or two things happening thats causing my anxiety",
+          "what do you mean by set things aside, what things?",
+          "work, pick up my kids from school, laundry, chores, bills.",
+          "So sometimes it’s like It does stay separate but then other times idk you know it all feels like one big jumbled mess and I try to separate it again but it just goes back into this big load. Idk very ebb and flow, maybe on a Monday it feels like separate things but on a Tuesday its one big mess.",
+          "Having to choose what gets done but then I choose nothing except for the deep yearning desire to do something while I still do nothing",
+          "I wish someone else would take them on haha but no not shit happens so its like where do I go from here with this mess!",
+          "To be honest, I dont know, thats kinda why im here"
+        ],
+        "check_answer": "Yea I think u got it all",
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Try it",
+            "a long list of things that I need to get done and haven't",
+            "That I won’t get it all done there’s just too much and so I dont start",
+            "yes",
+            "Nothing comes to mind for me",
+            "no",
+            "i mean no, thats the thought i had earlier",
+            "not sure",
+            "my eyes are burning"
+          ]
         }
       }
     }

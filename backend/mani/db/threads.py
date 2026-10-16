@@ -250,6 +250,10 @@ class ThreadUpdates:
     understanding: dict | None = None
     # When Mani's check of its understanding was made, set only on the turn whose reply is one.
     check_at_message_count: int | None = None
+    # How their body felt after the exercise, and whether the conversation helped: the client's two
+    # measurements, set only on the turn that answers each (migration 025).
+    body_response: str | None = None
+    conversation_helped: str | None = None
 
     def __bool__(self) -> bool:
         # Each optional field is tested for presence, not for truth. A field whose
@@ -266,6 +270,8 @@ class ThreadUpdates:
             or self.stages_known is not None
             or self.understanding is not None
             or self.check_at_message_count is not None
+            or self.body_response is not None
+            or self.conversation_helped is not None
         )
 
 
@@ -331,6 +337,15 @@ async def apply(
             "where thread_id = $2 and user_id = $3",
             updates.stages_known, thread_id, user_id,
         )
+
+    for column in ("body_response", "conversation_helped"):
+        value = getattr(updates, column)
+        if value is not None:
+            # Their own statements after the upsert, like the stage store, so a retiring row keeps them.
+            await conn.execute(
+                f"update public.thread_technique_state set {column} = $1 where thread_id = $2 and user_id = $3",
+                value, thread_id, user_id,
+            )
 
     if updates.understanding is not None:
         # Its own column grant, to mani_service only (migration 022).

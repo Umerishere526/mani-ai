@@ -15,7 +15,9 @@ from mani.chat import context, repairs, reply_checks, safety, understanding, wal
 from mani.chat.greeting import (
     CHAT_MORE_LABEL,
     EXPLAIN_LABELS,
+    FINISH_LABEL,
     GO_TO_LIBRARY_LABEL,
+    KEEP_CHATTING_CLOSE_LABEL,
     OPENERS,
     STYLE_OPTIONS,
     greeting,
@@ -24,10 +26,14 @@ from mani.chat.techniques import OFFERING
 from mani.config import get_settings
 from mani.db import (
     exercises as exercises_db,
+)
+from mani.db import (
     llm_calls,
-    messages as messages_db,
     profiles,
     threads,
+)
+from mani.db import (
+    messages as messages_db,
 )
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client, schema
@@ -61,11 +67,20 @@ def _handoff() -> list[SmartPrompt]:
     ]
 
 
+def _closing() -> list[SmartPrompt]:
+    """The closing choices after the body cadence (the client's somatic cadence document, 2026-10-16)."""
+    return [
+        SmartPrompt(label=KEEP_CHATTING_CLOSE_LABEL),
+        SmartPrompt(label=GO_TO_LIBRARY_LABEL, library=LibrarySection.HOME.value),
+        SmartPrompt(label=FINISH_LABEL),
+    ]
+
+
 def _awaiting_place(history: list[Message]) -> bool:
-    """Whether Mani's last reply asked where in the body they feel it, and it is unanswered."""
+    """Whether Mani's last reply asked where in the body they notice tension, and it is unanswered."""
     last = next((m for m in reversed(history) if m.role is MessageRole.MANI), None)
     return bool(last and any(
-        str(o.get("label", "")) in repairs.PLACE_LABELS for o in (last.prompt_options or [])
+        str(o.get("label", "")) in repairs.CHECK_IN_BUTTONS for o in (last.prompt_options or [])
     ))
 
 
@@ -87,19 +102,25 @@ def _body_route(
     framework: Framework,
     history: list[Message],
     style: str,
-) -> repairs.Repaired:
-    """The body route's turn, from the branch the reply reports (spec 0003's transition table). A
-    tapped place decides by itself. The two choices, Chat More and Go to Library, come with a
-    decline or an action they already know, and on the turn the framework retires unless they were
-    just shown; never from reading the reply's words."""
+    body_said: str | None,
+) -> tuple[repairs.Repaired, str | None]:
+    """The body cadence's turn, from the branch a tap or the reply names, and that branch, so the
+    orchestrator records the two answers apart. A tapped button decides by itself. The check-in is the
+    client's introduction with her five choices; asked again it is only her question, and after that
+    the cadence moves on so it never holds them. The closing choices come on the turn that answers
+    whether the conversation helped, and with any way out of the cadence; never from reading the
+    reply's words. `body_said` is what they told Mani earlier they feel in their body."""
     if technique is None:
         at = "retiring"
     else:
         at = "closing" if technique.phase == framework.closing else technique.phase
-    if tapped is not None and tapped.label in repairs.PLACE_LABELS and _awaiting_place(history):
-        body = repairs.PLACE_LABELS[tapped.label]
+    if tapped is not None and tapped.label in repairs.BODY_BUTTONS:
+        body = repairs.BODY_BUTTONS[tapped.label]
     if body is not None and not repairs.body_answer_fits(body, at, style):
         fixed = dataclasses.replace(fixed, notes=fixed.notes + [f"ignored body {body} at {at}"])
+        body = None
+    if body == "asked":
+        # Answered in Mani's text, then the check-in's question once more, as for an answer that fits no branch.
         body = None
     handoff = False
     if body is not None:
@@ -112,14 +133,28 @@ def _body_route(
             phase=step.phase if technique else None,
         )
         handoff = step.handoff
-    elif at == "closing" and fixed.phase == "somatic_checkin":
-        # The client's flow (2026-09-24): the body check-in is fixed content, sent word for word.
-        script = ((framework.stages.get("somatic_checkin") or {}).get("ask") or {}).get(style)
-        if script:
-            fixed = dataclasses.replace(fixed, text=repairs.with_the_check_in(fixed.text, script))
+    elif at == "somatic_checkin" or (at == "closing" and fixed.phase == "somatic_checkin"):
+        # The client's check-in is fixed content, sent word for word with her five choices.
+        script = repairs.check_in_script(framework.stages, style, body_said)
+        sent = _check_ins_sent(history, repairs.check_in_script(framework.stages, style, body_said, again=True))
+        if script and at == "somatic_checkin" and sent >= 2:
+            fixed = dataclasses.replace(
+                fixed, framework_id=framework.id, phase="somatic_helped",
+                notes=fixed.notes + ["check-in asked twice, handed off"],
+            )
+            handoff = True
+        elif script:
+            ask = repairs.check_in_script(framework.stages, style, body_said, again=at == "somatic_checkin")
+            fixed = dataclasses.replace(
+                fixed, text=repairs.with_the_check_in(fixed.text, ask),
+                prompts=[SmartPrompt(label=label) for label in repairs.CHECK_IN_BUTTONS],
+            )
+    elif at == "somatic_physical":
+        # Something other than how their body feels: Mani's reply, with the three choices again.
+        fixed = dataclasses.replace(fixed, prompts=[SmartPrompt(label=label) for label in repairs.PHYSICAL_BUTTONS])
     if at == "retiring":
         handoff = not _offered_handoff(history)
-    return dataclasses.replace(fixed, prompts=_handoff()) if handoff else fixed
+    return (dataclasses.replace(fixed, prompts=_closing()) if handoff else fixed), body
 
 
 def _walked(
@@ -153,6 +188,14 @@ def _walked(
         fixed, text=text, framework_id=framework.id, phase=walked.phase,
         notes=fixed.notes + walked.notes + notes,
     ), walked
+
+
+def _check_ins_sent(history: list[Message], script: str) -> int:
+    """How many of Mani's last two replies carried the body check-in."""
+    # ponytail: matched on the current script, so a check-in sent before their body record changed is
+    # not counted; the cap then comes one turn later.
+    replies = [m for m in history if m.role is MessageRole.MANI][-2:]
+    return sum(script in (m.content or "") for m in replies)
 
 
 def _offered_handoff(history: list[Message]) -> bool:
@@ -500,6 +543,12 @@ async def send(
             else config.registry.get(ctx.technique.framework_id) if declined_row
             else None
         ),
+        finished=(
+            config.registry.get(ctx.technique.framework_id)
+            if ctx.technique is not None and ctx.technique.phase is None
+            and ctx.technique.outcome is TechniqueOutcome.ACCEPTED
+            else None
+        ),
     )
     for_model = (
         f'User tapped the button: "{tapped.label}".'
@@ -523,7 +572,7 @@ async def send(
     # Mani's check, so the model cannot offer before they confirm its understanding, and an answer
     # to an offer exists only while one is open or was declined (spec 0006).
     moment = context.moment(
-        technique, outcome, retiring_framework_id, _awaiting_place(history), running_framework,
+        technique, outcome, retiring_framework_id, running_framework,
         concern=assessment.blocks_framework, check_open=context.check_open(ctx),
     )
     reply_shape = schema.reply_for(
@@ -537,6 +586,7 @@ async def send(
             config.registry, conversation_style,
             technique.framework_id if moment is Moment.OFFER_OPEN else None,
         ),
+        feeling_asked=bool(ctx.thread.understanding.get(understanding.PENDING)),
     )
     call = await client.complete(
         [{"role": "system", "content": system.text}]
@@ -619,11 +669,14 @@ async def send(
     check_written = False
     if not guarded:
         before = ctx.thread.understanding
-        theirs = understanding.merge(before, reply.understanding_update, before=before)
+        theirs = understanding.merge(
+            before, reply.understanding_update, before=before, feeling_answer=reply.feeling_answer,
+        )
         check_written = with_check and understanding.next_step(theirs) is None
         understood = (
             understanding.merge(
                 understanding.merge_check(before, reply.check), reply.understanding_update, before=before,
+                track=False, feeling_answer=reply.feeling_answer,
             )
             if check_written else theirs
         )
@@ -631,7 +684,7 @@ async def send(
         updates.understanding = understood
     if check_written:
         updates.check_at_message_count = ctx.thread.message_count + 2
-    # A clear yes to the check is the only way to an offer (spec 0006, AC-1, AC-4).
+    # Going along with the reading is the only way to an offer (spec 0006, AC-1, AC-4).
     confirmed = (
         moment is Moment.CHECK_OPEN and not guarded and starting is None
         and reply.check_answer == "yes"
@@ -696,12 +749,25 @@ async def send(
         )
         if walked.entries != (stored_all.get(walking.id) or {}):
             updates.stages_known = {**stored_all, walking.id: walked.entries}
+        if walked.stopped:
+            # They ended the questions: recorded as a decline, so the next check waits the short
+            # cooldown, and the two choices follow their own words (spec 0007, AC-3).
+            outcome = TechniqueOutcome.DECLINED
+            fixed = dataclasses.replace(
+                fixed, framework_id=None, phase=None, prompts=_handoff(),
+                notes=fixed.notes + ["questions stopped by them"],
+            )
     if moment is Moment.BODY and not guarded:
-        fixed = _body_route(
+        fixed, answered = _body_route(
             fixed, body, tapped, technique,
             config.registry.get(technique.framework_id if technique else retiring_framework_id),
-            history, conversation_style,
+            history, conversation_style, ctx.thread.understanding.get("body"),
         )
+        # The two measurements of the client's cadence, recorded apart (2026-10-16).
+        if answered in repairs.PHYSICAL or answered == "no_tension":
+            updates.body_response = answered
+        elif answered in repairs.HELPED:
+            updates.conversation_helped = answered
     if fixed.notes:
         logger.info("repaired reply on thread %s: %s", ctx.thread.id, "; ".join(fixed.notes))
 

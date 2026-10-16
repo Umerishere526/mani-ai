@@ -12,10 +12,10 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from mani.chat.repairs import template_slots  # noqa: E402
-from mani.chat.techniques import OFFERING  # noqa: E402
-from mani.config import get_settings  # noqa: E402
-from mani.models.rows import ENDING_STAGES, SupportStyle  # noqa: E402
+from mani.chat.repairs import template_slots
+from mani.chat.techniques import OFFERING
+from mani.config import get_settings
+from mani.models.rows import ENDING_STAGES, SupportStyle
 
 # Authored content, not code: markdown is the input this script loads, and once loaded the
 # database is what the application reads. Kept outside the `mani` package for that reason -
@@ -43,6 +43,9 @@ def load_somatic_stages() -> dict:
     stages = (yaml.safe_load(match.group(1)) or {}).get("stages")
     if not stages:
         raise ValueError(f"{SOMATIC_FILE.name} yaml block has no stages")
+    known = (stages.get("somatic_checkin") or {}).get("ask_known")
+    if not isinstance(known, str) or template_slots(known)[1] is None:
+        raise ValueError(f"{SOMATIC_FILE.name} somatic_checkin.ask_known lacks a <body_said> line")
     return stages
 
 
@@ -117,8 +120,6 @@ def missing_for_activation(framework: dict) -> list[str]:
         if phase == OFFERING or phase in ENDING_STAGES:
             continue
         stage = stages.get(phase) or {}
-        if not stage.get("intro"):
-            missing.append(f"stages.{phase}.intro")
         missing += [f"stages.{phase}.ask.{style.value}" for style in SupportStyle
                     if not (stage.get("ask") or {}).get(style.value)]
     return missing
