@@ -240,6 +240,7 @@ class Check(BaseModel):
 
 OfferAnswer = Literal["yes", "no", "asked", "moved_on"]
 CheckAnswer = Literal["yes", "no"]
+FeelingAnswer = Literal["yes", "no"]
 BodyBranch = Literal[
     "chest", "head", "stomach", "elsewhere", "no_place", "agreed", "declined", "acting", "pain",
     "returned", "asked", "moved_on", "eased",
@@ -316,6 +317,13 @@ class Reply(_ReplyBase):
             "when they go along with the reading, which includes answering your question, even with no "
             "or not yet. no only when they correct the reading, say it does not fit, or say they only "
             "want to talk."
+        ),
+    )
+    feeling_answer: FeelingAnswer | None = Field(
+        default=None,
+        description=(
+            "Only while feeling_change is in [ctx]: yes when they go along with the feeling having moved "
+            "to the second word, no when they say it has not."
         ),
     )
     offer_answer: OfferAnswer | None = Field(
@@ -459,11 +467,14 @@ def reply_for(
     declined_row: bool = False,
     on_closing: bool = False,
     slots: Slots | None = None,
+    feeling_asked: bool = False,
 ) -> type[BaseModel]:
     """The reply shape sent this turn: the core fields plus what this moment needs. A field that
     is not here cannot be filled, so the gate is the database that picked the moment."""
     slots = slots or Slots()
     names = set(_CORE)
+    if feeling_asked:
+        names.add("feeling_answer")
     overrides: dict[str, tuple] = {}
     if moment is Moment.BODY:
         names |= {"body", *(_STAGES if on_closing else ())}

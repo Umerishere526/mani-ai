@@ -220,6 +220,10 @@ _MEANING: dict[str, str | dict[str, str]] = {
         "what they have told you so far, kept for you. A step marked missing is still to be found. In "
         "understanding_update report only what their message names or changes."
     ),
+    "feeling_change": (
+        "your last reply asked whether their feeling has moved from the first word to the second. Set "
+        "feeling_answer from how they take that, then go on with what the rest of this block says."
+    ),
     "understanding_next": {
         "problem": (
             "the problem is not pinned down yet. Help them narrow it to what actually happens: who, "
@@ -355,6 +359,9 @@ def build(
     understood = understanding.render(ctx.thread.understanding)
     if understood:
         lines += _line("understanding", understood)
+    pending = ctx.thread.understanding.get(understanding.PENDING)
+    if pending:
+        lines += _line("feeling_change", f"{disarm(ctx.thread.understanding.get('feeling', ''))} -> {disarm(pending)}")
     step = understanding.next_step(ctx.thread.understanding)
     if step and live(ctx.technique) is None and not safety_concern:
         lines += _line("understanding_next", step)

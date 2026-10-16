@@ -1400,6 +1400,33 @@ async def test_the_core_issue_is_revised_inside_a_framework(alice, model):
     assert understood["history"] == {"core_issue": ["choosing leaves you doing nothing"]}
 
 
+async def test_a_changed_feeling_is_asked_about_and_stored_on_their_yes(alice, model):
+    """Spec 0007, AC-15 (muhammad, 2026-10-16): a feeling that differs from the stored one is held while
+    Mani asks whether it has changed; their yes stores it, with the earlier word kept."""
+    scripted = model(
+        Reply(text="Has it moved from anxious to something more like dread?",
+              understanding_update=UnderstandingUpdate(feeling="dread")),
+        Reply(text="Go on.", feeling_answer="yes"),
+    )
+    from mani.db import pool
+
+    thread = await start(alice)
+    async with pool.as_user(alice) as conn:
+        await conn.execute("update public.threads set understanding = $1::jsonb where id = $2",
+                           {"feeling": "anxious", "issue": "a long list undone"}, thread.id)
+
+    await send(alice, thread.id, "honestly it's more like dread now")
+    held = (await _thread_row(alice, thread.id)).understanding
+    assert (held["feeling"], held["feeling_asked"]) == ("anxious", "dread")
+    assert "feeling_answer" not in scripted.schemas[0].model_fields
+
+    await send(alice, thread.id, "yes, dread")
+    stored = (await _thread_row(alice, thread.id)).understanding
+    assert "feeling_answer" in scripted.schemas[1].model_fields
+    assert "feeling_change: anxious -> dread" in scripted.last_messages[-1]["content"]
+    assert (stored["feeling"], stored.get("feeling_asked"), stored["history"]) == ("dread", None, {"feeling": ["anxious"]})
+
+
 PLACES = ["Chest", "Head", "Stomach", "Somewhere else"]
 
 

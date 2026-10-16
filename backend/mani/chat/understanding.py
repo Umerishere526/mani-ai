@@ -38,30 +38,48 @@ def next_step(stored: dict[str, Any]) -> str | None:
 
 def merge(
     stored: dict[str, Any], update: UnderstandingUpdate | None, *, before: dict[str, Any] | None = None,
-    track: bool = True,
+    track: bool = True, feeling_answer: str | None = None,
 ) -> dict[str, Any]:
     """The record after this turn. Per key, a null or blank value keeps what is stored; anything
     else replaces it, on one line (which also keeps it from opening a line of its own in [ctx]) and
     cut to LIMIT characters, and a replaced value of a tracked key is kept in its history, except
     while `track` is off: the turn Mani's check is written establishes the reading rather than
-    changing it. A step is taken only in order, judged on `before`, the record as this turn began
-    (`stored` when not given)."""
+    changing it. A feeling that differs from the stored one is not stored but held as pending while
+    Mani asks whether it has changed; `feeling_answer`, from the next reply, stores it on yes with
+    the earlier word kept, and drops it on no. A step is taken only in order, judged on `before`,
+    the record as this turn began (`stored` when not given)."""
     before = stored if before is None else before
     merged = {key: stored[key] for key in KEYS if stored.get(key)}
     for key in (HISTORY, PENDING):
         if stored.get(key):
             merged[key] = stored[key]
+    pending = merged.pop(PENDING, None)
+    if pending and feeling_answer == "yes":
+        _remember(merged, "feeling", merged.get("feeling"))
+        merged["feeling"] = pending
+    elif pending and feeling_answer != "no":
+        merged[PENDING] = pending
     for key in KEYS:
         value = " ".join((getattr(update, key, None) or "").split())
         if value and _in_order(key, before):
             value = value[:LIMIT].rstrip()
             old = merged.get(key)
+            if key == "feeling" and old and old != value:
+                merged[PENDING] = value
+                continue
             if track and key in TRACKED and old and old != value:
-                history = dict(merged.get(HISTORY) or {})
-                history[key] = (history.get(key) or [])[-(KEPT - 1):] + [old]
-                merged[HISTORY] = history
+                _remember(merged, key, old)
             merged[key] = value
     return merged
+
+
+def _remember(merged: dict[str, Any], key: str, old: str | None) -> None:
+    """Keep the value `key` is about to lose, the last KEPT per key."""
+    if not old:
+        return
+    history = dict(merged.get(HISTORY) or {})
+    history[key] = (history.get(key) or [])[-(KEPT - 1):] + [old]
+    merged[HISTORY] = history
 
 
 def render(stored: dict[str, Any]) -> str | None:

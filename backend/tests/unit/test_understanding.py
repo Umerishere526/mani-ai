@@ -15,9 +15,10 @@ def test_a_null_or_blank_update_keeps_what_is_stored():
 
 
 def test_a_new_value_replaces_the_stored_one_and_leaves_the_other_key_alone():
-    """AC-3, AC-4: a different feeling, or a move to another issue, replaces what was stored."""
+    """Spec 0005 AC-3, AC-4: a move to another issue replaces what was stored. A different feeling is
+    held for their yes instead (spec 0007, decision 8), the stored one untouched."""
     assert understanding.merge(STORED, UnderstandingUpdate(feeling="angry")) == {
-        "feeling": "angry", "issue": STORED["issue"],
+        "feeling": "frustrated", "issue": STORED["issue"], "feeling_asked": "angry",
     }
     assert understanding.merge({}, UnderstandingUpdate(issue="my work")) == {"issue": "my work"}
 
@@ -113,3 +114,19 @@ def test_a_replaced_issue_or_event_is_kept_in_the_history():
     assert understanding.merge(merged, UnderstandingUpdate(issue="your partner doesn't help"))["history"] == merged["history"]
     assert "history" not in understanding.merge({"body": "tight chest"}, UnderstandingUpdate(body="sore neck"))
     assert "feeling_asked" in understanding.merge({"feeling_asked": "dread"}, None)
+
+
+def test_a_changed_feeling_waits_for_their_yes():
+    """Spec 0007 decision 8: a different feeling is asked about, stored on yes, dropped on no."""
+    asked = understanding.merge(STORED, UnderstandingUpdate(feeling="dread"))
+    assert asked["feeling"] == "frustrated" and asked["feeling_asked"] == "dread"
+    stored = understanding.merge(asked, None, feeling_answer="yes")
+    assert stored["feeling"] == "dread" and "feeling_asked" not in stored
+    assert stored["history"]["feeling"] == ["frustrated"]
+    assert "feeling_asked" not in understanding.merge(asked, None, feeling_answer="no")
+    assert understanding.merge({}, UnderstandingUpdate(feeling="dread")) == {"feeling": "dread"}
+    assert understanding.merge(asked, UnderstandingUpdate(feeling="panic"))["feeling_asked"] == "panic"
+    assert "feeling_asked" not in understanding.render(asked)
+    # The same word again is not a change, and an answer with nothing pending changes nothing.
+    assert "feeling_asked" not in understanding.merge(STORED, UnderstandingUpdate(feeling="frustrated"))
+    assert understanding.merge(STORED, None, feeling_answer="yes") == STORED

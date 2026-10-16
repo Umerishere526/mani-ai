@@ -567,6 +567,7 @@ async def send(
             config.registry, conversation_style,
             technique.framework_id if moment is Moment.OFFER_OPEN else None,
         ),
+        feeling_asked=bool(ctx.thread.understanding.get(understanding.PENDING)),
     )
     call = await client.complete(
         [{"role": "system", "content": system.text}]
@@ -649,12 +650,14 @@ async def send(
     check_written = False
     if not guarded:
         before = ctx.thread.understanding
-        theirs = understanding.merge(before, reply.understanding_update, before=before)
+        theirs = understanding.merge(
+            before, reply.understanding_update, before=before, feeling_answer=reply.feeling_answer,
+        )
         check_written = with_check and understanding.next_step(theirs) is None
         understood = (
             understanding.merge(
                 understanding.merge_check(before, reply.check), reply.understanding_update, before=before,
-                track=False,
+                track=False, feeling_answer=reply.feeling_answer,
             )
             if check_written else theirs
         )

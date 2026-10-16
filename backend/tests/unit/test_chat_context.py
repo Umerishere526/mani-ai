@@ -462,6 +462,16 @@ def test_no_check_until_the_problem_its_core_issue_and_their_control_are_all_fou
     assert [line(c, "check") for c in contexts] == [None, None, None, "check: may_check"]
 
 
+def test_a_pending_feeling_change_is_named_for_the_reply_that_reads_their_answer():
+    """Spec 0007, AC-15: the turn after Mani asked whether the feeling moved, [ctx] names both words."""
+    pending = _on_message(5).thread.model_copy(update={"understanding": {"feeling": "anxious", "feeling_asked": "dread"}})
+    lines = context.build(TurnContext(thread=pending, profile=None, technique=None)).splitlines()
+    assert "feeling_change: anxious -> dread" in lines
+    assert lines[lines.index("feeling_change: anxious -> dread") + 1].startswith("  means: ")
+    settled = _on_message(5).thread.model_copy(update={"understanding": {"feeling": "anxious"}})
+    assert "feeling_change" not in context.build(TurnContext(thread=settled, profile=None, technique=None))
+
+
 def test_the_context_tells_the_model_the_check_the_code_allows():
     ready = TurnContext(thread=found(_on_message(4).thread), profile=None, technique=None)
     assert "check:" not in context.build(_on_message(4, style="directive"))
