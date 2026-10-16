@@ -1,4 +1,4 @@
-# ABOUTME: What Mani understands of the person so far (feeling, issue, core issue, what is in their control).
+# ABOUTME: What Mani understands of the person so far (feeling, body, issue, core issue, what is in their control).
 # ABOUTME: Pure functions: this turn's reported update merged into the stored record, and its [ctx] value.
 
 from __future__ import annotations
@@ -6,7 +6,7 @@ from __future__ import annotations
 from mani.chat import context
 from mani.llm.schema import Check, UnderstandingUpdate
 
-KEYS = ("feeling", "issue", "core_issue", "in_their_control", "comes_down_to")
+KEYS = ("feeling", "body", "issue", "core_issue", "in_their_control", "comes_down_to")
 LIMIT = 200
 # The client's steps before Mani checks its understanding, in order: the problem, the core issue under
 # it, what is in their control (meeting and cheat sheet, 2026-10-13). Each is taken only once the one
@@ -56,11 +56,12 @@ def render(stored: dict[str, str]) -> str | None:
 
 
 def usable(check: Check | None) -> bool:
-    """Whether a reply's check says what Mani understands, the problem, what lies under it and what is
-    in their control, and asks whether it is right. What it comes down to is welcome, not required."""
+    """Whether a reply's check holds what Mani understands, the problem, what lies under it and what is
+    in their control, and says what it all comes down to, the only part sent, with its question."""
     return bool(check and all(
         (value or "").strip()
-        for value in (check.problem, check.core_issue, check.in_their_control, check.question)
+        for value in (check.problem, check.core_issue, check.in_their_control, check.comes_down_to,
+                      check.question)
     ))
 
 

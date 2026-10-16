@@ -140,6 +140,30 @@ def test_a_plain_no_stays_once_and_the_second_lets_the_stage_go(abcde):
     assert second.notes == ["belief let go after a second not_yet"]
 
 
+def test_a_question_holds_the_stage_without_a_try_then_the_answer_moves_it(abcde):
+    """A question or push-back is answered and the stage held; it never spends a try, so two questions
+    and then an answer move on by the answer, not by let_go."""
+    first = walk.advance(abcde, {}, None, "asked", in_force="belief")
+    second = walk.advance(abcde, first.entries, None, "asked", in_force="belief")
+    assert (second.phase, second.entries["belief"].get("tries", 0)) == ("belief", 0)
+    answered = walk.advance(abcde, second.entries, [said("belief", "I'll be let go")], "answered", in_force="belief")
+    assert answered.phase == "consequence"
+    assert not any("let go" in note for note in answered.notes)
+
+
+def test_questions_hold_a_stage_only_so_long_then_count_as_tries(abcde):
+    """Past HELD_FOR_QUESTIONS, asked counts as not_yet, so a person who only asks is never held for ever,
+    and on E the body check-in waits until then."""
+    entries: dict = {}
+    for _ in range(walk.HELD_FOR_QUESTIONS):
+        held = walk.advance(abcde, entries, None, "asked", in_force="effective")
+        assert held.phase == "effective"
+        entries = held.entries
+    tried = walk.advance(abcde, entries, None, "asked", in_force="effective")
+    assert (tried.phase, tried.entries["effective"]["tries"]) == ("effective", 1)
+    assert walk.advance(abcde, tried.entries, None, "asked", in_force="effective").phase == "somatic_checkin"
+
+
 def test_an_answer_that_cannot_be_true_of_the_stage_is_read_as_not_yet(abcde):
     """AC-2, AC-12: agreed only answers a check of their words, and answered brings words for the stage."""
     asked = walk.advance(abcde, {}, None, "agreed", in_force="belief")

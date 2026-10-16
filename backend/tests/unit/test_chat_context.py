@@ -73,7 +73,7 @@ def test_a_check_is_answered_on_the_next_turn_only_and_then_waits_its_cooldown()
     answering = TurnContext(thread=checked_at(10, 10), profile=None, technique=None)
     assert context.check_open(answering) and not context.may_check(answering)
     block = context.build(answering).splitlines()
-    assert "A clear yes always brings the offer" in block[block.index("check: open") + 1]
+    assert "always brings the offer" in block[block.index("check: open") + 1]
 
     after = [context.may_check(TurnContext(thread=checked_at(10, n), profile=None, technique=None))
              for n in (12, 10 + context.COOLDOWN_AFTER_DECLINE - 1, 10 + context.COOLDOWN_AFTER_DECLINE)]
@@ -600,7 +600,24 @@ def test_a_stage_is_left_after_two_tries():
     tried = {"abcde": {"belief": {"tries": 1}}}
     second = context.build(_running_at("belief", tried), framework=_five_stage_framework()).splitlines()
     branch = next(line for line in second if line.startswith("next: "))
-    assert branch.startswith("next: Whatever they answer, the walk reaches consequence")
+    assert branch.startswith("next: Whatever else they answer, the walk reaches consequence")
+
+
+def test_a_finished_framework_keeps_what_they_found_in_view():
+    """After the framework ends, Mani can still answer "what was my new belief?" or "that didn't help"
+    from what was found, not only from the raw messages."""
+    found = {"abcde": {"belief": {"said": "I'm not good enough", "status": "done"},
+                       "closing": {"said": "one mistake is not my whole work", "status": "done"}}}
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+        phase=None, at_message_count=8, stages_known=found,
+    )
+    ctx = TurnContext(thread=thread(10), profile=None, technique=state)
+    line = next(line for line in context.build(ctx, finished=_five_stage_framework()).splitlines()
+                if line.startswith("finished_framework: "))
+    assert 'belief done: "I\'m not good enough"' in line
+    assert 'closing done: "one mistake is not my whole work"' in line
+    assert "finished_framework" not in context.build(ctx)
 
 
 def _five_stage_framework() -> Framework:

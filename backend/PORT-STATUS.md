@@ -17,7 +17,7 @@ the same change as the work.**
   `reasoning_effort` instead, so `mani/llm/chain.py` sends the sampling parameters an ordinary
   chat model takes only to models that accept them. A prompt row names its own effort in
   `model_parameters.reasoning_effort` and `mani/config.py` holds the default for the calls that have
-  no row of their own; `mani_base` is on `low` (2026-10-12) and so is the exercise pick that follows
+  no row of their own, `low` since 2026-10-16 (muhammad: "all should be low"; was `high`); `mani_base` is on `low` (2026-10-12) and so is the exercise pick that follows
   it, while `summarization` and `memory_fold` are on `high`. Effort is billed: measured against Azure,
   `high` spent 26 reasoning tokens where `low` spent 0, about three times the cost of the same call. Every endpoint keeps `data_collection: deny`, so
   training use stays refused, but OpenAI now serves a turn whenever it is faster, not only when Azure is
@@ -144,22 +144,27 @@ the same change as the work.**
   `mani-vault/Journal/provider-tail-latency-2026-10-14.md`). `test_routing_sends_a_turn_only_to_azure_or_openai_
   fastest_first` in `tests/unit/test_config.py`, `test_each_call_records_the_generation_that_served_it` in
   `tests/unit/test_client.py`. Not yet measured live (needs muhammad's yes).
-- **An offer comes only on a clear yes to Mani's check of its understanding; the check comes only once code has
+- **An offer comes only when the person goes along with Mani's reading of their situation (`check_answer` yes);
+  the reading comes only once code has
   seen the problem, its core issue and what is in their control found in that order, each in an exchange of its
   own, so at their third message at the earliest, in every style** (muhammad, 2026-10-13, spec 0006; the order
   is code's since muhammad's live run of the same day, where Mani checked at their second message having asked
   about neither the core issue nor control: `understanding.merge` takes a step only once the one before it was
   stored on an earlier turn, `[ctx]` names the next step as `understanding_next`, and a check is stored only when
-  their own words give control; a stored check is sent as the model's own sentences in the client's order,
-  problem, core issue, control, what it comes down to, then the question, `repairs.check_text`). Because the client's flow
+  their own words give control; a stored check sends only what it all comes down to and the question, in the
+  model's words, and keeps the problem, core issue and control unsaid, because the four sentences in the client's
+  order read to her as a case summary of what they had already said (the client, 2026-10-16, R16;
+  `repairs.check_text`, `understanding.usable`); the reading ends on a question that moves forward, never "do I
+  have this right", and answering it counts as going along with it, because she said the person "should not
+  have to confirm it again" (2026-10-16, R16; `Check.question`, `check_answer` in `schema.py`)). Because the client's flow
   (meeting of 2026-10-13, R14) is understand the problem, then its core issue and what is in their control,
   then check that understanding with them and offer only on a yes, and the message count it replaces needed
   three fixes in a row (scope features 12, 15, 19) without ever recording whether the person agreed. Before
   that: the client rejected an offer on the first message (R1, 2026-10-12); the three steps put the earliest
   check at their third message and the earliest offer at their fourth. Code stores only when the last check was made
   (`threads.check_at_message_count`, migration 023); the next turn is `Moment.CHECK_OPEN`, whose shape alone
-  carries `check_answer` and `offer`. A clear yes makes that reply the client's offer; anything else (a no, a
-  yes with an addition, another topic) keeps chatting, and the check is used either way. A new check waits
+  carries `check_answer` and `offer`. Going along with the reading makes that reply the client's offer; a correction,
+  "that doesn't fit" or only wanting to talk keeps chatting, and the check is used either way. A new check waits
   `COOLDOWN_AFTER_DECLINE` after the last check and `cooldown_for(outcome)` after the last offer, and a set
   just finished may be offered again on a new confirmed check. The check's words are the model's own, never
   fixed text (muhammad, 2026-10-13); its `check` field marks it, so no code reads text to find it. "No check by
@@ -344,18 +349,26 @@ the same change as the work.**
   mean", are allowed: the client asks both (2026-10-12). `heading_toward` only decides what is offered. Mani never joins two things
   they said into a link they did not make. Told it got something wrong, in any words, it says it misunderstood and asks what would be
   more accurate (the client's line), never explaining what it meant.
-- **Mani talks like the client's sample conversation, which is the spec for the voice** (muhammad, 2026-10-13).
-  Mani's first five replies from the sample are in `mani_base.md` as `example`, word for word (its summary, which
-  invents facts, is left out), and `how_you_talk` says to copy how it talks: say back the part that matters in
-  their words, say what Mani wants to understand, ask one question that often offers options. Because rules that
-  described the sample while forbidding its moves ("never repeat their words", "never reuse its words", vary
-  every opener) produced lines like "can make it hard to separate one piece of feedback from what you think it
-  says about your ability" (live, 2026-10-13; diagnosed by a second model). `recent_openers` is gone from `[ctx]`
-  for the same reason. `scripts/scenario_check.py` flags "explains people" and the example's details borrowed. Because
-  muhammad wants human-like language in plain everyday words (2026-10-07), and the client's way of
-  communication document (R13, 2026-10-13) shows the voice: up to four short sentences in short paragraphs, a
-  direct ask answered plainly first, a short line saying what Mani wants to understand, and an understanding
-  of how things fit together said for them to confirm or correct. Its paragraphs are laid out in code, not left
+- **Each reply moves the conversation forward from what is new in their last message, and the example is three
+  short pieces of other conversations, each showing one move her better replies make** (the client, 2026-10-16,
+  R16; it replaces her sample conversation of 2026-10-13 as the example). The moves: a new reading in one sentence,
+  knowing their role before asking what they can do, and why what they tried may not be enough followed by the step
+  it points to. Her coworker chat itself is not in the prompt, because as the example Mani replied with her lines
+  nearly word for word, so testing it showed copying (muhammad: hardcode nothing to a scenario, 2026-10-16); it is
+  now a held-out test (`coworker_bad_mood`). `how_you_talk` says: know what is new and the one thing still
+  missing; say what is new in one plain sentence of Mani's own, as what it sees in their situation; then one
+  question about what is missing; never say back what they just said or announce what Mani wants to understand;
+  options only when they give almost nothing. Mani may say what it sees from their words, never a motive, never
+  people in general, never what to do (`identity`, `boundaries`), and it knows their role before asking what is in
+  their control (`understanding_them`). Because the sample's moves, copied as a recipe for every reply, read to the
+  client as mechanical paraphrase ending in a case summary, the fourth round of R13 and R14; and the rules before the
+  sample, which forbade its moves, produced abstract lines like "can make it hard to separate one piece of feedback
+  from what you think it says about your ability" (live, 2026-10-13; diagnosed by a second model). So the lever is
+  what each reply does, not another do or don't. `recent_openers` is gone from `[ctx]` for the same reason.
+  `scripts/scenario_check.py` flags "explains people", "announces understanding" and the example's details
+  borrowed. Because muhammad wants human-like language in plain everyday words (2026-10-07), and both client
+  documents show the voice: a few short sentences, a direct ask answered plainly first, and an understanding of how
+  things fit together said for them to confirm or correct. Its paragraphs are laid out in code, not left
   to the model, which broke the line before its question in some replies and not others: Mani's own text
   before a framework goes out with the closing questions on a line of their own, unless fewer than 8 words come
   before them (`repairs.laid_out`, gated in `orchestrator.send`; stage replies stay one paragraph, as the ABCDE
@@ -396,6 +409,22 @@ the same change as the work.**
   so muhammad to revisit streaming after the next measured run).
   In process routing no longer describes the code (`router.py` is gone and the model chooses the framework):
   muhammad to reword or drop it.
+- **A question or push-back on a stage (`stage_answer` asked) is answered and the stage held, without spending a
+  try, up to `walk.HELD_FOR_QUESTIONS` (2) per stage; past that it counts as not_yet.** Because a question counted
+  as a failed try, so a second one let the stage go and, on E, forced the body check-in over it (muhammad,
+  2026-10-16). `test_a_question_holds_the_stage_without_a_try_then_the_answer_moves_it`,
+  `test_questions_hold_a_stage_only_so_long_then_count_as_tries` (`tests/unit/test_walk.py`).
+- **What they say they feel in their body is kept as `understanding.body`, and the check-in asks about it in the
+  client-style `somatic_checkin.ask_known` line (slot `<body_said>`); with nothing kept it is her plain check-in.
+  A question at the check-in (body asked, or no branch) gets Mani's answer and the check-in once more, then the two
+  choices; something else brought up (body moved_on) gets Mani's reply and the two choices.** Because muhammad
+  asked that a sensation named anywhere in the chat be what the check-in asks about, and the check-in could hold a
+  person for ever when no branch fit (2026-10-16). `repairs.check_in_script`, `orchestrator._body_route`,
+  `_check_ins_sent`; `ask_known` is checked by `seed.load_somatic_stages`. The `ask_known` wording is ours and is
+  waiting on the client.
+- **After a framework ends, `[ctx]` keeps what was found in it (`finished_framework`, the retired row's stages).**
+  Because "what was my new belief?" or "that didn't help" after the end had only the raw messages to go on
+  (2026-10-16). `test_a_finished_framework_keeps_what_they_found_in_view`.
 
 ## Before it takes real traffic
 

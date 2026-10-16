@@ -98,7 +98,7 @@ class TurnOut(BaseModel):
     check_at_message_count: int | None = None
     # Set only on the turn a framework completes, and only once the catalog has a
     # matching exercise.
-    exercise: "ExerciseOut | None" = None
+    exercise: ExerciseOut | None = None
 
 
 class StartOut(BaseModel):
@@ -106,6 +106,9 @@ class StartOut(BaseModel):
 
     thread: ThreadOut
     messages: list[MessageOut]
+    # Set when the thread has more messages than this opening tail. A client resuming the
+    # conversation pages the rest from GET /v1/threads/{id}/messages with this cursor.
+    next_cursor: str | None = None
     is_new: bool
 
 

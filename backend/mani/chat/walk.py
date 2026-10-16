@@ -21,6 +21,9 @@ _REPORTED = frozenset({"partial", "possible", "known"})
 CONFIRMED = frozenset({"known", "possible"})
 # How their message may answer the stage in force and move the walk on.
 MOVES = frozenset({"agreed", "answered", "corrected", "let_go"})
+# How many questions or push-backs hold a stage without counting as a try; past that, an
+# answer of asked counts as not_yet, so no stage is held for ever.
+HELD_FOR_QUESTIONS = 2
 SAID_LIMIT = 200
 # How Mani confirms a stage the person already answered, in its own words (muhammad's team lead, 2026-10-13).
 CONFIRM_ASK = (
@@ -183,7 +186,8 @@ def advance(
 ) -> Walked:
     """A turn on the stage in force: merge what they said for it and any correction to an earlier
     stage, move at most one phase, then merge the stage reached from this turn's `report` of it,
-    which is ignored when the walk stays. A second not_yet in a row moves on as let_go.
+    which is ignored when the walk stays. A second not_yet in a row moves on as let_go. A question or
+    push-back (asked) holds the stage without a try, up to HELD_FOR_QUESTIONS times.
     `body_answered` is a body route answer at the closing, which wins over the stage answer. Nothing
     is stored for a stage before it is reached, and an entry stored ahead by an earlier version is
     ignored, so no stale words are said back."""
@@ -213,6 +217,11 @@ def advance(
         if answer is not None and not _counts(answer, before, in_force in merged.updated):
             notes.append(f"stage answer invalid: {answer}")
             answer = None
+        held = before.get("asked", 0)
+        if answer == "asked" and held < HELD_FOR_QUESTIONS:
+            stored = merged.entries
+            stored[in_force] = {**stored.get(in_force, {}), "asked": held + 1}
+            return Walked(stored, in_force, None, notes)
         moved = answer in MOVES
         if not moved and tries >= 1:
             notes.append(f"{in_force} let go after a second not_yet")
@@ -349,15 +358,24 @@ def reach_line(stage: str) -> str:
 
 def next_line(framework: Framework, entries: dict[str, dict], phase: str) -> str:
     """What the reply's text is for, in each way their message can answer the stage in force, from
-    the store before this turn. On the second try both ways move on."""
+    the store before this turn. On the second try both ways move on; a question holds the stage until
+    it has held it HELD_FOR_QUESTIONS times."""
     following = framework.phases[framework.phase_index(phase) + 1]
     if following in ENDING_STAGES:
         moved = "the questions end, and the body check-in is sent after your text: write one short sentence, no question."
     else:
         moved = f"the walk reaches {following}: {reach_line(following)}"
-    if (entries.get(phase) or {}).get("tries", 0) >= 1:
-        return f"Whatever they answer, {moved}"
-    return f"If you answer agreed, answered, corrected or let_go, {moved} If not_yet, write the follow up for this stage."
+    entry = entries.get(phase) or {}
+    asked = (
+        " If asked, answer them plainly, then ask this stage's question again."
+        if entry.get("asked", 0) < HELD_FOR_QUESTIONS else ""
+    )
+    if entry.get("tries", 0) >= 1:
+        return f"Whatever else they answer, {moved}{asked}"
+    return (
+        f"If you answer agreed, answered, corrected or let_go, {moved} If not_yet, write the follow up for "
+        f"this stage.{asked}"
+    )
 
 
 # What the walk does with a stage, for a person watching the conversation.

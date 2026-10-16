@@ -223,21 +223,18 @@ def _check() -> Reply:
     """Mani's check of its understanding, each part its own sentence; its free text opens with their last
     answer, as the model's did live, and is never sent (spec 0006)."""
     return Reply(
-        text="You're not sure yet. Your coworkers miss deadlines. Do I have that right?",
+        text="You're not sure yet. Your coworkers miss deadlines. Have you been able to talk to them about it?",
         check=Check(
             problem="Your coworkers keep missing deadlines", core_issue="The work always ends up landing on you.",
             in_their_control="You're not sure yet what you can do about it.",
-            comes_down_to="It seems to come down to carrying what others drop.", question="Do I have that right",
+            comes_down_to="It seems to come down to carrying what others drop.", question="Have you been able to talk to them about it",
         ),
         understanding_update=UnderstandingUpdate(in_their_control="you're not sure yet"),
     )
 
 
-# _check() as sent: the problem, the core issue, control and what it comes down to, then the question.
-CHECK_SENT = (
-    "Your coworkers keep missing deadlines. The work always ends up landing on you. You're not sure yet "
-    "what you can do about it. It seems to come down to carrying what others drop.\n\nDo I have that right?"
-)
+# _check() as sent: what it comes down to, then the question. The other parts are kept, never said back.
+CHECK_SENT = "It seems to come down to carrying what others drop.\n\nHave you been able to talk to them about it?"
 
 
 async def answering_a_check(thread):
@@ -1547,6 +1544,67 @@ async def test_the_body_check_in_is_sent_from_the_script_not_reworded(alice, mod
 
     turn = await send(alice, thread.id, "yes, that fits what happened")
     assert turn.content.endswith("Would you like to notice what is happening in your body?")
+
+
+async def test_the_check_in_asks_about_what_they_said_earlier_of_their_body(alice, model):
+    """muhammad, 2026-10-16: a sensation they named earlier is what the check-in asks about, and a yes
+    to it goes straight to the practice for its place, with no "where" question."""
+    model(
+        Reply(text="What would be a fairer way to see it?", stage_answer="not_yet",
+              understanding_update=UnderstandingUpdate(body="your chest getting tight")),
+        Reply(text="That feels more true to you.", stage_answer="let_go"),
+        Reply(text="It is still there.", body="chest"),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "effective")
+
+    await send(alice, thread.id, "I don't know, my chest gets tight when I think about it")
+    checked_in = await send(alice, thread.id, "maybe it was one bad week, not all of me")
+    assert checked_in.content.endswith(
+        "Earlier you mentioned your chest getting tight. Would you like to notice whether that is still there?"
+    )
+    yes = await send(alice, thread.id, "yes it's still tight")
+    assert "Place one hand on your chest." in yes.content
+    assert yes.prompts == []
+
+
+async def test_a_question_at_the_check_in_is_answered_and_asked_once_more_then_they_choose(alice, model):
+    """A question instead of an answer to the check-in gets Mani's answer and the check-in again; a
+    second one goes to the two choices, so the body route never holds them."""
+    model(
+        Reply(text="That fits.", stage_answer="let_go"),
+        Reply(text="Noticing your body can show how this is sitting with you.", body="asked"),
+        Reply(text="We can leave it there."),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "effective")
+    check_in = "Would you like to notice what is happening in your body?"
+
+    assert (await send(alice, thread.id, "yes that fits")).content.endswith(check_in)
+    asked = await send(alice, thread.id, "why does my body matter?")
+    assert asked.content == f"Noticing your body can show how this is sitting with you.\n\n{check_in}"
+    again = await send(alice, thread.id, "I still don't get it")
+    assert again.content == "We can leave it there."
+    assert [p.label for p in again.prompts] == ["Chat More", "Go to Library"]
+    assert (await _offered_row(alice, thread.id)).phase == "somatic_practice"
+
+
+async def test_something_new_at_the_check_in_is_followed_not_met_with_the_check_in(alice, model):
+    """Live, 2026-10-16: "I'm being moved to another team and I'm scared" got the body check-in again.
+    Something else brought up is followed, and the two choices come under Mani's reply."""
+    model(
+        Reply(text="That fits.", stage_answer="let_go"),
+        Reply(text="Being moved without a say is a lot to take in. What worries you most about it?",
+              body="moved_on"),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "effective")
+
+    await send(alice, thread.id, "yes that fits")
+    moved = await send(alice, thread.id, "my manager just told me I'm being moved to another team")
+    assert moved.content.startswith("Being moved without a say is a lot to take in.")
+    assert "in your body" not in moved.content
+    assert [p.label for p in moved.prompts] == ["Chat More", "Go to Library"]
 
 
 async def test_an_offer_carries_the_clients_three_buttons_and_tell_me_more_offers_again(

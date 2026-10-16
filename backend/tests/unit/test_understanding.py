@@ -2,7 +2,7 @@
 # ABOUTME: Spec 0005: a null keeps what is stored, a value replaces it on one line. Spec 0006: steps in order.
 
 from mani.chat import understanding
-from mani.llm.schema import UnderstandingUpdate
+from mani.llm.schema import Check, UnderstandingUpdate
 
 STORED = {"feeling": "frustrated", "issue": "my client keeps changing the requirements"}
 
@@ -28,6 +28,14 @@ def test_a_value_is_kept_on_one_line_and_cut_to_the_limit():
     assert merged == {"issue": "my client keeps changing things"}
     long = understanding.merge({}, UnderstandingUpdate(issue="word " * 60))["issue"]
     assert len(long) <= understanding.LIMIT and not long.endswith(" ")
+
+
+def test_what_they_feel_in_their_body_is_kept_and_shown_but_is_never_a_step():
+    """A sensation named early stays for the body check-in, and it neither opens nor blocks the check."""
+    kept = understanding.merge(STORED, UnderstandingUpdate(body="your chest gets tight"))
+    assert kept["body"] == "your chest gets tight"
+    assert "body: your chest gets tight" in understanding.render(kept)
+    assert understanding.next_step(kept) == understanding.next_step(STORED)
 
 
 def test_the_ctx_value_names_each_key_and_cannot_close_the_block():
@@ -64,11 +72,20 @@ def test_the_next_step_is_the_first_one_missing():
 def test_a_stored_check_keeps_what_it_came_down_to():
     """Live, 2026-10-13: the line closest to what they hold was dropped, so the start turn saw their
     opening feeling instead."""
-    from mani.llm.schema import Check
-
     check = Check(problem="Your boss wants overtime.", core_issue="Your team now works it too.",
                   in_their_control="You'll raise it with HR.", question="Is that right?",
                   comes_down_to="You want to undo the overtime culture you feel you started.")
     merged = understanding.merge_check({"issue": "x", "core_issue": "y"}, check)
     assert merged["comes_down_to"] == "You want to undo the overtime culture you feel you started."
     assert "comes_down_to: You want to undo" in understanding.render(merged)
+
+
+def test_a_check_with_nothing_it_comes_down_to_is_never_sent():
+    """The client, 2026-10-16: what it comes down to is the only sentence of the check they read, so a check
+    without it would ask its question with nothing before it."""
+    full = Check(
+        problem="your coworkers miss deadlines", core_issue="the work lands on you", in_their_control="not sure yet",
+        comes_down_to="It comes down to carrying what others drop.", question="Have you been able to talk to them about it?",
+    )
+    assert understanding.usable(full)
+    assert not understanding.usable(full.model_copy(update={"comes_down_to": "  "}))

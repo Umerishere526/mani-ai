@@ -147,8 +147,8 @@ class NextStage(BaseModel):
 
 # Merged into the thread's record by chat/understanding.py. The docstring is sent to the model.
 class UnderstandingUpdate(BaseModel):
-    """What their message names or changes about how they feel, what they are dealing with, what
-    lies under it, and what is in their control. A null keeps what is already known."""
+    """What their message names or changes about how they feel, what they feel in their body, what
+    they are dealing with, what lies under it, and what is in their control. A null keeps what is already known."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -158,6 +158,14 @@ class UnderstandingUpdate(BaseModel):
             "Their own word for how they feel, only when this message names it or changes it, in the "
             "form that reads after \"feeling\", such as \"frustrated\". Never one they did not use. "
             "Null otherwise."
+        ),
+    )
+    body: str | None = Field(
+        default=None,
+        description=(
+            "What they said they feel in their body and where, in their words and said to them as you, "
+            "such as \"your chest gets tight\", only when this message names it or changes it. Never a "
+            "feeling word, never one they did not give. A dozen words at most. Null otherwise."
         ),
     )
     issue: str | None = Field(
@@ -192,32 +200,42 @@ class UnderstandingUpdate(BaseModel):
 # Read by the orchestrator: a check with all its parts is written to the thread, and repairs sends its
 # parts in this order in place of the reply's text (spec 0006). The docstring is sent to the model.
 class Check(BaseModel):
-    """Your check of what you understand, filled only on the reply that checks it with them. Each part
-    is one sentence in your own words, said to them as you, from their words only. The parts are sent
-    in this order, in place of your text."""
+    """Your reading of what is going on, filled only on the reply that gives it, from their words only.
+    problem, core_issue and in_their_control are kept and never sent. comes_down_to and the question are
+    sent, in place of your text. Their next message confirms the reading by going along with it."""
 
     model_config = ConfigDict(extra="ignore")
 
-    problem: str | None = Field(default=None, description="One sentence: the problem, as you understand it.")
-    core_issue: str | None = Field(default=None, description="One sentence: the core issue under it.")
+    problem: str | None = Field(default=None, description="Kept, not sent: the problem, a short phrase.")
+    core_issue: str | None = Field(default=None, description="Kept, not sent: the core issue under it, a short phrase.")
     in_their_control: str | None = Field(
         default=None,
-        description="One sentence: what they said is in their control, or that they're not sure yet, which is fine.",
+        description="Kept, not sent: what they said is in their control, or that they're not sure yet, which is fine.",
     )
     comes_down_to: str | None = Field(
         default=None,
-        description="One sentence: what it all seems to come down to for them, offered as your understanding.",
+        description=(
+            "Sent: one or two plain sentences, said to them as you, of what you see it all comes down to, such "
+            "as why what they tried may not be enough. A new way of putting it, never a list or a retelling of "
+            "what they told you."
+        ),
     )
-    question: str | None = Field(default=None, description="Your one question asking whether you have it right.")
+    question: str | None = Field(
+        default=None,
+        description=(
+            "Your one question that moves forward from your reading, toward what they could do, such as whether "
+            "they have tried the step their situation points to. Never whether you have it right."
+        ),
+    )
 
 
 OfferAnswer = Literal["yes", "no", "asked", "moved_on"]
 CheckAnswer = Literal["yes", "no"]
 BodyBranch = Literal[
     "chest", "head", "stomach", "elsewhere", "no_place", "agreed", "declined", "acting", "pain",
-    "returned",
+    "returned", "asked", "moved_on", "eased",
 ]
-StageAnswer = Literal["agreed", "answered", "corrected", "let_go", "not_yet"]
+StageAnswer = Literal["agreed", "answered", "corrected", "let_go", "not_yet", "asked"]
 _CLOSED_SETS = {
     "offer_answer": get_args(OfferAnswer),
     "check_answer": get_args(CheckAnswer),
@@ -285,9 +303,10 @@ class Reply(_ReplyBase):
     check_answer: CheckAnswer | None = Field(
         default=None,
         description=(
-            "How they answered the check of your understanding in your last reply. yes only when "
-            "they clearly agree with all of it. no for anything else: a correction, an addition, "
-            "or talking about something else."
+            "How they took the reading in your last reply, never how they answered your question. yes "
+            "when they go along with the reading, which includes answering your question, even with no "
+            "or not yet. no only when they correct the reading, say it does not fit, or say they only "
+            "want to talk."
         ),
     )
     offer_answer: OfferAnswer | None = Field(
@@ -301,7 +320,8 @@ class Reply(_ReplyBase):
         default=None,
         description=(
             "The body route branch their message meets, by its id from [ctx]. returned: the "
-            "feeling came back after the practice. Null when none fits."
+            "panic or the feeling came back after the practice, never just that it did not help or "
+            "they are still upset. Null when none fits."
         ),
     )
     stage_answer: StageAnswer | None = Field(
@@ -310,8 +330,10 @@ class Reply(_ReplyBase):
             "How their message answers the stage in force. agreed: yes to your check of what they "
             "said, even with more added. answered: they gave what the stage needs, with an update for it. corrected: a no "
             "with new words, with an update for it. let_go: move on without words, because it was "
-            "asked twice already or the question made them uneasy. not_yet: a plain no, unclear, or "
-            "I don't know while you still help."
+            "asked twice already or the question made them uneasy and they want to skip it. not_yet: a "
+            "plain no, unclear, or I don't know while you still help. asked: instead of answering, they "
+            "asked you something or pushed back on the question; answer them and ask the stage's question "
+            "again. A question or push-back is always asked, never agreed or let_go."
         ),
     )
     stage_updates: list[StageUpdate] | None = Field(

@@ -119,9 +119,28 @@ def test_explaining_people_is_flagged_and_the_clients_sample_never_is():
 
 
 def test_the_examples_details_are_flagged_only_when_the_person_never_said_them():
-    reply = "When vendors don't follow through, what happens next?"
-    assert scenario_check.borrowed_from_the_example(reply, {"boss", "work"}) == ["vendors", "follow through"]
-    assert scenario_check.borrowed_from_the_example(reply, {"vendors", "follow", "through"}) == []
+    reply = "Has your flatmate said how it lands for you?"
+    assert scenario_check.borrowed_from_the_example(reply, {"boss", "work"}) == ["flatmate", "lands for you"]
+    assert scenario_check.borrowed_from_the_example(reply, {"flatmate", "lands", "for", "you"}) == []
+
+
+# The replies the client wrote as better, in her Directive feedback of 2026-10-16.
+HER_REPLIES = (
+    "What does he do when he's in a bad mood that affects the rest of the team?",
+    "Has he actually scolded or confronted people, or are they worried about how he might react?",
+    ("This goes beyond someone having a bad day. His behavior is affecting how people work. Are you in a "
+     "position to address this with him directly?"),
+    ("I understand why you're telling them that, but if they're afraid of being scolded, telling them not to "
+     "let his mood affect them may not change much. The behavior creating that fear needs attention. Have you "
+     "been able to speak with him about it?"),
+)
+
+
+def test_announcing_understanding_is_flagged_and_her_replies_never_are():
+    """The client, 2026-10-16: people show they understood through what they say next, never by announcing it."""
+    assert scenario_check.ANNOUNCES.search("So people stay quiet. I want to understand what keeps that pattern going.")
+    assert scenario_check.ANNOUNCES.search("Have I understood that right?")
+    assert not any(scenario_check.ANNOUNCES.search(reply) for reply in HER_REPLIES)
 
 
 def test_a_stage_reached_otherwise_than_expected_is_flagged_once():

@@ -11,7 +11,8 @@ merges the two stage blocks below into each framework's `stages`. The existing p
 `_stage_lines` then handle them like any other stage. `is_final` lands on `somatic_practice`.
 Capsules attach at the final phase as they already do.
 
-The check-in question is a fixed per-style line. Each `if_unclear` branch has an `id`: the reply
+The check-in question is a fixed per-style line: `ask_known`, with their words in `<body_said>`, when
+they told Mani earlier what they feel in their body, and `ask` otherwise. Each `if_unclear` branch has an `id`: the reply
 reports the branch its answer meets in `body`, and code sends that branch's text word for word. Do
 not summarize the framework at any point in this route.
 
@@ -23,7 +24,7 @@ stages:
     ready_when: "They have answered the check-in, or declined it, or were skipped for action-readiness."
     boundaries:
       - "must not summarize the framework before asking"
-      - "must not ask the check-in more than once"
+      - "must not ask the check-in again unless they asked something instead of answering it, and then only once, after answering them"
       - "must not add a feeling or a body sensation the user did not name"
     if_unclear:
       - id: acting
@@ -35,14 +36,24 @@ stages:
       - id: declined
         when: "the user declines the check-in"
         reply: "You'd rather not check in with your body right now. Would you like to keep chatting or go to the Library?"
+      - id: asked
+        when: "they ask about the check-in, or what it is for, instead of answering it. Answer them plainly in your text; the check-in is asked once more after it"
+      - id: moved_on
+        when: "they bring up something else instead, such as a new problem. Follow them in your text; the two choices come under it"
+      - id: eased
+        when: "they say what they felt in their body has gone or eased. Say so in your text, no question; the two choices come under it"
     ask:
       supportive: "Would you like to notice what is happening in your body?"
       reflective: "What do you notice in your body?"
       directive: "What do you notice in your body now?"
+    ask_known:
+      supportive: "Earlier you mentioned <body_said>. Would you like to notice whether that is still there?"
+      reflective: "Earlier you mentioned <body_said>. What do you notice there now?"
+      directive: "Earlier you mentioned <body_said>. Is that still there now?"
 
   somatic_practice:
     purpose: "Offer one short grounding practice for where they feel it, then let the handoff capsules follow. Do not ask about the body a second time."
-    listen_for: "Where in the body they feel it. If they already named a place in the check-in, use it and do not ask again."
+    listen_for: "Where in the body they feel it. If they named a place anywhere in this chat and say it is still there, use it and do not ask again."
     ready_when: "A practice has been offered for the place they named, or they were routed to the capsules by a skip, decline, or safety-out."
     boundaries:
       - "must not ask about the body a second time"

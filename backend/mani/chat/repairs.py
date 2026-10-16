@@ -13,7 +13,16 @@ from mani.chat.greeting import (
     TRY_IT_LABEL,
 )
 from mani.chat.techniques import OFFERING, Registry
-from mani.llm.schema import SHAPES, Check, Moment, Offer, Reply, Slots, SmartPrompt, Style
+from mani.llm.schema import (
+    SHAPES,
+    Check,
+    Moment,
+    Offer,
+    Reply,
+    Slots,
+    SmartPrompt,
+    Style,
+)
 from mani.models.rows import Framework
 
 MAX_TITLE_LENGTH = 100
@@ -172,6 +181,15 @@ def with_the_check_in(text: str, script: str) -> str:
     return f"{reflection}\n\n{script}" if reflection else script
 
 
+def check_in_script(stages: dict, style: str, body_said: str | None) -> str | None:
+    """The client's body check-in in one style: the line that asks about what they said earlier they
+    feel in their body, when they said something, otherwise the plain check-in."""
+    stage = stages.get("somatic_checkin") or {}
+    known = (stage.get("ask_known") or {}).get(style)
+    asked_about = render_template(known, lead_line=None, slot=body_said) if known else None
+    return asked_about or (stage.get("ask") or {}).get(style)
+
+
 # The client's place buttons under the "where" question, each with the body branch it answers.
 PLACE_LABELS = {"Chest": "chest", "Head": "head", "Stomach": "stomach", "Somewhere else": "elsewhere"}
 _PLACES = frozenset(PLACE_LABELS.values())
@@ -187,6 +205,9 @@ _ANSWERED_AT = {
     "acting": {"closing", "somatic_checkin"},
     "pain": {"closing", "somatic_checkin", "somatic_practice"},
     "returned": {"retiring"},
+    "asked": {"somatic_checkin"},
+    "moved_on": {"somatic_checkin"},
+    "eased": {"somatic_checkin"},
 }
 
 
@@ -227,16 +248,19 @@ class BodyReply:
 
 def body_reply(body: str, at: str, stages: dict, style: str, text: str) -> BodyReply:
     """The client's reply for an answer that fits where the body route is: the branch's own text,
-    or Mani's first sentence then the client's question. A decline after the place question has
-    no client line, so the model's text goes."""
+    or Mani's first sentence then the client's question. A decline after the place question, and
+    something else brought up or the feeling gone at the check-in, have no client line, so the model's
+    text goes."""
     branch = body_branch(stages, body)
-    client = reply_for(branch, style) if branch else text
+    client = reply_for(branch, style) if branch and branch.get("reply") else text
     practice = "somatic_practice"
     if body == "no_place":
         ask = ((stages.get(practice) or {}).get("ask") or {}).get(style) or client
         return BodyReply(with_the_check_in(first_sentence(text), ask), list(PLACE_LABELS), practice)
     if body == "agreed":
         return BodyReply(with_the_check_in(first_sentence(text), client), [], "somatic_checkin")
+    if body in ("moved_on", "eased"):
+        return BodyReply(text, [], practice, handoff=True)
     if body == "declined":
         return BodyReply(client if at == "somatic_checkin" else text, [], practice, handoff=True)
     return BodyReply(client, [], practice, handoff=body in ("acting", "returned"))
@@ -354,12 +378,10 @@ def _sentence(value: str | None, end: str = ".") -> str:
 
 
 def check_text(check: Check) -> str:
-    """Mani's check in the client's order, the problem, the core issue, what is in their control and what
-    it comes down to, then its question on a line of its own. Every word is the model's; only the order
-    is code's (spec 0006)."""
-    parts = (check.problem, check.core_issue, check.in_their_control, check.comes_down_to)
-    understood = " ".join(sentence for part in parts if (sentence := _sentence(part)))
-    return f"{understood}\n\n{_sentence(check.question, '?')}"
+    """Mani's check as sent: what it all comes down to, then its question on a line of its own. The
+    problem, core issue and control are stored, never said back, because four sentences of what they
+    already told Mani read as a case summary (the client, 2026-10-16). Every word is the model's."""
+    return f"{_sentence(check.comes_down_to)}\n\n{_sentence(check.question, '?')}"
 
 
 def keep_chatting(framework: Framework | None, style: str, their_words: str | None) -> str | None:

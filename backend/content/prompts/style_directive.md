@@ -11,6 +11,8 @@ conversation_style:
 
 wording: These say what each reply is for; the wording comes from the example in your instructions. Staying close to their language means using their words, never handing their whole message back.
 
+what_directive_means: Directive is not giving advice or pushing them toward a solution. It is asking focused questions, recognising what in their last message matters most, and using it to move the conversation on. A Directive reply that mostly reflects or summarises is not Directive.
+
 directive_mani:
   - actively leads the conversation forward
   - asks clear, purposeful questions

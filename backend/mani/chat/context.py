@@ -6,8 +6,8 @@ from __future__ import annotations
 import re
 
 from mani.chat import repairs, understanding, walk
-from mani.chat.techniques import OFFERING
 from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CHAT_MORE_LABEL
+from mani.chat.techniques import OFFERING
 from mani.db.threads import TurnContext
 from mani.llm.schema import Moment
 from mani.models.rows import (
@@ -206,18 +206,19 @@ _MEANING: dict[str, str | dict[str, str]] = {
     "check": {
         "once_control_is_answered": (
             "if their message answers what is in their control, even with I don't know, report it and "
-            "check your understanding in this reply by filling check, from their words only. If it does "
-            "not, ask about control and leave check empty."
+            "give your reading in this reply by filling check, from their words only. If it does not, "
+            "ask about control and leave check empty."
         ),
         "may_check": (
-            "the problem, its core issue and what is in their control are all found. Check your "
-            "understanding with them now by filling check, from their words only. Never add anything "
-            "they did not say."
+            "the problem, its core issue and what is in their control are all found. Give your reading "
+            "now by filling check, from their words only, and ask the one question that moves forward. "
+            "Never ask whether you have it right, and never ask for what is already clear."
         ),
         "open": (
-            "your last reply checked your understanding. Set check_answer. A clear yes always brings the "
-            "offer: fill offer for the set closest to what they confirmed, even when its Use it when "
-            "does not fit exactly. Anything else, follow what they said toward the root of it."
+            "your last reply gave your reading. Set check_answer for the reading, not for your question. "
+            "Going along with it, even by answering your question with no or not yet, always brings the offer: fill offer for the set closest to what "
+            "they told you, even when its Use it when does not fit exactly. Anything else, follow what "
+            "they said toward the root of it."
         ),
     },
     "understanding": (
@@ -252,6 +253,10 @@ _MEANING: dict[str, str | dict[str, str]] = {
     "history": "what was tried earlier in this conversation, and whether it helped.",
     "library_pending": {"yes": "offer the Library before anything new."},
     "current_phase": "the stage the questions are on, as last recorded.",
+    "finished_framework": (
+        "what they found in the framework they finished, stage by stage in their words. Use it when they "
+        "ask about it or say it did not help. Never summarise it unasked."
+    ),
     "safety": {
         "concern": (
             "something they said may mean they are not safe. No stage question and no offer. "
@@ -311,6 +316,7 @@ def build(
     offer_waiting: bool = False,
     starting: bool = False,
     yes_framework: Framework | None = None,
+    finished: Framework | None = None,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -321,6 +327,7 @@ def build(
 
     `framework` is the one already active. `starting` is a turn that opens it, and `yes_framework`
     the set a yes in this message would open; both ask the reply to report what they already said.
+    `finished` is the framework of the thread's finished row, whose stages stay in view after it ends.
 
     `history` is the same window the caller already loads for the model's own conversation
     view - nothing new is fetched for it.
@@ -382,6 +389,9 @@ def build(
             lines += _line("library_pending", "yes")
         if technique.phase:
             lines += _line("current_phase", technique.phase)
+        elif finished is not None and technique.outcome is TechniqueOutcome.ACCEPTED:
+            known = technique.stages_known.get(finished.id) or {}
+            lines += _line("finished_framework", f"{finished.id}: {_stored(finished, known, finished.closing)}")
 
     if ctx.summary and ctx.summary.techniques_tried:
         tried = ", ".join(
