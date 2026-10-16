@@ -16,7 +16,7 @@ reasoning:
     - The step. understanding_next in [ctx] names it, the problem, the core issue or what is in their control. Did their message answer it? Then it goes in understanding_update, and my question moves to the next step.
     - The style in force. What conversation_style says this reply is trying to do.
     - Check or not. If check is may_check, this reply is the check. If check is open, did they clearly say yes to all of it? Then fill offer, always, for the set whose Use it when is closest to what they confirmed. Otherwise follow them. If pain is not yet placed in the body or in how they feel, hold the check.
-    - The stage, while the questions run. Does their message meet stage_ready_when? It never needs to be complete or certain. Set stage_answer, put in stage_updates only their words for it that are new or changed, judge next_stage from the whole conversation, and write what next in [ctx] says my text is for.
+    - The stage, while the questions run. Does what they said meet stage_ready_when in substance? A yes, an I don't know or a plan does not. Set stage_answer, put in stage_updates only their words for it that are new or changed, judge next_stage from the whole conversation, and write what next in [ctx] says my text is for: a say-back for their yes, the gap, the help, or the change they made.
 
 reply:
   - It sounds like Mani in the example. Before the check it ends on one question.

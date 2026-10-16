@@ -428,6 +428,27 @@ def test_d_reached_with_only_support_said_asks_only_the_challenge(abcde):
     assert notes == ["gap asks nothing"]
 
 
+def test_c_reached_with_only_what_they_did_asks_how_believing_it_left_them_feeling(abcde):
+    """Lolly, 2026-10-16: C is both how it left them feeling and what they did; one of the two is a gap."""
+    entries = {"belief": {"said": "I won't get it all done", "status": "done", "tries": 0},
+               "consequence": {"said": "so you don't start", "status": "partial", "gap": "feeling"}}
+    assert walk._gap_line(abcde, entries, "consequence", "feeling") == (
+        "And when you believe I won't get it all done, how does that leave you feeling?")
+    assert walk._gap_line(abcde, entries, "consequence", "doing") == (
+        "What do you do, or stop doing, once you believe I won't get it all done?")
+
+
+def test_e_offered_a_new_belief_is_asked_whether_it_fits_before_it_is_done(abcde):
+    """Lolly, 2026-10-16, point 7: a new belief is verified with them before the body check-in."""
+    entries = {"effective": {"said": "I can still make progress on something", "status": "partial", "gap": "fits"}}
+    assert walk._gap_line(abcde, entries, "effective", "fits") == (
+        "So the thought would now be: I can still make progress on something. Does that fit for you?")
+    effective, dispute = abcde.stages["effective"], abcde.stages["dispute"]
+    assert "no different one" not in effective["ready_when"]
+    assert effective["when_stuck"] and dispute["when_stuck"]
+    assert "enough information" not in dispute["ready_when"]
+
+
 def test_a_confirmation_let_go_without_their_words_stores_none(abcde):
     """Words they did not agree to never stand as done, so D never disputes them."""
     let_go = walk.advance(abcde, SEEDED, None, "let_go", in_force="belief")

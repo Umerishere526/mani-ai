@@ -466,16 +466,16 @@ def _start_lines(framework: Framework, style: str) -> list[str]:
 def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> list[str]:
     """One stage's full guidance - current or next - resolved to one conversation style.
 
-    Purpose, listening cues, readiness and boundaries are clinical rather than tonal and do
-    not vary; `ask` is the one leaf a style changes, so only the resolved style's variant is
-    sent rather than all three.
+    Purpose, listening cues, readiness, the help when they are stuck and boundaries are clinical
+    rather than tonal and do not vary; `ask` is the one leaf a style changes, so only the resolved
+    style's variant is sent rather than all three.
     """
     stage = framework.stages.get(phase)
     if not stage:
         return [f"{prefix}: {phase}"]
 
     lines = [f"{prefix}: {phase}"]
-    for field in ("purpose", "listen_for", "ready_when"):
+    for field in ("purpose", "listen_for", "ready_when", "when_stuck"):
         if stage.get(field):
             lines.append(f"{prefix}_{field}: {stage[field]}")
     if prefix == "next_stage" and stage.get("reach"):

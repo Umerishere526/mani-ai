@@ -208,6 +208,7 @@ def framework() -> Framework:
             },
             "belief": {
                 "purpose": "Identify the belief.",
+                "when_stuck": "Offer one distinction from their words.",
                 "ask": {"supportive": "What did that mean to you?"},
             },
         },
@@ -215,6 +216,14 @@ def framework() -> Framework:
 
 
 TONES = ("directive", "supportive", "reflective")
+
+
+def test_a_stages_when_stuck_line_is_sent_for_the_stage_and_the_next():
+    """Spec 0007, AC-4."""
+    block = context.build(_running_at("activate"), framework=framework()).splitlines()
+    assert "next_stage_when_stuck: Offer one distinction from their words." in block
+    block = context.build(_running_at("belief"), framework=framework()).splitlines()
+    assert "stage_when_stuck: Offer one distinction from their words." in block
 
 
 def test_the_turn_a_framework_starts_reaches_only_its_first_stage():
