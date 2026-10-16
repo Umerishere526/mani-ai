@@ -13,7 +13,7 @@ from mani.chat.greeting import (
     TRY_IT_LABEL,
 )
 from mani.chat.techniques import OFFERING, Registry
-from mani.llm.schema import SHAPES, Check, Moment, Offer, Reply, Slots, SmartPrompt, Style
+from mani.llm.schema import SHAPES, Check, Moment, Offer, OfferSlots, Reply, Slots, SmartPrompt, Style
 from mani.models.rows import Framework
 
 MAX_TITLE_LENGTH = 100
@@ -211,9 +211,12 @@ def body_branch(stages: dict, branch_id: str) -> dict | None:
     )
 
 
-def body_answer_fits(body: str, at: str, style: str) -> bool:
+def body_answer_fits(body: str, at: str, style: str, *, check_in_required: bool = False) -> bool:
     """Whether the reply's body value can come where the route is. Agreeing to notice answers only
-    the supportive check-in, the one that asks whether they would like to."""
+    the supportive check-in, the one that asks whether they would like to. An action they will take
+    skips the check-in only where the framework does not require it."""
+    if body == "acting" and check_in_required:
+        return False
     return at in _ANSWERED_AT.get(body, ()) and (body != "agreed" or style == "supportive")
 
 
@@ -300,26 +303,42 @@ def render_template(template: str, *, lead_line: str | None, slot: str | None) -
 
 
 def slots_for(registry: Registry, style: str, offered_id: str | None) -> Slots:
-    """What the slots ask for in this style: an offer's from the first set with an offer template,
-    and Keep chatting's from the set on the open offer."""
-    offer = next(
-        (t for fid in registry.ids if (t := _offering(registry.get(fid), "offer", style))), None
-    )
-    lead_line, going_through = template_slots(offer) if offer else (None, None)
+    """What the slots ask for in this style: each set's offer from its own template, and Keep
+    chatting's from the set on the open offer."""
+    offers = []
+    for fid in registry.ids:
+        template = _offering(registry.get(fid), "offer", style)
+        lead_line, going_through = template_slots(template) if template else (None, None)
+        if going_through:
+            offers.append(OfferSlots(framework_id=fid, going_through=going_through, lead_line=lead_line))
     keep = _offering(registry.get(offered_id), "keep_chatting", style)
-    return Slots(
-        going_through=going_through,
-        lead_line=lead_line,
-        their_words=template_slots(keep)[1] if keep else None,
-    )
+    return Slots(offers=tuple(offers), their_words=template_slots(keep)[1] if keep else None)
 
 
-def offer_framework(heading_toward: str | None, registry: Registry) -> str | None:
-    """The set an offer is for: the one the reply heads toward when it is active, otherwise the
-    only active set when there is just one, otherwise none (spec 0006, AC-8)."""
-    if heading_toward in registry:
-        return heading_toward
+def _filled(offer: Offer | None) -> bool:
+    return offer is not None and bool(_slot_value(offer.going_through) or _slot_value(offer.lead_line))
+
+
+def offer_framework(reply: Reply, registry: Registry) -> str | None:
+    """The set an offer is for: the one whose slots the reply filled, the one it heads toward when it
+    filled several; with none filled, the one it heads toward when it is active, otherwise the only
+    active set when there is just one, otherwise none (spec 0006, AC-8)."""
+    filled = [fid for fid, offer in (reply.offer or {}).items() if fid in registry and _filled(offer)]
+    if len(filled) == 1:
+        return filled[0]
+    if filled:
+        return reply.heading_toward if reply.heading_toward in filled else None
+    if reply.heading_toward in registry:
+        return reply.heading_toward
     return registry.ids[0] if len(registry) == 1 else None
+
+
+def _feeling_slot(framework: Framework | None, feeling: str | None) -> str | None:
+    """The feeling they named, as it reads in a set's slot ("feeling frustrated"), only for a set
+    whose offer declares it can stand in for an empty slot."""
+    offering = ((framework.stages or {}).get(OFFERING) or {}) if framework else {}
+    feeling = _slot_value(feeling)
+    return f"feeling {feeling}" if offering.get("feeling_fills_slot") and feeling else None
 
 
 def _offer_text(
@@ -327,11 +346,13 @@ def _offer_text(
     confirmed: bool, feeling: str | None,
 ) -> tuple[str | None, str | None]:
     """The client's offer for the set, with its slots filled, the feeling they named standing in
-    for an empty going_through. Otherwise None and why it could not be made."""
+    for an empty going_through where the set allows it. Otherwise None and why it could not be made."""
     framework = registry.get(framework_id)
     template = offer_template(framework, style)
     whole, _ = template_slots(template) if template else (None, None)
-    going_through = offer.going_through if _slot_value(offer.going_through) else feeling
+    going_through = (
+        offer.going_through if _slot_value(offer.going_through) else _feeling_slot(framework, feeling)
+    )
     if not confirmed:
         reason = "no yes to the check"
     elif framework is None:
@@ -436,9 +457,9 @@ def apply(
     prompts: list[SmartPrompt] = []
     offer_dropped: str | None = None
     if moment is Moment.CHECK_OPEN and (confirmed or reply.offer is not None) and not guarded:
-        framework_id = offer_framework(reply.heading_toward, registry)
+        framework_id = offer_framework(reply, registry)
         offer, offer_dropped = _offer_text(
-            reply.offer or Offer(), framework_id, registry, conversation_style,
+            (reply.offer or {}).get(framework_id) or Offer(), framework_id, registry, conversation_style,
             confirmed=confirmed, feeling=feeling,
         )
         if offer is not None:

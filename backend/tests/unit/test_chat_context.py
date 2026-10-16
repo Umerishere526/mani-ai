@@ -440,7 +440,7 @@ def test_no_check_until_the_problem_its_core_issue_and_their_control_are_all_fou
     core issue nor control. The steps are code's now (spec 0006, AC-2, AC-18): the next missing one is
     named in [ctx] in order, and the check field waits for all three."""
     steps = [{}, {"issue": FOUND["issue"]}, {k: FOUND[k] for k in ("issue", "core_issue")}, FOUND]
-    on = [_on_message(6, style="directive").thread.model_copy(update={"understanding": u}) for u in steps]
+    on = [_on_message(4, style="directive").thread.model_copy(update={"understanding": u}) for u in steps]
     contexts = [TurnContext(thread=t, profile=None, technique=None) for t in on]
     # The turn that receives their answer about control may carry the check; code stores it only if
     # that answer came (the orchestrator), so [ctx] says to check only once it is answered.
@@ -672,3 +672,48 @@ def test_reaching_b_carries_its_own_test_and_its_rule_for_several_beliefs():
     assert "next_stage_ready_when: A belief they have expressed in their own language. If several appear" in block
     assert "next_stage_reach: Where several beliefs appear, report belief as partial with each in their words" in block
     assert "stage_reach:" not in context.build(_running_at("belief"), framework=abcde).replace("next_stage_reach:", "")
+
+
+# The deadline: from their CHECK_DUE_AT-th message the reply checks with whatever it has (spec 0006, AC-11).
+
+def _due_ctx(person_message: int, **update) -> TurnContext:
+    on = _on_message(person_message, style="directive")
+    return TurnContext(thread=on.thread.model_copy(update=update), profile=None, technique=None)
+
+
+def test_a_check_is_due_from_their_fifth_message_whatever_is_stored():
+    """muhammad's feeling level chat, thread 8f03e7bf, 2026-10-15: only the problem was ever stored and
+    about twenty messages passed with no check."""
+    only_the_problem = {"understanding": {"issue": FOUND["issue"]}}
+    assert [context.check_due(_due_ctx(n, **only_the_problem)) for n in (3, 4, 5, 6, 20)] == [
+        False, False, True, True, True,
+    ]
+    assert context.check_due(_due_ctx(5))
+
+
+def test_a_due_turn_is_told_to_check_and_never_to_ask_the_next_step():
+    block = context.build(_due_ctx(5, understanding={"issue": FOUND["issue"]}))
+    assert "check: may_check" in block
+    assert "understanding_next" not in block
+    before = context.build(_due_ctx(4, understanding={"issue": FOUND["issue"]}))
+    assert "understanding_next: core_issue" in before and "check:" not in before
+    concern = context.build(_due_ctx(5, understanding={"issue": FOUND["issue"]}), safety_concern=True)
+    assert "check:" not in concern and "understanding_next" not in concern
+
+
+def test_a_check_is_not_due_while_one_waits_inside_its_cooldown_or_after_an_offer():
+    # Mani's check, made in reply to their 6th message, is stored at the count after that reply.
+    checked_at = _on_message(6).thread.message_count + 2
+    waiting = _due_ctx(7, check_at_message_count=checked_at)
+    assert context.check_open(waiting) and not context.check_due(waiting)
+    inside_cooldown = _due_ctx(9, check_at_message_count=checked_at)
+    assert not context.check_due(inside_cooldown)
+    after_cooldown = _due_ctx(10, check_at_message_count=checked_at)
+    assert context.check_due(after_cooldown), "a no leaves the next check three exchanges away"
+    offered = _due_ctx(6)
+    offered = TurnContext(thread=offered.thread, profile=None, technique=None, techniques_offered=["abcde"])
+    assert not context.check_due(offered)
+    declined = TurnContext(thread=offered.thread, profile=None, techniques_offered=["abcde"], technique=TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED, phase=None, at_message_count=3,
+    ))
+    assert not context.check_due(declined), "after Keep chatting the person is not pushed to another check"

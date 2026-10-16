@@ -6,12 +6,13 @@ from __future__ import annotations
 import re
 import uuid
 import zlib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from mani.chat import repairs
 from mani.chat.techniques import OFFERING
 from mani.llm.schema import NextStage, StageUpdate
-from mani.models.rows import ENDING_STAGES, Framework
+from mani.models.rows import ENDING_STAGES, Framework, SupportStyle
 
 # Lowest first. A stage with no status is missing, below all of them.
 STATUSES = ("partial", "possible", "known", "done")
@@ -28,6 +29,7 @@ CONFIRM_ASK = (
     "your own words whether that is right, in one or two sentences, asked differently from the stage before."
 )
 _LETTER_LINE = re.compile(r"^\s*[A-E] is for\b")
+_SENTENCES = re.compile(r"(?<=[.!?])\s+")
 # "I" and its contractions keep their capital inside a sentence; nothing else that starts their words does.
 _FIRST_PERSON = re.compile(r"^I\b")
 
@@ -62,6 +64,23 @@ def _mid_sentence(words: str | None) -> str | None:
 
 def _client_line(framework: Framework, stage: str, key: str, style: str) -> str | None:
     return (((framework.stages or {}).get(stage) or {}).get(key) or {}).get(style)
+
+
+def _opening_lines(framework: Framework) -> list[str]:
+    """The sentences code sends to open a framework and its stages, lowercased and without their
+    full stop: the begin line in each style, and each stage's intro and title."""
+    stages = framework.stages or {}
+    lines = [_client_line(framework, OFFERING, "begin", style) for style in SupportStyle]
+    lines += [(stages.get(stage) or {}).get(key) for stage in content_stages(framework) for key in ("intro", "title")]
+    sentences = {sentence.strip().rstrip(".").lower() for line in lines if line for sentence in _SENTENCES.split(line)}
+    return [sentence for sentence in sentences if sentence]
+
+
+def _sent_for_them(framework: Framework) -> Callable[[str], bool]:
+    """Whether a sentence of the model's is one code sends itself: a letter line, or one carrying a
+    begin line, an intro or a title of this framework."""
+    lines = _opening_lines(framework)
+    return lambda sentence: bool(_LETTER_LINE.match(sentence)) or any(line in sentence.lower() for line in lines)
 
 
 @dataclass(frozen=True)
@@ -128,6 +147,8 @@ class Walked:
     # A stage was reached and the reply did not judge it, so its text was not written for it and the
     # client's question is sent: logged apart from a stage judged missing, which Mani asks itself.
     unjudged: bool = False
+    # They asked to stop: the run ends here and the reply returns to the conversation.
+    stopped: bool = False
 
 
 def _reach(
@@ -183,7 +204,8 @@ def advance(
 ) -> Walked:
     """A turn on the stage in force: merge what they said for it and any correction to an earlier
     stage, move at most one phase, then merge the stage reached from this turn's `report` of it,
-    which is ignored when the walk stays. A second not_yet in a row moves on as let_go.
+    which is ignored when the walk stays. A second not_yet in a row moves on as let_go; stop ends
+    the walk where it is.
     `body_answered` is a body route answer at the closing, which wins over the stage answer. Nothing
     is stored for a stage before it is reached, and an entry stored ahead by an earlier version is
     ignored, so no stale words are said back."""
@@ -204,6 +226,8 @@ def advance(
         answer = "agreed"
     merged = merge(base, now, framework, in_force=in_force)
     notes += merged.notes
+    if answer == "stop" and not body_answered:
+        return Walked(merged.entries, in_force, None, notes + [f"stopped at {in_force}"], stopped=True)
     tries = before.get("tries", 0)
     if body_answered:
         if answer is not None:
@@ -252,18 +276,22 @@ def reply_text(
     style: str,
     thread_id: uuid.UUID | str,
     feeling: str | None,
+    starting: bool = False,
 ) -> tuple[str, list[str]]:
-    """The reply and the fallbacks it took. A stage just reached opens with its letter line, then
-    what its stored status calls for; otherwise it is the model's text. Every stage reached is one
-    [ctx] told the reply about, so once the reply judged it, the model's text is used for it when it
-    asks something: a confirmation, the gap, or its question about their situation. A stage missing
-    keeps the client's own line where it has one with their feeling word (A), and a stage left
-    unjudged gets the client's line. A letter line the model wrote is dropped either way."""
+    """The reply and the fallbacks it took. A stage just reached opens with its intro line, then
+    what its stored status calls for; otherwise it is the model's text. On the turn the framework
+    starts, its begin line comes first, in a paragraph of its own. Every stage reached is one [ctx]
+    told the reply about, so once the reply judged it, the model's text is used for it when it asks
+    something: a confirmation, the gap, or its question about their situation. A stage missing keeps
+    the client's own line where it has one with their feeling word, and a stage left unjudged gets
+    the client's line. An opening line the model wrote is dropped either way."""
     notes: list[str] = []
-    own = repairs.without_sentences(text, lambda s: bool(_LETTER_LINE.match(s))).strip()
+    own = repairs.without_sentences(text, _sent_for_them(framework)).strip()
     if own != text.strip():
-        notes.append("dropped a letter line")
+        notes.append("dropped an opening line")
     reached = walked.reached
+    if walked.stopped:
+        return own, notes
     if reached is None:
         if not own and walked.phase in content_stages(framework):
             notes.append("stay text empty")
@@ -304,7 +332,9 @@ def reply_text(
             body = ask
     intro = ((framework.stages or {}).get(reached) or {}).get("intro")
     # One paragraph, as the client's document writes it: "A is for Activating Event. You've mentioned..."
-    return " ".join(part for part in (intro, body) if part), notes
+    opened = " ".join(part for part in (intro, body) if part)
+    begin = _client_line(framework, OFFERING, "begin", style) if starting else None
+    return "\n\n".join(part for part in (begin, opened) if part), notes
 
 
 def _gap_line(framework: Framework, entries: dict[str, dict], stage: str, gap: str | None) -> str | None:
@@ -342,7 +372,7 @@ def reach_line(stage: str) -> str:
     return (
         f"your text follows what you report for {stage} in next_stage. Known or possible: your text is "
         f"its confirmation. {CONFIRM_ASK} Partial: your text asks only for what is missing, built on "
-        f"what they said. Missing: your text is only the question, since its letter line is sent for you; "
+        f"what they said. Missing: your text is only the question, since its opening lines are sent for you; "
         f"ask next_stage_ask as written, with what it refers to in their words."
     )
 

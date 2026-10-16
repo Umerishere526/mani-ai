@@ -22,9 +22,9 @@ from mani.models.rows import (
 # Mani may check its understanding again: three of its replies (muhammad, 2026-09-24).
 COOLDOWN_AFTER_DECLINE = 6
 
-# The message by which a check is expected, "two to four exchanges" in the client's cadence. Only
-# logged when it passes without one, never sent to the model (spec 0006, AC-11).
-CHECK_EXPECTED_BY = 5
+# Their message from which a check is due, "two to four exchanges" in the client's cadence plus one.
+# From here the reply must check, with whatever the conversation has given (spec 0006, AC-11).
+CHECK_DUE_AT = 5
 # The greeting, the style they tapped, and that style's opener.
 OPENING_MESSAGES = 3
 COOLDOWN_AFTER_COMPLETE = 45
@@ -115,6 +115,19 @@ def check_open(ctx: TurnContext) -> bool:
     Any later turn finds it used, whatever happened on this one (spec 0006)."""
     at = ctx.thread.check_at_message_count
     return at is not None and at == ctx.thread.message_count and live(ctx.technique) is None
+
+
+def check_due(ctx: TurnContext) -> bool:
+    """Whether this reply must check Mani's understanding: they are still being understood, nothing
+    offered and no framework live, no check waits for its answer, the cooldown after the last check has
+    passed, and it is their CHECK_DUE_AT-th message or later. Owned by code, so a person whose answers
+    never show a core issue still reaches the check, and their yes or no is what decides (spec 0006)."""
+    if ctx.technique is not None or ctx.techniques_offered or check_open(ctx):
+        return False
+    at = ctx.thread.check_at_message_count
+    if at is not None and ctx.thread.message_count - at < COOLDOWN_AFTER_DECLINE:
+        return False
+    return their_messages(ctx) >= CHECK_DUE_AT
 
 
 def may_check(ctx: TurnContext) -> bool:
@@ -210,9 +223,9 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "not, ask about control and leave check empty."
         ),
         "may_check": (
-            "the problem, its core issue and what is in their control are all found. Check your "
-            "understanding with them now by filling check, from their words only. Never add anything "
-            "they did not say."
+            "check your understanding with them now by filling check, from their words only: the problem, "
+            "what it seems to come down to underneath, and what is in their control if they said "
+            "anything about it. Never add anything they did not say."
         ),
         "open": (
             "your last reply checked your understanding. Set check_answer. A clear yes always brings the "
@@ -232,8 +245,7 @@ _MEANING: dict[str, str | dict[str, str]] = {
         ),
         "core_issue": (
             "the problem is clear, what lies under it is not. Ask plainly: what usually happens next, "
-            "what falls on them, or what keeps it going. A feeling, such as not being enough, is not yet "
-            "the core issue: ask what makes them feel it or what keeps it going. Once their answers show "
+            "what falls on them, or what keeps it going. Once their answers show "
             "the core issue, offer it in your reply as your understanding, report it, and ask what is in "
             "their control. They don't need to name it themselves."
         ),
@@ -353,8 +365,9 @@ def build(
     understood = understanding.render(ctx.thread.understanding)
     if understood:
         lines += _line("understanding", understood)
+    due = check_due(ctx) and not safety_concern
     step = understanding.next_step(ctx.thread.understanding)
-    if step and live(ctx.technique) is None and not safety_concern:
+    if step and live(ctx.technique) is None and not safety_concern and not due:
         lines += _line("understanding_next", step)
     if offer_waiting:
         # Mani's last reply was an offer, and they typed rather than tapped.
@@ -368,6 +381,8 @@ def build(
     if not safety_concern:
         if check_open(ctx):
             lines += _line("check", "open")
+        elif due:
+            lines += _line("check", "may_check")
         elif may_check(ctx):
             waiting = understanding.next_step(ctx.thread.understanding) == "control"
             lines += _line("check", "once_control_is_answered" if waiting else "may_check")
@@ -482,11 +497,16 @@ def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> l
         lines.append(f"{prefix}_reach: {stage['reach']}")
     if stage.get("boundaries"):
         lines.append(f"{prefix}_boundaries: " + "; ".join(stage["boundaries"]))
-    if stage.get("if_unclear"):
+    # A framework that requires the body check-in never skips it for an action they name.
+    branches = [
+        e for e in stage.get("if_unclear") or []
+        if not (e.get("id") == "acting" and framework.check_in_required)
+    ]
+    if branches:
         # A body route branch is shown by its id, which the reply names in `body`: code sends its text.
         rendered = " | ".join(
             f"{e['id']}: {e['when']}" if e.get("id") else f"if {e['when']}: {repairs.reply_for(e, style)}"
-            for e in stage["if_unclear"]
+            for e in branches
         )
         lines.append(f"{prefix}_if_unclear: {rendered}")
     ask = (stage.get("ask") or {}).get(style)

@@ -6,6 +6,9 @@ from __future__ import annotations
 import json
 
 from scripts import scenario_check
+from scripts.seed import FRAMEWORKS_DIR
+
+SEEDED = [path.stem for path in FRAMEWORKS_DIR.glob("*.md")]
 
 
 def test_a_check_before_the_conversation_says_how_it_is_is_flagged_on_that_message():
@@ -33,6 +36,7 @@ def test_every_conversation_in_the_file_has_lines_and_expectations_that_can_be_m
         assert conversation["lines"], name
         assert earliest >= scenario_check.EARLIEST_CHECK, name
         assert expect.get("check_by", len(conversation["lines"])) >= earliest, name
+        assert expect.get("offers") in (None, *SEEDED), name
 
 
 def test_mani_talking_about_the_person_instead_of_to_them_is_flagged():
@@ -87,13 +91,17 @@ def test_a_stage_reached_without_its_letter_line_or_a_known_stage_asked_is_flagg
     on_a = trace("activate", "missing")
     assert scenario_check.stage_flags("A is for Activating Event. What happened?", on_a, None, stages, "supportive") == []
     assert scenario_check.stage_flags("What happened?", on_a, None, stages, "supportive") == [
-        "stage reply without its letter line"]
+        "stage reply without its intro line"]
     assert scenario_check.stage_flags("Can you say more?", on_a, on_a, stages, "supportive") == [], "a stay has none"
     known_b = trace("belief", "known")
     assert scenario_check.stage_flags(
         "B is for Belief. What did you tell yourself?", known_b, on_a, stages, "supportive",
     ) == ["asked a stage already known"]
     assert scenario_check.stage_flags("Anything", None, on_a, stages, "supportive") == []
+    begun = {**stages, "offering": {"begin": {"supportive": "Let's begin."}}}
+    assert scenario_check.stage_flags(
+        "Let's begin.\n\nA is for Activating Event. What happened?", on_a, None, begun, "supportive",
+    ) == [], "the begin line comes before the first intro on Try it"
 
 
 # Mani's five replies in the client's way of communication sample, word for word (2026-10-13).

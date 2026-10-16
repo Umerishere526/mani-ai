@@ -142,9 +142,10 @@
     }
   },
   "answering_the_offer": {
-    "about": "Spec 0003, AC-11: what follows the offer, written by Claude on 2026-10-12. The opening lines are resentful_coworker's; Mani's check is answered yes, and after_offer is sent once ABCDE is offered.",
+    "about": "Spec 0003, AC-11: what follows the offer, written by Claude on 2026-10-12. The opening lines are resentful_coworker's; Mani's check is answered yes, and after_offer is sent once ABCDE is offered, and its lines answer ABCDE's stages.",
     "expect": {
-      "check_by": 5
+      "check_by": 5,
+      "offers": "abcde"
     },
     "conversations": {
       "says_no": {
@@ -221,7 +222,7 @@
     }
   },
   "pinpoint_and_check": {
-    "about": "Spec 0006: Mani pinpoints the problem and its core issue, then checks its understanding in its own words, using only theirs. A yes brings the offer; anything else keeps the conversation going. Every set offered is ABCDE while it is the only active one.",
+    "about": "Spec 0006: Mani pinpoints the problem and its core issue, then checks its understanding in its own words, using only theirs. A yes brings the offer; anything else keeps the conversation going. With ABCDE and Thought Reframe active, the set offered follows the cheat sheet, ABCDE first when both fit equally.",
     "expect": {},
     "conversations": {
       "client_sample": {
@@ -242,7 +243,10 @@
           "I'm frustrated because my boss criticized my work today, and now I'm questioning whether I'm actually good at my job.",
           "It makes me feel like all the effort I put in doesn't count for anything.",
           "I'm not sure what I can do about it."
-        ]
+        ],
+        "expect": {
+          "offers": "abcde"
+        }
       },
       "cheat_sheet_problem_solving": {
         "source": "the client's Framework Selection Cheat Sheet, Example 1, its opening and its Structured Problem-Solving line, word for word; ABCDE is offered for now (muhammad, 2026-10-13); lines 3 and 4 written by Claude on 2026-10-13 to answer the core issue and control questions",
@@ -323,7 +327,8 @@
           "i think i going to rise this concern with him and involve the HR department as well. this is work abuse i was wrong to have started this culture and my team and i are paying for it."
         ],
         "expect": {
-          "check_from": 3
+          "check_from": 3,
+          "offers": "abcde"
         },
         "after_offer": {
           "answer": "yes",
@@ -357,7 +362,8 @@
         ],
         "check_answer": "bulls eye",
         "expect": {
-          "check_from": 6
+          "check_from": 6,
+          "offers": "abcde"
         },
         "after_offer": {
           "answer": "yes",
@@ -378,6 +384,91 @@
             "dispute": "said back",
             "effective": "asked"
           }
+        }
+      }
+    }
+  },
+  "thought_reframe_cadence": {
+    "about": "The client's Thought Reframe document, 2026-10-15, and the cheat sheet's Thought Reframe lines: one persistent, painful thought. A yes to the check offers Thought Reframe; Try it opens with the begin line, then Step 1, and each step is named as it is reached.",
+    "expect": {
+      "offers": "thought_reframe"
+    },
+    "conversations": {
+      "client_overwhelmed": {
+        "source": "line 1 is the opening of the client's Thought Reframe document word for word; lines 2 and 3 are its manager example (Step 1, Situation 1, and the Step 2 answer); line 4 written by Claude on 2026-10-15 to answer the control question",
+        "lines": [
+          "I'm just overwhelmed, anxious, and don't feel like I'm handling things well.",
+          "My manager has stopped including me in meetings, and I've started thinking my manager no longer trusts me.",
+          "I'm worried it means my manager doesn't value my work, and that could affect my future opportunities.",
+          "I can't control who gets invited, but I could ask my manager about it."
+        ],
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Try it",
+            "Yes, that's the thought.",
+            "My manager used to invite me to every meeting, and now I'm being left out. That's why I think something has changed.",
+            "Maybe the meetings are being organized differently. I hadn't really considered that.",
+            "I know I've been excluded from meetings, but I don't actually know why. Maybe I need to find out more before assuming my manager doesn't trust me.",
+            "It's tight in my chest."
+          ],
+          "stages": {
+            "thought": "said back",
+            "painful": "said back"
+          }
+        }
+      },
+      "cheat_sheet_never_good_enough": {
+        "source": "the client's Framework Selection Cheat Sheet, Example 1, its opening and its Thought Reframe line, word for word; lines 3 and 4 written by Claude on 2026-10-15 to answer the core issue and control questions",
+        "lines": [
+          "I'm frustrated at work.",
+          "I keep thinking that no matter how hard I work, I'll never be good enough.",
+          "It's been on my mind for months, whatever I finish it never feels like it counts.",
+          "I don't know what I could change about it."
+        ]
+      },
+      "cheat_sheet_impossible_to_love": {
+        "source": "the client's Framework Selection Cheat Sheet, Example 2, its opening and its Thought Reframe line, word for word; lines 3 and 4 written by Claude on 2026-10-15 to answer the core issue and control questions",
+        "lines": [
+          "I'm having problems in my relationship.",
+          "I keep thinking I'm impossible to love and that every relationship I have will fail.",
+          "It makes me pull back before anyone can get close, because I'm sure it will end anyway.",
+          "I guess I could choose whether I keep pulling away, but I'm not sure."
+        ]
+      }
+    }
+  },
+  "feeling_level_only": {
+    "about": "Their answers stay at the level of a feeling or an identity ('I'm a failure', 'shameful'), so Mani never finds a core issue by asking. The check still comes by their 5th message, from what they said, and a yes brings an offer; a no keeps the conversation going toward the root.",
+    "expect": {
+      "check_by": 5,
+      "check_from": 3
+    },
+    "conversations": {
+      "exams_failure": {
+        "source": "muhammad's Directive tester run, thread 8f03e7bf, 2026-10-15: the person's first six lines word for word; Mani asked about twenty questions and never checked",
+        "lines": [
+          "I'm a failure and I'll never amount to anything",
+          "i failed my exams even though i worked hard, studied all day but it still amount to nothing",
+          "all of them",
+          "i have disappointed my parents and now they will not be able to face the security due to my failures",
+          "sorry society",
+          "all the friends and cousins passed with flying colors. only i failed."
+        ]
+      },
+      "exams_failure_says_no": {
+        "source": "the same lines as exams_failure, the check answered no by Claude on 2026-10-15",
+        "lines": [
+          "I'm a failure and I'll never amount to anything",
+          "i failed my exams even though i worked hard, studied all day but it still amount to nothing",
+          "all of them",
+          "i have disappointed my parents and now they will not be able to face the security due to my failures",
+          "sorry society",
+          "all the friends and cousins passed with flying colors. only i failed."
+        ],
+        "check_answer": "no, that's not quite it",
+        "expect": {
+          "check_confirms": false
         }
       }
     }

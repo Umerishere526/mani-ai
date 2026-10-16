@@ -2,7 +2,7 @@
 # ABOUTME: Spec 0005: a null keeps what is stored, a value replaces it on one line. Spec 0006: steps in order.
 
 from mani.chat import understanding
-from mani.llm.schema import UnderstandingUpdate
+from mani.llm.schema import Check, UnderstandingUpdate
 
 STORED = {"feeling": "frustrated", "issue": "my client keeps changing the requirements"}
 
@@ -72,3 +72,28 @@ def test_a_stored_check_keeps_what_it_came_down_to():
     merged = understanding.merge_check({"issue": "x", "core_issue": "y"}, check)
     assert merged["comes_down_to"] == "You want to undo the overtime culture you feel you started."
     assert "comes_down_to: You want to undo" in understanding.render(merged)
+
+
+def _check(**parts) -> Check:
+    return Check(**({
+        "problem": "You failed your exams", "core_issue": "You feel you have shamed them",
+        "in_their_control": "", "question": "Have I understood you right",
+    } | parts))
+
+
+def test_a_check_at_the_deadline_may_leave_control_out_but_never_the_core_issue():
+    """Spec 0006, AC-11: control they never said is left out, never invented."""
+    assert not understanding.usable(_check())
+    assert understanding.usable(_check(), due=True)
+    assert not understanding.usable(_check(core_issue=" "), due=True)
+    assert not understanding.usable(None, due=True)
+
+
+def test_a_check_at_the_deadline_stores_only_a_problem_that_is_missing_and_never_its_guesses():
+    guess = _check(in_their_control="you could ask them", comes_down_to="it comes down to shame")
+    assert understanding.merge_due_check({}, guess) == {"issue": "You failed your exams"}
+    assert understanding.merge_due_check({"issue": "your parents expected more"}, guess) == {
+        "issue": "your parents expected more"
+    }
+    kept = {"issue": "x", "feeling": "depressed"}
+    assert understanding.merge_due_check(kept, guess) == kept

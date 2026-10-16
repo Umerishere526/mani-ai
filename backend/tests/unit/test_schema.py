@@ -1,9 +1,12 @@
 # ABOUTME: Checks the reply shape sent each turn is chosen by the moment, and that a loose value
 # ABOUTME: is read as null rather than failing the turn, which would cost a call and the message.
 
-from mani.llm.schema import Moment, Reply, Slots, as_reply, reply_for
+from mani.llm.schema import Moment, OfferSlots, Reply, Slots, as_reply, reply_for
 
-SLOTS = Slots(going_through="what they are going through", lead_line="a warm line", their_words="their words")
+SLOTS = Slots(
+    offers=(OfferSlots("abcde", going_through="what they are going through", lead_line="a warm line"),),
+    their_words="their words",
+)
 CORE = {"reasoning", "style", "understanding_update", "heading_toward", "text", "title", "crisis"}
 # Where a stage can be answered or a yes can start one (spec 0004).
 STAGE = {"stage_updates", "stage_answer"}
@@ -29,15 +32,41 @@ def test_each_moment_carries_only_the_fields_that_mean_something_in_it():
     assert fields(Moment.BODY, on_closing=True) == CORE | {"body", *STAGE}, "the body route follows the closing"
 
 
+def test_a_due_check_is_not_nullable_and_otherwise_stays_optional():
+    """Spec 0006, AC-11: at the deadline the reply is the check; before it the field can stay null."""
+    due = reply_for(Moment.CHATTING, slots=SLOTS, check_due=True)
+    optional = reply_for(Moment.CHATTING, slots=SLOTS, may_check=True)
+    assert due.model_fields["check"].is_required() and not optional.model_fields["check"].is_required()
+    assert "check" not in reply_for(Moment.CHATTING, slots=SLOTS).model_fields
+    assert "check" not in reply_for(Moment.CONCERN, slots=SLOTS, check_due=True).model_fields
+
+
 def test_the_offer_slots_are_described_in_the_clients_words_and_a_style_without_a_lead_line_has_none():
     supportive = reply_for(Moment.CHECK_OPEN, slots=SLOTS).model_json_schema()
-    offer = supportive["$defs"]["Offer"]["properties"]
+    offer = supportive["$defs"]["OfferAbcde"]["properties"]
     assert offer["going_through"]["description"] == "what they are going through"
     assert offer["lead_line"]["description"] == "a warm line"
     directive = reply_for(
-        Moment.CHECK_OPEN, slots=Slots(going_through="what they are going through"),
+        Moment.CHECK_OPEN, slots=Slots(offers=(OfferSlots("abcde", going_through="what they are going through"),)),
     ).model_json_schema()
-    assert set(directive["$defs"]["Offer"]["properties"]) == {"going_through"}
+    assert set(directive["$defs"]["OfferAbcde"]["properties"]) == {"going_through"}
+
+
+def test_each_set_offers_only_its_own_slots_so_one_sets_words_never_fill_anothers():
+    both = Slots(offers=(
+        OfferSlots("abcde", going_through="their feeling"),
+        OfferSlots("thought_reframe", going_through="the thought troubling them"),
+    ))
+    schema = reply_for(Moment.CHECK_OPEN, slots=both).model_json_schema()
+    assert set(schema["$defs"]["Offer"]["properties"]) == {"abcde", "thought_reframe"}
+    assert schema["$defs"]["OfferAbcde"]["properties"]["going_through"]["description"] == "their feeling"
+    assert schema["$defs"]["OfferThoughtReframe"]["properties"]["going_through"]["description"] == (
+        "the thought troubling them"
+    )
+    parsed = reply_for(Moment.CHECK_OPEN, slots=both).model_validate(
+        {"text": "t", "offer": {"abcde": None, "thought_reframe": {"going_through": "you never get it right"}}}
+    )
+    assert as_reply(parsed).offer["thought_reframe"].going_through == "you never get it right"
 
 
 def test_mani_writes_its_text_before_reading_the_person_into_fields():

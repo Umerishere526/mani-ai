@@ -170,6 +170,11 @@ class Framework(Row):
         """The last stage before the body route: where the person says whether it helped."""
         return next((p for p in reversed(self.phases) if p not in ENDING_STAGES), None)
 
+    @property
+    def check_in_required(self) -> bool:
+        """Whether the body check-in follows the closing even when they name an action they will take."""
+        return bool((self.stages.get(self.closing) or {}).get("check_in_required"))
+
 
 class Prompt(Row):
     id: uuid.UUID

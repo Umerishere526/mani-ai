@@ -135,8 +135,8 @@ SUPPORTIVE_OFFER = (
 )
 
 
-def offering(**slots) -> Reply:
-    return reply(text="Model's own words.", heading_toward="abcde", offer=Offer(**slots))
+def offering(framework_id: str = "abcde", **slots) -> Reply:
+    return reply(text="Model's own words.", heading_toward=framework_id, offer={framework_id: Offer(**slots)})
 
 
 def yes_to_the_check(registry, model_reply, **overrides):
@@ -173,8 +173,8 @@ def test_a_slot_loses_its_quotes_and_trailing_punctuation_and_keeps_its_case(cli
 
 
 @pytest.mark.parametrize(("change", "reason"), [
-    ({"offer": Offer(going_through="  ")}, "no going_through"),
-    ({"offer": Offer(going_through="feeling used")}, "no lead_line"),
+    ({"offer": {"abcde": Offer(going_through="  ")}}, "no going_through"),
+    ({"offer": {"abcde": Offer(going_through="feeling used")}}, "no lead_line"),
 ])
 def test_an_offer_that_cannot_be_made_sends_the_models_text_alone(client_abcde, change, reason):
     unusable = offering(lead_line="A line.", going_through="feeling used").model_copy(update=change)
@@ -191,20 +191,24 @@ def test_with_one_active_set_a_yes_offers_it_whatever_the_reply_heads_toward(cli
     assert fixed.prompts[0].technique == "abcde"
 
 
-def test_with_several_active_sets_an_offer_needs_the_one_the_reply_heads_toward(client_abcde):
-    unsure = offering(going_through="feeling used").model_copy(update={"heading_toward": None})
-    fixed = yes_to_the_check(Registry([client_abcde, REFRAMING]), unsure, conversation_style="directive")
+def test_with_several_active_sets_an_offer_needs_the_one_the_reply_filled_or_heads_toward(client_abcde):
+    both = Registry([client_abcde, REFRAMING])
+    unsure = reply(text="Model's own words.", heading_toward=None)
+    fixed = yes_to_the_check(both, unsure, conversation_style="directive", feeling="frustrated")
     assert (fixed.text, fixed.offer_dropped) == ("Model's own words.", "no framework")
+    filled = offering(going_through="feeling used").model_copy(update={"heading_toward": None})
+    assert yes_to_the_check(both, filled, conversation_style="directive").prompts[0].technique == "abcde"
 
 
 def test_an_empty_going_through_is_filled_from_the_feeling_they_named(client_abcde):
     """Spec 0006, AC-8: the offer is not dropped for a slot the stored understanding can fill,
-    nor when the yes turn's reply forgot the offer field altogether."""
+    nor when the yes turn's reply forgot the offer field altogether. The feeling is stored as their
+    word ("frustrated"), so it goes in as "feeling frustrated"."""
     for model_reply in (offering(going_through=" "), reply(text="Model's own words.", heading_toward="abcde")):
         fixed = yes_to_the_check(
-            Registry([client_abcde]), model_reply, conversation_style="directive", feeling="your frustration",
+            Registry([client_abcde]), model_reply, conversation_style="directive", feeling="frustrated",
         )
-        assert "the thoughts behind your frustration," in fixed.text, model_reply
+        assert "the thoughts behind feeling frustrated," in fixed.text, model_reply
 
 
 def test_no_offer_without_a_yes_to_the_check_or_for_a_set_without_a_template(client_abcde):
@@ -212,7 +216,7 @@ def test_no_offer_without_a_yes_to_the_check_or_for_a_set_without_a_template(cli
     slots = {"lead_line": "A line.", "going_through": "feeling used"}
     unconfirmed = fix(both, offering(**slots), moment=Moment.CHECK_OPEN)
     assert (unconfirmed.text, unconfirmed.offer_dropped) == ("Model's own words.", "no yes to the check")
-    no_template = offering(**slots).model_copy(update={"heading_toward": "thought_reframing"})
+    no_template = offering("thought_reframing", **slots)
     assert yes_to_the_check(both, no_template).offer_dropped == "no template"
 
 
@@ -236,10 +240,11 @@ def test_once_told_more_the_offer_comes_back_with_two_buttons():
 
 def test_the_slot_descriptions_are_the_clients_placeholders(client_abcde):
     directive = repairs.slots_for(Registry([client_abcde]), "directive", "abcde")
-    assert directive.lead_line is None
-    assert directive.going_through.startswith("their feeling from understanding as a short noun phrase")
+    (abcde,) = directive.offers
+    assert abcde.framework_id == "abcde" and abcde.lead_line is None
+    assert abcde.going_through.startswith("their feeling from understanding as a short noun phrase")
     assert directive.their_words == "what they said they are struggling with, in their words"
-    assert repairs.slots_for(Registry([client_abcde]), "supportive", None).lead_line.startswith(
+    assert repairs.slots_for(Registry([client_abcde]), "supportive", None).offers[0].lead_line.startswith(
         "A short warm line"
     )
 
@@ -414,3 +419,74 @@ def test_a_reply_not_laid_out_goes_as_written(registry):
     """A stage reply keeps the one paragraph the client's ABCDE document writes."""
     written = CLIENT_LAYOUT[1].replace("\n\n", " ")
     assert fix(registry, reply(text=written)).text == written
+
+
+# ABCDE and Thought Reframe active together, from the files that are seeded (2026-10-15).
+
+@pytest.fixture(scope="module")
+def client_reframe() -> Framework:
+    parsed = parse_framework(FRAMEWORKS_DIR / "thought_reframe.md")
+    return Framework(
+        id=parsed["id"], name=parsed["name"], summary=parsed["summary"], body="b",
+        phases=parsed["phases"], activation=parsed["activation"], stages=parsed["stages"],
+    )
+
+
+@pytest.mark.parametrize("style", ["directive", "supportive", "reflective"])
+def test_abcdes_offer_slots_read_the_same_with_thought_reframe_active(client_abcde, client_reframe, style):
+    alone = repairs.slots_for(Registry([client_abcde]), style, None).offers
+    both = repairs.slots_for(Registry([client_abcde, client_reframe]), style, None).offers
+    assert both[0] == alone[0]
+    assert [o.framework_id for o in both] == ["abcde", "thought_reframe"]
+
+
+def test_a_thought_reframe_offer_is_its_own_template_then_the_permission_question_and_no_steps(
+    client_abcde, client_reframe,
+):
+    fixed = yes_to_the_check(
+        Registry([client_abcde, client_reframe]),
+        offering("thought_reframe", going_through="you are not handling things well"),
+        conversation_style="directive",
+    )
+    assert fixed.text == (
+        "When you say you are not handling things well, Thought Reframe can help us understand what is "
+        "behind that thought and consider another way of thinking about it.\n\nWould you like to try it?"
+    )
+    assert fixed.prompts[0].technique == "thought_reframe"
+
+
+@pytest.mark.parametrize("heading_toward", [None, "abcde"])
+def test_a_thought_reframe_slot_never_fills_abcdes_template(client_abcde, client_reframe, heading_toward):
+    """The set is the one whose slots were filled, so their thought is never read as a feeling."""
+    model_reply = offering("thought_reframe", going_through="you never get anything right").model_copy(
+        update={"heading_toward": heading_toward}
+    )
+    fixed = yes_to_the_check(Registry([client_abcde, client_reframe]), model_reply, conversation_style="directive")
+    assert fixed.text.startswith("When you say you never get anything right, Thought Reframe")
+    assert "ABCDE" not in fixed.text
+
+
+def test_with_both_sets_filled_the_one_it_heads_toward_is_offered_with_its_own_words(client_abcde, client_reframe):
+    model_reply = reply(
+        text="Model's own words.", heading_toward="abcde",
+        offer={"abcde": Offer(going_through="your frustration"),
+               "thought_reframe": Offer(going_through="you never get anything right")},
+    )
+    fixed = yes_to_the_check(Registry([client_abcde, client_reframe]), model_reply, conversation_style="directive")
+    assert "the thoughts behind your frustration," in fixed.text
+    assert "never get anything right" not in fixed.text
+
+
+def test_the_feeling_never_stands_in_for_the_thought_thought_reframe_asks_for(client_abcde, client_reframe):
+    fixed = yes_to_the_check(
+        Registry([client_abcde, client_reframe]), offering("thought_reframe", going_through=" "),
+        conversation_style="directive", feeling="frustrated",
+    )
+    assert (fixed.text, fixed.offer_dropped) == ("Model's own words.", "no going_through")
+
+
+def test_an_action_they_name_skips_the_body_check_in_after_abcde_but_never_after_thought_reframe():
+    """The client's Thought Reframe document: the body check-in "must not be omitted"."""
+    assert repairs.body_answer_fits("acting", "closing", "directive")
+    assert not repairs.body_answer_fits("acting", "closing", "directive", check_in_required=True)
+    assert repairs.body_answer_fits("declined", "somatic_checkin", "directive", check_in_required=True)

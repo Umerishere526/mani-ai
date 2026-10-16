@@ -1,4 +1,4 @@
-# ABOUTME: Checks the one seeded framework, ABCDE, carries what the client's ABCDE document asks for.
+# ABOUTME: Checks the seeded ABCDE framework carries what the client's ABCDE document asks for.
 # ABOUTME: Read from the framework file itself, the same structure that is seeded, so no database is needed.
 
 import re
@@ -26,8 +26,10 @@ def as_framework(parsed: dict) -> Framework:
     )
 
 
-def test_only_abcde_is_seeded():
-    assert [p.stem for p in FRAMEWORKS_DIR.glob("*.md")] == ["abcde"]
+def test_abcde_and_thought_reframe_are_seeded_abcde_first():
+    """The client's documents: ABCDE takes priority when both fit equally."""
+    seeded = sorted((parse_framework(p) for p in FRAMEWORKS_DIR.glob("*.md")), key=lambda f: f["display_order"])
+    assert [f["id"] for f in seeded] == ["abcde", "thought_reframe"]
 
 
 def test_abcde_runs_a_to_e_and_the_body_check_in_follows(abcde):
@@ -158,9 +160,12 @@ def test_an_open_offer_turn_costs_less_prompt_than_before_the_structured_fields(
     from scripts.seed import PROMPTS_DIR, load_somatic_stages, parse_prompt
 
     somatic = load_somatic_stages()
-    framework = as_framework({**abcde, "phases": abcde["phases"] + list(somatic),
-                              "stages": {**abcde["stages"], **somatic}})
-    registry = Registry([framework])
+    reframe = parse_framework(FRAMEWORKS_DIR / "thought_reframe.md")
+    framework, reframe_framework = (
+        as_framework({**parsed, "phases": parsed["phases"] + list(somatic), "stages": {**parsed["stages"], **somatic}})
+        for parsed in (abcde, reframe)
+    )
+    registry = Registry([framework, reframe_framework])
     prompts = {
         name: Prompt(id=uuid.uuid4(), name=name, content=parse_prompt(PROMPTS_DIR / f"{name}.md")["content"])
         for name in ("mani_base", "response_format", "style_supportive")

@@ -18,7 +18,7 @@ not summarize the framework at any point in this route.
 ```yaml
 stages:
   somatic_checkin:
-    purpose: "Check in with the body after the framework, without summarizing what was done. Ask the check-in question exactly as written, once; Mani's reflection of their last answer comes before it. If their closing answer already points to an action they are going to take, skip the check-in, support that action, and let the handoff capsules follow."
+    purpose: "Check in with the body after the framework, without summarizing what was done. Ask the check-in question exactly as written, once; Mani's reflection of their last answer comes before it."
     listen_for: "Whether they name a change in the body, and whether they name where they feel it."
     ready_when: "They have answered the check-in, or declined it, or were skipped for action-readiness."
     boundaries:
@@ -27,7 +27,7 @@ stages:
       - "must not add a feeling or a body sensation the user did not name"
     if_unclear:
       - id: acting
-        when: "their closing answer already names an action they are going to take"
+        when: "their closing answer already names an action they are going to take, so the check-in is skipped, that action supported, and the handoff capsules follow"
         reply: "It sounds like you're ready to act on that. We can skip the body check-in. Would you like to keep chatting or go to the Library?"
       - id: agreed
         when: "they agree to notice but have not said what they notice"

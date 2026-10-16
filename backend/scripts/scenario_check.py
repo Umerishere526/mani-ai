@@ -125,17 +125,25 @@ def _offering(registry, framework_id: str | None, key: str, style: str) -> str |
     return (((framework.stages or {}).get("offering") or {}).get(key) or {}).get(style) if framework else None
 
 
+def _begin(stages: dict, style: str) -> str | None:
+    """The framework's begin line in this style, sent before the first stage on Try it."""
+    return ((stages.get("offering") or {}).get("begin") or {}).get(style)
+
+
 def stage_flags(reply: str, trace: list[dict] | None, before: list[dict] | None, stages: dict, style: str) -> list[str]:
-    """Inside a framework: a stage reached opens with its letter line, and a stage stored as known or
-    possible is said back, never asked with the client's question (spec 0004)."""
+    """Inside a framework: a stage reached opens with its intro line, after the begin line on the
+    turn it starts, and a stage stored as known or possible is said back, never asked with the
+    client's question (spec 0004)."""
     asking = next((row for row in trace or [] if row["asking"]), None)
     if asking is None:
         return []
     was = next((row["stage"] for row in before or [] if row["asking"]), None)
     stage = stages.get(asking["stage"]) or {}
     flags = []
-    if asking["stage"] != was and stage.get("intro") and not reply.startswith(stage["intro"]):
-        flags.append("stage reply without its letter line")
+    begin = _begin(stages, style)
+    opened = reply.removeprefix(f"{begin}\n\n") if begin else reply
+    if asking["stage"] != was and stage.get("intro") and not opened.startswith(stage["intro"]):
+        flags.append("stage reply without its intro line")
     ask = (stage.get("ask") or {}).get(style)
     if asking["status"] in ("known", "possible") and ask and ask in reply:
         flags.append("asked a stage already known")
@@ -170,7 +178,9 @@ def _check(
         # The text that was sent, which inside a framework is mostly code's, not the model's draft.
         if previous and reply_checks.repeats(exchange.reply, previous.reply):
             exchange.flags.append("sent text repeats the last question")
-        if offer_words_in_text(exchange.reply, registry):
+        # The begin line names its framework, as the client's document writes it.
+        begin = _begin(framework.stages, style) if framework else None
+        if offer_words_in_text(exchange.reply.replace(begin, "") if begin else exchange.reply, registry):
             exchange.flags.append(OFFER_WORDS_FLAG)
         return
     template = repairs.offer_template(registry.get(exchange.offered), style)
@@ -274,6 +284,8 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
                 answered.flags.append("confirmed check, no offer")
                 break
             framework = answered.offered
+            if expect.get("offers") and framework != expect["offers"]:
+                answered.flags.append(f"offered {framework}, expected {expect['offers']}")
             seen: set[str] = set()
             for line in (after or {}).get("lines") or [TELL_ME_MORE_LABEL]:
                 reached = await say(line, told_more=line == TELL_ME_MORE_LABEL, framework_id=framework)

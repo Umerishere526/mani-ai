@@ -1,5 +1,5 @@
-# ABOUTME: Checks the ABCDE walk: the merge of what they said, the one stage step, and each reply it renders.
-# ABOUTME: Built on the real abcde.md and somatic stages, the same content that is seeded.
+# ABOUTME: Checks the framework walk: the merge of what they said, the one stage step, and each reply it renders.
+# ABOUTME: Built on the real abcde.md, thought_reframe.md and somatic stages, the same content that is seeded.
 
 import uuid
 
@@ -13,15 +13,24 @@ from scripts.seed import FRAMEWORKS_DIR, load_somatic_stages, parse_framework
 THREAD = uuid.UUID("b0000000-0000-4000-8000-00000000000b")
 
 
-@pytest.fixture(scope="module")
-def abcde() -> Framework:
-    parsed = parse_framework(FRAMEWORKS_DIR / "abcde.md")
+def seeded(name: str) -> Framework:
+    parsed = parse_framework(FRAMEWORKS_DIR / name)
     somatic = load_somatic_stages()
     return Framework(
         id=parsed["id"], name=parsed["name"], summary=parsed["summary"], body="b",
         phases=parsed["phases"] + list(somatic), stages={**parsed["stages"], **somatic},
         confirm_phrases=parsed["confirm_phrases"],
     )
+
+
+@pytest.fixture(scope="module")
+def abcde() -> Framework:
+    return seeded("abcde.md")
+
+
+@pytest.fixture(scope="module")
+def reframe() -> Framework:
+    return seeded("thought_reframe.md")
 
 
 def said(stage: str, words: str, status: str = "known", corrected: bool | None = None) -> StageUpdate:
@@ -159,8 +168,10 @@ def test_leaving_the_closing_enters_the_body_route_and_a_body_answer_wins(abcde)
     assert body.notes == ["stage answer not_yet ignored for a body answer"]
 
 
-def render(abcde, walked, text="", style="supportive", feeling=None):
-    return walk.reply_text(abcde, walked, text=text, style=style, thread_id=THREAD, feeling=feeling)
+def render(abcde, walked, text="", style="supportive", feeling=None, starting=False):
+    return walk.reply_text(
+        abcde, walked, text=text, style=style, thread_id=THREAD, feeling=feeling, starting=starting,
+    )
 
 
 def reached(entries: dict, stage: str) -> walk.Walked:
@@ -176,7 +187,7 @@ def test_a_missing_stage_is_its_letter_line_then_manis_own_question_about_their_
     reached = walk.Walked({}, "belief", "belief")
     assert render(abcde, reached, text=own, style="directive") == (f"B is for Belief. {own}", [])
     assert render(abcde, reached, text=f"B is for Belief. {own}", style="directive") == (
-        f"B is for Belief. {own}", ["dropped a letter line"],
+        f"B is for Belief. {own}", ["dropped an opening line"],
     )
 
 
@@ -267,7 +278,7 @@ def test_a_reply_that_stays_has_no_letter_line_and_any_the_model_wrote_is_droppe
     stayed = walk.Walked({}, "belief", None)
     text, notes = render(abcde, stayed, text="B is for Belief. I misunderstood. What would be more accurate?")
     assert text == "I misunderstood. What would be more accurate?"
-    assert notes == ["dropped a letter line"]
+    assert notes == ["dropped an opening line"]
 
 
 def test_the_confirm_phrase_is_stable_per_thread_and_differs_between_neighbouring_stages(abcde):
@@ -351,3 +362,66 @@ def test_once_they_add_to_a_partial_stage_its_gap_is_dropped(abcde):
     partial = {"said": "your team works overtime too", "status": "partial", "gap": "challenge"}
     full = walk.merge({"dispute": partial}, [said("dispute", "nothing really challenges it")], abcde, in_force="dispute")
     assert "gap" not in full.entries["dispute"]
+
+
+# Thought Reframe on the same walk (the client's Thought Reframe document, 2026-10-15).
+
+BEGIN = "Let's begin Thought Reframe. We'll start with what you've already told me."
+
+
+def test_thought_reframe_starts_with_its_begin_line_then_step_one_and_abcde_has_none(abcde, reframe):
+    own = "You've been thinking your manager no longer trusts you. Is that the thought you want to look at?"
+    start = walk.start(reframe, None, judged("known", "your manager no longer trusts you"))
+    assert render(reframe, start, text=own, style="directive", starting=True) == (
+        f"{BEGIN}\n\nStep 1 is Identify the Thought. {own}", [],
+    )
+    abcde_start = walk.start(abcde, None, judged("missing"))
+    assert render(abcde, abcde_start, style="directive", feeling="overwhelmed", starting=True)[0] == (
+        "A is for Activating Event. What's been happening that's left you feeling overwhelmed?"
+    )
+
+
+def test_a_begin_or_step_line_the_model_wrote_is_sent_once(reframe):
+    own = "What's most upsetting about that thought?"
+    on_two = walk.Walked({}, "painful", "painful")
+    wrote = f"Step 2 is Name What Makes It Painful. {own}"
+    assert render(reframe, on_two, text=wrote, style="directive") == (
+        f"Step 2 is Name What Makes It Painful. {own}", ["dropped an opening line"],
+    )
+    start = walk.start(reframe, None, judged("known", "you are failing at everything"))
+    own = "You've been thinking you are failing at everything. Is that the thought you want to look at?"
+    assert render(reframe, start, text=f"{BEGIN} {own}", style="directive", starting=True) == (
+        f"{BEGIN}\n\nStep 1 is Identify the Thought. {own}", ["dropped an opening line"],
+    )
+
+
+def test_step_one_missing_is_asked_with_their_feeling_word_and_directive_without_one(reframe):
+    start = walk.start(reframe, None, judged("missing"))
+    assert render(reframe, start, style="supportive", feeling="overwhelmed")[0] == (
+        "Step 1 is Identify the Thought. When you're feeling overwhelmed, what's the thought that's been "
+        "bothering you most?"
+    )
+    assert render(reframe, start, style="directive") == (
+        "Step 1 is Identify the Thought. What's the thought that's been bothering you most?", [],
+    )
+
+
+def test_step_three_missing_whether_anything_changes_it_falls_back_to_the_clients_half_question(reframe):
+    on_three = reached({"feels_true": {"said": "I'm not invited anymore", "status": "partial",
+                                       "gap": "differently"}}, "feels_true")
+    text, notes = render(reframe, on_three, text="That's a real change.", style="reflective")
+    assert text == (
+        "Step 3 is Explore What Makes the Thought Feel True. Is there anything that makes you see it differently?"
+    )
+    assert notes == ["gap asks nothing"]
+
+
+@pytest.mark.parametrize("stage", ["belief", "effective"])
+def test_stop_ends_the_walk_where_it_is_with_their_words_kept(abcde, stage):
+    """Both client documents, section 6: "I just want to talk" ends the framework, never a next stage."""
+    stored = {"activate": {"said": "left out of meetings", "status": "done", "tries": 0}}
+    walked = walk.advance(abcde, stored, None, "stop", in_force=stage, report=judged("missing"))
+    assert (walked.phase, walked.reached, walked.stopped) == (stage, None, True)
+    assert walked.entries["activate"]["said"] == "left out of meetings"
+    talk = "Of course. What would you like to talk about?"
+    assert render(abcde, walked, text=talk) == (talk, [])

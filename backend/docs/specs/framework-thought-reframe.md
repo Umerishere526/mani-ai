@@ -1,5 +1,9 @@
 # Framework 2 — Thought Reframe
 
+> Superseded 2026-10-15 by the client's Thought Reframe framework document
+> (`docs/client/docs/thought reframe framework .docx`), which `content/frameworks/thought_reframe.md`
+> is built from. Kept as the earlier source; where they differ, the client's document wins.
+
 > Source specification, transcribed from *SIX FRAMEWORKS.pdf* "FRAMEWORK 2: REFRAME THOUGHT".
 > Shared rules live in `six-frameworks-overview.md`.
 

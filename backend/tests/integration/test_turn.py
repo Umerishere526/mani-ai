@@ -186,7 +186,7 @@ async def test_a_turn_costs_exactly_one_provider_call(alice, model):
             # with no stage running, and an offer for a set that does not exist.
             text="Here you go. What happened?\n\n**Mani:** breathe\n\n(Include prompts: yes/no)",
             heading_toward="made_up_technique",
-            offer=Offer(going_through="a hard day", lead_line="That sounds hard."),
+            offer={"made_up_technique": Offer(going_through="a hard day", lead_line="That sounds hard.")},
             stage_answer="answered",
             style=Style(shape="mirror and ask"),
         )
@@ -208,14 +208,15 @@ RESENTFUL = (
 )
 
 
-def _offer(technique: str = "abcde") -> Reply:
+def _offer(technique: str = "abcde", **update) -> Reply:
     """An offer as the model makes one on a yes to its check: the slots of the client's template, for
     the set it heads toward. Its text is what goes when the offer cannot be made."""
     return Reply(
         text="What happened at work after that?",
         check_answer="yes",
         heading_toward=technique,
-        offer=Offer(lead_line="That sounds like a lot to carry.", going_through="what happened at work"),
+        offer={technique: Offer(lead_line="That sounds like a lot to carry.", going_through="what happened at work")},
+        **update,
     )
 
 
@@ -364,7 +365,7 @@ async def test_a_check_whose_control_did_not_come_from_them_opens_nothing(alice,
     thread = await start(alice)
     async with pool.as_admin() as conn:
         await conn.execute(
-            "update public.threads set message_count = 11, understanding = $2::jsonb where id = $1",
+            "update public.threads set message_count = 9, understanding = $2::jsonb where id = $1",
             thread.id, {k: FOUND[k] for k in ("issue", "core_issue")},
         )
     turn = await send(alice, thread.id, "it happens every week")
@@ -394,7 +395,8 @@ async def test_anything_but_a_clear_yes_keeps_chatting_and_the_next_check_waits(
     model fills one; the check is used, and the next waits three replies."""
     scripted = model(
         _offer().model_copy(update={"check_answer": answer, "text": "What part did I miss?"}),
-        *[Reply(text=f"What happened {n}?") for n in range(4)],
+        *[Reply(text=f"What happened {n}?") for n in range(2)],
+        _check(),
     )
     thread = await past_the_opening(await start(alice))
     turn = await send(alice, thread.id, "yes, but it's also my manager")
@@ -407,16 +409,86 @@ async def test_anything_but_a_clear_yes_keeps_chatting_and_the_next_check_waits(
     assert ["check" in shape.model_fields for shape in scripted.schemas] == [False, False, False, True]
 
 
-async def test_no_check_by_their_fifth_message_is_logged_and_never_asked_for(alice, model):
-    """Spec 0006, AC-11: counted on that message only, and nothing about it reaches [ctx]."""
-    from mani.models.rows import SupportStyle
+async def _at_their_fifth_with_only_the_problem(alice, style: str = "supportive"):
+    """muhammad's feeling level chat, thread 8f03e7bf, 2026-10-15: only the problem was ever found."""
+    from mani.db import pool
 
-    scripted = model(*[Reply(text=f"What happened then, {n}?") for n in range(6)])
-    thread = await _in_style(await start(alice), SupportStyle.DIRECTIVE)
-    turns = [await send(alice, thread.id, f"message {n}") for n in range(1, 7)]
+    thread = await start(alice)
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set message_count = 11, conversation_style = $2, understanding = $3::jsonb "
+            "where id = $1",
+            thread.id, style, {"issue": FOUND["issue"]},
+        )
+    return thread
 
-    assert [("no check by message 5" in t.checks) for t in turns] == [False] * 4 + [True, False]
-    assert "no check" not in scripted.last_messages[-1]["content"]
+
+async def test_the_check_is_due_at_their_fifth_message_with_only_the_problem_found(alice, model):
+    """Spec 0006, AC-11: the reply is the check, whatever the conversation has not given; control they never
+    said is left out, never asked or invented; a yes brings the offer."""
+    due = Reply(
+        text="Do I have that right?",
+        check=Check(
+            problem="You failed your exams and worry people will judge your parents",
+            core_issue="You feel you have shamed them", in_their_control="", comes_down_to=None,
+            question="Have I understood you right",
+        ),
+    )
+    scripted = model(due, _offer("abcde"))
+    thread = await _at_their_fifth_with_only_the_problem(alice)
+
+    checked = await send(alice, thread.id, "i don't know")
+    row = await _thread_row(alice, thread.id)
+
+    assert scripted.schemas[0].model_fields["check"].is_required(), "the reply is the check"
+    assert checked.content == (
+        "You failed your exams and worry people will judge your parents. You feel you have shamed them."
+        "\n\nHave I understood you right?"
+    )
+    assert row.check_at_message_count == 13
+    # Mani's reading is for them to confirm, so none of it is stored as theirs.
+    assert row.understanding == {"issue": FOUND["issue"]}
+    assert "check unusable" not in checked.checks
+
+    offer = await send(alice, thread.id, "yes")
+    assert [p.label for p in offer.prompts] == ["Try it", "Tell me more", "Keep chatting"]
+
+
+async def test_a_no_to_the_due_check_stores_no_guess_and_the_questions_resume(alice, model):
+    """R14: on a no Mani keeps talking toward the root cause; the next check is three exchanges away."""
+    due = Reply(
+        text="Do I have that right?",
+        check=Check(problem="You failed your exams", core_issue="You feel you have shamed them",
+                    in_their_control="", question="Have I understood you right"),
+    )
+    scripted = model(
+        due,
+        Reply(text="What did I get wrong?", check_answer="no"),
+        Reply(text="What usually happens next?"),
+    )
+    thread = await _at_their_fifth_with_only_the_problem(alice)
+    await send(alice, thread.id, "i don't know")
+    await send(alice, thread.id, "no that's not it")
+    await send(alice, thread.id, "my parents expected more")
+
+    assert (await _thread_row(alice, thread.id)).understanding == {"issue": FOUND["issue"]}
+    assert "understanding_next: core_issue" in scripted.last_messages[-1]["content"]
+    assert "check: may_check" not in scripted.last_messages[-1]["content"], "inside the cooldown"
+
+
+async def test_before_their_fifth_message_nothing_is_forced(alice, model):
+    scripted = model(Reply(text="What happens when it comes up?"))
+    from mani.db import pool
+
+    thread = await start(alice)
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set message_count = 9, understanding = $2::jsonb where id = $1",
+            thread.id, {"issue": FOUND["issue"]},
+        )
+    await send(alice, thread.id, "everything")
+
+    assert not scripted.schemas[0].model_fields.get("check")
 
 
 async def test_a_concern_on_the_answer_to_a_check_renders_no_offer_and_lets_the_check_lapse(alice, model):
@@ -1330,12 +1402,12 @@ async def test_the_body_check_in_waits_for_their_answer_before_the_two_choices(a
     assert turn.prompts == []
 
 
-async def _land_on(alice, thread_id, phase, stages_known: dict | None = None) -> None:
+async def _land_on(alice, thread_id, phase, stages_known: dict | None = None, framework: str = "abcde") -> None:
     from mani.db import pool
 
     async with pool.as_user(alice) as conn:
         await set_technique_outcome(
-            conn, thread_id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
+            conn, thread_id, ALICE, framework, TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase=phase, stages_known=stages_known,
         )
 
@@ -1900,6 +1972,9 @@ async def test_a_stage_reached_late_is_confirmed_from_what_they_said_long_before
               next_stage=NextStage(status="known", said="nobody wants me there")),
     )
     thread = await start(alice)
+    # An offer was declined, so this is ordinary conversation, where no check is due.
+    async with pool.as_user(alice) as conn:
+        await set_technique_outcome(conn, thread.id, ALICE, "abcde", TechniqueOutcome.DECLINED, at_message_count=2)
     await send(alice, thread.id, "I keep thinking nobody wants me there")
     for n in range(12):
         await send(alice, thread.id, f"one more thing, number {n}")
@@ -2028,6 +2103,11 @@ async def test_what_they_named_early_stays_in_view_and_in_the_understanding_line
         Reply(text="And then?"),
     )
     thread = await start(alice)
+    # An offer was declined, so this is ordinary conversation, where no check is due.
+    from mani.db import pool
+
+    async with pool.as_user(alice) as conn:
+        await set_technique_outcome(conn, thread.id, ALICE, "abcde", TechniqueOutcome.DECLINED, at_message_count=2)
     await send(alice, thread.id, "I feel anxious")
     for n in range(12):
         await send(alice, thread.id, f"one more thing, number {n}")
@@ -2072,3 +2152,59 @@ async def test_a_concern_turn_leaves_what_was_understood_as_it_was(alice, model)
 
     assert turn.understanding == {"feeling": "sad"}
     assert await _understood(alice, thread.id) == {"feeling": "sad"}
+
+
+# Thought Reframe next to ABCDE (the client's Thought Reframe document, 2026-10-15).
+
+BEGIN = "Let's begin Thought Reframe. We'll start with what you've already told me."
+
+
+@pytest.mark.parametrize(("style", "step_one"), [
+    ("SUPPORTIVE", "When you're feeling overwhelmed, what's the thought that's been bothering you most?"),
+    ("DIRECTIVE", "What's the thought that's been bothering you most?"),
+])
+async def test_try_it_on_thought_reframe_opens_with_the_begin_line_then_step_one(alice, model, style, step_one):
+    from mani.models.rows import SupportStyle
+
+    model(
+        _offer("thought_reframe", understanding_update=UnderstandingUpdate(feeling="overwhelmed")),
+        Reply(text="What is on your mind?", next_stage=NextStage(status="missing")),
+    )
+    thread = await past_the_opening(await _in_style(await start(alice), SupportStyle[style]))
+    offered = await send(alice, thread.id, "yes, that's it")
+    assert offered.content.startswith("When you say what happened at work" if style == "DIRECTIVE" else "You said")
+    turn = await send(alice, thread.id, "Try it")
+
+    assert turn.content == f"{BEGIN}\n\nStep 1 is Identify the Thought. {step_one}"
+    row = await _offered_row(alice, thread.id)
+    assert (row.framework_id, row.outcome, row.phase) == ("thought_reframe", TechniqueOutcome.ACCEPTED, "thought")
+
+
+async def test_after_thought_reframe_the_body_check_in_comes_even_for_an_action_they_name(alice, model):
+    """The document's own Step 5 answer names something to find out; it is the replacement thought, and
+    the check-in "must not be omitted"."""
+    balanced = "I don't know why yet, I need to find out more before deciding what it means"
+    model(Reply(text="That's a fair way to see it.", stage_answer="answered", body="acting",
+                stage_updates=[StageUpdate(stage="replacement", said=balanced, status="known")]))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "replacement", framework="thought_reframe")
+
+    turn = await send(alice, thread.id, f"{balanced}. I'll ask my manager tomorrow.")
+
+    assert turn.content.endswith("Would you like to notice what is happening in your body?")
+    assert (await _offered_row(alice, thread.id)).phase == "somatic_checkin"
+
+
+async def test_asking_to_stop_mid_abcde_ends_it_with_no_check_in_and_no_exercise(alice, model, abcde_exercise):
+    """Both client documents, section 6: "I just want to talk" returns to the conversation."""
+    talk = "Of course. What would you like to talk about?"
+    model(Reply(text=talk, stage_answer="stop"))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "consequence", {"abcde": {"belief": {"said": "they don't trust me", "status": "done"}}})
+
+    turn = await send(alice, thread.id, "I don't want to keep analyzing this. I just want to talk.")
+
+    assert (turn.content, turn.prompts, turn.exercise) == (talk, [], None)
+    row = await _offered_row(alice, thread.id)
+    assert (row.outcome, row.phase) == (TechniqueOutcome.DECLINED, None)
+    assert row.stages_known["abcde"]["belief"]["said"] == "they don't trust me"

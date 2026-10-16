@@ -49,6 +49,8 @@ stages:
       reflective: |-
         <A short line about how the way we interpret what is happening can make it feel harder, fitted to what they said, such as "Sometimes the way we interpret what's happening can make a difficult situation feel even harder.">
         There's a framework called ABCDE that helps you examine what you're telling yourself about <their feeling from understanding as a short noun phrase that reads naturally after "what you're telling yourself about", such as "your frustration"; what is worrying them only when they named no feeling>, understand how those thoughts affect you, and consider whether there's a more realistic way to see things.
+    # An empty slot takes the feeling in the running understanding, as "feeling <their word>".
+    feeling_fills_slot: true
     steps: |-
       - A: Activating Event. What happened or what is happening.
       - B: Belief. What you began believing about it.

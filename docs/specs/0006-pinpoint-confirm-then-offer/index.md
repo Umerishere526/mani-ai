@@ -49,7 +49,7 @@ Today a message count decides when an offer may come. That count is deleted. In 
   - the `finished_framework_id` rule in `repairs._offer_text`
 
   No code reads history text to find the check.
-- **AC-11**: On the reply to the person's 5th message, if the thread has never had a check and this reply makes none, `no check by message 5` is added to `Turn.checks` and logged. This happens on that turn only, and nothing about it reaches `[ctx]`.
+- **AC-11** (changed 2026-10-15, thread 8f03e7bf: about twenty messages with no check): from the person's `CHECK_DUE_AT`-th message (5), while nothing is offered, no framework is live, no check waits (`check_open`) and the cooldown after the last check has passed, the reply is the check. `reply_for(check_due=True)` makes `check` non-nullable in the CHATTING shape, `[ctx]` sends `check: may_check` and no `understanding_next`, and the check is written whatever the record holds. `understanding.usable(due=True)` needs problem, core issue and question, so what is in their control may be left out when they never said it; it is never asked at the deadline and never invented. A due check stores only a missing `issue`: its core issue, control and comes-down-to are Mani's reading for them to confirm and are not stored, so a no leaves nothing they did not say, the questions resume, and the next check is due three exchanges later. After a declined offer or a finished framework nothing is due. The earlier log-only rule `no check by message 5` is removed.
 - **AC-12**: Changes to the framework content files:
   - `content/frameworks/abcde.md` `central_indication` is the client's selection line: a specific event tied to a troubling belief and the reaction to it, judged on the pinpointed problem and its core issue, never on the opening feeling.
   - Each file in `content/frameworks/paused/` carries its own cheat sheet line in `central_indication`.
@@ -70,7 +70,7 @@ Today a message count decides when an offer may come. That count is deleted. In 
   - no check invents a fact they did not give.
 - **AC-17**: `understanding.merge` takes the steps in order, judged on the record as the turn began: `core_issue` only once `issue` was stored on an earlier turn, `in_their_control` only once both were. Each step therefore gets an exchange of its own, and none is filled from the opening message.
 - **AC-19**: A stored check is sent as its parts in the client's order, each a sentence the model wrote: the problem, the core issue, what is in their control, what it comes down to, then its question on a line of its own (`repairs.check_text`). The model's free text is not sent. Live, the model opened every check with their control answer despite two prompt fixes; muhammad chose code ordering with model wording (2026-10-13).
-- **AC-18**: `[ctx]` names the first missing step (`understanding_next: problem | core_issue | control`) with what to ask for it, and the `check` line says `once_control_is_answered` while control is the step. A check is stored only when the person's own reported words (`understanding_update`) or the stored record give all three; a check whose control comes only from the check opens nothing and is logged as `check before the three steps`.
+- **AC-18**: `[ctx]` names the first missing step (`understanding_next: problem | core_issue | control`) with what to ask for it, and the `check` line says `once_control_is_answered` while control is the step. A check is stored only when the person's own reported words (`understanding_update`) or the stored record give all three; a check whose control comes only from the check opens nothing and is logged as `check before the three steps`, except at the deadline (AC-11), where the check is written whatever is stored.
 - **AC-16**: These records are edited in place: the Decisions in force for the offer window, the fit rule and the running understanding, and the Conflicts rows in `docs/client/requirements.md` for the window and the fit rule.
 
 ## Decision
@@ -128,13 +128,13 @@ Reasoning and options: see [rationale.md](rationale.md).
 | Read the answer | yes or not | the reply's `check_answer`; null counts as not |
 | Offer which set | framework id | `reply.heading_toward` if in `config.registry` (active only); else the single id when `len(config.registry.ids) == 1`; else none |
 | Fill the offer | `going_through` | `reply.offer.going_through`; else `ctx.thread.understanding["feeling"]` |
-| Log late | `no check by message 5` | `_their_messages(ctx) == 5`, `check_at_message_count` null, no usable `check` this turn |
+| Required | the reply is the check | `context.check_due(ctx)`: their 5th message or later in the understanding phase, no check waiting, cooldown passed |
 | Merge understanding | four keys | `understanding.merge(stored, from_check(reply.check))`, then `merge(..., reply.understanding_update)`; skipped when guarded |
 
 **Key invariants**:
 - An offer is rendered only on a `CHECK_OPEN` turn whose `check_answer` is `yes`, for an active framework.
 - Code never reads the person's or Mani's text to find or judge a check.
-- No state can leave a thread unable to check again: every check is used on the next turn, and the cooldowns always expire.
+- No state can leave a thread unable to check again: every check is used on the next turn, and the cooldowns always expire. (Until 2026-10-15 this was false: a check also waited on a core issue the model had to report. AC-11 now bounds it.)
 - One provider call per chat turn.
 
 **Security model**:

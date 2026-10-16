@@ -55,13 +55,23 @@ def render(stored: dict[str, str]) -> str | None:
     return "; ".join(parts)
 
 
-def usable(check: Check | None) -> bool:
+def usable(check: Check | None, *, due: bool = False) -> bool:
     """Whether a reply's check says what Mani understands, the problem, what lies under it and what is
-    in their control, and asks whether it is right. What it comes down to is welcome, not required."""
-    return bool(check and all(
-        (value or "").strip()
-        for value in (check.problem, check.core_issue, check.in_their_control, check.question)
-    ))
+    in their control, and asks whether it is right. What it comes down to is welcome, not required.
+    When the check is due, what is in their control may be left out if they never said it."""
+    if check is None:
+        return False
+    parts = [check.problem, check.core_issue, check.question]
+    if not due:
+        parts.insert(2, check.in_their_control)
+    return all((value or "").strip() for value in parts)
+
+
+def merge_due_check(stored: dict[str, str], check: Check) -> dict[str, str]:
+    """The record after a check made at the deadline. Its core issue and control are Mani's reading,
+    for them to confirm, so they are not stored: a no leaves nothing they did not say. Only the problem,
+    and only when none is stored."""
+    return merge(stored, UnderstandingUpdate(issue=None if stored.get("issue") else check.problem))
 
 
 def merge_check(stored: dict[str, str], check: Check) -> dict[str, str]:

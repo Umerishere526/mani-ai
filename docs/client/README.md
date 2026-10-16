@@ -39,3 +39,4 @@ conflict under "Conflicts" in [requirements.md](requirements.md) and update the 
 | 2026-10-13 | client | [MANI's way of communication: language and tone](messages/2026-10-13-way-of-communication.md) |
 | 2026-10-13 | client (meeting) | [The conversation flow agreed in the meeting](messages/2026-10-13-meeting-flow.md) |
 | 2026-10-13 | Lolly | [Framework Selection Cheat Sheet](messages/2026-10-13-framework-cheat-sheet.md) |
+| 2026-10-15 | client | [Thought Reframe framework document](messages/2026-10-15-thought-reframe-document.md) |

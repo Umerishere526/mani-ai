@@ -28,14 +28,6 @@ def test_a_check_sent_before_their_control_was_answered_is_counted():
     ) == ["check before the three steps"]
 
 
-def test_no_check_by_the_expected_message_is_counted_never_asked_for():
-    """Spec 0006, AC-11: logged only, so the live runs measure it."""
-    assert reply_checks.misses(
-        Reply(text="What happened next?"), offered=None, offer_dropped=None, needs_question=True,
-        last_mani_text=None, no_check_by=5,
-    ) == ["no check by message 5"]
-
-
 def test_a_comfort_with_no_question_is_missed_before_an_offer():
     comfort = Reply(text="It is okay to feel that way. I am here with you.")
     assert reply_checks.misses(

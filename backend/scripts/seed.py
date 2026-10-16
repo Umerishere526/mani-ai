@@ -111,8 +111,9 @@ def missing_for_activation(framework: dict) -> list[str]:
         for key in ("keep_chatting", "explain"):
             if not (offering.get(key) or {}).get(style.value):
                 missing.append(f"stages.offering.{key}.{style.value}")
-    if not offering.get("steps"):
-        missing.append("stages.offering.steps")
+    begin = offering.get("begin")
+    if begin is not None and not all(isinstance(begin.get(style.value), str) for style in SupportStyle):
+        missing.append("stages.offering.begin as one line in each style")
     for phase in framework["phases"]:
         if phase == OFFERING or phase in ENDING_STAGES:
             continue
@@ -121,6 +122,10 @@ def missing_for_activation(framework: dict) -> list[str]:
             missing.append(f"stages.{phase}.intro")
         missing += [f"stages.{phase}.ask.{style.value}" for style in SupportStyle
                     if not (stage.get("ask") or {}).get(style.value)]
+        # A line the walk sends for a part still missing is found by its id and sent as one string.
+        missing += [f"stages.{phase}.if_unclear.{branch['id']} with a when and one reply"
+                    for branch in stage.get("if_unclear") or []
+                    if branch.get("id") and not (branch.get("when") and isinstance(branch.get("reply"), str))]
     return missing
 
 

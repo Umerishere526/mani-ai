@@ -54,6 +54,7 @@ Once someone says yes to ABCDE, Mani walks them through it one stage per reply. 
   - Anything else these leave unused.
   
   The debug `ledger_view` and the chat tester's "What Mani knows" read the store.
+- **AC-14** (added 2026-10-15, both client framework documents, section 6): when they say they want to stop, just talk, or that it is not helping, the reply's `stage_answer` is `stop`. The walk ends where it is, the row is recorded `declined` with no phase, the store is kept, no body check-in and no exercise follow, and the model's text goes. Asking for the set again later starts it afresh. The same walk runs Thought Reframe, whose Try it opens with its `offering.begin` line in a paragraph of its own before Step 1's intro.
 
 ## Decision
 

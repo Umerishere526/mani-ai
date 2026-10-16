@@ -98,7 +98,9 @@ def _body_route(
         at = "closing" if technique.phase == framework.closing else technique.phase
     if tapped is not None and tapped.label in repairs.PLACE_LABELS and _awaiting_place(history):
         body = repairs.PLACE_LABELS[tapped.label]
-    if body is not None and not repairs.body_answer_fits(body, at, style):
+    if body is not None and not repairs.body_answer_fits(
+        body, at, style, check_in_required=framework.check_in_required,
+    ):
         fixed = dataclasses.replace(fixed, notes=fixed.notes + [f"ignored body {body} at {at}"])
         body = None
     handoff = False
@@ -147,7 +149,7 @@ def _walked(
         )
     text, notes = walk.reply_text(
         framework, walked, text=fixed.text, style=style, thread_id=thread_id,
-        feeling=feeling if start else None,
+        feeling=feeling if start else None, starting=start,
     )
     return dataclasses.replace(
         fixed, text=text, framework_id=framework.id, phase=walked.phase,
@@ -526,9 +528,12 @@ async def send(
         technique, outcome, retiring_framework_id, _awaiting_place(history), running_framework,
         concern=assessment.blocks_framework, check_open=context.check_open(ctx),
     )
+    # The deadline: this reply is the check, with whatever the conversation has given (spec 0006).
+    check_due = moment is Moment.CHATTING and context.check_due(ctx)
     reply_shape = schema.reply_for(
         moment,
         may_check=context.may_check(ctx),
+        check_due=check_due,
         declined_row=declined_row,
         on_closing=bool(
             running_framework and technique and technique.phase == running_framework.closing
@@ -614,16 +619,19 @@ async def send(
     # Mani's check is stored, so the next turn reads their answer to it, only once their own words
     # (understanding_update, or what is stored) give all three steps; a check whose control comes only
     # from the check itself opens nothing (spec 0006, AC-3, AC-7, AC-18).
-    with_check = not guarded and starting is None and understanding.usable(reply.check)
+    with_check = not guarded and starting is None and understanding.usable(reply.check, due=check_due)
     understood = ctx.thread.understanding
     check_written = False
     if not guarded:
         before = ctx.thread.understanding
         theirs = understanding.merge(before, reply.understanding_update, before=before)
-        check_written = with_check and understanding.next_step(theirs) is None
+        all_found = understanding.next_step(theirs) is None
+        check_written = with_check and (all_found or check_due)
+        # At the deadline what is not found is Mani's reading for them to confirm, so it is not stored.
+        stored_check = understanding.merge_check if all_found else understanding.merge_due_check
         understood = (
             understanding.merge(
-                understanding.merge_check(before, reply.check), reply.understanding_update, before=before,
+                stored_check(before, reply.check), reply.understanding_update, before=before,
             )
             if check_written else theirs
         )
@@ -691,12 +699,18 @@ async def send(
             start=starting is not None, in_force=None if starting else technique.phase,
             style=conversation_style, thread_id=ctx.thread.id,
             body_answered=moment is Moment.BODY and body is not None
-            and repairs.body_answer_fits(body, "closing", conversation_style),
+            and repairs.body_answer_fits(
+                body, "closing", conversation_style, check_in_required=walking.check_in_required,
+            ),
             feeling=understood.get("feeling"),
         )
         if walked.entries != (stored_all.get(walking.id) or {}):
             updates.stages_known = {**stored_all, walking.id: walked.entries}
-    if moment is Moment.BODY and not guarded:
+        if walked.stopped:
+            # They asked to stop: the run ends as declined, with no body check-in and no exercise,
+            # and asking for the set again later starts it afresh (both client documents, section 6).
+            outcome = TechniqueOutcome.DECLINED
+    if moment is Moment.BODY and not guarded and not (walked is not None and walked.stopped):
         fixed = _body_route(
             fixed, body, tapped, technique,
             config.registry.get(technique.framework_id if technique else retiring_framework_id),
@@ -712,15 +726,11 @@ async def send(
         offer_dropped=fixed.offer_dropped,
         needs_question=needs_question,
         last_mani_text=last_mani_text,
-        check_unusable=not guarded and reply.check is not None and not understanding.usable(reply.check),
+        check_unusable=(
+            not guarded and reply.check is not None and not understanding.usable(reply.check, due=check_due)
+        ),
         check_too_early=with_check and not check_written,
         reach_unjudged=walked is not None and walked.unjudged,
-        no_check_by=(
-            context.CHECK_EXPECTED_BY
-            if context.their_messages(ctx) == context.CHECK_EXPECTED_BY
-            and ctx.thread.check_at_message_count is None and not check_written
-            else None
-        ),
     )
     if checks:
         logger.info("thread %s reply checks: %s", ctx.thread.id, "; ".join(checks))

@@ -107,7 +107,8 @@ class StageUpdate(BaseModel):
     status: str = Field(
         description=(
             "known: their words answer the stage. partial: half of it is there. possible: "
-            "activate only, an event that likely started this but they never said so."
+            "only the first stage of a framework, what likely started this or the thought they likely "
+            "mean, though they never said so."
         )
     )
     corrected: bool | None = Field(
@@ -124,9 +125,9 @@ class NextStage(BaseModel):
 
     status: str = Field(
         description=(
-            "known: their words answer the stage. partial: part of it is there. possible: activate "
-            "only, an event that likely started this but they never said so. missing: nothing they "
-            "said answers it."
+            "known: their words answer the stage. partial: part of it is there. possible: only the "
+            "first stage of a framework, what likely started this or the thought they likely mean, "
+            "though they never said so. missing: nothing they said answers it."
         )
     )
     said: str | None = Field(
@@ -202,7 +203,10 @@ class Check(BaseModel):
     core_issue: str | None = Field(default=None, description="One sentence: the core issue under it.")
     in_their_control: str | None = Field(
         default=None,
-        description="One sentence: what they said is in their control, or that they're not sure yet, which is fine.",
+        description=(
+            "One sentence: what they said is in their control, or that they're not sure yet, which is fine. "
+            "Empty when they said nothing about it."
+        ),
     )
     comes_down_to: str | None = Field(
         default=None,
@@ -217,7 +221,7 @@ BodyBranch = Literal[
     "chest", "head", "stomach", "elsewhere", "no_place", "agreed", "declined", "acting", "pain",
     "returned",
 ]
-StageAnswer = Literal["agreed", "answered", "corrected", "let_go", "not_yet"]
+StageAnswer = Literal["agreed", "answered", "corrected", "let_go", "not_yet", "stop"]
 _CLOSED_SETS = {
     "offer_answer": get_args(OfferAnswer),
     "check_answer": get_args(CheckAnswer),
@@ -311,7 +315,8 @@ class Reply(_ReplyBase):
             "said, even with more added. answered: they gave what the stage needs, with an update for it. corrected: a no "
             "with new words, with an update for it. let_go: move on without words, because it was "
             "asked twice already or the question made them uneasy. not_yet: a plain no, unclear, or "
-            "I don't know while you still help."
+            "I don't know while you still help. stop: they want to stop the questions, just talk, "
+            "or say this is not helping; your text returns to the conversation."
         ),
     )
     stage_updates: list[StageUpdate] | None = Field(
@@ -359,16 +364,17 @@ class Reply(_ReplyBase):
     check: Check | None = Field(
         default=None,
         description=(
-            "Fill it only when this reply checks your understanding with them, once the problem and "
-            "what lies under it are clear from their words. Null otherwise. Not shown to the user."
+            "Fill it only when this reply checks your understanding with them, from their words only. "
+            "Null otherwise. Not shown to the user."
         ),
     )
-    offer: Offer | None = Field(
+    # Keyed by framework id: each set's own slots, so one set's words never fill another's template.
+    offer: dict[str, Offer | None] | None = Field(
         default=None,
         description=(
-            "Fill it only when check_answer is yes: the set in heading_toward, closest to what they "
-            "confirmed. Null otherwise. The offer's words are the client's: you fill only these "
-            "parts, in their words. Your text is not sent when the offer is."
+            "Fill it only when check_answer is yes: only the set in heading_toward, closest to what they "
+            "confirmed, and every other set null. Null otherwise. The offer's words are the client's: you "
+            "fill only these parts, in their words. Your text is not sent when the offer is."
         ),
     )
     their_words: str | None = Field(default=None)
@@ -402,12 +408,21 @@ class Reply(_ReplyBase):
 
 
 @dataclass(frozen=True)
+class OfferSlots:
+    """What one set's offer template asks for in the thread's style: the text inside its `<...>`."""
+
+    framework_id: str
+    going_through: str
+    lead_line: str | None = None
+
+
+@dataclass(frozen=True)
 class Slots:
     """What each slot of the client's templates asks for, in the thread's style: the text inside
-    its `<...>`. The client's own description of the slot is what the model reads."""
+    its `<...>`. The client's own description of the slot is what the model reads. `offers` holds
+    one entry per active set with an offer template, in display order."""
 
-    going_through: str | None = None
-    lead_line: str | None = None
+    offers: tuple[OfferSlots, ...] = ()
     their_words: str | None = None
 
 
@@ -426,9 +441,11 @@ def reply_for(
     declined_row: bool = False,
     on_closing: bool = False,
     slots: Slots = Slots(),
+    check_due: bool = False,
 ) -> type[BaseModel]:
     """The reply shape sent this turn: the core fields plus what this moment needs. A field that
-    is not here cannot be filled, so the gate is the database that picked the moment."""
+    is not here cannot be filled, so the gate is the database that picked the moment. When the
+    check is due, `check` is not nullable: the reply is the check."""
     names = set(_CORE)
     overrides: dict[str, tuple] = {}
     if moment is Moment.BODY:
@@ -445,11 +462,13 @@ def reply_for(
             )
     elif moment is Moment.CHECK_OPEN:
         names.add("check_answer")
-        if slots.going_through:
+        if slots.offers:
             names.add("offer")
-            overrides["offer"] = (_offer_model(slots.going_through, slots.lead_line) | None, Reply.model_fields["offer"])
-    elif moment is Moment.CHATTING and may_check:
+            overrides["offer"] = (_offer_model(slots.offers) | None, Reply.model_fields["offer"])
+    elif moment is Moment.CHATTING and (may_check or check_due):
         names.add("check")
+        if check_due:
+            overrides["check"] = (Check, Field(description=Reply.model_fields["check"].description))
     if declined_row and moment in (Moment.CHECK_OPEN, Moment.CHATTING):
         names |= {"offer_answer", *_STAGES, *_REACH}
         overrides["offer_answer"] = (
@@ -473,13 +492,26 @@ def reply_for(
 
 
 @functools.cache
-def _offer_model(going_through: str, lead_line: str | None) -> type[BaseModel]:
-    """The offer's slots in this style. lead_line exists only when the style's template opens
-    with a whole line of the model's own."""
-    fields: dict[str, tuple] = {"going_through": (str | None, Field(default=None, description=going_through))}
-    if lead_line:
-        fields["lead_line"] = (str | None, Field(default=None, description=lead_line))
+def _offer_model(offers: tuple[OfferSlots, ...]) -> type[BaseModel]:
+    """The offer in this style: one field per set, its id, holding only that set's slots."""
+    fields = {
+        slots.framework_id: (
+            _set_offer_model(slots) | None,
+            Field(default=None, description="Only when you offer this set; null otherwise."),
+        )
+        for slots in offers
+    }
     return create_model("Offer", __config__=ConfigDict(extra="ignore"), **fields)
+
+
+def _set_offer_model(slots: OfferSlots) -> type[BaseModel]:
+    """One set's slots in this style. lead_line exists only when the style's template opens
+    with a whole line of the model's own."""
+    fields: dict[str, tuple] = {"going_through": (str | None, Field(default=None, description=slots.going_through))}
+    if slots.lead_line:
+        fields["lead_line"] = (str | None, Field(default=None, description=slots.lead_line))
+    name = "".join(part.capitalize() for part in slots.framework_id.split("_"))
+    return create_model(f"Offer{name}", __config__=ConfigDict(extra="ignore"), **fields)
 
 
 def as_reply(parsed: BaseModel) -> Reply:
