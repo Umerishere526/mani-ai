@@ -1370,6 +1370,31 @@ async def test_stopping_the_questions_keeps_what_was_said_and_offers_the_two_cho
     assert context.live(ctx.technique) is None
 
 
+async def test_the_core_issue_is_revised_inside_a_framework(alice, model):
+    """Spec 0007, AC-9: the core issue is Mani's reading and moves when a later answer changes it; the
+    reading it replaced is kept."""
+    revised = "not finishing everything has become a reason not to start"
+    model(Reply(text="What stops you starting, in that moment?", stage_answer="not_yet",
+                understanding_update=UnderstandingUpdate(core_issue=revised)))
+    from mani.db import pool
+
+    thread = await start(alice)
+    async with pool.as_user(alice) as conn:
+        await conn.execute(
+            "update public.threads set understanding = $1::jsonb where id = $2",
+            {"issue": "a long list undone", "core_issue": "choosing leaves you doing nothing",
+             "in_their_control": "you're not sure yet"},
+            thread.id,
+        )
+    await _land_on(alice, thread.id, "belief")
+
+    await send(alice, thread.id, "I won't get it all done so I don't start")
+
+    understood = (await _thread_row(alice, thread.id)).understanding
+    assert understood["core_issue"] == revised
+    assert understood["history"] == {"core_issue": ["choosing leaves you doing nothing"]}
+
+
 PLACES = ["Chest", "Head", "Stomach", "Somewhere else"]
 
 

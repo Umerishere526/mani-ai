@@ -89,3 +89,27 @@ def test_a_check_with_nothing_it_comes_down_to_is_never_sent():
     )
     assert understanding.usable(full)
     assert not understanding.usable(full.model_copy(update={"comes_down_to": "  "}))
+
+
+def test_the_event_they_describe_is_kept_and_shown_but_is_never_a_step():
+    """Spec 0007, AC-9: the event that started it is recorded from the first message that names it."""
+    stored = understanding.merge({}, UnderstandingUpdate(event="your boss criticized your report in front of the team"))
+    assert stored == {"event": "your boss criticized your report in front of the team"}
+    assert understanding.next_step(stored) == "problem"
+    assert understanding.render(stored) == (
+        "event: your boss criticized your report in front of the team; issue: missing; "
+        "core_issue: missing; in_their_control: missing"
+    )
+
+
+def test_a_replaced_issue_or_event_is_kept_in_the_history():
+    """Spec 0007, AC-16: a change is corrected in place and what it replaced is kept, never rendered."""
+    stored = {"issue": "the list", "history": {"issue": ["x"]}}
+    merged = understanding.merge(stored, UnderstandingUpdate(issue="your partner doesn't help"))
+    assert merged["issue"] == "your partner doesn't help"
+    assert merged["history"] == {"issue": ["x", "the list"]}
+    assert "history" not in understanding.render(merged)
+    # The same value again is not a change, and an untracked key keeps no history.
+    assert understanding.merge(merged, UnderstandingUpdate(issue="your partner doesn't help"))["history"] == merged["history"]
+    assert "history" not in understanding.merge({"body": "tight chest"}, UnderstandingUpdate(body="sore neck"))
+    assert "feeling_asked" in understanding.merge({"feeling_asked": "dread"}, None)

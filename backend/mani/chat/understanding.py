@@ -1,20 +1,29 @@
-# ABOUTME: What Mani understands of the person so far (feeling, body, issue, core issue, what is in their control).
-# ABOUTME: Pure functions: this turn's reported update merged into the stored record, and its [ctx] value.
+# ABOUTME: What Mani understands of the person so far: feeling, body, the event, issue, core issue, control.
+# ABOUTME: Pure functions: this turn's reported update merged into the stored record, with the values it replaced.
 
 from __future__ import annotations
+
+from typing import Any
 
 from mani.chat import context
 from mani.llm.schema import Check, UnderstandingUpdate
 
-KEYS = ("feeling", "body", "issue", "core_issue", "in_their_control", "comes_down_to")
+KEYS = ("feeling", "body", "event", "issue", "core_issue", "in_their_control", "comes_down_to")
 LIMIT = 200
+# What a replaced value of these keys is kept under, the last KEPT per key, so a change can be
+# named from what it changed and never rendered as a step (spec 0007, AC-16).
+HISTORY = "history"
+TRACKED = ("issue", "event", "core_issue")
+KEPT = 3
+# A changed feeling waits here for their yes (spec 0007, AC-15).
+PENDING = "feeling_asked"
 # The client's steps before Mani checks its understanding, in order: the problem, the core issue under
 # it, what is in their control (meeting and cheat sheet, 2026-10-13). Each is taken only once the one
 # before it was stored on an earlier turn, so each gets an exchange of its own (spec 0006).
 STEPS = {"issue": "problem", "core_issue": "core_issue", "in_their_control": "control"}
 
 
-def _in_order(key: str, before: dict[str, str]) -> bool:
+def _in_order(key: str, before: dict[str, Any]) -> bool:
     """Whether `key` may be stored this turn: it is not a step, or every step before it was stored."""
     if key not in STEPS:
         return True
@@ -22,28 +31,38 @@ def _in_order(key: str, before: dict[str, str]) -> bool:
     return all(before.get(step) for step in earlier)
 
 
-def next_step(stored: dict[str, str]) -> str | None:
+def next_step(stored: dict[str, Any]) -> str | None:
     """The first step still missing, by its name in [ctx], or None once all three are stored."""
     return next((name for key, name in STEPS.items() if not stored.get(key)), None)
 
 
 def merge(
-    stored: dict[str, str], update: UnderstandingUpdate | None, *, before: dict[str, str] | None = None,
-) -> dict[str, str]:
+    stored: dict[str, Any], update: UnderstandingUpdate | None, *, before: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """The record after this turn. Per key, a null or blank value keeps what is stored; anything
     else replaces it, on one line (which also keeps it from opening a line of its own in [ctx]) and
-    cut to LIMIT characters. A step is taken only in order, judged on `before`, the record as this
-    turn began (`stored` when not given)."""
+    cut to LIMIT characters, and a replaced value of a tracked key is kept in its history. A step
+    is taken only in order, judged on `before`, the record as this turn began (`stored` when not
+    given)."""
     before = stored if before is None else before
     merged = {key: stored[key] for key in KEYS if stored.get(key)}
+    for key in (HISTORY, PENDING):
+        if stored.get(key):
+            merged[key] = stored[key]
     for key in KEYS:
         value = " ".join((getattr(update, key, None) or "").split())
         if value and _in_order(key, before):
-            merged[key] = value[:LIMIT].rstrip()
+            value = value[:LIMIT].rstrip()
+            old = merged.get(key)
+            if key in TRACKED and old and old != value:
+                history = dict(merged.get(HISTORY) or {})
+                history[key] = (history.get(key) or [])[-(KEPT - 1):] + [old]
+                merged[HISTORY] = history
+            merged[key] = value
     return merged
 
 
-def render(stored: dict[str, str]) -> str | None:
+def render(stored: dict[str, Any]) -> str | None:
     """The record as the value of its [ctx] line, each step named even while it is missing, or None
     when nothing is stored yet."""
     if not any(stored.get(key) for key in KEYS):
@@ -65,7 +84,7 @@ def usable(check: Check | None) -> bool:
     ))
 
 
-def merge_check(stored: dict[str, str], check: Check) -> dict[str, str]:
+def merge_check(stored: dict[str, Any], check: Check) -> dict[str, Any]:
     """The record after a stored check: its problem is the issue they are dealing with, and what it
     came down to, which they confirmed, is kept too, since it is closer to what they hold than their
     opening line (live, 2026-10-13)."""

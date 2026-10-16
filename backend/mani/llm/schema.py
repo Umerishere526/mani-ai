@@ -168,6 +168,14 @@ class UnderstandingUpdate(BaseModel):
             "feeling word, never one they did not give. A dozen words at most. Null otherwise."
         ),
     )
+    event: str | None = Field(
+        default=None,
+        description=(
+            "The specific event or moment they describe that seems to have started this, such as "
+            "\"your boss criticized your report in front of the team\", in their words and said to them "
+            "as you, only when this message names it or changes it. A dozen words at most. Null otherwise."
+        ),
+    )
     issue: str | None = Field(
         default=None,
         description=(
@@ -180,11 +188,12 @@ class UnderstandingUpdate(BaseModel):
     core_issue: str | None = Field(
         default=None,
         description=(
-            "The core issue: what the problem comes down to for them underneath, such as what usually "
-            "happens next, what falls on them, or what keeps it going. Your understanding, "
-            "formed from their answers and said to them as you. Report it as soon as their answers show "
-            "it; they don't need to name it themselves. Never the feeling they opened with or the problem "
-            "reworded. A dozen words at most. Null otherwise."
+            "The core issue: your reading of what the problem comes down to for them underneath, formed "
+            "from what is happening and how they feel about it, such as what usually happens next, what "
+            "falls on them, or what keeps it going. Report it as soon as their answers show it, and again "
+            "whenever a later answer changes it, before or after your check and inside the framework. "
+            "Never the feeling they opened with or the problem reworded. A dozen words at most. Null when "
+            "nothing changed."
         ),
     )
     in_their_control: str | None = Field(
