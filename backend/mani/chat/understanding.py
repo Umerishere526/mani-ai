@@ -38,12 +38,14 @@ def next_step(stored: dict[str, Any]) -> str | None:
 
 def merge(
     stored: dict[str, Any], update: UnderstandingUpdate | None, *, before: dict[str, Any] | None = None,
+    track: bool = True,
 ) -> dict[str, Any]:
     """The record after this turn. Per key, a null or blank value keeps what is stored; anything
     else replaces it, on one line (which also keeps it from opening a line of its own in [ctx]) and
-    cut to LIMIT characters, and a replaced value of a tracked key is kept in its history. A step
-    is taken only in order, judged on `before`, the record as this turn began (`stored` when not
-    given)."""
+    cut to LIMIT characters, and a replaced value of a tracked key is kept in its history, except
+    while `track` is off: the turn Mani's check is written establishes the reading rather than
+    changing it. A step is taken only in order, judged on `before`, the record as this turn began
+    (`stored` when not given)."""
     before = stored if before is None else before
     merged = {key: stored[key] for key in KEYS if stored.get(key)}
     for key in (HISTORY, PENDING):
@@ -54,7 +56,7 @@ def merge(
         if value and _in_order(key, before):
             value = value[:LIMIT].rstrip()
             old = merged.get(key)
-            if key in TRACKED and old and old != value:
+            if track and key in TRACKED and old and old != value:
                 history = dict(merged.get(HISTORY) or {})
                 history[key] = (history.get(key) or [])[-(KEPT - 1):] + [old]
                 merged[HISTORY] = history
@@ -90,7 +92,7 @@ def merge_check(stored: dict[str, Any], check: Check) -> dict[str, Any]:
     opening line (live, 2026-10-13)."""
     merged = merge(stored, UnderstandingUpdate(
         issue=check.problem, core_issue=check.core_issue, in_their_control=check.in_their_control,
-    ))
+    ), track=False)
     came_to = " ".join((check.comes_down_to or "").split())
     if came_to:
         merged["comes_down_to"] = came_to[:LIMIT].rstrip()

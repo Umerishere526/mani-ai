@@ -654,6 +654,7 @@ async def send(
         understood = (
             understanding.merge(
                 understanding.merge_check(before, reply.check), reply.understanding_update, before=before,
+                track=False,
             )
             if check_written else theirs
         )
