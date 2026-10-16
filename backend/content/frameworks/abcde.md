@@ -89,7 +89,6 @@ stages:
         5. E: Effective New Belief: What's a more accurate and helpful way to understand the situation?
   activate:
     title: "A: Activating Event"
-    intro: "A is for Activating Event."
     purpose: "Identify the activating event from the conversation."
     listen_for: "What happened or has been happening, what was said or done, and whether the person is describing what they observed or what they inferred."
     ready_when: "The event is clear from what they have said."
@@ -120,7 +119,6 @@ stages:
       reflective: "What's been happening that seems connected to it?"
   belief:
     title: "B: Belief"
-    intro: "B is for Belief."
     purpose: "Identify what the person began believing about the event, in their own words."
     # Sent as next_stage_reach on the stage before, where the reply judges this stage for the walk.
     reach: "Where several beliefs appear, report belief as partial with each in their words, so your text asks which affected them most. A belief is what they concluded about themselves or what it means for them, never whether how they were treated was real or fair. What they did because of it is not the belief; keep it for consequence."
@@ -142,7 +140,6 @@ stages:
       reflective: "When that happened, what did you begin believing about yourself or the situation?"
   consequence:
     title: "C: Consequences"
-    intro: "C is for Consequences."
     purpose: "Identify how believing that affected what they felt and what they did or avoided."
     reach: "Report consequence as known only where they tied both a feeling and an action or avoidance to that belief. Where only one is there, report it as partial with that one in their words and the other as the gap: feeling when how it left them feeling is missing, doing when what they did or avoided is missing. A yes to your confirmation adds nothing."
     listen_for: "A change in feeling or behaviour after they believed it, such as anxiety, withdrawing or avoiding."
@@ -169,7 +166,6 @@ stages:
       reflective: "When you believed that thought, how did it influence your feelings or the way you responded?"
   dispute:
     title: "D: Dispute"
-    intro: "D is for Dispute."
     purpose: "Help them look at what supports the belief and what may challenge it, and tell what they know from what they assume, without trying to prove the belief wrong."
     listen_for: "What they have observed, what supports the belief, what may suggest a different understanding, and what they do not yet know."
     ready_when: "What supports the belief and what might challenge it have both been looked at, and where the belief is joined to a conclusion they draw from it (\"I can't get it all done\" and \"so there is no point starting\"), the two have been pulled apart in their words. Not knowing for sure is not enough on its own. They do not have to disprove it."
@@ -195,7 +191,6 @@ stages:
       reflective: "As you think about that belief, what seems to support it, and what might suggest a different explanation?"
   effective:
     title: "E: Effective New Belief"
-    intro: "E is for Effective New Belief."
     purpose: "Help them reach a more realistic and helpful understanding from what they have looked at, in their own words."
     reach: "A plan or an action, such as raising it with someone, is not a new belief, so report effective as missing. When they answer effective with a plan, acknowledge the plan and ask for the new way of seeing it. When they offer a new way of seeing it, report effective as partial with it in their words and gap fits: your text says it back and asks whether it fits for them. Known only once they said it does."
     listen_for: "A conclusion that separates what they know from what they assumed, such as not knowing why something happened and wanting more information."
@@ -229,6 +224,6 @@ Source: the ABCDE framework document sent by the client on 2026-10-09 (Direct, S
 Reflective cadences, and the implementation requirements). When it fits comes from the client's
 Framework Selection Cheat Sheet of 2026-10-13. One MANI personality, three
 communication styles, one ABCDE methodology, and a conversation that remembers what the person has
-already said. Each letter and its name is said when the stage is reached. A stage the conversation
+already said. No letter line is said; the stage shows beside the chat. A stage the conversation
 already answers is said back with what they said for it and confirmed once, never asked again. It
 ends with the shared body check-in, then Chat More and Go to Library.

@@ -600,7 +600,7 @@ async def test_tapping_the_offer_records_acceptance(alice, model):
 
     assert ctx.technique.outcome is TechniqueOutcome.ACCEPTED
     assert ctx.technique.phase == "activate"
-    assert turn.content.startswith("A is for Activating Event. ")
+    assert not turn.content.startswith("A is for")
     # So the store is seeded from what they already said instead of asking it again.
     assert "framework_starting: yes" in scripted.last_messages[-1]["content"]
 
@@ -1846,7 +1846,8 @@ def _abcde_stages() -> dict:
 
 
 def _opens(stage: str, then: str) -> str:
-    return f"{_abcde_stages()[stage]['intro']} {then}"
+    """A stage's reply is Mani's own text alone: no letter line (spec 0007, decision 5)."""
+    return then
 
 
 def _asks(stage: str) -> str:

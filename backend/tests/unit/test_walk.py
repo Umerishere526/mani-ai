@@ -108,11 +108,11 @@ def test_a_stage_reached_without_a_judgement_is_asked_and_reported_apart_from_on
     unjudged = walk.advance(abcde, stored, None, "agreed", in_force="belief")
     assert unjudged.unjudged and "consequence" not in unjudged.entries
     assert render(abcde, unjudged, text=own, style="directive") == (
-        "C is for Consequences. How did that thought affect how you felt or what you did?", [],
+        "How did that thought affect how you felt or what you did?", [],
     )
     missing = walk.advance(abcde, stored, None, "agreed", in_force="belief", report=judged("missing"))
     assert not missing.unjudged and "consequence" not in missing.entries
-    assert render(abcde, missing, text=own, style="directive") == (f"C is for Consequences. {own}", [])
+    assert render(abcde, missing, text=own, style="directive") == (own, [])
 
 
 def test_a_judgement_of_the_next_stage_on_a_turn_that_stays_is_neither_stored_nor_flagged(abcde):
@@ -128,7 +128,7 @@ def test_a_stage_let_go_reaches_the_next_said_back_from_the_judgement(abcde):
     second = walk.advance(abcde, first.entries, None, "let_go", in_force="belief",
                           report=judged("partial", "you felt frustrated"))
     own = "You mentioned feeling frustrated. Is that how this belief has affected you?"
-    assert render(abcde, second, text=own, style="directive") == (f"C is for Consequences. {own}", [])
+    assert render(abcde, second, text=own, style="directive") == (own, [])
 
 
 def test_a_question_holds_the_stage_without_a_try_then_their_yes_to_the_say_back_moves_it(abcde):
@@ -255,44 +255,40 @@ def reached(entries: dict, stage: str) -> walk.Walked:
     return walk.Walked(entries, stage, stage)
 
 
-def test_a_missing_stage_is_its_letter_line_then_manis_own_question_about_their_situation(abcde):
+def test_a_missing_stage_is_manis_own_question_about_their_situation_with_no_letter_line(abcde):
     """Thread 425f6a55, 2026-10-14: the client's bare question ("…about what was happening?") was met
-    with "regarding?". Mani asks it about their situation, as the client's document adapts D, after the
-    letter line code sends; a letter line the model wrote is dropped."""
+    with "regarding?". Mani asks it about their situation, as the client's document adapts D. No letter
+    line is sent (muhammad, 2026-10-16: the stage shows in the ledger at the side), and one the model
+    wrote is dropped."""
     own = "What did you start telling yourself when your manager gave you work outside your responsibilities?"
     reached = walk.Walked({}, "belief", "belief")
-    assert render(abcde, reached, text=own, style="directive") == (f"B is for Belief. {own}", [])
+    assert render(abcde, reached, text=own, style="directive") == (own, [])
     assert render(abcde, reached, text=f"B is for Belief. {own}", style="directive") == (
-        f"B is for Belief. {own}", ["dropped a letter line"],
+        own, ["dropped a letter line"],
     )
+    # A missing with a feeling: Mani's own question comes before the client's line with the feeling in it.
+    start = walk.start(abcde, None, judged("missing"))
+    own_a = "What happened at work that left you feeling overwhelmed?"
+    assert render(abcde, start, text=own_a, feeling="overwhelmed") == (own_a, [])
+    assert "moves only on their yes" in walk.CONFIRM_ASK
+    assert "as written" not in walk.reach_line("belief") and "your own question" in walk.reach_line("belief")
 
 
 def test_a_missing_stage_whose_text_asks_nothing_falls_back_to_the_clients_question(abcde):
     text, notes = render(abcde, walk.Walked({}, "belief", "belief"), text="Thanks for telling me.", style="directive")
-    assert text == "B is for Belief. What did you start telling yourself about what was happening?"
+    assert text == "What did you start telling yourself about what was happening?"
     assert notes == ["missing asks nothing"]
 
 
 def test_a_missing_event_is_asked_with_their_own_word_for_the_feeling(abcde):
     start = walk.start(abcde, None, judged("missing"))
-    assert render(abcde, start, feeling="overwhelmed")[0] == (
-        "A is for Activating Event. What's been happening that's left you feeling so overwhelmed?"
+    assert render(abcde, start, feeling="overwhelmed") == (
+        "What's been happening that's left you feeling so overwhelmed?", ["missing asks nothing"],
     )
     assert render(abcde, start) == (
-        "A is for Activating Event. What's been happening that's left things feeling so hard?",
-        ["slot empty", "missing asks nothing"],
+        "What's been happening that's left things feeling so hard?",
+        ["missing asks nothing", "slot empty"],
     )
-
-
-def test_a_missing_event_keeps_the_clients_line_with_their_feeling_over_manis_question(abcde):
-    """The client's Situation 3 for A is already about them, through their feeling word; without one,
-    Mani's own question is used."""
-    start = walk.start(abcde, None, judged("missing"))
-    own = "What has been happening at work that you want to look at?"
-    assert render(abcde, start, text=own, feeling="overwhelmed")[0] == (
-        "A is for Activating Event. What's been happening that's left you feeling so overwhelmed?"
-    )
-    assert render(abcde, start, text=own) == (f"A is for Activating Event. {own}", ["slot empty"])
 
 
 @pytest.mark.parametrize("status", ["known", "possible"])
@@ -300,7 +296,7 @@ def test_without_manis_own_confirmation_a_known_event_falls_back_to_the_clients_
     """AC-4: when Mani's own confirmation cannot be used, the client's confirm line carries their words."""
     start = walk.start(abcde, None, judged(status, "Being left out of meetings at work."))
     assert render(abcde, start, text="Being left out of meetings.", style="reflective")[0] == (
-        "A is for Activating Event. You've mentioned being left out of meetings at work. "
+        "You've mentioned being left out of meetings at work. "
         "Is that where these concerns began?"
     )
 
@@ -313,12 +309,12 @@ def test_their_words_inside_a_line_start_lowercase_except_i(abcde):
     assert render(abcde, walk.start(abcde, None, judged("missing")), feeling="Overwhelmed")[0].endswith("feeling so overwhelmed?")
 
 
-def test_a_known_stage_is_its_letter_line_then_manis_own_confirmation(abcde):
+def test_a_known_stage_is_manis_own_confirmation_with_no_letter_line(abcde):
     """muhammad's team lead, 2026-10-13: the model says back what they said and asks, in its own words,
     whether it is right; no fixed phrase is added and its question is kept."""
     own = "Here's what I understand: you've been telling yourself you're useless. Is that still how it feels?"
     assert render(abcde, reached({"belief": {"said": "I am useless", "status": "known"}}, "belief"), text=own) == (
-        f"B is for Belief. {own}", [],
+        own, [],
     )
 
 
@@ -326,7 +322,7 @@ def test_on_the_start_turn_a_is_manis_own_confirmation(abcde):
     """The yes turn judges A as the walk reaches it and writes for it at once, so its text is used for A."""
     start = walk.start(abcde, None, judged("known", "your boss criticized your work today"))
     own = "So it started when your boss criticized your work today. Is that where this began for you?"
-    assert render(abcde, start, text=own) == (f"A is for Activating Event. {own}", [])
+    assert render(abcde, start, text=own) == (own, [])
 
 
 def test_a_confirmation_that_asks_nothing_falls_back(abcde):
@@ -334,7 +330,7 @@ def test_a_confirmation_that_asks_nothing_falls_back(abcde):
     stored = {"belief": {"said": "I am useless", "status": "known"}}
     phrase = walk.confirm_phrase(abcde, "belief", THREAD)
     assert render(abcde, reached(stored, "belief"), text="You've been telling yourself you're useless.") == (
-        f"B is for Belief. You mentioned I am useless. {phrase}", ["confirm text unusable"],
+        f"You mentioned I am useless. {phrase}", ["confirm text unusable"],
     )
 
 
@@ -343,7 +339,7 @@ def test_a_partial_stage_asks_only_the_gap_or_falls_back_to_the_clients_question
     stored = {"consequence": {"said": "I felt bad", "status": "partial"}}
     on_c = reached(stored, "consequence")
     gap = "What did you do after that?"
-    assert render(abcde, on_c, text=gap) == (f"C is for Consequences. {gap}", [])
+    assert render(abcde, on_c, text=gap) == (gap, [])
     text, notes = render(abcde, on_c, text="That sounds hard.")
     assert text.endswith("How did that belief affect how you felt or what you did?")
     assert notes == ["gap asks nothing"]
@@ -423,7 +419,7 @@ def test_d_reached_with_only_support_said_asks_only_the_challenge(abcde):
                          report=judged("partial", "your team now works overtime too", gap="challenge"))
     assert moved.entries["dispute"]["gap"] == "challenge"
     text, notes = render(abcde, moved, text="That sounds hard.")
-    assert text == ("D is for Dispute. What might make you question the belief that because of your bad "
+    assert text == ("What might make you question the belief that because of your bad "
                     "decision, others have to pay for it?")
     assert notes == ["gap asks nothing"]
 

@@ -73,11 +73,12 @@ def test_every_answer_after_an_offer_names_what_kind_of_answer_it_is():
     assert all(c["after_offer"]["lines"] for c in answered)
 
 
-def test_a_stage_reached_without_its_letter_line_or_a_known_stage_asked_is_flagged():
-    """Spec 0004, AC-1 and AC-4, read from the turn's stage trace: ids and statuses, never words."""
+def test_a_known_stage_asked_with_the_clients_question_is_flagged():
+    """Spec 0004, AC-4, read from the turn's stage trace: ids and statuses, never words. No letter line is
+    expected (spec 0007, decision 5)."""
     stages = {
-        "activate": {"intro": "A is for Activating Event.", "ask": {"supportive": "What happened?"}},
-        "belief": {"intro": "B is for Belief.", "ask": {"supportive": "What did you tell yourself?"}},
+        "activate": {"ask": {"supportive": "What happened?"}},
+        "belief": {"ask": {"supportive": "What did you tell yourself?"}},
     }
 
     def trace(asking: str, status: str) -> list[dict]:
@@ -85,28 +86,26 @@ def test_a_stage_reached_without_its_letter_line_or_a_known_stage_asked_is_flagg
                 for s in stages]
 
     on_a = trace("activate", "missing")
-    assert scenario_check.stage_flags("A is for Activating Event. What happened?", on_a, None, stages, "supportive") == []
-    assert scenario_check.stage_flags("What happened?", on_a, None, stages, "supportive") == [
-        "stage reply without its letter line"]
-    assert scenario_check.stage_flags("Can you say more?", on_a, on_a, stages, "supportive") == [], "a stay has none"
+    assert scenario_check.stage_flags("What happened?", on_a, stages, "supportive") == []
+    assert scenario_check.stage_flags("Can you say more?", on_a, stages, "supportive") == [], "a stay has none"
     known_b = trace("belief", "known")
     assert scenario_check.stage_flags(
-        "B is for Belief. What did you tell yourself?", known_b, on_a, stages, "supportive",
+        "What did you tell yourself?", known_b, stages, "supportive",
     ) == ["asked a stage already known"]
-    assert scenario_check.stage_flags("Anything", None, on_a, stages, "supportive") == []
+    assert scenario_check.stage_flags("Anything", None, stages, "supportive") == []
 
 
 # Mani's five replies in the client's way of communication sample, word for word (2026-10-13).
 SAMPLE_REPLIES = (
     "I'm listening. What's frustrating you?",
-    "When everything feels frustrating, sometimes it's because several things have been building up for a "
-    "while. I don't want to assume that's what's happening to you.",
-    "That's a lot of frustration coming from every direction at work. I want to understand something before "
-    "we go further.",
-    "That would be frustrating, especially when other people's lack of follow-through creates additional work "
-    "for you. But I want to understand the pattern rather than assume everyone is the problem.",
-    "So your ability to do your job depends on other people fulfilling their responsibilities. When they "
-    "don't, your work gets held up, and you're left dealing with the consequences.",
+    ("When everything feels frustrating, sometimes it's because several things have been building up for a "
+    "while. I don't want to assume that's what's happening to you."),
+    ("That's a lot of frustration coming from every direction at work. I want to understand something before "
+    "we go further."),
+    ("That would be frustrating, especially when other people's lack of follow-through creates additional work "
+    "for you. But I want to understand the pattern rather than assume everyone is the problem."),
+    ("So your ability to do your job depends on other people fulfilling their responsibilities. When they "
+    "don't, your work gets held up, and you're left dealing with the consequences."),
 )
 
 

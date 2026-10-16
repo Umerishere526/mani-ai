@@ -135,17 +135,14 @@ def _offering(registry, framework_id: str | None, key: str, style: str) -> str |
     return (((framework.stages or {}).get("offering") or {}).get(key) or {}).get(style) if framework else None
 
 
-def stage_flags(reply: str, trace: list[dict] | None, before: list[dict] | None, stages: dict, style: str) -> list[str]:
-    """Inside a framework: a stage reached opens with its letter line, and a stage stored as known or
-    possible is said back, never asked with the client's question (spec 0004)."""
+def stage_flags(reply: str, trace: list[dict] | None, stages: dict, style: str) -> list[str]:
+    """Inside a framework: a stage stored as known or possible is said back, never asked with the
+    client's question (spec 0004). No letter line is expected (spec 0007, decision 5)."""
     asking = next((row for row in trace or [] if row["asking"]), None)
     if asking is None:
         return []
-    was = next((row["stage"] for row in before or [] if row["asking"]), None)
     stage = stages.get(asking["stage"]) or {}
     flags = []
-    if asking["stage"] != was and stage.get("intro") and not reply.startswith(stage["intro"]):
-        flags.append("stage reply without its letter line")
     ask = (stage.get("ask") or {}).get(style)
     if asking["status"] in ("known", "possible") and ask and ask in reply:
         flags.append("asked a stage already known")
@@ -159,9 +156,7 @@ def _check(
     exchange.question = _question(exchange.reply)
     framework = registry.get(framework_id)
     if framework:
-        exchange.flags += stage_flags(
-            exchange.reply, exchange.trace, previous.trace if previous else None, framework.stages, style,
-        )
+        exchange.flags += stage_flags(exchange.reply, exchange.trace, framework.stages, style)
     # A stage said back to confirm it reuses their words on purpose, so it is not asking for them again.
     confirming = any(row["asking"] and row["status"] in ("known", "possible", "partial") for row in exchange.trace or [])
     if (not confirming and exchange.question

@@ -33,9 +33,12 @@ HELD_FOR_QUESTIONS = 2
 SAID_LIMIT = 200
 # How Mani confirms a stage the person already answered, in its own words (muhammad's team lead, 2026-10-13).
 CONFIRM_ASK = (
-    "Say back only what they said for this stage, never another stage's part, to them as you, and ask in "
-    "your own words whether that is right, in one or two sentences, asked differently from the stage before."
+    "Say back what they said for this stage, never another stage's part, to them as you, as what you now "
+    "understand, and ask in your own words whether that is right, in one or two sentences, asked differently "
+    "from the stage before. The stage moves only on their yes."
 )
+# A letter line the model writes is dropped: the stage is shown beside the chat, never said (spec 0007,
+# decision 5).
 _LETTER_LINE = re.compile(r"^\s*[A-E] is for\b")
 # "I" and its contractions keep their capital inside a sentence; nothing else that starts their words does.
 _FIRST_PERSON = re.compile(r"^I\b")
@@ -278,12 +281,12 @@ def reply_text(
     thread_id: uuid.UUID | str,
     feeling: str | None,
 ) -> tuple[str, list[str]]:
-    """The reply and the fallbacks it took. A stage just reached opens with its letter line, then
-    what its stored status calls for; otherwise it is the model's text. Every stage reached is one
-    [ctx] told the reply about, so once the reply judged it, the model's text is used for it when it
-    asks something: a confirmation, the gap, or its question about their situation. A stage missing
-    keeps the client's own line where it has one with their feeling word (A), and a stage left
-    unjudged gets the client's line. A letter line the model wrote is dropped either way."""
+    """The reply and the fallbacks it took. A stage just reached is Mani's own text for it, written for
+    what [ctx] told the reply the stage is (a say-back, the gap, or its own question about their
+    situation), whenever that text asks something; the client's lines are the logged fallback when it
+    asks nothing: its confirm line or a phrase for a known stage, its line for the gap, its missing line
+    with their feeling word (A) or its ask for a missing one. A stage left unjudged gets the client's
+    line. No letter line is sent, and one the model wrote is dropped (spec 0007, decision 5)."""
     notes: list[str] = []
     own = repairs.without_sentences(text, lambda s: bool(_LETTER_LINE.match(s))).strip()
     if own != text.strip():
@@ -299,37 +302,23 @@ def reply_text(
     status, said = entry.get("status"), entry.get("said") or ""
     own_asks = "?" in own
     ask = _client_line(framework, reached, "ask", style) or ""
+    if own_asks and not walked.unjudged:
+        return own, notes
     if status in CONFIRMED:
-        # Mani's own confirmation, what it understands for the stage and its own question (muhammad's
-        # team lead, 2026-10-13). The client's line or a fixed phrase only when it cannot be used.
-        if own_asks:
-            body = own
-        else:
-            notes.append("confirm text unusable")
-            body = _confirm_fallback(framework, reached, said, style, thread_id) or ask
+        notes.append("confirm text unusable")
+        body = _confirm_fallback(framework, reached, said, style, thread_id) or ask
     elif status == "partial":
-        if own_asks:
-            body = own
-        else:
-            notes.append("gap asks nothing")
-            body = _gap_line(framework, walked.entries, reached, entry.get("gap")) or ask
+        notes.append("gap asks nothing")
+        body = _gap_line(framework, walked.entries, reached, entry.get("gap")) or ask
     else:
+        if not walked.unjudged:
+            notes.append("missing asks nothing")
         missing = _client_line(framework, reached, "missing", style)
         body = repairs.render_template(missing, lead_line=None, slot=_mid_sentence(feeling)) if missing else None
         if missing and body is None:
             notes.append("slot empty")
-        if body is None and own_asks and not walked.unjudged:
-            # Mani's own question for the stage, about their situation in their words, as the client's
-            # document adapts it ("What makes you believe your manager is planning to replace you…"):
-            # muhammad, 2026-10-14.
-            body = own
-        elif body is None:
-            if not walked.unjudged:
-                notes.append("missing asks nothing")
-            body = ask
-    intro = ((framework.stages or {}).get(reached) or {}).get("intro")
-    # One paragraph, as the client's document writes it: "A is for Activating Event. You've mentioned..."
-    return " ".join(part for part in (intro, body) if part), notes
+        body = body or ask
+    return body, notes
 
 
 def _gap_line(framework: Framework, entries: dict[str, dict], stage: str, gap: str | None) -> str | None:
@@ -367,8 +356,8 @@ def reach_line(stage: str) -> str:
     return (
         f"your text follows what you report for {stage} in next_stage. Known or possible: your text is "
         f"its confirmation. {CONFIRM_ASK} Partial: your text asks only for what is missing, built on "
-        f"what they said. Missing: your text is only the question, since its letter line is sent for you; "
-        f"ask next_stage_ask as written, with what it refers to in their words."
+        f"what they said. Missing: your text is your own question for it, about their situation in their "
+        f"words, with next_stage_ask as its model; never name the letter or the stage."
     )
 
 
