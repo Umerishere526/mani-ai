@@ -118,12 +118,12 @@ def check_open(ctx: TurnContext) -> bool:
 
 
 def may_check(ctx: TurnContext) -> bool:
-    """Whether this reply may check Mani's understanding: once the problem and its core issue are
-    stored and what is in their control is stored or is what this message answers, which takes at
-    least three of their messages, with no framework live and no check waiting for its answer, and
-    once the cooldowns after the last check and the last offer have passed. The orchestrator stores a
-    check only when all three are found after this turn. The only way to an offer (spec 0006)."""
-    if understanding.next_step(ctx.thread.understanding) not in (None, "control"):
+    """Whether this reply may check Mani's understanding: once the problem, its core issue and what
+    is in their control are all stored, which takes at least four of their messages, so the reply
+    that receives the control answer is an ordinary one (spec 0007, AC-10); with no framework live
+    and no check waiting for its answer, and once the cooldowns after the last check and the last
+    offer have passed. The only way to an offer (spec 0006)."""
+    if understanding.next_step(ctx.thread.understanding) is not None:
         return False
     if live(ctx.technique) is not None or check_open(ctx):
         return False
@@ -204,11 +204,6 @@ _MEANING: dict[str, str | dict[str, str]] = {
         ),
     },
     "check": {
-        "once_control_is_answered": (
-            "if their message answers what is in their control, even with I don't know, report it and "
-            "give your reading in this reply by filling check, from their words only. If it does not, "
-            "ask about control and leave check empty."
-        ),
         "may_check": (
             "the problem, its core issue and what is in their control are all found. Give your reading "
             "now by filling check, from their words only, and ask the one question that moves forward. "
@@ -376,8 +371,7 @@ def build(
         if check_open(ctx):
             lines += _line("check", "open")
         elif may_check(ctx):
-            waiting = understanding.next_step(ctx.thread.understanding) == "control"
-            lines += _line("check", "once_control_is_answered" if waiting else "may_check")
+            lines += _line("check", "may_check")
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
         lines += _line("since_last", since_last)

@@ -445,13 +445,13 @@ def _on_message(person_message: int, technique=None, style: str | None = None):
 def test_no_check_until_the_problem_its_core_issue_and_their_control_are_all_found():
     """muhammad's run, 2026-10-13: Mani checked at their second message having asked about neither the
     core issue nor control. The steps are code's now (spec 0006, AC-2, AC-18): the next missing one is
-    named in [ctx] in order, and the check field waits for all three."""
+    named in [ctx] in order, and the check field waits for all three to be stored, so the reply that
+    receives the control answer is an ordinary one and the check comes the turn after (Lolly,
+    2026-10-16, point 2; spec 0007, AC-10)."""
     steps = [{}, {"issue": FOUND["issue"]}, {k: FOUND[k] for k in ("issue", "core_issue")}, FOUND]
     on = [_on_message(6, style="directive").thread.model_copy(update={"understanding": u}) for u in steps]
     contexts = [TurnContext(thread=t, profile=None, technique=None) for t in on]
-    # The turn that receives their answer about control may carry the check; code stores it only if
-    # that answer came (the orchestrator), so [ctx] says to check only once it is answered.
-    assert [context.may_check(c) for c in contexts] == [False, False, True, True]
+    assert [context.may_check(c) for c in contexts] == [False, False, False, True]
 
     def line(c, key):
         return next((l for l in context.build(c).splitlines() if l.startswith(f"{key}:")), None)
@@ -459,9 +459,7 @@ def test_no_check_until_the_problem_its_core_issue_and_their_control_are_all_fou
     assert [line(c, "understanding_next") for c in contexts] == [
         "understanding_next: problem", "understanding_next: core_issue", "understanding_next: control", None,
     ]
-    assert [line(c, "check") for c in contexts] == [
-        None, None, "check: once_control_is_answered", "check: may_check",
-    ]
+    assert [line(c, "check") for c in contexts] == [None, None, None, "check: may_check"]
 
 
 def test_the_context_tells_the_model_the_check_the_code_allows():

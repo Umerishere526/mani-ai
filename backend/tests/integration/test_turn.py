@@ -322,10 +322,11 @@ async def test_an_offer_still_made_on_their_first_message_cannot_start_a_framewo
 async def test_the_problem_its_core_issue_and_control_each_take_an_exchange_then_the_check_and_offer(
     alice, model,
 ):
-    """Spec 0006, AC-2 to AC-4, AC-17, AC-18, muhammad's run of 2026-10-13. The model reports
-    everything it can see from the first message; code takes one step per exchange, so the check field
-    first appears on their third message, the check is stored once their own words give control, and a
-    clear yes at their fourth makes that reply the client's offer. One call each."""
+    """Spec 0006, AC-2 to AC-4, AC-17, AC-18, muhammad's run of 2026-10-13, and spec 0007 AC-10. The
+    model reports everything it can see from the first message; code takes one step per exchange, the
+    reply to their control answer is an ordinary reply built on what is new in it, so the check field
+    first appears on their fourth message, and a clear yes at their fifth makes that reply the client's
+    offer. One call each."""
     from mani.models.rows import SupportStyle
 
     everything = UnderstandingUpdate(
@@ -335,6 +336,7 @@ async def test_the_problem_its_core_issue_and_control_each_take_an_exchange_then
     scripted = model(
         Reply(text="That sounds draining. Who does it fall on when they miss them?", understanding_update=everything),
         Reply(text="That's a lot to carry. What could you change about it?", understanding_update=everything),
+        Reply(text="When you want to start and nothing happens, what gets in the way?", understanding_update=everything),
         _check(),
         _offer("abcde"),
     )
@@ -342,14 +344,16 @@ async def test_the_problem_its_core_issue_and_control_each_take_an_exchange_then
     await send(alice, thread.id, "i'm frustrated at work")
     first = await _thread_row(alice, thread.id)
     await send(alice, thread.id, "my coworkers keep missing deadlines and i end up doing their work")
-    checked = await send(alice, thread.id, "i don't know what i could do")
+    await send(alice, thread.id, "i don't know what i could do")
+    assert (await _thread_row(alice, thread.id)).check_at_message_count is None
+    checked = await send(alice, thread.id, "I just freeze, I think")
     assert (await _thread_row(alice, thread.id)).check_at_message_count is not None
     turn = await send(alice, thread.id, "yes, that's it")
 
     assert set(first.understanding) == {"issue"}, "the opening message fills the problem only"
-    assert scripted.calls == 4
-    assert ["check" in shape.model_fields for shape in scripted.schemas] == [False, False, True, False]
-    assert ["offer" in shape.model_fields for shape in scripted.schemas] == [False, False, False, True]
+    assert scripted.calls == 5
+    assert ["check" in shape.model_fields for shape in scripted.schemas] == [False, False, False, True, False]
+    assert ["offer" in shape.model_fields for shape in scripted.schemas] == [False, False, False, False, True]
     # The check's parts in the client's order, whatever order the model's own text took.
     assert checked.content == CHECK_SENT
     # The client's template word for word with the model's slots in it, never the model's text.
@@ -363,22 +367,23 @@ async def test_the_problem_its_core_issue_and_control_each_take_an_exchange_then
     }
 
 
-async def test_a_check_whose_control_did_not_come_from_them_opens_nothing(alice, model):
-    """Spec 0006, AC-18: on the turn that should ask about control, a check carrying a control they never
-    gave is not stored, so their yes to it brings no offer; it is counted."""
+async def test_the_turn_that_asks_about_control_has_no_check_field(alice, model):
+    """Spec 0007, AC-10: with the problem and its core issue stored, the reply to their third message asks
+    about control and cannot check; a check the model fills anyway is dropped with the shape, and nothing
+    is stored."""
     from mani.db import pool
 
-    model(_check().model_copy(update={"understanding_update": None}))
+    scripted = model(_check().model_copy(update={"understanding_update": None}))
     thread = await start(alice)
     async with pool.as_admin() as conn:
         await conn.execute(
             "update public.threads set message_count = 11, understanding = $2::jsonb where id = $1",
             thread.id, {k: FOUND[k] for k in ("issue", "core_issue")},
         )
-    turn = await send(alice, thread.id, "it happens every week")
+    await send(alice, thread.id, "it happens every week")
 
+    assert "check" not in scripted.schemas[-1].model_fields
     assert (await _thread_row(alice, thread.id)).check_at_message_count is None
-    assert "check before the three steps" in turn.checks
 
 
 @pytest.mark.parametrize("style", ["directive", "supportive", "reflective"])
