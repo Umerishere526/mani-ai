@@ -533,5 +533,39 @@
         }
       }
     }
+  },
+  "two_styles_2026_10_16": {
+    "about": "Lolly's Reflective and Directive runs of 2026-10-16, the same answers in both. Read by eye: the reply to her control answer engages it and the check comes the turn after; each stage is said back and moves on her yes, takes as many exchanges as it needs, I don't know gets help, a rejected new belief is worked on, and E is verified before the body check-in. Her lines are kept word for word, so they carry no yes to a say-back and land a stage early or late.",
+    "expect": {},
+    "conversations": {
+      "anxious_long_day": {
+        "source": "Lolly, 2026-10-16, her lines word for word (the Reflective chat before the check; the Directive chat's framework answers, which add 'not sure')",
+        "lines": [
+          "I had a really long day and i am feeling anxious.",
+          "I am not sure it could be so many things but I just compartmentalize too much to identify the one or two things happening thats causing my anxiety",
+          "what do you mean by set things aside, what things?",
+          "work, pick up my kids from school, laundry, chores, bills.",
+          "So sometimes it’s like It does stay separate but then other times idk you know it all feels like one big jumbled mess and I try to separate it again but it just goes back into this big load. Idk very ebb and flow, maybe on a Monday it feels like separate things but on a Tuesday its one big mess.",
+          "Having to choose what gets done but then I choose nothing except for the deep yearning desire to do something while I still do nothing",
+          "I wish someone else would take them on haha but no not shit happens so its like where do I go from here with this mess!",
+          "To be honest, I dont know, thats kinda why im here"
+        ],
+        "check_answer": "Yea I think u got it all",
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Try it",
+            "a long list of things that I need to get done and haven't",
+            "That I won’t get it all done there’s just too much and so I dont start",
+            "yes",
+            "Nothing comes to mind for me",
+            "no",
+            "i mean no, thats the thought i had earlier",
+            "not sure",
+            "my eyes are burning"
+          ]
+        }
+      }
+    }
   }
 }
