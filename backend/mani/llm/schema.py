@@ -242,8 +242,9 @@ OfferAnswer = Literal["yes", "no", "asked", "moved_on"]
 CheckAnswer = Literal["yes", "no"]
 FeelingAnswer = Literal["yes", "no"]
 BodyBranch = Literal[
-    "chest", "head", "stomach", "elsewhere", "no_place", "agreed", "declined", "acting", "pain",
-    "returned", "asked", "moved_on", "eased",
+    "chest", "head", "stomach", "jaw", "hands", "eyes", "feet", "toes", "arms", "elsewhere", "no_place",
+    "no_tension", "clarify", "declined", "acting", "pain", "asked", "moved_on", "eased",
+    "better", "same", "worse", "helped", "somewhat", "not_helped",
 ]
 StageAnswer = Literal["agreed", "answered", "corrected", "let_go", "not_yet", "asked", "stopped"]
 _CLOSED_SETS = {
@@ -336,9 +337,10 @@ class Reply(_ReplyBase):
     body: BodyBranch | None = Field(
         default=None,
         description=(
-            "The body route branch their message meets, by its id from [ctx]. returned: the "
-            "panic or the feeling came back after the practice, never just that it did not help or "
-            "they are still upset. Null when none fits."
+            "The body cadence branch their message meets, by its id from [ctx]. better, same, worse: "
+            "how their body feels after the exercise. helped, somewhat, not_helped: whether they feel "
+            "the conversation helped with what brought them here, only after Mani asked it. Null when "
+            "none fits."
         ),
     )
     stage_answer: StageAnswer | None = Field(
@@ -348,7 +350,8 @@ class Reply(_ReplyBase):
             "have for this stage, with more or not. answered: they gave what the stage needs, with an "
             "update for it; your text says it back and asks whether that is right. corrected: a no "
             "with new words for this stage, or new words for an earlier stage, with an update for it. "
-            "let_go: they want to skip this stage, or a question made them uneasy. not_yet: a plain "
+            "let_go: they want to skip this one stage, or a question made them uneasy; never because "
+            "another issue came in or they want to come back to it later, which is asked. not_yet: a plain "
             "no, unclear, or I don't know while you still help. asked: they asked you something or "
             "pushed back instead of answering; answer them and ask again. stopped: they want to stop "
             "the questions altogether, never a plain no or I don't know. A question or push-back is "

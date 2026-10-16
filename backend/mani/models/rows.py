@@ -130,7 +130,7 @@ class ThreadSummary(Row):
 
 # The body route that ends every framework, and the one stage a practice may be run from. Code runs
 # these stages, so the model never skips them and no stage button is shown on them.
-ENDING_STAGES = frozenset({"somatic_checkin", "somatic_practice", "grounding"})
+ENDING_STAGES = frozenset({"somatic_checkin", "somatic_practice", "somatic_physical", "somatic_helped", "grounding"})
 
 
 class Framework(Row):

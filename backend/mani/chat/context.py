@@ -11,6 +11,7 @@ from mani.chat.techniques import OFFERING
 from mani.db.threads import TurnContext
 from mani.llm.schema import Moment
 from mani.models.rows import (
+    ENDING_STAGES,
     Framework,
     Message,
     MessageRole,
@@ -138,7 +139,6 @@ def moment(
     technique: TechniqueState | None,
     outcome: TechniqueOutcome | None,
     retiring_framework_id: str | None,
-    awaiting_place: bool,
     framework: Framework | None,
     concern: bool,
     check_open: bool = False,
@@ -154,8 +154,7 @@ def moment(
         return Moment.CHECK_OPEN if check_open else Moment.CHATTING
     if outcome is TechniqueOutcome.ACCEPTED:
         phase = technique.phase
-        at_the_body = phase == "somatic_checkin" or (phase == "somatic_practice" and awaiting_place)
-        if at_the_body or (framework is not None and phase == framework.closing):
+        if phase in ENDING_STAGES or (framework is not None and phase == framework.closing):
             return Moment.BODY
         return Moment.IN_STAGES
     if outcome is TechniqueOutcome.OFFERED:
@@ -491,7 +490,7 @@ def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> l
             for e in stage["if_unclear"]
         )
         lines.append(f"{prefix}_if_unclear: {rendered}")
-    ask = (stage.get("ask") or {}).get(style)
+    ask = repairs.styled(stage.get("ask"), style)
     if ask:
         lines.append(f"{prefix}_ask: {ask}")
     return lines

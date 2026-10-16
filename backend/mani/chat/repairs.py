@@ -181,40 +181,56 @@ def with_the_check_in(text: str, script: str) -> str:
     return f"{reflection}\n\n{script}" if reflection else script
 
 
-def check_in_script(stages: dict, style: str, body_said: str | None) -> str | None:
-    """The client's body check-in in one style: the line that asks about what they said earlier they
-    feel in their body, when they said something, otherwise the plain check-in."""
+def styled(value, style: str):
+    """A client text that is one text for every style, or the client's text for this one."""
+    return value.get(style) if isinstance(value, dict) else value
+
+
+def check_in_script(stages: dict, style: str, body_said: str | None, *, again: bool = False) -> str | None:
+    """The client's body check-in: her introduction and question, with what they said earlier they feel
+    in their body named before the question when they said something; asked again, only the question."""
     stage = stages.get("somatic_checkin") or {}
-    known = (stage.get("ask_known") or {}).get(style)
+    if again and stage.get("ask_again"):
+        return styled(stage["ask_again"], style)
+    known = styled(stage.get("ask_known"), style)
     asked_about = render_template(known, lead_line=None, slot=body_said) if known else None
-    return asked_about or (stage.get("ask") or {}).get(style)
+    return asked_about or styled(stage.get("ask"), style)
 
 
-# The client's place buttons under the "where" question, each with the body branch it answers.
-PLACE_LABELS = {"Chest": "chest", "Head": "head", "Stomach": "stomach", "Somewhere else": "elsewhere"}
-_PLACES = frozenset(PLACE_LABELS.values())
-BODY_STAGES = ("somatic_checkin", "somatic_practice")
+# The client's buttons on each step of the body cadence, each with the body branch it answers
+# (her somatic cadence document, 2026-10-16).
+CHECK_IN_BUTTONS = {
+    "Chest": "chest", "Stomach": "stomach", "Head": "head", "Somewhere Else": "no_place", "No Tension": "no_tension",
+}
+PHYSICAL_BUTTONS = {"Feel Better": "better", "Feel the Same": "same", "Feel Worse": "worse"}
+HELPED_BUTTONS = {"Yes, It Helped": "helped", "Somewhat": "somewhat", "No, Not Really": "not_helped"}
+BODY_BUTTONS = {**CHECK_IN_BUTTONS, **PHYSICAL_BUTTONS, **HELPED_BUTTONS}
+PLACES = frozenset({"chest", "head", "stomach", "jaw", "hands", "eyes", "feet", "toes", "arms", "elsewhere"})
+PHYSICAL = frozenset(PHYSICAL_BUTTONS.values())
+HELPED = frozenset(HELPED_BUTTONS.values())
+BODY_STAGES = ("somatic_checkin", "somatic_practice", "somatic_physical", "somatic_helped")
 
-# Where in the body route each answer may come (spec 0003's transition table): the stored phase,
-# the framework's closing, or `retiring`, the turn after the practice. Anywhere else it is ignored.
+# Where in the body cadence each answer may come: the stored phase, the framework's closing, or
+# `retiring`, the turn whose answer says whether the conversation helped. Anywhere else it is ignored.
 _ANSWERED_AT = {
-    **{place: {"closing", "somatic_checkin", "somatic_practice"} for place in _PLACES},
+    **{place: {"closing", "somatic_checkin", "somatic_practice"} for place in PLACES},
     "no_place": {"somatic_checkin", "somatic_practice"},
-    "agreed": {"somatic_checkin"},
+    "no_tension": {"closing", "somatic_checkin"},
     "declined": {"somatic_checkin", "somatic_practice"},
     "acting": {"closing", "somatic_checkin"},
     "pain": {"closing", "somatic_checkin", "somatic_practice"},
-    "returned": {"retiring"},
+    "clarify": {"somatic_checkin"},
     "asked": {"somatic_checkin"},
     "moved_on": {"somatic_checkin"},
     "eased": {"somatic_checkin"},
+    **{answer: {"somatic_physical"} for answer in PHYSICAL},
+    **{answer: {"retiring"} for answer in HELPED},
 }
 
 
 def reply_for(branch: dict, style: str) -> str:
     """A stage branch's reply: one text for every style, or the client's text for this one."""
-    reply = branch["reply"]
-    return reply[style] if isinstance(reply, dict) else reply
+    return styled(branch["reply"], style)
 
 
 def first_sentence(text: str) -> str:
@@ -224,7 +240,7 @@ def first_sentence(text: str) -> str:
 
 
 def body_branch(stages: dict, branch_id: str) -> dict | None:
-    """The body route branch with this id, from either of its two stages."""
+    """The body cadence branch with this id, from any of its stages."""
     return next(
         (b for stage in BODY_STAGES for b in (stages.get(stage) or {}).get("if_unclear") or []
          if b.get("id") == branch_id),
@@ -233,9 +249,8 @@ def body_branch(stages: dict, branch_id: str) -> dict | None:
 
 
 def body_answer_fits(body: str, at: str, style: str) -> bool:
-    """Whether the reply's body value can come where the route is. Agreeing to notice answers only
-    the supportive check-in, the one that asks whether they would like to."""
-    return at in _ANSWERED_AT.get(body, ()) and (body != "agreed" or style == "supportive")
+    """Whether the reply's body value can come where the cadence is."""
+    return at in _ANSWERED_AT.get(body, ())
 
 
 @dataclass(frozen=True)
@@ -246,24 +261,32 @@ class BodyReply:
     handoff: bool = False
 
 
+def _ask(stages: dict, stage: str, style: str) -> str:
+    return styled((stages.get(stage) or {}).get("ask"), style) or ""
+
+
 def body_reply(body: str, at: str, stages: dict, style: str, text: str) -> BodyReply:
-    """The client's reply for an answer that fits where the body route is: the branch's own text,
-    or Mani's first sentence then the client's question. A decline after the place question, and
-    something else brought up or the feeling gone at the check-in, have no client line, so the model's
-    text goes."""
+    """The client's reply for an answer that fits where the cadence is, word for word: an exercise and
+    how their body feels now; her reply to that and whether the conversation helped; her reply to that,
+    then the closing choices. Answers with no client line send the model's text."""
     branch = body_branch(stages, body)
     client = reply_for(branch, style) if branch and branch.get("reply") else text
-    practice = "somatic_practice"
     if body == "no_place":
-        ask = ((stages.get(practice) or {}).get("ask") or {}).get(style) or client
-        return BodyReply(with_the_check_in(first_sentence(text), ask), list(PLACE_LABELS), practice)
-    if body == "agreed":
-        return BodyReply(with_the_check_in(first_sentence(text), client), [], "somatic_checkin")
-    if body in ("moved_on", "eased"):
-        return BodyReply(text, [], practice, handoff=True)
-    if body == "declined":
-        return BodyReply(client if at == "somatic_checkin" else text, [], practice, handoff=True)
-    return BodyReply(client, [], practice, handoff=body in ("acting", "returned"))
+        return BodyReply(client, [], "somatic_practice")
+    if body in PLACES:
+        return BodyReply(f"{client}\n\n{_ask(stages, 'somatic_physical', style)}", list(PHYSICAL_BUTTONS),
+                         "somatic_physical")
+    if body == "no_tension":
+        return BodyReply(client, list(HELPED_BUTTONS), "somatic_helped")
+    if body in PHYSICAL:
+        return BodyReply(f"{client}\n\n{_ask(stages, 'somatic_helped', style)}", list(HELPED_BUTTONS),
+                         "somatic_helped")
+    if body == "clarify":
+        return BodyReply(text, [], "somatic_checkin")
+    if body == "pain":
+        return BodyReply(client, [], "somatic_helped")
+    # helped, somewhat, not_helped, and the ways out of the cadence: the closing choices follow.
+    return BodyReply(text if body in ("moved_on", "eased") else client, [], "somatic_helped", handoff=True)
 
 
 def _offering(framework: Framework | None, key: str, style: str) -> str | None:

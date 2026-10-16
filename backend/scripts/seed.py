@@ -43,11 +43,9 @@ def load_somatic_stages() -> dict:
     stages = (yaml.safe_load(match.group(1)) or {}).get("stages")
     if not stages:
         raise ValueError(f"{SOMATIC_FILE.name} yaml block has no stages")
-    known = (stages.get("somatic_checkin") or {}).get("ask_known") or {}
-    if lacking := [style.value for style in SupportStyle
-                   if not known.get(style.value) or template_slots(known[style.value])[1] is None]:
-        raise ValueError(f"{SOMATIC_FILE.name} somatic_checkin.ask_known lacks a <body_said> line for: "
-                         f"{', '.join(lacking)}")
+    known = (stages.get("somatic_checkin") or {}).get("ask_known")
+    if not isinstance(known, str) or template_slots(known)[1] is None:
+        raise ValueError(f"{SOMATIC_FILE.name} somatic_checkin.ask_known lacks a <body_said> line")
     return stages
 
 

@@ -41,6 +41,9 @@ EXPLAIN_LABELS = {TELL_ME_ABOUT_THIS_LABEL.lower(), TELL_ME_MORE_LABEL.lower()}
 # Somatic check-in -> Chat More OR Go to Library".
 CHAT_MORE_LABEL = "Chat More"
 GO_TO_LIBRARY_LABEL = "Go to Library"
+# The closing choices after the body cadence (the client's somatic cadence document, 2026-10-16).
+KEEP_CHATTING_CLOSE_LABEL = "Keep Chatting"
+FINISH_LABEL = "Finish for Now"
 
 # Asked in this order, one per reply, once a framework has finished and the person carries on
 # with the same issue - the client's "three forward-moving reflective questions".
