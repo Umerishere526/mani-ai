@@ -73,12 +73,13 @@ the same change as the work.**
   brings it back. ABCDE ends on E and then the shared body check-in below (muhammad, 2026-10-09: the check-in
   is asked). An offer comes only on a clear yes to Mani's check of its understanding, which may come from
   the person's second message, in every style (spec 0006). The shared body check-in and practice come from `content/prompts/somatic.md`.
-  The body route is held in code (`orchestrator._body_route_step`): the check-in is asked once; whatever
-  the person answers, the next reply asks where, with Chest / Head / Stomach / Somewhere else; "idk" asks
-  again; a place gets the client's practice for that place and style, word for word, ending "How do you feel
-  now?". The framework is not retired, and Chat More / Go to Library do not appear, until a practice has been
-  given (or they decline, or say what they will do). "It comes back" gets the client's waves reply for the
-  style.
+  The body cadence is the client's of 2026-10-16, held in code (`orchestrator._body_route`), one voice in every
+  style: her mind-body introduction and question with Chest / Stomach / Head / Somewhere Else / No Tension; one of
+  her nine exercises word for word, then how their body feels now (Feel Better / Feel the Same / Feel Worse); her
+  reply, then whether the conversation helped (Yes, It Helped / Somewhat / No, Not Really); her reply, then Keep
+  Chatting / Go to Library / Finish for Now. No Tension goes straight to whether it helped. The two answers are
+  recorded apart (`thread_technique_state.body_response`, `conversation_helped`, migration 025). The framework
+  retires on the turn that answers whether it helped (`somatic_helped` is final).
 - **Memory**: per person, folded from earlier chats by `mani/memory.py`; idle threads fold through
   `scripts/fold_idle_threads.py` or `GET /internal/cron/fold-summaries` behind `CRON_SECRET`.
 - **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). A completing framework picks one
@@ -240,13 +241,13 @@ the same change as the work.**
   stale (2026-10-13: the seed of every stage at the yes went stale twice; reviewed by Fable 5.1 and the
   architecture reviewer, and again 2026-10-14). `walk.py` merges the stage in force, then moves at most one phase,
   then merges the stage reached; an update for any other stage is dropped, logged: `agreed` counts only on a stage reached as a check,
-  `answered` and `corrected` only with words for it ("yes, and more" with no new words reads as `agreed`), and a
-  second `not_yet` in a row moves on as `let_go`. No stage is skipped. Every stage reached is one `[ctx]` told the
+  `answered` and `corrected` only with words for it ("yes, and more" with no new words reads as `agreed`). No
+  count moves a stage (spec 0007, see the entries below). No stage is skipped. Every stage reached is one `[ctx]` told the
   reply about (a start, a move on its answer, or a second try, where `next` says the walk moves whatever they
   answer), so the model's text is used for it when it asks something; a partial D missing its challenge falls
   back to the client's own line for it (its `if_unclear` id, `NextStage.gap`). At E, a plan ("raise it with HR") is not
   the new belief: `acting` may skip the body check-in only once E has their words or one try (muhammad,
-  2026-10-13). The stage reached opens with its `intro` line, then: for a known or possible stage, A to E, Mani's own
+  2026-10-13). The stage reached is Mani's own text with no letter line (spec 0007, decision 5): for a known or possible stage, A to E, Mani's own
   confirmation, saying back only what they said for that stage and asking in its own words whether it is right
   (muhammad's team lead, 2026-10-13: the fixed "Is that right?" phrases read as canned; `walk.CONFIRM_ASK`), with
   A's client `confirm` line or their words and a phrase from `confirm_phrases` only as the logged fallback
@@ -267,10 +268,11 @@ the same change as the work.**
   `frustrated_work_full` and `overtime_full` in `scripts/scenarios.json`.
 - **Only ABCDE is offered, from the client's ABCDE document** (muhammad, 2026-10-09). Because the client's
   ABCDE document of 2026-10-09 is what we build to, and ABCDE's stages give the questions a target
-  (2026-10-09); why the other five are paused and why the body check-in stays: reason unknown, muhammad to
-  confirm. Each stage opens with its letter and name ("A is for Activating Event."), as the document shows
-  (muhammad agreed 2026-10-13, R12), and nothing comes before it, so the styles' consent lines are no longer
-  sent (the document goes from Try It straight to "A is for"). What Mani knows lives in the stage store; a stage
+  (2026-10-09); the other five are paused because Lolly asked for one framework at a time, tested and corrected
+  until it works, before the next (her message of 2026-10-09 with the ABCDE document). No stage is introduced
+  by its letter: Mani's own words open it and the stage shows beside the chat, in the chat tester's ledger
+  (muhammad, 2026-10-16, spec 0007 decision 5, reversing his agreement of 2026-10-13 to R12; the client must be
+  told). The styles' consent lines are not sent. What Mani knows lives in the stage store; a stage
   already answered is confirmed once, as the decision above says, and one not known is asked with the document's
   question about their situation, as the decision above says, using the feeling word they gave for A if they
   named one. Tell me more is
@@ -414,14 +416,37 @@ the same change as the work.**
   as a failed try, so a second one let the stage go and, on E, forced the body check-in over it (muhammad,
   2026-10-16). `test_a_question_holds_the_stage_without_a_try_then_the_answer_moves_it`,
   `test_questions_hold_a_stage_only_so_long_then_count_as_tries` (`tests/unit/test_walk.py`).
-- **What they say they feel in their body is kept as `understanding.body`, and the check-in asks about it in the
-  client-style `somatic_checkin.ask_known` line (slot `<body_said>`); with nothing kept it is her plain check-in.
-  A question at the check-in (body asked, or no branch) gets Mani's answer and the check-in once more, then the two
-  choices; something else brought up (body moved_on) gets Mani's reply and the two choices.** Because muhammad
+- **What they say they feel in their body is kept as `understanding.body`, and the check-in names it before her
+  question in `somatic_checkin.ask_known` (slot `<body_said>`); with nothing kept it is her plain check-in. A question
+  at the check-in (body asked, or no branch) gets Mani's answer and her question once more (`ask_again`), then the
+  cadence moves on; something else brought up (body moved_on) gets Mani's reply and the closing choices; an unclear
+  sensation such as burning eyes (body clarify) is asked about before any exercise (Lolly, 2026-10-16, point 8).** Because muhammad
   asked that a sensation named anywhere in the chat be what the check-in asks about, and the check-in could hold a
   person for ever when no branch fit (2026-10-16). `repairs.check_in_script`, `orchestrator._body_route`,
   `_check_ins_sent`; `ask_known` is checked by `seed.load_somatic_stages`. The `ask_known` wording is ours and is
   waiting on the client.
+- **Inside a framework a stage moves only on their yes to Mani's say-back of what it has for the stage, or a skip;
+  never on an answer alone and never by a count** (muhammad, 2026-10-16, spec 0007 decisions 3 and 6). Because
+  Lolly's review of 2026-10-16 found ABCDE run as a questionnaire: an answer moved the walk, and a second not_yet
+  let a stage go. `answered` and `corrected` store their words and wait; `agreed` moves only a known stage with no
+  gap; a correction to an earlier stage holds this one while Mani asks about it, with the replaced words kept in
+  `was`. After `walk.STALL_LIMIT` (4) replies on one stage Mani offers to keep going, skip or stop; `stopped` records
+  the run as declined, with the store kept. Another issue, or "come back to it later", is `asked`, never `let_go`.
+  `when_stuck` in `abcde.md` says how to help at D and E; C needs a feeling and a behaviour, E is said back and
+  asked whether it fits. `tests/unit/test_walk.py`, `test_stopping_the_questions_keeps_what_was_said_and_offers_the_two_choices`.
+- **The check comes the turn after control is stored, never on the reply that receives it** (muhammad,
+  2026-10-16, spec 0007 decision 2). Because Lolly's point 2: the reply to "I choose nothing" summarised instead
+  of engaging it. The earliest check answers their 4th message. `test_no_check_until_the_problem_its_core_issue_and_their_control_are_all_found`.
+- **A changed feeling is confirmed before it is stored, and a changed issue, event or core issue is kept with what
+  it replaced** (muhammad, 2026-10-16, spec 0007 decisions 8 and 9). Because he asked for a confirmation when the
+  emotion changes and for a stack of what changed. `understanding.feeling_asked` holds the new word while
+  `[ctx]` `feeling_change` asks, `feeling_answer` stores it; `understanding.history` keeps the last three values of
+  `feeling`, `issue`, `event` and `core_issue`. The turn the check is written records no history.
+  `test_a_changed_feeling_waits_for_their_yes`, `test_a_replaced_issue_or_event_is_kept_in_the_history`.
+- **The body cadence is the client's somatic cadence document of 2026-10-16, word for word, one voice, its two
+  measurements recorded apart** (Lolly, 2026-10-16, R18). Because she asked for it to replace the body route of
+  2026-10-02. Built without tests (muhammad: "build it fast no test", 2026-10-16); the 24 tests that pin the old
+  route fail until they are rewritten. Migration 025 is applied locally only.
 - **After a framework ends, `[ctx]` keeps what was found in it (`finished_framework`, the retired row's stages).**
   Because "what was my new belief?" or "that didn't help" after the end had only the raw messages to go on
   (2026-10-16). `test_a_finished_framework_keeps_what_they_found_in_view`.
