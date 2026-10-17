@@ -130,3 +130,19 @@ def test_a_changed_feeling_waits_for_their_yes():
     # The same word again is not a change, and an answer with nothing pending changes nothing.
     assert "feeling_asked" not in understanding.merge(STORED, UnderstandingUpdate(feeling="frustrated"))
     assert understanding.merge(STORED, None, feeling_answer="yes") == STORED
+
+
+def test_a_turn_can_carry_the_understanding_with_its_history_and_a_pending_feeling():
+    """The debug view of a turn holds the whole record, whose history is a mapping of lists."""
+    import datetime as dt
+    import uuid
+
+    from mani.models.api import TurnOut
+
+    record = understanding.merge(
+        {"feeling": "anxious", "issue": "the list"},
+        UnderstandingUpdate(issue="your partner doesn't help", feeling="dread"),
+    )
+    turn = TurnOut(id=uuid.uuid4(), content="x", created_at=dt.datetime.now(dt.UTC), understanding=record)
+    assert turn.understanding["history"] == {"issue": ["the list"]}
+    assert turn.understanding["feeling_asked"] == "dread"
