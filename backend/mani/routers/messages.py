@@ -81,6 +81,7 @@ async def send(
         crisis_blocks_chat=turn.crisis_blocks_chat,
         was_duplicate=turn.was_duplicate,
         reasoning=turn.reasoning,
+        offered_because=turn.offered_because,
         ledger=turn.ledger,
         understanding=turn.understanding if get_settings().ai_debug_mode else None,
         check_at_message_count=turn.check_at_message_count if get_settings().ai_debug_mode else None,

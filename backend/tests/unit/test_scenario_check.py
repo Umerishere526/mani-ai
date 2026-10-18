@@ -73,12 +73,11 @@ def test_every_answer_after_an_offer_names_what_kind_of_answer_it_is():
     assert all(c["after_offer"]["lines"] for c in answered)
 
 
-def test_a_known_stage_asked_with_the_clients_question_is_flagged():
-    """Spec 0004, AC-4, read from the turn's stage trace: ids and statuses, never words. No letter line is
-    expected (spec 0007, decision 5)."""
+def test_the_reply_opening_a_stage_needs_its_letter_line_and_a_stage_read_back_is_never_asked_again():
+    """Spec 0004, AC-4, spec 0007: read from the turn's stage trace: ids and statuses, never words."""
     stages = {
-        "activate": {"ask": {"supportive": "What happened?"}},
-        "belief": {"ask": {"supportive": "What did you tell yourself?"}},
+        "activate": {"intro": "A is for Activating Event.", "ask": {"supportive": "What happened?"}},
+        "belief": {"intro": "B is for Belief.", "ask": {"supportive": "What did you tell yourself?"}},
     }
 
     def trace(asking: str, status: str) -> list[dict]:
@@ -86,13 +85,15 @@ def test_a_known_stage_asked_with_the_clients_question_is_flagged():
                 for s in stages]
 
     on_a = trace("activate", "missing")
-    assert scenario_check.stage_flags("What happened?", on_a, stages, "supportive") == []
-    assert scenario_check.stage_flags("Can you say more?", on_a, stages, "supportive") == [], "a stay has none"
-    known_b = trace("belief", "known")
+    assert scenario_check.stage_flags("A is for Activating Event. What happened?", on_a, None, stages, "supportive") == []
+    assert scenario_check.stage_flags("Can you say more?", on_a, None, stages, "supportive") == [
+        "stage reply without its letter line"]
+    assert scenario_check.stage_flags("Can you say more?", on_a, on_a, stages, "supportive") == [], "a stay has none"
+    read_b = trace("belief", "reading")
     assert scenario_check.stage_flags(
-        "What did you tell yourself?", known_b, stages, "supportive",
+        "What did you tell yourself?", read_b, read_b, stages, "supportive",
     ) == ["asked a stage already known"]
-    assert scenario_check.stage_flags("Anything", None, stages, "supportive") == []
+    assert scenario_check.stage_flags("Anything", None, None, stages, "supportive") == []
 
 
 # Mani's five replies in the client's way of communication sample, word for word (2026-10-13).

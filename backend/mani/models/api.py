@@ -90,6 +90,9 @@ class TurnOut(BaseModel):
     was_duplicate: bool = False
     # Null unless AI_DEBUG_MODE is on.
     reasoning: str | None = None
+    # Null unless AI_DEBUG_MODE is on: Mani's own reason for this turn's framework pick, when one
+    # was made (spec 0008).
+    offered_because: str | None = None
     # Null unless AI_DEBUG_MODE is on: what is stored for each stage and what the walk does about it.
     ledger: list[LedgerRow] | None = None
     # Null unless AI_DEBUG_MODE is on: what Mani understands of them (spec 0005, spec 0006).

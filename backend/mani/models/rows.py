@@ -102,6 +102,21 @@ class TechniqueState(Row):
     # What they said per stage, by framework id then stage id. Kept when a run retires, so a
     # framework that comes back can read it; a new start of one framework clears only its own.
     stages_known: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # Mani's own reading of why this framework was offered, kept with the run for reviewing
+    # selection quality; never read by application logic, never logged (spec 0008, migration 027).
+    offered_because: str | None = None
+
+
+class TechniqueRun(Row):
+    """One finished run, appended when its outcome is decided (migration 027). The only record of
+    which frameworks a thread has already run, since thread_technique_state holds just the one
+    most recent row; read to keep a just-finished framework's own cooldown from blocking a
+    different one (spec 0008, decision 3)."""
+
+    thread_id: uuid.UUID
+    framework_id: str
+    outcome: TechniqueOutcome
+    ended_at_message_count: int
 
 
 class ResponseStyle(Row):

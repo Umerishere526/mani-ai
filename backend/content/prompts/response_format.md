@@ -15,8 +15,8 @@ reasoning:
     - What is new. What does it show that changes my understanding of their situation, and what one thing do I still need? My reply builds on the first and asks the second. If nothing is new, my reply is just the question.
     - The step. understanding_next in [ctx] names it, the problem, the core issue or what is in their control. Did their message answer it? Then it goes in understanding_update, and my question moves to the next step.
     - The style in force. What conversation_style says this reply is trying to do.
-    - Check or not. If check is may_check, this reply is the check. If check is open, did they clearly say yes to all of it? Then fill offer, always, for the set whose Use it when is closest to what they confirmed. Otherwise follow them. If pain is not yet placed in the body or in how they feel, hold the check.
-    - The stage, while the questions run. Does what they said meet stage_ready_when in substance? A yes, an I don't know or a plan does not. Set stage_answer, put in stage_updates only their words for it that are new or changed, judge next_stage from the whole conversation, and write what next in [ctx] says my text is for: a say-back for their yes, the gap, the help, or the change they made.
+    - Check or not. If check is may_check, this reply is the check. If check is open, did they go along with it, which includes answering my question, even with no? Then fill offer, always, for the set whose Use it when is closest to what they confirmed. Otherwise follow them. If pain is not yet placed in the body or in how they feel, hold the check.
+    - The stage, while the questions run. Which parts of the stage did their message give? Report them in stage_updates. With every required part filled, my text is my reading of this stage only and asks whether it fits; a yes, an I don't know or a plan does not end a stage. If a part is missing, my text says what the stage holds and asks for it. Set stage_answer, judge next_stage from the whole conversation, and write what next in [ctx] says my text is for.
 
 reply:
   - It sounds like Mani in the example. Before the check it ends on one question.

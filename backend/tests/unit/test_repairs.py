@@ -118,20 +118,11 @@ def test_presence_reaches_the_person_in_any_style(registry, style):
 
 # The client's offer, Keep chatting and Tell me more (spec 0003, AC-2 to AC-4).
 
-# The client's short list of the five steps, sent after the permission question (R11).
-FIVE_STEPS = (
-    "\n\n- A: Activating Event. What happened or what is happening.\n"
-    "- B: Belief. What you began believing about it.\n"
-    "- C: Consequences. How that belief affected your feelings or actions.\n"
-    "- D: Dispute. What supports the belief and what might challenge it.\n"
-    "- E: Effective New Belief. A more realistic and helpful way to understand it."
-)
-
 SUPPORTIVE_OFFER = (
     "Feeling overwhelmed can make you question how well you're handling things.\n"
     "There's a framework called ABCDE that can help you understand the thoughts behind feeling used "
     "by your coworker, see whether those thoughts are really true, and find a more helpful way to "
-    "think about what's happening.\n\nWould you like to try it?" + FIVE_STEPS
+    "think about what's happening.\n\nWould you like to try it?"
 )
 
 
@@ -168,7 +159,7 @@ def test_a_slot_loses_its_quotes_and_trailing_punctuation_and_keeps_its_case(cli
     assert fixed.text == (
         "There's a framework called ABCDE that helps you identify the thoughts behind Feeling used by "
         "Sam, question whether they're true, and replace them with more realistic ones."
-        "\n\nWould you like to try it?" + FIVE_STEPS
+        "\n\nWould you like to try it?"
     )
 
 
@@ -191,9 +182,23 @@ def test_with_one_active_set_a_yes_offers_it_whatever_the_reply_heads_toward(cli
     assert fixed.prompts[0].technique == "abcde"
 
 
-def test_with_several_active_sets_an_offer_needs_the_one_the_reply_heads_toward(client_abcde):
+def test_with_no_pick_the_first_offerable_set_wins_the_tie(client_abcde):
+    """Spec 0008, decision 1: a bad or missing heading_toward falls back to the first offerable set
+    in the registry's order, never to dropping the offer - the client's "ABCDE wins a tie" rule,
+    generalised past exactly two sets."""
     unsure = offering(going_through="feeling used").model_copy(update={"heading_toward": None})
     fixed = yes_to_the_check(Registry([client_abcde, REFRAMING]), unsure, conversation_style="directive")
+    assert fixed.offer_dropped is None
+    assert fixed.prompts[0].technique == "abcde"
+
+
+def test_with_everything_excluded_the_offer_is_still_dropped(client_abcde):
+    """Spec 0008, decision 3: a set held by its own just-finished or declined run is never offered,
+    reported and tested through offerable rather than the registry itself."""
+    unsure = offering(going_through="feeling used").model_copy(update={"heading_toward": "abcde"})
+    fixed = yes_to_the_check(
+        Registry([client_abcde, REFRAMING]), unsure, conversation_style="directive", offerable=frozenset(),
+    )
     assert (fixed.text, fixed.offer_dropped) == ("Model's own words.", "no framework")
 
 
@@ -272,6 +277,14 @@ def test_the_body_check_in_is_sent_word_for_word():
     )
 
 
+def test_mani_s_own_version_of_the_check_in_introduction_gives_way_to_hers():
+    """Live, 2026-10-17 (thread with "leaving it as is"): the reply wrote the introduction in its own words,
+    and her introduction followed it, so it was said twice. Only Mani's one sentence about their answer stays."""
+    own = ("You see that his behavior might change. Now that we've worked through your thoughts, let's check in "
+           "with your body. You may not realize it, but our emotions affect your body too.")
+    assert repairs.with_the_check_in(own, CHECK_IN) == f"You see that his behavior might change.\n\n{CHECK_IN}"
+
+
 def test_a_check_in_already_word_for_word_is_left_alone():
     exact = f"You can wait without deciding what it means. {CHECK_IN}"
     assert repairs.with_the_check_in(exact, CHECK_IN) == exact
@@ -309,10 +322,11 @@ def body_stages() -> dict:
 
 
 def test_the_check_in_asks_about_what_they_said_of_their_body_and_otherwise_is_the_plain_one(body_stages):
-    """Asked about the sensation they named earlier, in the client's line, else her plain check-in."""
+    """Asked about the sensation they named earlier, in her introduction, else her plain check-in."""
     known = repairs.check_in_script(body_stages, "directive", "your chest getting tight")
-    assert known == "Earlier you mentioned your chest getting tight. Is that still there now?"
-    plain = body_stages["somatic_checkin"]["ask"]["directive"]
+    assert known.startswith("Now that we've worked through your thoughts")
+    assert known.endswith("Earlier you mentioned your chest getting tight. Where are you noticing any tension or discomfort right now?")
+    plain = body_stages["somatic_checkin"]["ask"]
     assert repairs.check_in_script(body_stages, "directive", None) == plain
     assert repairs.check_in_script(body_stages, "directive", "  ") == plain
 
@@ -321,45 +335,44 @@ def test_the_check_in_asks_about_what_they_said_of_their_body_and_otherwise_is_t
     ("chest", "closing", "directive", True),
     ("chest", "retiring", "directive", False),
     ("no_place", "closing", "directive", False),
-    ("agreed", "somatic_checkin", "supportive", True),
-    ("agreed", "somatic_checkin", "directive", False),
+    ("no_tension", "somatic_checkin", "supportive", True),
+    ("better", "somatic_physical", "directive", True),
+    ("better", "somatic_checkin", "directive", False),
     ("acting", "somatic_practice", "reflective", False),
-    ("returned", "retiring", "reflective", True),
+    ("helped", "retiring", "reflective", True),
 ])
 def test_a_body_answer_counts_only_where_the_route_can_take_it(body, at, style, fits):
     assert repairs.body_answer_fits(body, at, style) is fits
 
 
-def test_a_place_is_the_clients_practice_word_for_word_with_no_buttons(body_stages):
+def test_a_place_is_her_exercise_word_for_word_then_how_their_body_feels_now(body_stages):
     step = repairs.body_reply("head", "somatic_checkin", body_stages, "directive", "Model words.")
     head = next(b for b in body_stages["somatic_practice"]["if_unclear"] if b["id"] == "head")
+    ask = body_stages["somatic_physical"]["ask"]
     assert (step.text, step.labels, step.phase, step.handoff) == (
-        head["reply"]["directive"], [], "somatic_practice", False,
+        f"{head['reply']}\n\n{ask}", ["Feel Better", "Feel the Same", "Feel Worse"], "somatic_physical", False,
     )
 
 
-def test_no_place_is_manis_first_sentence_then_the_clients_where_question(body_stages):
-    step = repairs.body_reply(
-        "no_place", "somatic_checkin", body_stages, "reflective", "It is hard to say. Is it your chest?",
-    )
-    assert step.text == "It is hard to say.\n\nWhere does that sit in your body right now?"
-    assert step.labels == ["Chest", "Head", "Stomach", "Somewhere else"]
+def test_no_place_is_her_where_question_with_no_buttons(body_stages):
+    step = repairs.body_reply("no_place", "somatic_checkin", body_stages, "reflective", "Is it your chest?")
+    assert (step.text, step.labels, step.phase) == ("Where in your body do you feel it?", [], "somatic_practice")
 
 
-def test_a_decline_and_an_action_are_the_clients_lines_with_the_two_choices(body_stages):
+def test_a_decline_and_an_action_are_her_lines_with_the_two_choices(body_stages):
     declined = repairs.body_reply("declined", "somatic_checkin", body_stages, "supportive", "Okay.")
     assert declined.text.startswith("You'd rather not check in with your body right now.")
     assert declined.handoff
     after_where = repairs.body_reply("declined", "somatic_practice", body_stages, "supportive", "Okay.")
-    assert (after_where.text, after_where.handoff) == ("Okay.", True), "the client wrote no line for it"
+    assert (after_where.text, after_where.handoff) == (declined.text, True)
     acting = repairs.body_reply("acting", "closing", body_stages, "supportive", "Okay.")
     assert acting.text.startswith("It sounds like you're ready to act on that.") and acting.handoff
 
 
-def test_pain_gets_the_clients_safety_line_and_no_practice(body_stages):
+def test_pain_gets_the_safety_line_and_no_exercise(body_stages):
     pain = repairs.body_reply("pain", "somatic_checkin", body_stages, "directive", "Okay.")
     assert (pain.text, pain.labels, pain.handoff) == (
-        "Let's not do a breathing practice then. I'm here with you. What would help right now?", [], False,
+        "Let's not do a physical exercise then. I'm here with you. What would help right now?", [], False,
     )
 
 
@@ -380,17 +393,17 @@ def test_a_stored_check_says_only_what_it_comes_down_to_then_asks(registry):
 # Mani's replies from the client's way of communication document, each as the client lays it out.
 CLIENT_LAYOUT = [
     "I'm listening. What's frustrating you?",
-    "When everything feels frustrating, sometimes it's because several things have been building up for a "
+    ("When everything feels frustrating, sometimes it's because several things have been building up for a "
     "while. I don't want to assume that's what's happening to you.\n\nTell me, are you frustrated with the "
-    "people around you, the circumstances you're dealing with, or how you're feeling about your life right now?",
-    "That would be frustrating, especially when other people's lack of follow-through creates additional work "
+    "people around you, the circumstances you're dealing with, or how you're feeling about your life right now?"),
+    ("That would be frustrating, especially when other people's lack of follow-through creates additional work "
     "for you. But I want to understand the pattern rather than assume everyone is the problem.\n\nWhen people "
     "fail to deliver, what typically happens next? Do you confront them, take over the work yourself, or end up "
-    "chasing them until they do what they promised?",
-    "So your ability to do your job depends on other people fulfilling their responsibilities. When they don't, "
+    "chasing them until they do what they promised?"),
+    ("So your ability to do your job depends on other people fulfilling their responsibilities. When they don't, "
     "your work gets held up, and you're left dealing with the consequences.\n\nHere's what I want to understand: "
     "When people fail to follow through, do they face any consequences, or does the responsibility for getting "
-    "things back on track fall on you?",
+    "things back on track fall on you?"),
 ]
 
 

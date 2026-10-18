@@ -91,56 +91,52 @@ class Style(BaseModel):
 
 
 class StageUpdate(BaseModel):
-    """What they said this turn for one stage. `status` is checked by code (walk.py), not typed,
-    for the reason the note on SHAPES gives."""
+    """What they said this turn for one part of a stage, by the part's id from stage_parts in [ctx]."""
 
     model_config = ConfigDict(extra="ignore")
 
-    stage: str = Field(description="The stage id, from framework_stages in [ctx].")
+    part: str = Field(description="The part's id, from stage_parts (or next_stage_parts) in [ctx].")
     said: str = Field(
+        default="",
         description=(
-            "What they said for this stage, in their words and said to them as you, such as "
+            "What they said for this part, in their words and said to them as you, such as "
             "\"your boss criticized your work in front of the team\". One event or thought, a dozen "
-            "words at most. Never they or the user for them."
-        )
+            "words at most. Never they or the user for them. For a rejected part, empty."
+        ),
     )
-    status: str = Field(
-        description=(
-            "known: their words answer the stage. partial: half of it is there. possible: "
-            "activate only, an event that likely started this but they never said so."
-        )
+    inferred: bool | None = Field(
+        default=None,
+        description="True when you read it from what they said and they never said it themselves.",
     )
     corrected: bool | None = Field(
         default=None,
-        description="True when they said words stored for this stage earlier are wrong.",
+        description="True when they say words already stored for this part are wrong and give new ones.",
+    )
+    rejected: bool | None = Field(
+        default=None,
+        description="True when they say words you gave back for this part are wrong and give no new ones.",
+    )
+    released: bool | None = Field(
+        default=None,
+        description=(
+            "True when the part's stop_pushing says to stop asking: said is then the closest thing they "
+            "gave, or empty when they gave nothing."
+        ),
     )
 
 
 class NextStage(BaseModel):
-    """How the conversation answers the stage the walk reaches next. `status` and `gap` are checked
-    by code (walk.py), not typed, for the reason the note on SHAPES gives."""
+    """What the conversation already holds for the stage the walk reaches next. A part is reported
+    only when they said it or it follows from what they said; an empty list means nothing answers it."""
 
     model_config = ConfigDict(extra="ignore")
 
-    status: str = Field(
-        description=(
-            "known: their words answer the stage. partial: part of it is there. possible: activate "
-            "only, an event that likely started this but they never said so. missing: nothing they "
-            "said answers it."
-        )
-    )
-    said: str | None = Field(
+    parts: list[StageUpdate] | None = Field(
         default=None,
         description=(
-            "What they said for this stage, in their words and said to them as you, a dozen words at "
-            "most. Never they or the user for them. Null when missing."
-        ),
-    )
-    gap: str | None = Field(
-        default=None,
-        description=(
-            "partial only: which part of the stage they have not given yet, by the id of its line in "
-            "next_stage_if_unclear, such as challenge for dispute. Null otherwise."
+            "The parts of next_stage the conversation already answers, from everything they said about "
+            "the issue, this message included, the latest words for each; a part already given is never asked. "
+            "Parts only; never rejected, corrected or released."
         ),
     )
 
@@ -156,6 +152,7 @@ class UnderstandingUpdate(BaseModel):
         default=None,
         description=(
             "Their own word for how they feel, only when this message names it or changes it, in the "
+            "framework too, even one they want to be rid of, in the "
             "form that reads after \"feeling\", such as \"frustrated\". Never one they did not use. "
             "Null otherwise."
         ),
@@ -204,6 +201,15 @@ class UnderstandingUpdate(BaseModel):
             "about it. Null otherwise."
         ),
     )
+    change: str | None = Field(
+        default=None,
+        description=(
+            "refine: what they said sharpens or adjusts the situation, the feeling or what it comes down "
+            "to (not anxious but overwhelmed, mostly the bills). shift: they turned to a different "
+            "situation or a different underlying issue. Null when they only answered. A shift is only when "
+            "what they describe is not the situation you were on, never the same story in new words."
+        ),
+    )
 
 
 # Read by the orchestrator: a check with all its parts is written to the thread, and repairs sends its
@@ -246,7 +252,7 @@ BodyBranch = Literal[
     "no_tension", "clarify", "declined", "acting", "pain", "asked", "moved_on", "eased",
     "better", "same", "worse", "helped", "somewhat", "not_helped",
 ]
-StageAnswer = Literal["agreed", "answered", "corrected", "let_go", "not_yet", "asked", "stopped"]
+StageAnswer = Literal["agreed", "let_go", "not_yet", "asked", "stopped"]
 _CLOSED_SETS = {
     "offer_answer": get_args(OfferAnswer),
     "check_answer": get_args(CheckAnswer),
@@ -317,7 +323,8 @@ class Reply(_ReplyBase):
             "How they took the reading in your last reply, never how they answered your question. yes "
             "when they go along with the reading, which includes answering your question, even with no "
             "or not yet. no only when they correct the reading, say it does not fit, or say they only "
-            "want to talk."
+            "want to talk. An objection to your question, such as that they already told you, is not a "
+            "correction of the reading."
         ),
     )
     feeling_answer: FeelingAnswer | None = Field(
@@ -346,33 +353,32 @@ class Reply(_ReplyBase):
     stage_answer: StageAnswer | None = Field(
         default=None,
         description=(
-            "How their message answers the stage in force. agreed: yes to your say-back of what you "
-            "have for this stage, with more or not. answered: they gave what the stage needs, with an "
-            "update for it; your text says it back and asks whether that is right. corrected: a no "
-            "with new words for this stage, or new words for an earlier stage, with an update for it. "
-            "let_go: they want to skip this one stage, or a question made them uneasy; never because "
-            "another issue came in or they want to come back to it later, which is asked. not_yet: a plain "
-            "no, unclear, or I don't know while you still help. asked: they asked you something or "
-            "pushed back instead of answering; answer them and ask again. stopped: they want to stop "
-            "the questions altogether, never a plain no or I don't know. A question or push-back is "
-            "always asked, never agreed or let_go."
+            "How their message answers the stage in force. agreed: yes to the reading you gave, with "
+            "more added or not; a goal or new focus instead is corrected and read again; also the yes that lets the stage end after your question about what they "
+            "take from it. let_go: they want to skip this one stage, or a question made them uneasy; never "
+            "because another issue came in or they want to come back to it later, which is asked. not_yet: "
+            "they gave nothing for the stage: a plain no, unclear, or I don't know while you still help. "
+            "asked: they asked you something or pushed back instead of answering, or they brought "
+            "another situation in; answer them and ask again. stopped: they want to stop the questions "
+            "altogether, never a plain no or I don't know. Null when they gave words for a part and "
+            "answered nothing else. A question or push-back is always asked, never agreed or let_go."
         ),
     )
     stage_updates: list[StageUpdate] | None = Field(
         default=None,
         description=(
-            "Fill it before text. The stage in force, from their message, and an earlier stage they "
-            "correct. Never what stages_known already holds unchanged. Null when there is none. Not "
-            "shown to the user."
+            "Fill it before text. Every part of the stage in force their message gives or changes, one "
+            "entry per part, and a part of an earlier stage they correct. Never what stage_have already "
+            "holds unchanged. Null when there is none. Not shown to the user."
         ),
     )
     next_stage: NextStage | None = Field(
         default=None,
         description=(
-            "Fill it before text, every time: how this conversation answers the stage named next_stage "
-            "in [ctx], judged by next_stage_ready_when and next_stage_reach from everything they have "
-            "said about the issue they confirmed, before or after your check, the latest words for "
-            "each part. Used only if the walk reaches that stage this turn. Not shown to the user."
+            "Fill it before text, every time: the parts of next_stage this conversation already answers, "
+            "judged from everything they have said about the issue they confirmed, before or after your "
+            "check, the latest words for each. Used only if the walk reaches that stage this turn. Not "
+            "shown to the user."
         ),
     )
     text: str = Field(
@@ -390,8 +396,16 @@ class Reply(_ReplyBase):
         description=(
             "The id from the Framework Index that this "
             "conversation is most likely heading toward, or null when nothing has pointed "
-            "anywhere yet. It decides which set you offer, never what you ask. Not shown to "
-            "the user."
+            "anywhere yet. It decides which set you offer, never what you ask. On a tie, the first "
+            "in the Index. Not shown to the user."
+        ),
+    )
+    heading_reason: str | None = Field(
+        default=None,
+        description=(
+            "Only when check_answer is yes: one short sentence, from their words only, of why "
+            "heading_toward fits what it comes down to for them better than the Index's other sets. "
+            "Kept for later review, never shown to the user."
         ),
     )
     style: Style | None = Field(
@@ -492,7 +506,7 @@ def reply_for(
                 Field(default=None, description=f"Only on no, or when they chose Keep chatting: {slots.their_words}."),
             )
     elif moment is Moment.CHECK_OPEN:
-        names.add("check_answer")
+        names.update({"check_answer", "heading_reason"})
         if slots.going_through:
             names.add("offer")
             overrides["offer"] = (_offer_model(slots.going_through, slots.lead_line) | None, Reply.model_fields["offer"])
@@ -509,9 +523,9 @@ def reply_for(
         # On the answer to a check a yes is the client's offer, which replaces the text, so the set and
         # its slots are filled before the text; written after it, the slots were left empty (live,
         # 2026-10-13: "offer unusable: no lead_line" in Supportive and Reflective).
-        order = [n for n in order if n not in ("heading_toward", "offer")]
+        order = [n for n in order if n not in ("heading_toward", "heading_reason", "offer")]
         at = order.index("check_answer") + 1
-        order[at:at] = ["heading_toward", "offer"]
+        order[at:at] = ["heading_toward", "heading_reason", "offer"]
     fields = {
         name: overrides.get(name, (Reply.model_fields[name].annotation, Reply.model_fields[name]))
         for name in order

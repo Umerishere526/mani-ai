@@ -252,16 +252,22 @@
           "I'm frustrated because my boss criticized my work today, and now I'm questioning whether I'm actually good at my job.",
           "It makes me feel like all the effort I put in doesn't count for anything.",
           "I'm not sure what I can do about it."
-        ]
+        ],
+        "expect": {
+          "offers": "abcde"
+        }
       },
       "cheat_sheet_problem_solving": {
-        "source": "the client's Framework Selection Cheat Sheet, Example 1, its opening and its Structured Problem-Solving line, word for word; ABCDE is offered for now (muhammad, 2026-10-13); lines 3 and 4 written by Claude on 2026-10-13 to answer the core issue and control questions",
+        "source": "the client's Framework Selection Cheat Sheet, Example 1, its opening and its Structured Problem-Solving line, word for word; ABCDE is offered while Structured Problem-Solving stays paused (muhammad, 2026-10-13, reaffirmed 2026-10-17 spec 0008); lines 3 and 4 written by Claude on 2026-10-13 to answer the core issue and control questions",
         "lines": [
           "I'm frustrated at work.",
           "My coworkers keep missing deadlines, and I end up doing their work. I don't know how to change this.",
           "It feels like I'm the only one who cares whether things get done.",
           "I could talk to my manager about it, but I don't know if it would change anything."
-        ]
+        ],
+        "expect": {
+          "offers": "abcde"
+        }
       },
       "check_not_confirmed": {
         "source": "the client's sample lines, with an answer to the check written by Claude on 2026-10-13",
@@ -388,6 +394,18 @@
             "dispute": "said back",
             "effective": "asked"
           }
+        }
+      },
+      "cheat_sheet_thought_reframe": {
+        "source": "the client's Framework Selection Cheat Sheet, Example 1, its opening and its Thought Reframe line, word for word (spec 0008, R19); lines 3 and 4 written to answer the core issue and control questions, the same pattern as the other cheat-sheet conversations in this group",
+        "lines": [
+          "I'm frustrated at work.",
+          "I keep thinking that no matter how hard I work, I'll never be good enough.",
+          "It makes me feel like nothing I do will ever change that.",
+          "I don't know what I can do about a thought like that."
+        ],
+        "expect": {
+          "offers": "thought_reframe"
         }
       }
     }

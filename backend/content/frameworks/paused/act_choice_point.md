@@ -7,44 +7,9 @@ phases: [offering, situation, present, pull, matters, toward, action, closing]
 activation:
   central_indication: >-
     The user knows what matters to them but is allowing difficult thoughts or emotions to prevent meaningful action.
-  to_find_out:
-    - "what part of the situation they cannot change or control"
-    - "the thought, feeling or urge that stays with them"
-    - "what it pulls them toward doing"
-    - "whether they want help choosing how to respond, not solving or disproving it"
-  # Documentation of the specification: nothing in mani/ reads to_find_out, appropriate_when or not_when.
-  # The prompt reads central_indication, distinctions and contraindications.
-  appropriate_when:
-    - "The user cannot fully control or resolve the situation"
-    - "A thought cannot be proved or disproved"
-    - "Uncertainty remains"
-    - "The user is repeatedly trying to eliminate a thought or feeling"
-    - "The user knows discomfort may remain"
-    - "The user wants to choose how to respond"
-    - "The user's current reaction is moving them away from what matters"
-    - "The issue has been clearly identified and the user has agreed"
-  not_when:
-    - "The user wants to continue chatting without a framework, or has not agreed"
-    - "The issue has not been clearly identified"
-    - "A specific thought can be usefully examined against evidence"
-    - "The user wants a brief reframe"
-    - "The user needs to define and solve a practical problem"
-    - "The user knows what to do but cannot begin"
-    - "The user is close to acting impulsively"
-    - "The user cannot participate in reflective questions"
-    - "A safety concern requires the approved safety protocol"
   contraindications:
     - "The situation is something that should change rather than be accepted - ongoing abuse, an unsafe workplace, a real medical or financial risk. Accepting a feeling is not the same as accepting a harmful situation, and this framework must never blur that line"
     - "The experience is being used to push the person toward forgiving, tolerating, or accepting what is unjust or harmful, or away from medical, legal, or emergency help - self-protection is never a move away from what matters"
-  redirects:
-    - signal: "I think everyone believes I am incompetent, and I want to know if that is accurate."
-      instead: thought_reframe
-    - signal: "One criticism made me believe I was a failure, and I want to understand why."
-      instead: abcde
-    - signal: "I need to compare my options and make a plan."
-      instead: structured_problem_solving
-    - signal: "I know what I want to do, but I cannot begin."
-      instead: behavioral_activation
   distinctions:
     thought_reframe: >-
       Reframe when evidence can help examine the thought, another interpretation may be more

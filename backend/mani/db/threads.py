@@ -9,11 +9,11 @@ from dataclasses import dataclass, field
 
 import asyncpg
 
-from mani.llm.schema import Memory
 from mani.models.rows import (
     Profile,
     ResponseStyle,
     SupportStyle,
+    TechniqueRun,
     TechniqueState,
     Thread,
     ThreadSummary,
@@ -161,8 +161,10 @@ class TurnContext:
     # Another of this person's conversations was flagged for crisis recently. Only the fact
     # crosses threads, never what was said in it.
     recent_crisis: bool = False
-    # Patterns from this person's earlier conversations, folded in as each one finished.
-    memory: Memory | None = None
+    # Every finished run of this thread (migration 027), oldest first. thread_technique_state is
+    # one row per thread, so this is the only record of which other frameworks it has already run,
+    # read to keep a just-finished framework's own cooldown from blocking a different one.
+    recent_runs: list[TechniqueRun] = field(default_factory=list)
 
 
 # How long a crisis in one conversation keeps the next ones gentle.
@@ -193,8 +195,9 @@ select
            where c.user_id = t.user_id and c.id <> t.id and c.crisis_detected
              and c.last_message_at > now() - interval '{RECENT_CRISIS_DAYS} days')
                                                    as recent_crisis,
-  (select um.memory from admin.user_memory um
-    where um.user_id = t.user_id)                  as memory
+  coalesce((select jsonb_agg(to_jsonb(r) order by r.created_at)
+    from public.thread_technique_runs r
+    where r.thread_id = t.id), '[]'::jsonb)        as recent_runs
 from (select {COLUMNS}, understanding, check_at_message_count from public.threads
        where id = $1 and user_id = $2 and deleted_at is null) t
 """
@@ -218,7 +221,7 @@ async def load_turn_context(
         ],
         summary=ThreadSummary.model_validate(row["summary"]) if row["summary"] else None,
         recent_crisis=row["recent_crisis"],
-        memory=Memory.model_validate(row["memory"]) if row["memory"] else None,
+        recent_runs=[TechniqueRun.model_validate(r) for r in row["recent_runs"] or []],
     )
 
 
@@ -254,6 +257,9 @@ class ThreadUpdates:
     # measurements, set only on the turn that answers each (migration 025).
     body_response: str | None = None
     conversation_helped: str | None = None
+    # Appended once a run's outcome is decided: finished (retired at its last phase) or declined,
+    # including a stop (spec 0008, migration 027). Never set on an ordinary offer or a mid-run turn.
+    record_run: TechniqueRun | None = None
 
     def __bool__(self) -> bool:
         # Each optional field is tested for presence, not for truth. A field whose
@@ -272,6 +278,7 @@ class ThreadUpdates:
             or self.check_at_message_count is not None
             or self.body_response is not None
             or self.conversation_helped is not None
+            or self.record_run is not None
         )
 
 
@@ -316,17 +323,32 @@ async def apply(
             """
             insert into public.thread_technique_state
                 (thread_id, user_id, framework_id, outcome, phase,
-                 at_message_count, library_offered_since)
-            values ($1, $2, $3, $4, $5, $6, $7)
+                 at_message_count, library_offered_since, offered_because)
+            values ($1, $2, $3, $4, $5, $6, $7, $8)
             on conflict (thread_id) do update set
                 framework_id         = excluded.framework_id,
                 outcome              = excluded.outcome,
                 phase                = excluded.phase,
                 at_message_count     = excluded.at_message_count,
-                library_offered_since = excluded.library_offered_since
+                library_offered_since = excluded.library_offered_since,
+                offered_because      = excluded.offered_because
             """,
             thread_id, user_id, t.framework_id, t.outcome.value, t.phase,
-            t.at_message_count, t.library_offered_since,
+            t.at_message_count, t.library_offered_since, t.offered_because,
+        )
+
+    if updates.record_run is not None:
+        # Its own append, never part of the upsert above: thread_technique_runs is additional
+        # history, read only to keep a finished framework's cooldown from blocking a different
+        # one (spec 0008, decision 3).
+        r = updates.record_run
+        await conn.execute(
+            """
+            insert into public.thread_technique_runs
+                (thread_id, user_id, framework_id, outcome, ended_at_message_count)
+            values ($1, $2, $3, $4, $5)
+            """,
+            thread_id, user_id, r.framework_id, r.outcome.value, r.ended_at_message_count,
         )
 
     if updates.stages_known is not None:

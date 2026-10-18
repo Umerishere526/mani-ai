@@ -1,6 +1,7 @@
 # ABOUTME: Checks the one seeded framework, ABCDE, carries what the client's ABCDE document asks for.
 # ABOUTME: Read from the framework file itself, the same structure that is seeded, so no database is needed.
 
+import copy
 import re
 
 import pytest
@@ -8,7 +9,7 @@ import pytest
 from mani.chat import context, repairs
 from mani.chat.techniques import Registry
 from mani.models.rows import Framework
-from scripts.seed import FRAMEWORKS_DIR, parse_framework
+from scripts.seed import FRAMEWORKS_DIR, missing_for_activation, parse_framework
 
 STYLES = ("directive", "supportive", "reflective")
 
@@ -26,8 +27,8 @@ def as_framework(parsed: dict) -> Framework:
     )
 
 
-def test_only_abcde_is_seeded():
-    assert [p.stem for p in FRAMEWORKS_DIR.glob("*.md")] == ["abcde"]
+def test_abcde_and_thought_reframe_are_the_active_frameworks():
+    assert sorted(p.stem for p in FRAMEWORKS_DIR.glob("*.md")) == ["abcde", "thought_reframe"]
 
 
 def test_abcde_runs_a_to_e_and_the_body_check_in_follows(abcde):
@@ -52,38 +53,49 @@ def test_tell_me_more_is_the_five_steps_in_the_selected_style(abcde):
         assert text.endswith("Would you like to try it?")
 
 
-def test_the_event_stage_carries_the_clients_confirm_and_missing_lines_in_each_style(abcde):
-    """The document's three cases for A: an event said back and confirmed, and the event asked for
-    with their own word for the feeling (spec 0004, AC-4 and AC-6)."""
+def test_the_event_stage_carries_the_clients_confirm_line_and_asks_with_their_own_word_for_the_feeling(abcde):
+    """The document's cases for A: an event said back and confirmed, and the event asked for with their
+    own word for the feeling, now the question of the stage's event part (spec 0007)."""
     activate = abcde["stages"]["activate"]
     assert activate["confirm"]["supportive"] == (
         "You mentioned <the event, in their words>. Is that what started these feelings?"
     )
-    assert activate["missing"]["supportive"] == "What's been happening that's left you feeling so <their word for it>?"
-    for key in ("confirm", "missing"):
-        assert set(activate[key]) == set(STYLES)
-        assert all(line.endswith("?") and "<" in line for line in activate[key].values())
+    event = activate["parts"][0]
+    assert event["from"] == "understanding.event"
+    assert event["ask"]["supportive"] == "What's been happening that's left you feeling so <understanding.feeling>?"
+    assert set(activate["confirm"]) == set(event["ask"]) == set(STYLES)
+    assert all(line.endswith("?") and "<" in line for line in event["ask"].values())
 
 
-def test_no_stage_carries_a_letter_line_and_the_confirm_phrases_are_the_four(abcde):
-    """muhammad, 2026-10-16 (spec 0007, decision 5): the stage is shown in the ledger at the side, never
-    said; a stage said back closes with one of four short phrases only as the logged fallback."""
-    assert not any("intro" in abcde["stages"][stage] for stage in abcde["phases"][1:])
+def test_each_letter_has_its_line_and_the_confirm_phrases_are_the_four(abcde):
+    """Spec 0007: every reply inside a stage opens with its letter line, from the content."""
+    assert {stage: abcde["stages"][stage]["intro"] for stage in abcde["phases"][1:]} == {
+        "activate": "A is for Activating Event.", "belief": "B is for Belief.",
+        "consequence": "C is for Consequences.", "dispute": "D is for Dispute.",
+        "effective": "E is for Effective New Belief.",
+    }
     assert abcde["confirm_phrases"] == [
         "Is that right?", "Do we have this right?", "Did I get that right?", "Does that sound right?",
     ]
 
 
-def test_the_offer_follows_the_clients_pattern_with_a_slot_for_their_situation(abcde):
-    offer = abcde["stages"]["offering"]["offer"]
-    assert set(offer) == set(STYLES)
-    for text in offer.values():
-        assert "There's a framework called ABCDE" in text
-        assert "<" in text and ">" in text and "?" not in text, "a slot to fill, and no question of its own"
-        # Spec 0005, AC-6: the feeling they named fills it; their worry only when they named none.
-        assert "<their feeling from understanding" in text and "only when they named no feeling>" in text
-    assert "helps you identify the thoughts behind <" in offer["directive"]
-    assert "question whether they're true, and replace them with more realistic ones." in offer["directive"]
+def test_every_stage_declares_the_parts_it_needs_and_when_to_stop_asking_for_each(abcde):
+    """Spec 0007: code reads parts (id, required, from); the words say what is enough and when to stop."""
+    needs = {stage: {p["id"]: p.get("required", True) for p in abcde["stages"][stage]["parts"]}
+             for stage in abcde["phases"][1:]}
+    assert needs == {
+        "activate": {"event": True},
+        "belief": {"belief": True, "belief_type": False},
+        "consequence": {"felt": True, "did": True},
+        "dispute": {"evidence": True, "logic": True, "usefulness": False},
+        "effective": {"new_belief": True, "next_step": False},
+    }
+    every = [p for stage in abcde["phases"][1:] for p in abcde["stages"][stage]["parts"]]
+    assert len({p["id"] for p in every}) == len(every)
+    assert all(p.get("stop_pushing") for p in every if p.get("required", True))
+    assert [stage for stage in abcde["phases"][1:] if abcde["stages"][stage].get("reflect")] == [
+        "belief", "consequence", "dispute", "effective",
+    ], "A has no reflection: the event needs none"
 
 
 def test_the_clients_offer_wording_reaches_the_person_but_never_the_framework_index(abcde):
@@ -96,13 +108,6 @@ def test_the_clients_offer_wording_reaches_the_person_but_never_the_framework_in
         for text in abcde["stages"]["offering"][key].values():
             fixed = max(re.split(r"<[^>]*>", text), key=len).strip()
             assert fixed[:40] not in index, key
-    assert abcde["stages"]["offering"]["steps"].splitlines()[0] not in index
-
-
-def test_the_offer_lists_the_five_steps_by_letter_and_the_clients_name(abcde):
-    lines = abcde["stages"]["offering"]["steps"].splitlines()
-    names = ["Activating Event", "Belief", "Consequences", "Dispute", "Effective New Belief"]
-    assert [line.split(".")[0] for line in lines] == [f"- {l}: {n}" for l, n in zip("ABCDE", names)]
 
 
 CLIENT_QUESTIONS = {
@@ -175,3 +180,22 @@ def test_an_open_offer_turn_costs_less_prompt_than_before_the_structured_fields(
 
     total = len(system.text) + len(block) + len(json.dumps(shape.model_json_schema()))
     assert total < CHARACTERS_BEFORE_STRUCTURED_FIELDS
+
+
+def test_a_framework_whose_parts_the_walk_cannot_read_is_refused_at_seed_with_the_path_named(abcde):
+    """Spec 0007: code reads parts, so a framework with none, a repeated id, a part question that refers to
+    nothing, or a part bound to no understanding key fails at seed, not in a live chat."""
+    assert missing_for_activation(abcde) == []
+    broken = copy.deepcopy(abcde)
+    del broken["stages"]["activate"]["parts"]
+    broken["stages"]["belief"]["parts"][1]["id"] = "belief"
+    broken["stages"]["consequence"]["parts"][0]["from"] = "understanding.mood"
+    broken["stages"]["consequence"]["parts"][1]["ask"] = "And when you <thought>, what do you do?"
+    del broken["stages"]["effective"]["intro"]
+    assert missing_for_activation(broken) == [
+        "stages.activate.parts",
+        "stages.effective.intro",
+        "parts.belief listed twice",
+        "stages.consequence.parts.felt.from understanding.mood names no understanding key",
+        "stages.consequence.parts.did.ask refers to <thought>, which is no part or understanding key",
+    ]

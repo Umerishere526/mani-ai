@@ -17,6 +17,11 @@ TRACKED = ("issue", "event", "core_issue")
 KEPT = 3
 # A changed feeling waits here for their yes (spec 0007, AC-15).
 PENDING = "feeling_asked"
+# After a shift, the steps they already answered that may still hold, kept to confirm in one question
+# rather than erased and asked again; a step listed here is still to take, so no check comes until
+# they confirm or replace it (2026-10-17).
+RECHECK = "to_confirm"
+CARRIED = ("core_issue", "in_their_control")
 # The client's steps before Mani checks its understanding, in order: the problem, the core issue under
 # it, what is in their control (meeting and cheat sheet, 2026-10-13). Each is taken only once the one
 # before it was stored on an earlier turn, so each gets an exchange of its own (spec 0006).
@@ -32,13 +37,15 @@ def _in_order(key: str, before: dict[str, Any]) -> bool:
 
 
 def next_step(stored: dict[str, Any]) -> str | None:
-    """The first step still missing, by its name in [ctx], or None once all three are stored."""
-    return next((name for key, name in STEPS.items() if not stored.get(key)), None)
+    """The first step still missing or left to confirm, by its name in [ctx], or None once all three
+    are stored and confirmed."""
+    flagged = stored.get(RECHECK) or ()
+    return next((name for key, name in STEPS.items() if not stored.get(key) or key in flagged), None)
 
 
 def merge(
     stored: dict[str, Any], update: UnderstandingUpdate | None, *, before: dict[str, Any] | None = None,
-    track: bool = True, feeling_answer: str | None = None,
+    track: bool = True, feeling_answer: str | None = None, restart: bool = False,
 ) -> dict[str, Any]:
     """The record after this turn. Per key, a null or blank value keeps what is stored; anything
     else replaces it, on one line (which also keeps it from opening a line of its own in [ctx]) and
@@ -47,12 +54,23 @@ def merge(
     changing it. A feeling that differs from the stored one is not stored but held as pending while
     Mani asks whether it has changed; `feeling_answer`, from the next reply, stores it on yes with
     the earlier word kept, and drops it on no. A step is taken only in order, judged on `before`,
-    the record as this turn began (`stored` when not given)."""
+    the record as this turn began (`stored` when not given). A `restart`, their turn to another
+    situation, empties the event, the problem and the reading, the replaced values kept, and keeps
+    the core issue and what is in their control to confirm; a value reported for one confirms it."""
     before = stored if before is None else before
     merged = {key: stored[key] for key in KEYS if stored.get(key)}
-    for key in (HISTORY, PENDING):
+    for key in (HISTORY, PENDING, RECHECK):
         if stored.get(key):
             merged[key] = stored[key]
+    if restart:
+        for key in ("event", "issue", "comes_down_to"):
+            old = merged.pop(key, None)
+            if key in TRACKED:
+                _remember(merged, key, old)
+        carried = [key for key in CARRIED if merged.get(key)]
+        if carried:
+            merged[RECHECK] = carried
+    given: set[str] = set()
     pending = merged.pop(PENDING, None)
     if pending and feeling_answer == "yes":
         _remember(merged, "feeling", merged.get("feeling"))
@@ -70,6 +88,10 @@ def merge(
             if track and key in TRACKED and old and old != value:
                 _remember(merged, key, old)
             merged[key] = value
+            given.add(key)
+    left = [key for key in merged.pop(RECHECK, []) if key not in given]
+    if left:
+        merged[RECHECK] = left
     return merged
 
 
@@ -87,8 +109,13 @@ def render(stored: dict[str, Any]) -> str | None:
     when nothing is stored yet."""
     if not any(stored.get(key) for key in KEYS):
         return None
+    history = stored.get(HISTORY) or {}
+    flagged = stored.get(RECHECK) or ()
     parts = [
-        f"{key}: {context.disarm(stored[key])}" if stored.get(key) else f"{key}: missing"
+        f"{key}: {context.disarm(stored[key])}"
+        + (f" (was: {context.disarm(history[key][-1])})" if history.get(key) else "")
+        + (" (from before the change, to confirm)" if key in flagged else "")
+        if stored.get(key) else f"{key}: missing"
         for key in KEYS if stored.get(key) or key in STEPS
     ]
     return "; ".join(parts)
