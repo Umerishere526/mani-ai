@@ -42,3 +42,4 @@ conflict under "Conflicts" in [requirements.md](requirements.md) and update the 
 | 2026-10-16 | Lolly | [Directive feedback: the coworker in a bad mood](messages/2026-10-16-coworker-directive-feedback.md) |
 | 2026-10-16 | Lolly | [Reflective and Directive compared: eight issues, ABCDE as a questionnaire](messages/2026-10-16-two-styles-abcde-feedback.md) |
 | 2026-10-16 | Lolly (document) | [The somatic cadence after a framework](messages/2026-10-16-somatic-cadence.md) |
+| 2026-10-17 | client (document) | [The Thought Reframe framework: complete cadences](messages/2026-10-17-thought-reframe-cadence.md) |

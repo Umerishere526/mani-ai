@@ -11,6 +11,8 @@ memory table, the summary's current issue); the counts, `thread_summaries`, the 
 note below were checked against the live database that day. Regenerate from the queries at the bottom after
 the next schema change. Hand updated on 2026-10-13 for migrations 020 and 022 only (`stages_known`,
 `threads.understanding`, `thread_summaries.current_issue` dropped); 018, 019 and 021 are not reflected yet.
+Hand updated on 2026-10-17 for migration 027 only (`thread_technique_runs`,
+`thread_technique_state.offered_because`, `threads.vague_streak` dropped); 023 to 026 are not reflected yet.
 
 The rest of this paragraph describes the original generation: Nothing here was typed
 from memory — every table, column, constraint, policy, and grant was queried directly from
@@ -58,6 +60,7 @@ Query: `select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid
 | `public` | `threads` | One conversation. |
 | `public` | `messages` | Every message in every thread, both sides. |
 | `public` | `thread_technique_state` | Which framework is active in a thread, and its current phase. |
+| `public` | `thread_technique_runs` | One row per finished framework run (accepted or declined) in a thread, for per-framework cooldowns. Written by the backend only (migration 027). |
 | `public` | `thread_techniques_offered` | Frequency-limiting: which frameworks have already been offered in a thread. |
 | `public` | `thread_response_styles` | The model's self-reported response shape/voice per reply — anti-repetition signal. |
 | `public` | `thread_summaries` | The rolling summary of a thread too long for the model's budget, refreshed once messages have left its view (`CONTEXT_BUDGET_CHARS`). Written by the backend only (migration 007). |
@@ -99,9 +102,8 @@ One row per user, created automatically by the migration-004 trigger on signup.
 | 7 | `last_message_at` | timestamptz | default `now()` | Maintained by the same trigger as `message_count`. |
 | 8 | `deleted_at` | timestamptz | optional | Soft-delete marker. |
 | 9 | `conversation_style` | text | optional 🔒 | `supportive` / `reflective` / `directive` (CHECK `threads_conversation_style_known`). Wins over `profiles.support_style` when set — see `mani/chat/context.py:resolve_style`. |
-| 10 | `vague_streak` | smallint | default `0`, 0–10 (CHECK) | Currently written by nothing (`PORT-STATUS.md` "Open" — the vague-reply pivot isn't built). |
-| 11 | `memory_folded_at` | timestamptz | optional | The last message folded into `admin.user_memory`; null means never. Only `mani_service` may write it (migration 009). |
-| 12 | `understanding` | jsonb | default `'{}'`, an object (CHECK `threads_understanding_object`) | `{feeling, issue}`, both optional, each at most 200 characters: their feeling word and their issue as Mani understands them so far. Merged by `mani/chat/understanding.py` after each reply, except on a concern turn, and sent back in `[ctx]`. Only `mani_service` may write it (migration 022). Loaded only for a turn, never in a thread list. |
+| 10 | `memory_folded_at` | timestamptz | optional | The last message folded into `admin.user_memory`; null means never. Only `mani_service` may write it (migration 009). |
+| 11 | `understanding` | jsonb | default `'{}'`, an object (CHECK `threads_understanding_object`) | `{feeling, issue}`, both optional, each at most 200 characters: their feeling word and their issue as Mani understands them so far. Merged by `mani/chat/understanding.py` after each reply, except on a concern turn, and sent back in `[ctx]`. Only `mani_service` may write it (migration 022). Loaded only for a turn, never in a thread list. |
 
 ### `public.messages`
 | # | Column | Type | Required | Purpose |
@@ -130,6 +132,20 @@ One row per thread — the currently (or most recently) active framework.
 | 7 | `library_offered_since` | boolean | default `false` | Whether the library follow-up has been offered since acceptance. |
 | 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
 | 9 | `stages_known` | jsonb | default `'{}'`, an object (CHECK `thread_technique_state_stages_known_object`) | What they said per stage, keyed by framework id then stage id: `{said, status, tries}`. Merged and stepped by `mani/chat/walk.py`; kept when a run retires (migration 020). |
+| 10 | `offered_because` | text | optional, at most 200 characters (CHECK `thread_technique_state_offered_because_short`) | The model's one sentence for why this framework fits, written with the offer (`heading_reason`). Read by nothing that decides a turn; shown only in debug turns, for reviewing selection (migration 027). |
+
+### `public.thread_technique_runs`
+One row per finished run; `thread_technique_state` holds only the most recent. Insert only for `mani_service`, select for the owner (migration 027).
+
+| # | Column | Type | Required | Purpose |
+|---|---|---|---|---|
+| 1 | `id` | uuid | **PK**, default `gen_random_uuid()` | |
+| 2 | `thread_id` | uuid | FK→`threads` cascade | |
+| 3 | `user_id` | uuid | FK→`auth.users` cascade | |
+| 4 | `framework_id` | text | FK→`admin.frameworks(id)` **RESTRICT** | |
+| 5 | `outcome` | `technique_outcome` (enum) | required | `accepted` (completed) or `declined`. |
+| 6 | `ended_at_message_count` | integer | required | The thread's `message_count` when the run ended — the per-framework cooldown clock (`context.excluded_frameworks`). |
+| 7 | `created_at` | timestamptz | default `now()` | |
 
 ### `public.thread_techniques_offered`
 Frequency-limiting log — every framework ever offered in a thread.
@@ -188,7 +204,7 @@ Append-only log of the model's self-reported style per reply.
 | 9 | `created_at` | timestamptz | default `now()` | |
 | 10 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
 | 11 | `stages` | jsonb | default `'{}'`, must be a JSON object (CHECK) | Per-phase content: purpose, listen_for, ready_when, boundaries, `ask.{style}`. |
-| 12 | `activation` | jsonb | default `'{}'`, must be a JSON object (CHECK) | `central_indication`/`to_find_out`/`distinctions`/`contraindications` — what the prompt reads. |
+| 12 | `activation` | jsonb | default `'{}'`, must be a JSON object (CHECK) | `central_indication`/`distinctions`/`contraindications` — what the prompt reads. |
 
 ### `admin.prompts`
 | # | Column | Type | Required | Purpose |
@@ -291,7 +307,7 @@ Query: `select rolname, rolsuper, rolinherit, rolcreaterole, rolcanlogin, rolbyp
 | `service_role` | no (assumed via `authenticator`) | **yes** | Anything presenting the service-role key | Full, RLS-bypassing access. Never reaches a client — `backend/mani/config.py`'s `supabase_service_role_key` is the only place this key lives, and it's used only for Storage signing (`mani/storage.py`) and, since this session, the Auth Admin API (`mani/auth_admin.py`). |
 | `authenticator` | **yes** | no | PostgREST's own connection | The role PostgREST logs in as. Not used to do anything itself — it's a member of `anon`, `authenticated`, **and** `service_role`, and `SET ROLE`s to whichever one a request's JWT specifies. This is stock Supabase/PostgREST architecture, not a project decision — confirmed live (`pg_auth_members`). |
 | `supabase_auth_admin` | **yes** | no | GoTrue (Supabase Auth), confirmed via `GOTRUE_DB_DATABASE_URL` | Owns `auth.users` and everything under `auth.*`. Since migration 005, also holds the narrow, table-specific grants and RLS policies needed to complete the cascades this project's own `on delete cascade`/`set null` foreign keys promise when it deletes a user (§3, §5). **Cannot be granted `BYPASSRLS`** — confirmed live, Postgres refuses even from `postgres` here, because it's a reserved role. |
-| `mani_service` | no (assumed by the backend via `SET LOCAL ROLE`) | no | This backend, for every ordinary request | A member of `authenticated`, so it inherits everything that role can do, **plus** a handful of privileges an ordinary user must not have: EXECUTE on the three `security definer` functions (`create_message_pair`, `mark_thread_crisis`, `create_greeting`) DELETE on `thread_technique_state`, INSERT/UPDATE on `thread_summaries` and `thread_technique_state` (moved off `authenticated` in migration 007, since both feed the model), SELECT/INSERT/UPDATE on `admin.user_memory`, and UPDATE on `threads.memory_folded_at` (migration 009) and `threads.vague_streak` (migration 002). RLS still applies — the extra privileges are never a wider view of rows, only a wider set of actions (`.claude/SUPABASE.md`). **Never grant this to `authenticator`** — that would let PostgREST assume it directly and undo the separation (asserted by `tests/sql/test_grants.sql`, confirmed still true here — `mani_service` is absent from `authenticator`'s memberships). |
+| `mani_service` | no (assumed by the backend via `SET LOCAL ROLE`) | no | This backend, for every ordinary request | A member of `authenticated`, so it inherits everything that role can do, **plus** a handful of privileges an ordinary user must not have: EXECUTE on the three `security definer` functions (`create_message_pair`, `mark_thread_crisis`, `create_greeting`) DELETE on `thread_technique_state`, INSERT/UPDATE on `thread_summaries` and `thread_technique_state` (moved off `authenticated` in migration 007, since both feed the model), SELECT/INSERT/UPDATE on `admin.user_memory`, UPDATE on `threads.memory_folded_at` (migration 009), and SELECT/INSERT on `thread_technique_runs` (migration 027). RLS still applies — the extra privileges are never a wider view of rows, only a wider set of actions (`.claude/SUPABASE.md`). **Never grant this to `authenticator`** — that would let PostgREST assume it directly and undo the separation (asserted by `tests/sql/test_grants.sql`, confirmed still true here — `mani_service` is absent from `authenticator`'s memberships). |
 | `postgres` | yes | yes | Migrations, and anyone connecting directly (e.g. `supabase status`'s credentials) | **Not a true superuser on this platform** (`rolsuper = false`, confirmed live) — Supabase deliberately keeps its own internal roles (like `supabase_auth_admin`) out of reach even from this role, which is why migration 005 could not simply `ALTER ROLE ... BYPASSRLS`. |
 
 ## 5. RLS policies — one row per operation, per table, per role

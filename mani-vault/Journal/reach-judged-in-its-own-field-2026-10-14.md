@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-14
 tags: [journal, abcde, stages, schema, lessons]
 ---
+> Superseded 2026-10-17 (a stage's judgement is its parts, `next_stage` reports parts, not a status and gap) — see [[stage-contract-parts-2026-10-17]]
 
 # The stage the walk reaches is judged in its own field (2026-10-14)
 
