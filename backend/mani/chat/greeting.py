@@ -37,12 +37,10 @@ KEEP_CHATTING_LABEL = "Keep chatting"
 TELL_ME_ABOUT_THIS_LABEL = "Tell me about this"
 EXPLAIN_LABELS = {TELL_ME_ABOUT_THIS_LABEL.lower(), TELL_ME_MORE_LABEL.lower()}
 
-# The two choices every framework ends on - the client's cadence: "Framework completes ->
-# Somatic check-in -> Chat More OR Go to Library".
-CHAT_MORE_LABEL = "Chat More"
-GO_TO_LIBRARY_LABEL = "Go to Library"
-# The closing choices after the body cadence (the client's somatic cadence document, 2026-10-16).
+# The three choices every framework ends on, after the body cadence (the client's somatic cadence
+# document, 2026-10-16).
 KEEP_CHATTING_CLOSE_LABEL = "Keep Chatting"
+GO_TO_LIBRARY_LABEL = "Go to Library"
 FINISH_LABEL = "Finish for Now"
 
 # Asked in this order, one per reply, once a framework has finished and the person carries on

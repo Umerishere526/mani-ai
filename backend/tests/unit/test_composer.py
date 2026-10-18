@@ -9,7 +9,6 @@ import pytest
 
 from mani.chat.techniques import Registry
 from mani.errors import ServiceError
-from mani.llm.schema import Memory
 from mani.models.rows import Framework, Profile, TechniqueTried, ThreadSummary
 from mani.prompts import cache, composer
 from mani.prompts.cache import Config
@@ -155,7 +154,7 @@ def test_the_framework_index_is_built_from_the_registry_not_written_by_hand():
     other - so adding a framework must need no prompt edit at all."""
     registry = Registry([
         framework("abcde", "ABCDE", "A specific event triggered a belief.",
-                  {"thought_reframe": "Reframe when one thought is already clear."}),
+                  {"dbt_stop": "ABCDE is the slower one."}),
         framework("dbt_stop", "DBT STOP", "The user is about to act.", {}),
     ])
 
@@ -163,9 +162,25 @@ def test_the_framework_index_is_built_from_the_registry_not_written_by_hand():
 
     assert "| ABCDE | `abcde` | A specific event triggered a belief. |" in index
     assert "| DBT STOP | `dbt_stop` | The user is about to act. |" in index
-    # thought_reframe is not in this registry, so it falls back to a readable form of the
-    # id rather than a display name it has no way to look up.
-    assert "**ABCDE or thought reframe** — Reframe when one thought is already clear." in index
+    assert "**ABCDE or DBT STOP** — ABCDE is the slower one." in index
+
+
+def test_a_distinction_naming_a_set_that_is_not_active_is_dropped_not_guessed_at():
+    """spec 0008: a paused framework's id looks exactly like any other distinction key, so the
+    index must not render a readable guess at its name - the model would be told to tell two
+    sets apart when only one of them can ever be offered. continued_conversation is the one
+    non-framework key every framework file uses, and keeps rendering."""
+    registry = Registry([
+        framework("abcde", "ABCDE", "A specific event triggered a belief.", {
+            "act_choice_point": "Stale: act_choice_point is still paused.",
+            "continued_conversation": "Keep talking when the issue is unclear.",
+        }),
+    ])
+
+    index = composer.framework_index(registry)
+
+    assert "act_choice_point" not in index and "act choice point" not in index
+    assert "continued conversation" in index
 
 
 def test_a_distinction_written_from_both_sides_is_emitted_once():
@@ -253,26 +268,12 @@ def test_the_framework_index_carries_each_frameworks_contraindications():
     assert "**DBT STOP**: The action itself is protective - leaving, calling for help" in index
 
 
-def test_what_is_remembered_across_chats_reaches_the_prompt_after_the_static_layers(config):
-    """After the per-user context, never before the static layers: the cached prefix has to
-    stay byte-identical for everyone."""
-    remembered = Memory(
-        low_times=["feels low on Sunday evenings, because of work"],
-        what_helps=["walking the dog"],
-    )
-    profile = Profile(user_id=uuid.uuid4(), nickname="Sam")
-    built = composer.compose(config, profile, style="supportive", memory=remembered)
+def test_nothing_from_another_chat_reaches_the_prompt():
+    """muhammad, 2026-10-17: a chat's context stays in that chat. The prompt takes the person's profile and
+    this conversation's own summary, and has no way to be handed what was remembered from other chats."""
+    import inspect
 
-    names = [name for name, _ in built.layers]
-    assert names.index("user_memory") == names.index("user_context") + 1
-    assert "feels low on Sunday evenings, because of work" in built.text
-    assert "walking the dog" in built.text
-    assert "never say you remember" in built.text.lower()
-
-
-def test_an_empty_memory_adds_nothing(config):
-    built = composer.compose(config, None, style="supportive", memory=Memory())
-    assert "user_memory" not in [name for name, _ in built.layers]
+    assert "memory" not in inspect.signature(composer.compose).parameters
 
 
 def test_the_index_keeps_the_description_from_the_model():

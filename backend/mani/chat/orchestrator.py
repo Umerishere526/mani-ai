@@ -13,7 +13,6 @@ import asyncpg
 from mani.auth.jwt import Claims
 from mani.chat import context, repairs, reply_checks, safety, understanding, walk
 from mani.chat.greeting import (
-    CHAT_MORE_LABEL,
     EXPLAIN_LABELS,
     FINISH_LABEL,
     GO_TO_LIBRARY_LABEL,
@@ -46,6 +45,7 @@ from mani.models.rows import (
     ResponseStyle,
     SupportStyle,
     TechniqueOutcome,
+    TechniqueRun,
     TechniqueState,
     Thread,
 )
@@ -58,13 +58,7 @@ logger = logging.getLogger(__name__)
 # one message rather than two - moved the count past 3 and the thread was never titled.
 TITLE_AFTER_MESSAGES = 3
 
-_HANDOFF_LABELS = {CHAT_MORE_LABEL.lower(), GO_TO_LIBRARY_LABEL.lower()}
-
-def _handoff() -> list[SmartPrompt]:
-    return [
-        SmartPrompt(label=CHAT_MORE_LABEL),
-        SmartPrompt(label=GO_TO_LIBRARY_LABEL, library=LibrarySection.HOME.value),
-    ]
+_HANDOFF_LABELS = {KEEP_CHATTING_CLOSE_LABEL.lower(), GO_TO_LIBRARY_LABEL.lower(), FINISH_LABEL.lower()}
 
 
 def _closing() -> list[SmartPrompt]:
@@ -91,7 +85,7 @@ def _closing_unanswered(
     if technique is None or framework is None or technique.phase != framework.closing:
         return False
     entry = (stored_all.get(framework.id) or {}).get(technique.phase) or {}
-    return not entry.get("said") and not entry.get("tries")
+    return not entry.get("parts") and not entry.get("tries")
 
 
 def _body_route(
@@ -168,22 +162,25 @@ def _walked(
     style: str,
     thread_id: uuid.UUID,
     body_answered: bool,
-    feeling: str | None,
+    known: dict,
+    hold: bool,
 ) -> tuple[repairs.Repaired, walk.Walked]:
-    """The walk's turn: what they said merged into the store, the step taken, and the reply that
-    opens the stage reached, from the reply's judgement of that stage in next_stage. Code decides all
-    three."""
+    """The walk's turn: the parts they gave merged into the store, the step taken, and the reply that
+    opens the stage reached, from the reply's judgement of that stage in next_stage. `known` is the
+    person's running understanding, which the stage's parts may be bound to; `hold` keeps the walk where
+    it is while a change in how they feel or in what they are dealing with awaits their answer. Code
+    decides all three."""
     if start:
-        walked = walk.start(framework, reply.stage_updates, reply.next_stage)
+        walked = walk.start(framework, reply.stage_updates, reply.next_stage, known)
     else:
         walked = walk.advance(
             framework, stored, reply.stage_updates, reply.stage_answer,
-            in_force=in_force, report=reply.next_stage, body_answered=body_answered,
+            in_force=in_force, report=reply.next_stage, body_answered=body_answered, known=known, hold=hold,
         )
     text, notes = walk.reply_text(
-        framework, walked, text=fixed.text, style=style, thread_id=thread_id,
-        feeling=feeling if start else None,
+        framework, walked, text=fixed.text, style=style, thread_id=thread_id, known=known,
     )
+    walked = walk.with_last_ask(framework, walked, text)
     return dataclasses.replace(
         fixed, text=text, framework_id=framework.id, phase=walked.phase,
         notes=fixed.notes + walked.notes + notes,
@@ -222,6 +219,10 @@ class Turn:
     llm_call_id: uuid.UUID | None = None
     # Present only when AI_DEBUG_MODE is on; never sent to an ordinary client.
     reasoning: str | None = None
+    # Mani's own reason for this turn's framework pick, when one was made (spec 0008). Present
+    # only with AI_DEBUG_MODE, like reasoning; never read by anything that decides what happens
+    # next, and never logged.
+    offered_because: str | None = None
     # The stage store after this turn, as rows. Only with AI_DEBUG_MODE, like the reasoning.
     ledger: list[dict] | None = None
     # Each content stage's id and stored status after this turn, and whether the reply is on it, for
@@ -459,6 +460,10 @@ async def send(
     ):
         retiring_framework_id = technique.framework_id
         updates.retire_technique = True
+        updates.record_run = TechniqueRun(
+            thread_id=ctx.thread.id, framework_id=technique.framework_id,
+            outcome=TechniqueOutcome.ACCEPTED, ended_at_message_count=ctx.thread.message_count + 2,
+        )
         ctx = dataclasses.replace(
             ctx, technique=technique.model_copy(update={"phase": None})
         )
@@ -501,6 +506,10 @@ async def send(
     # Which framework fits is the model's call, from the Framework Index; code owns only when an
     # offer may come. repairs.apply still checks whatever is offered.
     running_framework = config.registry.get(technique.framework_id) if technique else None
+    # Active frameworks whose own cooldown has not excluded them (spec 0008, decision 3): a check
+    # is due once any one of them could be offered, and the offer itself falls back to the first
+    # of these, never to one still held by its own just-finished or declined run.
+    offerable = frozenset(config.registry.ids) - context.excluded_frameworks(ctx)
 
     wants_title = (
         ctx.thread.message_count >= TITLE_AFTER_MESSAGES and not ctx.thread.title
@@ -517,7 +526,6 @@ async def send(
         offered=offered_now,
         # Only once messages have left the window, so it never repeats what the model reads raw.
         summary=ctx.summary if window.dropped else None,
-        memory=ctx.memory,
     )
     model, parameters, routing = composer.model_settings(config)
 
@@ -536,7 +544,7 @@ async def send(
     prefix = context.build(
         ctx, framework=active_framework,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
-        starting=starting is not None,
+        starting=starting is not None, offerable=offerable,
         # A typed yes to the open offer, or asking for the set they declined, starts it.
         yes_framework=(
             active_framework if deferred
@@ -577,7 +585,7 @@ async def send(
     )
     reply_shape = schema.reply_for(
         moment,
-        may_check=context.may_check(ctx),
+        may_check=context.may_check(ctx, offerable=offerable),
         declined_row=declined_row,
         on_closing=bool(
             running_framework and technique and technique.phase == running_framework.closing
@@ -615,13 +623,16 @@ async def send(
         # the id only, never a word of what the person said.
         logger.info("thread %s heading toward %s", ctx.thread.id, reply.heading_toward)
     if reply.stage_updates:
-        # Which stages the reply reports words for: ids and statuses only, never their words.
+        # Which parts the reply reports: ids and how, never their words.
         logger.info(
             "thread %s stage updates: %s", ctx.thread.id,
-            ", ".join(f"{u.stage}={u.status}" for u in reply.stage_updates),
+            ", ".join(
+                f"{u.part}{'=rejected' if u.rejected else '=released' if u.released else '=inferred' if u.inferred else ''}"
+                for u in reply.stage_updates
+            ),
         )
     if reply.next_stage:
-        logger.info("thread %s next stage judged %s", ctx.thread.id, reply.next_stage.status)
+        logger.info("thread %s next stage judged %d parts", ctx.thread.id, len(reply.next_stage.parts or []))
 
     # The model's own crisis judgment no longer locks the thread: a small model over-fires it
     # on ordinary distress, pain or injury. Only the deterministic screen (safety.screen, above)
@@ -665,18 +676,24 @@ async def send(
     # (understanding_update, or what is stored) give all three steps; a check whose control comes only
     # from the check itself opens nothing (spec 0006, AC-3, AC-7, AC-18).
     with_check = not guarded and starting is None and understanding.usable(reply.check)
+    shifted = getattr(reply.understanding_update, "change", None) == "shift"
     understood = ctx.thread.understanding
     check_written = False
     if not guarded:
         before = ctx.thread.understanding
+        # A shift to another situation, in the open chat, takes the problem again from what is new and
+        # keeps the core issue and control to confirm; inside a framework it only holds the walk while
+        # Mani asks whether to stay or switch.
+        restart = shifted and not framework_going
         theirs = understanding.merge(
             before, reply.understanding_update, before=before, feeling_answer=reply.feeling_answer,
+            restart=restart,
         )
         check_written = with_check and understanding.next_step(theirs) is None
         understood = (
             understanding.merge(
                 understanding.merge_check(before, reply.check), reply.understanding_update, before=before,
-                track=False, feeling_answer=reply.feeling_answer,
+                track=False, feeling_answer=reply.feeling_answer, restart=restart,
             )
             if check_written else theirs
         )
@@ -713,6 +730,7 @@ async def send(
             moment in (Moment.CHATTING, Moment.CHECK_OPEN, Moment.OFFER_OPEN)
             and starting is None and not guarded
         ),
+        offerable=offerable,
     )
     if moment is Moment.OFFER_OPEN and not guarded:
         fixed = _answered_offer(
@@ -745,16 +763,17 @@ async def send(
             style=conversation_style, thread_id=ctx.thread.id,
             body_answered=moment is Moment.BODY and body is not None
             and repairs.body_answer_fits(body, "closing", conversation_style),
-            feeling=understood.get("feeling"),
+            known=understood,
+            hold=bool(understood.get(understanding.PENDING)) or shifted,
         )
         if walked.entries != (stored_all.get(walking.id) or {}):
             updates.stages_known = {**stored_all, walking.id: walked.entries}
         if walked.stopped:
             # They ended the questions: recorded as a decline, so the next check waits the short
-            # cooldown, and the two choices follow their own words (spec 0007, AC-3).
+            # cooldown, and the closing choices follow their own words (spec 0007, AC-3).
             outcome = TechniqueOutcome.DECLINED
             fixed = dataclasses.replace(
-                fixed, framework_id=None, phase=None, prompts=_handoff(),
+                fixed, framework_id=None, phase=None, prompts=_closing(),
                 notes=fixed.notes + ["questions stopped by them"],
             )
     if moment is Moment.BODY and not guarded:
@@ -828,6 +847,9 @@ async def send(
             outcome=TechniqueOutcome.OFFERED,
             phase=fixed.phase or "offering",
             at_message_count=count_after,
+            # Mani's own reason for this pick, kept with the run for reviewing selection quality
+            # (spec 0008); never read by anything that decides what happens next.
+            offered_because=(reply.heading_reason or "")[:200] or None,
         )
         updates.offer_frameworks.append(new_offer.technique)
     elif (decided := _decided_framework(fixed.framework_id, outcome, technique, starting)) is not None:
@@ -850,6 +872,14 @@ async def send(
         )
         if accepted_this_turn:
             updates.offer_frameworks.append(decided)
+        elif outcome is TechniqueOutcome.DECLINED:
+            # A decline, or stopping the questions (walk.py reports it as a decline too): a
+            # finished run either way, kept so a different framework's offer is not blocked by
+            # this one's own cooldown (spec 0008, decision 3).
+            updates.record_run = TechniqueRun(
+                thread_id=ctx.thread.id, framework_id=decided, outcome=TechniqueOutcome.DECLINED,
+                ended_at_message_count=count_after,
+            )
 
     if library_offer is not None:
         updates.library_offered = True
@@ -892,6 +922,10 @@ async def send(
             else ctx.thread.check_at_message_count
         ),
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
+        offered_because=(
+            updates.technique.offered_because
+            if settings.ai_debug_mode and updates.technique is not None else None
+        ),
         checks=checks,
         ledger=ledger if settings.ai_debug_mode else None,
         stage_trace=(

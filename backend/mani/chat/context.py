@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 
 from mani.chat import repairs, understanding, walk
-from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CHAT_MORE_LABEL
+from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, KEEP_CHATTING_CLOSE_LABEL
 from mani.chat.techniques import OFFERING
 from mani.db.threads import TurnContext
 from mani.llm.schema import Moment
@@ -72,7 +72,7 @@ def _after_framework_question(history: list[Message]) -> str | None:
     mani = [m for m in history if m.role is MessageRole.MANI]
     ended = next(
         (i for i in range(len(mani) - 1, -1, -1)
-         if any(str(o.get("label", "")).lower() == CHAT_MORE_LABEL.lower()
+         if any(str(o.get("label", "")).lower() == KEEP_CHATTING_CLOSE_LABEL.lower()
                 for o in (mani[i].prompt_options or []))),
         None,
     )
@@ -93,6 +93,27 @@ def cooldown_for(outcome: TechniqueOutcome) -> int:
         if outcome is TechniqueOutcome.ACCEPTED
         else COOLDOWN_AFTER_DECLINE
     )
+
+
+def excluded_frameworks(ctx: TurnContext) -> frozenset[str]:
+    """Which framework ids a check may not offer right now: every completed (accepted) run, from the
+    thread's singleton row and from thread_technique_runs, held for COOLDOWN_AFTER_COMPLETE
+    messages from when it ended. A completed framework's long cooldown never blocks offering a
+    *different* one, read from history because thread_technique_state holds only one row (spec
+    0008, decision 3). Declines are not excluded here: may_check paces every check after one, so a
+    "no" or "Keep chatting" is never read as "offer me something else instead"."""
+    count = ctx.thread.message_count
+    held: set[str] = set()
+    technique = ctx.technique
+    if (
+        technique is not None and technique.outcome is TechniqueOutcome.ACCEPTED
+        and count - technique.at_message_count < cooldown_for(technique.outcome)
+    ):
+        held.add(technique.framework_id)
+    for run in ctx.recent_runs:
+        if run.outcome is TechniqueOutcome.ACCEPTED and count - run.ended_at_message_count < cooldown_for(run.outcome):
+            held.add(run.framework_id)
+    return frozenset(held)
 
 
 def their_messages(ctx: TurnContext) -> int:
@@ -118,12 +139,17 @@ def check_open(ctx: TurnContext) -> bool:
     return at is not None and at == ctx.thread.message_count and live(ctx.technique) is None
 
 
-def may_check(ctx: TurnContext) -> bool:
+def may_check(ctx: TurnContext, *, offerable: frozenset[str] | None = None) -> bool:
     """Whether this reply may check Mani's understanding: once the problem, its core issue and what
     is in their control are all stored, which takes at least four of their messages, so the reply
     that receives the control answer is an ordinary one (spec 0007, AC-10); with no framework live
     and no check waiting for its answer, and once the cooldowns after the last check and the last
-    offer have passed. The only way to an offer (spec 0006)."""
+    offer have passed. The only way to an offer (spec 0006).
+
+    `offerable` is the active framework ids not excluded by excluded_frameworks (spec 0008,
+    decision 3): a completed framework's long cooldown blocks only offering it again, so a check is
+    due once anything else could be offered; a decline still blocks every check for its own short
+    cooldown. Left out, the singleton row's own cooldown is used, as with a single framework."""
     if understanding.next_step(ctx.thread.understanding) is not None:
         return False
     if live(ctx.technique) is not None or check_open(ctx):
@@ -132,6 +158,15 @@ def may_check(ctx: TurnContext) -> bool:
     if at is not None and count - at < COOLDOWN_AFTER_DECLINE:
         return False
     technique = ctx.technique
+    if (
+        technique is not None and technique.outcome is TechniqueOutcome.DECLINED
+        and count - technique.at_message_count < COOLDOWN_AFTER_DECLINE
+    ):
+        # A decline paces the next check itself, globally, never just which framework is offered
+        # (spec 0008, decision 3: only a completed run's cooldown is framework-specific).
+        return False
+    if offerable is not None:
+        return bool(offerable)
     return technique is None or count - technique.at_message_count >= cooldown_for(technique.outcome)
 
 
@@ -278,12 +313,12 @@ _MEANING: dict[str, str | dict[str, str]] = {
     ),
     "active_framework": (
         "the set of questions running, with its stages in order. Then the stage you are on, with "
-        "its purpose, what to listen for, when it is done, its boundaries and what to do if "
+        "its purpose, the parts it is made of, what to listen for, its boundaries and what to do if "
         "unclear. Its ask is a model question already in this style."
     ),
     "stages_known": (
-        "what they have said for each stage the walk has reached, kept for you. Never ask for what a "
-        "stage already holds. In stage_updates report the stage in force from their message."
+        "where each stage the walk has reached stands, with their words, kept for you. Never ask for what a "
+        "stage already holds. In stage_updates report the parts of the stage in force from their message."
     ),
     "after_framework_question": (
         "they kept chatting after the questions ended and are still on the same issue. Reflect "
@@ -315,6 +350,7 @@ def build(
     starting: bool = False,
     yes_framework: Framework | None = None,
     finished: Framework | None = None,
+    offerable: frozenset[str] | None = None,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -329,6 +365,9 @@ def build(
 
     `history` is the same window the caller already loads for the model's own conversation
     view - nothing new is fetched for it.
+
+    `offerable` is may_check's own parameter, passed through so the `check:` line this turn
+    renders agrees with what the reply shape actually decided.
     """
     technique = ctx.technique
     # Named first because every stage_ask and offer_ask below is resolved from it, and named
@@ -376,7 +415,7 @@ def build(
     if not safety_concern:
         if check_open(ctx):
             lines += _line("check", "open")
-        elif may_check(ctx):
+        elif may_check(ctx, offerable=offerable):
             lines += _line("check", "may_check")
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
@@ -408,7 +447,7 @@ def build(
         lines += _running_lines(ctx, framework, offer_waiting=offer_waiting, starting=starting)
     if yes_framework is not None and not safety_concern:
         lines += _line("if_they_say_yes", yes_framework.id)
-        lines += _start_lines(yes_framework, resolve_style(ctx))
+        lines += _start_lines(yes_framework, resolve_style(ctx), ctx.thread.understanding)
 
     return "[ctx]\n" + "\n".join(lines) + "\n[/ctx]\n\n"
 
@@ -423,52 +462,91 @@ def _running_lines(
     lines = _line("active_framework", framework.id)
     lines.append(f"framework_stages: {', '.join(framework.phases)}")
     if starting:
-        return lines + _line("framework_starting", "yes") + _start_lines(framework, style)
+        return lines + _line("framework_starting", "yes") + _start_lines(framework, style, ctx.thread.understanding)
+    known = technique.stages_known.get(framework.id) or {}
     stage = _stage_lines("stage", framework, technique.phase, style)
+    stage += _have_lines(framework, known, technique.phase)
     if offer_waiting:
         # The offering stage's question is the offer they have just typed past.
         stage = [line for line in stage if not line.startswith("stage_ask:")]
     lines.extend(stage)
     if technique.phase == OFFERING:
         return lines
-    known = technique.stages_known.get(framework.id) or {}
     lines += _line("stages_known", _stored(framework, known, technique.phase))
     if technique.phase in walk.content_stages(framework):
         lines.append(f"next: {walk.next_line(framework, known, technique.phase)}")
     index = framework.phase_index(technique.phase)
     following = framework.phases[index + 1] if 0 <= index < len(framework.phases) - 1 else None
     if following:
-        lines.extend(_stage_lines("next_stage", framework, following, style))
+        lines.extend(_stage_lines("next_stage", framework, following, style, ctx.thread.understanding))
     return lines
 
 
 def _stored(framework: Framework, known: dict[str, dict], phase: str) -> str:
-    """Every content stage with its stored status, and their words when there are some. A stage after
+    """Every content stage with where it stands, and their words when there are some. A stage after
     the one in force is not reached yet, whatever an earlier version stored for it."""
-    at = framework.phase_index(phase)
     parts = []
-    for stage in walk.content_stages(framework):
-        ahead = framework.phase_index(stage) > at
-        entry = {} if ahead and (known.get(stage) or {}).get("status") != "done" else known.get(stage) or {}
-        status = entry.get("status") or ("not reached" if ahead else "missing")
-        said = entry.get("said")
-        parts.append(f'{stage} {status}: "{disarm(said)}"' if said else f"{stage} {status}")
+    for row in walk.ledger_view(framework, known, phase):
+        status = row["status"].replace("_", " ")
+        parts.append(f'{row["stage"]} {status}: "{disarm(row["known"])}"' if row["known"] else f'{row["stage"]} {status}')
     return " | ".join(parts)
 
 
-def _start_lines(framework: Framework, style: str) -> list[str]:
+def _have_lines(framework: Framework, known: dict[str, dict], stage: str) -> list[str]:
+    """What the stage in force already holds, what it still needs and the question last asked on it, so
+    that when they don't know the reply says what it has and asks again."""
+    if stage not in walk.content_stages(framework):
+        return []
+    entry = known.get(stage)
+    held = entry["parts"] if walk.is_stored(entry) else {}
+    lines = []
+    if held:
+        have = "; ".join(
+            f'{pid}: "{disarm(p.get("said", ""))}"' + (" (inferred)" if p.get("source") == "inferred" else "")
+            for pid, p in held.items() if p.get("said")
+        )
+        lines.append(f"stage_have: {have}")
+    missing = walk.missing_parts(framework, stage, entry if walk.is_stored(entry) else {"parts": {}})
+    lines.append(f"stage_missing: {', '.join(missing) if missing else 'none'}")
+    if walk.is_stored(entry) and entry.get("last_ask"):
+        lines.append(f"stage_last_question: {disarm(entry['last_ask'])}")
+    return lines
+
+
+def _parts_line(prefix: str, framework: Framework, stage: str, style: str) -> str | None:
+    """The parts a stage is made of, each with what it is, what is enough and when to stop asking."""
+    parts = walk.specs(framework, stage)
+    if not parts:
+        return None
+    described = []
+    for part in parts:
+        ask = repairs.styled(part.get("ask"), style)
+        bits = [f"{part['id']} ({'required' if part.get('required', True) else 'optional'}): {part['is']}"]
+        for key in ("enough", "stop_pushing"):
+            if part.get(key):
+                bits.append(f"{key}: {part[key]}")
+        if ask:
+            bits.append(f"ask: {ask}")
+        described.append(" | ".join(bits))
+    return f"{prefix}_parts: " + " || ".join(described)
+
+
+def _start_lines(framework: Framework, style: str, known: dict | None = None) -> list[str]:
     """On a turn that can start the set: what the reply does with the first stage, which the walk
     reaches, and that stage in full to judge it by."""
     first = walk.content_stages(framework)[0]
     return [f"next: the walk reaches {first}: {walk.reach_line(first)}",
-            *_stage_lines("next_stage", framework, first, style)]
+            *_stage_lines("next_stage", framework, first, style, known)]
 
-def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> list[str]:
+def _stage_lines(
+    prefix: str, framework: Framework, phase: str, style: str, known: dict | None = None,
+) -> list[str]:
     """One stage's full guidance - current or next - resolved to one conversation style.
 
-    Purpose, listening cues, readiness, the help when they are stuck and boundaries are clinical
-    rather than tonal and do not vary; `ask` is the one leaf a style changes, so only the resolved
-    style's variant is sent rather than all three.
+    Purpose, listening cues, the parts, the help when they are stuck and boundaries are clinical rather
+    than tonal and do not vary; `ask` is the one leaf a style changes, so only the resolved style's
+    variant is sent rather than all three. For the stage ahead, what the person already told Mani that
+    its parts are bound to.
     """
     stage = framework.stages.get(phase)
     if not stage:
@@ -478,11 +556,19 @@ def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> l
     for field in ("purpose", "listen_for", "ready_when", "when_stuck"):
         if stage.get(field):
             lines.append(f"{prefix}_{field}: {stage[field]}")
-    if prefix == "next_stage" and stage.get("reach"):
-        # How the stage is judged when the walk reaches it, beside its ready_when.
-        lines.append(f"{prefix}_reach: {stage['reach']}")
+    if parts := _parts_line(prefix, framework, phase, style):
+        lines.append(parts)
+    if prefix == "next_stage" and known:
+        told = "; ".join(
+            f'{p["id"]}: "{disarm(str(known[key]))}"' for p in walk.specs(framework, phase)
+            if p.get("from") and (key := p["from"].removeprefix("understanding.")) and known.get(key)
+        )
+        if told:
+            lines.append(f"{prefix}_known: {told}")
     if stage.get("boundaries"):
         lines.append(f"{prefix}_boundaries: " + "; ".join(stage["boundaries"]))
+    if stage.get("reflect") and prefix == "stage":
+        lines.append(f"{prefix}_reflect: {stage['reflect']}")
     if stage.get("if_unclear"):
         # A body route branch is shown by its id, which the reply names in `body`: code sends its text.
         rendered = " | ".join(

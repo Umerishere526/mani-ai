@@ -146,3 +146,44 @@ def test_a_turn_can_carry_the_understanding_with_its_history_and_a_pending_feeli
     turn = TurnOut(id=uuid.uuid4(), content="x", created_at=dt.datetime.now(dt.UTC), understanding=record)
     assert turn.understanding["history"] == {"issue": ["the list"]}
     assert turn.understanding["feeling_asked"] == "dread"
+
+
+def test_a_shift_keeps_the_core_issue_and_control_to_confirm_instead_of_asking_them_again():
+    """2026-10-17: a shift empties only what belonged to the old situation (the event, the problem, the
+    reading); the core issue and what is in their control are kept to confirm in one question, and no
+    check comes until they are confirmed or replaced."""
+    full = {"feeling": "anxious", "event": "the list", "issue": "a long list undone",
+            "core_issue": "choosing leaves you doing nothing", "in_their_control": "you're not sure yet",
+            "comes_down_to": "wanting to start and not starting"}
+    shifted = understanding.merge(full, UnderstandingUpdate(issue="your marriage feels distant"), restart=True)
+    assert shifted["issue"] == "your marriage feels distant" and shifted["feeling"] == "anxious"
+    assert shifted["core_issue"] == full["core_issue"] and shifted["in_their_control"] == full["in_their_control"]
+    assert not {"event", "comes_down_to"} & set(shifted)
+    assert shifted["history"] == {"issue": ["a long list undone"], "event": ["the list"]}
+    assert shifted[understanding.RECHECK] == ["core_issue", "in_their_control"]
+    assert understanding.next_step(shifted) == "core_issue", "no check while anything is left to confirm"
+    assert "core_issue: choosing leaves you doing nothing (from before the change, to confirm)" in (
+        understanding.render(shifted))
+
+    one = understanding.merge(shifted, UnderstandingUpdate(core_issue=full["core_issue"]))
+    assert one[understanding.RECHECK] == ["in_their_control"] and understanding.next_step(one) == "control"
+    both = understanding.merge(shifted, UnderstandingUpdate(
+        core_issue=full["core_issue"], in_their_control="you could talk to her"))
+    assert understanding.RECHECK not in both and understanding.next_step(both) is None
+    assert both["in_their_control"] == "you could talk to her"
+
+
+def test_the_same_story_in_new_words_never_takes_a_step_back():
+    """2026-10-17, muhammad's looping chat: a refined problem keeps every step they already answered."""
+    full = {"issue": "everyone left you", "core_issue": "you fear facing life alone",
+            "in_their_control": "nothing, you say"}
+    refined = understanding.merge(full, UnderstandingUpdate(change="refine", issue="getting things done is hard"))
+    assert understanding.RECHECK not in refined and understanding.next_step(refined) is None
+
+
+def test_the_context_value_names_what_a_replaced_value_was():
+    """Spec 0007: a value that replaced another carries it, so the reply names the change and never mixes them."""
+    record = understanding.merge(STORED, UnderstandingUpdate(issue="your client now wants a rewrite"))
+    assert "issue: your client now wants a rewrite (was: my client keeps changing the requirements)" in (
+        understanding.render(record))
+    assert "(was:" not in understanding.render(STORED)

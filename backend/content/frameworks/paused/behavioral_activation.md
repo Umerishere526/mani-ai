@@ -7,31 +7,6 @@ phases: [offering, stopped, matters, choose, manageable, begin, barrier, closing
 activation:
   central_indication: >-
     The user has withdrawn, stopped participating in activities, or lost motivation and needs help taking one manageable action.
-  to_find_out:
-    - "what they have stopped doing or are avoiding"
-    - "whether they know what they could do but cannot begin"
-    - "what gets in the way of beginning"
-    - "whether anything physical or medical explains it, or whether this is early grief (then not this)"
-  # Documentation of the specification: nothing in mani/ reads to_find_out, appropriate_when or not_when.
-  # The prompt reads central_indication, distinctions and contraindications.
-  appropriate_when:
-    - "The user knows something they want or need to do"
-    - "The user is having difficulty beginning"
-    - "The user has stopped an activity that matters"
-    - "The user is withdrawing from routines or relationships"
-    - "The user is avoiding a manageable responsibility"
-    - "Waiting for motivation is keeping the user inactive"
-    - "The user wants help taking action"
-    - "The issue has been clearly identified and the user has agreed to try a framework"
-  not_when:
-    - "The user wants to continue chatting without a framework, or has not agreed"
-    - "The issue has not been clearly identified"
-    - "The user does not know what action would address the problem"
-    - "The central need is examining a painful belief"
-    - "The user needs to compare options or make a decision"
-    - "The user needs help responding to something outside their control"
-    - "The user is close to acting impulsively"
-    - "A safety concern requires the approved safety protocol"
   contraindications:
     - "The proposed activity could place the user at risk"
     - "Serious injury, severe or sudden physical symptoms, an acute medical condition, medication side effects, intoxication, severe sleep deprivation, or physical limitations make the activity unsafe"
@@ -39,15 +14,6 @@ activation:
     - "Fatigue with no identifiable avoidance pattern behind it - nothing they used to do and stopped, no trigger they are avoiding - which points to an undiagnosed medical cause (thyroid, anaemia, sleep, medication) rather than a Behavioral Activation case"
     - "The person cannot complete basic care, or their inactivity looks like an impairment that needs professional evaluation - activity planning is not the response, and they must never be told to push through a limitation"
     - "Acute grief in the period right after a loss - the withdrawal Behavioral Activation treats is avoidance of reminders and of life going on, not the ordinary work of mourning itself"
-  redirects:
-    - signal: "I do not know what I should do."
-      instead: structured_problem_solving
-    - signal: "I know what to do, but I am certain I will fail."
-      instead: thought_reframe
-    - signal: "I am about to send an angry message."
-      instead: dbt_stop
-    - signal: "I cannot change the situation, but I need to decide how to respond."
-      instead: act_choice_point
   distinctions:
     structured_problem_solving: >-
       Behavioral Activation when the user generally knows what they could do, beginning is the

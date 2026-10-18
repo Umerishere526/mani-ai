@@ -272,8 +272,8 @@ async def test_config_tables_are_readable_and_seeded(users):
     # registry at compose time, so it is deliberately not a row here.
     assert {p.name for p in prompts} >= {"mani_base", "response_format"}
     assert "framework_index" not in {p.name for p in prompts}
-    # ABCDE is the only framework offered; the others are paused, not removed.
-    assert {f.id for f in frameworks} == {"abcde"}
+    # ABCDE and Thought Reframe are active; the other four are paused, not removed (spec 0008).
+    assert {f.id for f in frameworks} == {"abcde", "thought_reframe"}
     assert frameworks[0].phases[0] == "offering"
 
 

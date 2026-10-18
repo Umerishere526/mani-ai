@@ -20,9 +20,9 @@ def test_each_moment_carries_only_the_fields_that_mean_something_in_it():
     assert fields(Moment.CHATTING) == CORE, "no check before their second message, never an offer"
     assert fields(Moment.CHATTING, may_check=True) == CORE | {"check"}
     assert fields(Moment.CHATTING, declined_row=True) == CORE | {"offer_answer", *REACH}
-    assert fields(Moment.CHECK_OPEN) == CORE | {"check_answer", "offer"}
+    assert fields(Moment.CHECK_OPEN) == CORE | {"check_answer", "heading_reason", "offer"}
     assert fields(Moment.CHECK_OPEN, declined_row=True) == CORE | {
-        "check_answer", "offer", "offer_answer", *REACH}
+        "check_answer", "heading_reason", "offer", "offer_answer", *REACH}
     assert fields(Moment.IN_STAGES) == CORE | REACH
     assert fields(Moment.OFFER_OPEN) == CORE | {"offer_answer", "their_words", *REACH}
     assert fields(Moment.BODY) == CORE | {"body"}

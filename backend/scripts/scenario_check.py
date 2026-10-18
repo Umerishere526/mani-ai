@@ -106,6 +106,9 @@ class Exchange:
     check_at: int | None = None
     # Whether this reply was Mani's check of its understanding.
     checked: bool = False
+    # Mani's own reason for this pick, when this reply made an offer (spec 0008, orchestrator.Turn
+    # .offered_because). Read here only to print it; never used to judge a conversation.
+    offered_because: str | None = None
 
 
 def _words(text: str) -> set[str]:
@@ -135,16 +138,19 @@ def _offering(registry, framework_id: str | None, key: str, style: str) -> str |
     return (((framework.stages or {}).get("offering") or {}).get(key) or {}).get(style) if framework else None
 
 
-def stage_flags(reply: str, trace: list[dict] | None, stages: dict, style: str) -> list[str]:
-    """Inside a framework: a stage stored as known or possible is said back, never asked with the
-    client's question (spec 0004). No letter line is expected (spec 0007, decision 5)."""
+def stage_flags(reply: str, trace: list[dict] | None, before: list[dict] | None, stages: dict, style: str) -> list[str]:
+    """Inside a framework: the reply that reaches a stage opens with its letter line, and a stage already
+    read back or being reflected on is never asked again with the client's question (spec 0004, spec 0007)."""
     asking = next((row for row in trace or [] if row["asking"]), None)
     if asking is None:
         return []
+    was = next((row["stage"] for row in before or [] if row["asking"]), None)
     stage = stages.get(asking["stage"]) or {}
     flags = []
+    if asking["stage"] != was and stage.get("intro") and not reply.startswith(stage["intro"]):
+        flags.append("stage reply without its letter line")
     ask = (stage.get("ask") or {}).get(style)
-    if asking["status"] in ("known", "possible") and ask and ask in reply:
+    if asking["status"] in ("reading", "reflecting") and ask and ask in reply:
         flags.append("asked a stage already known")
     return flags
 
@@ -156,9 +162,11 @@ def _check(
     exchange.question = _question(exchange.reply)
     framework = registry.get(framework_id)
     if framework:
-        exchange.flags += stage_flags(exchange.reply, exchange.trace, framework.stages, style)
+        exchange.flags += stage_flags(
+            exchange.reply, exchange.trace, previous.trace if previous else None, framework.stages, style,
+        )
     # A stage said back to confirm it reuses their words on purpose, so it is not asking for them again.
-    confirming = any(row["asking"] and row["status"] in ("known", "possible", "partial") for row in exchange.trace or [])
+    confirming = any(row["asking"] and row["status"] in ("reading", "reflecting", "partial") for row in exchange.trace or [])
     if (not confirming and exchange.question
             and len(exchange.question & said) / len(exchange.question) >= ASKS_WHAT_THEY_SAID):
         exchange.flags.append("asks what they already said")
@@ -188,7 +196,7 @@ def _check(
 
 
 # What a stage reached should be, by the status the walk stored for it as it was reached.
-_REACHED_AS = {"said back": ("known", "possible", "partial"), "asked": ("missing",)}
+_REACHED_AS = {"said back": ("reading", "partial"), "asked": ("missing",)}
 
 
 def reached_flags(trace: list[dict] | None, expected: dict[str, str], seen: set[str]) -> list[str]:
@@ -281,6 +289,9 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
                 answered.flags.append("confirmed check, no offer")
                 break
             framework = answered.offered
+            wanted = expect.get("offers")
+            if wanted and framework != wanted:
+                answered.flags.append(f"offered {framework}, expected {wanted}")
             seen: set[str] = set()
             for line in (after or {}).get("lines") or [TELL_ME_MORE_LABEL]:
                 reached = await say(line, told_more=line == TELL_ME_MORE_LABEL, framework_id=framework)
@@ -313,6 +324,7 @@ async def _exchange(
         offered=next((p.technique for p in turn.prompts if p.technique), None),
         cost=await _cost(thread_id, seconds, billed), checks=turn.checks, trace=turn.stage_trace,
         understanding=turn.understanding, check_at=turn.check_at_message_count,
+        offered_because=turn.offered_because,
     )
     _check(exchange, registry, told_more, said, style, previous, framework_id)
     return exchange
@@ -366,6 +378,9 @@ def _report(name: str, runs: dict[str, list[Exchange]], *, full: bool = False) -
                 # Read side by side by a person: does the offer's slot hold the feeling they named?
                 feeling = (exchange.understanding or {}).get("feeling") or "-"
                 print(f"      feeling stored: {feeling}\n      offer: {' '.join(exchange.reply.split())}")
+                if exchange.offered_because:
+                    # Mani's own reason for this pick over the Index's other sets (spec 0008).
+                    print(f"      heading: {exchange.offered} — {exchange.offered_because}")
     return flagged
 
 

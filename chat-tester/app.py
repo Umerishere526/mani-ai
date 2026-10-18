@@ -159,6 +159,11 @@ if framework_state and framework_state.get("phase"):
     caption.append(f"framework: {framework_state['framework_id']} · stage: {framework_state['phase']}")
 if caption:
     st.caption("  ·  ".join(caption))
+# Mani's own reason this framework was picked over the Index's other sets, sent only once, on
+# the turn it was offered (spec 0008). AI_DEBUG_MODE must be on in the backend to see it.
+offered_because = (st.session_state.get("last_turn") or {}).get("offered_because")
+if offered_because:
+    st.caption(f"heading: {framework_state['framework_id'] if framework_state else '?'} — {offered_because}")
 
 # ---------------------------------------------------------------------------
 # The conversation itself
@@ -350,7 +355,7 @@ with st.sidebar:
     if check_at is not None:
         st.caption(f"Mani's last check: after message {check_at}")
     LEDGER_ICONS = {
-        "known": "✅", "possible": "❓", "partial": "🟡", "missing": "⬜", "done": "✔️", "not_reached": "⚪",
+        "reading": "✅", "reflecting": "💬", "partial": "🟡", "missing": "⬜", "done": "✔️", "not_reached": "⚪",
     }
     ledger = (last_turn or {}).get("ledger")
     if ledger:
@@ -362,7 +367,7 @@ with st.sidebar:
             )
             if row.get("known"):
                 st.caption(f"knows: {row['known']}")
-        st.caption("✅ known, confirm once  ❓ possible event  🟡 partial  ⬜ missing  ✔️ done  ▶ on it now")
+        st.caption("✅ reading given  💬 asked what they take from it  🟡 partly known  ⬜ missing  ✔️ done  ▶ on it now")
     else:
         st.caption("Shown while a framework is running, with AI_DEBUG_MODE on in the backend.")
 

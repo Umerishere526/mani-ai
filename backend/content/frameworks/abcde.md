@@ -4,23 +4,12 @@ name: ABCDE
 summary: "These questions help you see what happened, what you started believing about it, and how that belief has affected you, then look at whether it is true and find a more realistic and helpful way to see it."
 display_order: 1
 phases: [offering, activate, belief, consequence, dispute, effective]
-# Used only when Mani's own confirmation of a stage cannot be: closes their words said back, B to E.
-# A falls back to its own confirm line.
+# Used only when Mani's own reading of a stage cannot be: closes their words said back.
+# A stage with a confirm line uses it instead.
 confirm_phrases: ["Is that right?", "Do we have this right?", "Did I get that right?", "Does that sound right?"]
 activation:
   central_indication: >-
     The user connects a specific event to a troubling belief and emotional reaction.
-  # Documentation of the specification: nothing in mani/ reads appropriate_when or not_when.
-  # The prompt reads central_indication, distinctions and contraindications.
-  appropriate_when:
-    - "A situation, what the person believes it means, or how that belief is affecting them has come up"
-    - "The person wants to understand their thinking rather than only talk"
-    - "The issue has been identified well enough to say what ABCDE would help with"
-  not_when:
-    - "The user wants to continue chatting without a framework"
-    - "The issue has not been identified"
-    - "The user cannot take part in reflective questions"
-    - "A safety concern requires the approved safety protocol"
   contraindications:
     - "The only thing left to examine would be whether abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger was real or as serious as it felt. What they came to believe about themselves after it may still be examined; the event itself is never questioned or reinterpreted as harmless"
   distinctions:
@@ -49,12 +38,6 @@ stages:
       reflective: |-
         <A short line about how the way we interpret what is happening can make it feel harder, fitted to what they said, such as "Sometimes the way we interpret what's happening can make a difficult situation feel even harder.">
         There's a framework called ABCDE that helps you examine what you're telling yourself about <their feeling from understanding as a short noun phrase that reads naturally after "what you're telling yourself about", such as "your frustration"; what is worrying them only when they named no feeling>, understand how those thoughts affect you, and consider whether there's a more realistic way to see things.
-    steps: |-
-      - A: Activating Event. What happened or what is happening.
-      - B: Belief. What you began believing about it.
-      - C: Consequences. How that belief affected your feelings or actions.
-      - D: Dispute. What supports the belief and what might challenge it.
-      - E: Effective New Belief. A more realistic and helpful way to understand it.
     keep_chatting:
       directive: |-
         What's been happening that's making you feel like <what they said they are struggling with, in their words>?
@@ -89,23 +72,29 @@ stages:
         5. E: Effective New Belief: What's a more accurate and helpful way to understand the situation?
   activate:
     title: "A: Activating Event"
+    intro: "A is for Activating Event."
     purpose: "Identify the activating event from the conversation."
-    listen_for: "What happened or has been happening, what was said or done, and whether the person is describing what they observed or what they inferred."
-    ready_when: "The event is clear from what they have said."
+    listen_for: "What happened, what was said or done, and whether they observed it or inferred it."
+    when_stuck: "When they can't say what happened, ask about one recent moment it came up, built on what they already described."
     boundaries:
-      - "must not ask them to repeat an event they have already described"
       - "must not assume why the event occurred"
       - "must not assign another person's motive"
       - "must not merge several events"
       - "must not treat the user's interpretation as observable fact"
+    parts:
+      - id: event
+        is: "what happened, as they observed it, in the one situation they want to look at"
+        enough: "one event or situation in their words. A broad \"everything went wrong\" is narrowed to the one they want to look at. What they infer about someone's motive is not the event. The situation is theirs: what they want to change, such as a feeling, points to the moments that bring it on"
+        from: understanding.event
+        ask:
+          directive: "What's been happening that's left you feeling <understanding.feeling>?"
+          supportive: "What's been happening that's left you feeling so <understanding.feeling>?"
+          reflective: "When you think about feeling <understanding.feeling>, what's been happening that seems connected to it?"
+        stop_pushing: "they described it twice, even loosely: take it as the event"
     confirm:
       directive: "From what you've shared, <the event, in their words> seems to be what started these concerns. Is that right?"
       supportive: "You mentioned <the event, in their words>. Is that what started these feelings?"
       reflective: "You've mentioned <the event, in their words>. Is that where these concerns began?"
-    missing:
-      directive: "What's been happening that's left you feeling <their word for it>?"
-      supportive: "What's been happening that's left you feeling so <their word for it>?"
-      reflective: "When you think about feeling <their word for it>, what's been happening that seems connected to it?"
     if_unclear:
       - when: "assumed motive - \"My manager embarrassed me because she wants me to fail.\""
         reply: "You believe she wants you to fail. What did she say or do?"
@@ -119,16 +108,25 @@ stages:
       reflective: "What's been happening that seems connected to it?"
   belief:
     title: "B: Belief"
+    intro: "B is for Belief."
     purpose: "Identify what the person began believing about the event, in their own words."
-    # Sent as next_stage_reach on the stage before, where the reply judges this stage for the walk.
-    reach: "Where several beliefs appear, report belief as partial with each in their words, so your text asks which affected them most. A belief is what they concluded about themselves or what it means for them, never whether how they were treated was real or fair. What they did because of it is not the belief; keep it for consequence."
     listen_for: "The conclusion, prediction, expectation or judgment they attached to what happened."
-    ready_when: "A belief they have expressed in their own language. If several appear, ask which one affected them most."
+    when_stuck: "When they can't say what they told themselves, ask what went through their mind at that moment, or what they were afraid it meant. Build on the event and the feeling they already gave, never a belief of your own."
     boundaries:
       - "must not ask them to repeat or explain a belief they already gave"
       - "must not question whether the belief is true here, that belongs to Dispute"
       - "must not suggest another interpretation"
       - "must not interpret the belief beyond what they said"
+    parts:
+      - id: belief
+        is: "what they concluded about themselves or what it means for them: the thought, prediction, expectation or judgment they attached to what happened"
+        enough: "a thought in their own words, even a rough one. What they did because of it is not the belief, it belongs to consequence. Where several appear, ask which one hits hardest, the one tied to the strongest feeling. Never whether how they were treated was real or fair. A prediction of real harm from someone with more power, such as being targeted for speaking up, is a real risk, never the belief to question: ask what it means for them, such as that they can't protect themselves or just have to put up with it, and never supply it"
+        stop_pushing: "they have said they can't put it into words twice: take the closest thing they said, give it back as a possibility, and let them correct it"
+      - id: belief_type
+        is: "the kind of thought it is: a must or a should, all or nothing, I can't stand it, or putting themselves down"
+        enough: "your own reading from what they said, reported as inferred. Never asked about, and never named to them as a label"
+        required: false
+    reflect: "how true the thought feels to them right now: a little, a lot, or completely"
     if_unclear:
       - when: "a feeling instead of a belief - \"I felt embarrassed.\""
         reply: "You felt embarrassed. What were you telling yourself at that point?"
@@ -140,36 +138,41 @@ stages:
       reflective: "When that happened, what did you begin believing about yourself or the situation?"
   consequence:
     title: "C: Consequences"
+    intro: "C is for Consequences."
     purpose: "Identify how believing that affected what they felt and what they did or avoided."
-    reach: "Report consequence as known only where they tied both a feeling and an action or avoidance to that belief. Where only one is there, report it as partial with that one in their words and the other as the gap: feeling when how it left them feeling is missing, doing when what they did or avoided is missing. A yes to your confirmation adds nothing."
     listen_for: "A change in feeling or behaviour after they believed it, such as anxiety, withdrawing or avoiding."
-    ready_when: "A feeling and a behaviour, each tied by them to the belief. Do not introduce either."
+    when_stuck: "When they don't know how it affected them, ask about the last time they believed it: what they felt, then what they did next. Build on what they already said, never a consequence of your own."
     boundaries:
       - "must not ask about the same consequence again"
       - "must not name a consequence they did not identify"
       - "must not tell them how the belief must have affected them"
       - "must not introduce an interpretation they have not expressed"
+    parts:
+      - id: felt
+        is: "how believing the thought left them feeling, tied by them to the belief"
+        enough: "a feeling they link to the thought. The feeling they opened the conversation with is only a possibility for them to confirm"
+        from: understanding.feeling
+        ask: "And when you believe <belief>, how does that leave you feeling?"
+        stop_pushing: "they have no word for it after one try: accept a plain description, or that it is hard to name"
+      - id: did
+        is: "what they did, stopped doing or avoided once they believed it"
+        enough: "an action or an avoidance, in their words"
+        ask: "What do you do, or stop doing, once you believe <belief>?"
+        stop_pushing: "they say nothing changed: accept it"
+    reflect: "what believing the thought costs them"
     if_unclear:
       - when: "consequence unclear - \"It affected everything.\""
         reply: "It affected everything. What changed first?"
-      - id: feeling
-        slot: belief
-        when: "what they did is there and how believing it left them feeling is not"
-        reply: "And when you believe <their belief>, how does that leave you feeling?"
-      - id: doing
-        slot: belief
-        when: "how it left them feeling is there and what they did or avoided is not"
-        reply: "What do you do, or stop doing, once you believe <their belief>?"
     ask:
       directive: "How did that thought affect how you felt or what you did?"
       supportive: "Our thoughts can affect how we feel and respond. How did that belief affect how you felt or what you did?"
       reflective: "When you believed that thought, how did it influence your feelings or the way you responded?"
   dispute:
     title: "D: Dispute"
-    purpose: "Help them look at what supports the belief and what may challenge it, and tell what they know from what they assume, without trying to prove the belief wrong."
-    listen_for: "What they have observed, what supports the belief, what may suggest a different understanding, and what they do not yet know."
-    ready_when: "What supports the belief and what might challenge it have both been looked at, and where the belief is joined to a conclusion they draw from it (\"I can't get it all done\" and \"so there is no point starting\"), the two have been pulled apart in their words. Not knowing for sure is not enough on its own. They do not have to disprove it."
-    when_stuck: "When nothing comes to mind, help them look, from their own words. Offer one distinction: between the belief and the conclusion they draw from it, or between what they know and what they assume. Ask which is closer to what they tell themselves."
+    intro: "D is for Dispute."
+    purpose: "Help them look at the belief from B: what supports it, what may challenge it, and whether the conclusion they draw from it follows. Tell what they know from what they assume, without trying to prove the belief wrong."
+    listen_for: "What they have observed, what supports the belief, what may suggest a different understanding, what they do not yet know, and where the belief is joined to a conclusion."
+    when_stuck: "When nothing comes to mind, help them look, from their own words. Offer one distinction: between the belief and the conclusion they draw from it, or between what they know and what they assume, or where believing it gets them. Ask which is closer to what they tell themselves. Start with the kind of thought belief_type names."
     boundaries:
       - "must not argue with them or try to prove the belief wrong"
       - "must take information that supports the belief seriously and never answer it with a contradiction"
@@ -177,24 +180,35 @@ stages:
       - "must not invent evidence against the belief"
       - "must not assume another person's intention"
       - "must not reinterpret danger or mistreatment"
+    parts:
+      - id: evidence
+        is: "what supports the belief and what, if anything, suggests a different explanation"
+        enough: "both looked at, with what supports it taken seriously. Nothing coming to mind for the other side is an answer once one distinction has been offered"
+        ask: "As you think about <belief>, what seems to support it, and what might suggest a different explanation?"
+        stop_pushing: "nothing comes to mind even after you offered one distinction in their words: keep what supports it, and nothing yet for the other side"
+      - id: logic
+        is: "whether the conclusion follows from the thought: where the belief is joined to what they conclude or do because of it, the two pulled apart in their words"
+        enough: "they have said whether one has to lead to the other, or that they can't tell. Not knowing for sure is not enough on its own, and they do not have to disprove it"
+        ask: "Looking at <belief> and what you do because of it, does one really have to lead to the other?"
+        stop_pushing: "they say they can't tell after one try and one distinction: accept it and give back that the two feel joined"
+      - id: usefulness
+        is: "where believing it tends to get them"
+        required: false
+        ask: "Where does believing <belief> tend to get you?"
+        stop_pushing: "asked once, never again"
+    reflect: "what stands out to them now that they have looked at it"
     if_unclear:
       - when: "nothing challenges the belief - \"Nothing suggests otherwise.\""
         reply: "Nothing comes to mind yet, and that's fine. <one distinction from when_stuck, in their words, as a question>"
-      - id: challenge
-        # The stage whose words fill the reply's slot.
-        slot: belief
-        when: "what supports the belief has been said and what challenges it has not been asked"
-        reply: "What might make you question the belief that <their belief, in their words>?"
     ask:
       directive: "What makes you believe this is true, and what makes you question it?"
       supportive: "Let's look at that belief together. What makes you think it's true? Is there anything that suggests otherwise?"
       reflective: "As you think about that belief, what seems to support it, and what might suggest a different explanation?"
   effective:
     title: "E: Effective New Belief"
-    purpose: "Help them reach a more realistic and helpful understanding from what they have looked at, in their own words."
-    reach: "A plan or an action, such as raising it with someone, is not a new belief, so report effective as missing. When they answer effective with a plan, acknowledge the plan and ask for the new way of seeing it. When they offer a new way of seeing it, report effective as partial with it in their words and gap fits: your text says it back and asks whether it fits for them. Known only once they said it does."
-    listen_for: "A conclusion that separates what they know from what they assumed, such as not knowing why something happened and wanting more information."
-    ready_when: "A more realistic and helpful understanding in their own words, which they have said fits them. One they rejected, or not sure, is not reached: stay and help. Never make one up."
+    intro: "E is for Effective New Belief."
+    purpose: "Help them reach a more realistic and helpful understanding of the belief from B, from what they have looked at, in their own words."
+    listen_for: "A conclusion that separates what they know from what they assumed, such as not knowing why something happened and wanting more information, or one that allows for action alongside the difficulty."
     when_stuck: "Put side by side, in their words, the belief and what they found when they looked at it in dispute, and ask what they would say to themselves now. Never supply the belief, never force a positive one."
     boundaries:
       - "must not replace their conclusion with a more positive one"
@@ -202,11 +216,17 @@ stages:
       - "must not offer reassurance they did not ask for"
       - "must not keep questioning once they have reached a clear understanding"
       - "must not force a positive conclusion or a change of feeling"
-    if_unclear:
-      - id: fits
-        slot: effective
-        when: "they offered a new way of seeing it and have not said whether it fits"
-        reply: "So the thought would now be: <their new belief>. Does that fit for you?"
+    parts:
+      - id: new_belief
+        is: "a more realistic and helpful way to understand it, in their own words, from what they looked at"
+        enough: "a thought that separates what they know from what they assumed, or that allows for action alongside the difficulty. A plan or an action is not a new belief: acknowledge it and ask for the way of seeing it. One they reject, or not sure, is not reached: stay and help. Never made up"
+        stop_pushing: "they offered none after you put the belief and what they found side by side: accept that, say so plainly, and let your reading carry where they are"
+      - id: next_step
+        is: "one small thing they could do, if they name one"
+        required: false
+        stop_pushing: "they don't want one: never pressed"
+    reflect: "what they take with them from this"
+    confirm: "So the thought would now be: <the new belief, in their words>. Does that fit for you?"
     ask:
       directive: "What's a more realistic and helpful way to think about what's happening?"
       supportive: "Now that you've looked at both sides, what's a more realistic and helpful way to think about what's happening?"
@@ -224,6 +244,7 @@ Source: the ABCDE framework document sent by the client on 2026-10-09 (Direct, S
 Reflective cadences, and the implementation requirements). When it fits comes from the client's
 Framework Selection Cheat Sheet of 2026-10-13. One MANI personality, three
 communication styles, one ABCDE methodology, and a conversation that remembers what the person has
-already said. No letter line is said; the stage shows beside the chat. A stage the conversation
-already answers is said back with what they said for it and confirmed once, never asked again. It
-ends with the shared body check-in, then Chat More and Go to Library.
+already said. Each reply inside a stage opens with that stage's letter line. A stage's parts the
+conversation already answers are read back and confirmed once, never asked again, and a stage ends
+on their yes and what they take from it. It ends with the shared body check-in, then the closing
+choices.

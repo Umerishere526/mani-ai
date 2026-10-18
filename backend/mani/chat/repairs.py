@@ -41,10 +41,6 @@ SCRIPT_LEAKAGE = [
 
 _BLANK_RUN = re.compile(r"\n{3,}")
 
-# The permission question an offer asks. The client's ABCDE document asks it the same way in all
-# three styles (2026-10-09).
-PERMISSION_QUESTION = "Would you like to try it?"
-
 # A slot in one of the client's templates: `<what goes here, in the client's words>`.
 _SLOT = re.compile(r"<([^<>]+)>")
 _QUOTES = "\"'“”‘’"
@@ -173,12 +169,20 @@ def _without_their_name(text: str, name: str, *, keep_one: bool) -> str:
 
 def with_the_check_in(text: str, script: str) -> str:
     """The body check-in, sent word for word. The client's flow (2026-09-24) treats it as
-    fixed content: Mani's reflection stays, its own version of the question does not."""
+    fixed content: Mani's one sentence about their answer stays; anything after it, its own version of
+    the introduction or the question, gives way to hers (live, 2026-10-17: the introduction twice)."""
     if script in text:
         return text
     match = _LAST_QUESTION.search(text)
     reflection = text[: match.start(1)].rstrip() if match else text.rstrip()
+    reflection = first_sentence(reflection).strip() if reflection else ""
     return f"{reflection}\n\n{script}" if reflection else script
+
+
+def last_question(text: str) -> str | None:
+    """The question a text ends on, if it ends on one."""
+    match = _LAST_QUESTION.search(text.rstrip())
+    return match.group(1).strip() if match else None
 
 
 def styled(value, style: str):
@@ -298,12 +302,11 @@ def _offering(framework: Framework | None, key: str, style: str) -> str | None:
 
 def offer_template(framework: Framework | None, style: str) -> str | None:
     """The client's whole offer for a framework in one style, slots still open: the style's
-    template, the permission question, then the framework's steps when it lists them."""
+    template, then the framework's own permission question."""
     template = _offering(framework, "offer", style)
     if template is None:
         return None
-    steps = ((framework.stages or {}).get(OFFERING) or {}).get("steps")
-    return "\n\n".join(part for part in (template, PERMISSION_QUESTION, steps) if part)
+    return "\n\n".join(part for part in (template, _offering(framework, "ask", style)) if part)
 
 
 def template_slots(template: str) -> tuple[str | None, str | None]:
@@ -361,12 +364,16 @@ def slots_for(registry: Registry, style: str, offered_id: str | None) -> Slots:
     )
 
 
-def offer_framework(heading_toward: str | None, registry: Registry) -> str | None:
-    """The set an offer is for: the one the reply heads toward when it is active, otherwise the
-    only active set when there is just one, otherwise none (spec 0006, AC-8)."""
-    if heading_toward in registry:
+def offer_framework(heading_toward: str | None, registry: Registry, offerable: frozenset[str]) -> str | None:
+    """The set an offer is for: the one the reply heads toward when it is active and offerable,
+    otherwise the first offerable set in the registry's order (lowest display_order - the client's
+    rule that the earlier-listed framework wins a tie), otherwise none (spec 0006, AC-8; spec 0008,
+    decision 1 and 3). `offerable` excludes a framework still held by its own just-finished or
+    declined run (context.excluded_frameworks); with one active framework this is that framework or
+    nothing, exactly as before a second one existed."""
+    if heading_toward in registry and heading_toward in offerable:
         return heading_toward
-    return registry.ids[0] if len(registry) == 1 else None
+    return next((fid for fid in registry.ids if fid in offerable), None)
 
 
 def _offer_text(
@@ -414,9 +421,9 @@ def keep_chatting(framework: Framework | None, style: str, their_words: str | No
 
 
 def explanation(framework: Framework, style: str) -> str:
-    """The client's answer to Tell me more in this style, then the permission question."""
+    """The client's answer to Tell me more in this style, then the framework's permission question."""
     explained = _offering(framework, "explain", style) or " ".join(framework.summary.split())
-    return f"{explained}\n\n{PERMISSION_QUESTION}"
+    return "\n\n".join(part for part in (explained, _offering(framework, "ask", style)) if part)
 
 
 def offer_buttons(framework_id: str, *, explained: bool) -> list[SmartPrompt]:
@@ -443,11 +450,13 @@ def apply(
     feeling: str | None = None,
     check: Check | None = None,
     lay_out: bool = False,
+    offerable: frozenset[str] | None = None,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again, and the client's
     offer when they said yes to Mani's check (`confirmed`). `check` is a check stored this turn, whose
     parts are sent in their order in place of the reply's text. `lay_out` is Mani's own text before a
-    framework, which goes out in the client's paragraphs.
+    framework, which goes out in the client's paragraphs. `offerable` is which active frameworks are
+    not excluded by their own cooldown (spec 0008); left out, every active framework is offerable.
 
     The implementation this replaces answered each of these by re-calling the provider,
     up to six extra generations for one user message. They are all deterministic checks
@@ -481,7 +490,9 @@ def apply(
     prompts: list[SmartPrompt] = []
     offer_dropped: str | None = None
     if moment is Moment.CHECK_OPEN and (confirmed or reply.offer is not None) and not guarded:
-        framework_id = offer_framework(reply.heading_toward, registry)
+        framework_id = offer_framework(
+            reply.heading_toward, registry, offerable if offerable is not None else frozenset(registry.ids),
+        )
         offer, offer_dropped = _offer_text(
             reply.offer or Offer(), framework_id, registry, conversation_style,
             confirmed=confirmed, feeling=feeling,

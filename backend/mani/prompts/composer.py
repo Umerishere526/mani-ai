@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 
 from mani.chat.techniques import Registry
 from mani.config import get_settings
-from mani.llm.schema import Memory
 from mani.models.rows import Profile, ThreadSummary
 from mani.prompts.cache import Config, style_prompt
 
@@ -48,8 +47,8 @@ def framework_index(registry: Registry) -> str | None:
     lines = [
         "# Framework Index",
         "",
-        "The frameworks available to offer, and what each one is for. The `[ctx]` block "
-        "carries the stage guidance for whichever is running.",
+        ("The frameworks available to offer, and what each one is for. The `[ctx]` block "
+        "carries the stage guidance for whichever is running."),
         "",
         "| Framework | Id | Use it when |",
         "|---|---|---|",
@@ -65,11 +64,18 @@ def framework_index(registry: Registry) -> str | None:
     # itself against Thought Reframe and Thought Reframe explains itself against ABCDE - and
     # the ones about not using a framework at all are written five times over. Both are
     # right in a file a clinician reads and pure waste in a prompt paid for every turn, so
-    # a pair is emitted once and a non-framework comparison only the first time.
+    # a pair is emitted once and a non-framework comparison only the first time. The only
+    # non-framework key every framework file uses is continued_conversation; anything else
+    # not in the active registry is a paused framework (or a stale id) and is dropped rather
+    # than rendered with a guessed label - the model is never told to tell two sets apart
+    # when it can only ever be offered one of them.
+    NOT_A_FRAMEWORK = {"continued_conversation"}
     seen: set[frozenset[str] | str] = set()
     rendered: list[str] = []
     for framework in present:
         for other, text in ((framework.activation or {}).get("distinctions") or {}).items():
+            if other not in known and other not in NOT_A_FRAMEWORK:
+                continue
             key = frozenset({framework.id, other}) if other in known else other
             if key in seen:
                 continue
@@ -80,9 +86,9 @@ def framework_index(registry: Registry) -> str | None:
     if rendered:
         lines += ["", "## Telling them apart", ""] + rendered
 
-    # Only the contraindications, not every not_when line: most of those name a different
-    # framework to use instead, which "Telling them apart" already says. These name a
-    # situation where offering any of it would harm the person.
+    # Only the contraindications, never the rest of a framework's activation data: those are a
+    # situation where offering any set would harm the person, which the model must always see;
+    # everything else (which framework fits instead) is what "Telling them apart" already says.
     never = [
         f"- **{framework.name}**: {' '.join(text.split())}"
         for framework in present
@@ -114,41 +120,6 @@ def user_context(profile: Profile | None) -> str | None:
         lines.append(f"Topics they came here for: {', '.join(profile.topics)}.")
 
     return "## User Context\n" + "\n".join(lines) if lines else None
-
-
-# Headings for each part of the memory, in the order a reply would use them.
-_MEMORY_HEADINGS = (
-    ("themes", "Keeps coming back to"),
-    ("low_times", "Feels low when"),
-    ("better_times", "Feels better when"),
-    ("what_helps", "What has helped"),
-    ("what_doesnt", "What has not helped"),
-    ("how_they_talk", "How they like the conversation to go"),
-)
-
-
-def user_memory(memory: Memory | None) -> str | None:
-    """What this person has said about themselves across earlier chats, as patterns.
-
-    Never the earlier conversations themselves: a new chat starts with none of their
-    messages. This is what lets Mani choose how to respond without making them repeat it.
-    """
-    if memory is None:
-        return None
-    parts = [
-        f"- **{heading}:** " + "; ".join(getattr(memory, field))
-        for field, heading in _MEMORY_HEADINGS
-        if getattr(memory, field)
-    ]
-    if not parts:
-        return None
-    return (
-        "## What you know about them from earlier conversations\n"
-        "Patterns they have described, in their words. Use them to choose how you respond: "
-        "what to ask about, what to offer, what to avoid. Never quote them, never say you "
-        "remember, and never mention an earlier conversation. If they bring something up, "
-        "respond to what they say now.\n\n" + "\n".join(parts)
-    )
 
 
 def techniques_used(offered: list[str]) -> str | None:
@@ -191,7 +162,6 @@ def compose(
     should_generate_title: bool = False,
     offered: list[str] | None = None,
     summary: ThreadSummary | None = None,
-    memory: Memory | None = None,
 ) -> SystemPrompt:
     """Build the system prompt for one turn.
 
@@ -210,7 +180,6 @@ def compose(
         ("style", config.require(style_prompt(style)).content),
         ("framework_index", framework_index(config.registry)),
         ("user_context", user_context(profile)),
-        ("user_memory", user_memory(memory)),
     ]
 
     if should_generate_title:

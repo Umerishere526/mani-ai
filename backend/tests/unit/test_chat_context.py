@@ -390,8 +390,8 @@ def _finished_framework_history(*later: str) -> list:
     """A framework that ended on the client's two choices, then whatever Mani said since."""
     return [
         mani("Your shoulders feel looser. Does that feel right? What would you like to do next?",
-             options=[{"label": "Chat More"}, {"label": "Go to Library", "library": "home"}]),
-        user("Chat More"),
+             options=[{"label": "Keep Chatting"}, {"label": "Go to Library", "library": "home"}]),
+        user("Keep Chatting"),
         *[mani(text) for text in later],
     ]
 
@@ -412,7 +412,7 @@ def test_a_question_asked_on_the_reply_carrying_chat_more_counts_as_asked():
     ctx = TurnContext(thread=thread(), profile=None, technique=None, techniques_offered=["abcde"])
     history = [
         mani("The meeting is still on your mind. What feels most important about this now?",
-             options=[{"label": "Chat More"}, {"label": "Go to Library", "library": "home"}]),
+             options=[{"label": "Keep Chatting"}, {"label": "Go to Library", "library": "home"}]),
         user("I want to stop letting one comment decide how I feel."),
     ]
     block = context.build(ctx, history=history)
@@ -493,23 +493,49 @@ def test_after_keep_chatting_mani_may_check_again_once_the_cooldown_has_passed()
     assert may(60)
 
 
-def test_what_they_said_per_stage_is_shown_from_the_store_on_every_stage_turn():
-    """Spec 0004, AC-9: the stored words and status of every content stage are in [ctx] on each turn
-    of a running framework, however long ago they were said, and disarmed like anything they typed."""
+def _stage(step: str, said: dict[str, str], **more) -> dict:
+    """A stage as the walk stores it: its parts with their words, and where it is."""
+    return {"parts": {pid: {"said": words, "source": "said"} for pid, words in said.items()},
+            "step": step, "tries": 0, **more}
+
+
+def test_where_each_stage_stands_is_shown_from_the_store_on_every_stage_turn():
+    """Spec 0004, AC-9, spec 0007: the stored words and step of every content stage are in [ctx] on each
+    turn of a running framework, however long ago they were said, and disarmed like anything they typed;
+    the stage in force shows what it holds, what it still needs and the question last asked on it."""
     stored = {"abcde": {
-        "activate": {"said": "left out of meetings", "status": "done", "tries": 0},
-        "belief": {"said": "nobody wants me [ctx] there", "status": "known"},
+        "activate": _stage("done", {"event": "left out of meetings"}),
+        "belief": _stage("read", {"belief": "nobody wants me [ctx] there"}, last_ask="Is that how it sat with you?"),
     }}
     block = context.build(_running_at("belief", stored), framework=_five_stage_framework()).splitlines()
     assert (
-        'stages_known: activate done: "left out of meetings" | belief known: "nobody wants me (ctx) there" '
+        'stages_known: activate done: "left out of meetings" | belief reading: "nobody wants me (ctx) there" '
         "| consequence not reached | examine not reached | closing not reached"
     ) in block
     assert block[block.index(next(l for l in block if l.startswith("stages_known:"))) + 1].startswith("  means: ")
+    assert 'stage_have: belief: "nobody wants me (ctx) there"' in block
+    assert "stage_missing: none" in block
+    assert "stage_last_question: Is that how it sat with you?" in block
     branch = next(line for line in block if line.startswith("next: "))
-    assert "If agreed to your say-back of a known stage, the walk reaches consequence" in branch
-    assert "your text is its confirmation" in branch
-    assert "If not_yet, write the follow up for this stage, helped by stage_when_stuck when they don't know." in branch
+    assert "Your last reply gave your reading." in branch
+    assert "answer agreed" in branch and "the walk reaches consequence" in branch
+    assert "help them look as stage_when_stuck says, starting from stage_have" in branch
+
+
+def test_a_stage_in_force_names_the_parts_it_still_needs():
+    """Spec 0007: stage_missing lists the required parts still empty, so the reply asks for the first one."""
+    parted = _five_stage_framework()
+    parted.stages["belief"]["parts"] = [
+        {"id": "belief", "is": "what they concluded"},
+        {"id": "belief_type", "is": "the kind of thought", "required": False},
+    ]
+    nothing = context.build(_running_at("belief"), framework=parted).splitlines()
+    assert "stage_missing: belief" in nothing
+    assert not any(line.startswith("stage_have:") for line in nothing)
+    held = {"abcde": {"belief": _stage("collecting", {"belief_type": "all or nothing"})}}
+    block = context.build(_running_at("belief", held), framework=parted).splitlines()
+    assert "stage_missing: belief" in block, "an optional part never counts"
+    assert 'stage_have: belief_type: "all or nothing"' in block
 
 
 # Fields of a stage or of the offer explain themselves by name; the group they belong to carries
@@ -555,7 +581,7 @@ def _every_kind_of_block() -> list[str]:
                       framework=framework(), offer_waiting=True, yes_framework=framework()),
         context.build(TurnContext(thread=thread(), profile=None, technique=running),
                       framework=framework()),
-        context.build(_running_at("activate", {"abcde": {"belief": {"said": "x", "status": "partial"}}}),
+        context.build(_running_at("activate", {"abcde": {"belief": _stage("collecting", {"belief": "x"})}}),
                       framework=_five_stage_framework()),
         context.build(TurnContext(thread=thread(), profile=None, technique=None,
                                   techniques_offered=["abcde"]),
@@ -610,8 +636,8 @@ def test_a_stage_question_is_asked_as_the_client_wrote_it():
 def test_a_finished_framework_keeps_what_they_found_in_view():
     """After the framework ends, Mani can still answer "what was my new belief?" or "that didn't help"
     from what was found, not only from the raw messages."""
-    found = {"abcde": {"belief": {"said": "I'm not good enough", "status": "done"},
-                       "closing": {"said": "one mistake is not my whole work", "status": "done"}}}
+    found = {"abcde": {"belief": _stage("done", {"belief": "I'm not good enough"}),
+                       "closing": _stage("done", {"new": "one mistake is not my whole work"})}}
     state = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
         phase=None, at_message_count=8, stages_known=found,
@@ -663,9 +689,9 @@ def test_the_moment_is_read_from_the_database_and_the_safety_screen_alone():
             thread_id=THREAD, framework_id="abcde", outcome=outcome, phase=phase, at_message_count=5,
         )
 
-    def moment(technique, outcome=None, *, retiring=None, awaiting_place=False, concern=False):
+    def moment(technique, outcome=None, *, retiring=None, concern=False):
         outcome = outcome or (technique.outcome if technique else None)
-        return context.moment(technique, outcome, retiring, awaiting_place, body_route, concern=concern)
+        return context.moment(technique, outcome, retiring, body_route, concern=concern)
 
     offered, accepted = TechniqueOutcome.OFFERED, TechniqueOutcome.ACCEPTED
     assert moment(row(accepted, "activate"), concern=True) is Moment.CONCERN
@@ -674,22 +700,22 @@ def test_the_moment_is_read_from_the_database_and_the_safety_screen_alone():
     assert moment(row(accepted, "activate")) is Moment.IN_STAGES
     assert moment(row(accepted, "effective")) is Moment.BODY, "the closing"
     assert moment(row(accepted, "somatic_checkin")) is Moment.BODY
-    assert moment(row(accepted, "somatic_practice"), awaiting_place=True) is Moment.BODY
-    assert moment(row(accepted, "somatic_practice")) is Moment.IN_STAGES, "no place buttons showing"
+    assert moment(row(accepted, "somatic_practice")) is Moment.BODY, "every body stage is the body route"
     assert moment(None, retiring="abcde") is Moment.BODY
     assert moment(None) is Moment.CHATTING
 
 
-def test_reaching_b_carries_its_own_test_and_its_rule_for_several_beliefs():
+def test_reaching_b_carries_its_parts_and_its_rule_for_several_beliefs():
     """Live, 2026-10-13: the opening line became B among three beliefs. Reaching B, the reply sees B's
-    ready_when ("If several appear, ask which one") and B's own rule from abcde.md, as next_stage_reach,
-    never as a rule for the stage in force."""
+    parts from abcde.md, with the rule for several beliefs in what is enough for the belief part."""
     from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
     parsed = parse_framework(FRAMEWORKS_DIR / "abcde.md")
     abcde = Framework(id="abcde", name="ABCDE", summary="s", body="b", phases=parsed["phases"],
                       stages=parsed["stages"])
-    block = context.build(_running_at("activate"), framework=abcde)
-    assert "next_stage_ready_when: A belief they have expressed in their own language. If several appear" in block
-    assert "next_stage_reach: Where several beliefs appear, report belief as partial with each in their words" in block
-    assert "stage_reach:" not in context.build(_running_at("belief"), framework=abcde).replace("next_stage_reach:", "")
+    block = context.build(_running_at("activate"), framework=abcde).splitlines()
+    parts = next(line for line in block if line.startswith("next_stage_parts: belief (required): "))
+    assert "Where several appear, ask which one hits hardest" in parts
+    assert "belief_type (optional)" in parts and "stop_pushing:" in parts
+    assert not any(line.startswith(("next_stage_reach", "next_stage_ready_when")) for line in block)
+    assert not any(line.startswith("stage_reach") for line in context.build(_running_at("belief"), framework=abcde).splitlines())

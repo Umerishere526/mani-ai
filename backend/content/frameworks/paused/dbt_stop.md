@@ -7,31 +7,6 @@ phases: [offering, stop, pause, observe, proceed, closing]
 activation:
   central_indication: >-
     The user is emotionally overwhelmed and needs to pause before reacting impulsively.
-  to_find_out:
-    - "what they are about to do"
-    - "whether it has already happened"
-    - "whether it can safely wait a moment"
-    - "whether anyone is at risk (then safety, not this)"
-  # Documentation of the specification: nothing in mani/ reads to_find_out, appropriate_when or not_when.
-  # The prompt reads central_indication, distinctions and contraindications.
-  appropriate_when:
-    - "The user is close to acting impulsively"
-    - "The action has not yet occurred"
-    - "The action can safely be paused"
-    - "The user expects the action may intensify the situation"
-    - "The user wants help stopping before acting"
-    - "Remaining with MANI may support the pause"
-    - "The issue has been identified and the user has agreed"
-  not_when:
-    - "The user wants to continue chatting without a framework, or has not agreed"
-    - "No immediate action or reaction is present"
-    - "The action has already occurred and no further action is imminent"
-    - "The user wants to examine a belief"
-    - "The user needs to solve a practical problem"
-    - "The user has stopped acting and needs help beginning"
-    - "The user needs to choose a values-aligned direction"
-    - "The user is already able to respond intentionally"
-    - "A medical emergency is present, or the safety protocol is required"
   contraindications:
     - "The intended action involves suicide, self-harm, harm to another person, overdose, immediate danger, or inability to remain safe - the safety protocol, not STOP"
     - "The action itself is protective - leaving, getting away from someone, calling emergency services, or seeking medical help. STOP exists to interrupt a regrettable action, and pausing a protective one is the same failure with the direction reversed: it delays the person from doing the thing that helps"

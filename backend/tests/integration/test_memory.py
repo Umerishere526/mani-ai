@@ -6,15 +6,14 @@ import uuid
 
 import pytest
 
-from mani.config import get_settings
-
 from mani import memory
 from mani.chat import orchestrator
+from mani.config import get_settings
 from mani.db import llm_calls, threads
 from mani.llm import client
 from mani.llm.schema import Memory, Reply
-from tests.integration.test_turn import claims_for, reachable
 from tests.integration.cleanup import remove_test_users
+from tests.integration.test_turn import claims_for, reachable
 
 BEA = uuid.UUID("a0000000-0000-4000-8000-0000000000d2")
 
@@ -92,7 +91,8 @@ async def _new_chat(claims):
 
 
 async def _stored(claims):
-    from mani.db import pool, memory as memory_db
+    from mani.db import memory as memory_db
+    from mani.db import pool
 
     async with pool.as_user(claims) as conn:
         return await memory_db.get(conn, claims.user_id)
@@ -127,7 +127,8 @@ async def test_the_new_chat_itself_is_never_folded_and_carries_no_old_messages(b
     second = await _new_chat(bea)
     await memory.fold_finished(bea, keep=second.id)
 
-    from mani.db import messages as messages_db, pool
+    from mani.db import messages as messages_db
+    from mani.db import pool
 
     async with pool.as_user(bea) as conn:
         history = (await messages_db.for_context(conn, second.id, bea.user_id, budget_chars=get_settings().context_budget_chars)).messages
@@ -196,7 +197,8 @@ async def test_the_idle_job_finds_a_quiet_conversation_and_not_a_live_one(bea, s
     quiet = await _chat(bea, "I always feel low on Sunday evenings because of work")
     live = await _chat(bea, "today was fine actually")
 
-    from mani.db import memory as memory_db, pool
+    from mani.db import memory as memory_db
+    from mani.db import pool
 
     async with pool.as_admin() as conn:
         await conn.execute(
@@ -214,7 +216,7 @@ async def test_the_idle_job_finds_a_quiet_conversation_and_not_a_live_one(bea, s
     assert await _folded_at(live.id) is None
 
 
-async def test_the_next_chat_is_shaped_by_the_memory_but_carries_none_of_the_old_chat(
+async def test_the_next_chat_carries_nothing_of_the_old_one_not_even_what_was_remembered(
     bea, scripted, monkeypatch
 ):
     scripted()
@@ -235,9 +237,8 @@ async def test_the_next_chat_is_shaped_by_the_memory_but_carries_none_of_the_old
     async with pool.as_user(bea) as conn:
         await orchestrator.send(conn, bea, second.id, "hi")
 
-    system, *conversation = sent[-1]
-    assert "feels low on Sunday evenings" in system["content"]
-    assert not any("Sunday" in m["content"] for m in conversation)
+    # A chat's context stays in that chat (muhammad, 2026-10-17): the memory is folded and stored, and never sent.
+    assert not any("Sunday" in m["content"] for m in sent[-1])
 
 
 async def test_an_admin_can_read_what_was_remembered_and_the_person_cannot(bea, scripted):
