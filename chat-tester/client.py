@@ -216,30 +216,22 @@ class ManiClient:
             json={"content": content, "client_message_id": client_message_id or str(uuid.uuid4())},
         )
 
-    def list_messages(self, thread_id: str, cursor: str | None = None) -> dict[str, Any]:
-        """A page of a thread's messages, newest first, with next_cursor set while older
-        ones remain - pass it back to page further into the thread's history."""
-        params = {"cursor": cursor} if cursor else {}
-        return self._call("GET", f"/v1/threads/{thread_id}/messages", params=params)
+    def list_messages(self, thread_id: str) -> dict[str, Any]:
+        return self._call("GET", f"/v1/threads/{thread_id}/messages")
 
     def list_threads(self, limit: int = 20) -> list[dict[str, Any]]:
         """GET /v1/threads - the person's conversations, most recently active first."""
         return self._call("GET", "/v1/threads", params={"limit": limit})["threads"]
 
     def open_thread(self, thread_id: str) -> dict[str, Any]:
-        """A conversation to continue: the thread and its newest page of messages, oldest
-        first, with next_cursor set while older ones remain unread.
+        """A conversation to continue: the thread and its newest messages, oldest first.
 
         GET /v1/threads/{id} and GET /v1/threads/{id}/messages, which returns newest first.
         Buttons come back live only on Mani's newest message, as in the apps.
         """
         thread = self._call("GET", f"/v1/threads/{thread_id}")
-        page = self.list_messages(thread_id)
-        return {
-            "thread": thread,
-            "messages": list(reversed(page["messages"])),
-            "next_cursor": page.get("next_cursor"),
-        }
+        page = self._call("GET", f"/v1/threads/{thread_id}/messages", params={"limit": 100})
+        return {"thread": thread, "messages": list(reversed(page["messages"]))}
 
     def list_exercises(self) -> list[dict[str, Any]]:
         """GET /v1/exercises - the whole library, each item with a signed audio link."""
@@ -294,7 +286,7 @@ async def framework_debug_state(thread_id: str) -> dict[str, Any] | None:
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         row = await conn.fetchrow(
-            "select framework_id, outcome, phase, at_message_count, library_offered_since "
+            "select framework_id, outcome, phase, at_message_count, physical_response, conversation_effect "
             "from public.thread_technique_state where thread_id = $1",
             uuid.UUID(thread_id),
         )

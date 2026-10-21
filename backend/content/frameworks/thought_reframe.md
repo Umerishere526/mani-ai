@@ -1,23 +1,66 @@
 ---
 id: thought_reframe
 name: Thought Reframe
-summary: "These questions help you examine a troubling thought and consider a more balanced perspective. By the end, you will be able to see the situation differently."
+summary: "These questions help you examine a troubling thought and consider a more balanced perspective."
 display_order: 2
-phases: [offering, thought, significance, facts, alternative, reframe]
+phases: [offering, thought, painful, feels_true, alternative, replacement]
+# Used only when Mani's own confirmation of a stage cannot be: closes their words said back.
 confirm_phrases: ["Is that right?", "Do we have this right?", "Did I get that right?", "Does that sound right?"]
 activation:
   central_indication: >-
-    The user struggles with one persistent, painful thought that needs a more balanced interpretation.
+    The user is struggling with a specific thought that is affecting how they feel about
+    themselves, another person, or a situation.
+  to_find_out:
+    - "the exact thought going round, in their words"
+    - "the situation it is attached to"
+    - "why that thought hurts"
+    - "whether they want a brief look rather than a deep one"
+    - "whether it could be tested against facts (a loss or a settled fact is not a thought to test)"
+  # Documentation of the specification: nothing in mani/ reads to_find_out, appropriate_when or not_when.
+  # The prompt reads central_indication, distinctions and contraindications.
+  appropriate_when:
+    - "One specific thought is intensifying the user's difficulty"
+    - "The thought contains an assumption, prediction, or broad conclusion"
+    - "The user is treating one interpretation as certain"
+    - "Relevant facts can be considered"
+    - "Another interpretation may be possible"
+    - "The user wants a brief process"
+    - "The issue has already been clearly identified"
+    - "The user has agreed to try a framework"
+  not_when:
+    - "The user wants to continue chatting without a framework"
+    - "The user has not agreed to try it"
+    - "No specific thought has been identified"
+    - "The user wants deeper examination of an event, belief, and consequence"
+    - "The primary need is a practical decision or plan"
+    - "The primary difficulty is inactivity or withdrawal"
+    - "The user needs to choose how to act while uncertainty remains"
+    - "The user cannot engage in reflective questions"
+    - "A safety concern requires the approved safety protocol"
   contraindications:
     - "The thought keeps returning as a repeated request to check whether it is true, especially about harm, contamination, or identity - in OCD this checking is the compulsion, and answering it again only feeds the loop it is trying to escape"
     - "The only thought left to examine would be whether abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger was real or as serious as it felt. A thought they formed about themselves after it may still be examined; the event itself is never questioned or reinterpreted as harmless"
     - "The painful statement is itself an established fact - a relationship ended, a person said they want to end the friendship - the fact is not reframed, only a related thought about themselves or their future"
+  redirects:
+    - signal: "I keep thinking I am incompetent, and I want to understand why one criticism affected me so strongly."
+      instead: abcde
+    - signal: "I know the thought may never go away, but I do not want it making my decisions."
+      instead: act_choice_point
+    - signal: "I know what I need to do, but I cannot make myself begin."
+      instead: behavioral_activation
   distinctions:
     abcde: >-
-      ABCDE when a specific event or someone's behaviour is at the centre, and what they came to
-      believe about it and what it led to need separating. Reframe when one sweeping thought about
-      themselves, other people or their future keeps coming back, more than any one event, and the
-      event behind it is vague or long past. Only when both fit equally, ABCDE takes priority.
+      Reframe when one thought is already clear, a shorter process is wanted, and the full
+      event-belief-consequence sequence does not require examination. ABCDE when the user wants
+      deeper understanding and the event, belief, and consequences need separating. ABCDE takes
+      priority when both are equally appropriate, but never choose ABCDE only because the user
+      expresses a troubling thought.
+    act_choice_point: >-
+      Reframe when evidence may help reconsider the thought. ACT when the thought cannot be
+      proved or disproved, uncertainty cannot be resolved, examining the thought is keeping the
+      user stuck, or the user needs to choose how to act while the thought remains. Reframe asks
+      "What else may be true?"; ACT asks "How do you want to respond while this thought is
+      present?"
     continued_conversation: >-
       Continue chatting when the thought is unclear, the user wants to be heard, declines, or
       does not want to examine the thought.
@@ -25,224 +68,240 @@ stages:
   offering:
     purpose: "Mirror the identified thought and ask one permission question, once the thought is clear and the user wants a brief process."
     boundaries:
-      - "must not combine the three tones in one offer"
+      - "must not combine the three tones or shift tone without a reason grounded in the conversation"
     if_unclear:
       - when: "the user declines"
         reply: "You do not want to use a framework. What would be most helpful to talk through?"
     ask:
-      directive: "Would you like to try it?"
-      supportive: "Would you like to try it?"
-      reflective: "Would you like to try it?"
+      supportive: "This thought keeps returning for you. Would it help to look at it together?"
+      reflective: "Would it help to examine what supports that thought and what else may be true?"
+      directive: "Would you like to test that thought against the facts?"
     offer:
       directive: |-
-        When you say <their thought from understanding as a short noun phrase that reads naturally after "you say", such as "you're not handling things well">, Thought Reframe can help us understand what is behind that thought and consider another way of thinking about it.
+        There's a framework called Thought Reframe that helps you look at <what is weighing on them, as a short noun phrase that reads naturally after "look at", such as "the thought that you are not doing enough"; their feeling only when they named no thought>, test it against the facts, and land on a more balanced thought you can believe.
       supportive: |-
-        <A short warm line in your own words about what they're facing, never about doubting themselves, such as "You said you do not feel like you are handling things well.">
-        Thought Reframe can help us understand what you mean by <their thought from understanding as a short noun phrase that reads naturally after "understand what you mean by", such as "not handling things well"; what is troubling them only when they named no specific thought> and consider another way of thinking about it.
+        <A short warm line in your own words about what they're carrying, never about doubting themselves.>
+        There's a framework called Thought Reframe that can help you look at <what is weighing on them, as a short noun phrase that reads naturally after "look at", such as "the thought that you are not doing enough"; their feeling only when they named no thought>, understand what makes it feel so true, and find a more balanced thought you can actually believe.
       reflective: |-
-        <A short line about wanting to understand what is behind the thought, fitted to what they said, such as "When you say you are not handling things well, I would like to understand what is behind that thought.">
-        We could use Thought Reframe to explore <their thought from understanding as a short noun phrase that reads naturally after "explore", such as "that thought"; what is troubling them only when they named no specific thought> together.
+        <A short line about how one thought can start to feel like the whole truth, fitted to what they said.>
+        There's a framework called Thought Reframe that helps you examine <what is weighing on them, as a short noun phrase that reads naturally after "examine", such as "the thought that you are not doing enough"; their feeling only when they named no thought>, notice what supports it and what else might be true, and arrive at a more balanced thought you can believe.
     keep_chatting:
       directive: |-
-        What's been happening that's making you feel like <what they said they are struggling with, in their words>?
+        What's been going through your mind about <what they said is troubling them, in their words>?
       supportive: |-
-        We can keep talking. What's been happening that's making things feel so <how they described it, in their words>?
+        We can keep talking. What's been going through your mind about <how they described it, in their words>?
       reflective: |-
-        When you say <what they said about themselves or the situation, in their words>, what experiences have led you to think that about yourself?
+        When you say <what they said about themselves or the situation, in their words>, what makes it feel true to you?
     explain:
       directive: |-
-        Thought Reframe has five steps.
+        The Thought Reframe framework has five steps:
 
-        1. Identify the Thought: What's the thought that's troubling you?
-        2. Name What Makes It Painful: What's most upsetting about that thought?
-        3. Explore What Makes the Thought Feel True: What makes that thought feel true to you? Is there anything that makes you see it differently?
-        4. Consider Another Interpretation: Is there another way to understand what's happening that could also make sense?
-        5. Create a Believable Replacement Thought: What's a more balanced way to think about this that you can believe?
-      supportive: |-
-        Thought Reframe has five steps. They help you understand a thought, why it affects you, and whether another way of seeing the situation might make sense.
-
-        1. Identify the Thought: What's the thought that's been troubling you?
-        2. Name What Makes It Painful: What's the hardest part of thinking that might be true?
-        3. Explore What Makes the Thought Feel True: What makes that thought feel true to you? Is there anything that makes you see it differently?
-        4. Consider Another Interpretation: Is there another way of looking at what's happening that might also make sense to you?
-        5. Create a Believable Replacement Thought: What is a more balanced way of thinking about it that feels true to you?
-      reflective: |-
-        Thought Reframe has five steps that help you examine a troubling thought, understand why it affects you, and consider whether another perspective might also make sense.
-
-        1. Identify the Thought: What thought about yourself or the situation keeps coming back to you?
-        2. Name What Makes It Painful: What feels most upsetting about what that thought might mean?
-        3. Explore What Makes the Thought Feel True: What makes that thought feel true to you? Is there anything that makes you see it differently?
+        1. Identify the Thought: What thought is troubling you?
+        2. Name What Makes It Painful: What is the most upsetting thing it might mean?
+        3. Explore What Makes the Thought Feel True: What makes it convincing, and is there anything that complicates it?
         4. Consider Another Interpretation: Is there another explanation that could also make sense?
-        5. Create a Believable Replacement Thought: How would you describe the situation in a way that feels more balanced and true to you?
+        5. Create a Believable Replacement Thought: What is a more balanced way to see this that you can believe?
+      supportive: |-
+        The Thought Reframe framework has five steps. Each one helps you understand a thought that is weighing on you and consider a more balanced way to see it.
+
+        1. Identify the Thought: What thought has been weighing on you?
+        2. Name What Makes It Painful: What feels most upsetting about what it might mean?
+        3. Explore What Makes the Thought Feel True: What makes it so convincing, and is there anything that complicates it?
+        4. Consider Another Interpretation: Is there another explanation that could also make sense?
+        5. Create a Believable Replacement Thought: What is a more balanced way of seeing this that you could genuinely believe?
+      reflective: |-
+        The Thought Reframe framework has five steps that help you examine one thought and what it means to you.
+
+        1. Identify the Thought: What thought about yourself, someone else, or the situation keeps coming back?
+        2. Name What Makes It Painful: When you think about what it might mean, what feels most painful?
+        3. Explore What Makes the Thought Feel True: What seems to support it, and is there anything that makes you see it a little differently?
+        4. Consider Another Interpretation: Given what you know, is there another explanation that could also fit?
+        5. Create a Believable Replacement Thought: What more balanced understanding could you genuinely believe?
   thought:
-    title: "Step 1: Identify the Thought"
-    intro: "Let's begin Thought Reframe. We'll start with what you've already told me. Step 1 is Identify the Thought."
-    purpose: "Isolate one specific thought in the user's own language, tied to a moment, using what the conversation already established."
-    listen_for: "One specific assumption, conclusion, prediction, or belief in the user's language, and the moment it is attached to."
-    when_stuck: "When nothing is clear yet, ask what keeps repeating in their mind. When what they named is a standing judgment about who they are rather than a thought tied to a moment, ask what happened that brought it up."
+    title: "Identify the Thought"
+    intro: "Let's start by identifying the thought."
+    purpose: "Establish the specific thought they want to examine."
+    reach: "Where their_case already gives the thought, in what it comes down to, report thought as known in their words. Your text says back the thought together with the underlying feeling they confirmed, in one sentence, then asks whether that is what they want to look at, never asking for it again. The thought is what they tell themselves, in their words, never a reading of it. Where their_case holds no clear thought, report thought as missing and ask what keeps coming back to their mind."
+    listen_for: "A specific thought about themselves, another person, or the situation, in their language, and whether they describe what happened or what they concluded it means."
+    ready_when: >-
+      One specific thought identified, in their own words. If several appear, ask which one to
+      examine. A thought they have already said is identified; never ask them to confirm it.
     boundaries:
-      - "must not select the thought for the user"
-      - "must not combine several thoughts"
-      - "must not rewrite the thought in clinical language"
-      - "must not call it irrational or distorted"
-      - "must not settle for a global self-judgment with no moment attached - \"I'm worthless\" is a standing belief about who they are, not a thought about what just happened, and light reframing does not move something that size. Find the moment it is attached to right now"
-    parts:
-      - id: thought
-        is: "the one specific thought troubling them, in their own words, tied to a moment"
-        enough: "a thought already said is read back, never asked again. Where several appear, ask which one to examine. An identity-level judgment (\"I'm a failure\") is anchored to the moment that brought it up before it counts"
-        stop_pushing: "they can't put it into words after one try: take the closest thing they said, give it back as a possibility, and let them correct it"
-    confirm: "You mentioned <the thought, in their words>. Are you thinking that <the thought>?"
+      - "must use their own words and never select the thought for them or combine several"
+      - "must not rewrite the thought in clinical language or call it irrational, distorted or wrong"
+      - "must not treat a real event as if it were only a thought: what happened is separate from what they concluded it means"
+      - "a broad judgment about who they are: use the conversation to understand what brought it up, and clarify only if necessary"
     if_unclear:
       - when: "several thoughts appear"
         reply: "Several thoughts are connected here. Which one do you want to examine?"
       - when: "no clear thought - \"I don't know.\""
         reply: "The thought is difficult to identify. What keeps repeating in your mind?"
-      - when: "identity-level rather than moment-level - \"I'm just a failure.\""
-        reply: "That's about who you are, not just today. What happened that brought it up?"
+      - when: "a broad judgment about who they are, with nothing said about what brought it up - \"I'm just a failure.\""
+        reply: "What was happening when that thought came up?"
+      - when: "what they describe is an established fact, not a thought - a relationship ended, a person said they want to end the friendship"
+        reply: "What happened is real, and I am not going to ask you to see it differently. What thought about yourself or your future has come from it?"
       - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
         reply: "What happened sounds serious, and I am not going to ask you to see it differently. What would be most helpful to talk through?"
     ask:
-      directive: "What's the thought that's troubling you?"
-      supportive: "When you're feeling overwhelmed, what's the thought that's been bothering you most?"
-      reflective: "When you think about feeling that way, what thought about yourself or the situation keeps coming back to you?"
-  significance:
-    title: "Step 2: Name What Makes It Painful"
-    intro: "Step 2 is Name What Makes It Painful."
-    purpose: "Understand what makes the thought matter, without labelling their experience."
-    listen_for: "Why the thought matters and what the user believes it says about themselves, another person, or the future."
-    when_stuck: "If a feeling word comes instead of a reason, name the word and ask what thought is connected to it."
+      supportive: "What thought has been weighing on you about this?"
+      reflective: "What thought about yourself, someone else, or the situation keeps coming back?"
+      directive: "What thought is troubling you most about this?"
+  painful:
+    title: "Name What Makes It Painful"
+    intro: "Next, what makes it painful."
+    purpose: "Understand the emotional significance of the thought, without labelling their experience."
+    reach: "Where their_case already gives the feeling underneath or what makes the thought hurt, report painful as known in their words, so your text says it back and asks whether that is what makes it hard, never asking for it again."
+    listen_for: "What feels most upsetting about what the thought might mean, and what they believe it says about themselves, another person, or the future."
+    ready_when: "What makes the thought painful is clear, in their words. MANI does not assign the meaning."
     boundaries:
-      - "must not assign feelings or meanings the user has not expressed - never assume rejected, inadequate, or unworthy unless they said so"
-      - "must not tell the user why the thought is painful"
-      - "must not introduce history the user has not mentioned"
-      - "must not expand the brief framework into a deeper investigation"
-    parts:
-      - id: painful
-        is: "what's most upsetting about the thought, or what it would mean for them"
-        enough: "their own meaning, in their words. Never ask again once it is clear"
-        stop_pushing: "hard to name after one try: accept their plain words as what it means to them"
+      - "must acknowledge the painful meaning they have already described and ask only if it is not clear yet"
+      - "must not interpret beyond what they have expressed, assign feelings or tell them why the thought is painful"
+      - "must not over-validate or repeat their distress back to them at length"
+      - "must not introduce history they have not mentioned or turn the brief framework into a deeper investigation"
     if_unclear:
       - when: "a feeling word instead - \"Rejected.\""
-        reply: "You used the word 'rejected.' What thought is connected to it?"
+        reply: "You used the word 'rejected.' What is it about the thought that brings that up?"
     ask:
-      directive: "What's most upsetting about that thought?"
-      supportive: "What's the hardest part of thinking that might be true?"
-      reflective: "When you think about that possibility, what feels most upsetting about what it might mean?"
-  facts:
-    title: "Step 3: Explore What Makes the Thought Feel True"
-    intro: "Step 3 is Explore What Makes the Thought Feel True."
-    purpose: "Separate what the user knows from what they assume or predict, with curiosity rather than an attempt to prove the thought wrong."
-    listen_for: "What supports the thought, what does not, and what remains unknown."
-    when_stuck: "When nothing comes to mind on either side, help them recognise what they know and what they have not yet been able to establish, such as the change they noticed and the reason they have not been given."
+      supportive: "What feels most upsetting about what that thought might mean?"
+      reflective: "When you think about what that thought might mean, what feels most painful?"
+      directive: "What is the most upsetting thing that thought might mean?"
+  feels_true:
+    title: "Explore What Makes the Thought Feel True"
+    intro: "Now, what makes the thought feel true."
+    purpose: "Understand why the thought feels convincing, and whether anything complicates it."
+    reach: "Report feels_true as missing where nothing has been said for it, so your text asks only what makes the thought convincing. Where what makes it convincing is said and anything that complicates it was never asked, report it as partial with that in their words and the gap complicates, so your text asks only whether anything complicates it."
+    listen_for: "The experience, feedback, evidence or pattern that makes the thought convincing, and any information that complicates it."
+    ready_when: "They have said what makes the thought convincing and have been asked whether anything complicates it. Nothing complicating it is an answer; they do not have to disprove the thought."
     boundaries:
-      - "must not argue, decide the thought is false, or use rhetorical questions to push a conclusion"
-      - "must not ignore supporting evidence or invent contrary evidence"
-      - "must not assume another person's intentions"
-      - "must not open by asking what challenges the thought - ask what supports it first. Leading with counter-evidence reads as debate before the person has finished laying out their own case"
-    parts:
-      - id: supports
-        is: "what supports the thought, asked and taken seriously before anything that might challenge it"
-        enough: "what they noticed, in their words"
-        stop_pushing: "asked once"
-      - id: against
-        is: "what does not fit the thought, or what remains unknown about it"
-        enough: "something that doesn't fit, or an honest \"nothing yet\" once one distinction has been offered from stage_when_stuck"
-        stop_pushing: "nothing comes to mind even after one help: keep what supports it, and that the reason remains unknown, as where it stands"
-      - id: fact
-        is: "when what supports the thought is itself an established fact (a relationship ended, someone said they want to end it)"
-        required: false
-        enough: "named only when it applies; the fact itself is never reframed, only a related thought about themselves or their future"
+      - "must not dismiss what supports the thought, argue with it or assume it is inaccurate"
+      - "must not stack questions or turn the step into a demand that they defend themselves"
+      - "must not invent contrary evidence, assume another person's intentions or lead them to a conclusion"
+      - "must not reinterpret danger or mistreatment"
+      - "each question asks one part, in their thought and the feeling underneath, and never says what it is for"
     if_unclear:
-      - when: "no contrary information - \"Nothing challenges it.\""
-        reply: "Nothing comes to mind yet. What remains unknown about why [the situation continues as it is]?"
-      - when: "the thought is supported by an established fact - \"She told me she does not want the friendship.\""
-        reply: "[She directly ended the friendship]. What thought about yourself or your future do you want help examining?"
+      - id: complicates
+        # The stage whose words fill the reply's slot.
+        slot: thought
+        when: "what makes the thought convincing has been said and whether anything complicates it has not been asked, so ask only that"
+        reply: "Is there anything that complicates the thought that <their thought, in their words>?"
     ask:
-      directive: "What supports that thought?"
-      supportive: "What makes that thought feel true to you?"
-      reflective: "What have you seen that seems to support it?"
+      supportive: "What makes that thought feel so convincing to you, and is there anything that complicates it?"
+      reflective: "What seems to support that thought, and is there anything that makes you see it a little differently?"
+      directive: "What makes that thought convincing, and is there anything that complicates it?"
   alternative:
-    title: "Step 4: Consider Another Interpretation"
-    intro: "Step 4 is Consider Another Interpretation."
-    purpose: "Help the user recognize the original interpretation may not be the only possibility, without requiring them to reject it."
-    listen_for: "At least one credible possibility that does not deny known facts, or a clear acknowledgment that they don't have enough information to know."
-    when_stuck: "When no alternative comes, ask whether there could be more than one explanation for what remains unknown, without naming one yourself."
+    title: "Consider Another Interpretation"
+    intro: "Let's consider another interpretation."
+    purpose: "Consider whether another explanation could also fit the known facts."
+    listen_for: "A credible possibility that does not deny what is known, or an acknowledgement that there is not enough information to know."
+    ready_when: >-
+      A credible alternative is named, or they say there is not enough information to know or that
+      none feels credible. That is accepted; never replace it with one of Mani's.
     boundaries:
-      - "must not force a positive explanation or manufacture reassurance"
-      - "must not replace one unsupported certainty with another"
+      - "must invite an alternative only when it is plausible and useful, and use one they already offered rather than asking for another"
+      - "must not invent a comforting explanation, force a positive one or claim to know another person's motives"
+      - "must not insist they find an alternative if none feels credible, and must not choose one for them"
       - "must not minimize a legitimate concern or reinterpret danger or mistreatment"
-      - "must not choose the alternative for the user"
-      - "if an alternative was already given while exploring what makes the thought feel true, acknowledge it here rather than asking them to invent another"
-    parts:
-      - id: alternative
-        is: "another credible interpretation that could also make sense, or an acknowledgment that the original interpretation is not certain"
-        enough: "one possibility in their words, or them saying they don't know for sure - that counts as reached"
-        stop_pushing: "none comes to mind after one help: the uncertainty itself (more than one explanation is possible) is kept as what is known"
     if_unclear:
       - when: "no alternative offered - \"There is no other explanation.\""
         reply: "This explanation feels certain to you. What part do you know for a fact?"
     ask:
-      directive: "Is there another way to understand what's happening that could also make sense?"
-      supportive: "Is there another way of looking at what's happening that might also make sense to you?"
-      reflective: "As you think about what's happened, is there another explanation that could also make sense?"
-  reframe:
-    title: "Step 5: Create a Believable Replacement Thought"
-    intro: "Step 5 is Create a Believable Replacement Thought."
-    purpose: "Develop a brief, balanced thought grounded in the facts the user identified, from the thought in thought and what was found in facts and alternative."
-    listen_for: "A thought the user considers accurate, balanced, and believable - not necessarily positive."
-    when_stuck: "Put side by side, in their words, what they know and what remains uncertain, and ask what would need to change in a reframe to make it feel truer."
+      supportive: "Is there another way of understanding this that could also make sense?"
+      reflective: "Given what you know, is there another explanation that could also fit?"
+      directive: "Is there another explanation that could also make sense?"
+  replacement:
+    title: "Create a Believable Replacement Thought"
+    intro: "Last, a believable replacement thought."
+    purpose: "Help them express a more balanced thought they can genuinely believe, in their own words, grounded in what they have identified."
+    reach: "Report replacement as known only where they gave a thought that fits what they know and said they believe it. A thought they offered without saying they believe it is partial with their words and the gap believe, so your text asks whether it feels true to them."
+    listen_for: "A balanced thought in their own words that fits what is known and that they find believable. It may be cautious, partial or uncertain."
+    ready_when: >-
+      A thought, in their own words, that fits what is known and that they say they believe. It does
+      not have to be positive. The gate is whether they actually believe it: "yes", "that feels
+      fairer", "that's closer" mean it is done. If it does not feel true yet, adjust it with them
+      until it does. Check once, plainly, if they have not said; never ask for a number. If they
+      already arrived at one, recognise it and finish without asking them to repeat it.
     boundaries:
-      - "must not write a polished reframe that does not sound like the user, or require positive language"
-      - "must not claim the new thought is true with certainty, or require the user to feel differently"
-      - "must not continue revising a thought the user already finds credible"
-      - "if the user says the reframe does not feel true, must not argue it - weaken or adjust the reframe itself until it is credible to them"
-      - "a believable replacement is a possible outcome, never a requirement: if none feels credible, say so plainly and accept it as where they stand"
-    parts:
-      - id: new_thought
-        is: "a more balanced thought, grounded in what they know, that includes the uncertainty rather than denying it"
-        enough: "their own words, confirmed once (\"yes\", \"that feels fairer\", \"that's closer\"); never a number"
-        stop_pushing: "none feels believable after one help: accept that plainly, in their words, as a meaningful place to end"
-      - id: next_step
-        is: "one small thing they could do, if they name one"
-        required: false
-        stop_pushing: "they don't want one: never pressed"
-    reflect: "what changes when they see it this way"
-    confirm: "So the thought would now be: <the new thought, in their words>. Does that fit for you?"
+      - "must build on their own reasoning and language, and never write the thought for them unless they ask for help finding words"
+      - "when they are unsure, may offer two or three loose possibilities for a believable thought, from what they know, never as advice and never deciding for them"
+      - "must not force an affirmation, claim the new thought is true with certainty or minimize a genuine problem"
+      - "must not require them to feel differently or keep revising a thought they already find credible"
+      - "if they say it does not feel true, must not argue it - weaken or adjust the thought itself until it is credible to them"
     if_unclear:
-      - when: "falsely positive - \"She definitely cares, and everything is fine.\""
+      - when: "falsely positive - \"Everything is fine, there is nothing to worry about.\""
         reply: "You do not know that everything is fine. What thought stays closer to what you know?"
-      - when: "it does not feel true yet - \"I don't really believe that.\""
+      - id: believe
+        when: "it does not feel true yet - \"I don't really believe that.\""
         reply: "It isn't there yet. What would need to change in it to make it feel truer?"
     ask:
-      directive: "What's a more balanced way to think about this that you can believe?"
-      supportive: "After looking at this together, what's a more balanced way of thinking about it that feels true to you?"
-      reflective: "After talking this through, is there another way you might look at the situation that feels more realistic to you?"
+      supportive: "What would be a more balanced way of seeing this that you could genuinely believe?"
+      reflective: "What more balanced understanding could you genuinely believe?"
+      directive: "What is a more balanced way to see this that you can believe?"
 ---
 
 # Thought Reframe
 
-Helps the user examine one specific thought and develop a more balanced, credible interpretation:
-identify the exact thought, understand why it matters, separate facts from assumptions, consider what
-supports and challenges it, recognize another possible interpretation, and create a believable
-replacement. The purpose is not to turn a negative thought into a positive one - it is to develop a
-thought that fits the available facts more accurately. The user reaches their own conclusion; MANI does
-not impose one.
+Thought Reframe helps the person examine a troubling thought, understand why it feels painful or
+convincing, and consider whether another interpretation might also fit. **The goal is not to prove
+the thought wrong or replace it with forced positivity.** It is a guide for reflection, not a
+mandatory five-question interview. The person reaches their own conclusion; MANI does not impose one.
 
-MANI does not tell the user the thought is irrational, distorted, or wrong. MANI does not force a
-positive interpretation. MANI does not turn Thought Reframe into ABCDE - it stays shorter and lighter,
-following all five steps without expanding into a deeper event-belief-consequence investigation: one
-reflection, at the end only, never after every step.
+It is for a specific thought that is affecting how the person feels about themselves, another
+person, or a situation. ABCDE takes priority when both are equally appropriate, but MANI does not
+choose ABCDE only because someone expresses a troubling thought. MANI does not turn Thought Reframe
+into ABCDE: it stays shorter and lighter.
+
+Source: the client's Thought Reframe document (`docs/client/docs/Thought_Reframe_Framework.md`) and
+its framework note. It supersedes the older six-frameworks specification where they differ.
+
+## The five steps
+
+1. **Identify the Thought:** what thought about the self, another person, or the situation is troubling the person?
+2. **Name What Makes It Painful:** what feels most upsetting about what the thought might mean?
+3. **Explore What Makes the Thought Feel True:** what makes the thought convincing, and is there anything that complicates it?
+4. **Consider Another Interpretation:** is there another explanation that could also make sense?
+5. **Create a Believable Replacement Thought:** what is a more balanced understanding the person can genuinely believe?
+
+## How it behaves
+
+- Use what the person has already shared; never ask them to restate a thought or feeling that is already clear.
+- Introduce the step name naturally, and keep every turn from sounding like a worksheet.
+- A step is complete when its purpose has been met, even if no new question is needed.
+- Never call the thought irrational, distorted, wrong, or automatically untrue.
+- Never treat a real event as if it were merely a thought: separate what happened from what the person concluded it means.
+- Never manufacture an alternative explanation or push the person to accept one. If none feels credible, stay with what is known and uncertain.
+- A replacement thought must be credible to the person and consistent with what is known. It may be cautious, partial or uncertain, and does not have to sound positive.
+- If the original thought reflects a real problem, never minimise or dismiss it. If a practical problem needs attention, do not keep reframing the thought as a substitute for addressing it.
+- If the person wants to pause, stop, or carry on chatting, respect that.
+
+## Flexible progression
+
+The five steps describe the work, not five compulsory questions. A step the conversation already
+answers is said back and confirmed once, never asked again. If a believable replacement thought
+emerges early, recognise it. MANI does not skip a step in silence.
+
+## Example: feeling inadequate after vague feedback
+
+A manager criticised the person's client communication without a concrete example. They conclude
+"I'm not enough" and have become anxious around clients. A rigid approach would ask them to list
+evidence for and against "I'm not enough", though the conversation has not established what the
+manager meant. A more natural approach first recognises the real uncertainty: "Without an example,
+you're left trying to guess what needs to change, and that seems to be making every client
+interaction feel harder." From there MANI asks only for a missing piece: what the feedback actually
+contained, what "I'm not enough" means to them, or whether another plausible way to understand it
+exists. It does not assume the manager is wrong, that the person is at fault, or that the thought
+must be replaced by a positive one.
+
+## Completion
+
+When Thought Reframe reaches a meaningful conclusion, MANI acknowledges the person's own
+understanding in one short sentence, without overexplaining or reopening completed steps. The
+shared body check-in follows, introduced naturally, never implying it is mandatory and never
+overriding a request to stop or change topic.
 
 Must not be used to question an accurate experience of abuse, threats, coercion, harassment,
-discrimination, exploitation, medical danger, financial danger, or legal danger. Some painful statements
-are facts - "My relationship ended" is not reframed. A related thought may be examined instead: "Because
-the relationship ended, I will always be alone."
-
-Source: the Thought Reframe framework document sent by the client on 2026-10-17 (Direct, Supportive and
-Reflective cadences, and the implementation requirements), enriched with the paused version's
-if_unclear branches, boundaries and contraindications. Each step and its name is said once as the step
-opens ("Step 1 is Identify the Thought."). A step the conversation already answers is read back and
-confirmed once, never asked again. It ends with the shared body check-in, then the closing choices.
+discrimination, exploitation, medical danger, financial danger, or legal danger. Some painful
+statements are facts: "My relationship ended" is not reframed. A related thought may be examined
+instead: "Because the relationship ended, I will always be alone."
 
 ## Responses MANI must avoid
 
@@ -259,3 +318,4 @@ confirmed once, never asked again. It ends with the shared body check-in, then t
 | Forced positivity | "People care about you, and everything will be fine. Can you focus on that?" | Not grounded in the user's evidence |
 | Reframing an established fact | "Maybe she did not really mean it when she said she wanted to end the friendship." | Questions a fact because it is painful |
 | Reframing danger | "Could your partner's threat mean something less serious?" | Must not reinterpret danger, abuse, or coercion |
+| Wrong tone | after the user selects support: "The evidence is insufficient. Identify a more accurate conclusion." | Abrupt; does not follow the selected tone |

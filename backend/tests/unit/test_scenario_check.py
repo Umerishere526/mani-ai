@@ -73,8 +73,8 @@ def test_every_answer_after_an_offer_names_what_kind_of_answer_it_is():
     assert all(c["after_offer"]["lines"] for c in answered)
 
 
-def test_the_reply_opening_a_stage_needs_its_letter_line_and_a_stage_read_back_is_never_asked_again():
-    """Spec 0004, AC-4, spec 0007: read from the turn's stage trace: ids and statuses, never words."""
+def test_a_stage_reached_without_its_letter_line_or_a_known_stage_asked_is_flagged():
+    """Spec 0004, AC-1 and AC-4, read from the turn's stage trace: ids and statuses, never words."""
     stages = {
         "activate": {"intro": "A is for Activating Event.", "ask": {"supportive": "What happened?"}},
         "belief": {"intro": "B is for Belief.", "ask": {"supportive": "What did you tell yourself?"}},
@@ -86,27 +86,27 @@ def test_the_reply_opening_a_stage_needs_its_letter_line_and_a_stage_read_back_i
 
     on_a = trace("activate", "missing")
     assert scenario_check.stage_flags("A is for Activating Event. What happened?", on_a, None, stages, "supportive") == []
-    assert scenario_check.stage_flags("Can you say more?", on_a, None, stages, "supportive") == [
+    assert scenario_check.stage_flags("What happened?", on_a, None, stages, "supportive") == [
         "stage reply without its letter line"]
     assert scenario_check.stage_flags("Can you say more?", on_a, on_a, stages, "supportive") == [], "a stay has none"
-    read_b = trace("belief", "reading")
+    known_b = trace("belief", "known")
     assert scenario_check.stage_flags(
-        "What did you tell yourself?", read_b, read_b, stages, "supportive",
+        "B is for Belief. What did you tell yourself?", known_b, on_a, stages, "supportive",
     ) == ["asked a stage already known"]
-    assert scenario_check.stage_flags("Anything", None, None, stages, "supportive") == []
+    assert scenario_check.stage_flags("Anything", None, on_a, stages, "supportive") == []
 
 
 # Mani's five replies in the client's way of communication sample, word for word (2026-10-13).
 SAMPLE_REPLIES = (
     "I'm listening. What's frustrating you?",
-    ("When everything feels frustrating, sometimes it's because several things have been building up for a "
-    "while. I don't want to assume that's what's happening to you."),
-    ("That's a lot of frustration coming from every direction at work. I want to understand something before "
-    "we go further."),
-    ("That would be frustrating, especially when other people's lack of follow-through creates additional work "
-    "for you. But I want to understand the pattern rather than assume everyone is the problem."),
-    ("So your ability to do your job depends on other people fulfilling their responsibilities. When they "
-    "don't, your work gets held up, and you're left dealing with the consequences."),
+    "When everything feels frustrating, sometimes it's because several things have been building up for a "
+    "while. I don't want to assume that's what's happening to you.",
+    "That's a lot of frustration coming from every direction at work. I want to understand something before "
+    "we go further.",
+    "That would be frustrating, especially when other people's lack of follow-through creates additional work "
+    "for you. But I want to understand the pattern rather than assume everyone is the problem.",
+    "So your ability to do your job depends on other people fulfilling their responsibilities. When they "
+    "don't, your work gets held up, and you're left dealing with the consequences.",
 )
 
 
@@ -119,28 +119,9 @@ def test_explaining_people_is_flagged_and_the_clients_sample_never_is():
 
 
 def test_the_examples_details_are_flagged_only_when_the_person_never_said_them():
-    reply = "Has your flatmate said how it lands for you?"
-    assert scenario_check.borrowed_from_the_example(reply, {"boss", "work"}) == ["flatmate", "lands for you"]
-    assert scenario_check.borrowed_from_the_example(reply, {"flatmate", "lands", "for", "you"}) == []
-
-
-# The replies the client wrote as better, in her Directive feedback of 2026-10-16.
-HER_REPLIES = (
-    "What does he do when he's in a bad mood that affects the rest of the team?",
-    "Has he actually scolded or confronted people, or are they worried about how he might react?",
-    ("This goes beyond someone having a bad day. His behavior is affecting how people work. Are you in a "
-     "position to address this with him directly?"),
-    ("I understand why you're telling them that, but if they're afraid of being scolded, telling them not to "
-     "let his mood affect them may not change much. The behavior creating that fear needs attention. Have you "
-     "been able to speak with him about it?"),
-)
-
-
-def test_announcing_understanding_is_flagged_and_her_replies_never_are():
-    """The client, 2026-10-16: people show they understood through what they say next, never by announcing it."""
-    assert scenario_check.ANNOUNCES.search("So people stay quiet. I want to understand what keeps that pattern going.")
-    assert scenario_check.ANNOUNCES.search("Have I understood that right?")
-    assert not any(scenario_check.ANNOUNCES.search(reply) for reply in HER_REPLIES)
+    reply = "When vendors don't follow through, what happens next?"
+    assert scenario_check.borrowed_from_the_example(reply, {"boss", "work"}) == ["vendors", "follow through"]
+    assert scenario_check.borrowed_from_the_example(reply, {"vendors", "follow", "through"}) == []
 
 
 def test_a_stage_reached_otherwise_than_expected_is_flagged_once():

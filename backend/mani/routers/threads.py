@@ -10,8 +10,7 @@ from mani import memory
 from mani.auth.deps import CurrentUser
 from mani.background import fire_and_forget
 from mani.chat import orchestrator
-from mani.db import messages as messages_db
-from mani.db import threads
+from mani.db import messages as messages_db, threads
 from mani.db.deps import UserConn
 from mani.errors import ErrorCategory, ServiceError
 from mani.models.api import (
@@ -55,9 +54,10 @@ async def start(user: CurrentUser, conn: UserConn, body: ThreadCreateIn) -> Star
     # can hand back an untouched thread while another the person returned to still waits.
     # It reads only earlier, committed threads, and never delays this response.
     fire_and_forget(memory.fold_finished(user, keep=thread.id), name="fold_memory")
-    messages, next_cursor = await _history(conn, thread.id, user.user_id)
     return StartOut(
-        thread=to_thread(thread), messages=messages, next_cursor=next_cursor, is_new=created,
+        thread=to_thread(thread),
+        messages=await _history(conn, thread.id, user.user_id),
+        is_new=created,
     )
 
 
@@ -73,25 +73,23 @@ async def current(user: CurrentUser, conn: UserConn) -> StartOut:
     if thread is None:
         thread, created = await orchestrator.start_thread(conn, user)
 
-    messages, next_cursor = await _history(conn, thread.id, user.user_id)
     return StartOut(
-        thread=to_thread(thread), messages=messages, next_cursor=next_cursor, is_new=created,
+        thread=to_thread(thread),
+        messages=await _history(conn, thread.id, user.user_id),
+        is_new=created,
     )
 
 
 # How many of a thread's newest messages the app is sent on opening it; older ones page in from
-# the messages route, by next_cursor, when there are more. The app's own number, apart from how
-# much of the thread the model sees.
+# the messages route. The app's own number, apart from how much of the thread the model sees.
 OPENING_TAIL = 20
 
 
-async def _history(
-    conn, thread_id: uuid.UUID, user_id: str
-) -> tuple[list[MessageOut], str | None]:
+async def _history(conn, thread_id: uuid.UUID, user_id: str) -> list[MessageOut]:
     """A thread's tail, oldest first, with buttons live only on Mani's newest message."""
     page = await messages_db.list_for_thread(conn, thread_id, user_id, limit=OPENING_TAIL)
     live = await messages_db.latest_mani_id(conn, thread_id, user_id)
-    return to_messages(list(reversed(page.messages)), live), page.next_cursor
+    return to_messages(list(reversed(page.messages)), live)
 
 
 @router.get("/{thread_id}", response_model=ThreadOut)

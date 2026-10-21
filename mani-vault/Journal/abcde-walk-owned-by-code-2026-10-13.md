@@ -3,9 +3,7 @@ type: journal
 date: 2026-10-13
 tags: [journal, frameworks, stages, memory, gotchas]
 ---
-> Superseded 2026-10-16 (the second not_yet moving on) — see [[stages-as-conversation-2026-10-16]]
 > Superseded 2026-10-13 (seeding every stage at the yes: each stage is now judged when the walk reaches it, from the whole thread) — see [[transcript-is-the-memory-2026-10-13]]
-> Superseded 2026-10-17 (the stage statuses and `MOVES`: a stage is parts, stepped by code) — see [[stage-contract-parts-2026-10-17]]
 
 # The ABCDE walk is owned by code (2026-10-13)
 

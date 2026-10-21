@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-14
 tags: [journal, latency, openrouter, routing, lessons]
 ---
+> Superseded 2026-10-21 (the deadline that was never retried, and "next if slow turns persist") - see [[streamed-chat-call-cut-and-retried-2026-10-21]]
 
 # Provider tail latency, and why the pinned order was wrong (2026-10-14)
 

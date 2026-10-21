@@ -34,7 +34,7 @@ Without activating, call the venv binaries directly — `./.venv/bin/python`, `.
 
 - `main.py` — `create_app()` plus the module-level `app`. Sentry init and the `ServiceError` handler live here; routes do not.
 - `mani/` — the application package, and the only thing that runs. `config.py`, `errors.py`, `routers/`, `auth/`, `models/`, and the `chat/`, `prompts/`, `llm/` and `db/` layers, plus `memory.py`, `summarize.py`, `background.py`, `storage.py` and `auth_admin.py`. `chat/` is the turn: `orchestrator.py` runs it, `safety.py` screens, `context.py` builds the `[ctx]` block and when Mani may check its understanding (the only way to an offer, spec 0006), `walk.py` merges what they said per stage into the thread's stage store and steps a framework one stage at a time, `understanding.py` merges their feeling, the problem, its core issue and what is in their control into the thread's running understanding, `reply_checks.py` counts what the reply missed, `repairs.py` corrects what remains. **It never reads the filesystem for content** — prompts and frameworks come from the database.
-- `content/` — authored markdown, seeded into the `admin` schema by `scripts/seed.py` and never read at runtime. `content/prompts/*.md` become `admin.prompts` (except `somatic.md`, which `seed.py` merges into every framework as the last two stages); `content/frameworks/*.md` (ABCDE and Thought Reframe now; the rest are in `paused/`) become `admin.frameworks`, carrying each framework's per-stage content and its activation data (`central_indication`, `distinctions`, `contraindications`, which the Framework Index renders). Editing one of these changes nothing until it is re-seeded. Kept outside `mani/` because it is input to the database, not code — the same relationship a migration has to the schema.
+- `content/` — authored markdown, seeded into the `admin` schema by `scripts/seed.py` and never read at runtime. `content/prompts/*.md` become `admin.prompts` (except `somatic.md`, which `seed.py` merges into every framework as the last stages); `content/frameworks/*.md` (ABCDE and Thought Reframe; the rest are in `paused/`) become `admin.frameworks`, carrying each framework's per-stage content and its activation data (`central_indication`, `signals`, `contraindications`; `to_find_out`, `appropriate_when` and `not_when` are read by nothing). Editing one of these changes nothing until it is re-seeded. Kept outside `mani/` because it is input to the database, not code — the same relationship a migration has to the schema.
 - `supabase/migrations/` — the schema. `test_harness.sql` stubs what Supabase adds (`auth.users`, `auth.uid()`, the three roles) so the schema can be tested on plain Postgres.
 - `tests/unit/` — deterministic logic. `tests/integration/` — whole turns against a live database with a scripted model. `tests/sql/` — schema, RLS and privilege assertions run by `scripts/test_db.sh`.
 - `scripts/` — `seed.py`, `seed_exercises.py` (the library: `content/exercises/exercises.json` plus its MP3s, compressed to 64 kbps mono), `scenario_check.py` with `scenarios.json`, `fold_idle_threads.py` (memory folding, also reachable as `GET /internal/cron/fold-summaries` behind `CRON_SECRET`), `test_db.sh`.
@@ -109,23 +109,6 @@ Things a reviewer will check for, and where they are.
   decided at serialization. `selected_prompt` persists everywhere — what somebody chose
   is part of the conversation, what they were offered is not.
 
-## Where a reply comes from
-
-One model call returns a `Reply` (`mani/llm/schema.py`, its shape picked per moment by `reply_for`); code owns everything else. To trace a line of a reply:
-
-| Reply field or behaviour | Owned by |
-| --- | --- |
-| When Mani may check its understanding | `chat/context.py` `may_check`, `excluded_frameworks` |
-| The check's words, `check_answer` | the model; `repairs.check_text` renders it |
-| Which framework is offered (`heading_toward`, `heading_reason`) | the model from the Framework Index (`prompts/composer.py`); `repairs.offer_framework` resolves it |
-| The offer, Tell me more, Keep chatting, buttons | the framework file's `stages.offering`; `repairs.apply` renders them |
-| A stage's parts, intro, reading, reflection | the framework file's stage; `walk.advance` steps it, `walk.reply_text` renders it |
-| Feeling, problem, core issue, control | `understanding_update`; `chat/understanding.py` `merge` |
-| The body check-in and its branches | `content/prompts/somatic.md`; `orchestrator._body_route`, `repairs.body_reply` |
-| Script leakage, internal words | `repairs.py` |
-
-A new framework is content only: see the recipe in spec 0008 (`docs/specs/0008-second-framework-and-selection/` at the repo root).
-
 ## Gotchas
 
 - Python 3.14 is new enough that some C-extension wheels may not publish builds yet. If an install fails to compile, check the package's Python support before working around it.
@@ -133,6 +116,17 @@ A new framework is content only: see the recipe in spec 0008 (`docs/specs/0008-s
 - Integration tests skip rather than fail when no database is reachable. A green run that skipped everything is not a passing run — check the count.
 - The running app and the integration tests read frameworks and prompts from the database, not from `content/`. After editing a file there, run `python scripts/seed.py`; the app picks it up when its prompt cache expires or the server restarts.
 - Run the whole `pytest`, not only `tests/unit`: the integration tests run whole turns against the database.
+
+## Before changing how Mani talks or when it checks and offers
+
+Read `mani-vault/Journal/failure-classes-from-later-branches-2026-10-21.md`, then:
+
+1. State the root cause in one sentence before the fix. A second fix to the same class goes to the `architecture-reviewer` agent.
+2. No new gate, window, deadline or cooldown, in code or prompt. If one seems needed, stop and run `/architect`.
+3. Cut or swap prompt text; do not add. `mani_base.md` must not grow, and sample wording lives only in its `example`.
+4. Layout and format belong in code (`repairs.laid_out`), never in a prompt rule.
+5. Free tests first (`pytest tests/unit tests/integration`); a live run costs the client's tokens, so ask muhammad.
+6. Reseed (`python scripts/seed.py`) after content edits, and read the chat against the client's requirements.
 
 ## Where things live
 

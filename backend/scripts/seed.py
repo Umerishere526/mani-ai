@@ -12,11 +12,10 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from mani.chat import understanding
-from mani.chat.repairs import template_slots
-from mani.chat.techniques import OFFERING
-from mani.config import get_settings
-from mani.models.rows import ENDING_STAGES, SupportStyle
+from mani.chat.repairs import template_slots  # noqa: E402
+from mani.chat.techniques import OFFERING  # noqa: E402
+from mani.config import get_settings  # noqa: E402
+from mani.models.rows import ENDING_STAGES, SupportStyle  # noqa: E402
 
 # Authored content, not code: markdown is the input this script loads, and once loaded the
 # database is what the application reads. Kept outside the `mani` package for that reason -
@@ -44,9 +43,6 @@ def load_somatic_stages() -> dict:
     stages = (yaml.safe_load(match.group(1)) or {}).get("stages")
     if not stages:
         raise ValueError(f"{SOMATIC_FILE.name} yaml block has no stages")
-    known = (stages.get("somatic_checkin") or {}).get("ask_known")
-    if not isinstance(known, str) or template_slots(known)[1] is None:
-        raise ValueError(f"{SOMATIC_FILE.name} somatic_checkin.ask_known lacks a <body_said> line")
     return stages
 
 
@@ -112,10 +108,9 @@ def missing_for_activation(framework: dict) -> list[str]:
         offer = (offering.get("offer") or {}).get(style.value)
         if not offer or template_slots(offer)[1] is None:
             missing.append(f"stages.offering.offer.{style.value} with a <going_through> slot")
-        for key in ("ask", "keep_chatting", "explain"):
+        for key in ("keep_chatting", "explain"):
             if not (offering.get(key) or {}).get(style.value):
                 missing.append(f"stages.offering.{key}.{style.value}")
-    owners: dict[str, str] = {}
     for phase in framework["phases"]:
         if phase == OFFERING or phase in ENDING_STAGES:
             continue
@@ -124,24 +119,6 @@ def missing_for_activation(framework: dict) -> list[str]:
             missing.append(f"stages.{phase}.intro")
         missing += [f"stages.{phase}.ask.{style.value}" for style in SupportStyle
                     if not (stage.get("ask") or {}).get(style.value)]
-        for part in stage.get("parts") or []:
-            owners[part.get("id") or ""] = phase
-        if not stage.get("parts"):
-            missing.append(f"stages.{phase}.parts")
-    ids = [part.get("id") for phase in framework["phases"] for part in (stages.get(phase) or {}).get("parts") or []]
-    missing += [f"parts.{pid} listed twice" for pid in sorted({i for i in ids if ids.count(i) > 1})]
-    names = set(owners) | {f"understanding.{key}" for key in understanding.KEYS}
-    for phase in framework["phases"]:
-        for part in (stages.get(phase) or {}).get("parts") or []:
-            where = f"stages.{phase}.parts.{part.get('id')}"
-            if not part.get("id") or not part.get("is"):
-                missing.append(f"{where} needs an id and what it is")
-            if part.get("from") and part["from"] not in names:
-                missing.append(f"{where}.from {part['from']} names no understanding key")
-            asks = part.get("ask")
-            for text in (asks.values() if isinstance(asks, dict) else [asks] if asks else []):
-                missing += [f"{where}.ask refers to <{ref}>, which is no part or understanding key"
-                            for ref in re.findall(r"<([a-z_.]+)>", text) if ref not in names]
     return missing
 
 

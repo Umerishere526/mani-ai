@@ -1,5 +1,5 @@
 # ABOUTME: A minimal chat UI against the real Mani backend - for trying frameworks and
-# ABOUTME: exercise offers directly, not a product interface. Talks over HTTP like any client.
+# ABOUTME: the body check-in directly, not a product interface. Talks over HTTP like any client.
 
 from __future__ import annotations
 
@@ -68,12 +68,9 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def reset_thread_state(thread: dict, messages: list[dict], next_cursor: str | None = None) -> None:
+def reset_thread_state(thread: dict, messages: list[dict]) -> None:
     st.session_state.thread = thread
     st.session_state.messages = messages
-    # Set while the thread has older messages this page left out; "Load earlier messages"
-    # below pages them in from GET /v1/threads/{id}/messages.
-    st.session_state.older_cursor = next_cursor
     st.session_state.style = thread.get("conversation_style")
     st.session_state.locked = thread.get("crisis_detected") and thread.get("crisis_blocks_chat")
     st.session_state.last_turn = None
@@ -122,7 +119,7 @@ with st.sidebar:
         except mani.ApiError as exc:
             st.error(str(exc))
             st.stop()
-        reset_thread_state(started["thread"], started["messages"], started.get("next_cursor"))
+        reset_thread_state(started["thread"], started["messages"])
         st.session_state.view = "chat"
         st.rerun()
     if st.button("📚 Library", use_container_width=True):
@@ -143,7 +140,7 @@ if "thread" not in st.session_state:
     except mani.ApiError as exc:
         st.error(f"Could not reach the backend at {client.base_url}: {exc}")
         st.stop()
-    reset_thread_state(started["thread"], started["messages"], started.get("next_cursor"))
+    reset_thread_state(started["thread"], started["messages"])
 
 thread = st.session_state.thread
 
@@ -159,26 +156,10 @@ if framework_state and framework_state.get("phase"):
     caption.append(f"framework: {framework_state['framework_id']} · stage: {framework_state['phase']}")
 if caption:
     st.caption("  ·  ".join(caption))
-# Mani's own reason this framework was picked over the Index's other sets, sent only once, on
-# the turn it was offered (spec 0008). AI_DEBUG_MODE must be on in the backend to see it.
-offered_because = (st.session_state.get("last_turn") or {}).get("offered_because")
-if offered_because:
-    st.caption(f"heading: {framework_state['framework_id'] if framework_state else '?'} — {offered_because}")
 
 # ---------------------------------------------------------------------------
 # The conversation itself
 # ---------------------------------------------------------------------------
-
-if st.session_state.get("older_cursor"):
-    if st.button("Load earlier messages", use_container_width=True):
-        try:
-            page = client.list_messages(thread["id"], cursor=st.session_state.older_cursor)
-        except mani.ApiError as exc:
-            st.error(str(exc))
-            st.stop()
-        st.session_state.messages = list(reversed(page["messages"])) + st.session_state.messages
-        st.session_state.older_cursor = page.get("next_cursor")
-        st.rerun()
 
 for message in st.session_state.messages:
     avatar = "🧠" if message["role"] == "mani" else "🧑"
@@ -187,8 +168,8 @@ for message in st.session_state.messages:
 
 last_turn = st.session_state.get("last_turn")
 
-# The reply that just arrived gets its own callouts - a framework offer, an exercise
-# hand-off, or a crisis - which is the whole reason this tool exists.
+# The reply that just arrived gets its own callouts - a framework offer or a crisis - which is the
+# whole reason this tool exists.
 if last_turn:
     if last_turn.get("crisis_detected"):
         st.error("🚨 **Crisis detected.** " + last_turn["content"])
@@ -199,15 +180,6 @@ if last_turn:
             "🧩 **Framework offered:** "
             + ", ".join(p["technique"] for p in technique_prompts)
         )
-
-    exercise = last_turn.get("exercise")
-    if exercise:
-        with st.container(border=True):
-            st.success(f"🎧 **Exercise offered:** {exercise['title']}")
-            if exercise.get("subtitle"):
-                st.caption(exercise["subtitle"])
-            if exercise.get("audio_url"):
-                st.audio(exercise["audio_url"])
 
 # A message that has been sent and not yet answered: the person's own bubble straight away,
 # and the thinking pill where Mani's reply will appear. The backend call itself runs at the
@@ -343,8 +315,9 @@ with st.sidebar:
     understood = (last_turn or {}).get("understanding")
     if understood:
         for key, label in (
-            ("feeling", "Feeling"), ("event", "Event"), ("issue", "Problem"), ("core_issue", "Core issue"),
-            ("in_their_control", "In their control"),
+            ("feeling", "Feelings"), ("issue", "Problem"), ("core_issue", "Core issue"),
+            ("underlying_feeling", "Underlying feeling"), ("comes_down_to", "What it comes down to"),
+            ("also", "Also raised"),
         ):
             if understood.get(key):
                 st.markdown(f"**{label}:** {understood[key]}")
@@ -355,7 +328,7 @@ with st.sidebar:
     if check_at is not None:
         st.caption(f"Mani's last check: after message {check_at}")
     LEDGER_ICONS = {
-        "reading": "✅", "reflecting": "💬", "partial": "🟡", "missing": "⬜", "done": "✔️", "not_reached": "⚪",
+        "known": "✅", "possible": "❓", "partial": "🟡", "missing": "⬜", "done": "✔️", "not_reached": "⚪",
     }
     ledger = (last_turn or {}).get("ledger")
     if ledger:
@@ -367,7 +340,7 @@ with st.sidebar:
             )
             if row.get("known"):
                 st.caption(f"knows: {row['known']}")
-        st.caption("✅ reading given  💬 asked what they take from it  🟡 partly known  ⬜ missing  ✔️ done  ▶ on it now")
+        st.caption("✅ known, confirm once  ❓ possible event  🟡 partial  ⬜ missing  ✔️ done  ▶ on it now")
     else:
         st.caption("Shown while a framework is running, with AI_DEBUG_MODE on in the backend.")
 
@@ -395,7 +368,7 @@ with st.sidebar:
             except mani.ApiError as exc:
                 st.error(str(exc))
                 st.stop()
-            reset_thread_state(opened["thread"], opened["messages"], opened.get("next_cursor"))
+            reset_thread_state(opened["thread"], opened["messages"])
             st.rerun()
     if not conversations:
         st.caption("No conversations yet.")

@@ -21,7 +21,7 @@ ABCDE = Framework(
 
 BODY_ROUTE = Framework(
     id="with_body_route", name="With body route", summary="s", body="b",
-    phases=["offering", "one", "two", "closing", "somatic_checkin", "somatic_practice"],
+    phases=["offering", "one", "two", "closing", "somatic_body", "somatic_practice"],
 )
 
 
@@ -182,23 +182,9 @@ def test_with_one_active_set_a_yes_offers_it_whatever_the_reply_heads_toward(cli
     assert fixed.prompts[0].technique == "abcde"
 
 
-def test_with_no_pick_the_first_offerable_set_wins_the_tie(client_abcde):
-    """Spec 0008, decision 1: a bad or missing heading_toward falls back to the first offerable set
-    in the registry's order, never to dropping the offer - the client's "ABCDE wins a tie" rule,
-    generalised past exactly two sets."""
+def test_with_several_active_sets_an_offer_needs_the_one_the_reply_heads_toward(client_abcde):
     unsure = offering(going_through="feeling used").model_copy(update={"heading_toward": None})
     fixed = yes_to_the_check(Registry([client_abcde, REFRAMING]), unsure, conversation_style="directive")
-    assert fixed.offer_dropped is None
-    assert fixed.prompts[0].technique == "abcde"
-
-
-def test_with_everything_excluded_the_offer_is_still_dropped(client_abcde):
-    """Spec 0008, decision 3: a set held by its own just-finished or declined run is never offered,
-    reported and tested through offerable rather than the registry itself."""
-    unsure = offering(going_through="feeling used").model_copy(update={"heading_toward": "abcde"})
-    fixed = yes_to_the_check(
-        Registry([client_abcde, REFRAMING]), unsure, conversation_style="directive", offerable=frozenset(),
-    )
     assert (fixed.text, fixed.offer_dropped) == ("Model's own words.", "no framework")
 
 
@@ -277,23 +263,9 @@ def test_the_body_check_in_is_sent_word_for_word():
     )
 
 
-def test_mani_s_own_version_of_the_check_in_introduction_gives_way_to_hers():
-    """Live, 2026-10-17 (thread with "leaving it as is"): the reply wrote the introduction in its own words,
-    and her introduction followed it, so it was said twice. Only Mani's one sentence about their answer stays."""
-    own = ("You see that his behavior might change. Now that we've worked through your thoughts, let's check in "
-           "with your body. You may not realize it, but our emotions affect your body too.")
-    assert repairs.with_the_check_in(own, CHECK_IN) == f"You see that his behavior might change.\n\n{CHECK_IN}"
-
-
 def test_a_check_in_already_word_for_word_is_left_alone():
     exact = f"You can wait without deciding what it means. {CHECK_IN}"
     assert repairs.with_the_check_in(exact, CHECK_IN) == exact
-
-
-def test_the_acknowledgement_before_a_question_is_the_replys_first_sentence():
-    text = "It is okay not to know where. Try bringing gentle attention there. Where is it?"
-    assert repairs.first_sentence(text) == "It is okay not to know where."
-    assert repairs.first_sentence("No full stop here") == "No full stop here"
 
 
 def test_internal_words_never_reach_the_person(registry):
@@ -312,105 +284,44 @@ def test_the_model_is_never_asked_for_a_mirroring_voice():
     assert "voice" not in Reply.model_fields["style"].description
 
 
-# The body route (spec 0003, AC-5): the client's branch for the value the reply reports.
-
-@pytest.fixture(scope="module")
-def body_stages() -> dict:
-    from scripts.seed import load_somatic_stages
-
-    return load_somatic_stages()
-
-
-def test_the_check_in_asks_about_what_they_said_of_their_body_and_otherwise_is_the_plain_one(body_stages):
-    """Asked about the sensation they named earlier, in her introduction, else her plain check-in."""
-    known = repairs.check_in_script(body_stages, "directive", "your chest getting tight")
-    assert known.startswith("Now that we've worked through your thoughts")
-    assert known.endswith("Earlier you mentioned your chest getting tight. Where are you noticing any tension or discomfort right now?")
-    plain = body_stages["somatic_checkin"]["ask"]
-    assert repairs.check_in_script(body_stages, "directive", None) == plain
-    assert repairs.check_in_script(body_stages, "directive", "  ") == plain
-
-
-@pytest.mark.parametrize(("body", "at", "style", "fits"), [
-    ("chest", "closing", "directive", True),
-    ("chest", "retiring", "directive", False),
-    ("no_place", "closing", "directive", False),
-    ("no_tension", "somatic_checkin", "supportive", True),
-    ("better", "somatic_physical", "directive", True),
-    ("better", "somatic_checkin", "directive", False),
-    ("acting", "somatic_practice", "reflective", False),
-    ("helped", "retiring", "reflective", True),
-])
-def test_a_body_answer_counts_only_where_the_route_can_take_it(body, at, style, fits):
-    assert repairs.body_answer_fits(body, at, style) is fits
-
-
-def test_a_place_is_her_exercise_word_for_word_then_how_their_body_feels_now(body_stages):
-    step = repairs.body_reply("head", "somatic_checkin", body_stages, "directive", "Model words.")
-    head = next(b for b in body_stages["somatic_practice"]["if_unclear"] if b["id"] == "head")
-    ask = body_stages["somatic_physical"]["ask"]
-    assert (step.text, step.labels, step.phase, step.handoff) == (
-        f"{head['reply']}\n\n{ask}", ["Feel Better", "Feel the Same", "Feel Worse"], "somatic_physical", False,
-    )
-
-
-def test_no_place_is_her_where_question_with_no_buttons(body_stages):
-    step = repairs.body_reply("no_place", "somatic_checkin", body_stages, "reflective", "Is it your chest?")
-    assert (step.text, step.labels, step.phase) == ("Where in your body do you feel it?", [], "somatic_practice")
-
-
-def test_a_decline_and_an_action_are_her_lines_with_the_two_choices(body_stages):
-    declined = repairs.body_reply("declined", "somatic_checkin", body_stages, "supportive", "Okay.")
-    assert declined.text.startswith("You'd rather not check in with your body right now.")
-    assert declined.handoff
-    after_where = repairs.body_reply("declined", "somatic_practice", body_stages, "supportive", "Okay.")
-    assert (after_where.text, after_where.handoff) == (declined.text, True)
-    acting = repairs.body_reply("acting", "closing", body_stages, "supportive", "Okay.")
-    assert acting.text.startswith("It sounds like you're ready to act on that.") and acting.handoff
-
-
-def test_pain_gets_the_safety_line_and_no_exercise(body_stages):
-    pain = repairs.body_reply("pain", "somatic_checkin", body_stages, "directive", "Okay.")
-    assert (pain.text, pain.labels, pain.handoff) == (
-        "Let's not do a physical exercise then. I'm here with you. What would help right now?", [], False,
-    )
-
-
-def test_a_stored_check_says_only_what_it_comes_down_to_then_asks(registry):
-    """The client, 2026-10-16: the problem, core issue, control and what it comes down to, sent as four
-    sentences, read as a case summary of what they had already said. The first three are kept, never said."""
+def test_a_stored_check_goes_out_in_the_clients_order_whatever_order_the_model_wrote(registry):
+    """Spec 0006, muhammad's choice of 2026-10-13: live, the check opened with its last part in
+    every run though the prompt asked twice for the problem first. The words are the model's; the order
+    is code's, and a missing part leaves no gap."""
     check = Check(
-        problem="Your boss says you're not doing enough", core_issue="Nothing you do feels like enough for him.",
-        in_their_control="You're not sure yet what you can do.",
-        comes_down_to="  It comes down to never knowing what would count as enough for him", question="Have you been able to talk to them about it",
+        problem="  Your boss says you're not doing enough", core_issue="Nothing you do feels like enough for him.",
+        underlying_feeling="Maybe it feels like worry about being enough.", question="Do I have that right",
     )
-    model_text = reply(text="Your boss says you're not doing enough. Nothing you do feels like enough for him?")
+    model_text = reply(text="Maybe it feels like worry about being enough. Your boss says you're not doing enough?")
     fixed = fix(registry, model_text, check=check)
-    assert fixed.text == "It comes down to never knowing what would count as enough for him.\n\nHave you been able to talk to them about it?"
+    assert fixed.text == (
+        "Your boss says you're not doing enough. Nothing you do feels like enough for him. Maybe it feels like "
+        "worry about being enough.\n\nDo I have that right?"
+    )
     assert fix(registry, model_text).text == model_text.text, "without a stored check the reply goes as written"
 
 
 # Mani's replies from the client's way of communication document, each as the client lays it out.
 CLIENT_LAYOUT = [
     "I'm listening. What's frustrating you?",
-    ("When everything feels frustrating, sometimes it's because several things have been building up for a "
+    "When everything feels frustrating, sometimes it's because several things have been building up for a "
     "while. I don't want to assume that's what's happening to you.\n\nTell me, are you frustrated with the "
-    "people around you, the circumstances you're dealing with, or how you're feeling about your life right now?"),
-    ("That would be frustrating, especially when other people's lack of follow-through creates additional work "
+    "people around you, the circumstances you're dealing with, or how you're feeling about your life right now?",
+    "That would be frustrating, especially when other people's lack of follow-through creates additional work "
     "for you. But I want to understand the pattern rather than assume everyone is the problem.\n\nWhen people "
-    "fail to deliver, what typically happens next? Do you confront them, take over the work yourself, or end up "
-    "chasing them until they do what they promised?"),
-    ("So your ability to do your job depends on other people fulfilling their responsibilities. When they don't, "
+    "fail to deliver, what typically happens next?\n\nDo you confront them, take over the work yourself, or end "
+    "up chasing them until they do what they promised?",
+    "So your ability to do your job depends on other people fulfilling their responsibilities. When they don't, "
     "your work gets held up, and you're left dealing with the consequences.\n\nHere's what I want to understand: "
     "When people fail to follow through, do they face any consequences, or does the responsibility for getting "
-    "things back on track fall on you?"),
+    "things back on track fall on you?",
 ]
 
 
 @pytest.mark.parametrize("laid", CLIENT_LAYOUT)
 def test_manis_own_text_goes_out_as_the_client_lays_it_out(registry, laid):
-    """The client's document (R13): what Mani says back and wants to understand, then the closing
-    questions together on their own line. A short reply stays one line."""
+    """The client's document (R13): what Mani says back, then each closing question on its own line
+    (muhammad, 2026-10-21). A short reply stays one line."""
     written = laid.replace("\n\n", " ")
     assert fix(registry, reply(text=written), lay_out=True).text == laid
 
@@ -424,6 +335,14 @@ def test_manis_own_text_goes_out_as_the_client_lays_it_out(registry, laid):
      "Your boss criticized your work today.\n\nWhat did your boss criticize?"),
     ("That sounds like a lot to carry at work right now. Take your time.",
      "That sounds like a lot to carry at work right now. Take your time."),
+    ("A really long day has left you feeling anxious.\nWhat part of the day is weighing on you most?\n"
+     "Something that happened, something still ahead, or the day catching up with you?",
+     "A really long day has left you feeling anxious.\n\nWhat part of the day is weighing on you most?\n\n"
+     "Something that happened, something still ahead, or the day catching up with you?"),
+    ("A really long day has left you feeling anxious.\n\nWhat part of it is weighing on you most? Is it something "
+     "that happened, what still needs doing, or the day catching up with you?",
+     "A really long day has left you feeling anxious.\n\nWhat part of it is weighing on you most?\n\nIs it "
+     "something that happened, what still needs doing, or the day catching up with you?"),
 ])
 def test_the_layout_breaks_only_between_sentences_and_keeps_the_models_own_lines(registry, text, laid):
     assert fix(registry, reply(text=text), lay_out=True).text == laid
@@ -433,3 +352,21 @@ def test_a_reply_not_laid_out_goes_as_written(registry):
     """A stage reply keeps the one paragraph the client's ABCDE document writes."""
     written = CLIENT_LAYOUT[1].replace("\n\n", " ")
     assert fix(registry, reply(text=written)).text == written
+
+
+def test_the_options_go_on_the_line_under_the_question_and_only_where_the_reply_is_free_text(registry):
+    """muhammad, 2026-10-22: the options were left out of the text whenever the prompt's other lines said
+    one question. They are a field the model has to fill, and code puts them on their own line."""
+    asked = reply(
+        text="A really long day has left you feeling anxious.\nWhat part of it is weighing on you most?",
+        options="Is it something that happened, what still needs doing, or the day catching up with you",
+    )
+    assert fix(registry, asked, lay_out=True).text == (
+        "A really long day has left you feeling anxious.\n\nWhat part of it is weighing on you most?\n\n"
+        "Is it something that happened, what still needs doing, or the day catching up with you?"
+    )
+    assert fix(registry, reply(text="Take your time."), lay_out=True).text == "Take your time."
+    assert fix(registry, asked).text == asked.text, "a stage reply is not laid out and carries none"
+    checked = Check(problem="Your day was long.", core_issue="It all landed on you.",
+                    underlying_feeling="You may feel worn down.", question="Do I have that right")
+    assert "Is it something" not in fix(registry, asked, lay_out=True, check=checked).text

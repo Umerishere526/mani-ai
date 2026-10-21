@@ -137,22 +137,6 @@ async def create(conn: asyncpg.Connection, values: ExerciseInput) -> AdminExerci
     return AdminExercise.model_validate(dict(row))
 
 
-async def list_for_framework(
-    conn: asyncpg.Connection, framework_id: str
-) -> list[Exercise]:
-    """The active exercise(s) that follow a framework when it finishes.
-
-    Usually zero, until the catalog carries real content - the caller treats that as
-    "nothing to offer," not an error.
-    """
-    rows = await conn.fetch(
-        f"select {COLUMNS} from admin.exercises "
-        "where framework_id = $1 and is_active order by display_order, title",
-        framework_id,
-    )
-    return Exercise.from_records(rows)
-
-
 async def update(
     conn: asyncpg.Connection, exercise_id: uuid.UUID | str, values: ExerciseInput
 ) -> AdminExercise | None:

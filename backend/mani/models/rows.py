@@ -67,10 +67,10 @@ class Thread(Row):
     # Chosen per conversation. Null means this thread has not chosen, and the profile's
     # support_style stands as the default - the same closed set, deliberately.
     conversation_style: SupportStyle | None = None
-    # What Mani understands of them so far: feeling, the event, issue, core issue, what is in their
-    # control, and the values those replaced (chat/understanding.py).
+    # What Mani understands of them so far: feeling, issue, core issue, underlying feeling
+    # (chat/understanding.py).
     # Loaded only for a turn, never in a thread list.
-    understanding: dict[str, Any] = Field(default_factory=dict)
+    understanding: dict[str, str] = Field(default_factory=dict)
     # The message_count after the turn whose reply was Mani's latest check of its understanding
     # (spec 0006). Loaded only for a turn, never in a thread list.
     check_at_message_count: int | None = None
@@ -98,25 +98,13 @@ class TechniqueState(Row):
     outcome: TechniqueOutcome
     phase: str | None = None
     at_message_count: int
-    library_offered_since: bool = False
+    # What the body check-in found, each apart from the other (migration 025): how the body felt after the
+    # exercise, and whether the whole conversation helped. Null until the person answers the step.
+    physical_response: str | None = None
+    conversation_effect: str | None = None
     # What they said per stage, by framework id then stage id. Kept when a run retires, so a
     # framework that comes back can read it; a new start of one framework clears only its own.
     stages_known: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    # Mani's own reading of why this framework was offered, kept with the run for reviewing
-    # selection quality; never read by application logic, never logged (spec 0008, migration 027).
-    offered_because: str | None = None
-
-
-class TechniqueRun(Row):
-    """One finished run, appended when its outcome is decided (migration 027). The only record of
-    which frameworks a thread has already run, since thread_technique_state holds just the one
-    most recent row; read to keep a just-finished framework's own cooldown from blocking a
-    different one (spec 0008, decision 3)."""
-
-    thread_id: uuid.UUID
-    framework_id: str
-    outcome: TechniqueOutcome
-    ended_at_message_count: int
 
 
 class ResponseStyle(Row):
@@ -143,9 +131,9 @@ class ThreadSummary(Row):
     summarized_message_count: int = 0
 
 
-# The body route that ends every framework, and the one stage a practice may be run from. Code runs
-# these stages, so the model never skips them and no stage button is shown on them.
-ENDING_STAGES = frozenset({"somatic_checkin", "somatic_practice", "somatic_physical", "somatic_helped", "grounding"})
+# The body check-in that ends every framework. Code runs these stages from the client's script, so the model
+# never skips or words them and no stage button is shown on them.
+ENDING_STAGES = frozenset({"somatic_check", "somatic_body", "somatic_practice", "somatic_effect", "somatic_closing"})
 
 
 class Framework(Row):

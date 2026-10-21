@@ -1,34 +1,24 @@
-# ABOUTME: What Mani understands of the person so far: feeling, body, the event, issue, core issue, control.
-# ABOUTME: Pure functions: this turn's reported update merged into the stored record, with the values it replaced.
+# ABOUTME: What Mani understands of the person so far (feelings, issue, core issue, underlying feeling, what else).
+# ABOUTME: Pure functions: this turn's reported update merged into the stored record, and its [ctx] value.
 
 from __future__ import annotations
-
-from typing import Any
 
 from mani.chat import context
 from mani.llm.schema import Check, UnderstandingUpdate
 
-KEYS = ("feeling", "body", "event", "issue", "core_issue", "in_their_control", "comes_down_to")
+KEYS = ("feeling", "issue", "core_issue", "underlying_feeling", "comes_down_to", "also")
 LIMIT = 200
-# What a replaced value of these keys is kept under, the last KEPT per key, so a change can be
-# named from what it changed and never rendered as a step (spec 0007, AC-16).
-HISTORY = "history"
-TRACKED = ("issue", "event", "core_issue")
-KEPT = 3
-# A changed feeling waits here for their yes (spec 0007, AC-15).
-PENDING = "feeling_asked"
-# After a shift, the steps they already answered that may still hold, kept to confirm in one question
-# rather than erased and asked again; a step listed here is still to take, so no check comes until
-# they confirm or replace it (2026-10-17).
-RECHECK = "to_confirm"
-CARRIED = ("core_issue", "in_their_control")
+# What gathers over the conversation instead of being replaced: every feeling they name, and the new
+# problems and details they raise after the case was found. Each has its separator and its size.
+GATHERED = {"feeling": (", ", LIMIT), "also": ("; ", 2 * LIMIT)}
 # The client's steps before Mani checks its understanding, in order: the problem, the core issue under
-# it, what is in their control (meeting and cheat sheet, 2026-10-13). Each is taken only once the one
+# it, the feeling underneath (meeting and cheat sheet, 2026-10-13; the feeling replaced what is in their
+# control, muhammad, 2026-10-21). Each is taken only once the one
 # before it was stored on an earlier turn, so each gets an exchange of its own (spec 0006).
-STEPS = {"issue": "problem", "core_issue": "core_issue", "in_their_control": "control"}
+STEPS = {"issue": "problem", "core_issue": "core_issue", "underlying_feeling": "underlying_feeling"}
 
 
-def _in_order(key: str, before: dict[str, Any]) -> bool:
+def _in_order(key: str, before: dict[str, str]) -> bool:
     """Whether `key` may be stored this turn: it is not a step, or every step before it was stored."""
     if key not in STEPS:
         return True
@@ -36,108 +26,73 @@ def _in_order(key: str, before: dict[str, Any]) -> bool:
     return all(before.get(step) for step in earlier)
 
 
-def next_step(stored: dict[str, Any]) -> str | None:
-    """The first step still missing or left to confirm, by its name in [ctx], or None once all three
-    are stored and confirmed."""
-    flagged = stored.get(RECHECK) or ()
-    return next((name for key, name in STEPS.items() if not stored.get(key) or key in flagged), None)
+def next_step(stored: dict[str, str]) -> str | None:
+    """The first step still missing, by its name in [ctx], or None once all three are stored."""
+    return next((name for key, name in STEPS.items() if not stored.get(key)), None)
+
+
+def _gathered(stored: str | None, value: str, key: str) -> str:
+    """What `stored` holds with the entries of `value` added after it, none twice, and the oldest dropped
+    when the whole no longer fits."""
+    separator, limit = GATHERED[key]
+    entries: list[str] = []
+    for entry in [*(stored or "").split(separator.strip()), *value.split(separator.strip())]:
+        entry = entry.strip()
+        if entry and entry.lower() not in (e.lower() for e in entries):
+            entries.append(entry)
+    while len(separator.join(entries)) > limit and len(entries) > 1:
+        entries.pop(0)
+    return separator.join(entries)[:limit].rstrip()
 
 
 def merge(
-    stored: dict[str, Any], update: UnderstandingUpdate | None, *, before: dict[str, Any] | None = None,
-    track: bool = True, feeling_answer: str | None = None, restart: bool = False,
-) -> dict[str, Any]:
+    stored: dict[str, str], update: UnderstandingUpdate | None, *, before: dict[str, str] | None = None,
+    frozen: bool = False,
+) -> dict[str, str]:
     """The record after this turn. Per key, a null or blank value keeps what is stored; anything
     else replaces it, on one line (which also keeps it from opening a line of its own in [ctx]) and
-    cut to LIMIT characters, and a replaced value of a tracked key is kept in its history, except
-    while `track` is off: the turn Mani's check is written establishes the reading rather than
-    changing it. A feeling that differs from the stored one is not stored but held as pending while
-    Mani asks whether it has changed; `feeling_answer`, from the next reply, stores it on yes with
-    the earlier word kept, and drops it on no. A step is taken only in order, judged on `before`,
-    the record as this turn began (`stored` when not given). A `restart`, their turn to another
-    situation, empties the event, the problem and the reading, the replaced values kept, and keeps
-    the core issue and what is in their control to confirm; a value reported for one confirms it."""
+    cut to LIMIT characters, except what gathers (GATHERED), which is added to. A step is taken only
+    in order, judged on `before`, the record as this turn began (`stored` when not given), and not at
+    all when `frozen`: once an offer is open or a framework runs, the case is the one they confirmed and
+    anything new goes in `also`."""
     before = stored if before is None else before
     merged = {key: stored[key] for key in KEYS if stored.get(key)}
-    for key in (HISTORY, PENDING, RECHECK):
-        if stored.get(key):
-            merged[key] = stored[key]
-    if restart:
-        for key in ("event", "issue", "comes_down_to"):
-            old = merged.pop(key, None)
-            if key in TRACKED:
-                _remember(merged, key, old)
-        carried = [key for key in CARRIED if merged.get(key)]
-        if carried:
-            merged[RECHECK] = carried
-    given: set[str] = set()
-    pending = merged.pop(PENDING, None)
-    if pending and feeling_answer == "yes":
-        _remember(merged, "feeling", merged.get("feeling"))
-        merged["feeling"] = pending
-    elif pending and feeling_answer != "no":
-        merged[PENDING] = pending
     for key in KEYS:
         value = " ".join((getattr(update, key, None) or "").split())
-        if value and _in_order(key, before):
-            value = value[:LIMIT].rstrip()
-            old = merged.get(key)
-            if key == "feeling" and old and old != value:
-                merged[PENDING] = value
-                continue
-            if track and key in TRACKED and old and old != value:
-                _remember(merged, key, old)
-            merged[key] = value
-            given.add(key)
-    left = [key for key in merged.pop(RECHECK, []) if key not in given]
-    if left:
-        merged[RECHECK] = left
+        if not value or (key in STEPS and (frozen or not _in_order(key, before))):
+            continue
+        merged[key] = _gathered(merged.get(key), value, key) if key in GATHERED else value[:LIMIT].rstrip()
     return merged
 
 
-def _remember(merged: dict[str, Any], key: str, old: str | None) -> None:
-    """Keep the value `key` is about to lose, the last KEPT per key."""
-    if not old:
-        return
-    history = dict(merged.get(HISTORY) or {})
-    history[key] = (history.get(key) or [])[-(KEPT - 1):] + [old]
-    merged[HISTORY] = history
-
-
-def render(stored: dict[str, Any]) -> str | None:
+def render(stored: dict[str, str]) -> str | None:
     """The record as the value of its [ctx] line, each step named even while it is missing, or None
     when nothing is stored yet."""
     if not any(stored.get(key) for key in KEYS):
         return None
-    history = stored.get(HISTORY) or {}
-    flagged = stored.get(RECHECK) or ()
     parts = [
-        f"{key}: {context.disarm(stored[key])}"
-        + (f" (was: {context.disarm(history[key][-1])})" if history.get(key) else "")
-        + (" (from before the change, to confirm)" if key in flagged else "")
-        if stored.get(key) else f"{key}: missing"
+        f"{key}: {context.disarm(stored[key])}" if stored.get(key) else f"{key}: missing"
         for key in KEYS if stored.get(key) or key in STEPS
     ]
     return "; ".join(parts)
 
 
 def usable(check: Check | None) -> bool:
-    """Whether a reply's check holds what Mani understands, the problem, what lies under it and what is
-    in their control, and says what it all comes down to, the only part sent, with its question."""
+    """Whether a reply's check says what Mani understands, the problem, what lies under it and the
+    feeling underneath, and asks whether it is right. What it comes down to is welcome, not required."""
     return bool(check and all(
         (value or "").strip()
-        for value in (check.problem, check.core_issue, check.in_their_control, check.comes_down_to,
-                      check.question)
+        for value in (check.problem, check.core_issue, check.underlying_feeling, check.question)
     ))
 
 
-def merge_check(stored: dict[str, Any], check: Check) -> dict[str, Any]:
+def merge_check(stored: dict[str, str], check: Check) -> dict[str, str]:
     """The record after a stored check: its problem is the issue they are dealing with, and what it
     came down to, which they confirmed, is kept too, since it is closer to what they hold than their
     opening line (live, 2026-10-13)."""
     merged = merge(stored, UnderstandingUpdate(
-        issue=check.problem, core_issue=check.core_issue, in_their_control=check.in_their_control,
-    ), track=False)
+        issue=check.problem, core_issue=check.core_issue, underlying_feeling=check.underlying_feeling,
+    ))
     came_to = " ".join((check.comes_down_to or "").split())
     if came_to:
         merged["comes_down_to"] = came_to[:LIMIT].rstrip()

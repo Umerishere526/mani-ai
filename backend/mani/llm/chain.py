@@ -87,6 +87,7 @@ def _model(
     api_key: str,
     base_url: str,
     timeout: float,
+    chunk_timeout: float,
     model: str,
     temperature: float,
     max_tokens: int,
@@ -102,6 +103,9 @@ def _model(
         base_url=base_url,
         api_key=api_key,
         timeout=timeout,
+        # The longest gap between two streamed chunks, which is also the wait for the first one.
+        # Unlike `timeout`, it is not reset by the keepalives a provider sends while it thinks.
+        stream_chunk_timeout=chunk_timeout,
         # The SDK's own retries multiply the bill and the latency of a turn that is already
         # slow. One attempt; a retry is a decision the caller makes with its own budget.
         max_retries=0,
@@ -118,9 +122,10 @@ def build(
     max_tokens: int,
     routing: dict[str, Any] | None,
     settings: Settings,
+    chunk_timeout: float,
     reasoning_effort: str | None = None,
 ) -> Runnable:
-    """A runnable that takes chat messages and returns raw, parsed and parsing_error.
+    """A runnable that takes chat messages and streams raw, parsed and parsing_error.
 
     `include_raw` keeps the provider's own response alongside the parsed object, which is what
     makes the token accounting possible - and turns a malformed reply into a value rather than
@@ -131,44 +136,13 @@ def build(
         settings.openrouter_api_key,
         settings.openrouter_base_url,
         settings.llm_timeout_seconds,
+        chunk_timeout,
         model,
         temperature,
         max_tokens,
         json.dumps(extra_body, sort_keys=True),
     )
     return chat.with_structured_output(schema, method="json_schema", include_raw=True)
-
-
-def build_tool_choice(
-    tool: type[BaseModel],
-    *,
-    model: str,
-    temperature: float,
-    max_tokens: int,
-    routing: dict[str, Any] | None,
-    settings: Settings,
-    reasoning_effort: str | None = None,
-) -> Runnable:
-    """A runnable bound to exactly one tool, forced - real tool-calling, not structured
-    output. `with_structured_output` and `bind_tools` are two different invocation modes
-    in langchain-openai and do not merge into one call, so this is kept separate from
-    `build()` rather than added as an option to it. Used for exactly one turn shape: the
-    exercise hand-off, on the turn a framework completes.
-
-    Returns the model's raw `AIMessage` - `bind_tools` has no `include_raw`/`parsed` split
-    of its own, so the caller reads `.tool_calls` directly.
-    """
-    extra_body = request_body(model, settings, routing, reasoning_effort)
-    chat = _model(
-        settings.openrouter_api_key,
-        settings.openrouter_base_url,
-        settings.llm_timeout_seconds,
-        model,
-        temperature,
-        max_tokens,
-        json.dumps(extra_body, sort_keys=True),
-    )
-    return chat.bind_tools([tool], tool_choice=tool.__name__)
 
 
 def generation_id_from(raw: Any) -> str | None:
