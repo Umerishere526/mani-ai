@@ -111,16 +111,14 @@ async def test_a_missing_style_row_is_refused_when_the_prompts_load(config, monk
         await cache._read()
 
 
-async def test_a_framework_seeded_without_body_branch_ids_is_refused_when_it_loads(config, monkeypatch):
-    """Spec 0003: code sends the body route's branches by id, so content seeded before the ids
-    existed would miss every branch. It is refused at load, naming what is missing."""
+async def test_a_framework_seeded_without_the_body_check_in_script_is_refused_when_it_loads(config, monkeypatch):
+    """Code sends the client's body check-in script for each step, so a framework seeded without it would send
+    nothing at the end of its questions. It is refused at load, naming what is missing."""
     import mani.db.pool as pool_module
     from scripts.seed import load_somatic_stages
 
     stages = load_somatic_stages()
-    stages["somatic_practice"]["if_unclear"] = [
-        {k: v for k, v in branch.items() if k != "id"} for branch in stages["somatic_practice"]["if_unclear"]
-    ]
+    del stages["somatic_practice"]["script"]
     unseeded = Framework(id="abcde", name="ABCDE", summary="s", body="b",
                          phases=["offering", *stages], stages=stages)
 
@@ -138,7 +136,7 @@ async def test_a_framework_seeded_without_body_branch_ids_is_refused_when_it_loa
     monkeypatch.setattr(cache.config_tables, "list_active_prompts", active_prompts)
     monkeypatch.setattr(cache.config_tables, "list_active_frameworks", active_frameworks)
 
-    with pytest.raises(ServiceError, match="chest"):
+    with pytest.raises(ServiceError, match="somatic_practice"):
         await cache._read()
 
 
@@ -325,3 +323,55 @@ def test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_b
     for cut in ("Build every question from", "Never hand their own words or feelings back",
                 "Am I saying back their own words or feelings"):
         assert cut not in sent
+
+
+def test_mani_is_never_taught_to_announce_what_it_wants_to_understand():
+    """Live, 2026-10-21: "I want to understand what's behind that before I assume" opened a reply
+    because the prompt's example said it four times. The client liked the mirror, not that line."""
+    import pathlib
+
+    from scripts.seed import parse_prompt
+
+    prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
+    sent = "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in ("mani_base", "response_format"))
+    for line in ("I want to understand", "want to assume", "rather than assume", "and you say so"):
+        assert line not in sent
+
+
+def test_the_feeling_step_replaced_control_and_the_prompt_did_not_grow():
+    """The third step is the feeling underneath (muhammad, 2026-10-21). The prompt is held to the size
+    it had before the swap so rules cannot pile up silently, and no instruction still asks about control."""
+    import pathlib
+
+    from scripts.seed import parse_prompt
+
+    prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
+    base = (prompts / "mani_base.md").read_text()
+    sent = "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in ("mani_base", "response_format"))
+    assert "The feeling underneath." in base and "in their control" not in sent
+    assert len(base) <= 11268
+
+
+def test_no_rule_lets_mani_pass_a_stage_over_and_not_knowing_gets_possibilities():
+    """muhammad, 2026-10-21: "I don't know" ended frameworks having helped no one because two rules said to
+    take what they gave and move on, or to let a stage go. Not knowing is the case Mani thinks aloud for."""
+    import pathlib
+
+    from scripts.seed import parse_prompt
+
+    prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
+    sent = "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in ("mani_base", "response_format"))
+    for rule in ("After two tries", "let it go without pushing", "move to the next stage", "It is difficult to identify"):
+        assert rule not in sent
+    assert "think aloud" in sent and "only they decide to stop" in sent
+
+
+def test_the_framework_rules_point_at_their_case():
+    """muhammad, 2026-10-22: stage questions and possibilities are about the case found before the offer."""
+    import pathlib
+
+    from scripts.seed import parse_prompt
+
+    prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
+    sent = parse_prompt(prompts / "mani_base.md")["content"]
+    assert "about their_case in [ctx]" in sent and "from their case and what they said" in sent

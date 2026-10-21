@@ -12,21 +12,23 @@ from dataclasses import dataclass
 from typing import Any
 
 import openai
+from langchain_openai import StreamChunkTimeoutError
 from pydantic import BaseModel, ValidationError
 
 from mani.config import Settings, get_settings
 from mani.db import llm_calls
 from mani.errors import ErrorCategory, ServiceError
-from mani.llm import chain, tools
+from mani.llm import chain
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_MAX_TOKENS = 2048
 
-# One retry, shared by a malformed reply and a provider that is briefly down. Without it
-# either loses the person's typed message entirely - complete() is called before the turn
-# writes anything, so a raise here leaves nothing in the thread to show for the turn.
+# One retry, shared by a malformed reply, a provider that is briefly down and a call that sent
+# nothing for too long. Without it any of them loses the person's typed message entirely -
+# complete() is called before the turn writes anything, so a raise here leaves nothing in the
+# thread to show for the turn.
 MAX_SCHEMA_ATTEMPTS = 2
 
 
@@ -71,6 +73,15 @@ def _usage_of(exc: BaseException) -> llm_calls.Usage:
             getattr(usage.completion_tokens_details, "reasoning_tokens", None) or 0
         ),
     )
+
+
+async def _folded(stream) -> dict:
+    """The one reply a structured stream amounts to: its pieces, raw, parsing_error and parsed, each
+    arriving once, folded into the dict the call used to return whole."""
+    result: dict = {}
+    async for piece in stream:
+        result.update(piece)
+    return result
 
 
 def _as_service_error(exc: Exception) -> tuple[ServiceError, llm_calls.Outcome]:
@@ -210,6 +221,10 @@ async def complete[T: BaseModel](
         reasoning_effort=reasoning_effort,
         routing=routing,
         settings=settings,
+        chunk_timeout=(
+            settings.chat_first_token_seconds
+            if purpose is llm_calls.Purpose.CHAT else settings.llm_timeout_seconds
+        ),
     )
 
     messages = _apply_model_quirks(messages, model)
@@ -229,9 +244,22 @@ async def complete[T: BaseModel](
                 # A chat reply has a deadline for the whole call; the per read timeout alone let one
                 # run for 102 s. The background calls (summaries, the memory fold) keep only that.
                 if purpose is llm_calls.Purpose.CHAT:
-                    result = await asyncio.wait_for(runnable.ainvoke(messages), settings.chat_deadline_seconds)
+                    result = await asyncio.wait_for(_folded(runnable.astream(messages)), settings.chat_deadline_seconds)
                 else:
-                    result = await runnable.ainvoke(messages)
+                    result = await _folded(runnable.astream(messages))
+            except StreamChunkTimeoutError as exc:
+                if attempt == MAX_SCHEMA_ATTEMPTS:
+                    raise
+                # Nothing came for the whole wait: a reasoning model thinking far longer than its
+                # neighbours. The cut attempt gets its own row, and one more try usually answers
+                # sooner than waiting out the first (2026-10-21).
+                await _record(
+                    purpose=purpose, model=model, outcome=llm_calls.Outcome.TIMEOUT,
+                    usage=llm_calls.Usage(), latency_ms=int((time.perf_counter() - started) * 1000),
+                    user_id=user_id, thread_id=thread_id, prompt_version_id=prompt_version_id,
+                    error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}, retrying: {exc}",
+                )
+                continue
             except _TRANSIENT as exc:
                 if isinstance(exc, openai.APITimeoutError) or attempt == MAX_SCHEMA_ATTEMPTS:
                     raise
@@ -306,105 +334,3 @@ async def complete[T: BaseModel](
     return Call(
         value=parsed, model=model, usage=usage, latency_ms=latency_ms, call_id=call_id
     )
-
-
-async def choose_exercise(
-    candidates: list[dict[str, str]],
-    framework_name: str,
-    *,
-    model: str,
-    purpose: llm_calls.Purpose,
-    reasoning_effort: str | None = None,
-    said: Sequence[str] = (),
-    issue: str | None = None,
-    temperature: float = DEFAULT_TEMPERATURE,
-    max_tokens: int = 200,
-    routing: dict[str, Any] | None = None,
-    user_id: uuid.UUID | str | None = None,
-    thread_id: uuid.UUID | str | None = None,
-    prompt_version_id: uuid.UUID | str | None = None,
-    settings: Settings | None = None,
-) -> str | None:
-    """Ask the model which exercise fits, from the closed list of the active catalog.
-
-    Real tool-calling, not structured output - a deliberate, scoped exception to one call
-    per turn, only reached when a framework just completed and the catalog is not empty.
-    `candidates` is `[{"id", "title", "subtitle", "type", "category"}, ...]`, never free
-    text. `said` is the person's most recent messages and `issue` what Mani understands
-    they are dealing with, so the pick fits what they talked about rather than only the
-    framework.
-
-    Never raises. A failure here costs the exercise offer, not the turn - the caller falls
-    back to the plain library offer the ordinary reply already makes.
-    """
-    settings = settings or get_settings()
-    if not settings.openrouter_api_key or not candidates:
-        return None
-
-    runnable = chain.build_tool_choice(
-        tools.StartExercise, model=model, temperature=temperature, max_tokens=max_tokens,
-        routing=routing, settings=settings, reasoning_effort=reasoning_effort,
-    )
-
-    listing = "\n".join(
-        f"- {c['id']}: {c['title']}"
-        + (f" - {c['subtitle']}" if c.get("subtitle") else "")
-        + "".join(f" [{c[k]}]" for k in ("type", "category") if c.get(k))
-        for c in candidates
-    )
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                f"The person just completed the {framework_name} framework. Call "
-                "start_exercise with the id of the exercise from this list that best "
-                f"fits what they just worked through:\n{listing}"
-            ),
-        }
-    ]
-    # The person's own words go in a user message, never the system one: data, not orders.
-    context = ([f"What this conversation is about: {issue}"] if issue else []) + [
-        f"They said: {line}" for line in said
-    ]
-    if context:
-        messages.append({"role": "user", "content": "\n".join(context)})
-
-    started = time.perf_counter()
-    usage = llm_calls.Usage()
-    valid_ids = {c["id"] for c in candidates}
-
-    try:
-        message = await runnable.ainvoke(messages)
-    except Exception as exc:
-        logger.warning("exercise selection call failed: %s", exc)
-        latency_ms = int((time.perf_counter() - started) * 1000)
-        _, outcome = _as_service_error(exc)
-        await _record(
-            purpose=purpose, model=model, outcome=outcome, usage=usage,
-            latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-            prompt_version_id=prompt_version_id, error_message=str(exc),
-        )
-        return None
-
-    usage = chain.usage_from(message)
-    tool_calls = getattr(message, "tool_calls", None) or []
-    exercise_id: str | None = None
-    outcome = llm_calls.Outcome.SCHEMA_INVALID
-    error_message: str | None = "model made no tool call"
-
-    if tool_calls:
-        requested = tool_calls[0].get("args", {}).get("exercise_id")
-        # Untrusted until checked against the same closed list just given to the model -
-        # the same rule already applied to every other model-supplied identifier here.
-        exercise_id = requested if requested in valid_ids else candidates[0]["id"]
-        outcome = llm_calls.Outcome.OK
-        error_message = None
-
-    latency_ms = int((time.perf_counter() - started) * 1000)
-    await _record(
-        purpose=purpose, model=model, outcome=outcome, usage=usage,
-        latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-        prompt_version_id=prompt_version_id, error_message=error_message,
-        generation_id=chain.generation_id_from(message),
-    )
-    return exercise_id

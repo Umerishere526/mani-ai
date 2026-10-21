@@ -20,7 +20,7 @@ def test_a_check_missing_one_of_its_parts_is_counted():
     ) == ["check unusable"]
 
 
-def test_a_check_sent_before_their_control_was_answered_is_counted():
+def test_a_check_sent_before_their_feeling_was_answered_is_counted():
     """Spec 0006, AC-18: it opens nothing, so their yes to it brings no offer; how often is measured."""
     assert reply_checks.misses(
         Reply(text="So that is it. Do I have that right?"), offered=None, offer_dropped=None,

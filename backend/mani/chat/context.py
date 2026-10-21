@@ -5,9 +5,8 @@ from __future__ import annotations
 
 import re
 
-from mani.chat import repairs, understanding, walk
+from mani.chat import body, repairs, understanding, walk
 from mani.chat.techniques import OFFERING
-from mani.chat.greeting import AFTER_FRAMEWORK_QUESTIONS, CHAT_MORE_LABEL
 from mani.db.threads import TurnContext
 from mani.llm.schema import Moment
 from mani.models.rows import (
@@ -60,32 +59,6 @@ def disarm(text: str) -> str:
     return _CTX_MARKER.sub(lambda m: f"({m.group(1)}ctx)", text)
 
 
-def _after_framework_question(history: list[Message]) -> str | None:
-    """The next of the client's three questions, once a framework has ended.
-
-    A framework ends on the reply that offers Chat More. The questions asked since, that reply
-    included, are read from Mani's own replies, so they come in order and none twice. Once Mani
-    has replied as many times as there are questions, or has made an offer since, the
-    conversation has moved on and none are offered.
-    """
-    mani = [m for m in history if m.role is MessageRole.MANI]
-    ended = next(
-        (i for i in range(len(mani) - 1, -1, -1)
-         if any(str(o.get("label", "")).lower() == CHAT_MORE_LABEL.lower()
-                for o in (mani[i].prompt_options or []))),
-        None,
-    )
-    if ended is None:
-        return None
-    since_ended = mani[ended + 1:]
-    if len(since_ended) >= len(AFTER_FRAMEWORK_QUESTIONS) or any(
-        o.get("technique") for m in since_ended for o in (m.prompt_options or [])
-    ):
-        return None
-    since = " ".join(m.content.lower() for m in mani[ended:])
-    return next((q for q in AFTER_FRAMEWORK_QUESTIONS if q.lower().rstrip("?") not in since), None)
-
-
 def cooldown_for(outcome: TechniqueOutcome) -> int:
     return (
         COOLDOWN_AFTER_COMPLETE
@@ -119,11 +92,11 @@ def check_open(ctx: TurnContext) -> bool:
 
 def may_check(ctx: TurnContext) -> bool:
     """Whether this reply may check Mani's understanding: once the problem and its core issue are
-    stored and what is in their control is stored or is what this message answers, which takes at
+    stored and the feeling underneath is stored or is what this message answers, which takes at
     least three of their messages, with no framework live and no check waiting for its answer, and
     once the cooldowns after the last check and the last offer have passed. The orchestrator stores a
     check only when all three are found after this turn. The only way to an offer (spec 0006)."""
-    if understanding.next_step(ctx.thread.understanding) not in (None, "control"):
+    if understanding.next_step(ctx.thread.understanding) not in (None, "underlying_feeling"):
         return False
     if live(ctx.technique) is not None or check_open(ctx):
         return False
@@ -138,8 +111,6 @@ def moment(
     technique: TechniqueState | None,
     outcome: TechniqueOutcome | None,
     retiring_framework_id: str | None,
-    awaiting_place: bool,
-    framework: Framework | None,
     concern: bool,
     check_open: bool = False,
 ) -> Moment:
@@ -153,11 +124,7 @@ def moment(
     if technique is None:
         return Moment.CHECK_OPEN if check_open else Moment.CHATTING
     if outcome is TechniqueOutcome.ACCEPTED:
-        phase = technique.phase
-        at_the_body = phase == "somatic_checkin" or (phase == "somatic_practice" and awaiting_place)
-        if at_the_body or (framework is not None and phase == framework.closing):
-            return Moment.BODY
-        return Moment.IN_STAGES
+        return Moment.BODY if technique.phase in body.STAGES else Moment.IN_STAGES
     if outcome is TechniqueOutcome.OFFERED:
         return Moment.OFFER_OPEN
     return Moment.CHATTING
@@ -189,7 +156,7 @@ _MEANING: dict[str, str | dict[str, str]] = {
     "conversation_phase": {
         "understanding": (
             "nothing has been offered yet. Take in what they said, then ask for what you still "
-            "need: the problem, the core issue under it, or what is in their control."
+            "need: the problem, the core issue under it, or the feeling underneath."
         ),
         "framework": "the questions are running, so follow the stage.",
         "talking": (
@@ -204,15 +171,15 @@ _MEANING: dict[str, str | dict[str, str]] = {
         ),
     },
     "check": {
-        "once_control_is_answered": (
-            "if their message answers what is in their control, even with I don't know, report it and "
+        "once_feeling_is_answered": (
+            "if their message answers the feeling underneath, even with I don't know, report it and "
             "check your understanding in this reply by filling check, from their words only. If it does "
-            "not, ask about control and leave check empty."
+            "not, ask about the feeling and leave check empty."
         ),
         "may_check": (
-            "the problem, its core issue and what is in their control are all found. Check your "
-            "understanding with them now by filling check, from their words only. Never add anything "
-            "they did not say."
+            "the problem, its core issue and the feeling underneath are all found. Check your "
+            "understanding with them now by filling check, from their words only. Put a feeling they did "
+            "not name inside the check as a possibility for them to confirm."
         ),
         "open": (
             "your last reply checked your understanding. Set check_answer. A clear yes always brings the "
@@ -224,6 +191,13 @@ _MEANING: dict[str, str | dict[str, str]] = {
         "what they have told you so far, kept for you. A step marked missing is still to be found. In "
         "understanding_update report only what their message names or changes."
     ),
+    "their_case": (
+        "what you and they found before the questions began: the feelings they named, the problem, the core "
+        "issue under it, the feeling underneath and, once they confirmed it, what it comes down to, and "
+        "anything they added since, in their words. Every question you ask and every possibility you offer "
+        "is about this case and the feeling underneath, never generic. Never ask them again for anything in it: say it "
+        "back and build on it. In understanding_update report only what their message names or changes."
+    ),
     "understanding_next": {
         "problem": (
             "the problem is not pinned down yet. Help them narrow it to what actually happens: who, "
@@ -234,13 +208,14 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "the problem is clear, what lies under it is not. Ask plainly: what usually happens next, "
             "what falls on them, or what keeps it going. A feeling, such as not being enough, is not yet "
             "the core issue: ask what makes them feel it or what keeps it going. Once their answers show "
-            "the core issue, offer it in your reply as your understanding, report it, and ask what is in "
-            "their control. They don't need to name it themselves."
+            "the core issue, offer it in your reply as your understanding, report it, and ask how it sits "
+            "with them underneath. They don't need to name it themselves."
         ),
-        "control": (
-            "the problem and its core issue are clear. Ask what is in their control: what they could "
-            "do, influence or decide about it, once, never twice in other words. If they say they don't "
-            "know, that is their answer: report in_their_control as \"you're not sure yet\"."
+        "underlying_feeling": (
+            "the problem and its core issue are clear. Ask about the feeling underneath, once, never twice "
+            "in other words: their own word if they have one, otherwise two or three possibilities their "
+            "words point to, in options. If they say they don't know, that is their answer: report your closest "
+            "reading, worded as a possibility, in underlying_feeling."
         ),
     },
     "since_last": "how many messages have passed since the last offer.",
@@ -250,7 +225,6 @@ _MEANING: dict[str, str | dict[str, str]] = {
         "If they ask for one they declined, that is a yes at any time, so begin it."
     ),
     "history": "what was tried earlier in this conversation, and whether it helped.",
-    "library_pending": {"yes": "offer the Library before anything new."},
     "current_phase": "the stage the questions are on, as last recorded.",
     "safety": {
         "concern": (
@@ -279,13 +253,41 @@ _MEANING: dict[str, str | dict[str, str]] = {
         "unclear. Its ask is a model question already in this style."
     ),
     "stages_known": (
-        "what they have said for each stage the walk has reached, kept for you. Never ask for what a "
-        "stage already holds. In stage_updates report the stage in force from their message."
+        "what they have said for each stage the walk has reached. Never ask for what a stage already "
+        "holds. Where a part is still to ask, ask only that part. In stage_updates report the stage in "
+        "force from their message."
     ),
-    "after_framework_question": (
-        "they kept chatting after the questions ended and are still on the same issue. Reflect "
-        "what they said, then ask this question word for word."
-    ),
+    "landed_on": "what they said for the last of the questions, in their words: where they ended up.",
+    "body_step": {
+        body.CHECK: (
+            "they were asked whether a feeling they named earlier is still felt in the place Mani named, with Yes "
+            "and No. In body report yes or no; a place they name instead, none for no tension, pain, or unclear "
+            "are reported as at the first step. Code sends the client's exercise or the general question."
+        ),
+        body.BODY: (
+            "they were asked where they feel tension, with Chest, Stomach, Head, Somewhere Else and No Tension. "
+            "In body report the place they name (chest, stomach, head, jaw_face, hands, eyes, feet, toes, arms), "
+            "other when they say somewhere else and name no place (your text asks where), nearest when they name "
+            "a place with no exercise (your text offers the closest exercise in your own words and asks whether "
+            "they would like to try it), none for no tension, no for declining, pain, or unclear. When they say "
+            "yes to the closest exercise, report the place you offered. Code sends the client's exercise."
+        ),
+        body.PRACTICE: (
+            "they were guided through one exercise and asked how their body feels. In body report better, same, "
+            "worse, pain or unclear. Never assume tension has eased. Code sends the client's lines."
+        ),
+        body.EFFECT: (
+            "they were asked whether the whole conversation helped with what brought them. In body report helped, "
+            "somewhat, not_really or unclear. Code sends the client's lines."
+        ),
+        "closing": (
+            "they were offered Keep Chatting, Go to Library and Finish for Now. If they want to end for now, report "
+            "finish and write one warm line with no question. Otherwise report keep_chatting and continue from "
+            "their_case and landed_on in the same shape as before the questions: a mirror of where they ended up, one "
+            "open question, and possibilities in options. Never ask what they would like to talk about, and never ask "
+            "again for anything their_case already holds."
+        ),
+    },
 }
 
 
@@ -311,6 +313,7 @@ def build(
     offer_waiting: bool = False,
     starting: bool = False,
     yes_framework: Framework | None = None,
+    landed_on: str | None = None,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -352,16 +355,21 @@ def build(
     lines += _line("conversation_phase", phase)
     understood = understanding.render(ctx.thread.understanding)
     if understood:
-        lines += _line("understanding", understood)
+        # Once a framework is running or about to start, the findings are the case its questions are about.
+        in_play = (
+            bool(running) or (yes_framework is not None and not safety_concern) or body.closing_shown(history or [])
+        )
+        lines += _line("their_case" if in_play else "understanding", understood)
     step = understanding.next_step(ctx.thread.understanding)
     if step and live(ctx.technique) is None and not safety_concern:
         lines += _line("understanding_next", step)
     if offer_waiting:
         # Mani's last reply was an offer, and they typed rather than tapped.
         lines += _line("offer_waiting", "yes")
-    question = None if safety_concern else _after_framework_question(history or [])
-    if question:
-        lines += _line("after_framework_question", question)
+    if not safety_concern and body.closing_shown(history or []):
+        lines += _line("body_step", "closing")
+        if landed_on:
+            lines += _line("landed_on", disarm(landed_on))
 
     # Told to the model as the reply shape enforces it: a check only where the shape has the field,
     # and an offer only on the answer to one (spec 0006).
@@ -369,17 +377,12 @@ def build(
         if check_open(ctx):
             lines += _line("check", "open")
         elif may_check(ctx):
-            waiting = understanding.next_step(ctx.thread.understanding) == "control"
-            lines += _line("check", "once_control_is_answered" if waiting else "may_check")
+            waiting = understanding.next_step(ctx.thread.understanding) == "underlying_feeling"
+            lines += _line("check", "once_feeling_is_answered" if waiting else "may_check")
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
         lines += _line("since_last", since_last)
         lines += _line("this_thread", f"{technique.framework_id} ({technique.outcome})")
-        if (
-            technique.outcome is TechniqueOutcome.ACCEPTED
-            and not technique.library_offered_since
-        ):
-            lines += _line("library_pending", "yes")
         if technique.phase:
             lines += _line("current_phase", technique.phase)
 
@@ -414,6 +417,9 @@ def _running_lines(
     lines.append(f"framework_stages: {', '.join(framework.phases)}")
     if starting:
         return lines + _line("framework_starting", "yes") + _start_lines(framework, style)
+    if technique.phase in body.STAGES:
+        # The body check-in is the client's script, sent by code: the model only reads the answer.
+        return lines + _line("body_step", technique.phase)
     stage = _stage_lines("stage", framework, technique.phase, style)
     if offer_waiting:
         # The offering stage's question is the offer they have just typed past.
@@ -424,8 +430,7 @@ def _running_lines(
     known = technique.stages_known.get(framework.id) or {}
     lines += _line("stages_known", _stored(framework, known, technique.phase))
     if technique.phase in walk.content_stages(framework):
-        lines.append(f"next: {walk.next_line(framework, known, technique.phase)}")
-        lines.append(f"two_tries: {_TWO_TRIES}")
+        lines.append(f"next: {walk.next_line(framework, technique.phase)}")
     index = framework.phase_index(technique.phase)
     following = framework.phases[index + 1] if 0 <= index < len(framework.phases) - 1 else None
     if following:
@@ -443,18 +448,15 @@ def _stored(framework: Framework, known: dict[str, dict], phase: str) -> str:
         entry = {} if ahead and (known.get(stage) or {}).get("status") != "done" else known.get(stage) or {}
         status = entry.get("status") or ("not reached" if ahead else "missing")
         said = entry.get("said")
-        parts.append(f'{stage} {status}: "{disarm(said)}"' if said else f"{stage} {status}")
+        part = f"{stage} {status}"
+        if status == "partial" and entry.get("gap"):
+            part += f", still to ask {entry['gap']}"
+        parts.append(f'{part}: "{disarm(said)}"' if said else part)
     return " | ".join(parts)
 
 
 # A stage is a step, not an exam: it never needs complete or certain answers, and a person asked
 # the same thing a third time feels interrogated (live, 2026-10-08: five times running).
-_TWO_TRIES = (
-    "If you have already asked for this stage's thing twice, take what they gave you and move to "
-    "the next stage."
-)
-
-
 def _start_lines(framework: Framework, style: str) -> list[str]:
     """On a turn that can start the set: what the reply does with the first stage, which the walk
     reaches, and that stage in full to judge it by."""

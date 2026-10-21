@@ -286,7 +286,7 @@ async def framework_debug_state(thread_id: str) -> dict[str, Any] | None:
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         row = await conn.fetchrow(
-            "select framework_id, outcome, phase, at_message_count, library_offered_since "
+            "select framework_id, outcome, phase, at_message_count, physical_response, conversation_effect "
             "from public.thread_technique_state where thread_id = $1",
             uuid.UUID(thread_id),
         )

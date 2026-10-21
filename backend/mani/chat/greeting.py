@@ -36,16 +36,3 @@ TELL_ME_MORE_LABEL = "Tell me more"
 KEEP_CHATTING_LABEL = "Keep chatting"
 TELL_ME_ABOUT_THIS_LABEL = "Tell me about this"
 EXPLAIN_LABELS = {TELL_ME_ABOUT_THIS_LABEL.lower(), TELL_ME_MORE_LABEL.lower()}
-
-# The two choices every framework ends on - the client's cadence: "Framework completes ->
-# Somatic check-in -> Chat More OR Go to Library".
-CHAT_MORE_LABEL = "Chat More"
-GO_TO_LIBRARY_LABEL = "Go to Library"
-
-# Asked in this order, one per reply, once a framework has finished and the person carries on
-# with the same issue - the client's "three forward-moving reflective questions".
-AFTER_FRAMEWORK_QUESTIONS = (
-    "What feels most important about this now?",
-    "What do you think you need to do differently from here?",
-    "How could you take one small step toward that?",
-)

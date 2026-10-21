@@ -1,5 +1,5 @@
 # ABOUTME: A minimal chat UI against the real Mani backend - for trying frameworks and
-# ABOUTME: exercise offers directly, not a product interface. Talks over HTTP like any client.
+# ABOUTME: the body check-in directly, not a product interface. Talks over HTTP like any client.
 
 from __future__ import annotations
 
@@ -168,8 +168,8 @@ for message in st.session_state.messages:
 
 last_turn = st.session_state.get("last_turn")
 
-# The reply that just arrived gets its own callouts - a framework offer, an exercise
-# hand-off, or a crisis - which is the whole reason this tool exists.
+# The reply that just arrived gets its own callouts - a framework offer or a crisis - which is the
+# whole reason this tool exists.
 if last_turn:
     if last_turn.get("crisis_detected"):
         st.error("🚨 **Crisis detected.** " + last_turn["content"])
@@ -180,15 +180,6 @@ if last_turn:
             "🧩 **Framework offered:** "
             + ", ".join(p["technique"] for p in technique_prompts)
         )
-
-    exercise = last_turn.get("exercise")
-    if exercise:
-        with st.container(border=True):
-            st.success(f"🎧 **Exercise offered:** {exercise['title']}")
-            if exercise.get("subtitle"):
-                st.caption(exercise["subtitle"])
-            if exercise.get("audio_url"):
-                st.audio(exercise["audio_url"])
 
 # A message that has been sent and not yet answered: the person's own bubble straight away,
 # and the thinking pill where Mani's reply will appear. The backend call itself runs at the
@@ -324,8 +315,9 @@ with st.sidebar:
     understood = (last_turn or {}).get("understanding")
     if understood:
         for key, label in (
-            ("feeling", "Feeling"), ("issue", "Problem"), ("core_issue", "Core issue"),
-            ("in_their_control", "In their control"),
+            ("feeling", "Feelings"), ("issue", "Problem"), ("core_issue", "Core issue"),
+            ("underlying_feeling", "Underlying feeling"), ("comes_down_to", "What it comes down to"),
+            ("also", "Also raised"),
         ):
             if understood.get(key):
                 st.markdown(f"**{label}:** {understood[key]}")

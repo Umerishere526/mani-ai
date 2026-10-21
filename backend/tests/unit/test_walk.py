@@ -94,7 +94,7 @@ def test_a_move_answer_moves_exactly_one_stage_and_the_stage_reached_is_judged_t
     walked = walk.advance(abcde, stored, [said("dispute", "x")], "agreed", in_force="belief",
                           report=judged("known", "I stopped going"))
     assert (walked.phase, walked.reached, walked.unjudged) == ("consequence", "consequence", False)
-    assert walked.entries["belief"] == {"said": "I am useless", "status": "done", "tries": 0}
+    assert walked.entries["belief"] == {"said": "I am useless", "status": "done"}
     assert walked.entries["consequence"] == {"said": "I stopped going", "status": "known"}
     assert "dispute" not in walked.entries and "dropped update for dispute" in walked.notes
 
@@ -120,24 +120,35 @@ def test_a_judgement_of_the_next_stage_on_a_turn_that_stays_is_neither_stored_no
     assert not stayed.unjudged and stayed.notes == []
 
 
-def test_on_a_second_try_the_stage_reached_is_said_back_from_the_judgement(abcde):
-    """Thread 4b93d612: on a second try the walk moves whatever they answer, and [ctx] says so, so the
-    reply's confirmation of the next stage is used."""
+def test_the_stage_reached_after_not_knowing_is_said_back_from_the_judgement(abcde):
+    """Thread 4b93d612: once they answer, the walk reaches the next stage and the reply's confirmation
+    of it is used."""
     first = walk.advance(abcde, {}, None, "not_yet", in_force="belief")
-    second = walk.advance(abcde, first.entries, None, "not_yet", in_force="belief",
-                          report=judged("partial", "you felt frustrated"))
+    second = walk.advance(abcde, first.entries, [said("belief", "I am not good enough")], "answered",
+                          in_force="belief", report=judged("partial", "you felt frustrated"))
     own = "You mentioned feeling frustrated. Is that how this belief has affected you?"
     assert render(abcde, second, text=own, style="directive") == (f"C is for Consequences. {own}", [])
 
 
-def test_a_plain_no_stays_once_and_the_second_lets_the_stage_go(abcde):
-    """AC-2, AC-8: a stage is asked at most twice; the code backstop moves on as let_go."""
-    first = walk.advance(abcde, {}, None, "not_yet", in_force="belief")
-    assert (first.phase, first.reached, first.entries["belief"]["tries"]) == ("belief", None, 1)
-    second = walk.advance(abcde, first.entries, None, "not_yet", in_force="belief")
-    assert second.phase == "consequence"
-    assert second.entries["belief"] == {"said": "", "status": "done", "tries": 0}
-    assert second.notes == ["belief let go after a second not_yet"]
+def test_not_knowing_never_moves_the_walk_however_often_it_is_said(abcde):
+    """muhammad, 2026-10-21: a stage that is not clear keeps the conversation on it. The second not_yet
+    used to let it go, which ended frameworks having helped no one."""
+    walked = walk.advance(abcde, {}, None, "not_yet", in_force="belief")
+    for _ in range(5):
+        walked = walk.advance(abcde, walked.entries, None, "not_yet", in_force="belief")
+        assert (walked.phase, walked.reached) == ("belief", None)
+    assert walked.notes == []
+
+
+def test_a_stage_said_back_moves_only_when_they_confirm_or_correct_it(abcde):
+    """A stage already known is confirmed by them, never passed. Not yet, or a stop, leaves it where it is."""
+    stored = {"belief": {"said": "I am useless", "status": "known"}}
+    assert walk.advance(abcde, stored, None, "not_yet", in_force="belief").phase == "belief"
+    assert walk.advance(abcde, stored, None, "stop", in_force="belief").phase == "belief"
+    assert walk.advance(abcde, stored, None, "agreed", in_force="belief").phase == "consequence"
+    corrected = walk.advance(abcde, stored, [said("belief", "I let them down", corrected=True)], "corrected",
+                             in_force="belief")
+    assert (corrected.phase, corrected.entries["belief"]["said"]) == ("consequence", "I let them down")
 
 
 def test_an_answer_that_cannot_be_true_of_the_stage_is_read_as_not_yet(abcde):
@@ -151,12 +162,10 @@ def test_an_answer_that_cannot_be_true_of_the_stage_is_read_as_not_yet(abcde):
     assert with_words.entries["belief"]["said"] == "I am useless"
 
 
-def test_leaving_the_closing_enters_the_body_route_and_a_body_answer_wins(abcde):
+def test_leaving_the_last_stage_enters_the_body_check_in(abcde):
+    """The question about a place comes first; the turn settles whether it is asked or Step 1 follows."""
     left = walk.advance(abcde, {}, [said("effective", "I don't know yet")], "answered", in_force="effective")
-    assert (left.phase, left.reached) == ("somatic_checkin", None)
-    body = walk.advance(abcde, {}, None, "not_yet", in_force="effective", body_answered=True)
-    assert body.phase == "somatic_checkin"
-    assert body.notes == ["stage answer not_yet ignored for a body answer"]
+    assert (left.phase, left.reached) == ("somatic_check", None)
 
 
 def render(abcde, walked, text="", style="supportive", feeling=None):
@@ -341,13 +350,50 @@ def test_d_reached_with_only_support_said_asks_only_the_challenge(abcde):
     assert notes == ["gap asks nothing"]
 
 
-def test_a_confirmation_let_go_without_their_words_stores_none(abcde):
-    """Words they did not agree to never stand as done, so D never disputes them."""
-    let_go = walk.advance(abcde, SEEDED, None, "let_go", in_force="belief")
-    assert let_go.entries["belief"] == {"said": "", "status": "done", "tries": 0}
-
-
 def test_once_they_add_to_a_partial_stage_its_gap_is_dropped(abcde):
     partial = {"said": "your team works overtime too", "status": "partial", "gap": "challenge"}
     full = walk.merge({"dispute": partial}, [said("dispute", "nothing really challenges it")], abcde, in_force="dispute")
     assert "gap" not in full.entries["dispute"]
+
+
+def test_the_part_still_to_ask_is_kept_while_the_stage_is_partial_and_dropped_when_it_is_known(abcde):
+    """muhammad, 2026-10-21 (sister thread): D asked what supports the belief and, on later turns, never
+    asked what might challenge it, because the stored gap was dropped by the next update. The part still to
+    ask is kept until the stage is known; only an id the stage has a line for counts."""
+    partial = {"said": "family should always help", "status": "partial", "gap": "challenge"}
+
+    def update(status: str, gap: str | None = None) -> StageUpdate:
+        return StageUpdate(stage="dispute", said="we always help family", status=status, gap=gap)
+
+    def merged(update: StageUpdate) -> dict:
+        return walk.merge({"dispute": partial}, [update], abcde, in_force="dispute").entries["dispute"]
+
+    assert merged(update("partial"))["gap"] == "challenge"
+    assert merged(update("partial", "information"))["gap"] == "information"
+    assert merged(update("partial", "no such line"))["gap"] == "challenge"
+    assert "gap" not in merged(update("known"))
+
+
+def test_d_support_said_on_a_stay_turn_leaves_the_challenge_still_to_ask(abcde):
+    """The walk stays on D, stores what supports the belief, and remembers that the challenge was not asked."""
+    on_d = {"belief": {"said": "I should help", "status": "done"}, "consequence": {"said": "guilty", "status": "done"}}
+    stayed = walk.advance(abcde, on_d, [StageUpdate(stage="dispute", said="family always helps", status="partial",
+                                                    gap="challenge")], "not_yet", in_force="dispute")
+    assert stayed.phase == "dispute" and stayed.reached is None
+    assert stayed.entries["dispute"] == {"said": "family always helps", "status": "partial", "gap": "challenge"}
+
+
+def test_the_possibilities_go_under_the_models_own_question_and_never_under_the_clients_line(abcde):
+    """muhammad, 2026-10-22: framework replies carry the same mirror, question, possibilities as the chat
+    before them. They answer the model's own question, so they are dropped when the client's line is sent."""
+    options = "Do you feel trapped, overwhelmed by the responsibility, or worried about letting others down"
+    stayed = walk.Walked({"belief": {"status": "missing", "tries": 1}}, "belief", None)
+    own = "You're not sure what you told yourself. What was going through your mind?"
+    text, _ = walk.reply_text(abcde, stayed, text=own, style="directive", thread_id=THREAD, feeling=None,
+                              options=options)
+    assert text == f"{own}\n\n{options}?"
+
+    reached_missing = walk.Walked({"belief": {"status": "missing"}}, "belief", "belief", unjudged=True)
+    sent, _ = walk.reply_text(abcde, reached_missing, text="Anything.", style="directive", thread_id=THREAD,
+                              feeling=None, options=options)
+    assert options not in sent, "the client's own line is not followed by possibilities written for another question"

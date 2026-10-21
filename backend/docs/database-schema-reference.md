@@ -85,7 +85,7 @@ One row per user, created automatically by the migration-004 trigger on signup.
 | 4 | `support_style` | text | optional 🔒 | `supportive` / `reflective` / `directive` (CHECK `profiles_support_style_known`). Matches `mani.models.rows.SupportStyle`. The onboarding default; a thread's own `conversation_style` overrides it. |
 | 5 | `age_bracket` | text | optional | **Not constrained** — see §6. |
 | 6 | `created_at` | timestamptz | default `now()` | |
-| 7 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
+| 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
 
 ### `public.threads`
 | # | Column | Type | Required | Purpose |
@@ -127,9 +127,10 @@ One row per thread — the currently (or most recently) active framework.
 | 4 | `outcome` | `technique_outcome` (enum) | required | `offered` / `accepted` / `declined`. |
 | 5 | `phase` | text | optional | Current stage id within the framework. `null` when finished. |
 | 6 | `at_message_count` | integer | required | Thread's `message_count` when this state was last written — the cooldown clock. |
-| 7 | `library_offered_since` | boolean | default `false` | Whether the library follow-up has been offered since acceptance. |
+| 7 | `physical_response` | text | optional, one of `better`, `same`, `worse`, `no_tension` | What the body check-in's exercise did for the body, written once per run by `mani_service` (migration 025; replaced `library_offered_since`). |
 | 8 | `updated_at` | timestamptz | default `now()`, touched by trigger | |
-| 9 | `stages_known` | jsonb | default `'{}'`, an object (CHECK `thread_technique_state_stages_known_object`) | What they said per stage, keyed by framework id then stage id: `{said, status, tries}`. Merged and stepped by `mani/chat/walk.py`; kept when a run retires (migration 020). |
+| 9 | `stages_known` | jsonb | default `'{}'`, an object (CHECK `thread_technique_state_stages_known_object`) | What they said per stage, keyed by framework id then stage id: `{said, status}`. Merged and stepped by `mani/chat/walk.py`; kept when a run retires (migration 020). |
+| 10 | `conversation_effect` | text | optional, one of `helped`, `somewhat`, `not_really` | Whether the whole conversation helped with what brought them, recorded apart from `physical_response`, written once per run (migration 025). |
 
 ### `public.thread_techniques_offered`
 Frequency-limiting log — every framework ever offered in a thread.
@@ -261,7 +262,7 @@ Snapshot taken automatically whenever `admin.prompts` is edited via the admin AP
 | 3 | `user_id` | uuid | optional, FK→`auth.users` SET NULL | |
 | 4 | `message_id` | uuid | optional, FK→`messages` SET NULL | |
 | 5 | `prompt_version_id` | uuid | optional, FK→`admin.prompt_versions` SET NULL | **Always null in practice** — no call site passes it (`PORT-STATUS.md`). |
-| 6 | `purpose` | `admin.llm_call_purpose` (enum) | required | `chat` / `summarize` / `exercise_select` / `memory_fold`. Made a real enum in migration 006 — was free text; see §6's now-resolved note. `memory_fold` added in 009. |
+| 6 | `purpose` | `admin.llm_call_purpose` (enum) | required | `chat` / `summarize` / `exercise_select` (no longer written) / `memory_fold`. Made a real enum in migration 006 — was free text; see §6's now-resolved note. `memory_fold` added in 009. |
 | 7 | `model` | text | required | |
 | 8 | `input_tokens` | integer | default `0` | |
 | 9 | `output_tokens` | integer | default `0` | |

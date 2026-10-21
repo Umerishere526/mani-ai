@@ -29,18 +29,23 @@ def settings() -> Settings:
 
 
 class FakeRunnable:
-    """Stands in for chain.build()'s Runnable - one scripted result per ainvoke() call."""
+    """Stands in for chain.build()'s Runnable - one scripted result per astream() call, streamed as the
+    pieces the real chain yields (raw, parsing_error, parsed)."""
 
     def __init__(self, *results: dict) -> None:
         self._results = list(results)
         self.calls = 0
 
-    async def ainvoke(self, messages: list[dict]) -> dict:
+    async def scripted(self, messages: list[dict]) -> dict:
         self.calls += 1
         result = self._results[min(self.calls - 1, len(self._results) - 1)]
         if isinstance(result, BaseException):
             raise result
         return result
+
+    async def astream(self, messages: list[dict]):
+        for key, value in (await self.scripted(messages)).items():
+            yield {key: value}
 
 
 def valid(text: str = "hi") -> dict:
@@ -117,144 +122,12 @@ async def test_two_schema_failures_raise_and_record_both_attempts(monkeypatch, r
     ]
 
 
-class FakeToolMessage:
-    """What a bind_tools() runnable hands back - an AIMessage with tool_calls on it."""
-
-    def __init__(self, *, exercise_id: str | None) -> None:
-        self.tool_calls = (
-            [{"name": "StartExercise", "args": {"exercise_id": exercise_id}, "id": "1"}]
-            if exercise_id is not None
-            else []
-        )
-        self.usage_metadata = {"input_tokens": 40, "output_tokens": 8}
-        self.response_metadata: dict = {}
-
-
-class FakeToolRunnable:
-    def __init__(self, message: FakeToolMessage) -> None:
-        self._message = message
-        self.calls = 0
-        self.sent: list[dict] = []
-
-    async def ainvoke(self, messages: list[dict]) -> FakeToolMessage:
-        self.calls += 1
-        self.sent = messages
-        return self._message
-
-
-CANDIDATES = [
-    {"id": "11111111-1111-4111-8111-111111111111", "title": "One", "subtitle": ""},
-    {"id": "22222222-2222-4222-8222-222222222222", "title": "Two", "subtitle": ""},
-]
-
-
-async def test_the_chosen_exercise_is_the_one_the_tool_call_named(monkeypatch, recorded):
-    runnable = FakeToolRunnable(FakeToolMessage(exercise_id=CANDIDATES[1]["id"]))
-    monkeypatch.setattr(client.chain, "build_tool_choice", lambda *a, **kw: runnable)
-
-    chosen = await client.choose_exercise(
-        CANDIDATES, "ABCDE", model="m",
-        purpose=llm_calls.Purpose.EXERCISE_SELECT, settings=settings(),
-    )
-
-    assert chosen == CANDIDATES[1]["id"]
-    assert [c["outcome"] for c in recorded] == [llm_calls.Outcome.OK]
-
-
-async def test_the_pick_sees_the_whole_entry_and_what_the_person_said(monkeypatch, recorded):
-    """The choice is made from the whole catalog, so each entry has to say what kind of
-    exercise it is and which topic it belongs to, and the model has to see the conversation
-    it is choosing for."""
-    runnable = FakeToolRunnable(FakeToolMessage(exercise_id=CANDIDATES[0]["id"]))
-    monkeypatch.setattr(client.chain, "build_tool_choice", lambda *a, **kw: runnable)
-    candidates = [
-        {**CANDIDATES[0], "type": "Breathing", "category": "Burnout"},
-        {**CANDIDATES[1], "type": "Visualization", "category": "Boundaries"},
-    ]
-
-    await client.choose_exercise(
-        candidates, "ABCDE", model="m", purpose=llm_calls.Purpose.EXERCISE_SELECT,
-        said=["work has drained me for months", "that helped, thanks"],
-        issue="exhaustion from an unrelenting job",
-        settings=settings(),
-    )
-
-    sent = "\n".join(m["content"] for m in runnable.sent)
-    assert "Breathing" in sent and "Burnout" in sent
-    assert "Visualization" in sent and "Boundaries" in sent
-    assert "work has drained me for months" in sent
-    assert "exhaustion from an unrelenting job" in sent
-
-
-async def test_an_invented_exercise_id_is_corrected_not_trusted(monkeypatch, recorded):
-    """A model-supplied identifier is checked against the closed list it was given, the
-    same rule repairs.py already applies to a technique id. It corrects; it never fails."""
-    runnable = FakeToolRunnable(FakeToolMessage(exercise_id="not-in-the-catalogue"))
-    monkeypatch.setattr(client.chain, "build_tool_choice", lambda *a, **kw: runnable)
-
-    chosen = await client.choose_exercise(
-        CANDIDATES, "ABCDE", model="m",
-        purpose=llm_calls.Purpose.EXERCISE_SELECT, settings=settings(),
-    )
-
-    assert chosen == CANDIDATES[0]["id"]
-
-
-async def test_no_tool_call_offers_no_exercise(monkeypatch, recorded):
-    runnable = FakeToolRunnable(FakeToolMessage(exercise_id=None))
-    monkeypatch.setattr(client.chain, "build_tool_choice", lambda *a, **kw: runnable)
-
-    chosen = await client.choose_exercise(
-        CANDIDATES, "ABCDE", model="m",
-        purpose=llm_calls.Purpose.EXERCISE_SELECT, settings=settings(),
-    )
-
-    assert chosen is None
-    assert [c["outcome"] for c in recorded] == [llm_calls.Outcome.SCHEMA_INVALID]
-
-
-async def test_an_empty_candidate_list_costs_no_call_at_all(monkeypatch, recorded):
-    """The production case today: the catalog has nothing for this framework, so the
-    second call never happens and the turn stays at exactly one."""
-
-    def explode(*a, **kw):
-        raise AssertionError("no runnable should be built with nothing to choose from")
-
-    monkeypatch.setattr(client.chain, "build_tool_choice", explode)
-
-    chosen = await client.choose_exercise(
-        [], "ABCDE", model="m",
-        purpose=llm_calls.Purpose.EXERCISE_SELECT, settings=settings(),
-    )
-
-    assert chosen is None
-    assert recorded == []
-
-
-async def test_a_failed_selection_call_costs_the_offer_not_the_turn(monkeypatch, recorded):
-    class Boom(FakeToolRunnable):
-        async def ainvoke(self, messages: list[dict]):
-            self.calls += 1
-            raise RuntimeError("provider unreachable")
-
-    runnable = Boom(FakeToolMessage(exercise_id=None))
-    monkeypatch.setattr(client.chain, "build_tool_choice", lambda *a, **kw: runnable)
-
-    chosen = await client.choose_exercise(
-        CANDIDATES, "ABCDE", model="m",
-        purpose=llm_calls.Purpose.EXERCISE_SELECT, settings=settings(),
-    )
-
-    assert chosen is None
-    assert [c["outcome"] for c in recorded] == [llm_calls.Outcome.PROVIDER_ERROR]
-
-
 async def test_a_provider_error_is_not_retried_by_the_schema_loop(monkeypatch, recorded):
     """The retry is scoped to a schema failure - anything else must still surface on the
     first attempt, exactly as it did before this loop existed."""
 
     class Boom(FakeRunnable):
-        async def ainvoke(self, messages: list[dict]) -> dict:
+        async def scripted(self, messages: list[dict]) -> dict:
             self.calls += 1
             raise RuntimeError("provider unreachable")
 
@@ -332,10 +205,10 @@ async def test_a_failed_second_attempt_does_not_repeat_the_first_attempts_tokens
 class SlowThenValid(FakeRunnable):
     """The first attempt takes a while and fails to parse; the second answers at once."""
 
-    async def ainvoke(self, messages: list[dict]) -> dict:
+    async def scripted(self, messages: list[dict]) -> dict:
         if self.calls == 0:
             await asyncio.sleep(0.3)
-        return await super().ainvoke(messages)
+        return await super().scripted(messages)
 
 
 async def test_a_retried_attempts_latency_is_its_own_not_the_attempts_before_it(
@@ -415,9 +288,10 @@ async def test_a_chat_reply_past_its_deadline_fails_as_too_slow_and_is_recorded(
     class Stalled:
         calls = 0
 
-        async def ainvoke(self, messages):
+        async def astream(self, messages):
             Stalled.calls += 1
             await asyncio.sleep(10)
+            yield {}
 
     install(monkeypatch, Stalled())
     quick = settings().model_copy(update={"chat_deadline_seconds": 0.05})
@@ -432,36 +306,47 @@ async def test_a_chat_reply_past_its_deadline_fails_as_too_slow_and_is_recorded(
     assert recorded[0]["generation_id"] is None, "no reply came back, so there is no id to trace"
 
 
-def openrouter_body(content: str, generation_id: str, finish_reason: str = "stop") -> dict:
-    """A chat completion as OpenRouter sends it: its own id, and the provider that served it."""
-    return {
-        "id": generation_id,
-        "object": "chat.completion",
-        "created": 1_760_400_000,
-        "model": "openai/gpt-6-luna",
-        "provider": "Azure",
-        "choices": [{
-            "index": 0,
-            "finish_reason": finish_reason,
-            "message": {"role": "assistant", "content": content},
-        }],
-        "usage": {"prompt_tokens": 7000, "completion_tokens": 300, "total_tokens": 7300},
-    }
+def openrouter_stream(content: str, generation_id: str, finish_reason: str = "stop", wait: float = 0.0):
+    """A chat completion as OpenRouter streams it: its own id on every chunk, the content in two pieces,
+    and the usage on a last chunk of its own. `wait` is the silence before the first chunk, which is a
+    reasoning model thinking."""
+    import json
+
+    async def stream():
+        await asyncio.sleep(wait)
+        base = {"id": generation_id, "object": "chat.completion.chunk", "created": 1_760_400_000,
+                "model": "openai/gpt-6-luna", "provider": "Azure"}
+        half = len(content) // 2
+        for piece in (content[:half], content[half:]):
+            delta = {"role": "assistant", "content": piece}
+            yield f"data: {json.dumps({**base, 'choices': [{'index': 0, 'delta': delta, 'finish_reason': None}]})}\n\n".encode()
+        yield f"data: {json.dumps({**base, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': finish_reason}]})}\n\n".encode()
+        usage = {"prompt_tokens": 7000, "completion_tokens": 300, "total_tokens": 7300}
+        yield f"data: {json.dumps({**base, 'choices': [], 'usage': usage})}\n\n".encode()
+        yield b"data: [DONE]\n\n"
+
+    return stream
 
 
-def over_openrouter(monkeypatch, *bodies: dict) -> None:
-    """The real LangChain model and OpenAI SDK, with only the HTTP replies scripted."""
+def over_openrouter(monkeypatch, *streams, chunk_timeout: float = 5.0) -> list:
+    """The real LangChain model and OpenAI SDK, with only the HTTP replies scripted. Returns the requests
+    that reached the network."""
     import httpx
     from langchain_openai import ChatOpenAI
 
-    replies = iter(bodies)
-    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=next(replies)))
+    replies, requests = iter(streams), []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=next(replies)())
+
     model = ChatOpenAI(
         model="openai/gpt-6-luna", base_url="https://openrouter.ai/api/v1",
-        api_key="sk-test-not-a-real-key", max_retries=0,
-        http_async_client=httpx.AsyncClient(transport=transport),
+        api_key="sk-test-not-a-real-key", max_retries=0, stream_chunk_timeout=chunk_timeout,
+        http_async_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
     )
     install(monkeypatch, model.with_structured_output(Reply, method="json_schema", include_raw=True))
+    return requests
 
 
 async def test_each_call_records_the_generation_that_served_it(monkeypatch, recorded):
@@ -469,8 +354,8 @@ async def test_each_call_records_the_generation_that_served_it(monkeypatch, reco
     OpenRouter resolves to that endpoint, so a cut off attempt and its retry each keep their own."""
     over_openrouter(
         monkeypatch,
-        openrouter_body('{"text": "cut', "gen-cut-off", finish_reason="length"),
-        openrouter_body('{"text": "second try"}', "gen-answered"),
+        openrouter_stream('{"text": "cut', "gen-cut-off", finish_reason="length"),
+        openrouter_stream('{"text": "second try"}', "gen-answered"),
     )
 
     call = await client.complete(
@@ -483,3 +368,75 @@ async def test_each_call_records_the_generation_that_served_it(monkeypatch, reco
         (llm_calls.Outcome.SCHEMA_INVALID, "gen-cut-off"),
         (llm_calls.Outcome.OK, "gen-answered"),
     ]
+
+
+async def test_a_streamed_reply_records_its_usage_and_generation(monkeypatch, recorded):
+    over_openrouter(monkeypatch, openrouter_stream('{"text": "hello"}', "gen-streamed"))
+
+    call = await client.complete(
+        [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+        purpose=llm_calls.Purpose.CHAT, settings=settings(),
+    )
+
+    assert call.value.text == "hello"
+    assert (call.usage.input_tokens, call.usage.output_tokens) == (7000, 300)
+    assert [(r["outcome"], r["generation_id"]) for r in recorded] == [(llm_calls.Outcome.OK, "gen-streamed")]
+
+
+async def test_a_call_that_sends_nothing_for_too_long_is_cut_and_tried_once_more(monkeypatch, recorded):
+    """2026-10-21: a reasoning model thought for 22 s before its first token while its neighbours took 5, and
+    the 30 s deadline turned the slowest ones into an error. The silent attempt is recorded as a timeout on its
+    own row, and the second try answers."""
+    requests = over_openrouter(
+        monkeypatch,
+        openrouter_stream('{"text": "too late"}', "gen-silent", wait=1.0),
+        openrouter_stream('{"text": "answered on the second try"}', "gen-answered"),
+        chunk_timeout=0.1,
+    )
+
+    call = await client.complete(
+        [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+        purpose=llm_calls.Purpose.CHAT, settings=settings(),
+    )
+
+    assert call.value.text == "answered on the second try"
+    assert len(requests) == 2
+    assert [(r["outcome"], r.get("generation_id")) for r in recorded] == [
+        (llm_calls.Outcome.TIMEOUT, None), (llm_calls.Outcome.OK, "gen-answered"),
+    ]
+    assert recorded[0]["usage"] == llm_calls.Usage()
+
+
+async def test_a_call_silent_twice_fails_as_too_slow_after_two_tries_only(monkeypatch, recorded):
+    requests = over_openrouter(
+        monkeypatch,
+        openrouter_stream('{"text": "a"}', "gen-1", wait=1.0), openrouter_stream('{"text": "b"}', "gen-2", wait=1.0),
+        openrouter_stream('{"text": "c"}', "gen-3"),
+        chunk_timeout=0.1,
+    )
+
+    with pytest.raises(ServiceError) as raised:
+        await client.complete(
+            [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+            purpose=llm_calls.Purpose.CHAT, settings=settings(),
+        )
+
+    assert raised.value.retryable and raised.value.user_message == "Mani took too long to answer. Please try again."
+    assert len(requests) == 2, "one retry, never a third try"
+    assert [r["outcome"] for r in recorded] == [llm_calls.Outcome.TIMEOUT, llm_calls.Outcome.TIMEOUT]
+
+
+async def test_the_silence_a_chat_call_may_keep_is_the_first_token_limit_and_a_background_call_keeps_the_read_limit(
+    monkeypatch, recorded
+):
+    seen: list[float] = []
+
+    def build(*args, chunk_timeout, **kwargs):
+        seen.append(chunk_timeout)
+        return FakeRunnable(valid())
+
+    monkeypatch.setattr(client.chain, "build", build)
+    for purpose in (llm_calls.Purpose.CHAT, llm_calls.Purpose.SUMMARIZE):
+        await client.complete([], Reply, model="m", purpose=purpose, settings=settings())
+
+    assert seen == [settings().chat_first_token_seconds, settings().llm_timeout_seconds]

@@ -111,8 +111,6 @@ def missing_for_activation(framework: dict) -> list[str]:
         for key in ("keep_chatting", "explain"):
             if not (offering.get(key) or {}).get(style.value):
                 missing.append(f"stages.offering.{key}.{style.value}")
-    if not offering.get("steps"):
-        missing.append("stages.offering.steps")
     for phase in framework["phases"]:
         if phase == OFFERING or phase in ENDING_STAGES:
             continue

@@ -271,9 +271,9 @@ async def test_config_tables_are_readable_and_seeded(users):
     # registry at compose time, so it is deliberately not a row here.
     assert {p.name for p in prompts} >= {"mani_base", "response_format"}
     assert "framework_index" not in {p.name for p in prompts}
-    # ABCDE is the only framework offered; the others are paused, not removed.
-    assert {f.id for f in frameworks} == {"abcde"}
-    assert frameworks[0].phases[0] == "offering"
+    # ABCDE and Thought Reframe are offered; the others are paused, not removed.
+    assert {f.id for f in frameworks} == {"abcde", "thought_reframe"}
+    assert all(f.phases[0] == "offering" for f in frameworks)
 
 
 async def test_the_library_listing_is_the_whole_catalog_home_items_included(alice):

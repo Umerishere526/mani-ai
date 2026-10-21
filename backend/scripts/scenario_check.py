@@ -46,7 +46,7 @@ def borrowed_from_the_example(reply: str, said: set[str]) -> list[str]:
     return [b for b in BORROWED if b in text and not all(w in said for w in WORD.findall(b))]
 
 
-# One of their messages per step before the check: the problem, its core issue, what is in their control.
+# One of their messages per step before the check: the problem, its core issue, the feeling underneath.
 EARLIEST_CHECK = len(understanding.STEPS)
 # Offer wording: the model offering in its own text instead of the offer field, which code never
 # sends as an offer. Eval tooling only; nothing at runtime reads it.

@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # call: a provider that keeps the connection open sent a reply after 102 s (2026-10-14), past
     # the chat tester's 90. A reply past this fails as "took too long", and a resend is safe.
     chat_deadline_seconds: float = 30.0
+    # How long a chat call may send nothing before it is cut and tried once more. A reasoning model
+    # thinks before its first token, and the longest of those silences ran past 20 s while its
+    # neighbours took 5 (2026-10-21), so a second try usually answers faster than waiting.
+    chat_first_token_seconds: float = 15.0
 
     # Used when a prompt row names no model of its own.
     default_chat_model: str = "openai/gpt-6-luna"

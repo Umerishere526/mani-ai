@@ -19,13 +19,14 @@ STATUSES = ("partial", "possible", "known", "done")
 _REPORTED = frozenset({"partial", "possible", "known"})
 # A stage stored with one of these is said back and confirmed once, never asked.
 CONFIRMED = frozenset({"known", "possible"})
-# How their message may answer the stage in force and move the walk on.
-MOVES = frozenset({"agreed", "answered", "corrected", "let_go"})
+# How their message may answer the stage in force and move the walk on. Not knowing never moves it.
+MOVES = frozenset({"agreed", "answered", "corrected"})
 SAID_LIMIT = 200
 # How Mani confirms a stage the person already answered, in its own words (muhammad's team lead, 2026-10-13).
 CONFIRM_ASK = (
-    "Say back only what they said for this stage, never another stage's part, to them as you, and ask in "
-    "your own words whether that is right, in one or two sentences, asked differently from the stage before."
+    "Say back what they said for this stage, never another stage's part unless this stage's reach names it "
+    "(the feeling underneath may frame it, never be its answer), to them as you, and ask whether that is "
+    "right, in one or two sentences, asked differently from the stage before."
 )
 _LETTER_LINE = re.compile(r"^\s*[A-E] is for\b")
 # "I" and its contractions keep their capital inside a sentence; nothing else that starts their words does.
@@ -35,6 +36,12 @@ _FIRST_PERSON = re.compile(r"^I\b")
 def content_stages(framework: Framework) -> list[str]:
     """The stages the person answers: after the offer and before the body route."""
     return [p for p in framework.phases if p != OFFERING and p not in ENDING_STAGES]
+
+
+def landed_on(framework: Framework, entries: dict[str, dict]) -> str | None:
+    """What they said for the framework's last stage, where the questions ended, or None."""
+    stages = content_stages(framework)
+    return ((entries.get(stages[-1]) or {}).get("said") or None) if stages else None
 
 
 def _rank(entry: dict | None) -> int:
@@ -62,6 +69,15 @@ def _mid_sentence(words: str | None) -> str | None:
 
 def _client_line(framework: Framework, stage: str, key: str, style: str) -> str | None:
     return (((framework.stages or {}).get(stage) or {}).get(key) or {}).get(style)
+
+
+def _gap_for(framework: Framework, stage: str, entry: dict, reported: str | None) -> str | None:
+    """The part of a partial stage still to ask: the one reported when the stage has a line for it, else the
+    one stored. None once the stage is no longer partial."""
+    if entry.get("status") != "partial":
+        return None
+    ids = {b["id"] for b in ((framework.stages or {}).get(stage) or {}).get("if_unclear") or [] if b.get("id")}
+    return reported if reported in ids else entry.get("gap")
 
 
 @dataclass(frozen=True)
@@ -111,7 +127,11 @@ def merge(
         else:
             notes.append(f"ignored update for {stage}: {status} is not above {stored['status']}")
             continue
-        merged[stage].pop("gap", None)
+        gap = _gap_for(framework, stage, merged[stage], update.gap)
+        if gap:
+            merged[stage]["gap"] = gap
+        else:
+            merged[stage].pop("gap", None)
         updated.add(stage)
     return Merged(merged, frozenset(updated), notes)
 
@@ -142,12 +162,9 @@ def _reach(
         return entries, [], True
     if report.status == "missing":
         return entries, [], False
-    update = StageUpdate(stage=reached, said=report.said or "", status=report.status)
+    update = StageUpdate(stage=reached, said=report.said or "", status=report.status, gap=report.gap)
     merged = merge(entries, [update], framework, in_force=reached)
-    entries = merged.entries
-    if report.gap and reached in merged.updated and entries[reached].get("status") == "partial":
-        entries[reached]["gap"] = report.gap
-    return entries, merged.notes, False
+    return merged.entries, merged.notes, False
 
 
 def start(
@@ -179,14 +196,12 @@ def advance(
     *,
     in_force: str,
     report: NextStage | None = None,
-    body_answered: bool = False,
 ) -> Walked:
     """A turn on the stage in force: merge what they said for it and any correction to an earlier
     stage, move at most one phase, then merge the stage reached from this turn's `report` of it,
-    which is ignored when the walk stays. A second not_yet in a row moves on as let_go.
-    `body_answered` is a body route answer at the closing, which wins over the stage answer. Nothing
-    is stored for a stage before it is reached, and an entry stored ahead by an earlier version is
-    ignored, so no stale words are said back."""
+    which is ignored when the walk stays. Only what they confirm or say moves it, never their not
+    knowing. Nothing is stored for a stage before it is reached, and an entry stored ahead by an earlier
+    version is ignored, so no stale words are said back."""
     stages = content_stages(framework)
     at = stages.index(in_force) if in_force in stages else len(stages)
     notes: list[str] = []
@@ -204,31 +219,13 @@ def advance(
         answer = "agreed"
     merged = merge(base, now, framework, in_force=in_force)
     notes += merged.notes
-    tries = before.get("tries", 0)
-    if body_answered:
-        if answer is not None:
-            notes.append(f"stage answer {answer} ignored for a body answer")
-        moved = True
-    else:
-        if answer is not None and not _counts(answer, before, in_force in merged.updated):
-            notes.append(f"stage answer invalid: {answer}")
-            answer = None
-        moved = answer in MOVES
-        if not moved and tries >= 1:
-            notes.append(f"{in_force} let go after a second not_yet")
-            moved = True
+    if answer is not None and not _counts(answer, before, in_force in merged.updated):
+        notes.append(f"stage answer invalid: {answer}")
+        answer = None
     stored = merged.entries
-    if not moved:
-        stored[in_force] = {**stored.get(in_force, {}), "tries": tries + 1}
+    if answer not in MOVES:
         return Walked(stored, in_force, None, notes)
-    # A confirmation they did not agree to and gave no words for is let go with no words, so words they
-    # rejected never stand as done.
-    rejected = (
-        not body_answered and before.get("status") in CONFIRMED and answer != "agreed"
-        and in_force not in merged.updated
-    )
-    said = "" if rejected else stored.get(in_force, {}).get("said", "")
-    stored[in_force] = {"said": said, "status": "done", "tries": 0}
+    stored[in_force] = {"said": stored.get(in_force, {}).get("said", ""), "status": "done"}
     following = framework.phases[framework.phase_index(in_force) + 1]
     reached = following if following in stages else None
     stored, reach_notes, unjudged = _reach(framework, stored, reached, report)
@@ -252,13 +249,16 @@ def reply_text(
     style: str,
     thread_id: uuid.UUID | str,
     feeling: str | None,
+    options: str | None = None,
 ) -> tuple[str, list[str]]:
     """The reply and the fallbacks it took. A stage just reached opens with its letter line, then
     what its stored status calls for; otherwise it is the model's text. Every stage reached is one
     [ctx] told the reply about, so once the reply judged it, the model's text is used for it when it
     asks something: a confirmation, the gap, or its question about their situation. A stage missing
     keeps the client's own line where it has one with their feeling word (A), and a stage left
-    unjudged gets the client's line. A letter line the model wrote is dropped either way."""
+    unjudged gets the client's line. A letter line the model wrote is dropped either way. `options`
+    are the model's possibilities for its own question, so they go on a line under it only where
+    that question is what is sent."""
     notes: list[str] = []
     own = repairs.without_sentences(text, lambda s: bool(_LETTER_LINE.match(s))).strip()
     if own != text.strip():
@@ -267,8 +267,8 @@ def reply_text(
     if reached is None:
         if not own and walked.phase in content_stages(framework):
             notes.append("stay text empty")
-            own = _client_line(framework, walked.phase, "ask", style) or ""
-        return own, notes
+            return _client_line(framework, walked.phase, "ask", style) or "", notes
+        return repairs.under(own, options), notes
 
     entry = walked.entries.get(reached) or {}
     status, said = entry.get("status"), entry.get("said") or ""
@@ -304,7 +304,8 @@ def reply_text(
             body = ask
     intro = ((framework.stages or {}).get(reached) or {}).get("intro")
     # One paragraph, as the client's document writes it: "A is for Activating Event. You've mentioned..."
-    return " ".join(part for part in (intro, body) if part), notes
+    text = " ".join(part for part in (intro, body) if part)
+    return (repairs.under(text, options) if body == own else text), notes
 
 
 def _gap_line(framework: Framework, entries: dict[str, dict], stage: str, gap: str | None) -> str | None:
@@ -342,22 +343,25 @@ def reach_line(stage: str) -> str:
     return (
         f"your text follows what you report for {stage} in next_stage. Known or possible: your text is "
         f"its confirmation. {CONFIRM_ASK} Partial: your text asks only for what is missing, built on "
-        f"what they said. Missing: your text is only the question, since its letter line is sent for you; "
-        f"ask next_stage_ask as written, with what it refers to in their words."
+        f"what they said. Missing: its letter line is sent for you, so your text is a short mirror of their "
+        f"situation, the feeling underneath and what they said for the stages before, then the stage's question "
+        f"in your own words (keep what next_stage_ask asks, not its wording), and the possibilities for "
+        f"answering go in options."
     )
 
 
-def next_line(framework: Framework, entries: dict[str, dict], phase: str) -> str:
-    """What the reply's text is for, in each way their message can answer the stage in force, from
-    the store before this turn. On the second try both ways move on."""
+def next_line(framework: Framework, phase: str) -> str:
+    """What the reply's text is for, in each way their message can answer the stage in force."""
     following = framework.phases[framework.phase_index(phase) + 1]
     if following in ENDING_STAGES:
         moved = "the questions end, and the body check-in is sent after your text: write one short sentence, no question."
     else:
         moved = f"the walk reaches {following}: {reach_line(following)}"
-    if (entries.get(phase) or {}).get("tries", 0) >= 1:
-        return f"Whatever they answer, {moved}"
-    return f"If you answer agreed, answered, corrected or let_go, {moved} If not_yet, write the follow up for this stage."
+    return (
+        f"If you answer agreed, answered or corrected, {moved} If not_yet, the walk stays: think aloud with "
+        f"them about this stage, with two or three possibilities from what they have said and a door left open. "
+        f"If stop, write one warm line asking what they would like to talk about."
+    )
 
 
 # What the walk does with a stage, for a person watching the conversation.

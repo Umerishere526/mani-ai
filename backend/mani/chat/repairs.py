@@ -89,8 +89,9 @@ def _as_paragraphs(text: str) -> str:
 
 
 def laid_out(text: str) -> str:
-    """The reply as the client's way of communication document lays it out: the closing
-    questions in a paragraph of their own, after what Mani says back and wants to understand."""
+    """The reply as the client's way of communication document lays it out: what Mani says back
+    in a paragraph, then each closing question, a question and the options after it, on a line of
+    its own."""
     text = _as_paragraphs(text)
     head, _, last = text.rpartition("\n\n")
     sentences = _LAYOUT_BREAK.split(last)
@@ -98,9 +99,10 @@ def laid_out(text: str) -> str:
     while asked and sentences[asked - 1].rstrip(_CLOSERS).endswith("?"):
         asked -= 1
     lead = " ".join(sentences[:asked])
-    if asked == len(sentences) or len(lead.split()) < MIN_LEAD_WORDS:
+    questions = sentences[asked:]
+    if not questions or (len(questions) == 1 and len(lead.split()) < MIN_LEAD_WORDS):
         return text
-    paragraph = f"{lead}\n\n{' '.join(sentences[asked:])}"
+    paragraph = "\n\n".join([lead, *questions] if lead else questions)
     return f"{head}\n\n{paragraph}" if head else paragraph
 
 
@@ -172,74 +174,19 @@ def with_the_check_in(text: str, script: str) -> str:
     return f"{reflection}\n\n{script}" if reflection else script
 
 
-# The client's place buttons under the "where" question, each with the body branch it answers.
-PLACE_LABELS = {"Chest": "chest", "Head": "head", "Stomach": "stomach", "Somewhere else": "elsewhere"}
-_PLACES = frozenset(PLACE_LABELS.values())
-BODY_STAGES = ("somatic_checkin", "somatic_practice")
-
-# Where in the body route each answer may come (spec 0003's transition table): the stored phase,
-# the framework's closing, or `retiring`, the turn after the practice. Anywhere else it is ignored.
-_ANSWERED_AT = {
-    **{place: {"closing", "somatic_checkin", "somatic_practice"} for place in _PLACES},
-    "no_place": {"somatic_checkin", "somatic_practice"},
-    "agreed": {"somatic_checkin"},
-    "declined": {"somatic_checkin", "somatic_practice"},
-    "acting": {"closing", "somatic_checkin"},
-    "pain": {"closing", "somatic_checkin", "somatic_practice"},
-    "returned": {"retiring"},
-}
+def under(text: str, options: str | None) -> str:
+    """The model's own question with its possibilities on the line under it, as a question that ends in ?.
+    Text that asks nothing is left as it is."""
+    cleaned = " ".join((options or "").split())
+    if not cleaned or "?" not in text:
+        return text
+    return f"{text}\n\n{cleaned if cleaned[-1] in '.!?' else cleaned + '?'}"
 
 
 def reply_for(branch: dict, style: str) -> str:
     """A stage branch's reply: one text for every style, or the client's text for this one."""
     reply = branch["reply"]
     return reply[style] if isinstance(reply, dict) else reply
-
-
-def first_sentence(text: str) -> str:
-    """The reply's opening sentence: what Mani acknowledges before it asks."""
-    match = re.match(r"\s*(.+?[.!?])(?:\s|$)", text, re.DOTALL)
-    return match.group(1) if match else text
-
-
-def body_branch(stages: dict, branch_id: str) -> dict | None:
-    """The body route branch with this id, from either of its two stages."""
-    return next(
-        (b for stage in BODY_STAGES for b in (stages.get(stage) or {}).get("if_unclear") or []
-         if b.get("id") == branch_id),
-        None,
-    )
-
-
-def body_answer_fits(body: str, at: str, style: str) -> bool:
-    """Whether the reply's body value can come where the route is. Agreeing to notice answers only
-    the supportive check-in, the one that asks whether they would like to."""
-    return at in _ANSWERED_AT.get(body, ()) and (body != "agreed" or style == "supportive")
-
-
-@dataclass(frozen=True)
-class BodyReply:
-    text: str
-    labels: list[str]
-    phase: str
-    handoff: bool = False
-
-
-def body_reply(body: str, at: str, stages: dict, style: str, text: str) -> BodyReply:
-    """The client's reply for an answer that fits where the body route is: the branch's own text,
-    or Mani's first sentence then the client's question. A decline after the place question has
-    no client line, so the model's text goes."""
-    branch = body_branch(stages, body)
-    client = reply_for(branch, style) if branch else text
-    practice = "somatic_practice"
-    if body == "no_place":
-        ask = ((stages.get(practice) or {}).get("ask") or {}).get(style) or client
-        return BodyReply(with_the_check_in(first_sentence(text), ask), list(PLACE_LABELS), practice)
-    if body == "agreed":
-        return BodyReply(with_the_check_in(first_sentence(text), client), [], "somatic_checkin")
-    if body == "declined":
-        return BodyReply(client if at == "somatic_checkin" else text, [], practice, handoff=True)
-    return BodyReply(client, [], practice, handoff=body in ("acting", "returned"))
 
 
 def _offering(framework: Framework | None, key: str, style: str) -> str | None:
@@ -251,12 +198,11 @@ def _offering(framework: Framework | None, key: str, style: str) -> str | None:
 
 def offer_template(framework: Framework | None, style: str) -> str | None:
     """The client's whole offer for a framework in one style, slots still open: the style's
-    template, the permission question, then the framework's steps when it lists them."""
+    template, then the permission question."""
     template = _offering(framework, "offer", style)
     if template is None:
         return None
-    steps = ((framework.stages or {}).get(OFFERING) or {}).get("steps")
-    return "\n\n".join(part for part in (template, PERMISSION_QUESTION, steps) if part)
+    return f"{template}\n\n{PERMISSION_QUESTION}"
 
 
 def template_slots(template: str) -> tuple[str | None, str | None]:
@@ -354,10 +300,10 @@ def _sentence(value: str | None, end: str = ".") -> str:
 
 
 def check_text(check: Check) -> str:
-    """Mani's check in the client's order, the problem, the core issue, what is in their control and what
+    """Mani's check in the client's order, the problem, the core issue, the feeling underneath and what
     it comes down to, then its question on a line of its own. Every word is the model's; only the order
     is code's (spec 0006)."""
-    parts = (check.problem, check.core_issue, check.in_their_control, check.comes_down_to)
+    parts = (check.problem, check.core_issue, check.underlying_feeling, check.comes_down_to)
     understood = " ".join(sentence for part in parts if (sentence := _sentence(part)))
     return f"{understood}\n\n{_sentence(check.question, '?')}"
 
@@ -444,6 +390,13 @@ def apply(
         if offer is not None:
             text = offer
             prompts = offer_buttons(framework_id, explained=False)
+
+    # The options for answering the question go on a line of their own under it. They are the model's
+    # words in a field of their own, so the model has to write them, and code owns where they go. A
+    # check or an offer is the client's order and carries none.
+    options = _sentence(reply.options, "?")
+    if options and lay_out and check is None and not prompts:
+        text = f"{text}\n\n{options}"
 
     title = clean_title(reply.title) if wants_title else None
 

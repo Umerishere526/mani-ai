@@ -26,8 +26,8 @@ def as_framework(parsed: dict) -> Framework:
     )
 
 
-def test_only_abcde_is_seeded():
-    assert [p.stem for p in FRAMEWORKS_DIR.glob("*.md")] == ["abcde"]
+def test_abcde_and_thought_reframe_are_the_frameworks_seeded():
+    assert sorted(p.stem for p in FRAMEWORKS_DIR.glob("*.md")) == ["abcde", "thought_reframe"]
 
 
 def test_abcde_runs_a_to_e_and_the_body_check_in_follows(abcde):
@@ -101,13 +101,12 @@ def test_the_clients_offer_wording_reaches_the_person_but_never_the_framework_in
         for text in abcde["stages"]["offering"][key].values():
             fixed = max(re.split(r"<[^>]*>", text), key=len).strip()
             assert fixed[:40] not in index, key
-    assert abcde["stages"]["offering"]["steps"].splitlines()[0] not in index
 
 
-def test_the_offer_lists_the_five_steps_by_letter_and_the_clients_name(abcde):
-    lines = abcde["stages"]["offering"]["steps"].splitlines()
-    names = ["Activating Event", "Belief", "Consequences", "Dispute", "Effective New Belief"]
-    assert [line.split(".")[0] for line in lines] == [f"- {l}: {n}" for l, n in zip("ABCDE", names)]
+def test_the_offer_does_not_list_the_steps(abcde):
+    """muhammad, 2026-10-22: the offer is the framework line and the permission question; the five steps are
+    told only when they ask Tell me more."""
+    assert "steps" not in abcde["stages"]["offering"]
 
 
 CLIENT_QUESTIONS = {
