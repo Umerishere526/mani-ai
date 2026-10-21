@@ -13,16 +13,7 @@ from mani.chat.greeting import (
     TRY_IT_LABEL,
 )
 from mani.chat.techniques import OFFERING, Registry
-from mani.llm.schema import (
-    SHAPES,
-    Check,
-    Moment,
-    Offer,
-    Reply,
-    Slots,
-    SmartPrompt,
-    Style,
-)
+from mani.llm.schema import SHAPES, Check, Moment, Offer, Reply, Slots, SmartPrompt, Style
 from mani.models.rows import Framework
 
 MAX_TITLE_LENGTH = 100
@@ -40,6 +31,10 @@ SCRIPT_LEAKAGE = [
 ]
 
 _BLANK_RUN = re.compile(r"\n{3,}")
+
+# The permission question an offer asks. The client's ABCDE document asks it the same way in all
+# three styles (2026-10-09).
+PERMISSION_QUESTION = "Would you like to try it?"
 
 # A slot in one of the client's templates: `<what goes here, in the client's words>`.
 _SLOT = re.compile(r"<([^<>]+)>")
@@ -94,8 +89,9 @@ def _as_paragraphs(text: str) -> str:
 
 
 def laid_out(text: str) -> str:
-    """The reply as the client's way of communication document lays it out: the closing
-    questions in a paragraph of their own, after what Mani says back and wants to understand."""
+    """The reply as the client's way of communication document lays it out: what Mani says back
+    in a paragraph, then each closing question, a question and the options after it, on a line of
+    its own."""
     text = _as_paragraphs(text)
     head, _, last = text.rpartition("\n\n")
     sentences = _LAYOUT_BREAK.split(last)
@@ -103,9 +99,10 @@ def laid_out(text: str) -> str:
     while asked and sentences[asked - 1].rstrip(_CLOSERS).endswith("?"):
         asked -= 1
     lead = " ".join(sentences[:asked])
-    if asked == len(sentences) or len(lead.split()) < MIN_LEAD_WORDS:
+    questions = sentences[asked:]
+    if not questions or (len(questions) == 1 and len(lead.split()) < MIN_LEAD_WORDS):
         return text
-    paragraph = f"{lead}\n\n{' '.join(sentences[asked:])}"
+    paragraph = "\n\n".join([lead, *questions] if lead else questions)
     return f"{head}\n\n{paragraph}" if head else paragraph
 
 
@@ -169,128 +166,27 @@ def _without_their_name(text: str, name: str, *, keep_one: bool) -> str:
 
 def with_the_check_in(text: str, script: str) -> str:
     """The body check-in, sent word for word. The client's flow (2026-09-24) treats it as
-    fixed content: Mani's one sentence about their answer stays; anything after it, its own version of
-    the introduction or the question, gives way to hers (live, 2026-10-17: the introduction twice)."""
+    fixed content: Mani's reflection stays, its own version of the question does not."""
     if script in text:
         return text
     match = _LAST_QUESTION.search(text)
     reflection = text[: match.start(1)].rstrip() if match else text.rstrip()
-    reflection = first_sentence(reflection).strip() if reflection else ""
     return f"{reflection}\n\n{script}" if reflection else script
 
 
-def last_question(text: str) -> str | None:
-    """The question a text ends on, if it ends on one."""
-    match = _LAST_QUESTION.search(text.rstrip())
-    return match.group(1).strip() if match else None
-
-
-def styled(value, style: str):
-    """A client text that is one text for every style, or the client's text for this one."""
-    return value.get(style) if isinstance(value, dict) else value
-
-
-def check_in_script(stages: dict, style: str, body_said: str | None, *, again: bool = False) -> str | None:
-    """The client's body check-in: her introduction and question, with what they said earlier they feel
-    in their body named before the question when they said something; asked again, only the question."""
-    stage = stages.get("somatic_checkin") or {}
-    if again and stage.get("ask_again"):
-        return styled(stage["ask_again"], style)
-    known = styled(stage.get("ask_known"), style)
-    asked_about = render_template(known, lead_line=None, slot=body_said) if known else None
-    return asked_about or styled(stage.get("ask"), style)
-
-
-# The client's buttons on each step of the body cadence, each with the body branch it answers
-# (her somatic cadence document, 2026-10-16).
-CHECK_IN_BUTTONS = {
-    "Chest": "chest", "Stomach": "stomach", "Head": "head", "Somewhere Else": "no_place", "No Tension": "no_tension",
-}
-PHYSICAL_BUTTONS = {"Feel Better": "better", "Feel the Same": "same", "Feel Worse": "worse"}
-HELPED_BUTTONS = {"Yes, It Helped": "helped", "Somewhat": "somewhat", "No, Not Really": "not_helped"}
-BODY_BUTTONS = {**CHECK_IN_BUTTONS, **PHYSICAL_BUTTONS, **HELPED_BUTTONS}
-PLACES = frozenset({"chest", "head", "stomach", "jaw", "hands", "eyes", "feet", "toes", "arms", "elsewhere"})
-PHYSICAL = frozenset(PHYSICAL_BUTTONS.values())
-HELPED = frozenset(HELPED_BUTTONS.values())
-BODY_STAGES = ("somatic_checkin", "somatic_practice", "somatic_physical", "somatic_helped")
-
-# Where in the body cadence each answer may come: the stored phase, the framework's closing, or
-# `retiring`, the turn whose answer says whether the conversation helped. Anywhere else it is ignored.
-_ANSWERED_AT = {
-    **{place: {"closing", "somatic_checkin", "somatic_practice"} for place in PLACES},
-    "no_place": {"somatic_checkin", "somatic_practice"},
-    "no_tension": {"closing", "somatic_checkin"},
-    "declined": {"somatic_checkin", "somatic_practice"},
-    "acting": {"closing", "somatic_checkin"},
-    "pain": {"closing", "somatic_checkin", "somatic_practice"},
-    "clarify": {"somatic_checkin"},
-    "asked": {"somatic_checkin"},
-    "moved_on": {"somatic_checkin"},
-    "eased": {"somatic_checkin"},
-    **{answer: {"somatic_physical"} for answer in PHYSICAL},
-    **{answer: {"retiring"} for answer in HELPED},
-}
+def under(text: str, options: str | None) -> str:
+    """The model's own question with its possibilities on the line under it, as a question that ends in ?.
+    Text that asks nothing is left as it is."""
+    cleaned = " ".join((options or "").split())
+    if not cleaned or "?" not in text:
+        return text
+    return f"{text}\n\n{cleaned if cleaned[-1] in '.!?' else cleaned + '?'}"
 
 
 def reply_for(branch: dict, style: str) -> str:
     """A stage branch's reply: one text for every style, or the client's text for this one."""
-    return styled(branch["reply"], style)
-
-
-def first_sentence(text: str) -> str:
-    """The reply's opening sentence: what Mani acknowledges before it asks."""
-    match = re.match(r"\s*(.+?[.!?])(?:\s|$)", text, re.DOTALL)
-    return match.group(1) if match else text
-
-
-def body_branch(stages: dict, branch_id: str) -> dict | None:
-    """The body cadence branch with this id, from any of its stages."""
-    return next(
-        (b for stage in BODY_STAGES for b in (stages.get(stage) or {}).get("if_unclear") or []
-         if b.get("id") == branch_id),
-        None,
-    )
-
-
-def body_answer_fits(body: str, at: str, style: str) -> bool:
-    """Whether the reply's body value can come where the cadence is."""
-    return at in _ANSWERED_AT.get(body, ())
-
-
-@dataclass(frozen=True)
-class BodyReply:
-    text: str
-    labels: list[str]
-    phase: str
-    handoff: bool = False
-
-
-def _ask(stages: dict, stage: str, style: str) -> str:
-    return styled((stages.get(stage) or {}).get("ask"), style) or ""
-
-
-def body_reply(body: str, at: str, stages: dict, style: str, text: str) -> BodyReply:
-    """The client's reply for an answer that fits where the cadence is, word for word: an exercise and
-    how their body feels now; her reply to that and whether the conversation helped; her reply to that,
-    then the closing choices. Answers with no client line send the model's text."""
-    branch = body_branch(stages, body)
-    client = reply_for(branch, style) if branch and branch.get("reply") else text
-    if body == "no_place":
-        return BodyReply(client, [], "somatic_practice")
-    if body in PLACES:
-        return BodyReply(f"{client}\n\n{_ask(stages, 'somatic_physical', style)}", list(PHYSICAL_BUTTONS),
-                         "somatic_physical")
-    if body == "no_tension":
-        return BodyReply(client, list(HELPED_BUTTONS), "somatic_helped")
-    if body in PHYSICAL:
-        return BodyReply(f"{client}\n\n{_ask(stages, 'somatic_helped', style)}", list(HELPED_BUTTONS),
-                         "somatic_helped")
-    if body == "clarify":
-        return BodyReply(text, [], "somatic_checkin")
-    if body == "pain":
-        return BodyReply(client, [], "somatic_helped")
-    # helped, somewhat, not_helped, and the ways out of the cadence: the closing choices follow.
-    return BodyReply(text if body in ("moved_on", "eased") else client, [], "somatic_helped", handoff=True)
+    reply = branch["reply"]
+    return reply[style] if isinstance(reply, dict) else reply
 
 
 def _offering(framework: Framework | None, key: str, style: str) -> str | None:
@@ -302,11 +198,11 @@ def _offering(framework: Framework | None, key: str, style: str) -> str | None:
 
 def offer_template(framework: Framework | None, style: str) -> str | None:
     """The client's whole offer for a framework in one style, slots still open: the style's
-    template, then the framework's own permission question."""
+    template, then the permission question."""
     template = _offering(framework, "offer", style)
     if template is None:
         return None
-    return "\n\n".join(part for part in (template, _offering(framework, "ask", style)) if part)
+    return f"{template}\n\n{PERMISSION_QUESTION}"
 
 
 def template_slots(template: str) -> tuple[str | None, str | None]:
@@ -364,16 +260,12 @@ def slots_for(registry: Registry, style: str, offered_id: str | None) -> Slots:
     )
 
 
-def offer_framework(heading_toward: str | None, registry: Registry, offerable: frozenset[str]) -> str | None:
-    """The set an offer is for: the one the reply heads toward when it is active and offerable,
-    otherwise the first offerable set in the registry's order (lowest display_order - the client's
-    rule that the earlier-listed framework wins a tie), otherwise none (spec 0006, AC-8; spec 0008,
-    decision 1 and 3). `offerable` excludes a framework still held by its own just-finished or
-    declined run (context.excluded_frameworks); with one active framework this is that framework or
-    nothing, exactly as before a second one existed."""
-    if heading_toward in registry and heading_toward in offerable:
+def offer_framework(heading_toward: str | None, registry: Registry) -> str | None:
+    """The set an offer is for: the one the reply heads toward when it is active, otherwise the
+    only active set when there is just one, otherwise none (spec 0006, AC-8)."""
+    if heading_toward in registry:
         return heading_toward
-    return next((fid for fid in registry.ids if fid in offerable), None)
+    return registry.ids[0] if len(registry) == 1 else None
 
 
 def _offer_text(
@@ -408,10 +300,12 @@ def _sentence(value: str | None, end: str = ".") -> str:
 
 
 def check_text(check: Check) -> str:
-    """Mani's check as sent: what it all comes down to, then its question on a line of its own. The
-    problem, core issue and control are stored, never said back, because four sentences of what they
-    already told Mani read as a case summary (the client, 2026-10-16). Every word is the model's."""
-    return f"{_sentence(check.comes_down_to)}\n\n{_sentence(check.question, '?')}"
+    """Mani's check in the client's order, the problem, the core issue, the feeling underneath and what
+    it comes down to, then its question on a line of its own. Every word is the model's; only the order
+    is code's (spec 0006)."""
+    parts = (check.problem, check.core_issue, check.underlying_feeling, check.comes_down_to)
+    understood = " ".join(sentence for part in parts if (sentence := _sentence(part)))
+    return f"{understood}\n\n{_sentence(check.question, '?')}"
 
 
 def keep_chatting(framework: Framework | None, style: str, their_words: str | None) -> str | None:
@@ -421,9 +315,9 @@ def keep_chatting(framework: Framework | None, style: str, their_words: str | No
 
 
 def explanation(framework: Framework, style: str) -> str:
-    """The client's answer to Tell me more in this style, then the framework's permission question."""
+    """The client's answer to Tell me more in this style, then the permission question."""
     explained = _offering(framework, "explain", style) or " ".join(framework.summary.split())
-    return "\n\n".join(part for part in (explained, _offering(framework, "ask", style)) if part)
+    return f"{explained}\n\n{PERMISSION_QUESTION}"
 
 
 def offer_buttons(framework_id: str, *, explained: bool) -> list[SmartPrompt]:
@@ -450,13 +344,11 @@ def apply(
     feeling: str | None = None,
     check: Check | None = None,
     lay_out: bool = False,
-    offerable: frozenset[str] | None = None,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again, and the client's
     offer when they said yes to Mani's check (`confirmed`). `check` is a check stored this turn, whose
     parts are sent in their order in place of the reply's text. `lay_out` is Mani's own text before a
-    framework, which goes out in the client's paragraphs. `offerable` is which active frameworks are
-    not excluded by their own cooldown (spec 0008); left out, every active framework is offerable.
+    framework, which goes out in the client's paragraphs.
 
     The implementation this replaces answered each of these by re-calling the provider,
     up to six extra generations for one user message. They are all deterministic checks
@@ -490,9 +382,7 @@ def apply(
     prompts: list[SmartPrompt] = []
     offer_dropped: str | None = None
     if moment is Moment.CHECK_OPEN and (confirmed or reply.offer is not None) and not guarded:
-        framework_id = offer_framework(
-            reply.heading_toward, registry, offerable if offerable is not None else frozenset(registry.ids),
-        )
+        framework_id = offer_framework(reply.heading_toward, registry)
         offer, offer_dropped = _offer_text(
             reply.offer or Offer(), framework_id, registry, conversation_style,
             confirmed=confirmed, feeling=feeling,
@@ -500,6 +390,13 @@ def apply(
         if offer is not None:
             text = offer
             prompts = offer_buttons(framework_id, explained=False)
+
+    # The options for answering the question go on a line of their own under it. They are the model's
+    # words in a field of their own, so the model has to write them, and code owns where they go. A
+    # check or an offer is the client's order and carries none.
+    options = _sentence(reply.options, "?")
+    if options and lay_out and check is None and not prompts:
+        text = f"{text}\n\n{options}"
 
     title = clean_title(reply.title) if wants_title else None
 

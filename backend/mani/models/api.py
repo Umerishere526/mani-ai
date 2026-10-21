@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
-from typing import Annotated, Any
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -90,18 +90,12 @@ class TurnOut(BaseModel):
     was_duplicate: bool = False
     # Null unless AI_DEBUG_MODE is on.
     reasoning: str | None = None
-    # Null unless AI_DEBUG_MODE is on: Mani's own reason for this turn's framework pick, when one
-    # was made (spec 0008).
-    offered_because: str | None = None
     # Null unless AI_DEBUG_MODE is on: what is stored for each stage and what the walk does about it.
     ledger: list[LedgerRow] | None = None
     # Null unless AI_DEBUG_MODE is on: what Mani understands of them (spec 0005, spec 0006).
-    understanding: dict[str, Any] | None = None
+    understanding: dict[str, str] | None = None
     # Null unless AI_DEBUG_MODE is on: when Mani's latest check of its understanding was made.
     check_at_message_count: int | None = None
-    # Set only on the turn a framework completes, and only once the catalog has a
-    # matching exercise.
-    exercise: ExerciseOut | None = None
 
 
 class StartOut(BaseModel):
@@ -109,9 +103,6 @@ class StartOut(BaseModel):
 
     thread: ThreadOut
     messages: list[MessageOut]
-    # Set when the thread has more messages than this opening tail. A client resuming the
-    # conversation pages the rest from GET /v1/threads/{id}/messages with this cursor.
-    next_cursor: str | None = None
     is_new: bool
 
 

@@ -19,7 +19,7 @@ from mani.db import pool  # noqa: E402
 async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=30, help="most recent calls to show")
-    parser.add_argument("--purpose", default="chat", help="chat, summarize, exercise_select or memory_fold")
+    parser.add_argument("--purpose", default="chat", help="chat, summarize or memory_fold")
     parser.add_argument("--slower-than", type=int, default=0, help="only calls over this many ms")
     args = parser.parse_args()
     settings = get_settings()

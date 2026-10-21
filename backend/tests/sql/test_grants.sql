@@ -84,10 +84,18 @@ select pg_temp.want('a user cannot rewrite their own message count',
 select pg_temp.want('a user cannot reassign a thread to someone else',
   has_column_privilege('authenticated', 'public.threads', 'user_id', 'UPDATE'), false);
 
--- How Mani speaks is the person's to choose.
+-- The two columns migration 002 added, and the line between them: how Mani speaks is the
+-- person's to choose, the pacing counter behind the vague-reply pivot is not. A user who
+-- could write it could reset their own counter and never be moved off a vague loop.
 select pg_temp.want('a user can choose their conversation style',
   has_column_privilege('authenticated', 'public.threads', 'conversation_style', 'UPDATE'),
   true);
+
+select pg_temp.want('a user cannot reset their own vague streak',
+  has_column_privilege('authenticated', 'public.threads', 'vague_streak', 'UPDATE'), false);
+
+select pg_temp.want('the backend can move the vague streak',
+  has_column_privilege('mani_service', 'public.threads', 'vague_streak', 'UPDATE'), true);
 
 -- Migration 022: what Mani understands so far is sent back in [ctx] every turn, so a user who
 -- could write it could write their own context block.
@@ -217,31 +225,6 @@ select pg_temp.want('the backend can write summaries and technique state',
   and has_table_privilege('mani_service', 'public.thread_summaries', 'UPDATE')
   and has_table_privilege('mani_service', 'public.thread_technique_state', 'INSERT')
   and has_table_privilege('mani_service', 'public.thread_technique_state', 'UPDATE'), true);
-
--- Migration 027: per-framework run history, so an offer's cooldown can tell which framework
--- just finished apart from the others. The same shape as thread_technique_state: a user can
--- read their own rows, never write them directly, and the backend appends only, never deletes.
-select pg_temp.want('a user cannot write their own technique run history',
-  has_table_privilege('authenticated', 'public.thread_technique_runs', 'INSERT')
-  or has_table_privilege('authenticated', 'public.thread_technique_runs', 'UPDATE')
-  or has_table_privilege('authenticated', 'public.thread_technique_runs', 'DELETE'), false);
-
-select pg_temp.want('a user can read their own technique run history',
-  has_table_privilege('authenticated', 'public.thread_technique_runs', 'SELECT'), true);
-
-select pg_temp.want('the backend can append a technique run but never update or delete one',
-  has_table_privilege('mani_service', 'public.thread_technique_runs', 'INSERT')
-  and not has_table_privilege('mani_service', 'public.thread_technique_runs', 'UPDATE')
-  and not has_table_privilege('mani_service', 'public.thread_technique_runs', 'DELETE'), true);
-
-select pg_temp.want('technique run history is row-scoped',
-  (select relrowsecurity from pg_class where oid = 'public.thread_technique_runs'::regclass), true);
-
--- Mani's own reading of why a framework was offered: readable by the owner and the backend,
--- bounded the same way the understanding fields are, never a separate write surface.
-select pg_temp.want('the offer reason is bounded in the database, not only in the API',
-  exists (select 1 from pg_constraint where conname = 'thread_technique_state_offered_because_short'),
-  true);
 
 -- Topics are written by the person and pasted into every system prompt.
 select pg_temp.want('profile topics are bounded in the database, not only in the API',

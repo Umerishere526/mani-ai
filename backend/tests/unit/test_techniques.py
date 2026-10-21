@@ -24,7 +24,7 @@ STOP = Framework(
 # What every seeded framework looks like: content stages, a closing, then the body route.
 WITH_BODY_ROUTE = Framework(
     id="with_body_route", name="With body route", summary="s", body="b",
-    phases=["offering", "one", "two", "three", "closing", "somatic_checkin", "somatic_practice"],
+    phases=["offering", "one", "two", "three", "closing", "somatic_body", "somatic_practice"],
 )
 
 

@@ -1,8 +1,11 @@
 # ABOUTME: Checks the hidden [ctx] block and how a tap on a capsule button is recognised.
 # ABOUTME: Both read the database snapshot rather than a mutated in-memory copy.
 
+import dataclasses
 import datetime as dt
 import uuid
+
+import pytest
 
 from mani.chat import context
 from mani.chat.orchestrator import find_tapped_prompt, pending_offer
@@ -17,8 +20,8 @@ from mani.models.rows import (
     TechniqueOutcome,
     TechniqueState,
     TechniqueTried,
-    Thread,
     ThreadSummary,
+    Thread,
 )
 
 USER = uuid.UUID("a0000000-0000-4000-8000-00000000000a")
@@ -51,12 +54,12 @@ def user(content: str) -> Message:
 FOUND = {
     "issue": "your boss says you're not doing enough",
     "core_issue": "your sense of being enough rests on his view of you",
-    "in_their_control": "you could ask him what he expects",
+    "underlying_feeling": "worry that you are not enough",
 }
 
 
 def found(on: Thread) -> Thread:
-    """A thread where Mani has found the problem, its core issue and what is in their control."""
+    """A thread where Mani has found the problem, its core issue and the feeling underneath."""
     return on.model_copy(update={"understanding": FOUND})
 
 
@@ -71,7 +74,7 @@ def test_a_check_is_answered_on_the_next_turn_only_and_then_waits_its_cooldown()
     answering = TurnContext(thread=checked_at(10, 10), profile=None, technique=None)
     assert context.check_open(answering) and not context.may_check(answering)
     block = context.build(answering).splitlines()
-    assert "always brings the offer" in block[block.index("check: open") + 1]
+    assert "A clear yes always brings the offer" in block[block.index("check: open") + 1]
 
     after = [context.may_check(TurnContext(thread=checked_at(10, n), profile=None, technique=None))
              for n in (12, 10 + context.COOLDOWN_AFTER_DECLINE - 1, 10 + context.COOLDOWN_AFTER_DECLINE)]
@@ -98,16 +101,6 @@ def test_a_recent_decline_holds_the_cooldown_closed():
     assert "check:" not in block
     assert "since_last: 2" in block
     assert "this_thread: abcde (declined)" in block
-
-
-def test_an_accepted_technique_waits_for_the_library_offer():
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
-        phase="ground", at_message_count=4, library_offered_since=False,
-    )
-    block = context.build(TurnContext(thread=thread(60), profile=None, technique=state))
-    assert "library_pending: yes" in block
-    assert "current_phase: ground" in block
 
 
 def test_a_retired_technique_still_holds_the_cooldown_closed():
@@ -208,7 +201,6 @@ def framework() -> Framework:
             },
             "belief": {
                 "purpose": "Identify the belief.",
-                "when_stuck": "Offer one distinction from their words.",
                 "ask": {"supportive": "What did that mean to you?"},
             },
         },
@@ -216,14 +208,6 @@ def framework() -> Framework:
 
 
 TONES = ("directive", "supportive", "reflective")
-
-
-def test_a_stages_when_stuck_line_is_sent_for_the_stage_and_the_next():
-    """Spec 0007, AC-4."""
-    block = context.build(_running_at("activate"), framework=framework()).splitlines()
-    assert "next_stage_when_stuck: Offer one distinction from their words." in block
-    block = context.build(_running_at("belief"), framework=framework()).splitlines()
-    assert "stage_when_stuck: Offer one distinction from their words." in block
 
 
 def test_the_turn_a_framework_starts_reaches_only_its_first_stage():
@@ -251,9 +235,33 @@ def test_what_mani_understands_is_sent_with_its_meaning_only_once_something_is_s
     stored = thread().model_copy(update={"understanding": {"feeling": "frustrated"}})
     lines = context.build(TurnContext(thread=stored, profile=None, technique=None)).splitlines()
     at = lines.index(
-        "understanding: feeling: frustrated; issue: missing; core_issue: missing; in_their_control: missing"
+        "understanding: feeling: frustrated; issue: missing; core_issue: missing; underlying_feeling: missing"
     )
     assert lines[at + 1].startswith("  means: what they have told you so far")
+
+
+def test_the_findings_are_their_case_once_a_framework_is_running_or_about_to_start():
+    """muhammad, 2026-10-22: the stage questions and possibilities are about the problem, the core issue
+    and the feeling found before the offer, so the line carries that meaning inside a framework."""
+    found = {"issue": "your boss says you're not doing enough", "core_issue": "your worth rests on his view",
+             "underlying_feeling": "worry that you are not enough"}
+    stored = thread().model_copy(update={"understanding": found})
+    running = dataclasses.replace(_running_at("belief"), thread=stored)
+    block = context.build(running, framework=_five_stage_framework()).splitlines()
+    at = next(i for i, line in enumerate(block) if line.startswith("their_case: "))
+    assert "your worth rests on his view" in block[at] and "worry that you are not enough" in block[at]
+    assert "every question you ask and every possibility you offer" in block[at + 1].lower()
+    assert not any(line.startswith("understanding: ") for line in block)
+
+    offered = TechniqueState(thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
+                             phase="offering", at_message_count=4)
+    waiting = context.build(
+        TurnContext(thread=stored, profile=None, technique=offered),
+        framework=_five_stage_framework(), offer_waiting=True, yes_framework=_five_stage_framework(),
+    )
+    assert "their_case: " in waiting and "understanding: " not in waiting
+    before = context.build(TurnContext(thread=stored, profile=None, technique=None))
+    assert "understanding: " in before and "their_case" not in before
 
 
 def test_a_turn_where_a_yes_is_possible_shows_the_first_stage_it_would_reach():
@@ -300,7 +308,7 @@ def test_the_next_stage_is_always_shown_in_full_so_the_reply_can_judge_it_when_r
     assert "next_stage: belief" in block
     assert "next_stage_ask: What did it mean?" in block
     closing = context.build(_running_at("closing"), framework=_five_stage_framework()).splitlines()
-    assert "next_stage: somatic_checkin" in closing
+    assert "next_stage: somatic_body" in closing
     assert any(line.startswith("next: ") and "the questions end" in line for line in closing)
     assert not any("since the check" in line for line in block + closing), "thread 4b93d612: the whole conversation counts"
     body = context.build(_running_at("somatic_practice"), framework=_five_stage_framework())
@@ -390,33 +398,10 @@ def _finished_framework_history(*later: str) -> list:
     """A framework that ended on the client's two choices, then whatever Mani said since."""
     return [
         mani("Your shoulders feel looser. Does that feel right? What would you like to do next?",
-             options=[{"label": "Keep Chatting"}, {"label": "Go to Library", "library": "home"}]),
-        user("Keep Chatting"),
+             options=[{"label": "Chat More"}, {"label": "Go to Library", "library": "home"}]),
+        user("Chat More"),
         *[mani(text) for text in later],
     ]
-
-
-def test_after_a_framework_the_next_of_the_clients_three_questions_is_offered():
-    ctx = TurnContext(thread=thread(), profile=None, technique=None, techniques_offered=["abcde"])
-    block = context.build(ctx, history=_finished_framework_history())
-    assert "after_framework_question: What feels most important about this now?" in block
-
-    block = context.build(ctx, history=_finished_framework_history(
-        "You're still thinking about it. What feels most important about this now?"))
-    assert "after_framework_question: What do you think you need to do differently from here?" in block
-
-
-def test_a_question_asked_on_the_reply_carrying_chat_more_counts_as_asked():
-    """Observed: the reply that ended the framework also asked the first question, and the
-    next reply asked it again."""
-    ctx = TurnContext(thread=thread(), profile=None, technique=None, techniques_offered=["abcde"])
-    history = [
-        mani("The meeting is still on your mind. What feels most important about this now?",
-             options=[{"label": "Keep Chatting"}, {"label": "Go to Library", "library": "home"}]),
-        user("I want to stop letting one comment decide how I feel."),
-    ]
-    block = context.build(ctx, history=history)
-    assert "after_framework_question: What do you think you need to do differently from here?" in block
 
 
 def test_once_all_three_are_asked_there_is_no_after_framework_question():
@@ -442,34 +427,26 @@ def _on_message(person_message: int, technique=None, style: str | None = None):
     return TurnContext(thread=on, profile=None, technique=technique)
 
 
-def test_no_check_until_the_problem_its_core_issue_and_their_control_are_all_found():
+def test_no_check_until_the_problem_its_core_issue_and_the_feeling_underneath_are_all_found():
     """muhammad's run, 2026-10-13: Mani checked at their second message having asked about neither the
-    core issue nor control. The steps are code's now (spec 0006, AC-2, AC-18): the next missing one is
-    named in [ctx] in order, and the check field waits for all three to be stored, so the reply that
-    receives the control answer is an ordinary one and the check comes the turn after (Lolly,
-    2026-10-16, point 2; spec 0007, AC-10)."""
+    core issue nor the feeling underneath. The steps are code's now (spec 0006, AC-2, AC-18): the next missing one is
+    named in [ctx] in order, and the check field waits for all three."""
     steps = [{}, {"issue": FOUND["issue"]}, {k: FOUND[k] for k in ("issue", "core_issue")}, FOUND]
     on = [_on_message(6, style="directive").thread.model_copy(update={"understanding": u}) for u in steps]
     contexts = [TurnContext(thread=t, profile=None, technique=None) for t in on]
-    assert [context.may_check(c) for c in contexts] == [False, False, False, True]
+    # The turn that receives their answer about the feeling may carry the check; code stores it only if
+    # that answer came (the orchestrator), so [ctx] says to check only once it is answered.
+    assert [context.may_check(c) for c in contexts] == [False, False, True, True]
 
     def line(c, key):
         return next((l for l in context.build(c).splitlines() if l.startswith(f"{key}:")), None)
 
     assert [line(c, "understanding_next") for c in contexts] == [
-        "understanding_next: problem", "understanding_next: core_issue", "understanding_next: control", None,
+        "understanding_next: problem", "understanding_next: core_issue", "understanding_next: underlying_feeling", None,
     ]
-    assert [line(c, "check") for c in contexts] == [None, None, None, "check: may_check"]
-
-
-def test_a_pending_feeling_change_is_named_for_the_reply_that_reads_their_answer():
-    """Spec 0007, AC-15: the turn after Mani asked whether the feeling moved, [ctx] names both words."""
-    pending = _on_message(5).thread.model_copy(update={"understanding": {"feeling": "anxious", "feeling_asked": "dread"}})
-    lines = context.build(TurnContext(thread=pending, profile=None, technique=None)).splitlines()
-    assert "feeling_change: anxious -> dread" in lines
-    assert lines[lines.index("feeling_change: anxious -> dread") + 1].startswith("  means: ")
-    settled = _on_message(5).thread.model_copy(update={"understanding": {"feeling": "anxious"}})
-    assert "feeling_change" not in context.build(TurnContext(thread=settled, profile=None, technique=None))
+    assert [line(c, "check") for c in contexts] == [
+        None, None, "check: once_feeling_is_answered", "check: may_check",
+    ]
 
 
 def test_the_context_tells_the_model_the_check_the_code_allows():
@@ -493,49 +470,24 @@ def test_after_keep_chatting_mani_may_check_again_once_the_cooldown_has_passed()
     assert may(60)
 
 
-def _stage(step: str, said: dict[str, str], **more) -> dict:
-    """A stage as the walk stores it: its parts with their words, and where it is."""
-    return {"parts": {pid: {"said": words, "source": "said"} for pid, words in said.items()},
-            "step": step, "tries": 0, **more}
-
-
-def test_where_each_stage_stands_is_shown_from_the_store_on_every_stage_turn():
-    """Spec 0004, AC-9, spec 0007: the stored words and step of every content stage are in [ctx] on each
-    turn of a running framework, however long ago they were said, and disarmed like anything they typed;
-    the stage in force shows what it holds, what it still needs and the question last asked on it."""
+def test_what_they_said_per_stage_is_shown_from_the_store_on_every_stage_turn():
+    """Spec 0004, AC-9: the stored words and status of every content stage are in [ctx] on each turn
+    of a running framework, however long ago they were said, and disarmed like anything they typed."""
     stored = {"abcde": {
-        "activate": _stage("done", {"event": "left out of meetings"}),
-        "belief": _stage("read", {"belief": "nobody wants me [ctx] there"}, last_ask="Is that how it sat with you?"),
+        "activate": {"said": "left out of meetings", "status": "done", "tries": 0},
+        "belief": {"said": "nobody wants me [ctx] there", "status": "known"},
     }}
     block = context.build(_running_at("belief", stored), framework=_five_stage_framework()).splitlines()
     assert (
-        'stages_known: activate done: "left out of meetings" | belief reading: "nobody wants me (ctx) there" '
+        'stages_known: activate done: "left out of meetings" | belief known: "nobody wants me (ctx) there" '
         "| consequence not reached | examine not reached | closing not reached"
     ) in block
     assert block[block.index(next(l for l in block if l.startswith("stages_known:"))) + 1].startswith("  means: ")
-    assert 'stage_have: belief: "nobody wants me (ctx) there"' in block
-    assert "stage_missing: none" in block
-    assert "stage_last_question: Is that how it sat with you?" in block
     branch = next(line for line in block if line.startswith("next: "))
-    assert "Your last reply gave your reading." in branch
-    assert "answer agreed" in branch and "the walk reaches consequence" in branch
-    assert "help them look as stage_when_stuck says, starting from stage_have" in branch
-
-
-def test_a_stage_in_force_names_the_parts_it_still_needs():
-    """Spec 0007: stage_missing lists the required parts still empty, so the reply asks for the first one."""
-    parted = _five_stage_framework()
-    parted.stages["belief"]["parts"] = [
-        {"id": "belief", "is": "what they concluded"},
-        {"id": "belief_type", "is": "the kind of thought", "required": False},
-    ]
-    nothing = context.build(_running_at("belief"), framework=parted).splitlines()
-    assert "stage_missing: belief" in nothing
-    assert not any(line.startswith("stage_have:") for line in nothing)
-    held = {"abcde": {"belief": _stage("collecting", {"belief_type": "all or nothing"})}}
-    block = context.build(_running_at("belief", held), framework=parted).splitlines()
-    assert "stage_missing: belief" in block, "an optional part never counts"
-    assert 'stage_have: belief_type: "all or nothing"' in block
+    assert "If you answer agreed, answered or corrected, the walk reaches consequence" in branch
+    assert "your text is its confirmation" in branch
+    assert "If not_yet, the walk stays: think aloud with them about this stage" in branch
+    assert "If stop, write one warm line asking what they would like to talk about." in branch
 
 
 # Fields of a stage or of the offer explain themselves by name; the group they belong to carries
@@ -581,7 +533,7 @@ def _every_kind_of_block() -> list[str]:
                       framework=framework(), offer_waiting=True, yes_framework=framework()),
         context.build(TurnContext(thread=thread(), profile=None, technique=running),
                       framework=framework()),
-        context.build(_running_at("activate", {"abcde": {"belief": _stage("collecting", {"belief": "x"})}}),
+        context.build(_running_at("activate", {"abcde": {"belief": {"said": "x", "status": "partial"}}}),
                       framework=_five_stage_framework()),
         context.build(TurnContext(thread=thread(), profile=None, technique=None,
                                   techniques_offered=["abcde"]),
@@ -604,11 +556,10 @@ def test_every_line_of_the_block_says_what_it_means_for_this_turn():
 
 
 def test_the_block_is_weighed_with_the_conversation_never_instead_of_it():
+    from scripts.seed import parse_prompt
     import pathlib
 
     import yaml
-
-    from scripts.seed import parse_prompt
 
     rules = yaml.safe_load(parse_prompt(
         pathlib.Path(__file__).parents[2] / "content/prompts/response_format.md")["content"])
@@ -633,21 +584,14 @@ def test_a_stage_question_is_asked_as_the_client_wrote_it():
         assert rewrite not in block, rewrite
 
 
-def test_a_finished_framework_keeps_what_they_found_in_view():
-    """After the framework ends, Mani can still answer "what was my new belief?" or "that didn't help"
-    from what was found, not only from the raw messages."""
-    found = {"abcde": {"belief": _stage("done", {"belief": "I'm not good enough"}),
-                       "closing": _stage("done", {"new": "one mistake is not my whole work"})}}
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
-        phase=None, at_message_count=8, stages_known=found,
-    )
-    ctx = TurnContext(thread=thread(10), profile=None, technique=state)
-    line = next(line for line in context.build(ctx, finished=_five_stage_framework()).splitlines()
-                if line.startswith("finished_framework: "))
-    assert 'belief done: "I\'m not good enough"' in line
-    assert 'closing done: "one mistake is not my whole work"' in line
-    assert "finished_framework" not in context.build(ctx)
+def test_a_stage_is_never_left_because_it_was_tried_before():
+    """muhammad, 2026-10-21: the reply is told the same two ways at every try, and never that a stage
+    is let go after two. Not knowing is the case Mani helps with."""
+    tried = {"abcde": {"belief": {"tries": 3}}}
+    block = context.build(_running_at("belief", tried), framework=_five_stage_framework()).splitlines()
+    branch = next(line for line in block if line.startswith("next: "))
+    assert branch.startswith("next: If you answer agreed, answered or corrected")
+    assert not any(line.startswith("two_tries") for line in block)
 
 
 def _five_stage_framework() -> Framework:
@@ -655,14 +599,14 @@ def _five_stage_framework() -> Framework:
     return Framework(
         id="abcde", name="ABCDE", summary="s", body="b",
         phases=["offering", "activate", "belief", "consequence", "examine", "closing",
-                "somatic_checkin", "somatic_practice"],
+                "somatic_body", "somatic_practice"],
         stages={
             "activate": {"purpose": "a", "ready_when": "event named", "ask": ask("What happened?")},
             "belief": {"purpose": "b", "ready_when": "belief named", "ask": ask("What did it mean?")},
             "consequence": {"purpose": "c", "ready_when": "effect named", "ask": ask("What changed?")},
             "examine": {"purpose": "e", "ready_when": "evidence weighed", "ask": ask("What supports it?")},
             "closing": {"purpose": "x", "ready_when": "they decided", "ask": ask("How is it sitting?")},
-            "somatic_checkin": {"purpose": "s", "ready_when": "answered", "ask": ask("Your body?")},
+            "somatic_body": {"purpose": "s", "ready_when": "answered", "ask": ask("Your body?")},
         },
     )
 
@@ -679,11 +623,6 @@ def test_the_moment_is_read_from_the_database_and_the_safety_screen_alone():
     """Spec 0003, AC-1: the reply shape is picked from what the database says is happening."""
     from mani.llm.schema import Moment
 
-    body_route = Framework(
-        id="abcde", name="ABCDE", summary="s", body="b",
-        phases=["offering", "activate", "effective", "somatic_checkin", "somatic_practice"],
-    )
-
     def row(outcome: TechniqueOutcome, phase: str | None) -> TechniqueState:
         return TechniqueState(
             thread_id=THREAD, framework_id="abcde", outcome=outcome, phase=phase, at_message_count=5,
@@ -691,31 +630,56 @@ def test_the_moment_is_read_from_the_database_and_the_safety_screen_alone():
 
     def moment(technique, outcome=None, *, retiring=None, concern=False):
         outcome = outcome or (technique.outcome if technique else None)
-        return context.moment(technique, outcome, retiring, body_route, concern=concern)
+        return context.moment(technique, outcome, retiring, concern=concern)
 
     offered, accepted = TechniqueOutcome.OFFERED, TechniqueOutcome.ACCEPTED
     assert moment(row(accepted, "activate"), concern=True) is Moment.CONCERN
     assert moment(row(offered, "offering"), accepted) is Moment.IN_STAGES, "a Try it tap starts it"
     assert moment(row(offered, "offering")) is Moment.OFFER_OPEN, "buttons showing or not"
     assert moment(row(accepted, "activate")) is Moment.IN_STAGES
-    assert moment(row(accepted, "effective")) is Moment.BODY, "the closing"
-    assert moment(row(accepted, "somatic_checkin")) is Moment.BODY
-    assert moment(row(accepted, "somatic_practice")) is Moment.BODY, "every body stage is the body route"
+    assert moment(row(accepted, "effective")) is Moment.IN_STAGES, "the closing is still a stage they answer"
+    for phase in ("somatic_body", "somatic_practice", "somatic_effect", "somatic_closing"):
+        assert moment(row(accepted, phase)) is Moment.BODY, phase
     assert moment(None, retiring="abcde") is Moment.BODY
     assert moment(None) is Moment.CHATTING
 
 
-def test_reaching_b_carries_its_parts_and_its_rule_for_several_beliefs():
+def test_reaching_b_carries_its_own_test_and_its_rule_for_several_beliefs():
     """Live, 2026-10-13: the opening line became B among three beliefs. Reaching B, the reply sees B's
-    parts from abcde.md, with the rule for several beliefs in what is enough for the belief part."""
+    ready_when ("If several appear, ask which one") and B's own rule from abcde.md, as next_stage_reach,
+    never as a rule for the stage in force."""
     from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
     parsed = parse_framework(FRAMEWORKS_DIR / "abcde.md")
     abcde = Framework(id="abcde", name="ABCDE", summary="s", body="b", phases=parsed["phases"],
                       stages=parsed["stages"])
-    block = context.build(_running_at("activate"), framework=abcde).splitlines()
-    parts = next(line for line in block if line.startswith("next_stage_parts: belief (required): "))
-    assert "Where several appear, ask which one hits hardest" in parts
-    assert "belief_type (optional)" in parts and "stop_pushing:" in parts
-    assert not any(line.startswith(("next_stage_reach", "next_stage_ready_when")) for line in block)
-    assert not any(line.startswith("stage_reach") for line in context.build(_running_at("belief"), framework=abcde).splitlines())
+    block = context.build(_running_at("activate"), framework=abcde)
+    assert "next_stage_ready_when: A belief they have expressed in their own language. If several appear" in block
+    assert "next_stage_reach: Where several beliefs appear, report belief as partial with each in their words" in block
+    assert "stage_reach:" not in context.build(_running_at("belief"), framework=abcde).replace("next_stage_reach:", "")
+
+
+def test_a_part_still_to_ask_is_shown_beside_the_stage_it_belongs_to():
+    """muhammad, 2026-10-21: D's two halves are asked one at a time, so what is left to ask is in [ctx]."""
+    from scripts.seed import FRAMEWORKS_DIR, parse_framework
+
+    parsed = parse_framework(FRAMEWORKS_DIR / "abcde.md")
+    abcde = Framework(id="abcde", name="ABCDE", summary="s", body="b", phases=parsed["phases"],
+                      stages=parsed["stages"])
+    stored = {"abcde": {"dispute": {"said": "family should always help", "status": "partial", "gap": "challenge"}}}
+    block = context.build(_running_at("dispute", stored), framework=abcde).splitlines()
+    line = next(i for i, text in enumerate(block) if text.startswith("stages_known:"))
+    assert 'dispute partial, still to ask challenge: "family should always help"' in block[line]
+    assert "ask only that part" in block[line + 1]
+
+
+def test_their_case_carries_every_feeling_and_what_they_added_and_says_never_to_ask_again():
+    """muhammad, 2026-10-22: they had to say they felt trapped a second time though the check held it."""
+    case = {"feeling": "anxious, exhausted, burnt out", "issue": "overtime to meet deadlines",
+            "core_issue": "the work falls on you", "underlying_feeling": "trapped",
+            "also": "the client warned they would remove them"}
+    running = dataclasses.replace(_running_at("significance"), thread=thread().model_copy(update={"understanding": case}))
+    block = context.build(running, framework=_five_stage_framework()).splitlines()
+    at = next(i for i, line in enumerate(block) if line.startswith("their_case: "))
+    assert "anxious, exhausted, burnt out" in block[at] and "also: the client warned they would remove them" in block[at]
+    assert "never ask them again for anything in it" in block[at + 1].lower()

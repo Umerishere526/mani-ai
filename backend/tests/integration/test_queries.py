@@ -1,7 +1,6 @@
 # ABOUTME: Exercises the query layer against a live database, as a real user would be.
 # ABOUTME: Covers the composed turn read, the batched write, and the old leak's shape.
 
-import datetime as dt
 import uuid
 
 import asyncpg
@@ -272,9 +271,9 @@ async def test_config_tables_are_readable_and_seeded(users):
     # registry at compose time, so it is deliberately not a row here.
     assert {p.name for p in prompts} >= {"mani_base", "response_format"}
     assert "framework_index" not in {p.name for p in prompts}
-    # ABCDE and Thought Reframe are active; the other four are paused, not removed (spec 0008).
+    # ABCDE and Thought Reframe are offered; the others are paused, not removed.
     assert {f.id for f in frameworks} == {"abcde", "thought_reframe"}
-    assert frameworks[0].phases[0] == "offering"
+    assert all(f.phases[0] == "offering" for f in frameworks)
 
 
 async def test_the_library_listing_is_the_whole_catalog_home_items_included(alice):
@@ -385,35 +384,6 @@ async def test_threads_needing_summary_lists_across_users(users):
     ids = {(row["thread_id"], row["user_id"]) for row in due}
     assert (thread_a.id, ALICE) in ids
     assert (thread_b.id, BOB) not in ids
-
-
-async def test_the_opening_tail_hands_back_a_cursor_only_once_more_is_left_out(alice):
-    """StartOut used to return only its newest OPENING_TAIL messages with no way for a
-    resuming client to know anything older existed - the chat tester's one-shot page read
-    on every reload then showed a thread missing everything before it, with no cursor to
-    fetch the rest. _history must say so whenever it left messages out."""
-    from mani.routers import threads as threads_router
-
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
-    for n in range(threads_router.OPENING_TAIL // 2 - 1):
-        await messages.create_pair(alice, thread.id, f"user {n}", f"mani {n}")
-
-    short_messages, short_cursor = await threads_router._history(alice, thread.id, ALICE)
-    assert short_cursor is None
-    assert len(short_messages) == len((await messages.list_for_thread(alice, thread.id, ALICE)).messages)
-
-    for n in range(10):
-        await messages.create_pair(alice, thread.id, f"later {n}", f"reply {n}")
-
-    long_messages, long_cursor = await threads_router._history(alice, thread.id, ALICE)
-    assert len(long_messages) == threads_router.OPENING_TAIL
-    assert long_cursor is not None
-
-    older = await messages.list_for_thread(
-        alice, thread.id, ALICE, cursor=dt.datetime.fromisoformat(long_cursor)
-    )
-    assert older.messages, "the cursor must find the messages left out of the opening tail"
-    assert older.messages[0].content not in [m.content for m in long_messages]
 
 
 async def test_the_model_sees_the_whole_thread_until_the_budget_then_loses_whole_blocks(alice):

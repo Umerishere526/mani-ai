@@ -11,12 +11,9 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import context, repairs, reply_checks, safety, understanding, walk
+from mani.chat import body as body_route, context, repairs, reply_checks, safety, understanding, walk
 from mani.chat.greeting import (
     EXPLAIN_LABELS,
-    FINISH_LABEL,
-    GO_TO_LIBRARY_LABEL,
-    KEEP_CHATTING_CLOSE_LABEL,
     OPENERS,
     STYLE_OPTIONS,
     greeting,
@@ -24,28 +21,21 @@ from mani.chat.greeting import (
 from mani.chat.techniques import OFFERING
 from mani.config import get_settings
 from mani.db import (
-    exercises as exercises_db,
-)
-from mani.db import (
     llm_calls,
+    messages as messages_db,
     profiles,
     threads,
-)
-from mani.db import (
-    messages as messages_db,
 )
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client, schema
 from mani.llm.schema import LibrarySection, Moment, Reply, SmartPrompt
 from mani.models.rows import (
-    Exercise,
     Framework,
     Message,
     MessageRole,
     ResponseStyle,
     SupportStyle,
     TechniqueOutcome,
-    TechniqueRun,
     TechniqueState,
     Thread,
 )
@@ -58,97 +48,50 @@ logger = logging.getLogger(__name__)
 # one message rather than two - moved the count past 3 and the thread was never titled.
 TITLE_AFTER_MESSAGES = 3
 
-_HANDOFF_LABELS = {KEEP_CHATTING_CLOSE_LABEL.lower(), GO_TO_LIBRARY_LABEL.lower(), FINISH_LABEL.lower()}
-
-
-def _closing() -> list[SmartPrompt]:
-    """The closing choices after the body cadence (the client's somatic cadence document, 2026-10-16)."""
+def _prompts(buttons: list[body_route.Button]) -> list[SmartPrompt]:
     return [
-        SmartPrompt(label=KEEP_CHATTING_CLOSE_LABEL),
-        SmartPrompt(label=GO_TO_LIBRARY_LABEL, library=LibrarySection.HOME.value),
-        SmartPrompt(label=FINISH_LABEL),
+        SmartPrompt(label=b.label, library=LibrarySection.HOME.value if b.library else None) for b in buttons
     ]
-
-
-def _awaiting_place(history: list[Message]) -> bool:
-    """Whether Mani's last reply asked where in the body they notice tension, and it is unanswered."""
-    last = next((m for m in reversed(history) if m.role is MessageRole.MANI), None)
-    return bool(last and any(
-        str(o.get("label", "")) in repairs.CHECK_IN_BUTTONS for o in (last.prompt_options or [])
-    ))
-
-
-def _closing_unanswered(
-    technique: TechniqueState | None, framework: Framework | None, stored_all: dict[str, dict],
-) -> bool:
-    """Whether the framework is on its closing stage with nothing said for it and no try yet."""
-    if technique is None or framework is None or technique.phase != framework.closing:
-        return False
-    entry = (stored_all.get(framework.id) or {}).get(technique.phase) or {}
-    return not entry.get("parts") and not entry.get("tries")
 
 
 def _body_route(
     fixed: repairs.Repaired,
-    body: str | None,
+    value: str | None,
+    options: str | None,
     tapped: SmartPrompt | None,
     technique: TechniqueState | None,
     framework: Framework,
-    history: list[Message],
-    style: str,
-    body_said: str | None,
-) -> tuple[repairs.Repaired, str | None]:
-    """The body cadence's turn, from the branch a tap or the reply names, and that branch, so the
-    orchestrator records the two answers apart. A tapped button decides by itself. The check-in is the
-    client's introduction with her five choices; asked again it is only her question, and after that
-    the cadence moves on so it never holds them. The closing choices come on the turn that answers
-    whether the conversation helped, and with any way out of the cadence; never from reading the
-    reply's words. `body_said` is what they told Mani earlier they feel in their body."""
-    if technique is None:
-        at = "retiring"
-    else:
-        at = "closing" if technique.phase == framework.closing else technique.phase
-    if tapped is not None and tapped.label in repairs.BODY_BUTTONS:
-        body = repairs.BODY_BUTTONS[tapped.label]
-    if body is not None and not repairs.body_answer_fits(body, at, style):
-        fixed = dataclasses.replace(fixed, notes=fixed.notes + [f"ignored body {body} at {at}"])
-        body = None
-    if body == "asked":
-        # Answered in Mani's text, then the check-in's question once more, as for an answer that fits no branch.
-        body = None
-    handoff = False
-    if body is not None:
-        step = repairs.body_reply(body, at, framework.stages, style, fixed.text)
-        fixed = dataclasses.replace(
-            fixed,
-            text=step.text,
-            prompts=[SmartPrompt(label=label) for label in step.labels],
-            framework_id=framework.id if technique else None,
-            phase=step.phase if technique else None,
-        )
-        handoff = step.handoff
-    elif at == "somatic_checkin" or (at == "closing" and fixed.phase == "somatic_checkin"):
-        # The client's check-in is fixed content, sent word for word with her five choices.
-        script = repairs.check_in_script(framework.stages, style, body_said)
-        sent = _check_ins_sent(history, repairs.check_in_script(framework.stages, style, body_said, again=True))
-        if script and at == "somatic_checkin" and sent >= 2:
-            fixed = dataclasses.replace(
-                fixed, framework_id=framework.id, phase="somatic_helped",
-                notes=fixed.notes + ["check-in asked twice, handed off"],
-            )
-            handoff = True
-        elif script:
-            ask = repairs.check_in_script(framework.stages, style, body_said, again=at == "somatic_checkin")
-            fixed = dataclasses.replace(
-                fixed, text=repairs.with_the_check_in(fixed.text, ask),
-                prompts=[SmartPrompt(label=label) for label in repairs.CHECK_IN_BUTTONS],
-            )
-    elif at == "somatic_physical":
-        # Something other than how their body feels: Mani's reply, with the three choices again.
-        fixed = dataclasses.replace(fixed, prompts=[SmartPrompt(label=label) for label in repairs.PHYSICAL_BUTTONS])
-    if at == "retiring":
-        handoff = not _offered_handoff(history)
-    return (dataclasses.replace(fixed, prompts=_closing()) if handoff else fixed), body
+    area: str | None,
+) -> tuple[repairs.Repaired, body_route.Step | None]:
+    """The body check-in's turn: the client's script for the answer at this step. A tapped button decides
+    by itself; a typed answer is the value the reply read from it. Anywhere an answer does not fit, the
+    reply stands as the model wrote it. `area` is the place the question before the first step asked about."""
+    at = body_route.RETIRING if technique is None else technique.phase
+    if tapped is not None and (decided := body_route.tapped_value(at, tapped.label, framework.stages)):
+        value = decided
+    if at == body_route.RETIRING and value != "finish":
+        # Keep Chatting, tapped or typed: the model's own continuation, with its possibilities under the question.
+        fixed = dataclasses.replace(fixed, text=repairs.under(fixed.text, options))
+    if value is None:
+        return fixed, None
+    step = body_route.step(
+        at, value, framework.stages,
+        physical_response=technique.physical_response if technique else None, area=area,
+    )
+    if step is None:
+        return dataclasses.replace(fixed, notes=fixed.notes + [f"ignored body {value} at {at}"]), None
+    return dataclasses.replace(
+        fixed,
+        text=step.text if step.text is not None else fixed.text,
+        prompts=_prompts(step.buttons),
+        framework_id=framework.id if technique else None,
+        phase=step.phase if technique else None,
+    ), step
+
+
+def _feelings(understood: dict[str, str]) -> str:
+    """The feelings Mani found before the framework: the ones they named and the one underneath."""
+    return " ".join(understood.get(key, "") for key in ("feeling", "underlying_feeling"))
 
 
 def _walked(
@@ -161,46 +104,26 @@ def _walked(
     in_force: str | None,
     style: str,
     thread_id: uuid.UUID,
-    body_answered: bool,
-    known: dict,
-    hold: bool,
+    feeling: str | None,
 ) -> tuple[repairs.Repaired, walk.Walked]:
-    """The walk's turn: the parts they gave merged into the store, the step taken, and the reply that
-    opens the stage reached, from the reply's judgement of that stage in next_stage. `known` is the
-    person's running understanding, which the stage's parts may be bound to; `hold` keeps the walk where
-    it is while a change in how they feel or in what they are dealing with awaits their answer. Code
-    decides all three."""
+    """The walk's turn: what they said merged into the store, the step taken, and the reply that
+    opens the stage reached, from the reply's judgement of that stage in next_stage. Code decides all
+    three."""
     if start:
-        walked = walk.start(framework, reply.stage_updates, reply.next_stage, known)
+        walked = walk.start(framework, reply.stage_updates, reply.next_stage)
     else:
         walked = walk.advance(
             framework, stored, reply.stage_updates, reply.stage_answer,
-            in_force=in_force, report=reply.next_stage, body_answered=body_answered, known=known, hold=hold,
+            in_force=in_force, report=reply.next_stage,
         )
     text, notes = walk.reply_text(
-        framework, walked, text=fixed.text, style=style, thread_id=thread_id, known=known,
+        framework, walked, text=fixed.text, style=style, thread_id=thread_id,
+        feeling=feeling if start else None, options=reply.options,
     )
-    walked = walk.with_last_ask(framework, walked, text)
     return dataclasses.replace(
         fixed, text=text, framework_id=framework.id, phase=walked.phase,
         notes=fixed.notes + walked.notes + notes,
     ), walked
-
-
-def _check_ins_sent(history: list[Message], script: str) -> int:
-    """How many of Mani's last two replies carried the body check-in."""
-    # ponytail: matched on the current script, so a check-in sent before their body record changed is
-    # not counted; the cap then comes one turn later.
-    replies = [m for m in history if m.role is MessageRole.MANI][-2:]
-    return sum(script in (m.content or "") for m in replies)
-
-
-def _offered_handoff(history: list[Message]) -> bool:
-    """Whether Mani's last reply already put the two choices in front of them."""
-    last = next((m for m in reversed(history) if m.role is MessageRole.MANI), None)
-    return bool(last and any(
-        str(o.get("label", "")).lower() in _HANDOFF_LABELS for o in (last.prompt_options or [])
-    ))
 
 
 @dataclass(frozen=True)
@@ -219,10 +142,6 @@ class Turn:
     llm_call_id: uuid.UUID | None = None
     # Present only when AI_DEBUG_MODE is on; never sent to an ordinary client.
     reasoning: str | None = None
-    # Mani's own reason for this turn's framework pick, when one was made (spec 0008). Present
-    # only with AI_DEBUG_MODE, like reasoning; never read by anything that decides what happens
-    # next, and never logged.
-    offered_because: str | None = None
     # The stage store after this turn, as rows. Only with AI_DEBUG_MODE, like the reasoning.
     ledger: list[dict] | None = None
     # Each content stage's id and stored status after this turn, and whether the reply is on it, for
@@ -235,10 +154,6 @@ class Turn:
     understanding: dict | None = None
     # When Mani's latest check was made, after this turn (spec 0006). Sent only with AI_DEBUG_MODE.
     check_at_message_count: int | None = None
-    # Set only on the turn a framework completes, and only when the catalog has a
-    # matching exercise. A row model, not the wire shape - the router builds ExerciseOut
-    # (and signs the audio URL) when it serializes this.
-    exercise: Exercise | None = None
 
 
 def find_tapped_prompt(history: list[Message], content: str) -> SmartPrompt | None:
@@ -456,14 +371,9 @@ async def send(
         technique is not None
         and technique.outcome is TechniqueOutcome.ACCEPTED
         and config.registry.is_final(technique.framework_id, technique.phase)
-        and not _awaiting_place(history)
     ):
         retiring_framework_id = technique.framework_id
         updates.retire_technique = True
-        updates.record_run = TechniqueRun(
-            thread_id=ctx.thread.id, framework_id=technique.framework_id,
-            outcome=TechniqueOutcome.ACCEPTED, ended_at_message_count=ctx.thread.message_count + 2,
-        )
         ctx = dataclasses.replace(
             ctx, technique=technique.model_copy(update={"phase": None})
         )
@@ -506,10 +416,6 @@ async def send(
     # Which framework fits is the model's call, from the Framework Index; code owns only when an
     # offer may come. repairs.apply still checks whatever is offered.
     running_framework = config.registry.get(technique.framework_id) if technique else None
-    # Active frameworks whose own cooldown has not excluded them (spec 0008, decision 3): a check
-    # is due once any one of them could be offered, and the offer itself falls back to the first
-    # of these, never to one still held by its own just-finished or declined run.
-    offerable = frozenset(config.registry.ids) - context.excluded_frameworks(ctx)
 
     wants_title = (
         ctx.thread.message_count >= TITLE_AFTER_MESSAGES and not ctx.thread.title
@@ -526,6 +432,7 @@ async def send(
         offered=offered_now,
         # Only once messages have left the window, so it never repeats what the model reads raw.
         summary=ctx.summary if window.dropped else None,
+        memory=ctx.memory,
     )
     model, parameters, routing = composer.model_settings(config)
 
@@ -544,18 +451,17 @@ async def send(
     prefix = context.build(
         ctx, framework=active_framework,
         history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
-        starting=starting is not None, offerable=offerable,
+        starting=starting is not None,
         # A typed yes to the open offer, or asking for the set they declined, starts it.
         yes_framework=(
             active_framework if deferred
             else config.registry.get(ctx.technique.framework_id) if declined_row
             else None
         ),
-        finished=(
-            config.registry.get(ctx.technique.framework_id)
-            if ctx.technique is not None and ctx.technique.phase is None
-            and ctx.technique.outcome is TechniqueOutcome.ACCEPTED
-            else None
+        # Where the questions ended, for the turn that answers the closing choices.
+        landed_on=(
+            walk.landed_on(finished, ctx.technique.stages_known.get(retiring_framework_id) or {})
+            if retiring_framework_id and (finished := config.registry.get(retiring_framework_id)) else None
         ),
     )
     for_model = (
@@ -580,21 +486,17 @@ async def send(
     # Mani's check, so the model cannot offer before they confirm its understanding, and an answer
     # to an offer exists only while one is open or was declined (spec 0006).
     moment = context.moment(
-        technique, outcome, retiring_framework_id, running_framework,
+        technique, outcome, retiring_framework_id,
         concern=assessment.blocks_framework, check_open=context.check_open(ctx),
     )
     reply_shape = schema.reply_for(
         moment,
-        may_check=context.may_check(ctx, offerable=offerable),
+        may_check=context.may_check(ctx),
         declined_row=declined_row,
-        on_closing=bool(
-            running_framework and technique and technique.phase == running_framework.closing
-        ),
         slots=repairs.slots_for(
             config.registry, conversation_style,
             technique.framework_id if moment is Moment.OFFER_OPEN else None,
         ),
-        feeling_asked=bool(ctx.thread.understanding.get(understanding.PENDING)),
     )
     call = await client.complete(
         [{"role": "system", "content": system.text}]
@@ -623,16 +525,13 @@ async def send(
         # the id only, never a word of what the person said.
         logger.info("thread %s heading toward %s", ctx.thread.id, reply.heading_toward)
     if reply.stage_updates:
-        # Which parts the reply reports: ids and how, never their words.
+        # Which stages the reply reports words for: ids and statuses only, never their words.
         logger.info(
             "thread %s stage updates: %s", ctx.thread.id,
-            ", ".join(
-                f"{u.part}{'=rejected' if u.rejected else '=released' if u.released else '=inferred' if u.inferred else ''}"
-                for u in reply.stage_updates
-            ),
+            ", ".join(f"{u.stage}={u.status}" for u in reply.stage_updates),
         )
     if reply.next_stage:
-        logger.info("thread %s next stage judged %d parts", ctx.thread.id, len(reply.next_stage.parts or []))
+        logger.info("thread %s next stage judged %s", ctx.thread.id, reply.next_stage.status)
 
     # The model's own crisis judgment no longer locks the thread: a small model over-fires it
     # on ordinary distress, pain or injury. Only the deterministic screen (safety.screen, above)
@@ -650,6 +549,15 @@ async def send(
     # client text is rendered from them and no row changes because of them (AC-12).
     guarded = assessment.blocks_framework or model_concern
     answer = _offer_answer(moment, tapped, reply, guarded=guarded)
+    if (
+        reply.stage_answer == "stop" and not guarded and starting is None
+        and outcome is TechniqueOutcome.ACCEPTED and technique is not None
+        and running_framework is not None
+        and technique.phase in walk.content_stages(running_framework)
+    ):
+        # Only they can end the questions: a clear wish to stop leaves the framework as declined, so
+        # it comes back only if they ask for it again. Not knowing never ends it.
+        outcome = TechniqueOutcome.DECLINED
     if moment is Moment.OFFER_OPEN and not (guarded and tapped is None):
         if answer == "yes":
             outcome = TechniqueOutcome.ACCEPTED
@@ -673,27 +581,20 @@ async def send(
     # merged first and their own words after it, so their words win (spec 0006, AC-9). The steps are
     # judged against the record as this turn began, so each takes an exchange of its own (AC-17).
     # Mani's check is stored, so the next turn reads their answer to it, only once their own words
-    # (understanding_update, or what is stored) give all three steps; a check whose control comes only
+    # (understanding_update, or what is stored) give all three steps; a check whose feeling comes only
     # from the check itself opens nothing (spec 0006, AC-3, AC-7, AC-18).
     with_check = not guarded and starting is None and understanding.usable(reply.check)
-    shifted = getattr(reply.understanding_update, "change", None) == "shift"
     understood = ctx.thread.understanding
     check_written = False
     if not guarded:
         before = ctx.thread.understanding
-        # A shift to another situation, in the open chat, takes the problem again from what is new and
-        # keeps the core issue and control to confirm; inside a framework it only holds the walk while
-        # Mani asks whether to stay or switch.
-        restart = shifted and not framework_going
-        theirs = understanding.merge(
-            before, reply.understanding_update, before=before, feeling_answer=reply.feeling_answer,
-            restart=restart,
-        )
+        # An offer or a framework is the case they confirmed: later turns add to it, never replace it.
+        confirmed_case = context.live(ctx.technique) is not None
+        theirs = understanding.merge(before, reply.understanding_update, before=before, frozen=confirmed_case)
         check_written = with_check and understanding.next_step(theirs) is None
         understood = (
             understanding.merge(
                 understanding.merge_check(before, reply.check), reply.understanding_update, before=before,
-                track=False, feeling_answer=reply.feeling_answer, restart=restart,
             )
             if check_written else theirs
         )
@@ -701,7 +602,7 @@ async def send(
         updates.understanding = understood
     if check_written:
         updates.check_at_message_count = ctx.thread.message_count + 2
-    # Going along with the reading is the only way to an offer (spec 0006, AC-1, AC-4).
+    # A clear yes to the check is the only way to an offer (spec 0006, AC-1, AC-4).
     confirmed = (
         moment is Moment.CHECK_OPEN and not guarded and starting is None
         and reply.check_answer == "yes"
@@ -730,7 +631,6 @@ async def send(
             moment in (Moment.CHATTING, Moment.CHECK_OPEN, Moment.OFFER_OPEN)
             and starting is None and not guarded
         ),
-        offerable=offerable,
     )
     if moment is Moment.OFFER_OPEN and not guarded:
         fixed = _answered_offer(
@@ -750,43 +650,36 @@ async def send(
         if not guarded and outcome is TechniqueOutcome.ACCEPTED else None
     )
     walked = None
-    body = reply.body
-    if body == "acting" and _closing_unanswered(technique, running_framework, stored_all):
-        # A plan at the closing stage is not its answer: the stage is asked once before "ready to act"
-        # may skip the body check-in (muhammad, 2026-10-13).
-        body = None
-        fixed = dataclasses.replace(fixed, notes=fixed.notes + ["acting held until the closing stage is answered"])
     if walking is not None and (starting or technique.phase in walk.content_stages(walking)):
         fixed, walked = _walked(
             fixed, reply, walking, stored_all.get(walking.id) or {},
             start=starting is not None, in_force=None if starting else technique.phase,
             style=conversation_style, thread_id=ctx.thread.id,
-            body_answered=moment is Moment.BODY and body is not None
-            and repairs.body_answer_fits(body, "closing", conversation_style),
-            known=understood,
-            hold=bool(understood.get(understanding.PENDING)) or shifted,
+            feeling=understood.get("feeling"),
         )
         if walked.entries != (stored_all.get(walking.id) or {}):
             updates.stages_known = {**stored_all, walking.id: walked.entries}
-        if walked.stopped:
-            # They ended the questions: recorded as a decline, so the next check waits the short
-            # cooldown, and the closing choices follow their own words (spec 0007, AC-3).
-            outcome = TechniqueOutcome.DECLINED
+        if walked.phase == body_route.CHECK:
+            # The last stage was answered: the client's body check-in begins with its first step, asking
+            # about a place when what they said before the framework points to one.
+            check = body_route.check_for(_feelings(understood), walking.stages)
+            text, buttons = body_route.entry(fixed.text, walking.stages, check)
             fixed = dataclasses.replace(
-                fixed, framework_id=None, phase=None, prompts=_closing(),
-                notes=fixed.notes + ["questions stopped by them"],
+                fixed, text=text, prompts=_prompts(buttons),
+                phase=body_route.CHECK if check else body_route.BODY,
             )
     if moment is Moment.BODY and not guarded:
-        fixed, answered = _body_route(
-            fixed, body, tapped, technique,
-            config.registry.get(technique.framework_id if technique else retiring_framework_id),
-            history, conversation_style, ctx.thread.understanding.get("body"),
+        route = config.registry.get(technique.framework_id if technique else retiring_framework_id)
+        asked = (
+            body_route.check_for(_feelings(ctx.thread.understanding), route.stages)
+            if technique and technique.phase == body_route.CHECK else None
         )
-        # The two measurements of the client's cadence, recorded apart (2026-10-16).
-        if answered in repairs.PHYSICAL or answered == "no_tension":
-            updates.body_response = answered
-        elif answered in repairs.HELPED:
-            updates.conversation_helped = answered
+        fixed, step = _body_route(
+            fixed, reply.body, reply.options, tapped, technique, route, asked.area if asked else None,
+        )
+        if step is not None:
+            updates.physical_response = step.physical_response
+            updates.conversation_effect = step.conversation_effect
     if fixed.notes:
         logger.info("repaired reply on thread %s: %s", ctx.thread.id, "; ".join(fixed.notes))
 
@@ -837,7 +730,6 @@ async def send(
 
     count_after = ctx.thread.message_count + 2
     new_offer = next((p for p in fixed.prompts if p.technique), None)
-    library_offer = next((p for p in fixed.prompts if p.library), None)
 
     if new_offer is not None:
         updates.retire_technique = False
@@ -847,11 +739,9 @@ async def send(
             outcome=TechniqueOutcome.OFFERED,
             phase=fixed.phase or "offering",
             at_message_count=count_after,
-            # Mani's own reason for this pick, kept with the run for reviewing selection quality
-            # (spec 0008); never read by anything that decides what happens next.
-            offered_because=(reply.heading_reason or "")[:200] or None,
         )
         updates.offer_frameworks.append(new_offer.technique)
+        updates.reset_outcomes = True
     elif (decided := _decided_framework(fixed.framework_id, outcome, technique, starting)) is not None:
         updates.retire_technique = False
         updates.technique = TechniqueState(
@@ -868,36 +758,16 @@ async def send(
                 if technique and outcome is not TechniqueOutcome.DECLINED
                 else count_after
             ),
-            library_offered_since=False,
         )
         if accepted_this_turn:
             updates.offer_frameworks.append(decided)
-        elif outcome is TechniqueOutcome.DECLINED:
-            # A decline, or stopping the questions (walk.py reports it as a decline too): a
-            # finished run either way, kept so a different framework's offer is not blocked by
-            # this one's own cooldown (spec 0008, decision 3).
-            updates.record_run = TechniqueRun(
-                thread_id=ctx.thread.id, framework_id=decided, outcome=TechniqueOutcome.DECLINED,
-                ended_at_message_count=count_after,
-            )
 
-    if library_offer is not None:
-        updates.library_offered = True
     if fixed.style is not None:
         updates.style = ResponseStyle(shape=fixed.style.shape)
     if fixed.title:
         updates.title = fixed.title
 
     await threads.apply(conn, ctx.thread.id, user_id, updates)
-
-    exercise = None
-    if retiring_framework_id is not None:
-        said = [m.content for m in history if m.role is MessageRole.USER][-2:] + [content]
-        exercise = await _offer_exercise(
-            conn, retiring_framework_id, config, model, routing, user_id, ctx.thread.id,
-            reasoning_effort=parameters.get("reasoning_effort"),
-            said=said, issue=understood.get("issue"),
-        )
 
     summarized = ctx.summary.summarized_message_count if ctx.summary else 0
     ledger = walk.ledger_view(walking, walked.entries, walked.phase) if walked else None
@@ -914,7 +784,6 @@ async def send(
         # covers yet. Both sides are thread message counts.
         needs_summary=window.dropped > summarized,
         llm_call_id=call.call_id,
-        exercise=exercise,
         understanding=understood,
         check_at_message_count=(
             updates.check_at_message_count
@@ -922,10 +791,6 @@ async def send(
             else ctx.thread.check_at_message_count
         ),
         reasoning=reply.reasoning if settings.ai_debug_mode else None,
-        offered_because=(
-            updates.technique.offered_because
-            if settings.ai_debug_mode and updates.technique is not None else None
-        ),
         checks=checks,
         ledger=ledger if settings.ai_debug_mode else None,
         stage_trace=(
@@ -933,56 +798,6 @@ async def send(
             if ledger is not None else None
         ),
     )
-
-
-async def _offer_exercise(
-    conn: asyncpg.Connection,
-    framework_id: str,
-    config,
-    model: str,
-    routing: dict | None,
-    user_id: str,
-    thread_id: uuid.UUID,
-    *,
-    reasoning_effort: str | None,
-    said: list[str],
-    issue: str | None,
-) -> Exercise | None:
-    """The exercise that follows a just-completed framework, chosen by a bound tool call.
-
-    A second, small model call - real tool-calling, not the turn's structured reply - and
-    only reached here because a framework just finished. Every active exercise is a
-    candidate, the framework's own first, and the pick sees what the person said. Skipped
-    entirely, at zero cost, when the catalog is empty.
-    """
-    linked = await exercises_db.list_for_framework(conn, framework_id)
-    linked_ids = {c.id for c in linked}
-    candidates = linked + [
-        c for c in await exercises_db.list_active(conn) if c.id not in linked_ids
-    ]
-    if not candidates:
-        return None
-
-    framework = config.registry.get(framework_id)
-    chosen_id = await client.choose_exercise(
-        [
-            {
-                "id": str(c.id), "title": c.title, "subtitle": c.subtitle or "",
-                "type": c.type or "", "category": c.category,
-            }
-            for c in candidates
-        ],
-        framework.name if framework else framework_id,
-        model=model,
-        purpose=llm_calls.Purpose.EXERCISE_SELECT,
-        reasoning_effort=reasoning_effort,
-        said=said,
-        issue=issue,
-        routing=routing,
-        user_id=user_id,
-        thread_id=thread_id,
-    )
-    return next((c for c in candidates if str(c.id) == chosen_id), candidates[0])
 
 
 # FastAPI's own documented order is response sent -> background tasks run -> yield

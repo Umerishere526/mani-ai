@@ -9,11 +9,11 @@ from dataclasses import dataclass, field
 
 import asyncpg
 
+from mani.llm.schema import Memory
 from mani.models.rows import (
     Profile,
     ResponseStyle,
     SupportStyle,
-    TechniqueRun,
     TechniqueState,
     Thread,
     ThreadSummary,
@@ -161,10 +161,8 @@ class TurnContext:
     # Another of this person's conversations was flagged for crisis recently. Only the fact
     # crosses threads, never what was said in it.
     recent_crisis: bool = False
-    # Every finished run of this thread (migration 027), oldest first. thread_technique_state is
-    # one row per thread, so this is the only record of which other frameworks it has already run,
-    # read to keep a just-finished framework's own cooldown from blocking a different one.
-    recent_runs: list[TechniqueRun] = field(default_factory=list)
+    # Patterns from this person's earlier conversations, folded in as each one finished.
+    memory: Memory | None = None
 
 
 # How long a crisis in one conversation keeps the next ones gentle.
@@ -195,9 +193,8 @@ select
            where c.user_id = t.user_id and c.id <> t.id and c.crisis_detected
              and c.last_message_at > now() - interval '{RECENT_CRISIS_DAYS} days')
                                                    as recent_crisis,
-  coalesce((select jsonb_agg(to_jsonb(r) order by r.created_at)
-    from public.thread_technique_runs r
-    where r.thread_id = t.id), '[]'::jsonb)        as recent_runs
+  (select um.memory from admin.user_memory um
+    where um.user_id = t.user_id)                  as memory
 from (select {COLUMNS}, understanding, check_at_message_count from public.threads
        where id = $1 and user_id = $2 and deleted_at is null) t
 """
@@ -221,7 +218,7 @@ async def load_turn_context(
         ],
         summary=ThreadSummary.model_validate(row["summary"]) if row["summary"] else None,
         recent_crisis=row["recent_crisis"],
-        recent_runs=[TechniqueRun.model_validate(r) for r in row["recent_runs"] or []],
+        memory=Memory.model_validate(row["memory"]) if row["memory"] else None,
     )
 
 
@@ -245,7 +242,11 @@ class ThreadUpdates:
     retire_technique: bool = False
     offer_frameworks: list[str] = field(default_factory=list)
     style: ResponseStyle | None = None
-    library_offered: bool = False
+    # What the body check-in found, set only on the turn that answers its step, never overwritten within a run.
+    physical_response: str | None = None
+    conversation_effect: str | None = None
+    # A new offer starts a new run, so the last run's two outcomes are cleared.
+    reset_outcomes: bool = False
     conversation_style: SupportStyle | None = None
     # The whole stage store, set only when this turn's merge changed it.
     stages_known: dict | None = None
@@ -253,13 +254,6 @@ class ThreadUpdates:
     understanding: dict | None = None
     # When Mani's check of its understanding was made, set only on the turn whose reply is one.
     check_at_message_count: int | None = None
-    # How their body felt after the exercise, and whether the conversation helped: the client's two
-    # measurements, set only on the turn that answers each (migration 025).
-    body_response: str | None = None
-    conversation_helped: str | None = None
-    # Appended once a run's outcome is decided: finished (retired at its last phase) or declined,
-    # including a stop (spec 0008, migration 027). Never set on an ordinary offer or a mid-run turn.
-    record_run: TechniqueRun | None = None
 
     def __bool__(self) -> bool:
         # Each optional field is tested for presence, not for truth. A field whose
@@ -271,14 +265,13 @@ class ThreadUpdates:
             or self.retire_technique
             or bool(self.offer_frameworks)
             or self.style is not None
-            or self.library_offered
+            or self.physical_response is not None
+            or self.conversation_effect is not None
+            or self.reset_outcomes
             or self.conversation_style is not None
             or self.stages_known is not None
             or self.understanding is not None
             or self.check_at_message_count is not None
-            or self.body_response is not None
-            or self.conversation_helped is not None
-            or self.record_run is not None
         )
 
 
@@ -323,33 +316,35 @@ async def apply(
             """
             insert into public.thread_technique_state
                 (thread_id, user_id, framework_id, outcome, phase,
-                 at_message_count, library_offered_since, offered_because)
-            values ($1, $2, $3, $4, $5, $6, $7, $8)
+                 at_message_count)
+            values ($1, $2, $3, $4, $5, $6)
             on conflict (thread_id) do update set
                 framework_id         = excluded.framework_id,
                 outcome              = excluded.outcome,
                 phase                = excluded.phase,
-                at_message_count     = excluded.at_message_count,
-                library_offered_since = excluded.library_offered_since,
-                offered_because      = excluded.offered_because
+                at_message_count     = excluded.at_message_count
             """,
             thread_id, user_id, t.framework_id, t.outcome.value, t.phase,
-            t.at_message_count, t.library_offered_since, t.offered_because,
+            t.at_message_count,
         )
 
-    if updates.record_run is not None:
-        # Its own append, never part of the upsert above: thread_technique_runs is additional
-        # history, read only to keep a finished framework's cooldown from blocking a different
-        # one (spec 0008, decision 3).
-        r = updates.record_run
+    if updates.reset_outcomes:
         await conn.execute(
-            """
-            insert into public.thread_technique_runs
-                (thread_id, user_id, framework_id, outcome, ended_at_message_count)
-            values ($1, $2, $3, $4, $5)
-            """,
-            thread_id, user_id, r.framework_id, r.outcome.value, r.ended_at_message_count,
+            "update public.thread_technique_state set physical_response = null, conversation_effect = null "
+            "where thread_id = $1 and user_id = $2",
+            thread_id, user_id,
         )
+    for column, value in (
+        ("physical_response", updates.physical_response), ("conversation_effect", updates.conversation_effect),
+    ):
+        if value is not None:
+            # Its own statement per outcome, never part of the upsert above, so a later turn's upsert cannot
+            # erase it; written once per run by mani_service (migration 025).
+            await conn.execute(
+                f"update public.thread_technique_state set {column} = $1 where thread_id = $2 and user_id = $3 "
+                f"and {column} is null",
+                value, thread_id, user_id,
+            )
 
     if updates.stages_known is not None:
         # Its own statement after the upsert above, never part of it: a new offer row upserts over
@@ -359,15 +354,6 @@ async def apply(
             "where thread_id = $2 and user_id = $3",
             updates.stages_known, thread_id, user_id,
         )
-
-    for column in ("body_response", "conversation_helped"):
-        value = getattr(updates, column)
-        if value is not None:
-            # Their own statements after the upsert, like the stage store, so a retiring row keeps them.
-            await conn.execute(
-                f"update public.thread_technique_state set {column} = $1 where thread_id = $2 and user_id = $3",
-                value, thread_id, user_id,
-            )
 
     if updates.understanding is not None:
         # Its own column grant, to mani_service only (migration 022).
@@ -400,13 +386,6 @@ async def apply(
             "insert into public.thread_response_styles (thread_id, user_id, shape, voice) "
             "values ($1, $2, $3, $4)",
             thread_id, user_id, updates.style.shape, updates.style.voice,
-        )
-
-    if updates.library_offered:
-        await conn.execute(
-            "update public.thread_technique_state set library_offered_since = true "
-            "where thread_id = $1 and user_id = $2",
-            thread_id, user_id,
         )
 
 

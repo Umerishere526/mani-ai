@@ -7,10 +7,46 @@ phases: [offering, problem, facts, control, outcome, options, compare, select, f
 activation:
   central_indication: >-
     The user faces a practical problem and needs help determining what to do.
+  to_find_out:
+    - "the practical problem, in one sentence"
+    - "that they want a decision or a plan for it, not to understand it or to feel differently about it"
+    - "whether a decision or an action could change it"
+    - "whether it is one problem or several"
+    - "whether they do not know what to do, as opposed to knowing and not starting"
+  # Documentation of the specification: nothing in mani/ reads to_find_out, appropriate_when or not_when.
+  # The prompt reads central_indication, distinctions and contraindications.
+  appropriate_when:
+    - "The user has a specific practical problem"
+    - "The problem can be influenced through action"
+    - "The user does not know what to do"
+    - "Several options require consideration"
+    - "The user needs to make a decision"
+    - "Several problems need separating"
+    - "The user needs a realistic plan"
+    - "The user wants a direct solution"
+    - "The issue has been clearly identified and the user has agreed"
+  not_when:
+    - "The user wants to continue chatting without a framework, or has not agreed"
+    - "The issue has not been clearly identified"
+    - "The user already knows what to do but cannot begin"
+    - "The central issue is one painful thought"
+    - "The user wants deeper examination of an event and belief"
+    - "The situation cannot be changed or influenced"
+    - "The user is close to acting impulsively"
+    - "A safety concern requires the approved safety protocol"
   contraindications:
     - "The decision requires professional expertise MANI cannot provide - a medical treatment plan, a legal conclusion, an investment or financial decision. Mani may help the person work out who could advise them, and must not replace qualified judgment"
     - "The plan would be retaliation, deception, an unsafe confrontation, or harm to the person or someone else"
     - "The situation is abuse, a threat, or emergency danger - it is never a communication problem or an ordinary decision, and the safety protocol applies, not a plan"
+  redirects:
+    - signal: "I know what to do, but I cannot make myself begin."
+      instead: behavioral_activation
+    - signal: "I know my manager will think I am incompetent."
+      instead: thought_reframe
+    - signal: "There is nothing I can do to change the outcome."
+      instead: act_choice_point
+    - signal: "I am about to send a message I will regret."
+      instead: dbt_stop
   distinctions:
     behavioral_activation: >-
       Structured Problem-Solving when the user does not know what to do, options need

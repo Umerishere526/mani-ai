@@ -17,16 +17,15 @@ def fields(moment: Moment, **flags) -> set[str]:
 
 def test_each_moment_carries_only_the_fields_that_mean_something_in_it():
     assert fields(Moment.CONCERN) == CORE
-    assert fields(Moment.CHATTING) == CORE, "no check before their second message, never an offer"
-    assert fields(Moment.CHATTING, may_check=True) == CORE | {"check"}
-    assert fields(Moment.CHATTING, declined_row=True) == CORE | {"offer_answer", *REACH}
-    assert fields(Moment.CHECK_OPEN) == CORE | {"check_answer", "heading_reason", "offer"}
+    assert fields(Moment.CHATTING) == CORE | {"options"}, "no check before their second message, never an offer"
+    assert fields(Moment.CHATTING, may_check=True) == CORE | {"options", "check"}
+    assert fields(Moment.CHATTING, declined_row=True) == CORE | {"options", "offer_answer", *REACH}
+    assert fields(Moment.CHECK_OPEN) == CORE | {"options", "check_answer", "offer"}
     assert fields(Moment.CHECK_OPEN, declined_row=True) == CORE | {
-        "check_answer", "heading_reason", "offer", "offer_answer", *REACH}
-    assert fields(Moment.IN_STAGES) == CORE | REACH
-    assert fields(Moment.OFFER_OPEN) == CORE | {"offer_answer", "their_words", *REACH}
-    assert fields(Moment.BODY) == CORE | {"body"}
-    assert fields(Moment.BODY, on_closing=True) == CORE | {"body", *STAGE}, "the body route follows the closing"
+        "options", "check_answer", "offer", "offer_answer", *REACH}
+    assert fields(Moment.IN_STAGES) == CORE | REACH | {"options"}
+    assert fields(Moment.OFFER_OPEN) == CORE | {"offer_answer", "their_words", "options", *REACH}
+    assert fields(Moment.BODY) == CORE | {"body", "options"}
 
 
 def test_the_offer_slots_are_described_in_the_clients_words_and_a_style_without_a_lead_line_has_none():
@@ -78,7 +77,7 @@ def test_no_stage_field_reads_a_yes_to_a_check_as_the_start_turn():
     The start turn is named as accepting the offer, never as a yes."""
     import json
 
-    for moment, flags in ((Moment.IN_STAGES, {}), (Moment.OFFER_OPEN, {}), (Moment.BODY, {"on_closing": True})):
+    for moment, flags in ((Moment.IN_STAGES, {}), (Moment.OFFER_OPEN, {})):
         properties = reply_for(moment, slots=SLOTS, **flags).model_json_schema()["properties"]
         described = json.dumps({name: properties[name]["description"] for name in STAGE})
         assert "they say yes" not in described, moment

@@ -17,8 +17,8 @@ the same change as the work.**
   `reasoning_effort` instead, so `mani/llm/chain.py` sends the sampling parameters an ordinary
   chat model takes only to models that accept them. A prompt row names its own effort in
   `model_parameters.reasoning_effort` and `mani/config.py` holds the default for the calls that have
-  no row of their own, `low` since 2026-10-16 (muhammad: "all should be low"; was `high`); `mani_base` is on `low` (2026-10-12) and so is the exercise pick that follows
-  it, while `summarization` and `memory_fold` are on `high`. Effort is billed: measured against Azure,
+  no row of their own; `mani_base` is on `medium` (muhammad, 2026-10-22, for comprehension over the 2026-10-12 `low` that cut latency) and so is the exercise pick that
+  follows it, while `summarization` and `memory_fold` are on `high`. Effort is billed: measured against Azure,
   `high` spent 26 reasoning tokens where `low` spent 0, about three times the cost of the same call. Every endpoint keeps `data_collection: deny`, so
   training use stays refused, but OpenAI now serves a turn whenever it is faster, not only when Azure is
   down, so a larger share is processed by a second company - a data protection question that is open, not
@@ -54,14 +54,12 @@ the same change as the work.**
      a wish only to be listened to is the model's reading (`response_format.md`, reasoning).
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, the answers
      that decide the moment (`check_answer`, `offer_answer`, the stage fields), then `text`, then `understanding_update`,
-     `heading_toward`, `style`, `check`, `offer`; on the answer to a check, `heading_toward`, `heading_reason` and `offer`
-     come before `text`.
+     `heading_toward`, `style`, `check`, `offer`; on the answer to a check, `heading_toward` and `offer` come before `text`.
      The order is deliberate: with the reading of the person written first, the reply came out as a case note (2026-10-13). Its shape is picked from the database for the
      turn's moment (`context.moment`, `schema.reply_for`): the offer's slots only while an offer may be made,
      `offer_answer` only while one is open or was declined, `body` only on the body route.
-  5. `walk.py` costs no call: inside a framework it merges the parts the reply reports in `stage_updates` into the
-     stage store, steps the stage (collecting, a reading for their yes, what they take from it, done) on its
-     `stage_answer` and the parts, and renders the reply with its letter line (spec 0004, spec 0007).
+  5. `walk.py` costs no call: inside a framework it merges the reply's `stage_updates` into the stage store,
+     moves at most one stage on its `stage_answer`, and renders the stage reached (spec 0004).
      `reply_checks.py` counts what code cannot fix (an offer that is due and missing or could not be rendered, no question
      unless the draft chose a shape that asks nothing, the last reply's question asked again) in the logs and
      in `Turn.checks`.
@@ -69,19 +67,30 @@ the same change as the work.**
      fixed text from the reply's fields: the offer, Tell me more, Keep chatting and the body route's branches.
      Every button is set by code.
   7. Crisis, the reply, the framework state, what Mani understands of them and the summary are written together.
-- **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): ABCDE and Thought Reframe are seeded
-  and offered (the client's ABCDE document of 2026-10-09 and Thought Reframe document of 2026-10-17). The other
-  four are kept in `content/frameworks/paused/`; the seed sets their rows inactive (never deleted, since threads
-  and exercises refer to them), and moving a file back up brings it back (the recipe is in spec 0008). Each ends
-  on its last stage and then the shared body check-in below (muhammad, 2026-10-09: the check-in is asked). An offer comes only on a clear yes to Mani's check of its understanding, which may come from
-  the person's second message, in every style (spec 0006). The shared body check-in and practice come from `content/prompts/somatic.md`.
-  The body cadence is the client's of 2026-10-16, held in code (`orchestrator._body_route`), one voice in every
-  style: her mind-body introduction and question with Chest / Stomach / Head / Somewhere Else / No Tension; one of
-  her nine exercises word for word, then how their body feels now (Feel Better / Feel the Same / Feel Worse); her
-  reply, then whether the conversation helped (Yes, It Helped / Somewhat / No, Not Really); her reply, then Keep
-  Chatting / Go to Library / Finish for Now. No Tension goes straight to whether it helped. The two answers are
-  recorded apart (`thread_technique_state.body_response`, `conversation_helped`, migration 025). The framework
-  retires on the turn that answers whether it helped (`somatic_helped` is final).
+- **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): ABCDE and Thought Reframe are seeded and
+  offered (the client's ABCDE document of 2026-10-09; Thought Reframe moved out of `paused/` by muhammad, 2026-10-21). The other four are kept in `content/frameworks/paused/`; the seed
+  sets their rows inactive (never deleted, since threads and exercises refer to them), and moving a file back up
+  brings it back. ABCDE ends on E and then the shared body check-in below (muhammad, 2026-10-09: the check-in
+  is asked). An offer comes only on a clear yes to Mani's check of its understanding, which may come from
+  the person's second message, in every style (spec 0006). The shared body check-in comes from `content/prompts/somatic.md`
+  and is the client's document "SOMATIC SECTION OF MANI" (2026-10-16), sent word for word in one voice (muhammad,
+  2026-10-22). **The body check-in is the client's six steps, owned by code (`mani/chat/body.py`):** Step 1
+  straight after the framework's last stage, with Chest, Stomach, Head, Somewhere Else and No Tension (muhammad,
+  2026-10-22 later: the question that asked first was removed, and No Tension is the way out), one of the nine
+  exercises sent whole with the check for change (Feel Better / Feel the Same / Feel Worse), the fixed reply, the
+  overall question (Yes, It Helped / Somewhat / No, Not Really), and Keep Chatting, Go to Library and Finish for Now.
+  The phases are `somatic_check` (only when a place is asked about, see the decision below), `somatic_body`,
+  `somatic_practice`, `somatic_effect` and `somatic_closing`;
+  the last is final, so the turn after it retires the run. Taps decide by their label; a typed answer is the `body`
+  value the reply read, valid only at the step that accepts it, and `unclear` re-asks with the same buttons and never
+  moves the route. Somewhere Else asks where (the model's words, with the six other places as buttons); a place with
+  no exercise gets the closest one offered in the model's words, Yes or No thanks. No Tension skips the exercise and
+  sends its own block, whose Somewhat line differs from Step 5's, as the document places them. Pain, trouble breathing
+  or feeling faint ends the route with the client's line. The physical response (better, same, worse, no_tension) and
+  the conversation effect (helped, somewhat, not_really) are separate columns on `thread_technique_state` (migration
+  025), each written once per run, cleared when a new offer starts a run. Replaces the 2026-10-02 flow: Chat More, its
+  three follow-up questions, the Library nudge and the automatic exercise pick (a second model call) are deleted
+  (`tests/unit/test_removed_names.py`); `exercise` is gone from the turn response.
 - **Memory**: per person, folded from earlier chats by `mani/memory.py`; idle threads fold through
   `scripts/fold_idle_threads.py` or `GET /internal/cron/fold-summaries` behind `CRON_SECRET`.
 - **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). A completing framework picks one
@@ -128,13 +137,22 @@ the same change as the work.**
   asked for again, so how often each happens is known. The one scoped extra call is the exercise pick at the end
   of a framework, at the chat row's effort. `test_a_turn_costs_exactly_one_provider_call` and the
   `reply_checks` tests in `tests/integration/test_turn.py` hold it. Not yet measured live (needs muhammad's yes).
-- **A chat reply has a deadline of 30 s for the whole model call** (`chat_deadline_seconds`, 2026-10-14). Because
-  `llm_timeout_seconds` (60) bounds each wait for data, not the call: a provider that kept the connection open
-  replied after 102 s, past the chat tester's 90 s, and the person saw a traceback. Past the deadline the turn
-  fails as `LLM_TIMEOUT`, retryable, "Mani took too long to answer. Please try again.", recorded as a timeout,
-  never retried in the call; nothing was written, so a resend is safe. Summaries and the memory fold run in the
-  background and keep only the per read timeout. `test_a_chat_reply_past_its_deadline_fails_as_too_slow_and_is_
-  recorded` in `tests/unit/test_client.py`.
+- **A chat reply is streamed: a call silent for 15 s is cut and tried once more, and one attempt has a deadline of
+  30 s** (`chat_first_token_seconds`, `chat_deadline_seconds`, 2026-10-21; the deadline since 2026-10-14). Because
+  `medium` effort makes some turns think 15 to 30 s before the first token (70 percent of output tokens were hidden
+  reasoning, p50 9.7 s, 3 of 161 calls timed out), and a flat deadline around a blocking call could only fail them.
+  muhammad kept `medium` on purpose. `chain.build` streams through `langchain-openai`'s `astream`, whose
+  `stream_chunk_timeout` (set to `chat_first_token_seconds`; background calls keep `llm_timeout_seconds`) ends a
+  silence between chunks, keepalives not counting; `client.complete` folds the stream into the one reply it used to
+  get, records the cut attempt as its own `timeout` row, and retries once, sharing `MAX_SCHEMA_ATTEMPTS` with a
+  malformed reply and a provider blip. Past the deadline or after the second silence the turn fails as `LLM_TIMEOUT`,
+  retryable, "Mani took too long to answer. Please try again."; nothing was written, so a resend is safe. It does not
+  make a thinking-heavy call faster (the median stays about 9.7 s) and a cut attempt is probably billed; if timeouts stay
+  above about 1 percent, `low` effort for plain conversation turns is the next lever. `pytest.ini` ignores one
+  third-party warning the stream emits (`field_name='parsed'`). Not measured live (needs muhammad's yes: his
+  next chat turns, then read `admin.llm_calls`). `test_a_call_that_sends_nothing_for_too_long_is_cut_and_tried_once_
+  more`, `test_a_call_silent_twice_fails_as_too_slow_after_two_tries_only`, `test_a_streamed_reply_records_its_usage_
+  and_generation` in `tests/unit/test_client.py`.
 - **Chat calls go to the fastest Azure or OpenAI endpoint, never a pinned order and never flex**
   (`openrouter_providers` with `sort: latency`, muhammad, 2026-10-14). Because the pinned `order: ["azure",
   "openai"]` was carried from the previous system, never chosen for speed: an order turns off OpenRouter's load
@@ -147,32 +165,55 @@ the same change as the work.**
   `mani-vault/Journal/provider-tail-latency-2026-10-14.md`). `test_routing_sends_a_turn_only_to_azure_or_openai_
   fastest_first` in `tests/unit/test_config.py`, `test_each_call_records_the_generation_that_served_it` in
   `tests/unit/test_client.py`. Not yet measured live (needs muhammad's yes).
-- **An offer comes only when the person goes along with Mani's reading of their situation (`check_answer` yes);
-  the reading comes only once code has
-  seen the problem, its core issue and what is in their control found in that order, each in an exchange of its
+- **ABCDE's D asks what supports the belief and what might challenge it as two questions, one at a time, and code
+  remembers which is still to ask** (muhammad, 2026-10-21). Because in the sister thread D was one stage with one
+  stored status, `walk.merge` dropped the gap on every update, and the model alone chose each question: it never
+  asked what might challenge the belief and asked "do you have enough information" three times. A partial stage
+  now keeps the part still to ask (`StageUpdate.gap`, an id in the stage's `if_unclear`: `challenge`, then
+  `information`) until the stage is known, and `[ctx]` shows it (`stages_known`: `dispute partial, still to ask
+  challenge`). The model words the question from their belief and the feeling underneath; D's boundaries say each
+  question asks one part, never says what it is for, never leads. The client's lines stay the fallback when the
+  model asks nothing. Not measured live (needs muhammad's yes). `test_the_part_still_to_ask_is_kept_while_the_stage_
+  is_partial_and_dropped_when_it_is_known` in `tests/unit/test_walk.py`, `test_what_is_still_to_ask_at_d_is_stored_
+  and_sent_on_the_next_turn` in `tests/integration/test_turn.py`.
+- **The body check-in asks about a place only at its start, after a framework's last stage, and only when what Mani
+  found before the framework points to one** (muhammad, 2026-10-21). Because a feeling that usually sits in the body
+  makes the general question ("Where are you noticing any tension?") personal; it must never interrupt chat or a
+  framework, which an earlier build did (a word in a typed message asked about the chest while Mani was still finding
+  out how they feel, and was removed the same day). After the last stage, if the feelings they named or the one
+  underneath hold a word from `somatic_check.places` in `content/prompts/somatic.md` (anxious, anxiety, nervous to the
+  chest; stress, stressed, stressful to the head), Step 1 is the client's introduction and then "Earlier you
+  mentioned feeling anxious, and that's often felt in the chest. Is that still the case for you right now?" with Yes
+  and No (phase `somatic_check`). Yes is the client's exercise for that place and then the route as before; No is the
+  general question with its five buttons; a typed answer is read as at Step 1; a feeling with no place gets Step 1
+  as before. The place is found again from the stored understanding on the answer, which a running framework
+  freezes. The question, the buttons and the word list are ours, not the client's document. Not measured live
+  (needs muhammad's yes). `test_after_the_last_stage_a_feeling_that_has_a_place_gets_the_personal_question`,
+  `test_no_to_the_personal_question_carries_on_with_the_general_check_in` and `test_a_feeling_word_in_chat_or_inside_a_
+  stage_never_starts_a_body_question` in `tests/integration/test_turn.py`.
+- **An offer comes only on a clear yes to Mani's check of its understanding; the check comes only once code has
+  seen the problem, its core issue and the feeling underneath found in that order, each in an exchange of its
   own, so at their third message at the earliest, in every style** (muhammad, 2026-10-13, spec 0006; the order
   is code's since muhammad's live run of the same day, where Mani checked at their second message having asked
-  about neither the core issue nor control: `understanding.merge` takes a step only once the one before it was
+  about neither the core issue nor the feeling: `understanding.merge` takes a step only once the one before it was
   stored on an earlier turn, `[ctx]` names the next step as `understanding_next`, and a check is stored only when
-  their own words give control; a stored check sends only what it all comes down to and the question, in the
-  model's words, and keeps the problem, core issue and control unsaid, because the four sentences in the client's
-  order read to her as a case summary of what they had already said (the client, 2026-10-16, R16;
-  `repairs.check_text`, `understanding.usable`); the reading ends on a question that moves forward, never "do I
-  have this right", and answering it counts as going along with it, because she said the person "should not
-  have to confirm it again" (2026-10-16, R16; `Check.question`, `check_answer` in `schema.py`)). Because the client's flow
-  (meeting of 2026-10-13, R14) is understand the problem, then its core issue and what is in their control,
+  their own words give the feeling; a stored check is sent as the model's own sentences in the client's order,
+  problem, core issue, feeling, what it comes down to, then the question, `repairs.check_text`). The third step was what is
+  in their control until muhammad replaced it with the underlying feeling (2026-10-21): the person may name it, or Mani
+  offers it from their words as a possibility inside the check, never as a fact, for them to confirm or correct;
+  "I don't know" at that step stores Mani's closest reading as a possibility so the check still opens, and no new gate
+  or deadline was added (`test_the_feeling_step_replaced_control_and_the_prompt_did_not_grow`, the prompt is held to its
+  size). Because the client's flow
+  (meeting of 2026-10-13, R14) is understand the problem, then its core issue and the feeling underneath,
   then check that understanding with them and offer only on a yes, and the message count it replaces needed
   three fixes in a row (scope features 12, 15, 19) without ever recording whether the person agreed. Before
   that: the client rejected an offer on the first message (R1, 2026-10-12); the three steps put the earliest
   check at their third message and the earliest offer at their fourth. Code stores only when the last check was made
   (`threads.check_at_message_count`, migration 023); the next turn is `Moment.CHECK_OPEN`, whose shape alone
-  carries `check_answer` and `offer`. Going along with the reading makes that reply the client's offer; a correction,
-  "that doesn't fit" or only wanting to talk keeps chatting, and the check is used either way. A new check waits
-  `COOLDOWN_AFTER_DECLINE` after the last check and after a declined offer; a completed run holds back only its
-  own set for `COOLDOWN_AFTER_COMPLETE`, so a different active set may be offered on a new confirmed check
-  (muhammad, 2026-10-17, spec 0008 decision 3: finish one cadence, then the next fits what they say next;
-  `context.excluded_frameworks`, history in `thread_technique_runs`, migration 027, because
-  `thread_technique_state` holds one row per thread). The check's words are the model's own, never
+  carries `check_answer` and `offer`. A clear yes makes that reply the client's offer; anything else (a no, a
+  yes with an addition, another topic) keeps chatting, and the check is used either way. A new check waits
+  `COOLDOWN_AFTER_DECLINE` after the last check and `cooldown_for(outcome)` after the last offer, and a set
+  just finished may be offered again on a new confirmed check. The check's words are the model's own, never
   fixed text (muhammad, 2026-10-13); its `check` field marks it, so no code reads text to find it. "No check by
   message 5" is only logged. `context.offer_window`, `due` and the one time clarification lines are gone.
   `test_mani_may_check_from_their_second_message_*` and `test_a_check_is_answered_on_the_next_turn_only_*` in
@@ -185,36 +226,24 @@ the same change as the work.**
   offered (muhammad, 2026-10-09; 2026-10-08: when a weak router
   guess stopped being the candidate, wrong SPS offers went from 4 of 10 live conversations to 0).
 - **Which framework fits comes from the client's Framework Selection Cheat Sheet, one line per framework in
-  its `central_indication`; the model picks from the confirmed core issue and feeling, code resolves the rest,
-  and the reason is stored** (muhammad, 2026-10-13, R15; 2026-10-17, spec 0008). Because the client's cheat sheet
-  (2026-10-13) says to select only once the underlying concern is understood, never from the opening feeling,
-  and her Thought Reframe document (2026-10-17, R19) says ABCDE takes priority only when both fit equally; a
-  concern the cheat sheet gives to a paused framework still gets an active one (the client's own sample
+  its `central_indication`; while ABCDE is the only active set, every confirmed check offers it** (muhammad,
+  2026-10-13, R15). Because the client's cheat sheet (2026-10-13) says to select only once the underlying
+  concern is understood, never from the opening feeling, and gives one line per framework; and muhammad chose
+  to offer ABCDE for now even for a concern the cheat sheet gives to another framework (the client's own sample
   conversation is Structured Problem Solving by it), which the client must be told. No framework id is in code:
-  the offer goes to `heading_toward` when it is active and not held back, else to the first offerable set in
-  `display_order` (`repairs.offer_framework`). `heading_reason`, one sentence on the answer to a check, is kept
-  as `thread_technique_state.offered_because` (migration 027, at most 200 characters), never logged and read
-  by nothing that decides a turn; it shows only in debug turns, the chat tester and `scenario_check.py`, for
-  reviewing selection against `body_response` and `conversation_helped`.
+  the offer goes to `heading_toward` when it is active, else to the only active set (`repairs.offer_framework`).
   The paused files carry their cheat sheet line too, and the seed refuses to activate a framework missing what
   the chat reads (`seed.missing_for_activation`), so bringing one back is a content change. Scenario group
   `pinpoint_and_check` in `scripts/scenarios.json`. Not yet measured live.
-- **A chat's context stays in that chat; nothing another chat said or Mani learned from it is sent to the model**
-  (muhammad, 2026-10-17; reverses "Memory is per person" of 2026-09-23). Because a new chat opened already talking
-  about the last one's coworker, and the person expects each chat to start clean. `composer.compose` takes no
-  memory and `load_turn_context` no longer reads `admin.user_memory`; only the fact that another chat was
-  flagged for crisis still crosses (`recent_crisis`, safety). The fold on a new chat, `admin.user_memory`, the
-  admin read and the `memory_fold` prompt still run and store, and nothing reads them but the admin: muhammad to
-  decide whether to delete the pipeline (it spends a model call per finished chat and keeps health data for no
-  reader). `test_nothing_from_another_chat_reaches_the_prompt`,
-  `test_the_next_chat_carries_nothing_of_the_old_one_not_even_what_was_remembered`.
+- **Memory is per person**. Because Mani should learn each person's patterns across chats, while a new chat
+  still starts with none of the last one's messages (2026-09-23).
 - **An offer is the client's template for its set, and the model fills only the slots** (spec 0003). Because
   a line the model wrote drifted from the client's wording and needed regex repair, while rendering makes it
   exact in every style (2026-10-12). The reply's `offer` carries `going_through`, and `lead_line` where the
   style's template opens with a whole line, for the set in `heading_toward`; code sends `offering.offer[style]`
-  with them and the framework's own permission question (`offering.ask`), and Try it, Tell me more and Keep
-  chatting (`repairs.offer_template`). The offer no longer lists the five steps (muhammad, 2026-10-17; Tell me
-  more does, R11); `going_through` is the feeling they named, read from
+  with them and the permission question, and Try it, Tell me more and Keep chatting (`repairs.offer_template`).
+  The offer no longer lists the five steps, which R11 (2026-10-13) had added: they are told only on Tell me more
+  (muhammad, 2026-10-22; `offering.steps` is gone from both files and from the seed check); `going_through` is the feeling they named, read from
   `understanding:` in `[ctx]`, as a short noun phrase ("your frustration"), and their worry only when they named
   no feeling (spec 0005). Tell me more is the client's longer `offering.explain[style]`; a no is `offering.keep_chatting[style]` with `their_words`. An offer that cannot
   be rendered is dropped, the model's text goes, and `offer unusable: <reason>` is logged.
@@ -222,8 +251,8 @@ the same change as the work.**
 - **One style file per thread, in the system prompt, written from the client's behavior lists** (muhammad,
   2026-10-12). Because the client separates the styles by what each reply is trying to do, and our own recipe per
   style, under shared rules that contradicted their examples, drifted from it (styles document, 2026-10-12).
-  `content/prompts/style_directive.md`, `style_supportive.md` and `style_reflective.md` each hold that style's
-  behavior and the client's within-framework list word for word. Their example conversations were removed
+  `content/prompts/style_directive.md`, `style_supportive.md` and `style_reflective.md` each hold only the client's
+  one-sentence description of that style, which muhammad chose over the longer behavior lists on 2026-10-22. Their example conversations were removed
   (muhammad, 2026-10-13): the client's terse Directive examples pulled against the newer way of communication
   document, and the model copies examples over rules; the one example of the sound is now `mani_base.md`
   `sounds_like`. `composer.compose` sends only the style resolved for the thread, after
@@ -241,61 +270,91 @@ the same change as the work.**
   after it started nothing (2026-10-12). A question is a sentence that ends in `?`; one quoted inside a sentence
   is not. `repairs._asks_them`, `test_their_quoted_question_does_not_cost_the_offer` and
   `test_a_different_question_beside_an_offer_gives_way_to_it` in `tests/unit/test_repairs.py`.
-- **A stage is made of parts its content declares; code reads the parts, never a stage name, and steps the stage:
-  collecting, Mani's reading for their yes, a question about what they take from it, done** (muhammad, 2026-10-17,
-  spec 0007 decisions 11 to 15; replaces the walk of 2026-10-13, spec 0004). Because Lolly's review of 2026-10-16
-  found ABCDE run as a questionnaire, and the stage gate was the model's label (known, partial, missing) with one
-  gap id, so code could not tell a reading due from a reading given, and every new framework would have meant new
-  code for its own stages. Each content stage in `content/frameworks/*.md` lists `parts` (`id` unique across the
-  framework, `is`, `enough`, `required` (default true), `from: understanding.<key>`, `ask` with `<part id>` or
-  `<understanding.key>` references, `stop_pushing`), and may carry `intro` (its letter line), `reflect`,
-  `when_stuck` and `confirm`; `scripts/seed.py` refuses a framework whose parts the walk cannot read. The reply
-  reports `stage_updates`, one entry per part their message gives (`inferred`, `corrected`, `rejected`,
-  `released`), and `next_stage`, the parts of the stage the walk reaches next that the conversation already
-  answers, judged from the whole thread when it is reached (nothing is stored ahead). A part bound by `from` is
-  filled once per value from the running understanding as an inference to confirm; a part they rejected stays
-  empty until the understanding itself moves. With every required part filled the stage is read (`step: read`,
-  the words read back kept in `read`) and waits for their yes (`agreed`); a yes, even with more added, moves the
-  stage, or first brings Mani's question about what they take from it when the stage has a `reflect`, and any
-  answer to that ends it; words that change a part give a new reading, only then; a part they reject is asked
-  again; a skip (`let_go`) moves it and keeps no reading they did not agree to; a held part is released by its
-  `stop_pushing`. The reply that reaches a stage opens with its letter line from the content; a reply that stays
-  does not (muhammad, 2026-10-17). A stage stored in an earlier shape, or ahead of the stage in force, is ignored. `walk.py`,
-  `tests/unit/test_walk.py`, `test_a_walk_with_nothing_known_stays_on_each_stage_until_it_is_read_agreed_and_reflected_on`
-  (`tests/integration/test_turn.py`); live `anxious_long_day` in `scripts/scenarios.json`.
-- **ABCDE and Thought Reframe are offered, each from the client's own document** (muhammad, 2026-10-09;
-  Thought Reframe added 2026-10-17, spec 0008). Because the client's ABCDE document of 2026-10-09 and Thought
-  Reframe document of 2026-10-17 are what we build to, and their stages give the questions a target; the other
-  four are paused because Lolly asked for one framework at a time, tested and corrected until it works, before
-  the next (her message of 2026-10-09 with the ABCDE document). Thought Reframe stays lighter than ABCDE, by her
-  rule that it must not become a second ABCDE: "Step N is …" names each step once, and only its last step has a
-  reflection (muhammad, 2026-10-17). Its old `closing` stage is gone, since her somatic cadence ends every
-  framework. `tests/unit/test_thought_reframe_content.py`,
-  `test_a_reframe_walk_stays_lighter_than_abcde_with_one_reflection_at_the_end`. The reply that opens a
-  stage starts with its letter line, "B is for Belief." (muhammad, 2026-10-17, spec 0007 decision 11, reversing
-  decision 5 of 2026-10-16 and restoring R12; the stage also shows in the chat tester's ledger). The styles'
-  consent lines are not sent. What Mani knows lives in the stage store; the parts a stage already holds are
-  read back once, as the decision above says, and a part not known is asked about their situation using the
-  words it refers to. Tell me more is
+- **Inside a framework, a stage their words already answer is said back and confirmed once, never asked; one
+  stage per reply, stepped by code** (muhammad, 2026-10-13, spec 0004). Because the client wants each letter
+  introduced as it is reached and never to be asked again what they already said (R6, R12), and the model's own
+  walk past answered stages asked them again once their words left the history window and could name a stage
+  it never asked (2026-10-13). The reply reports `stage_answer`, then `stage_updates` (the stage in force from
+  their message, and any earlier stage they correct), then `next_stage`: on every turn that can start or move the
+  walk, its judgement of the stage after the one in force (A on a start) as known, possible (A only), partial
+  with its `gap`, or missing, from everything they said about the issue they confirmed, before or after the check,
+  by that stage's `ready_when` and `reach` (sent in `[ctx]` as `next_stage_ready_when` and `next_stage_reach`).
+  It is applied only when the walk moves. Because a reach judged in an optional entry, scoped to after the check,
+  was left out and C and D were asked though their feeling and what supports the belief came before the check, and
+  a stage never judged looked the same in the logs as one judged missing (thread 4b93d612, 2026-10-14; the client's
+  ABCDE document: "Use what the person has already shared"). A missing judgement on a move is logged as the reply
+  check "reach unjudged". Nothing is reported or stored for a stage before the walk reaches it, so nothing goes
+  stale (2026-10-13: the seed of every stage at the yes went stale twice; reviewed by Fable 5.1 and the
+  architecture reviewer, and again 2026-10-14). `walk.py` merges the stage in force, then moves at most one phase,
+  then merges the stage reached; an update for any other stage is dropped, logged: `agreed` counts only on a stage reached as a check,
+  `answered` and `corrected` only with words for it ("yes, and more" with no new words reads as `agreed`). Not
+  knowing never moves it: `not_yet` stays however often it is said, and only `stop`, their clear wish to leave the
+  questions, ends the framework (declined, so it returns only when they ask for it). No stage is skipped. Every
+  stage reached is one `[ctx]` told the reply about (a start or a move on its answer), so the model's text is used for it when it asks something; a partial D missing its challenge falls
+  back to the client's own line for it (its `if_unclear` id, `NextStage.gap`). E is done only when they have a more
+  realistic way to see it and one clear path, a plan ("raise it with HR") counting as the path, and Thought Reframe's
+  last step (`replacement`) only when they have a balanced thought they say they believe, which need not be positive
+  (the client's Thought Reframe document, matched by muhammad, 2026-10-21; it replaced his earlier "and hopeful" gate,
+  and the old `closing` stage is gone: one acknowledging sentence, then the body check-in; Mani may still offer loose
+  possibilities when they are unsure, the person decides; safety and danger boundaries stay); The stage reached opens with its `intro` line, then: for a known or possible stage, A to E, Mani's own
+  confirmation, saying back only what they said for that stage and asking in its own words whether it is right
+  (muhammad's team lead, 2026-10-13: the fixed "Is that right?" phrases read as canned; `walk.CONFIRM_ASK`), with
+  A's client `confirm` line or their words and a phrase from `confirm_phrases` only as the logged fallback
+  ("confirm text unusable") when Mani's text is empty, asks nothing or was written for another branch; for partial, the
+  model's question for only the gap; judged missing, A's client `missing` line with the feeling word in the
+  running understanding (spec 0005) when they named one, otherwise Mani's own question built on the client's
+  `ask` and about their situation, with the client's `ask` as the logged fallback ("missing asks nothing");
+  reached unjudged, the client's line. A reply that stays is the model's text with no letter line. Each falls back to fixed text when the
+  model's does not fit, logged by name. Leaving the last stage enters the body check-in. No stage
+  question carries a button: a "Not sure" button was added by mistake and removed (muhammad, 2026-10-09). The
+  chosen style holds inside a framework through its style file. A question that makes them uneasy keeps the
+  stage, asked more gently from another side; unsure typed ("I don't know", "not sure") is helped with two or three
+  loose possibilities, thinking aloud, each a different set, until they have it or stop (muhammad 2026-10-21; the
+  model's reading, not a phrase list). Every stored word that is said back
+  (`said`, the understanding and the check) is defined as said to them as you, a dozen words at most, because a
+  third person note pasted into A's client line read "From what you've shared, their boss criticized their…"
+  (muhammad's live run, 2026-10-13); `scripts/scenario_check.py` flags it as "talks about them, not to them".
+  `tests/unit/test_walk.py`, the walk scenarios at the end of `tests/integration/test_turn.py`, and the live
+  `frustrated_work_full` and `overtime_full` in `scripts/scenarios.json`.
+- **A framework walk never skips and helps when they don't know** (muhammad, 2026-10-21). Because "I don't know" was
+  routed around three ways in a row (silent skipping, the Not sure button, `let_go` after a second `not_yet`) and ended
+  frameworks having helped no one. A known stage is confirmed by them before the walk moves; an unclear one keeps the
+  conversation on it, with two or three loose possibilities from what they said, never the same twice, and no cap; only
+  `stop` ends it (`test_not_knowing_never_moves_the_walk_however_often_it_is_said`,
+  `test_a_wish_to_stop_leaves_the_framework_and_it_comes_back_only_when_asked_for`). The problem, core issue and feeling found before the offer reach every stage turn as `their_case` in `[ctx]`
+  (the stored understanding, relabelled while a framework runs or is about to start), and every stage question and
+  possibility is about it, in their words (muhammad, 2026-10-22; `test_the_findings_are_their_case_once_a_framework_is_running_or_about_to_start`). Every feeling they name is kept, none twice, and what they raise
+  after the case was found goes in `also` (a new problem, a warning, what is at stake); the problem, core issue and
+  underlying feeling are frozen once an offer is open or a framework runs, so a later detail cannot replace the problem
+  (muhammad, 2026-10-22; `understanding.merge(frozen=)`, `test_once_an_offer_is_open_the_case_is_not_replaced_but_feelings_and_details_still_gather`).
+  The stages their case can answer (ABCDE A, B and C; Thought Reframe's thought and why it hurts) are judged against it
+  through their `reach`, so they are said back and confirmed once, never asked again.
+- **ABCDE is offered from the client's ABCDE document** (muhammad, 2026-10-09; Thought Reframe joined it 2026-10-21). Because the client's
+  ABCDE document of 2026-10-09 is what we build to, and ABCDE's stages give the questions a target
+  (2026-10-09); why the other five are paused and why the body check-in stays: reason unknown, muhammad to
+  confirm. Each stage opens with its letter and name ("A is for Activating Event."), as the document shows
+  (muhammad agreed 2026-10-13, R12), and nothing comes before it, so the styles' consent lines are no longer
+  sent (the document goes from Try It straight to "A is for"). What Mani knows lives in the stage store; a stage
+  already answered is confirmed once, as the decision above says, and one not known is asked with the document's
+  question about their situation, as the decision above says, using the feeling word they gave for A if they
+  named one. Tell me more is
   the numbered five steps in the person's style word for word (`stages.offering.explain`), the offer follows the
-  client's pattern per style (`offer`) with no list of the steps under it (muhammad, 2026-10-17), Keep chatting
-  asks the client's question (`keep_chatting`), the permission question is the framework's own
-  (`stages.offering.ask`, "Would you like to try it?" in every style), and the body check-in is asked after E
-  (muhammad decided to keep it). Supportive inside a framework adds no extra reassurance, validation or
+  client's pattern per style (`offer`), Keep chatting asks the client's question (`keep_chatting`), the permission
+  question is "Would you like to try it?" in every style, and the body check-in is asked after E (muhammad
+  decided to keep it). Supportive inside a framework adds no extra reassurance, validation or
   questions.
 - **The stage store** (`thread_technique_state.stages_known`, migration 020, written by code after the reply).
   Because the stages reached so far must be remembered by code, the walk's record, not a stand-in for memory: the
   model sees the whole thread (the decision below), and each stage is judged when it is reached (R6, 2026-10-13). Keyed by framework id
-  then stage id: `parts` (each part's short words, at most 200 characters, its `source` said or inferred, and
-  the words it replaced in `was`), `step` (collecting, read, reflect, done), `read` (the words last read back),
-  `from` (the understanding value a part was last filled from), `tries`, `asked` and `last_ask` (the question
-  last asked on the stage, so the next reply can ask it again). On the stage in force the latest words win and
-  their own words are never replaced by an inference (`walk._apply`). An entry stored in an earlier shape, or
-  ahead of the stage in force, is ignored and shown as not reached. It has
+  then stage id: `said` (their short words, at most 200 characters), `status` (partial, possible for A only,
+  known, done) and `tries`. On the stage in force the latest words win and the status never drops; elsewhere only
+  a higher status replaces what is stored, or a correction, which keeps the higher status (`walk.merge`).
+  An entry
+  stored ahead of the stage in force, by an earlier version, is ignored and shown as not reached. It has
   its own update, never part of the shared upsert, so a later offer row keeps it; it is kept when a run retires,
   cleared for one framework when that framework starts again, deleted with the thread, never logged, and sent
   only in that thread's `[ctx]`, disarmed. With `AI_DEBUG_MODE` on, a turn returns `ledger`, built from the
-  store: every stage as missing, partial, reading, reflecting, done or not reached, with the stage the walk is
+  store: every ABCDE stage as known, possible, partial, done, missing or not reached, with the stage the walk is
   on marked, and the chat tester shows it under "What Mani knows". `Turn.stage_trace` carries the ids and
   statuses alone, for `scripts/scenario_check.py`.
 - **The transcript is the memory within a thread** (muhammad, 2026-10-13, after the architecture reviewer's
@@ -315,8 +374,8 @@ the same change as the work.**
   2026-10-13, R4, R6); muhammad chose this over OpenAI's conversation API (OpenRouter rejects stored state) and
   over a prompt rewrite alone. Since the whole thread is in view (2026-10-13) the window premise no longer
   holds; the record stays as the steps' gate state, A's feeling slot and the exercise pick's issue. Every reply reports `understanding_update` (`feeling`, `issue`, and since spec
-  0006 `core_issue` and `in_their_control`, the client's pinpointed problem, its core issue and what is in their
-  control): only what this message names or changes. On a check turn the check's fields are merged first and
+  0006 `core_issue` and `underlying_feeling`, the client's pinpointed problem, its core issue and the feeling
+  underneath): only what this message names or changes. On a check turn the check's fields are merged first and
   `understanding_update` after them, so their own words win. `understanding.merge` keeps the stored value on a null or blank one; anything else
   replaces it, on one line, at most 200 characters. Nothing is merged on a concern turn. It is sent back every
   later turn as the `understanding:` line in `[ctx]`, disarmed, and code reads it only to place A's feeling on
@@ -354,36 +413,41 @@ the same change as the work.**
   mean", are allowed: the client asks both (2026-10-12). `heading_toward` only decides what is offered. Mani never joins two things
   they said into a link they did not make. Told it got something wrong, in any words, it says it misunderstood and asks what would be
   more accurate (the client's line), never explaining what it meant.
-- **Each reply moves the conversation forward from what is new in their last message, and the example is three
-  short pieces of other conversations, each showing one move her better replies make** (the client, 2026-10-16,
-  R16; it replaces her sample conversation of 2026-10-13 as the example). The moves: a new reading in one sentence,
-  knowing their role before asking what they can do, and why what they tried may not be enough followed by the step
-  it points to. Her coworker chat itself is not in the prompt, because as the example Mani replied with her lines
-  nearly word for word, so testing it showed copying (muhammad: hardcode nothing to a scenario, 2026-10-16); it is
-  now a held-out test (`coworker_bad_mood`). `how_you_talk` says: know what is new and the one thing still
-  missing; say what is new in one plain sentence of Mani's own, as what it sees in their situation; then one
-  question about what is missing; never say back what they just said or announce what Mani wants to understand;
-  options only when they give almost nothing. Mani may say what it sees from their words, never a motive, never
-  people in general, never what to do (`identity`, `boundaries`), and it knows their role before asking what is in
-  their control (`understanding_them`). Because the sample's moves, copied as a recipe for every reply, read to the
-  client as mechanical paraphrase ending in a case summary, the fourth round of R13 and R14; and the rules before the
-  sample, which forbade its moves, produced abstract lines like "can make it hard to separate one piece of feedback
-  from what you think it says about your ability" (live, 2026-10-13; diagnosed by a second model). So the lever is
-  what each reply does, not another do or don't. `recent_openers` is gone from `[ctx]` for the same reason.
-  `scripts/scenario_check.py` flags "explains people", "announces understanding" and the example's details
-  borrowed. Because muhammad wants human-like language in plain everyday words (2026-10-07), and both client
-  documents show the voice: a few short sentences, a direct ask answered plainly first, and an understanding of how
-  things fit together said for them to confirm or correct. Its paragraphs are laid out in code, not left
+- **Mani talks like the client's sample conversation, which is the spec for the voice** (muhammad, 2026-10-13).
+  Mani's first five replies from the sample are in `mani_base.md` as `example`, word for word (its summary, which
+  invents facts, is left out), and `how_you_talk` says to copy how it talks: say back the part that matters in
+  their words, ask one question that ends on its own line, with its options on the next line. The lines saying what
+  Mani wants to understand or does not want to assume are cut from the example and the rules, so they do not come
+  back: the client liked the mirror, not that line (muhammad, 2026-10-21). Because rules that
+  described the sample while forbidding its moves ("never repeat their words", "never reuse its words", vary
+  every opener) produced lines like "can make it hard to separate one piece of feedback from what you think it
+  says about your ability" (live, 2026-10-13; diagnosed by a second model). `recent_openers` is gone from `[ctx]`
+  for the same reason. `scripts/scenario_check.py` flags "explains people" and the example's details borrowed. Because
+  muhammad wants human-like language in plain everyday words (2026-10-07), and the client's way of
+  communication document (R13, 2026-10-13) shows the voice: up to four short sentences in short paragraphs, a
+  direct ask answered plainly first, and an understanding
+  of how things fit together said for them to confirm or correct. the options for answering the question are the reply's `options` field, which the model must fill (or leave null
+  for a yes or no question or a check) and code puts on a line of their own under the question, because the prompt
+  rule for them was lost to "one question" lines elsewhere three times (muhammad, 2026-10-22;
+  `test_the_options_go_on_the_line_under_the_question_and_only_where_the_reply_is_free_text`); framework stage replies carry it too, under the model's own stage question and never under the
+  client's fallback line (`test_the_possibilities_go_under_the_models_own_question_and_never_under_the_clients_line`).
+  A reply is a mirror that adds nothing they did not say, an open question that never leads, then possibilities with room
+  for something else; the check reads as one flowing summary of the situation, what lies under it and the feeling, then asks
+  whether it captures it or something was missed (muhammad, 2026-10-22). Its paragraphs are laid out in code, not left
   to the model, which broke the line before its question in some replies and not others: Mani's own text
-  before a framework goes out with the closing questions on a line of their own, unless fewer than 8 words come
-  before them (`repairs.laid_out`, gated in `orchestrator.send`; stage replies stay one paragraph, as the ABCDE
+  before a framework goes out with each closing question, and the options asked after it, on a line of their
+  own (muhammad, 2026-10-21: the model put them on one line despite the prompt), unless a single question has
+  fewer than 8 words before it (`repairs.laid_out`, gated in `orchestrator.send`; stage replies stay one paragraph, as the ABCDE
   document writes them; `test_manis_own_text_goes_out_as_the_client_lays_it_out`, 2026-10-14). It never adds a fact they did not give, which
-  the sample's own summary does (muhammad, 2026-10-13); why stage questions are not made about feeling: reason
-  unknown, muhammad to confirm. Correct grammar and punctuation, each sentence short enough
+  the sample's own summary does (muhammad, 2026-10-13). Correct grammar and punctuation, each sentence short enough
   to say in one breath, as people talk in daily life (`mani_base.md` `voice`). Stage questions inside a
-  framework keep the framework's own wording and are not made about feeling: a stage reached as missing is asked
-  with the client's `ask` for the style as written, with what it refers to in their words (muhammad, 2026-10-14),
-  because the bare question ("…about what was happening?") was met with "regarding?" (thread 425f6a55) and the
+  framework carry the feeling underneath (muhammad, 2026-10-21, after the sister thread, where B and D dropped the
+  guilt they had confirmed): a stage reached as missing is a short mirror of their situation and the feeling
+  underneath, then its question in the model's own words with the possibilities under it, and the client's `ask` only as the logged
+  fallback when the model asks nothing (muhammad, 2026-10-22, replacing "as written": the E line said "both sides"
+  with no side in view). Stage A says back what happened together with the underlying feeling they confirmed, so
+  they do not say it twice. Naming what the question refers to stands (2026-10-14):
+  the bare question ("…about what was happening?") was met with "regarding?" (thread 425f6a55) and the
   client's document adapts it the same way ("What makes you believe your manager is planning to replace you…").
   Free rewording stays out: it produced stacked lines like "What do you find yourself telling yourself about
   that?" (2026-10-12). `walk.reply_text`,
@@ -414,61 +478,6 @@ the same change as the work.**
   so muhammad to revisit streaming after the next measured run).
   In process routing no longer describes the code (`router.py` is gone and the model chooses the framework):
   muhammad to reword or drop it.
-- **A question or push-back on a stage (`stage_answer` asked) is answered and the stage held, without spending a
-  try, up to `walk.HELD_FOR_QUESTIONS` (2) per stage; past that it counts as not_yet.** Because a question counted
-  as a failed try, so a second one let the stage go and, on E, forced the body check-in over it (muhammad,
-  2026-10-16). `test_a_question_holds_the_stage_without_a_try_then_counts_as_a_try` (`tests/unit/test_walk.py`).
-- **What they say they feel in their body is kept as `understanding.body`, and the check-in names it before her
-  question in `somatic_checkin.ask_known` (slot `<body_said>`); with nothing kept it is her plain check-in. A question
-  at the check-in (body asked, or no branch) gets Mani's answer and her question once more (`ask_again`), then the
-  cadence moves on; something else brought up (body moved_on) gets Mani's reply and the closing choices; an unclear
-  sensation such as burning eyes (body clarify) is asked about before any exercise (Lolly, 2026-10-16, point 8).** Because muhammad
-  asked that a sensation named anywhere in the chat be what the check-in asks about, and the check-in could hold a
-  person for ever when no branch fit (2026-10-16). `repairs.check_in_script`, `orchestrator._body_route`,
-  `_check_ins_sent`; `ask_known` is checked by `seed.load_somatic_stages`. The `ask_known` wording is ours and is
-  waiting on the client.
-- **Inside a framework a stage moves only on their yes to Mani's reading and what they answer to its question
-  about what they take from it, or a skip; never on an answer alone and never by a count** (muhammad, 2026-10-16,
-  spec 0007 decisions 3 and 6; 2026-10-17 decision 12). Because Lolly's review of 2026-10-16 found ABCDE run as
-  a questionnaire: an answer moved the walk, and a second not_yet let a stage go. "I don't know" never moves a
-  stage: the reply is sent what the stage holds (`stage_have`), what it needs (`stage_missing`) and the question
-  last asked (`stage_last_question`), and asks it again, narrower or helped by `when_stuck`; a part's
-  `stop_pushing` says when to accept what is there. A correction to an earlier stage holds this one while Mani
-  asks about it, with the replaced words kept in `was`. After `walk.STALL_LIMIT` (4) replies without progress
-  Mani offers to keep going, skip or stop; `stopped` records the run as declined, with the store kept, and the
-  closing choices follow. Another issue, or "come back to it later", is `asked`, never `let_go`. A change
-  awaiting their answer (a feeling, a shift) holds the walk in code. `tests/unit/test_walk.py`,
-  `test_stopping_the_questions_keeps_what_was_said_and_offers_the_two_choices`.
-- **Their situation, their feeling and what it comes down to can change anywhere; the reply reports it as a
-  refinement or a shift** (muhammad, 2026-10-17, spec 0007 decision 14). Because the person may adjust the
-  situation or the feeling at any point and the underlying issue moves with it, and Mani has to follow without
-  losing the thread it is on. `understanding_update.change` is `refine` (stored; a changed feeling waits for
-  their yes, the core issue is read again) or `shift` (a different situation): in the open chat a shift empties
-  the event, the problem and the reading, the replaced values kept, and keeps the core issue and what is in their
-  control marked to confirm (`to_confirm`), so Mani asks once whether they still hold instead of asking them from
-  scratch, and no check comes until they are confirmed or replaced (muhammad, 2026-10-17); inside a framework it only holds the walk while Mani asks whether to stay or look at the new one, and
-  their choice to switch is `stopped`. `[ctx]` shows a replaced value as `(was: …)`. `understanding.merge(restart)`,
-  `test_a_shift_keeps_the_core_issue_and_control_to_confirm_instead_of_asking_them_again`,
-  `test_a_shift_in_the_open_chat_keeps_what_they_answered_to_confirm`,
-  `test_a_shift_to_another_situation_holds_the_stage_inside_a_framework`.
-- **The check comes the turn after control is stored, never on the reply that receives it** (muhammad,
-  2026-10-16, spec 0007 decision 2). Because Lolly's point 2: the reply to "I choose nothing" summarised instead
-  of engaging it. The earliest check answers their 4th message. `test_no_check_until_the_problem_its_core_issue_and_their_control_are_all_found`.
-- **A changed feeling is confirmed before it is stored, and a changed issue, event or core issue is kept with what
-  it replaced** (muhammad, 2026-10-16, spec 0007 decisions 8 and 9). Because he asked for a confirmation when the
-  emotion changes and for a stack of what changed. `understanding.feeling_asked` holds the new word while
-  `[ctx]` `feeling_change` asks, `feeling_answer` stores it; `understanding.history` keeps the last three values of
-  `feeling`, `issue`, `event` and `core_issue`. The turn the check is written records no history.
-  `test_a_changed_feeling_waits_for_their_yes`, `test_a_replaced_issue_or_event_is_kept_in_the_history`.
-- **The body cadence is the client's somatic cadence document of 2026-10-16, word for word, one voice, its two
-  measurements recorded apart** (Lolly, 2026-10-16, R18). Because she asked for it to replace the body route of
-  2026-10-02. Built without tests (muhammad: "build it fast no test", 2026-10-16); the tests that pinned the old
-  route were rewritten 2026-10-17, `test_the_body_cadence_runs_from_the_check_in_to_the_closing_choices_and_records_both_answers`
-  among them, and the closing choices are Keep Chatting, Go to Library and Finish for Now everywhere (`Chat More`
-  is gone). Migration 025 is applied locally only.
-- **After a framework ends, `[ctx]` keeps what was found in it (`finished_framework`, the retired row's stages).**
-  Because "what was my new belief?" or "that didn't help" after the end had only the raw messages to go on
-  (2026-10-16). `test_a_finished_framework_keeps_what_they_found_in_view`.
 
 ## Before it takes real traffic
 
@@ -521,16 +530,15 @@ Ordered by what breaks first.
   Mani's check of its understanding, at their third message at the earliest, in every style, and have them
   read about five real Supportive and Reflective transcripts.
 - Send the client a short written summary of the flow agreed in the meeting of 2026-10-13 (no transcript
-  exists) so they can confirm it: pinpoint the problem, then its core issue and what is in their control,
+  exists) so they can confirm it: pinpoint the problem, then its core issue and the feeling underneath,
   check it with them, and offer only on a yes (R14, spec 0006).
 - Tell the client (2026-10-13): Mani's check uses only the person's words. The summary in their sample
   conversation adds facts the person never said ("acknowledge the problem when you confront them, promise to
   improve"), and Mani does not copy that (R13).
+- Tell the client (2026-10-21): the third step before the check is now the feeling underneath, not what is in their
+  control. A feeling the person did not name appears only as a possibility inside the check (R17, R34, R35).
 - Tell the client (2026-10-13): by their own cheat sheet, their sample conversation is Structured Problem
-  Solving, which is paused, so it gets ABCDE or Thought Reframe for now (R15).
-- Tell the client (2026-10-17, spec 0008): Thought Reframe's old closing stage is gone, since her somatic
-  cadence ends it, and the lines saying when Mani stops pushing on a step and its one reflection at the end are
-  ours; have Michaela or Lolly review them in `content/frameworks/thought_reframe.md`.
+  Solving, which is paused, so it gets ABCDE for now, as does every confirmed check (R15).
 - Tell the client: when a person asks Mani to pick, it offers one small draft step to accept
   or change, which the Behavioral Activation specification's "must not choose the activity" does not allow
   as written.
@@ -556,12 +564,11 @@ Ordered by what breaks first.
   `llm_call_facts`. Reviving any of those branches collides again.
 
 
-- **Body route, from the client's 2026-10-02 flow.** Still the client's to confirm: Chat More / Go to Library
-  keep their labels, where the new document says "take me to the library" / "want to keep chatting"; the
-  Reflective chest line was a fragment and is sent with its grammar fixed; the "somewhere else" practice has
-  no client wording and the three style versions are ours, written from their Ground specification. The
-  practice now carries no buttons, as in the new document. In the scripted eval, Direct can stall in a
-  framework's own closing stage (`panic_somatic_once`), which is the model not advancing, not the body route.
+- **Body check-in, tell the client (2026-10-22):** the buttons for the six places a Somewhere Else answer can name,
+  Mani offering the closest exercise for a place that has none, and the personal question about a place (2026-10-21)
+  with its word list, are ours, not in their document; the exercises are
+  unreviewed by their clinician. Keep Chatting continues from their case and where they ended up (`landed_on`), in the
+  same mirror, question and possibilities shape, never "what would you like to talk about".
 - **Generated TypeScript types** for `web/` and `mobile/` from the OpenAPI schema, with a CI gate. No CI exists.
 - **Admin audio upload.** The 17 seeded exercises come from `content/exercises/` through
   `scripts/seed_exercises.py`; there is no upload route, and the admin exercise CRUD takes an existing
@@ -570,8 +577,9 @@ Ordered by what breaks first.
 - **Admin conversation browser**: do not rebuild it as a general reader. Scope it to threads with an unresolved
   crisis event, log each read, and return metadata by default.
 - **`GET /v1/admin/models`**, which the prompt editor's model dropdown needs.
-- **Migration 027** (`thread_technique_runs`, `offered_because`, `threads.vague_streak` dropped) is applied
-  locally only (2026-10-17). Hosted was last compared on 2026-10-07; compare again before pushing it.
+- **`threads.vague_streak`** is granted to the backend and written by nothing; the pacing it belongs to is
+  designed, not built.
+- **`appropriate_when` and `not_when`** in the framework files are read by nothing (each file says so).
 - The words "worried", "concerned" and "a lot" still reach about 1 reply in 10 in some scenarios; repairs log
   them.
 

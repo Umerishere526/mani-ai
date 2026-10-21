@@ -1,5 +1,7 @@
 # Framework 2 — Thought Reframe
 
+> Superseded in part, 2026-10-21: the client's Thought Reframe document (`docs/client/docs/Thought_Reframe_Framework.md`) sets five steps and no closing question, and step 3 as why the thought feels convincing and whether anything complicates it. Where they differ, that document wins.
+>
 > Source specification, transcribed from *SIX FRAMEWORKS.pdf* "FRAMEWORK 2: REFRAME THOUGHT".
 > Shared rules live in `six-frameworks-overview.md`.
 

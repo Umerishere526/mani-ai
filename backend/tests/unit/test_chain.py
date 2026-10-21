@@ -21,7 +21,7 @@ def test_the_model_is_pointed_at_openrouter_not_openai():
     """langchain-openai is an OpenAI-protocol client. The base_url decides who is billed."""
     runnable = chain.build(
         Reply, model="google/gemini-3-flash-preview", temperature=0.7,
-        max_tokens=2048, routing=None, settings=settings(),
+        max_tokens=2048, routing=None, settings=settings(), chunk_timeout=15.0,
     )
     # with_structured_output wraps the model; the configured chat model is underneath it.
     configured = chain._model.cache_info()
@@ -29,13 +29,27 @@ def test_the_model_is_pointed_at_openrouter_not_openai():
     assert runnable is not None
 
 
+def test_the_silence_a_call_may_keep_reaches_the_streaming_model():
+    """A call that sends nothing for this long is cut by the library (a streamed chunk, not a keepalive)."""
+    chain.build(
+        Reply, model="m", temperature=0.7, max_tokens=100, routing=None, settings=settings(),
+        chunk_timeout=7.5,
+    )
+    model = chain._model(
+        "sk-test-not-a-real-key", "https://openrouter.ai/api/v1", 60.0, 7.5, "m", 0.7, 100,
+        '{"provider": {}, "usage": {"include": true}}',
+    )
+    assert model.stream_chunk_timeout == 7.5
+
+
 def test_the_provider_sdk_never_retries_on_its_own():
     """Its default is three, which multiplies the bill and the latency of a slow turn."""
     chain.build(
-        Reply, model="m", temperature=0.7, max_tokens=100, routing=None, settings=settings()
+        Reply, model="m", temperature=0.7, max_tokens=100, routing=None, settings=settings(),
+        chunk_timeout=15.0,
     )
     model = chain._model(
-        "sk-test-not-a-real-key", "https://openrouter.ai/api/v1", 60.0, "m", 0.7, 100,
+        "sk-test-not-a-real-key", "https://openrouter.ai/api/v1", 60.0, 15.0, "m", 0.7, 100,
         '{"provider": {}, "usage": {"include": true}}',
     )
     assert model.max_retries == 0
@@ -45,7 +59,7 @@ def test_the_provider_sdk_never_retries_on_its_own():
 def test_openrouter_is_asked_to_report_cached_tokens():
     """Without this OpenRouter omits the count, and prompt caching becomes unmeasurable."""
     model = chain._model(
-        "sk-test-not-a-real-key", "https://openrouter.ai/api/v1", 60.0, "m", 0.7, 100,
+        "sk-test-not-a-real-key", "https://openrouter.ai/api/v1", 60.0, 15.0, "m", 0.7, 100,
         '{"provider": {}, "usage": {"include": true}}',
     )
     assert model.extra_body["usage"] == {"include": True}
@@ -100,10 +114,10 @@ def test_a_reasoning_model_is_not_sent_a_temperature():
     chain._model.cache_clear()
     chain.build(
         Reply, model="openai/gpt-6-luna", temperature=0.7,
-        max_tokens=2048, routing=None, settings=settings(),
+        max_tokens=2048, routing=None, settings=settings(), chunk_timeout=15.0,
     )
     sent = chain._model("sk-test-not-a-real-key", "https://openrouter.ai/api/v1",
-                        60.0, "openai/gpt-6-luna", 0.7, 2048, "{}")._default_params
+                        60.0, 15.0, "openai/gpt-6-luna", 0.7, 2048, "{}")._default_params
     assert "temperature" not in sent
     assert sent["max_completion_tokens"] >= 2048
     assert sent.get("max_tokens") is None
@@ -112,7 +126,7 @@ def test_a_reasoning_model_is_not_sent_a_temperature():
 def test_an_ordinary_chat_model_still_gets_its_sampling_parameters():
     """The guard is on reasoning models only; everything else keeps the old request shape."""
     sent = chain._model("sk-test-not-a-real-key", "https://openrouter.ai/api/v1",
-                        60.0, "google/gemini-3.1-flash-lite", 0.7, 2048, "{}")._default_params
+                        60.0, 15.0, "google/gemini-3.1-flash-lite", 0.7, 2048, "{}")._default_params
     assert sent["temperature"] == 0.7
     assert sent["max_completion_tokens"] == 2048
 
@@ -120,7 +134,7 @@ def test_an_ordinary_chat_model_still_gets_its_sampling_parameters():
 def test_the_reasoning_effort_rides_with_a_reasoning_model_only():
     """A model that does not read a reasoning effort rejects the key."""
     s = settings()
-    assert chain._reasoning("openai/gpt-6-luna", s) == {"reasoning": {"effort": "low"}}
+    assert chain._reasoning("openai/gpt-6-luna", s) == {"reasoning": {"effort": "high"}}
     assert chain._reasoning("google/gemini-3.1-flash-lite", s) == {}
 
 
@@ -135,7 +149,7 @@ def test_a_prompt_row_can_name_its_own_reasoning_effort():
 
 def test_a_prompt_without_an_effort_falls_back_to_the_configured_one():
     assert chain._reasoning("openai/gpt-6-luna", settings(), None) == {
-        "reasoning": {"effort": "low"}
+        "reasoning": {"effort": "high"}
     }
 
 
@@ -146,15 +160,15 @@ def test_the_effort_reaches_the_request_body():
     captured = {}
     real = chain._model
 
-    def spy(api_key, base_url, timeout, model, temperature, max_tokens, extra_body):
+    def spy(api_key, base_url, timeout, chunk_timeout, model, temperature, max_tokens, extra_body):
         captured["extra_body"] = json.loads(extra_body)
-        return real(api_key, base_url, timeout, model, temperature, max_tokens, extra_body)
+        return real(api_key, base_url, timeout, chunk_timeout, model, temperature, max_tokens, extra_body)
 
     chain._model = spy
     try:
         chain.build(
             Reply, model="openai/gpt-6-luna", temperature=0.7, max_tokens=2048,
-            routing=None, settings=settings(), reasoning_effort="low",
+            routing=None, settings=settings(), chunk_timeout=15.0, reasoning_effort="low",
         )
     finally:
         chain._model = real

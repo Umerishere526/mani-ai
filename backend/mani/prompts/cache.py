@@ -7,14 +7,12 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import get_args
 
-from mani.chat.repairs import BODY_STAGES
+from mani.chat.body import STAGES as BODY_STAGES
 from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.db import config_tables, pool
 from mani.errors import ErrorCategory, ServiceError
-from mani.llm.schema import BodyBranch
 from mani.models.rows import Prompt, SupportStyle
 
 logger = logging.getLogger(__name__)
@@ -83,16 +81,11 @@ async def _read() -> Config:
     if not frameworks:
         logger.warning("no active frameworks; technique offers will be refused")
     for framework in frameworks:
-        # Code sends the body route's branches by id. Content seeded without them would miss every
-        # branch, so it is refused here rather than discovered mid-conversation.
-        ids = {
-            branch.get("id")
-            for stage in BODY_STAGES
-            for branch in (framework.stages.get(stage) or {}).get("if_unclear") or []
-        }
-        if missing := sorted(set(get_args(BodyBranch)) - ids):
+        # Code sends the body check-in's script for each step. A framework seeded without it would send
+        # nothing at the end of its questions, so it is refused here rather than discovered mid-conversation.
+        if missing := [s for s in BODY_STAGES if not (framework.stages.get(s) or {}).get("script")]:
             raise ServiceError(
-                f"framework {framework.id} has no body route branch for {', '.join(missing)}; "
+                f"framework {framework.id} has no body check-in script for {', '.join(missing)}; "
                 "run scripts/seed.py",
                 ErrorCategory.CONFIG_ERROR,
                 user_message="Mani is not available right now.",
