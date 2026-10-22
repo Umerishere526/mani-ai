@@ -202,8 +202,15 @@ class ManiClient:
         return response.json() if response.content else {}
 
     def start_or_resume_thread(self) -> dict[str, Any]:
-        """POST /v1/threads/current - what a real app calls on opening the app."""
-        return self._call("POST", "/v1/threads/current")
+        """POST /v1/threads/current - what a real app calls on opening the app.
+
+        The backend answers with only the thread's newest few messages; the rest is paged in
+        so a reload shows the whole conversation.
+        """
+        started = self._call("POST", "/v1/threads/current")
+        if not started["is_new"]:
+            started["messages"] = self.full_history(started["thread"]["id"])
+        return started
 
     def start_new_thread(self) -> dict[str, Any]:
         """POST /v1/threads - reuses an empty thread if the caller already has one,
@@ -216,22 +223,33 @@ class ManiClient:
             json={"content": content, "client_message_id": client_message_id or str(uuid.uuid4())},
         )
 
-    def list_messages(self, thread_id: str) -> dict[str, Any]:
-        return self._call("GET", f"/v1/threads/{thread_id}/messages")
+    def full_history(self, thread_id: str) -> list[dict[str, Any]]:
+        """Every message of a thread, oldest first.
+
+        GET /v1/threads/{id}/messages returns one page, newest first, with a cursor to the
+        next older page; this follows the cursor to the beginning of the conversation.
+        """
+        newest_first: list[dict[str, Any]] = []
+        cursor = None
+        while True:
+            params = {"limit": 100, **({"cursor": cursor} if cursor else {})}
+            page = self._call("GET", f"/v1/threads/{thread_id}/messages", params=params)
+            newest_first.extend(page["messages"])
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return newest_first[::-1]
 
     def list_threads(self, limit: int = 20) -> list[dict[str, Any]]:
         """GET /v1/threads - the person's conversations, most recently active first."""
         return self._call("GET", "/v1/threads", params={"limit": limit})["threads"]
 
     def open_thread(self, thread_id: str) -> dict[str, Any]:
-        """A conversation to continue: the thread and its newest messages, oldest first.
+        """A conversation to continue: the thread and all its messages, oldest first.
 
-        GET /v1/threads/{id} and GET /v1/threads/{id}/messages, which returns newest first.
         Buttons come back live only on Mani's newest message, as in the apps.
         """
         thread = self._call("GET", f"/v1/threads/{thread_id}")
-        page = self._call("GET", f"/v1/threads/{thread_id}/messages", params={"limit": 100})
-        return {"thread": thread, "messages": list(reversed(page["messages"]))}
+        return {"thread": thread, "messages": self.full_history(thread_id)}
 
     def list_exercises(self) -> list[dict[str, Any]]:
         """GET /v1/exercises - the whole library, each item with a signed audio link."""
