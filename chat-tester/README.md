@@ -83,8 +83,8 @@ signed in - the session is remembered for seven days. The sidebar's **Sign out**
 accounts, and **New conversation** starts a fresh thread for the signed-in user. Under it,
 **Conversations** lists that user's threads, most recently active first (the latest 20, titled once a
 thread has had an exchange, "Untitled" before that). Tap one to open it and continue; the open one is
-marked ▶. Hover a title to see its message count and last activity. An opened thread shows its latest 100
-messages, with Mani's buttons live only on its newest message, as in the apps.
+marked ▶. Hover a title to see its message count and last activity. An opened thread, or a reloaded
+tab, shows the whole conversation, with Mani's buttons live only on its newest message, as in the apps.
 
 ## Tests
 
