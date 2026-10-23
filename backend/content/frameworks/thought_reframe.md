@@ -119,7 +119,7 @@ stages:
         5. Create a Believable Replacement Thought: What more balanced understanding could you genuinely believe?
   thought:
     title: "Identify the Thought"
-    intro: "Let's start by identifying the thought."
+    intro: "Step 1 is Identify the Thought"
     purpose: "Establish the specific thought they want to examine."
     reach: "Where their_case already gives the thought, in what it comes down to, report thought as known in their words. Your text says back the thought together with the underlying feeling they confirmed, in one sentence, then asks whether that is what they want to look at, never asking for it again. The thought is what they tell themselves, in their words, never a reading of it. Where their_case holds no clear thought, report thought as missing and ask what keeps coming back to their mind."
     listen_for: "A specific thought about themselves, another person, or the situation, in their language, and whether they describe what happened or what they concluded it means."
@@ -149,7 +149,7 @@ stages:
   painful:
     title: "Name What Makes It Painful"
     carries_case: true
-    intro: "Next, what makes it painful."
+    intro: "Step 2 is Name What Makes It Painful"
     purpose: "Understand the emotional significance of the thought, without labelling their experience."
     reach: "Where their_case already gives the feeling underneath or what makes the thought hurt, report painful as known in their words, so your text says it back and asks whether that is what makes it hard, never asking for it again."
     listen_for: "What feels most upsetting about what the thought might mean, and what they believe it says about themselves, another person, or the future."
@@ -169,7 +169,7 @@ stages:
   feels_true:
     title: "Explore What Makes the Thought Feel True"
     carries_case: true
-    intro: "Now, what makes the thought feel true."
+    intro: "Step 3 is Explore What Makes the Thought Feel True"
     purpose: "Understand why the thought feels convincing, and whether anything complicates it."
     reach: "Report feels_true as missing where nothing has been said for it, so your text asks only what makes the thought convincing. Where what makes it convincing is said and anything that complicates it was never asked, report it as partial with that in their words and the gap complicates, so your text asks only whether anything complicates it."
     listen_for: "The experience, feedback, evidence or pattern that makes the thought convincing, and any information that complicates it."
@@ -193,7 +193,7 @@ stages:
   alternative:
     title: "Consider Another Interpretation"
     carries_case: true
-    intro: "Let's consider another interpretation."
+    intro: "Step 4 is Consider Another Interpretation"
     purpose: "Consider whether another explanation could also fit the known facts."
     listen_for: "A credible possibility that does not deny what is known, or an acknowledgement that there is not enough information to know."
     ready_when: >-
@@ -214,7 +214,7 @@ stages:
   replacement:
     title: "Create a Believable Replacement Thought"
     carries_case: true
-    intro: "Last, a believable replacement thought."
+    intro: "Step 5 is Create a Believable Replacement Thought"
     purpose: "Help them express a more balanced thought they can genuinely believe, in their own words, grounded in what they have identified."
     reach: "Report replacement as known only where they gave a thought that fits what they know and said they believe it. A thought they offered without saying they believe it is partial with their words and the gap believe, so your text asks whether it feels true to them."
     listen_for: "A balanced thought in their own words that fits what is known and that they find believable. It may be cautious, partial or uncertain."
