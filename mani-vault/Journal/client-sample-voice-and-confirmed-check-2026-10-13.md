@@ -4,6 +4,8 @@ date: 2026-10-13
 tags: [journal, prompts, offers, client, lessons]
 ---
 
+> Superseded 2026-10-22 (the shared sample as the one voice, `sounds_like` then `example`) - see [[three-styles-read-the-same-2026-10-22]].
+
 # The client's sample voice, and a confirmed check as the offer gate (2026-10-13)
 
 Three client inputs on one day:

@@ -118,12 +118,6 @@ def test_explaining_people_is_flagged_and_the_clients_sample_never_is():
     assert not any(scenario_check.EXPLAINS_PEOPLE.search(reply) for reply in SAMPLE_REPLIES)
 
 
-def test_the_examples_details_are_flagged_only_when_the_person_never_said_them():
-    reply = "When vendors don't follow through, what happens next?"
-    assert scenario_check.borrowed_from_the_example(reply, {"boss", "work"}) == ["vendors", "follow through"]
-    assert scenario_check.borrowed_from_the_example(reply, {"vendors", "follow", "through"}) == []
-
-
 def test_a_stage_reached_otherwise_than_expected_is_flagged_once():
     """Thread 7d102554: C was reached as missing and asked though they had said it."""
     seen: set[str] = set()

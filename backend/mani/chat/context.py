@@ -189,24 +189,24 @@ _MEANING: dict[str, str | dict[str, str]] = {
     },
     "understanding": (
         "what they have told you so far, kept for you. A step marked missing is still to be found. In "
-        "understanding_update report only what their message names or changes."
+        "understanding_update report only what their message adds that is new."
     ),
     "their_case": (
         "what you and they found before the questions began: the feelings they named, the problem, the core "
         "issue under it, the feeling underneath and, once they confirmed it, what it comes down to, and "
         "anything they added since, in their words. Every question you ask and every possibility you offer "
         "is about this case and the feeling underneath, never generic. Never ask them again for anything in it: say it "
-        "back and build on it. In understanding_update report only what their message names or changes."
+        "back and build on it. In understanding_update report only what their message adds that is new."
     ),
     "understanding_next": {
         "problem": (
-            "the problem is not pinned down yet. Help them narrow it to what actually happens: who, "
-            "what, how often, what is expected of them. If their message already gives it, report it "
-            "and ask about the core issue under it."
+            "the problem is not pinned down yet. If their message already gives it, report the whole of "
+            "it, with the name they gave it, and ask about the core issue under it. Otherwise help them "
+            "narrow it to what actually happens: who, what, how often, what is expected of them."
         ),
         "core_issue": (
-            "the problem is clear, what lies under it is not. Ask plainly: what usually happens next, "
-            "what falls on them, or what keeps it going. A feeling, such as not being enough, is not yet "
+            "the problem is clear, what lies under it is not. Ask plainly what happens because of the "
+            "problem as they named it. A feeling, such as not being enough, is not yet "
             "the core issue: ask what makes them feel it or what keeps it going. Once their answers show "
             "the core issue, offer it in your reply as your understanding, report it, and ask how it sits "
             "with them underneath. They don't need to name it themselves."

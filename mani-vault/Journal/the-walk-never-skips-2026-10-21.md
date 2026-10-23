@@ -3,6 +3,7 @@
 > Supersedes the "let_go" and "second not_yet moves on" parts of [[abcde-walk-owned-by-code-2026-10-13]] and the
 > "unsure is helped once, then the stage moves on" rule from [[stages-are-skipped-not-confirmed-2026-10-09]].
 > Superseded 2026-10-21 (the "more hopeful" part of Thought Reframe's ending) - see [[thought-reframe-matches-the-clients-five-steps-2026-10-21]].
+> Superseded 2026-10-22 (the record freezing once an offer is open or a framework runs) - see [[mirror-picked-one-clause-2026-10-22]].
 
 # "I don't know" is the case Mani helps with, not one it routes around
 

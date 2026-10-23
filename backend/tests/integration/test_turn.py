@@ -316,9 +316,9 @@ async def test_the_problem_its_core_issue_and_the_feeling_each_take_an_exchange_
     # The client's template word for word with the model's slots in it, never the model's text.
     assert turn.content == SUPPORTIVE_OFFER
     assert [p.label for p in turn.prompts] == ["Try it", "Tell me more", "Keep chatting"]
-    # The check's understanding is stored, under the person's own words for the feeling.
+    # Their own words stay as stored, and what the check came down to is kept beside them.
     assert (await _thread_row(alice, thread.id)).understanding == {
-        "issue": "Your coworkers keep missing deadlines", "core_issue": "The work always ends up landing on you.",
+        "issue": "your coworkers miss deadlines", "core_issue": "the work always lands on you",
         "underlying_feeling": "you may feel worn down by it",
         "comes_down_to": "It seems to come down to carrying what others drop.",
     }
@@ -1876,9 +1876,9 @@ async def test_the_options_for_answering_arrive_on_the_line_under_the_question(a
     )
 
 
-async def test_what_they_add_during_a_framework_is_kept_beside_the_case_and_never_replaces_it(alice, model):
-    """muhammad, 2026-10-22: a detail said ten turns into the framework replaced the problem, and the feeling
-    they named second replaced the first."""
+async def test_what_they_add_during_a_framework_is_added_to_the_case_and_nothing_is_lost(alice, model):
+    """muhammad, 2026-10-22: what they say ten turns into the framework is added to the problem, core issue
+    and feeling, and what was stored stays."""
     from mani.db import pool
 
     model(Reply(
@@ -1899,7 +1899,8 @@ async def test_what_they_add_during_a_framework_is_kept_beside_the_case_and_neve
 
     await send(alice, thread.id, "i need about 2 months but the deadline is this week")
     stored = (await _thread_row(alice, thread.id)).understanding
-    assert stored["issue"] == "overtime to meet deadlines"
+    assert stored["issue"] == "overtime to meet deadlines; you need two months and the deadline is this week"
+    assert stored["core_issue"] == "the work falls on you"
     assert stored["feeling"] == "anxious, burnt out"
     assert stored["also"] == "needs about two months, the deadline is this week"
 

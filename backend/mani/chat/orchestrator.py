@@ -588,9 +588,7 @@ async def send(
     check_written = False
     if not guarded:
         before = ctx.thread.understanding
-        # An offer or a framework is the case they confirmed: later turns add to it, never replace it.
-        confirmed_case = context.live(ctx.technique) is not None
-        theirs = understanding.merge(before, reply.understanding_update, before=before, frozen=confirmed_case)
+        theirs = understanding.merge(before, reply.understanding_update, before=before)
         check_written = with_check and understanding.next_step(theirs) is None
         understood = (
             understanding.merge(

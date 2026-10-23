@@ -14,10 +14,11 @@ def test_a_null_or_blank_update_keeps_what_is_stored():
     assert understanding.merge(STORED, UnderstandingUpdate(feeling="", issue=" \n ")) == STORED
 
 
-def test_a_new_value_replaces_the_stored_one_and_leaves_the_other_key_alone():
-    """AC-3, AC-4: a move to another issue replaces what was stored."""
+def test_a_new_problem_is_added_after_the_stored_one_and_leaves_the_other_key_alone():
+    """muhammad, 2026-10-22: the problem, core issue and underlying feeling grow with everything they say and
+    nothing is taken away, so questions follow the whole picture."""
     assert understanding.merge(STORED, UnderstandingUpdate(issue="my work")) == {
-        "feeling": "frustrated", "issue": "my work",
+        "feeling": "frustrated", "issue": "my client keeps changing the requirements; my work",
     }
     assert understanding.merge({}, UnderstandingUpdate(issue="my work")) == {"issue": "my work"}
 
@@ -42,26 +43,36 @@ def test_new_problems_and_details_are_added_beside_the_case_and_the_oldest_go_fi
     assert len(crowded["also"]) <= 2 * understanding.LIMIT and crowded["also"].endswith("detail number 59")
 
 
-def test_once_an_offer_is_open_the_case_is_not_replaced_but_feelings_and_details_still_gather():
-    """muhammad, 2026-10-22: a detail said ten turns into the framework replaced the problem."""
-    case = {"feeling": "anxious", "issue": "overtime to meet deadlines", "core_issue": "the work falls on you",
-            "underlying_feeling": "trapped"}
+def test_after_an_offer_the_case_keeps_growing_and_nothing_in_it_is_lost():
+    """muhammad, 2026-10-22: what they say ten turns into a framework (he takes credit, his father will not
+    listen) is added to the problem, core issue and feeling, and the first read stays."""
+    case = {"feeling": "anxious", "issue": "your boss does not lead", "core_issue": "the business could fail",
+            "underlying_feeling": "disrespect"}
     update = UnderstandingUpdate(
-        issue="needs two months", core_issue="x", underlying_feeling="y", feeling="burnt out", also="needs two months",
+        issue="he takes credit for your work", core_issue="his father will not listen",
+        underlying_feeling="exhausted", feeling="burnt out", also="the pay is low",
     )
-    kept = understanding.merge(case, update, frozen=True)
-    assert (kept["issue"], kept["core_issue"], kept["underlying_feeling"]) == (
-        "overtime to meet deadlines", "the work falls on you", "trapped")
-    assert kept["feeling"] == "anxious, burnt out" and kept["also"] == "needs two months"
-    assert understanding.merge(case, update)["issue"] == "needs two months", "before the offer they still refine"
+    kept = understanding.merge(case, update)
+    assert kept["issue"] == "your boss does not lead; he takes credit for your work"
+    assert kept["core_issue"] == "the business could fail; his father will not listen"
+    assert kept["underlying_feeling"] == "disrespect; exhausted"
+    assert kept["feeling"] == "anxious, burnt out" and kept["also"] == "the pay is low"
+    assert understanding.merge(kept, update) == kept, "said again, it is not stored twice"
+
+
+def test_the_case_drops_only_its_oldest_entry_and_only_past_its_size():
+    entries = [f"thing number {n}" for n in range(60)]
+    case = understanding.merge({}, UnderstandingUpdate(issue="; ".join(entries)))["issue"]
+    assert len(case) <= 3 * understanding.LIMIT
+    assert case.endswith("thing number 59") and "thing number 0;" not in case
 
 
 def test_a_value_is_kept_on_one_line_and_cut_to_the_limit():
     """AC-1: a newline in what is stored would open a line of its own in [ctx]."""
     merged = understanding.merge({}, UnderstandingUpdate(issue="my client\n  keeps changing\tthings"))
     assert merged == {"issue": "my client keeps changing things"}
-    long = understanding.merge({}, UnderstandingUpdate(issue="word " * 60))["issue"]
-    assert len(long) <= understanding.LIMIT and not long.endswith(" ")
+    long = understanding.merge({}, UnderstandingUpdate(issue="word " * 200))["issue"]
+    assert len(long) <= 3 * understanding.LIMIT and not long.endswith(" ")
 
 
 def test_the_ctx_value_names_each_key_and_cannot_close_the_block():
@@ -104,5 +115,6 @@ def test_a_stored_check_keeps_what_it_came_down_to():
                   underlying_feeling="You may be worried it was your doing.", question="Is that right?",
                   comes_down_to="You want to undo the overtime culture you feel you started.")
     merged = understanding.merge_check({"issue": "x", "core_issue": "y"}, check)
+    assert (merged["issue"], merged["core_issue"]) == ("x", "y"), "the check sums up the stored case, not adds to it"
     assert merged["comes_down_to"] == "You want to undo the overtime culture you feel you started."
     assert "comes_down_to: You want to undo" in understanding.render(merged)

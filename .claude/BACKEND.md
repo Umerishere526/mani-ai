@@ -123,7 +123,7 @@ Read `mani-vault/Journal/failure-classes-from-later-branches-2026-10-21.md`, the
 
 1. State the root cause in one sentence before the fix. A second fix to the same class goes to the `architecture-reviewer` agent.
 2. No new gate, window, deadline or cooldown, in code or prompt. If one seems needed, stop and run `/architect`.
-3. Cut or swap prompt text; do not add. `mani_base.md` must not grow, and sample wording lives only in its `example`.
+3. Cut or swap prompt text; do not add. `mani_base.md` must not grow, and each style's wording lives only in its own `style_*.md`.
 4. Layout and format belong in code (`repairs.laid_out`), never in a prompt rule.
 5. Free tests first (`pytest tests/unit tests/integration`); a live run costs the client's tokens, so ask muhammad.
 6. Reseed (`python scripts/seed.py`) after content edits, and read the chat against the client's requirements.

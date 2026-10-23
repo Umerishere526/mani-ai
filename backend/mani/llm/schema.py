@@ -155,9 +155,9 @@ class NextStage(BaseModel):
 
 # Merged into the thread's record by chat/understanding.py. The docstring is sent to the model.
 class UnderstandingUpdate(BaseModel):
-    """What their message names or changes about how they feel, what they are dealing with, what
-    lies under it, the feeling underneath, and anything new they raise. A null keeps what is already
-    known."""
+    """What their message adds about how they feel, what they are dealing with, what lies under it,
+    the feeling underneath, and anything else new they raise. Each is added to what is already known
+    and never replaces it. A null keeps what is already known."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -172,20 +172,21 @@ class UnderstandingUpdate(BaseModel):
     issue: str | None = Field(
         default=None,
         description=(
-            "The problem: what is actually happening to them, concrete (who, what, how often), in "
+            "The problem: what is happening to them taken as a whole, with the name they give it, in "
             "their words and said to them as you, such as \"your boss says you're not doing enough\". "
-            "Never the feeling. Only when this message makes it clear or moves to another. A dozen words "
-            "at most. Null otherwise."
+            "Never the feeling. Only what this message adds that you do not hold yet. It is added to the "
+            "ones already known and never replaces them. A dozen words at most. Null otherwise."
         ),
     )
     core_issue: str | None = Field(
         default=None,
         description=(
-            "The core issue: what the problem comes down to for them underneath, such as what usually "
-            "happens next, what falls on them, or what keeps it going. Your understanding, "
+            "The core issue: what the problem comes down to for them underneath, such as what happens "
+            "because of it or what keeps it going. Your understanding, "
             "formed from their answers and said to them as you. Report it as soon as their answers show "
-            "it; they don't need to name it themselves. Never the feeling they opened with or the problem "
-            "reworded. A dozen words at most. Null otherwise."
+            "it, and again for each thing they add that you do not hold yet; they don't need to name it "
+            "themselves. It is added to the ones already known and never replaces them. Never the feeling "
+            "they opened with or the problem reworded. A dozen words at most. Null otherwise."
         ),
     )
     underlying_feeling: str | None = Field(
@@ -194,7 +195,8 @@ class UnderstandingUpdate(BaseModel):
             "The feeling underneath the problem and its core issue, which may not be the one they opened "
             "with: their own word when they named it, otherwise the feeling their words point to, worded "
             "as a possibility and said to them as you. When they say they don't know, your closest "
-            "reading in the same form. Only in answer to your question about it. Null otherwise."
+            "reading in the same form. Any message may add one their words name or point to that you do "
+            "not hold yet. It is added to the ones already known and never replaces them. Null otherwise."
         ),
     )
     also: str | None = Field(
@@ -353,7 +355,7 @@ class Reply(_ReplyBase):
         ),
     )
     text: str = Field(
-        description="What Mani says to them, sounding like Mani in the example. Required."
+        description="What Mani says to them, in the style they chose. Required."
     )
     options: str | None = Field(
         default=None,

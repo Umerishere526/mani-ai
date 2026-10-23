@@ -128,6 +128,13 @@ the same change as the work.**
 
 ## Decisions in force
 
+- **Mani reads their whole message and says back what runs through it, with the name they gave the problem** (muhammad,
+  2026-10-22). Because in his Directive chat about a boss who does not lead, Mani mirrored one clause ("your boss doesn't
+  seem to understand the work you show him") and dropped the headline the person named, "lack of leadership"; the mirror
+  rule ("what matters", "never hand their whole message back") and the problem step's "who, what, how often" both
+  select, and nothing says what to keep. Cut and replaced, not added: `mani_base.md` `how_you_talk` and `core issue`,
+  `response_format.md` first reasoning step, `context.py` `understanding_next`, `schema.py` `issue` and `core_issue`. Not
+  measured live (needs muhammad's yes, replay of that turn); [[direct-questions-have-no-target-2026-10-09]].
 - **A turn is one chat call at effort `low`, never a second to fix a draft** (muhammad, 2026-10-12). Because the
   client's R2 asks for no excessive latency, a turn waited on a reasoning model at `high` and up to two more
   full calls whenever a draft broke a rule (a median of 12.6 s and 41 s at worst, 2026-10-07), and the reply
@@ -323,10 +330,15 @@ the same change as the work.**
   `stop` ends it (`test_not_knowing_never_moves_the_walk_however_often_it_is_said`,
   `test_a_wish_to_stop_leaves_the_framework_and_it_comes_back_only_when_asked_for`). The problem, core issue and feeling found before the offer reach every stage turn as `their_case` in `[ctx]`
   (the stored understanding, relabelled while a framework runs or is about to start), and every stage question and
-  possibility is about it, in their words (muhammad, 2026-10-22; `test_the_findings_are_their_case_once_a_framework_is_running_or_about_to_start`). Every feeling they name is kept, none twice, and what they raise
-  after the case was found goes in `also` (a new problem, a warning, what is at stake); the problem, core issue and
-  underlying feeling are frozen once an offer is open or a framework runs, so a later detail cannot replace the problem
-  (muhammad, 2026-10-22; `understanding.merge(frozen=)`, `test_once_an_offer_is_open_the_case_is_not_replaced_but_feelings_and_details_still_gather`).
+  possibility is about it, in their words (muhammad, 2026-10-22; `test_the_findings_are_their_case_once_a_framework_is_running_or_about_to_start`). Every feeling they name is kept, none twice. The problem, core issue and underlying feeling
+  grow with everything they say, through the whole conversation, in a framework too: each new entry is added after the
+  stored ones, none twice, and nothing is replaced or removed (the oldest entry goes only past 600 characters), so the
+  model sees the whole picture in `[ctx]` every turn; what does not fit them goes in `also` (a warning, a time limit).
+  Because the first read went stale (the boss chat: credit taken, his father not listening and low pay were said after the
+  case was frozen, so the D and E questions were built on a first read that missed them), and add-only removes the
+  failure the freeze was for, a later detail replacing the problem (muhammad, 2026-10-22; `understanding.merge`,
+  `test_after_an_offer_the_case_keeps_growing_and_nothing_in_it_is_lost`; the check no longer writes over them,
+  `test_a_stored_check_keeps_what_it_came_down_to`).
   The stages their case can answer (ABCDE A, B and C; Thought Reframe's thought and why it hurts) are judged against it
   through their `reach`, so they are said back and confirmed once, never asked again.
 - **ABCDE is offered from the client's ABCDE document** (muhammad, 2026-10-09; Thought Reframe joined it 2026-10-21). Because the client's
@@ -413,19 +425,21 @@ the same change as the work.**
   mean", are allowed: the client asks both (2026-10-12). `heading_toward` only decides what is offered. Mani never joins two things
   they said into a link they did not make. Told it got something wrong, in any words, it says it misunderstood and asks what would be
   more accurate (the client's line), never explaining what it meant.
-- **Mani talks like the client's sample conversation, which is the spec for the voice** (muhammad, 2026-10-13).
-  Mani's first five replies from the sample are in `mani_base.md` as `example`, word for word (its summary, which
-  invents facts, is left out), and `how_you_talk` says to copy how it talks: say back the part that matters in
-  their words, ask one question that ends on its own line, with its options on the next line. The lines saying what
-  Mani wants to understand or does not want to assume are cut from the example and the rules, so they do not come
-  back: the client liked the mirror, not that line (muhammad, 2026-10-21). Because rules that
-  described the sample while forbidding its moves ("never repeat their words", "never reuse its words", vary
-  every opener) produced lines like "can make it hard to separate one piece of feedback from what you think it
-  says about your ability" (live, 2026-10-13; diagnosed by a second model). `recent_openers` is gone from `[ctx]`
-  for the same reason. `scripts/scenario_check.py` flags "explains people" and the example's details borrowed. Because
-  muhammad wants human-like language in plain everyday words (2026-10-07), and the client's way of
-  communication document (R13, 2026-10-13) shows the voice: up to four short sentences in short paragraphs, a
-  direct ask answered plainly first, and an understanding
+- **Mani's voice is the shared shape in `mani_base.md` `how_you_talk` plus the chosen style's file; there is no
+  shared example conversation** (muhammad, 2026-10-22, replacing "Mani talks like the client's sample conversation",
+  2026-10-13). Because all three styles read the same: one sample was copied in every style, one line blended
+  Supportive and Reflective for everyone, and each style file was one sentence. The shape stays (a mirror of the whole
+  message in their words, one question on its own line, options under it, two to five short sentences, no dashes), and
+  each style file now says what its replies are for, in the client's own words, with what to do and avoid and the reply
+  shape it reaches for. The client's sample stays in `docs/client/messages/2026-10-13-way-of-communication.md`. Not
+  measured live (needs muhammad's yes; the case-note voice of 2026-10-13 may return). The sample replaced rules
+  that produced lines like "can make it hard to separate one piece of feedback from what you think it says about your
+  ability" (live, 2026-10-13; diagnosed by a second model), because they forbade the sample's own moves;
+  `recent_openers` is gone from `[ctx]` for the same reason, and `scripts/scenario_check.py` flags "explains people".
+  The lines saying what Mani wants to understand or does not want to assume stay out: the client liked the mirror, not
+  that line (muhammad, 2026-10-21). Because muhammad wants human-like language in plain everyday words (2026-10-07),
+  and the client's way of communication document (R13, 2026-10-13) shows the voice: up to four short sentences in
+  short paragraphs, a direct ask answered plainly first, and an understanding
   of how things fit together said for them to confirm or correct. the options for answering the question are the reply's `options` field, which the model must fill (or leave null
   for a yes or no question or a check) and code puts on a line of their own under the question, because the prompt
   rule for them was lost to "one question" lines elsewhere three times (muhammad, 2026-10-22;

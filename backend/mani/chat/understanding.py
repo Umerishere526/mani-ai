@@ -8,9 +8,16 @@ from mani.llm.schema import Check, UnderstandingUpdate
 
 KEYS = ("feeling", "issue", "core_issue", "underlying_feeling", "comes_down_to", "also")
 LIMIT = 200
-# What gathers over the conversation instead of being replaced: every feeling they name, and the new
-# problems and details they raise after the case was found. Each has its separator and its size.
-GATHERED = {"feeling": (", ", LIMIT), "also": ("; ", 2 * LIMIT)}
+# What gathers over the conversation instead of being replaced: every feeling they name, the details they
+# raise, and each step of the case (problem, core issue, underlying feeling), which grows with everything
+# they say and is never taken away. Each has its separator and its size.
+GATHERED = {
+    "feeling": (", ", LIMIT),
+    "issue": ("; ", 3 * LIMIT),
+    "core_issue": ("; ", 3 * LIMIT),
+    "underlying_feeling": ("; ", 3 * LIMIT),
+    "also": ("; ", 2 * LIMIT),
+}
 # The client's steps before Mani checks its understanding, in order: the problem, the core issue under
 # it, the feeling underneath (meeting and cheat sheet, 2026-10-13; the feeling replaced what is in their
 # control, muhammad, 2026-10-21). Each is taken only once the one
@@ -47,19 +54,16 @@ def _gathered(stored: str | None, value: str, key: str) -> str:
 
 def merge(
     stored: dict[str, str], update: UnderstandingUpdate | None, *, before: dict[str, str] | None = None,
-    frozen: bool = False,
 ) -> dict[str, str]:
     """The record after this turn. Per key, a null or blank value keeps what is stored; anything
     else replaces it, on one line (which also keeps it from opening a line of its own in [ctx]) and
-    cut to LIMIT characters, except what gathers (GATHERED), which is added to. A step is taken only
-    in order, judged on `before`, the record as this turn began (`stored` when not given), and not at
-    all when `frozen`: once an offer is open or a framework runs, the case is the one they confirmed and
-    anything new goes in `also`."""
+    cut to LIMIT characters, except what gathers (GATHERED), which is added to. A step is first taken
+    only in order, judged on `before`, the record as this turn began (`stored` when not given)."""
     before = stored if before is None else before
     merged = {key: stored[key] for key in KEYS if stored.get(key)}
     for key in KEYS:
         value = " ".join((getattr(update, key, None) or "").split())
-        if not value or (key in STEPS and (frozen or not _in_order(key, before))):
+        if not value or (key in STEPS and not _in_order(key, before)):
             continue
         merged[key] = _gathered(merged.get(key), value, key) if key in GATHERED else value[:LIMIT].rstrip()
     return merged
@@ -87,12 +91,10 @@ def usable(check: Check | None) -> bool:
 
 
 def merge_check(stored: dict[str, str], check: Check) -> dict[str, str]:
-    """The record after a stored check: its problem is the issue they are dealing with, and what it
-    came down to, which they confirmed, is kept too, since it is closer to what they hold than their
-    opening line (live, 2026-10-13)."""
-    merged = merge(stored, UnderstandingUpdate(
-        issue=check.problem, core_issue=check.core_issue, underlying_feeling=check.underlying_feeling,
-    ))
+    """The record after a stored check: what it came down to, which they confirmed, is kept, since it
+    is closer to what they hold than their opening line (live, 2026-10-13). Its problem, core issue and
+    feeling sum up what is already stored, so they are not added again."""
+    merged = dict(stored)
     came_to = " ".join((check.comes_down_to or "").split())
     if came_to:
         merged["comes_down_to"] = came_to[:LIMIT].rstrip()

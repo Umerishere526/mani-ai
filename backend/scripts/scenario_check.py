@@ -37,15 +37,6 @@ EXPLAINS_PEOPLE = re.compile(
     r"\bcan (?:make|leave)\b|\bcan be (?:hard|difficult|painful)\b|\bit'?s (?:natural|normal|common|understandable)\b",
     re.IGNORECASE,
 )
-# The example conversation's own people and details, which belong to someone else.
-BORROWED = ("vendors", "consultants", "over promise", "follow-through", "follow through")
-
-def borrowed_from_the_example(reply: str, said: set[str]) -> list[str]:
-    """The example's details in a reply when the person never used them."""
-    text = reply.lower()
-    return [b for b in BORROWED if b in text and not all(w in said for w in WORD.findall(b))]
-
-
 # One of their messages per step before the check: the problem, its core issue, the feeling underneath.
 EARLIEST_CHECK = len(understanding.STEPS)
 # Offer wording: the model offering in its own text instead of the offer field, which code never
@@ -164,8 +155,6 @@ def _check(
     if not exchange.offered and framework is None:
         if EXPLAINS_PEOPLE.search(exchange.reply):
             exchange.flags.append("explains people")
-        if borrowed := borrowed_from_the_example(exchange.reply, said):
-            exchange.flags.append(f"borrowed from the example: {', '.join(borrowed)}")
     if not exchange.offered:
         # The text that was sent, which inside a framework is mostly code's, not the model's draft.
         if previous and reply_checks.repeats(exchange.reply, previous.reply):
