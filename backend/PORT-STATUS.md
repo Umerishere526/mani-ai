@@ -9,6 +9,27 @@ History (how the port went, what was fixed from review, old measurements) is in
 
 ## Status, 2026-10-01
 
+**Update, 2026-10-23 (streaming demo on branch `feat/streamlit-signup-signin`).** A turn can now be
+streamed to a client over SSE: `POST /v1/threads/{id}/messages/stream` runs the same turn as the
+plain send and emits `delta` frames for the reply's `text` as the model writes it, `reset` before a
+retried attempt, `replace` when a redraft or a repair changed what was streamed, then `done` with
+the identical payload the plain endpoint returns (`mani/llm/streaming.py`, `client.complete_streaming`,
+`orchestrator.send(stream=...)`, `routers/messages.send_stream`; `tests/unit/test_streaming.py`).
+Only the turn's primary call streams; redrafts stay unstreamed, which is what `replace` is for.
+The demo client is `streamlit-chat/` next to `chat-tester/` (Streamlit, port 8502; backend on 8001).
+Two environment notes: this copy runs its own Supabase stack, project `mani_copy` on
+54321/54322 (the `mani` project on 54341+ is the main repo's database, whose 19 migrations this
+code cannot run against - `thread_technique_state.library_offered_since` is gone there, and the
+seeded prompts and frameworks differ); and this copy's `backend/.venv` console scripts (fastapi,
+uvicorn, pip) still exec the MAIN repo's venv python from their shebangs - the server therefore
+runs the main repo's site-packages. It works because the `mani` package resolves from the working
+directory, but `pip install` here would write into the main repo's venv; rebuild this venv before
+installing anything. Streamed turns log a benign pydantic serializer warning
+(`field_name='parsed'`) - the same third-party warning the main repo's own streaming change
+silenced in pytest.ini on 2026-10-21. Unit tests: 403 passed, 4 skipped; integration: 95 passed
+against the `mani_copy` stack. Verified live: first delta ~3 s into a ~7 s turn, streamed text
+identical to the committed reply, `replace` correct on a redrafted turn.
+
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
 - Tests: `pytest` runs 798 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
   JWKS-configured project).
@@ -69,6 +90,7 @@ History (how the port went, what was fixed from review, old measurements) is in
 | POST | `/v1/threads/current` | what to show on opening the app; creates a thread on first call |
 | GET PATCH DELETE | `/v1/threads/{id}` | fetch, set `conversation_style`, soft delete |
 | GET POST | `/v1/threads/{id}/messages` | history (paged), **send a turn** |
+| POST | `/v1/threads/{id}/messages/stream` | send a turn, reply streamed as SSE (delta/reset/replace/done/error) |
 | GET | `/v1/exercises`, `/home`, `/{id}` | catalog with signed audio |
 | GET POST | `/v1/exercises/completions` | a user's completions |
 | GET | `/v1/crisis/resources` | empty until real services exist |

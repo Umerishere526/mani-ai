@@ -8,6 +8,7 @@ import logging
 import re
 import uuid
 from dataclasses import dataclass, field
+from typing import Protocol
 
 import asyncpg
 
@@ -145,6 +146,24 @@ def _offered_handoff(history: list[Message]) -> bool:
     ))
 
 
+class TurnStream(Protocol):
+    """What a streaming client sees of the reply while the turn is still being written.
+
+    `delta` carries the first draft as the model writes it; `reset` means a retried
+    attempt is starting over; `replace` means the committed text differs from every
+    delta sent (a redraft or a repair changed it). `sent` is the draft as streamed.
+    """
+
+    @property
+    def sent(self) -> str: ...
+
+    async def delta(self, text: str) -> None: ...
+
+    async def reset(self) -> None: ...
+
+    async def replace(self, text: str) -> None: ...
+
+
 @dataclass(frozen=True)
 class Turn:
     """What the endpoint sends back."""
@@ -254,8 +273,13 @@ async def send(
     thread_id: uuid.UUID | str,
     content: str,
     client_message_id: uuid.UUID | str | None = None,
+    stream: TurnStream | None = None,
 ) -> Turn:
-    """Run one turn. The connection is already scoped to the caller and in a transaction."""
+    """Run one turn. The connection is already scoped to the caller and in a transaction.
+
+    With `stream`, the primary model call's text reaches the caller as it is written;
+    the turn's logic, its later calls and its writes are unchanged.
+    """
     settings = get_settings()
     user_id = claims.user_id
 
@@ -450,11 +474,12 @@ async def send(
                 user_message="You've reached today's message limit. Please come back tomorrow.",
             )
 
-    call = await client.complete(
+    for_model_messages = (
         [{"role": "system", "content": system.text}]
         + _conversation(history)
-        + [{"role": "user", "content": prefix + for_model}],
-        Reply,
+        + [{"role": "user", "content": prefix + for_model}]
+    )
+    call_kwargs = dict(
         model=model,
         purpose=llm_calls.Purpose.CHAT,
         temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
@@ -464,6 +489,15 @@ async def send(
         thread_id=ctx.thread.id,
         prompt_version_id=None,
     )
+    if stream is not None:
+        # Only this first call is streamed. A redraft runs unstreamed, and what it or
+        # repairs change reaches the client as one replacement before the reply commits.
+        call = await client.complete_streaming(
+            for_model_messages, Reply,
+            on_delta=stream.delta, on_reset=stream.reset, **call_kwargs,
+        )
+    else:
+        call = await client.complete(for_model_messages, Reply, **call_kwargs)
     reply = call.value
     clear_ok = context.cooldown_passed(ctx, urgent=urgent)
     closest_ok = context.closest_fit_ok(ctx, urgent=urgent)
@@ -689,6 +723,11 @@ async def send(
             retryable=True,
             user_message="Mani had trouble responding. Please try again.",
         )
+
+    if stream is not None and stream.sent and stream.sent != fixed.text:
+        # The draft the client watched being written is not what the turn commits:
+        # swap it for the real text before the reply stores.
+        await stream.replace(fixed.text)
 
     pair = await messages_db.create_pair(
         conn,

@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 import uuid
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,6 +19,7 @@ from mani.config import Settings, get_settings
 from mani.db import llm_calls
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import chain, tools
+from mani.llm.streaming import TextFieldExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -279,6 +281,134 @@ async def complete[T: BaseModel](
     )
     return Call(
         value=parsed, model=model, usage=usage, latency_ms=latency_ms, call_id=call_id
+    )
+
+
+async def complete_streaming[T: BaseModel](
+    messages: list[dict[str, str]],
+    schema: type[T],
+    *,
+    model: str,
+    purpose: llm_calls.Purpose,
+    on_delta: Callable[[str], Awaitable[None]],
+    on_reset: Callable[[], Awaitable[None]] | None = None,
+    temperature: float = DEFAULT_TEMPERATURE,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    routing: dict[str, Any] | None = None,
+    user_id: uuid.UUID | str | None = None,
+    thread_id: uuid.UUID | str | None = None,
+    prompt_version_id: uuid.UUID | str | None = None,
+    settings: Settings | None = None,
+) -> Call[T]:
+    """complete()'s streaming twin: the same call with the same accounting, but the
+    reply's `text` field reaches the caller chunk by chunk as it is written.
+
+    A retried attempt streams again from nothing: `on_reset` fires first so the client
+    can clear what the failed attempt said. What the callbacks carry is a draft - the
+    turn may still revise it afterwards (redraft, repairs), which is the caller's cue
+    to replace it wholesale.
+    """
+    settings = settings or get_settings()
+    if not settings.openrouter_api_key:
+        raise ServiceError(
+            "OPENROUTER_API_KEY is not set",
+            ErrorCategory.CONFIG_ERROR,
+            user_message="Mani is not available right now.",
+        )
+
+    runnable = chain.build_stream(
+        schema,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        routing=routing,
+        settings=settings,
+    )
+
+    messages = _apply_model_quirks(messages, model)
+
+    started = time.perf_counter()
+    usage = llm_calls.Usage()
+    try:
+        value: T | None = None
+        for attempt in range(1, MAX_SCHEMA_ATTEMPTS + 1):
+            if attempt > 1 and on_reset is not None:
+                await on_reset()
+            # Reset per attempt, so an attempt that fails is never recorded with the
+            # tokens of the one before it.
+            usage = llm_calls.Usage()
+            extractor = TextFieldExtractor("text")
+            accumulated = ""
+            merged = None
+            try:
+                async for chunk in runnable.astream(messages):
+                    piece = chunk.content if isinstance(chunk.content, str) else ""
+                    accumulated += piece
+                    merged = chunk if merged is None else merged + chunk
+                    delta = extractor.feed(piece)
+                    if delta:
+                        await on_delta(delta)
+                value = schema.model_validate(json.loads(accumulated))
+                usage = chain.usage_from(merged)
+            except _TRANSIENT as exc:
+                if isinstance(exc, openai.APITimeoutError) or attempt == MAX_SCHEMA_ATTEMPTS:
+                    raise
+                # Same blip budget as complete(): one retry, its own row, billed at zero.
+                await _record(
+                    purpose=purpose, model=model, outcome=llm_calls.Outcome.PROVIDER_ERROR,
+                    usage=llm_calls.Usage(),
+                    latency_ms=int((time.perf_counter() - started) * 1000),
+                    user_id=user_id, thread_id=thread_id,
+                    prompt_version_id=prompt_version_id,
+                    error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}, retrying: {exc}",
+                )
+                await asyncio.sleep(TRANSIENT_RETRY_DELAY_SECONDS)
+                continue
+            except ValueError as exc:
+                # A truncated or malformed reply (JSONDecodeError), a schema misfit
+                # (pydantic's ValidationError, a ValueError) and the extractor's own
+                # complaint about malformed escapes are one failure here: this attempt
+                # produced no parseable reply, so it gets the same one retry the
+                # blocking parse gets in complete().
+                usage = chain.usage_from(merged) if merged is not None else llm_calls.Usage()
+                await _record(
+                    purpose=purpose, model=model, outcome=llm_calls.Outcome.SCHEMA_INVALID,
+                    usage=usage, latency_ms=int((time.perf_counter() - started) * 1000),
+                    user_id=user_id, thread_id=thread_id,
+                    prompt_version_id=prompt_version_id,
+                    error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}: {exc}",
+                )
+                if attempt == MAX_SCHEMA_ATTEMPTS:
+                    raise ServiceError(
+                        f"model returned no parseable reply after {MAX_SCHEMA_ATTEMPTS} "
+                        f"attempts: {exc}",
+                        ErrorCategory.LLM_UNAVAILABLE,
+                        retryable=True,
+                        user_message="Mani had trouble responding. Please try again.",
+                    )
+                continue
+            break
+    except ServiceError:
+        # Already recorded above, per attempt - see complete() for why this re-raises bare.
+        raise
+    except Exception as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        error, outcome = _as_service_error(exc)
+        await _record(
+            purpose=purpose, model=model, outcome=outcome, usage=usage,
+            latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
+            prompt_version_id=prompt_version_id, error_message=str(exc),
+        )
+        raise error from exc
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    call_id = await _record(
+        purpose=purpose, model=model, outcome=llm_calls.Outcome.OK, usage=usage,
+        latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
+        prompt_version_id=prompt_version_id, error_message=None,
+    )
+    return Call(
+        value=value, model=model, usage=usage, latency_ms=latency_ms, call_id=call_id
     )
 
 

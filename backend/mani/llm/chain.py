@@ -122,6 +122,38 @@ def build_tool_choice(
     return chat.bind_tools([tool], tool_choice=tool.__name__)
 
 
+def build_stream(
+    schema: type[BaseModel],
+    *,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    routing: dict[str, Any] | None,
+    settings: Settings,
+) -> Runnable:
+    """build()'s streaming twin: the same model bound to the same JSON-schema response
+    format, without the parsing step, so the caller can astream raw chunks.
+
+    The parseable runnable is `bound model | parser`; taking `.first` hands back the
+    bound model itself, with LangChain's own response_format payload untouched - the
+    streamed bytes are exactly what the blocking path parses.
+    """
+    extra_body = {
+        "provider": settings.routing(routing),
+        "usage": {"include": True},
+    }
+    chat = _model(
+        settings.openrouter_api_key,
+        settings.openrouter_base_url,
+        settings.llm_timeout_seconds,
+        model,
+        temperature,
+        max_tokens,
+        json.dumps(extra_body, sort_keys=True),
+    )
+    return chat.with_structured_output(schema, method="json_schema").first
+
+
 def usage_from(raw: Any) -> llm_calls.Usage:
     """Token counts off the provider's response, whichever shape LangChain hands back."""
     if raw is None:
