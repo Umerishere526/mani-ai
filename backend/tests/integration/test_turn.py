@@ -462,7 +462,7 @@ async def test_someone_who_asks_only_to_be_heard_is_not_forced_to_answer_a_quest
     """The model reads that someone only wants to be listened to and picks a shape that asks nothing;
     no phrase list in code decides it."""
     scripted = model(Reply(
-        text="That sounds like it has been sitting with you for a long time.",
+        text="That sounds like it has been hard for a long time.",
         style=Style(shape="mirror and hold"),
     ))
     thread = await start(alice)
@@ -474,7 +474,7 @@ async def test_someone_who_asks_only_to_be_heard_is_not_forced_to_answer_a_quest
 
 async def test_a_reply_that_asks_nothing_and_chose_to_ask_something_is_logged(alice, model):
     scripted = model(
-        Reply(text="That sounds like it has been sitting with you.", style=Style(shape="mirror and ask")),
+        Reply(text="That sounds like it has been hard.", style=Style(shape="mirror and ask")),
     )
     thread = await start(alice)
     turn = await send(alice, thread.id, "work has been a lot lately")
@@ -2133,3 +2133,30 @@ async def test_a_feeling_word_in_chat_or_inside_a_stage_never_starts_a_body_ques
     assert "chest" not in stage.content and [p.label for p in stage.prompts] == []
     assert scripted.calls == 2
     assert (await _offered_row(alice, inside.id)).phase == "belief"
+
+
+async def test_a_question_at_d_that_leaves_out_what_they_feel_believe_and_want_is_logged(alice, model):
+    """Lolly, 2026-10-22: at D Mani asked only about her belief and the hurt and the missing were gone. D carries
+    the case, so a reply with none of it is counted; one that carries any of it is not."""
+    from mani.db import pool
+
+    scripted = model(
+        Reply(text="Is there anything that makes you question that?", stage_answer="not_yet"),
+        Reply(text="You miss her and you want an apology. What makes you question that her silence means you "
+                   "don't matter?", stage_answer="not_yet"),
+    )
+    thread = await start(alice)
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set understanding = $2::jsonb where id = $1", thread.id,
+            {"feeling": "sad", "stack": "you miss her; her silence means you don't matter; you want an apology",
+             "issue": "your friend has not spoken to you in three weeks"},
+        )
+    done = {"said": "x", "status": "done"}
+    await _land_on(alice, thread.id, "dispute", {"abcde": {"activate": done, "belief": done, "consequence": done}})
+
+    bare = await send(alice, thread.id, "she is ignoring me for three weeks")
+    carried = await send(alice, thread.id, "we used to talk every day")
+    assert scripted.calls == 2
+    assert bare.checks == ["stack missing"]
+    assert carried.checks == []

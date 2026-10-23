@@ -118,3 +118,12 @@ def test_a_stored_check_keeps_what_it_came_down_to():
     assert (merged["issue"], merged["core_issue"]) == ("x", "y"), "the check sums up the stored case, not adds to it"
     assert merged["comes_down_to"] == "You want to undo the overtime culture you feel you started."
     assert "comes_down_to: You want to undo" in understanding.render(merged)
+
+
+def test_the_stack_of_what_they_feel_believe_and_want_only_grows():
+    """Lolly, 2026-10-22: sad, unimportant, missing her and wanting an apology are one experience, and by D the
+    hurt and the missing were gone. Each part is added in their words and none is lost or kept twice."""
+    first = understanding.merge({}, UnderstandingUpdate(stack="you miss her; her silence means you don't matter"))
+    second = understanding.merge(first, UnderstandingUpdate(stack="you want an apology; you miss her"))
+    assert second["stack"] == "you miss her; her silence means you don't matter; you want an apology"
+    assert understanding.merge(second, UnderstandingUpdate(feeling="sad"))["stack"] == second["stack"]

@@ -375,3 +375,17 @@ def test_the_framework_rules_point_at_their_case():
     prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
     sent = parse_prompt(prompts / "mani_base.md")["content"]
     assert "about their_case in [ctx]" in sent and "from their case and what they said" in sent
+
+
+def test_a_question_back_is_not_an_answer_and_the_plain_words_rule_is_in_the_prompt():
+    """Lolly, 2026-10-22: "what do you mean?" at C moved the walk to D, and Mani said "hold onto". A question
+    back keeps the stage, and the voice is plain words with no figure of speech."""
+    import pathlib
+
+    from mani.llm.schema import Reply
+    from scripts.seed import parse_prompt
+
+    base = parse_prompt(pathlib.Path(__file__).parents[2] / "content/prompts/mani_base.md")["content"]
+    assert "they ask what you mean: the stage is not answered" in base
+    assert "never a figure of speech" in base
+    assert "a question back about what you asked" in Reply.model_fields["stage_answer"].description

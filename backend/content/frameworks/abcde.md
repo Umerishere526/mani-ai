@@ -137,6 +137,7 @@ stages:
       reflective: "When that happened, what did you begin believing about yourself or the situation?"
   consequence:
     title: "C: Consequences"
+    carries_case: true
     intro: "C is for Consequences."
     purpose: "Identify how believing that affected what they felt, did or avoided."
     reach: "Report consequence as known where they tied a feeling or an action to that belief. Where they described feelings or actions that may follow from it but never tied them, report it as partial with those words, so your text says them back and asks whether that is how the belief has affected them. Where their_case already gives the feeling underneath, report consequence as known in their words, so your text says it back and asks whether that is how the belief has affected them."
@@ -156,6 +157,7 @@ stages:
       reflective: "When you believed that thought, how did it influence your feelings or the way you responded?"
   dispute:
     title: "D: Dispute"
+    carries_case: true
     intro: "D is for Dispute."
     purpose: "Help them look at what supports the belief and what may challenge it, and tell what they know from what they assume, without trying to prove the belief wrong."
     listen_for: "What they have observed, what supports the belief, what may suggest a different understanding, and what they do not yet know."
@@ -183,6 +185,7 @@ stages:
       reflective: "As you think about that belief, what seems to support it, and what might suggest a different explanation?"
   effective:
     title: "E: Effective New Belief"
+    carries_case: true
     intro: "E is for Effective New Belief."
     purpose: "Help them reach a more realistic and helpful way to see it from what they have looked at, and one clear path they will focus on, in their own words."
     reach: "Report effective as known only where they gave both a more realistic way to see it and one path, such as raising it with someone. Where only the new view came, report it as partial with their words and the gap path, so your text asks what one thing they could focus on."

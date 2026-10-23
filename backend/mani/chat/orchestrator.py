@@ -94,6 +94,11 @@ def _feelings(understood: dict[str, str]) -> str:
     return " ".join(understood.get(key, "") for key in ("feeling", "underlying_feeling"))
 
 
+def _case_words(understood: dict[str, str]) -> str:
+    """What they feel, believe it means and want, in their words: the stack a flagged stage's question carries."""
+    return " ".join(understood.get(key, "") for key in ("feeling", "stack", "underlying_feeling"))
+
+
 def _walked(
     fixed: repairs.Repaired,
     reply: Reply,
@@ -682,6 +687,8 @@ async def send(
         logger.info("repaired reply on thread %s: %s", ctx.thread.id, "; ".join(fixed.notes))
 
     offered = next((p.technique for p in fixed.prompts if p.technique), None)
+    asked = (walked.reached or walked.phase) if walked is not None else None
+    carries_case = asked is not None and bool((walking.stages.get(asked) or {}).get("carries_case"))
     checks = reply_checks.misses(
         reply,
         offered=offered,
@@ -691,6 +698,7 @@ async def send(
         check_unusable=not guarded and reply.check is not None and not understanding.usable(reply.check),
         check_too_early=with_check and not check_written,
         reach_unjudged=walked is not None and walked.unjudged,
+        stack=_case_words(understood) if carries_case else None,
         no_check_by=(
             context.CHECK_EXPECTED_BY
             if context.their_messages(ctx) == context.CHECK_EXPECTED_BY

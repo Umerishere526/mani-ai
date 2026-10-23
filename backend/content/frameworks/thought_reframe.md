@@ -148,6 +148,7 @@ stages:
       directive: "What thought is troubling you most about this?"
   painful:
     title: "Name What Makes It Painful"
+    carries_case: true
     intro: "Next, what makes it painful."
     purpose: "Understand the emotional significance of the thought, without labelling their experience."
     reach: "Where their_case already gives the feeling underneath or what makes the thought hurt, report painful as known in their words, so your text says it back and asks whether that is what makes it hard, never asking for it again."
@@ -167,6 +168,7 @@ stages:
       directive: "What is the most upsetting thing that thought might mean?"
   feels_true:
     title: "Explore What Makes the Thought Feel True"
+    carries_case: true
     intro: "Now, what makes the thought feel true."
     purpose: "Understand why the thought feels convincing, and whether anything complicates it."
     reach: "Report feels_true as missing where nothing has been said for it, so your text asks only what makes the thought convincing. Where what makes it convincing is said and anything that complicates it was never asked, report it as partial with that in their words and the gap complicates, so your text asks only whether anything complicates it."
@@ -190,6 +192,7 @@ stages:
       directive: "What makes that thought convincing, and is there anything that complicates it?"
   alternative:
     title: "Consider Another Interpretation"
+    carries_case: true
     intro: "Let's consider another interpretation."
     purpose: "Consider whether another explanation could also fit the known facts."
     listen_for: "A credible possibility that does not deny what is known, or an acknowledgement that there is not enough information to know."
@@ -210,6 +213,7 @@ stages:
       directive: "Is there another explanation that could also make sense?"
   replacement:
     title: "Create a Believable Replacement Thought"
+    carries_case: true
     intro: "Last, a believable replacement thought."
     purpose: "Help them express a more balanced thought they can genuinely believe, in their own words, grounded in what they have identified."
     reach: "Report replacement as known only where they gave a thought that fits what they know and said they believe it. A thought they offered without saying they believe it is partial with their words and the gap believe, so your text asks whether it feels true to them."

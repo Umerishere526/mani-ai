@@ -179,3 +179,16 @@ def test_an_open_offer_turn_costs_less_prompt_than_before_the_structured_fields(
 
     total = len(system.text) + len(block) + len(json.dumps(shape.model_json_schema()))
     assert total < CHARACTERS_BEFORE_STRUCTURED_FIELDS
+
+
+def test_the_stages_that_look_at_the_belief_or_thought_carry_the_stack_in_both_frameworks():
+    """Lolly, 2026-10-22: the stack must reach C, D and E. A framework says which of its stages carry it."""
+    carrying = {
+        name: sorted(stage for stage, body in parse_framework(FRAMEWORKS_DIR / f"{name}.md")["stages"].items()
+                     if body.get("carries_case"))
+        for name in ("abcde", "thought_reframe")
+    }
+    assert carrying == {
+        "abcde": ["consequence", "dispute", "effective"],
+        "thought_reframe": ["alternative", "feels_true", "painful", "replacement"],
+    }

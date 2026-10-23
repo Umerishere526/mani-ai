@@ -169,6 +169,15 @@ class UnderstandingUpdate(BaseModel):
             "are new. They are added to the ones already known. Null otherwise."
         ),
     )
+    stack: str | None = Field(
+        default=None,
+        description=(
+            "Everything they feel about this as one experience, each as a short phrase in their words and "
+            "separated by semicolons: each feeling, what they believe it means, and what they want from it, "
+            "such as \"you miss her\", \"her silence means you don't matter\", \"you want an apology\". "
+            "Only what this message adds that you do not hold yet. Null otherwise."
+        ),
+    )
     issue: str | None = Field(
         default=None,
         description=(
@@ -333,8 +342,8 @@ class Reply(_ReplyBase):
             "How their message answers the stage in force. agreed: yes to your check of what they "
             "said, even with more added. answered: they gave what the stage needs, or picked one of "
             "your possibilities as theirs, with an update for it. corrected: a no with new words, with "
-            "an update for it. not_yet: a plain no, unclear, unsure, I don't know or only part of what "
-            "the stage needs, so the walk stays. stop: they clearly want to stop or leave the questions."
+            "an update for it. not_yet: a plain no, unclear, unsure, I don't know, a question back about what you "
+            "asked, or only part of what the stage needs, so the walk stays. stop: they clearly want to stop or leave the questions."
         ),
     )
     stage_updates: list[StageUpdate] | None = Field(

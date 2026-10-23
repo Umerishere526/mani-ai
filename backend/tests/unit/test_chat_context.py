@@ -207,6 +207,26 @@ def framework() -> Framework:
     )
 
 
+def test_only_a_stage_that_carries_the_case_asks_for_the_stack_in_its_question():
+    """The stack is carried by the stages a framework flags with carries_case, whatever the framework."""
+    flagged = framework()
+    flagged.stages["belief"]["carries_case"] = True
+    at = lambda phase: context.build(  # noqa: E731
+        TurnContext(
+            thread=thread(), profile=Profile(user_id=USER, support_style="directive"),
+            technique=TechniqueState(
+                thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+                phase=phase, at_message_count=4,
+            ),
+        ),
+        framework=flagged,
+    )
+    lines = lambda phase: at(phase).splitlines()  # noqa: E731
+    assert not any(line.startswith("stage_carries_case:") for line in lines("activate"))
+    assert f"next_stage_carries_case: {context.CARRIES_CASE}" in lines("activate")
+    assert f"stage_carries_case: {context.CARRIES_CASE}" in lines("belief")
+
+
 TONES = ("directive", "supportive", "reflective")
 
 

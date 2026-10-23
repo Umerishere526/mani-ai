@@ -315,7 +315,7 @@ with st.sidebar:
     understood = (last_turn or {}).get("understanding")
     if understood:
         for key, label in (
-            ("feeling", "Feelings"), ("issue", "Problem"), ("core_issue", "Core issue"),
+            ("feeling", "Feelings"), ("stack", "Stack"), ("issue", "Problem"), ("core_issue", "Core issue"),
             ("underlying_feeling", "Underlying feeling"), ("comes_down_to", "What it comes down to"),
             ("also", "Also raised"),
         ):

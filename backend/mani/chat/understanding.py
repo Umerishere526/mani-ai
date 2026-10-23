@@ -6,13 +6,15 @@ from __future__ import annotations
 from mani.chat import context
 from mani.llm.schema import Check, UnderstandingUpdate
 
-KEYS = ("feeling", "issue", "core_issue", "underlying_feeling", "comes_down_to", "also")
+KEYS = ("feeling", "stack", "issue", "core_issue", "underlying_feeling", "comes_down_to", "also")
 LIMIT = 200
-# What gathers over the conversation instead of being replaced: every feeling they name, the details they
-# raise, and each step of the case (problem, core issue, underlying feeling), which grows with everything
-# they say and is never taken away. Each has its separator and its size.
+# What gathers over the conversation instead of being replaced: every feeling they name, the stack of what
+# they feel, believe it means and want, the details they raise, and each step of the case (problem, core
+# issue, underlying feeling), which grows with everything they say and is never taken away. Each has its
+# separator and its size.
 GATHERED = {
     "feeling": (", ", LIMIT),
+    "stack": ("; ", 3 * LIMIT),
     "issue": ("; ", 3 * LIMIT),
     "core_issue": ("; ", 3 * LIMIT),
     "underlying_feeling": ("; ", 3 * LIMIT),

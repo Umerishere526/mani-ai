@@ -98,10 +98,38 @@ def test_a_draft_that_chose_a_shape_asking_nothing_is_not_missing_a_question():
     """Whether someone only wants to be listened to is the model's reading, shown by its shape."""
     from mani.llm.schema import Style
 
-    holding = Reply(text="That has been sitting with you.", style=Style(shape="mirror and hold"))
-    asking = Reply(text="That has been sitting with you.", style=Style(shape="mirror and ask"))
-    none = Reply(text="That has been sitting with you.")
+    holding = Reply(text="That has been hard for you.", style=Style(shape="mirror and hold"))
+    asking = Reply(text="That has been hard for you.", style=Style(shape="mirror and ask"))
+    none = Reply(text="That has been hard for you.")
     for draft, expected in ((holding, []), (asking, ["asks no question"]), (none, ["asks no question"])):
         assert reply_checks.misses(
             draft, offered=None, offer_dropped=None, needs_question=True, last_mani_text=None
         ) == expected
+
+
+def test_a_question_that_leaves_the_stack_out_is_counted_and_one_that_carries_any_of_it_is_not():
+    """Lolly, 2026-10-22: D asked only about her belief and dropped the hurt and the missing. Logged, never re-asked."""
+    stack = "sad hurt you miss her; her silence means you don't matter; you want an apology"
+    bare = Reply(text="Is there anything that makes you question that?")
+    carried = Reply(text="You miss her and you want an apology. What makes you question that?")
+    assert reply_checks.misses(
+        bare, offered=None, offer_dropped=None, needs_question=True, last_mani_text=None, stack=stack,
+    ) == ["stack missing"]
+    assert reply_checks.misses(
+        carried, offered=None, offer_dropped=None, needs_question=True, last_mani_text=None, stack=stack,
+    ) == []
+    assert reply_checks.misses(
+        bare, offered=None, offer_dropped=None, needs_question=True, last_mani_text=None, stack="",
+    ) == []
+
+
+def test_a_figure_of_speech_in_a_reply_is_counted_with_the_phrase_that_was_used():
+    """Lolly, 2026-10-22: "what would you want to hold onto" and "hold you" read as artificial."""
+    reply = Reply(text="What would you want to hold onto as you think about this?")
+    assert reply_checks.misses(
+        reply, offered=None, offer_dropped=None, needs_question=True, last_mani_text=None,
+    ) == ["figure of speech: hold onto"]
+    plain = Reply(text="What seems more realistic to you now?")
+    assert reply_checks.misses(
+        plain, offered=None, offer_dropped=None, needs_question=True, last_mani_text=None,
+    ) == []

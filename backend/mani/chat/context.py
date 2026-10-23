@@ -192,8 +192,8 @@ _MEANING: dict[str, str | dict[str, str]] = {
         "understanding_update report only what their message adds that is new."
     ),
     "their_case": (
-        "what you and they found before the questions began: the feelings they named, the problem, the core "
-        "issue under it, the feeling underneath and, once they confirmed it, what it comes down to, and "
+        "what you and they found before the questions began: the feelings they named, the stack of what they "
+        "feel, believe it means and want, the problem, the core issue under it, the feeling underneath and, once they confirmed it, what it comes down to, and "
         "anything they added since, in their words. Every question you ask and every possibility you offer "
         "is about this case and the feeling underneath, never generic. Never ask them again for anything in it: say it "
         "back and build on it. In understanding_update report only what their message adds that is new."
@@ -289,6 +289,14 @@ _MEANING: dict[str, str | dict[str, str]] = {
         ),
     },
 }
+
+
+# What a stage that carries the case asks of its question: the stack, said back in their words, whatever the
+# framework (a stage says so with `carries_case: true`).
+CARRIES_CASE = (
+    "the stack in their_case is in this question, in their words: what they feel, what they believe it means "
+    "and what they want. Fit as much as the style allows, never a list, never anything they did not say."
+)
 
 
 def _meaning(key: str, value: object) -> list[str]:
@@ -494,4 +502,6 @@ def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> l
     ask = (stage.get("ask") or {}).get(style)
     if ask:
         lines.append(f"{prefix}_ask: {ask}")
+    if stage.get("carries_case"):
+        lines.append(f"{prefix}_carries_case: {CARRIES_CASE}")
     return lines
