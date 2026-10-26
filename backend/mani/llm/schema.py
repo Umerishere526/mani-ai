@@ -155,9 +155,8 @@ class NextStage(BaseModel):
 
 # Merged into the thread's record by chat/understanding.py. The docstring is sent to the model.
 class UnderstandingUpdate(BaseModel):
-    """What their message names or changes about how they feel, what they are dealing with, what
-    lies under it, the feeling underneath, and anything new they raise. A null keeps what is already
-    known."""
+    """The feelings their message names. They are added to the ones already known and never replace them.
+    A null keeps what is already known."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -169,66 +168,22 @@ class UnderstandingUpdate(BaseModel):
             "are new. They are added to the ones already known. Null otherwise."
         ),
     )
-    issue: str | None = Field(
-        default=None,
-        description=(
-            "The problem: what is actually happening to them, concrete (who, what, how often), in "
-            "their words and said to them as you, such as \"your boss says you're not doing enough\". "
-            "Never the feeling. Only when this message makes it clear or moves to another. A dozen words "
-            "at most. Null otherwise."
-        ),
-    )
-    core_issue: str | None = Field(
-        default=None,
-        description=(
-            "The core issue: what the problem comes down to for them underneath, such as what usually "
-            "happens next, what falls on them, or what keeps it going. Your understanding, "
-            "formed from their answers and said to them as you. Report it as soon as their answers show "
-            "it; they don't need to name it themselves. Never the feeling they opened with or the problem "
-            "reworded. A dozen words at most. Null otherwise."
-        ),
-    )
-    underlying_feeling: str | None = Field(
-        default=None,
-        description=(
-            "The feeling underneath the problem and its core issue, which may not be the one they opened "
-            "with: their own word when they named it, otherwise the feeling their words point to, worded "
-            "as a possibility and said to them as you. When they say they don't know, your closest "
-            "reading in the same form. Only in answer to your question about it. Null otherwise."
-        ),
-    )
-    also: str | None = Field(
-        default=None,
-        description=(
-            "Another problem, or an important detail, they raise that what you know does not hold yet, such "
-            "as a warning they were given, what is at stake, or how much time they have. A short phrase, "
-            "said to them as you. It is added to the ones already known and never replaces the problem. "
-            "Null otherwise."
-        ),
-    )
 
 
-# Read by the orchestrator: a check with all its parts is written to the thread, and repairs sends its
-# parts in this order in place of the reply's text (spec 0006). The docstring is sent to the model.
+# Read by the orchestrator: a check with all its parts, on a reply that judged the heart of it ready, is written to
+# the thread, and repairs sends its parts in this order in place of the reply's text. The docstring is sent to the
+# model.
 class Check(BaseModel):
     """Your check of what you understand, filled only on the reply that checks it with them. Together the
-    parts read as a short flowing summary of two or three sentences that connects their situation, what
-    lies under it and the feeling, in your own words, said to them as you, from their words only. Each
-    part continues the one before it and is never a list. The parts are sent in this order, in place of
-    your text."""
+    parts read as a short flowing summary of two or three sentences, in your own words, said to them as you,
+    from their words only. Each part continues the one before it and is never a list. The parts are sent in
+    this order, in place of your text."""
 
     model_config = ConfigDict(extra="ignore")
 
-    problem: str | None = Field(default=None, description="The situation as you understand it, the start of the summary.")
-    core_issue: str | None = Field(default=None, description="What lies under it, continuing from the situation as one thought.")
-    underlying_feeling: str | None = Field(
-        default=None,
-        description="The feeling underneath, in their word or as a possibility for them to confirm, continuing from the part before.",
-    )
-    comes_down_to: str | None = Field(
-        default=None,
-        description="Only when it adds something the parts above do not, otherwise null.",
-    )
+    conflict: str | None = Field(default=None, description="The heart of it: what they are torn between or what it means to them, the start of the summary.")
+    want: str | None = Field(default=None, description="What they want, continuing from the conflict as one thought.")
+    in_the_way: str | None = Field(default=None, description="What is stopping them, continuing from the part before.")
     question: str | None = Field(default=None, description="Your one question asking whether that captures what they have been experiencing, leaving room for something you missed.")
 
 
@@ -239,11 +194,13 @@ BodyBranch = Literal[
     "nearest", "none", "pain", "better", "same", "worse", "helped", "somewhat", "not_really", "finish", "unclear",
 ]
 StageAnswer = Literal["agreed", "answered", "corrected", "stop", "not_yet"]
+Heart = Literal["exploring", "conflict_named", "ready"]
 _CLOSED_SETS = {
     "offer_answer": get_args(OfferAnswer),
     "check_answer": get_args(CheckAnswer),
     "body": get_args(BodyBranch),
     "stage_answer": get_args(StageAnswer),
+    "heart": get_args(Heart),
 }
 
 
@@ -275,7 +232,7 @@ class _ReplyBase(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    @field_validator("offer_answer", "check_answer", "body", "stage_answer", mode="before", check_fields=False)
+    @field_validator("offer_answer", "check_answer", "heart", "body", "stage_answer", mode="before", check_fields=False)
     @classmethod
     def _off_list_is_null(cls, value: object, info) -> object:
         if value is None or value in _CLOSED_SETS[info.field_name]:
@@ -311,6 +268,15 @@ class Reply(_ReplyBase):
             "or talking about something else."
         ),
     )
+    heart: Heart | None = Field(
+        default=None,
+        description=(
+            "Where your reading of the heart of it stands, from the whole conversation including their "
+            "message. exploring: the central conflict is not clear yet. conflict_named: you said the "
+            "tension back to them and they agreed. ready: the conflict is agreed, and you also know what "
+            "they want and what is stopping them."
+        ),
+    )
     offer_answer: OfferAnswer | None = Field(
         default=None,
         description=(
@@ -331,8 +297,8 @@ class Reply(_ReplyBase):
             "How their message answers the stage in force. agreed: yes to your check of what they "
             "said, even with more added. answered: they gave what the stage needs, or picked one of "
             "your possibilities as theirs, with an update for it. corrected: a no with new words, with "
-            "an update for it. not_yet: a plain no, unclear, unsure, I don't know or only part of what "
-            "the stage needs, so the walk stays. stop: they clearly want to stop or leave the questions."
+            "an update for it. not_yet: a plain no, unclear, unsure, I don't know, a question back about what you "
+            "asked, or only part of what the stage needs, so the walk stays. stop: they clearly want to stop or leave the questions."
         ),
     )
     stage_updates: list[StageUpdate] | None = Field(
@@ -353,7 +319,7 @@ class Reply(_ReplyBase):
         ),
     )
     text: str = Field(
-        description="What Mani says to them, sounding like Mani in the example. Required."
+        description="What Mani says to them, in the style they chose. Required."
     )
     options: str | None = Field(
         default=None,
@@ -391,8 +357,8 @@ class Reply(_ReplyBase):
     check: Check | None = Field(
         default=None,
         description=(
-            "Fill it only when this reply checks your understanding with them, once the problem and "
-            "what lies under it are clear from their words. Null otherwise. Not shown to the user."
+            "Fill it only when heart is ready in this reply: it checks your understanding with them. "
+            "Null otherwise. Not shown to the user."
         ),
     )
     offer: Offer | None = Field(
@@ -443,7 +409,7 @@ class Slots:
     their_words: str | None = None
 
 
-_CORE = ("reasoning", "style", "understanding_update", "heading_toward", "text", "title", "crisis")
+_CORE = ("reasoning", "style", "understanding_update", "text", "title", "crisis")
 _STAGES = ("stage_updates", "stage_answer")
 # The stage the walk may reach this turn, judged on every turn that can start or move the walk. Not at
 # the closing, which the body route follows.
@@ -475,12 +441,14 @@ def reply_for(
                 Field(default=None, description=f"Only on no, or when they chose Keep chatting: {slots.their_words}."),
             )
     elif moment is Moment.CHECK_OPEN:
-        names |= {"check_answer", "options"}
+        # The answer to a check is where the set is chosen, and a no carries on toward the heart of it.
+        names |= {"check_answer", "heading_toward", "heart"}
         if slots.going_through:
             names.add("offer")
             overrides["offer"] = (_offer_model(slots.going_through, slots.lead_line) | None, Reply.model_fields["offer"])
     elif moment is Moment.CHATTING:
-        names.add("options")
+        # One question carries its own possibilities, so a chatting reply has no options line (R30).
+        names.add("heart")
         if may_check:
             names.add("check")
     if declined_row and moment in (Moment.CHECK_OPEN, Moment.CHATTING):
@@ -519,6 +487,48 @@ def as_reply(parsed: BaseModel) -> Reply:
     """A reply in this turn's shape, read into the full record, every absent field null."""
     return Reply.model_validate(parsed.model_dump())
 
+
+
+# The reply whenever no framework, offer or check is open (orchestrator.converse). The model reads every
+# description. Text comes first, so the voice is written before anything is judged about it.
+class ConversationReply(_ReplyBase):
+    """Mani's reply, and where the conversation stands after it."""
+
+    text: str = Field(description="What Mani says to them. Required.")
+    heart: Heart | None = Field(
+        default=None,
+        description=(
+            "exploring: you don't yet know what they are torn between or what it means to them. conflict_named: "
+            "you said the heart of it back and they agreed. ready: that is agreed, and you also know what they want "
+            "and what is stopping them."
+        ),
+    )
+    conflict: str | None = Field(
+        default=None,
+        description="Once heart is conflict_named or ready: what they are torn between or what it means to them, one sentence said to them as you. Null otherwise.",
+    )
+    want: str | None = Field(
+        default=None, description="Once known: what they want, one sentence said to them as you. Null otherwise.",
+    )
+    in_the_way: str | None = Field(
+        default=None, description="Once known: what is stopping them, one sentence said to them as you. Null otherwise.",
+    )
+    checking: bool | None = Field(
+        default=None,
+        description="True only on the reply that pulls it together and asks whether it describes what they feel.",
+    )
+    feelings: str | None = Field(
+        default=None,
+        description="Feeling words they used for the first time in their last message, in their words, separated by commas. Null otherwise.",
+    )
+    crisis: Crisis | None = Field(
+        default=None,
+        description="Only when something they said sounds like they may not be safe, or may hurt themselves or someone else. Null otherwise.",
+    )
+    title: str | None = Field(
+        default=None,
+        description="Only when the instructions ask for a title: a short title for this conversation. Null otherwise.",
+    )
 
 class Extraction(BaseModel):
     """What summarization asks for. Schema-validated rather than parsed out of prose."""

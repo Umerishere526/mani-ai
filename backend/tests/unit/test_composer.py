@@ -28,6 +28,7 @@ def prompt(name: str, content: str):
 @pytest.fixture
 def config() -> Config:
     named = [
+        prompt("conversation", "CONVERSATION"),
         prompt("mani_base", "IDENTITY"),
         prompt("response_format", "FORMAT"),
         prompt("style_directive", "DIRECTIVE STYLE"),
@@ -306,7 +307,8 @@ def test_every_rule_in_a_prompt_file_is_a_sentence_not_a_yaml_mapping(name):
 
 def test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_beside_it():
     """Spec 0005, AC-9: a framework's checklist steered the questions toward its own needs, and the
-    bans kept the feeling they named out of them (live, 2026-10-13: the frustrated chat)."""
+    bans kept the feeling they named out of them (live, 2026-10-13: the frustrated chat). Every feeling
+    they named stays in view, not only the first (muhammad, 2026-10-25: a second feeling replaced the first)."""
     import pathlib
 
     import yaml
@@ -315,10 +317,10 @@ def test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_b
 
     prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
     base = yaml.safe_load(parse_prompt(prompts / "mani_base.md")["content"])
-    assert (
-        "Each question follows from their last answer and keeps the feeling and issue they came with "
-        "in view. Their feeling word may come back inside a question, never as a statement about them."
-    ) in base["understanding_them"]
+    assert any(
+        isinstance(rule, str) and rule.startswith("Each question follows from their last answer.")
+        for rule in base["understanding_them"]
+    )
     sent = "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in ("mani_base", "response_format"))
     for cut in ("Build every question from", "Never hand their own words or feelings back",
                 "Am I saying back their own words or feelings"):
@@ -338,9 +340,11 @@ def test_mani_is_never_taught_to_announce_what_it_wants_to_understand():
         assert line not in sent
 
 
-def test_the_feeling_step_replaced_control_and_the_prompt_did_not_grow():
-    """The third step is the feeling underneath (muhammad, 2026-10-21). The prompt is held to the size
-    it had before the swap so rules cannot pile up silently, and no instruction still asks about control."""
+def test_the_heart_of_it_replaced_the_steps_and_the_prompt_did_not_grow():
+    """muhammad, 2026-10-26 (R30, R33): Mani reads for the central conflict, what they want and what is stopping
+    them instead of walking named steps. The prompt is held to its size so rules cannot pile up silently, and no
+    instruction still names a step or asks about control. The chat before a framework has its own prompt since
+    the same day, so the framework prompt carries the cadence but not the client's example conversations."""
     import pathlib
 
     from scripts.seed import parse_prompt
@@ -348,8 +352,11 @@ def test_the_feeling_step_replaced_control_and_the_prompt_did_not_grow():
     prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
     base = (prompts / "mani_base.md").read_text()
     sent = "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in ("mani_base", "response_format"))
-    assert "The feeling underneath." in base and "in their control" not in sent
-    assert len(base) <= 11268
+    assert "what is stopping them" in base
+    for cut in ("understanding_next", "The feeling underneath.", "in their control", "never leads them to a conclusion"):
+        assert cut not in sent, cut
+    assert len(base) <= 11000
+    assert "Them: " not in base
 
 
 def test_no_rule_lets_mani_pass_a_stage_over_and_not_knowing_gets_possibilities():
@@ -375,3 +382,17 @@ def test_the_framework_rules_point_at_their_case():
     prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
     sent = parse_prompt(prompts / "mani_base.md")["content"]
     assert "about their_case in [ctx]" in sent and "from their case and what they said" in sent
+
+
+def test_a_question_back_is_not_an_answer_and_the_plain_words_rule_is_in_the_prompt():
+    """Lolly, 2026-10-22: "what do you mean?" at C moved the walk to D, and Mani said "hold onto". A question
+    back keeps the stage, and the voice is plain words with no figure of speech."""
+    import pathlib
+
+    from mani.llm.schema import Reply
+    from scripts.seed import parse_prompt
+
+    base = parse_prompt(pathlib.Path(__file__).parents[2] / "content/prompts/mani_base.md")["content"]
+    assert "they ask what you mean: the stage is not answered" in base
+    assert "never a figure of speech" in base
+    assert "a question back about what you asked" in Reply.model_fields["stage_answer"].description

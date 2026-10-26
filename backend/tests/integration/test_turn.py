@@ -13,7 +13,7 @@ from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
 from mani.chat.repairs import PERMISSION_QUESTION
-from mani.llm.schema import Check, Crisis, NextStage, Offer, Reply, StageUpdate, Style, UnderstandingUpdate
+from mani.llm.schema import Check, ConversationReply, Crisis, NextStage, Offer, Reply, StageUpdate, Style, UnderstandingUpdate
 from mani.models.rows import TechniqueOutcome, TechniqueState as TechniqueRow
 from tests.integration.cleanup import remove_test_users
 
@@ -22,6 +22,21 @@ ALICE = uuid.UUID("a0000000-0000-4000-8000-0000000000d1")
 
 def claims_for(user_id: uuid.UUID) -> Claims:
     return Claims(sub=str(user_id), raw={"sub": str(user_id), "role": "authenticated"})
+
+
+def _in_shape(reply: Reply, schema: type) -> dict:
+    """A scripted reply as the fields of the shape the turn asked for. A conversation turn reads the feelings,
+    the check's parts and its flag from fields of its own, so a script written as a full Reply says the same
+    thing in either shape."""
+    fields = reply.model_dump()
+    if schema is not ConversationReply or not isinstance(reply, Reply):
+        return fields
+    if reply.understanding_update and reply.understanding_update.feeling:
+        fields["feelings"] = reply.understanding_update.feeling
+    if reply.check is not None:
+        fields |= {"checking": True, "conflict": reply.check.conflict, "want": reply.check.want,
+                   "in_the_way": reply.check.in_the_way}
+    return fields
 
 
 class ScriptedModel:
@@ -37,18 +52,20 @@ class ScriptedModel:
         self.calls = 0
         self.last_messages: list[dict] | None = None
         self.schemas: list[type] = []
+        self.sent: list[list[dict]] = []
         self.kwargs: dict = {}
 
     async def __call__(self, messages, schema, **kwargs):
         self.calls += 1
         self.last_messages = messages
+        self.sent.append(messages)
         self.schemas.append(schema)
         self.kwargs = kwargs
         reply = self._replies[min(self.calls - 1, len(self._replies) - 1)]
         return client.Call(
             # Parsed in the shape this turn sent, as the real call is: a field the moment does not
             # carry is dropped, however the script filled it.
-            value=schema.model_validate(reply.model_dump()),
+            value=schema.model_validate(_in_shape(reply, schema)),
             model="test/model",
             usage=llm_calls.Usage(input_tokens=100, output_tokens=20),
             latency_ms=1,
@@ -104,26 +121,24 @@ async def start(claims: Claims):
     return thread
 
 
-# The three steps before a check, all found (spec 0006).
-FOUND = {
-    "issue": "your coworkers miss deadlines",
-    "core_issue": "the work always lands on you",
-    "underlying_feeling": "you may feel worn down by it",
+# The heart of it judged ready and checked: the conflict, what they want and what is stopping them (R33).
+UNDERSTOOD = {
+    "heart": "ready",
+    "case": "The work always lands on you. You want them to carry their own share. Saying no feels like letting the team down.",
 }
 
 
 async def past_the_opening(thread):
-    """The rounds of conversation the client wants before anything is offered, already had: the
-    problem, its core issue and the feeling underneath found, ending on Mani's check of its
-    understanding, so the next message answers it (spec 0006). For tests about what happens to an
-    offer, not about when one may come."""
+    """The rounds of conversation the client wants before anything is offered, already had: the heart
+    of it found, ending on Mani's check of its understanding, so the next message answers it (spec 0006,
+    R33). For tests about what happens to an offer, not about when one may come."""
     from mani.db import pool
 
     async with pool.as_admin() as conn:
         await conn.execute(
             "update public.threads set message_count = message_count + 8, "
             "check_at_message_count = message_count + 8, understanding = $2::jsonb where id = $1",
-            thread.id, FOUND,
+            thread.id, UNDERSTOOD,
         )
     return thread
 
@@ -190,24 +205,31 @@ def _offer(technique: str = "abcde") -> Reply:
 
 
 def _check() -> Reply:
-    """Mani's check of its understanding, each part its own sentence; its free text opens with their last
-    answer, as the model's did live, and is never sent (spec 0006)."""
+    """Mani's check of its understanding from a reply that judged the heart of it ready, each part its own
+    sentence; its free text opens with their last answer, as the model's did live, and is never sent (R33)."""
     return Reply(
         text="You may feel worn down. Your coworkers miss deadlines. Do I have that right?",
+        heart="ready",
         check=Check(
-            problem="Your coworkers keep missing deadlines", core_issue="The work always ends up landing on you.",
-            underlying_feeling="You may feel worn down by it.",
-            comes_down_to="It seems to come down to carrying what others drop.", question="Do I have that right",
+            conflict="The work always lands on you when your coworkers miss deadlines",
+            want="You want them to carry their own share.",
+            in_the_way="Saying no feels like letting the team down.", question="Do I have that right",
         ),
-        understanding_update=UnderstandingUpdate(underlying_feeling="you may feel worn down by it"),
     )
 
 
-# _check() as sent: the problem, the core issue, the feeling underneath and what it comes down to, then the question.
-CHECK_SENT = (
-    "Your coworkers keep missing deadlines. The work always ends up landing on you. You may feel worn "
-    "down by it. It seems to come down to carrying what others drop.\n\nDo I have that right?"
+def _may_check(messages: list[dict]) -> bool:
+    """Whether the note sent with a conversation turn let that reply check Mani's understanding."""
+    note = messages[-1]["content"]
+    return note.startswith("Note for this reply only.") and "Do not check" not in note
+
+
+# _check() as sent: the conflict, what they want and what is stopping them, then the question.
+CHECK_CASE = (
+    "The work always lands on you when your coworkers miss deadlines. You want them to carry their own share. "
+    "Saying no feels like letting the team down."
 )
+CHECK_SENT = f"{CHECK_CASE}\n\nDo I have that right?"
 
 
 async def answering_a_check(thread):
@@ -280,66 +302,54 @@ async def test_an_offer_still_made_on_their_first_message_cannot_start_a_framewo
     assert ctx.technique is None
 
 
-async def test_the_problem_its_core_issue_and_the_feeling_each_take_an_exchange_then_the_check_and_offer(
-    alice, model,
-):
-    """Spec 0006, AC-2 to AC-4, AC-17, AC-18, muhammad's run of 2026-10-13. The model reports
-    everything it can see from the first message; code takes one step per exchange, so the check field
-    first appears on their third message, the check is stored once their own words give the feeling, even an I don't know, and a
-    clear yes at their fourth makes that reply the client's offer. One call each."""
+async def test_a_check_comes_from_their_fifth_message_once_the_heart_of_it_was_agreed(alice, model):
+    """muhammad, 2026-10-26: the chat before a framework is Mani's own conversation, in its own reply shape with
+    no options line. A check is allowed from their 5th message, and only after an earlier reply said the heart of
+    it back and had it agreed. The check is the model's own words, its parts are the case, and a clear yes on
+    the next turn makes that reply the client's offer. One call each."""
     from mani.models.rows import SupportStyle
 
-    everything = UnderstandingUpdate(
-        issue="your coworkers miss deadlines", core_issue="the work always lands on you",
-        underlying_feeling="you may feel worn down by it",
-    )
     scripted = model(
-        Reply(text="That sounds draining. Who does it fall on when they miss them?", understanding_update=everything),
-        Reply(text="That's a lot to carry. How does it sit with you underneath?", understanding_update=everything),
+        *[Reply(text=f"Was it the deadlines themselves, or what they cost you, {n}?", heart="exploring")
+          for n in range(3)],
+        Reply(text="It seems the work always lands on you. Is that the heart of it?", heart="conflict_named"),
         _check(),
         _offer("abcde"),
     )
     thread = await _in_style(await start(alice), SupportStyle.SUPPORTIVE)
-    await send(alice, thread.id, "i'm frustrated at work")
-    first = await _thread_row(alice, thread.id)
-    await send(alice, thread.id, "my coworkers keep missing deadlines and i end up doing their work")
-    checked = await send(alice, thread.id, "i don't know, it just wears me down")
-    assert (await _thread_row(alice, thread.id)).check_at_message_count is not None
+    for n in range(4):
+        await send(alice, thread.id, f"my coworkers keep missing deadlines, {n}")
+    assert (await _thread_row(alice, thread.id)).check_at_message_count is None
+    checked = await send(alice, thread.id, "i want them to do their part but saying no feels like letting the team down")
     turn = await send(alice, thread.id, "yes, that's it")
 
-    assert set(first.understanding) == {"issue"}, "the opening message fills the problem only"
-    assert scripted.calls == 4
-    assert ["check" in shape.model_fields for shape in scripted.schemas] == [False, False, True, False]
-    assert ["offer" in shape.model_fields for shape in scripted.schemas] == [False, False, False, True]
-    # The check's parts in the client's order, whatever order the model's own text took.
-    assert checked.content == CHECK_SENT
+    assert scripted.calls == 6
+    assert scripted.schemas[:5] == [ConversationReply] * 5
+    assert [_may_check(sent) for sent in scripted.sent[:5]] == [False] * 4 + [True]
+    assert "offer" in scripted.schemas[5].model_fields
+    # Mani's own words, as the model wrote them.
+    assert checked.content == "You may feel worn down. Your coworkers miss deadlines. Do I have that right?"
     # The client's template word for word with the model's slots in it, never the model's text.
     assert turn.content == SUPPORTIVE_OFFER
     assert [p.label for p in turn.prompts] == ["Try it", "Tell me more", "Keep chatting"]
-    # The check's understanding is stored, under the person's own words for the feeling.
-    assert (await _thread_row(alice, thread.id)).understanding == {
-        "issue": "Your coworkers keep missing deadlines", "core_issue": "The work always ends up landing on you.",
-        "underlying_feeling": "you may feel worn down by it",
-        "comes_down_to": "It seems to come down to carrying what others drop.",
-    }
+    # What the check said becomes the case the questions are about.
+    assert (await _thread_row(alice, thread.id)).understanding == {"heart": "ready", "case": CHECK_CASE}
 
 
-async def test_a_check_whose_feeling_did_not_come_from_them_opens_nothing(alice, model):
-    """Spec 0006, AC-18: on the turn that should ask about the feeling, a check carrying a feeling they never
-    gave is not stored, so their yes to it brings no offer; it is counted."""
+async def test_a_check_before_the_heart_of_it_was_agreed_opens_nothing(alice, model):
+    """muhammad, 2026-10-26: a reply that checks before any reply said the heart of it back and had it agreed is
+    not stored, so their yes to it brings no offer."""
     from mani.db import pool
 
-    model(_check().model_copy(update={"understanding_update": None}))
+    scripted = model(_check().model_copy(update={"heart": "conflict_named"}))
     thread = await start(alice)
     async with pool.as_admin() as conn:
-        await conn.execute(
-            "update public.threads set message_count = 11, understanding = $2::jsonb where id = $1",
-            thread.id, {k: FOUND[k] for k in ("issue", "core_issue")},
-        )
+        await conn.execute("update public.threads set message_count = 11 where id = $1", thread.id)
     turn = await send(alice, thread.id, "it happens every week")
 
+    assert not _may_check(scripted.sent[-1])
     assert (await _thread_row(alice, thread.id)).check_at_message_count is None
-    assert "check before the three steps" in turn.checks
+    assert turn.understanding == {"heart": "conflict_named"}
 
 
 @pytest.mark.parametrize("style", ["directive", "supportive", "reflective"])
@@ -373,19 +383,29 @@ async def test_anything_but_a_clear_yes_keeps_chatting_and_the_next_check_waits(
     assert turn.content == "What part did I miss?"
     assert turn.prompts == []
     assert "offer unusable: no yes to the check" in turn.checks
-    assert ["check" in shape.model_fields for shape in scripted.schemas] == [False, False, False, True]
+    assert "check_answer" in scripted.schemas[0].model_fields
+    assert [_may_check(sent) for sent in scripted.sent[1:]] == [False, False, True]
 
 
-async def test_no_check_by_their_fifth_message_is_logged_and_never_asked_for(alice, model):
-    """Spec 0006, AC-11: counted on that message only, and nothing about it reaches [ctx]."""
-    from mani.models.rows import SupportStyle
+async def test_a_reply_that_judged_the_heart_of_it_ready_without_checking_makes_the_check_due(alice, model):
+    """R33 and the journal of 2026-10-16: a step the model may take is not a step that happens, so a reply
+    that judged the heart of it ready and did not check makes the next turn's check due. Code names the turn."""
+    from mani.db import pool
 
-    scripted = model(*[Reply(text=f"What happened then, {n}?") for n in range(6)])
-    thread = await _in_style(await start(alice), SupportStyle.DIRECTIVE)
-    turns = [await send(alice, thread.id, f"message {n}") for n in range(1, 7)]
-
-    assert [("no check by message 5" in t.checks) for t in turns] == [False] * 4 + [True, False]
-    assert "no check" not in scripted.last_messages[-1]["content"]
+    scripted = model(
+        Reply(text="So you want her to own it. What is stopping you from reaching out?", heart="ready"),
+        Reply(text="What would that be like?"),
+    )
+    thread = await start(alice)
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set message_count = 11, understanding = $2::jsonb where id = $1",
+            thread.id, {"heart": "conflict_named"},
+        )
+    await send(alice, thread.id, "i want her to own how she made me feel")
+    assert "You may check your understanding this turn" in _ctx_sent(scripted)
+    await send(alice, thread.id, "she never will")
+    assert "this reply checks your understanding" in _ctx_sent(scripted)
 
 
 async def test_a_concern_on_the_answer_to_a_check_renders_no_offer_and_lets_the_check_lapse(alice, model):
@@ -395,7 +415,7 @@ async def test_a_concern_on_the_answer_to_a_check_renders_no_offer_and_lets_the_
     scripted = model(
         _offer().model_copy(update={
             "crisis": Crisis(reason="hopeless"), "text": "I'm here with you.",
-            "understanding_update": UnderstandingUpdate(issue="should not be stored"),
+            "understanding_update": UnderstandingUpdate(feeling="should not be stored"),
         }),
         Reply(text="What is happening for you right now?"),
     )
@@ -404,7 +424,7 @@ async def test_a_concern_on_the_answer_to_a_check_renders_no_offer_and_lets_the_
     await send(alice, thread.id, "I don't know")
 
     assert (turn.content, turn.prompts) == ("I'm here with you.", [])
-    assert (await _thread_row(alice, thread.id)).understanding == FOUND
+    assert (await _thread_row(alice, thread.id)).understanding == UNDERSTOOD
     assert "check_answer" not in scripted.schemas[-1].model_fields
     async with pool.as_user(alice) as conn:
         assert (await threads.load_turn_context(conn, thread.id, ALICE)).technique is None
@@ -462,7 +482,7 @@ async def test_someone_who_asks_only_to_be_heard_is_not_forced_to_answer_a_quest
     """The model reads that someone only wants to be listened to and picks a shape that asks nothing;
     no phrase list in code decides it."""
     scripted = model(Reply(
-        text="That sounds like it has been sitting with you for a long time.",
+        text="That sounds like it has been hard for a long time.",
         style=Style(shape="mirror and hold"),
     ))
     thread = await start(alice)
@@ -474,7 +494,7 @@ async def test_someone_who_asks_only_to_be_heard_is_not_forced_to_answer_a_quest
 
 async def test_a_reply_that_asks_nothing_and_chose_to_ask_something_is_logged(alice, model):
     scripted = model(
-        Reply(text="That sounds like it has been sitting with you.", style=Style(shape="mirror and ask")),
+        Reply(text="That sounds like it has been hard.", style=Style(shape="mirror and ask")),
     )
     thread = await start(alice)
     turn = await send(alice, thread.id, "work has been a lot lately")
@@ -486,13 +506,14 @@ async def test_a_reply_that_asks_nothing_and_chose_to_ask_something_is_logged(al
 ASKED_INLINE = "Your coworkers keep missing deadlines and the work lands on you every time. Is that what started this?"
 
 
-async def test_manis_own_reply_goes_out_with_its_question_on_its_own_line(alice, model):
-    """The client's way of communication document (R13) lays a reply out this way."""
-    model(Reply(text=ASKED_INLINE))
+async def test_manis_own_reply_keeps_the_models_line_breaks_and_gets_none_added(alice, model):
+    """muhammad, 2026-10-26: what the model wrote goes out with its own line breaks, and code adds none."""
+    broken = ASKED_INLINE.replace(" Is that", "\n\nIs that")
+    model(Reply(text=ASKED_INLINE), Reply(text=broken))
     thread = await start(alice)
-    turn = await send(alice, thread.id, "my coworkers never deliver")
 
-    assert turn.content == ASKED_INLINE.replace(" Is that", "\n\nIs that")
+    assert (await send(alice, thread.id, "my coworkers never deliver")).content == ASKED_INLINE
+    assert (await send(alice, thread.id, "every single week")).content == broken
 
 
 async def test_a_stage_reply_from_a_set_asked_for_again_stays_one_paragraph(alice, model):
@@ -949,7 +970,7 @@ async def test_a_new_chat_after_a_crisis_carries_the_flag_but_not_the_lock(alice
     assert created and second.id != first.id
 
     await send(alice, second.id, "hi again")
-    assert "recent_crisis: yes" in scripted.last_messages[-1]["content"]
+    assert "Another conversation of theirs was flagged recently" in scripted.last_messages[-1]["content"]
 
 
 async def test_the_framework_just_finished_is_offered_again_on_a_new_confirmed_check(alice, model):
@@ -1025,11 +1046,11 @@ async def test_choosing_a_style_sets_it_and_opens_in_it_with_no_model_call(alice
     assert ctx.thread.conversation_style.value == "reflective"
 
     await send(alice, thread.id, "I keep going over an argument with my sister")
-    assert "conversation_style: reflective" in scripted.last_messages[-1]["content"]
-    # The client's styles document (2026-10-12): only the chosen style reaches the model.
+    assert "Their style: Reflective." in scripted.last_messages[-1]["content"]
+    # muhammad, 2026-10-26: the conversation prompt carries all three styles, so it is one cached prefix, and
+    # the note names the one they chose.
     system = scripted.last_messages[0]["content"]
-    assert "MANI is thoughtful, curious, and exploratory" in system
-    assert "MANI is clear, concise, and focused" not in system and "MANI is warm, understanding" not in system
+    assert system.startswith("# Who you are") and "- Reflective: your reading does more of the work" in system
 
 
 async def test_a_greeting_stored_with_the_direct_button_opens_in_directive_after_migration_019(alice, model):
@@ -1408,7 +1429,7 @@ async def test_the_turn_log_names_the_moment_and_the_offer_and_never_their_words
     with caplog.at_level("INFO", logger="mani"):
         await send(alice, thread.id, "I keep spiralling")
 
-    assert "moment check_open: check_answer yes, offer_answer None, body None, stage_answer None, offered abcde" in caplog.text
+    assert "moment check_open: check_answer yes, heart None, offer_answer None, body None, stage_answer None, offered abcde" in caplog.text
     assert "what happened at work" not in caplog.text
     assert "a lot to carry" not in caplog.text
 
@@ -1704,25 +1725,24 @@ def _ctx_sent(scripted: ScriptedModel) -> str:
 
 
 async def test_what_they_name_is_stored_and_sent_back_on_every_later_turn(alice, model, caplog):
-    """AC-1, AC-2, AC-11: the feeling from their first message and the issue from their second are
-    stored, on one line, and the third turn's [ctx] carries both; a blank update keeps them. No log
-    line carries either."""
+    """AC-1, AC-2, AC-11: the feeling from their first message and where the heart of it stands after their
+    second are stored, and the third turn's [ctx] carries both; a blank update keeps them. No log line
+    carries their words."""
     scripted = model(
         Reply(text="What is it about?", understanding_update=UnderstandingUpdate(feeling="frustrated")),
-        Reply(text="What happens then?",
-              understanding_update=UnderstandingUpdate(issue="my client keeps\nchanging the requirements")),
+        Reply(text="Is it the changes themselves, or that nobody asks you first?", heart="exploring"),
         Reply(text="What goes through your mind?", understanding_update=UnderstandingUpdate(feeling=" ")),
     )
     thread = await start(alice)
 
     with caplog.at_level("INFO", logger="mani"):
         first = await send(alice, thread.id, "i am frustrated")
-        assert "understanding:" not in _ctx_sent(scripted)
+        assert "What you understood" not in _ctx_sent(scripted)
         await send(alice, thread.id, "my client keeps changing the requirements")
         third = await send(alice, thread.id, "we are moving in circles")
 
-    expected = {"feeling": "frustrated", "issue": "my client keeps changing the requirements"}
-    assert "understanding: feeling: frustrated; issue: my client keeps changing the requirements" in _ctx_sent(scripted)
+    expected = {"feeling": "frustrated", "heart": "exploring"}
+    assert "What you understood before their message: feeling: frustrated; heart: exploring." in _ctx_sent(scripted)
     assert (first.understanding, third.understanding) == ({"feeling": "frustrated"}, expected)
     assert await _understood(alice, thread.id) == expected
     assert scripted.calls == 3
@@ -1742,7 +1762,7 @@ async def test_what_they_named_early_stays_in_view_and_in_the_understanding_line
         await send(alice, thread.id, f"one more thing, number {n}")
 
     assert any("I feel anxious" in m["content"] for m in scripted.last_messages)
-    assert "understanding: feeling: anxious" in _ctx_sent(scripted)
+    assert "What you understood before their message: feeling: anxious" in _ctx_sent(scripted)
 
 
 @pytest.mark.parametrize("named", [True, False])
@@ -1817,8 +1837,8 @@ async def test_a_wish_to_stop_leaves_the_framework_and_it_comes_back_only_when_a
 
 
 async def test_a_stage_turn_is_sent_the_case_found_before_the_offer(alice, model):
-    """muhammad, 2026-10-22: the problem and the core issue reach the model on every stage turn as
-    their_case, so its question is about them."""
+    """muhammad, 2026-10-22: what was found before the offer reaches the model on every stage turn as
+    their_case, so its question is about it; since 2026-10-26 that is the case they confirmed."""
     from mani.db import pool
 
     scripted = model(Reply(text="What did he say about your work?", stage_answer="not_yet"))
@@ -1826,13 +1846,13 @@ async def test_a_stage_turn_is_sent_the_case_found_before_the_offer(alice, model
     async with pool.as_admin() as conn:
         await conn.execute(
             "update public.threads set understanding = $2::jsonb where id = $1", thread.id,
-            {"issue": "your coworkers miss deadlines", "core_issue": "the work always lands on you"},
+            {"feeling": "worn down", "case": "The work always lands on you."},
         )
     await _land_on(alice, thread.id, "belief")
 
     await send(alice, thread.id, "i don't know")
     sent = scripted.last_messages[-1]["content"]
-    assert "their_case: " in sent and "the work always lands on you" in sent
+    assert "their_case: " in sent and "The work always lands on you." in sent
 
 
 async def test_what_is_still_to_ask_at_d_is_stored_and_sent_on_the_next_turn(alice, model):
@@ -1859,49 +1879,43 @@ async def test_what_is_still_to_ask_at_d_is_stored_and_sent_on_the_next_turn(ali
     assert 'dispute partial, still to ask challenge: "family should always help"' in sent
 
 
-async def test_the_options_for_answering_arrive_on_the_line_under_the_question(alice, model):
-    """muhammad, 2026-10-22: a reply before the check is the mirror, its question, then the options as a
-    question of their own, each on its own line, however the model wrote its text."""
+async def test_before_the_check_one_question_carries_its_own_possibilities_and_nothing_is_added_under_it(alice, model):
+    """Lolly, 2026-10-26 (R30): ChatGPT's question held its two possibilities ("Was it the disagreement itself,
+    or how she treated you?"); a second question under it read as a menu, and code adds no line break
+    (muhammad, 2026-10-26)."""
     from mani.models.rows import SupportStyle
 
     model(Reply(
-        text="That long day has left you feeling anxious. What part of it is weighing on you most?",
+        text="That long day has left you feeling anxious. Is it something that happened today, or what still waits for you?",
         options="Is it something that happened, what still needs doing, or the day catching up with you",
     ))
     thread = await _in_style(await start(alice), SupportStyle.DIRECTIVE)
     turn = await send(alice, thread.id, "I had a really long day and i am feeling anxious.")
     assert turn.content == (
-        "That long day has left you feeling anxious.\n\nWhat part of it is weighing on you most?\n\n"
-        "Is it something that happened, what still needs doing, or the day catching up with you?"
+        "That long day has left you feeling anxious. Is it something that happened today, or what still waits for you?"
     )
 
 
-async def test_what_they_add_during_a_framework_is_kept_beside_the_case_and_never_replaces_it(alice, model):
-    """muhammad, 2026-10-22: a detail said ten turns into the framework replaced the problem, and the feeling
-    they named second replaced the first."""
+async def test_feelings_they_add_during_a_framework_are_added_and_the_case_stays(alice, model):
+    """muhammad, 2026-10-22: what they say ten turns into the framework is kept, and what was stored stays."""
     from mani.db import pool
 
     model(Reply(
         text="That makes the deadline feel very real. What would missing it mean for you?",
-        stage_answer="not_yet",
-        understanding_update=UnderstandingUpdate(
-            issue="you need two months and the deadline is this week", feeling="burnt out",
-            also="needs about two months, the deadline is this week",
-        ),
+        stage_answer="not_yet", understanding_update=UnderstandingUpdate(feeling="burnt out"),
     ))
     thread = await start(alice)
     async with pool.as_admin() as conn:
         await conn.execute(
             "update public.threads set understanding = $2::jsonb where id = $1", thread.id,
-            {"feeling": "anxious", "issue": "overtime to meet deadlines", "core_issue": "the work falls on you"},
+            {"feeling": "anxious", "case": "The work falls on you."},
         )
     await _land_on(alice, thread.id, "belief")
 
-    await send(alice, thread.id, "i need about 2 months but the deadline is this week")
-    stored = (await _thread_row(alice, thread.id)).understanding
-    assert stored["issue"] == "overtime to meet deadlines"
-    assert stored["feeling"] == "anxious, burnt out"
-    assert stored["also"] == "needs about two months, the deadline is this week"
+    await send(alice, thread.id, "i need about 2 months but the deadline is this week, i am burnt out")
+    assert (await _thread_row(alice, thread.id)).understanding == {
+        "feeling": "anxious, burnt out", "case": "The work falls on you.",
+    }
 
 
 # The client's body check-in after a framework (migration 025, spec: somatic cadence). Each tap is the
@@ -1982,7 +1996,7 @@ async def test_keep_chatting_is_sent_where_they_ended_up_and_what_they_told_mani
         )
         await conn.execute(
             "update public.threads set understanding = $2::jsonb where id = $1", thread.id,
-            {"issue": "rework keeps coming back", "underlying_feeling": "self-doubt about your ability"},
+            {"feeling": "self-doubt", "case": "Rework keeps coming back and you doubt your ability."},
         )
         await conn.execute(
             "insert into public.messages (thread_id, user_id, role, content, prompt_options) values "
@@ -1991,7 +2005,7 @@ async def test_keep_chatting_is_sent_where_they_ended_up_and_what_they_told_mani
         )
     await send(alice, thread.id, "Keep Chatting")
     sent = scripted.last_messages[-1]["content"]
-    assert "their_case: " in sent and "self-doubt about your ability" in sent
+    assert "their_case: " in sent and "you doubt your ability" in sent
     assert "landed_on: clarify expectations with my boss" in sent
     assert "\nunderstanding: " not in sent
 
@@ -2132,3 +2146,29 @@ async def test_a_feeling_word_in_chat_or_inside_a_stage_never_starts_a_body_ques
     assert "chest" not in stage.content and [p.label for p in stage.prompts] == []
     assert scripted.calls == 2
     assert (await _offered_row(alice, inside.id)).phase == "belief"
+
+
+async def test_a_question_at_d_that_leaves_out_what_they_feel_believe_and_want_is_logged(alice, model):
+    """Lolly, 2026-10-22: at D Mani asked only about her belief and the hurt and the missing were gone. D carries
+    the case, so a reply with none of it is counted; one that carries any of it is not."""
+    from mani.db import pool
+
+    scripted = model(
+        Reply(text="Is there anything that makes you question that?", stage_answer="not_yet"),
+        Reply(text="You miss her and you want an apology. What makes you question that her silence means you "
+                   "don't matter?", stage_answer="not_yet"),
+    )
+    thread = await start(alice)
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set understanding = $2::jsonb where id = $1", thread.id,
+            {"feeling": "sad", "case": "You miss her. Her silence means you don't matter. You want an apology."},
+        )
+    done = {"said": "x", "status": "done"}
+    await _land_on(alice, thread.id, "dispute", {"abcde": {"activate": done, "belief": done, "consequence": done}})
+
+    bare = await send(alice, thread.id, "she is ignoring me for three weeks")
+    carried = await send(alice, thread.id, "we used to talk every day")
+    assert scripted.calls == 2
+    assert bare.checks == ["case missing"]
+    assert carried.checks == []

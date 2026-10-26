@@ -1,5 +1,11 @@
 # 0006. Pinpoint, confirm, then offer: the person's confirmation is the offer gate
 
+> Superseded in part 2026-10-26 (the steps before the check and when the check comes): Mani no longer walks the
+> problem, its core issue and the feeling underneath one exchange at a time. It keeps one growing reading of the
+> central conflict and checks once it knows that conflict, what they want and what is stopping them, from their 5th
+> message (R30, R33; `backend/PORT-STATUS.md`, "An offer comes only on a clear yes…"). The check as the offer gate,
+> the check's record on the thread and the offer on a clear yes still hold.
+
 **Date**: 2026-10-13
 **Status**: In Progress
 

@@ -1,5 +1,5 @@
 # ABOUTME: FastAPI dependencies that turn an Authorization header into a verified caller.
-# ABOUTME: Endpoints take CurrentUser or AdminUser; they never read an id from the request.
+# ABOUTME: Endpoints take CurrentUser, Participant or AdminUser; they never read an id from the request.
 
 from typing import Annotated
 
@@ -35,5 +35,17 @@ def require_admin(user: Annotated[Claims, Depends(current_user)]) -> Claims:
     return user
 
 
+def require_participant(user: Annotated[Claims, Depends(current_user)]) -> Claims:
+    """A person who may talk to Mani. Admin accounts read conversations; they never take part."""
+    if user.is_admin:
+        raise ServiceError(
+            f"admin {user.user_id} tried to send a chat message",
+            ErrorCategory.FORBIDDEN,
+            user_message="Admin accounts can read conversations but cannot chat.",
+        )
+    return user
+
+
 CurrentUser = Annotated[Claims, Depends(current_user)]
 AdminUser = Annotated[Claims, Depends(require_admin)]
+Participant = Annotated[Claims, Depends(require_participant)]

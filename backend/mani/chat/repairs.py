@@ -69,43 +69,6 @@ def without_sentences(text: str, drop: Callable[[str], bool]) -> str:
     return "\n\n".join(paragraphs) if dropped else text
 
 
-# Where one sentence ends and the next begins, for laying a reply out: after . ! or ?, perhaps
-# inside a closing quote or bracket, before a capital. Never after a title or an initial.
-_LAYOUT_BREAK = re.compile(
-    r"(?<!\bMr\.)(?<!\bMs\.)(?<!\bMrs\.)(?<!\bDr\.)(?<!\bSt\.)(?<!\bProf\.)(?<!\b[A-Za-z]\.)"
-    r"(?:(?<=[.!?])|(?<=[.!?][\"'”’)]))\s+(?=[\"'“‘(]?[A-Z])"
-)
-_LINE_BREAKS = re.compile(r"[ \t]*\n\s*")
-_CLOSERS = "\"'”’)"
-
-# Fewer words than this before the closing question and the reply stays one line, as the client's
-# "I'm listening. What's frustrating you?" does.
-MIN_LEAD_WORDS = 8
-
-
-def _as_paragraphs(text: str) -> str:
-    """The text with every line break a paragraph break, which every client shows as one."""
-    return _LINE_BREAKS.sub("\n\n", text.strip())
-
-
-def laid_out(text: str) -> str:
-    """The reply as the client's way of communication document lays it out: what Mani says back
-    in a paragraph, then each closing question, a question and the options after it, on a line of
-    its own."""
-    text = _as_paragraphs(text)
-    head, _, last = text.rpartition("\n\n")
-    sentences = _LAYOUT_BREAK.split(last)
-    asked = len(sentences)
-    while asked and sentences[asked - 1].rstrip(_CLOSERS).endswith("?"):
-        asked -= 1
-    lead = " ".join(sentences[:asked])
-    questions = sentences[asked:]
-    if not questions or (len(questions) == 1 and len(lead.split()) < MIN_LEAD_WORDS):
-        return text
-    paragraph = "\n\n".join([lead, *questions] if lead else questions)
-    return f"{head}\n\n{paragraph}" if head else paragraph
-
-
 def without_internal_words(text: str) -> str:
     """The text with every sentence that carries the system's own words dropped."""
     return without_sentences(text, lambda s: bool(_INTERNAL_WORDS.search(s)))
@@ -294,18 +257,22 @@ def _offer_text(
 
 
 def _sentence(value: str | None, end: str = ".") -> str:
-    """One of a check's parts as a sentence: on one line, ending in punctuation."""
+    """One of a check's parts as a sentence: on one line, ending in punctuation. A part that ends on a comma
+    or a semicolon runs on into the next, as the check asks its parts to read as one flowing summary."""
     cleaned = " ".join((value or "").split())
-    return cleaned if not cleaned or cleaned[-1] in ".!?" else cleaned + end
+    return cleaned if not cleaned or cleaned[-1] in ".!?,;" else cleaned + end
+
+
+def check_summary(check: Check) -> str:
+    """What Mani's check says it understands: the conflict, what they want and what is stopping them, each
+    a sentence. Every word is the model's; only the order is code's (R33)."""
+    parts = (check.conflict, check.want, check.in_the_way)
+    return " ".join(sentence for part in parts if (sentence := _sentence(part)))
 
 
 def check_text(check: Check) -> str:
-    """Mani's check in the client's order, the problem, the core issue, the feeling underneath and what
-    it comes down to, then its question on a line of its own. Every word is the model's; only the order
-    is code's (spec 0006)."""
-    parts = (check.problem, check.core_issue, check.underlying_feeling, check.comes_down_to)
-    understood = " ".join(sentence for part in parts if (sentence := _sentence(part)))
-    return f"{understood}\n\n{_sentence(check.question, '?')}"
+    """Mani's check: its summary, then its question on a line of its own."""
+    return f"{check_summary(check)}\n\n{_sentence(check.question, '?')}"
 
 
 def keep_chatting(framework: Framework | None, style: str, their_words: str | None) -> str | None:
@@ -343,12 +310,12 @@ def apply(
     name_said_before: bool = False,
     feeling: str | None = None,
     check: Check | None = None,
-    lay_out: bool = False,
+    chat_text: bool = False,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again, and the client's
     offer when they said yes to Mani's check (`confirmed`). `check` is a check stored this turn, whose
-    parts are sent in their order in place of the reply's text. `lay_out` is Mani's own text before a
-    framework, which goes out in the client's paragraphs.
+    parts are sent in their order in place of the reply's text. `chat_text` is Mani's own text before a
+    framework, which goes out with the model's own line breaks and none added (muhammad, 2026-10-26).
 
     The implementation this replaces answered each of these by re-calling the provider,
     up to six extra generations for one user message. They are all deterministic checks
@@ -360,8 +327,6 @@ def apply(
     text, leaked = strip_script_leakage((check_text(check) if check else reply.text).strip())
     if leaked:
         notes.append(f"stripped script metadata: {', '.join(leaked)}")
-    if lay_out:
-        text = _as_paragraphs(text)
     spoken = without_internal_words(text)
     if spoken != text:
         notes.append("dropped a sentence with internal words")
@@ -374,8 +339,6 @@ def apply(
         if named != text:
             notes.append("removed their name, already used or said first")
             text = named
-    if lay_out:
-        text = laid_out(text)
 
     # The offer is the client's template with the model's slots in it, made only on a yes to the
     # check; the model's own text is what goes when it cannot be made (spec 0006, AC-1, AC-8).
@@ -395,7 +358,7 @@ def apply(
     # words in a field of their own, so the model has to write them, and code owns where they go. A
     # check or an offer is the client's order and carries none.
     options = _sentence(reply.options, "?")
-    if options and lay_out and check is None and not prompts:
+    if options and chat_text and check is None and not prompts:
         text = f"{text}\n\n{options}"
 
     title = clean_title(reply.title) if wants_title else None

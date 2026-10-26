@@ -6,7 +6,7 @@ import uuid
 
 from fastapi import APIRouter, Query
 
-from mani.auth.deps import CurrentUser
+from mani.auth.deps import CurrentUser, Participant
 from mani.background import fire_and_forget
 from mani.chat import orchestrator
 from mani.config import get_settings
@@ -36,7 +36,7 @@ async def list_messages(
 
 @router.post("", response_model=TurnOut, status_code=201)
 async def send(
-    user: CurrentUser,
+    user: Participant,
     conn: UserConn,
     thread_id: uuid.UUID,
     body: SendMessageIn,

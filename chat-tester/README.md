@@ -25,7 +25,28 @@ endpoint, the real LangChain call, the real router and safety screen - this is n
 - **Open, on purpose:** anyone who can reach the page can create an account. Sign-up goes
   through the Admin API (created confirmed, no email sent), so it uses the service role key and
   every new account can spend model credit. For the same reason, anyone who can reach the page can
-  reset any account's password and read its conversations. Don't put a link to this tool anywhere public.
+  reset any ordinary account's password and read its conversations. An admin account's password is refused
+  there. Don't put a link to this tool anywhere public.
+
+## Admin: reading everyone's conversations
+
+An admin account sees every person's conversations, read-only, to review how beta chats pace themselves. It
+gets no composer, no New conversation and no buttons that send anything, and the backend refuses a chat message
+from an admin token whatever the page does. The sidebar groups conversations under each person, people ordered by
+their most recent activity and each person's conversations newest first (searchable by email or user id, 🚨
+marks a crisis flag, and each title carries the style Mani spoke in, e.g. "(Directive)"); opening one shows every message with its time and the gap since the
+message before (`+2m`, `+1h 5m`), and which button the person tapped. Each opened conversation is logged by the
+backend in `admin.thread_reads`.
+
+To make an account an admin, sign it up here first, then from `backend/`:
+
+```bash
+source .venv/bin/activate && python scripts/grant_admin.py admin@example.com
+```
+
+It takes effect at the account's next sign-in (or a reload, which refreshes the token). `--revoke` undoes it.
+Several admins are fine; each is granted the same way. The on-page password reset refuses an admin account,
+so an admin who forgets their password needs the Supabase dashboard (or the Auth Admin API) to reset it.
 
 ## Deploying this
 

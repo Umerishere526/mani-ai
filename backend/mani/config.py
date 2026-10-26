@@ -89,18 +89,17 @@ class Settings(BaseSettings):
     # The only companies a conversation may go to. Without this OpenRouter may route it to any
     # provider serving the model, under whatever terms that provider applies. A base slug
     # matches every region of that provider and never a tier endpoint such as `openai/flex`.
-    # A prompt row's `routing` column overrides these when it needs to.
+    # A prompt row's `routing` column overrides these when it needs to. Not Azure: its content
+    # filter, which OpenRouter configures and we cannot, stops replies to ordinary conversations,
+    # and a filtered reply is not an error, so nothing falls back.
     openrouter_providers: list[str] = Field(
-        default_factory=lambda: ["azure", "openai"]
+        default_factory=lambda: ["openai"]
     )
     # Among those, the fastest endpoint by OpenRouter's recent measurements goes first. A
-    # pinned order sent turns to whichever endpoint it named, however slow it was at the time,
-    # and two of the three Azure regions had a tail over two minutes (2026-10-14).
+    # pinned order sent turns to whichever endpoint it named, however slow it was at the time.
     openrouter_sort: Literal["latency", "throughput", "price"] = "latency"
     # A turn the first endpoint cannot serve goes to the next rather than failing.
-    # data_collection stays "deny" on every one, so training use is refused there too, but
-    # either company may process the request - a data protection question, not only an
-    # availability one.
+    # data_collection stays "deny" on every one, so training use is refused there too.
     openrouter_allow_fallbacks: bool = True
 
     def routing(self, overrides: dict | None = None) -> dict:

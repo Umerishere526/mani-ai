@@ -31,6 +31,17 @@ def _start(sign_in: Callable[[], mani.Session], email: str, nickname: str = "") 
     st.rerun()
 
 
+def render_account(role: str) -> None:
+    """The sidebar's top: who is signed in, as what, and the way out."""
+    st.header("Session")
+    st.caption(f"backend: {mani.API_BASE_URL}")
+    st.caption(f"signed in: {st.session_state.email} ({role})")
+    if st.button("Sign out", use_container_width=True):
+        session_store.end()
+        st.session_state.clear()
+        st.rerun()
+
+
 def render_login() -> None:
     st.title("🧠 Mani chat tester")
     sign_in_tab, sign_up_tab, reset_tab = st.tabs(["Sign in", "Sign up", "Forgot password"])

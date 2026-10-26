@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import body as body_route, context, repairs, reply_checks, safety, understanding, walk
+from mani.chat import body as body_route, context, converse, repairs, reply_checks, safety, understanding, walk
 from mani.chat.greeting import (
     EXPLAIN_LABELS,
     OPENERS,
@@ -90,8 +90,13 @@ def _body_route(
 
 
 def _feelings(understood: dict[str, str]) -> str:
-    """The feelings Mani found before the framework: the ones they named and the one underneath."""
-    return " ".join(understood.get(key, "") for key in ("feeling", "underlying_feeling"))
+    """The feelings they named before the framework."""
+    return understood.get("feeling", "")
+
+
+def _case_words(understood: dict[str, str]) -> str:
+    """What they feel and the case they confirmed, in their words: what a flagged stage's question carries."""
+    return " ".join(understood.get(key, "") for key in ("feeling", "case"))
 
 
 def _walked(
@@ -262,6 +267,141 @@ def _answered_offer(
             return dataclasses.replace(fixed, notes=fixed.notes + ["keep chatting unusable: no their_words"])
         return dataclasses.replace(fixed, text=said)
     return fixed
+
+
+def _name_said_before(ctx: threads.TurnContext, history: list[Message], window) -> bool:
+    """Whether Mani already said their name. The greeting says it by design; the model's own replies count
+    from there. The greeting is the first message in view only while nothing has left the window."""
+    return bool(
+        ctx.profile and ctx.profile.nickname
+        and any(ctx.profile.nickname in m.content
+                for m in [m for m in history if m.role is MessageRole.MANI][0 if window.dropped else 1:])
+    )
+
+
+async def _converse(
+    conn: asyncpg.Connection,
+    ctx: threads.TurnContext,
+    *,
+    for_model: str,
+    content: str,
+    tapped: SmartPrompt | None,
+    history: list[Message],
+    window,
+    config: cache.Config,
+    conversation_style: str,
+    wants_title: bool,
+    client_message_id: uuid.UUID | str | None,
+    settings,
+    updates: threads.ThreadUpdates,
+) -> Turn:
+    """One turn of Mani's own conversation, when no framework, offer or check is open: the conversation
+    prompt, the transcript and their message, and a note saying what the conversation cannot show. The
+    reply's text is what Mani says, its check included; code only decides whether a check is stored."""
+    allowed = converse.check_allowed(ctx)
+    system = composer.compose_conversation(
+        config, ctx.profile, should_generate_title=wants_title,
+        summary=ctx.summary if window.dropped else None, memory=ctx.memory,
+    )
+    model, parameters, routing = composer.model_settings(config, "conversation")
+    note = converse.note(
+        conversation_style, allowed=allowed, due=understanding.ready(ctx.thread.understanding),
+        wants_title=wants_title, understood=ctx.thread.understanding, recent_crisis=ctx.recent_crisis,
+    )
+    call = await client.complete(
+        [{"role": "system", "content": system.text}]
+        + _conversation(history)
+        + [{"role": "user", "content": for_model}, {"role": "system", "content": note}],
+        schema.ConversationReply,
+        model=model,
+        purpose=llm_calls.Purpose.CHAT,
+        temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
+        max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
+        reasoning_effort=parameters.get("reasoning_effort"),
+        routing=routing,
+        user_id=ctx.thread.user_id,
+        thread_id=ctx.thread.id,
+        prompt_version_id=None,
+    )
+    reply = call.value
+    # As on every other turn, the model's own crisis judgment does not lock the thread (the deterministic
+    # screen does); it holds the check and keeps what is understood as it was.
+    guarded = reply.crisis is not None
+    if guarded:
+        logger.info("model reported a safety concern on thread %s: %s", ctx.thread.id, reply.crisis.reason)
+    check_written = not guarded and converse.checked(reply, allowed=allowed)
+    understood = (
+        ctx.thread.understanding if guarded
+        else converse.understood_after(ctx.thread.understanding, reply, check_written=check_written)
+    )
+    if understood != ctx.thread.understanding:
+        updates.understanding = understood
+    if check_written:
+        updates.check_at_message_count = ctx.thread.message_count + 2
+    logger.info(
+        "thread %s conversation turn: heart %s, check allowed %s, checked %s",
+        ctx.thread.id, reply.heart, allowed, check_written,
+    )
+
+    fixed = repairs.apply(
+        Reply(text=reply.text, title=reply.title),
+        config.registry,
+        moment=Moment.CHATTING,
+        confirmed=False,
+        conversation_style=conversation_style,
+        wants_title=wants_title,
+        nickname=ctx.profile.nickname if ctx.profile else None,
+        name_said_before=_name_said_before(ctx, history, window),
+        chat_text=not guarded,
+    )
+    if fixed.notes:
+        logger.info("repaired reply on thread %s: %s", ctx.thread.id, "; ".join(fixed.notes))
+    # Counted, never fixed: a question asked again, or a reply that asks nothing before the check.
+    checks = reply_checks.misses(
+        Reply(text=reply.text),
+        offered=None,
+        offer_dropped=None,
+        needs_question=not guarded and not check_written,
+        last_mani_text=next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None),
+    )
+    if checks:
+        logger.info("thread %s reply checks: %s", ctx.thread.id, "; ".join(checks))
+    if not fixed.text.strip():
+        raise ServiceError(
+            f"reply on thread {ctx.thread.id} was empty after repair",
+            ErrorCategory.LLM_UNAVAILABLE,
+            retryable=True,
+            user_message="Mani had trouble responding. Please try again.",
+        )
+
+    pair = await messages_db.create_pair(
+        conn, ctx.thread.id, content, fixed.text,
+        selected_prompt=tapped.label if tapped else None,
+        client_message_id=client_message_id,
+    )
+    if fixed.title:
+        updates.title = fixed.title
+    await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
+
+    summarized = ctx.summary.summarized_message_count if ctx.summary else 0
+    return Turn(
+        message_id=pair.mani_message_id,
+        content=fixed.text,
+        created_at=pair.created_at,
+        title=fixed.title or ctx.thread.title,
+        crisis_detected=False,
+        crisis_blocks_chat=settings.crisis_blocks_chat,
+        was_duplicate=pair.was_duplicate,
+        needs_summary=window.dropped > summarized,
+        llm_call_id=call.call_id,
+        checks=checks,
+        understanding=understood,
+        check_at_message_count=(
+            updates.check_at_message_count
+            if updates.check_at_message_count is not None
+            else ctx.thread.check_at_message_count
+        ),
+    )
 
 
 def _conversation(history: list[Message]) -> list[dict[str, str]]:
@@ -489,6 +629,13 @@ async def send(
         technique, outcome, retiring_framework_id,
         concern=assessment.blocks_framework, check_open=context.check_open(ctx),
     )
+    if moment is Moment.CHATTING and not declined_row:
+        # No framework, offer or check is open: Mani's own conversation, in the client's cadence.
+        return await _converse(
+            conn, ctx, for_model=for_model, content=content, tapped=tapped, history=history, window=window,
+            config=config, conversation_style=conversation_style, wants_title=wants_title,
+            client_message_id=client_message_id, settings=settings, updates=updates,
+        )
     reply_shape = schema.reply_for(
         moment,
         may_check=context.may_check(ctx),
@@ -577,27 +724,18 @@ async def send(
         starting = technique.framework_id
         offered_now.append(technique.framework_id)
 
-    # Nothing a concern turn reports is kept, so what they understand stays as stored. A check is
-    # merged first and their own words after it, so their words win (spec 0006, AC-9). The steps are
-    # judged against the record as this turn began, so each takes an exchange of its own (AC-17).
-    # Mani's check is stored, so the next turn reads their answer to it, only once their own words
-    # (understanding_update, or what is stored) give all three steps; a check whose feeling comes only
-    # from the check itself opens nothing (spec 0006, AC-3, AC-7, AC-18).
+    # Nothing a concern turn reports is kept, so what they understand stays as stored. Mani's check is
+    # stored, so the next turn reads their answer to it, only when the same reply judges the heart of it
+    # ready; its summary becomes the case (R33).
     with_check = not guarded and starting is None and understanding.usable(reply.check)
+    heart_ready = reply.heart == understanding.READY
     understood = ctx.thread.understanding
     check_written = False
     if not guarded:
-        before = ctx.thread.understanding
-        # An offer or a framework is the case they confirmed: later turns add to it, never replace it.
-        confirmed_case = context.live(ctx.technique) is not None
-        theirs = understanding.merge(before, reply.understanding_update, before=before, frozen=confirmed_case)
-        check_written = with_check and understanding.next_step(theirs) is None
-        understood = (
-            understanding.merge(
-                understanding.merge_check(before, reply.check), reply.understanding_update, before=before,
-            )
-            if check_written else theirs
-        )
+        understood = understanding.merge(ctx.thread.understanding, reply.understanding_update, reply.heart)
+        check_written = with_check and heart_ready
+        if check_written:
+            understood = understanding.merge_check(understood, repairs.check_summary(reply.check))
     if understood != ctx.thread.understanding:
         updates.understanding = understood
     if check_written:
@@ -619,15 +757,11 @@ async def send(
         nickname=ctx.profile.nickname if ctx.profile else None,
         # The greeting says their name by design; the model's own replies count from there. The
         # greeting is the first message in view only while nothing has left the window.
-        name_said_before=bool(
-            ctx.profile and ctx.profile.nickname
-            and any(ctx.profile.nickname in m.content
-                    for m in [m for m in history if m.role is MessageRole.MANI][0 if window.dropped else 1:])
-        ),
+        name_said_before=_name_said_before(ctx, history, window),
         feeling=understood.get("feeling"),
         check=reply.check if check_written else None,
-        # A stage reply stays one paragraph, as the client's ABCDE document writes it.
-        lay_out=(
+        # Mani's own text before a framework, which may carry an options line under it.
+        chat_text=(
             moment in (Moment.CHATTING, Moment.CHECK_OPEN, Moment.OFFER_OPEN)
             and starting is None and not guarded
         ),
@@ -684,28 +818,26 @@ async def send(
         logger.info("repaired reply on thread %s: %s", ctx.thread.id, "; ".join(fixed.notes))
 
     offered = next((p.technique for p in fixed.prompts if p.technique), None)
+    asked = (walked.reached or walked.phase) if walked is not None else None
+    carries_case = asked is not None and bool((walking.stages.get(asked) or {}).get("carries_case"))
     checks = reply_checks.misses(
         reply,
         offered=offered,
         offer_dropped=fixed.offer_dropped,
-        needs_question=needs_question,
+        # A written check asks in its own question, which is sent in place of the text.
+        needs_question=needs_question and not check_written,
         last_mani_text=last_mani_text,
         check_unusable=not guarded and reply.check is not None and not understanding.usable(reply.check),
-        check_too_early=with_check and not check_written,
+        check_without_ready=with_check and not heart_ready,
         reach_unjudged=walked is not None and walked.unjudged,
-        no_check_by=(
-            context.CHECK_EXPECTED_BY
-            if context.their_messages(ctx) == context.CHECK_EXPECTED_BY
-            and ctx.thread.check_at_message_count is None and not check_written
-            else None
-        ),
+        case=_case_words(understood) if carries_case else None,
     )
     if checks:
         logger.info("thread %s reply checks: %s", ctx.thread.id, "; ".join(checks))
     # What the model judged this turn, as the closed values only: never a slot, which holds their words.
     logger.info(
-        "thread %s moment %s: check_answer %s, offer_answer %s, body %s, stage_answer %s, offered %s",
-        ctx.thread.id, moment.value, reply.check_answer, answer, reply.body, reply.stage_answer, offered,
+        "thread %s moment %s: check_answer %s, heart %s, offer_answer %s, body %s, stage_answer %s, offered %s",
+        ctx.thread.id, moment.value, reply.check_answer, reply.heart, answer, reply.body, reply.stage_answer, offered,
     )
     if not fixed.text.strip():
         # Nothing left to say once leaked metadata was stripped. Refused here as retryable,

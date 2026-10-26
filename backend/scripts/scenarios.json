@@ -1,9 +1,6 @@
 {
   "says_how_it_is_early": {
-    "about": "They say how it is for them (a feeling, a worry, or what they tell themselves) in their first messages. Mani checks its understanding within the client's two to four exchanges after the issue, and a yes brings the offer.",
-    "expect": {
-      "check_by": 5
-    },
+    "about": "They say how it is for them (a feeling, a worry, or what they tell themselves) in their first messages. Since 2026-10-26 no check comes before their 5th message and only once the heart of it is ready (R33), so these openings end before one.",
     "conversations": {
       "resentful_coworker": {
         "source": "Lolly's Directive test, 2026-10-12 (R1): line 1 is her message word for word; lines 2 to 5 are muhammad's test lines",
@@ -72,10 +69,6 @@
   },
   "describes_only_what_happened": {
     "about": "Their first messages give only what happened or what they keep doing, with no feeling or belief. No check until they say how it is for them.",
-    "expect": {
-      "check_from": 4,
-      "check_by": 5
-    },
     "conversations": {
       "coworker_in_fragments": {
         "source": "muhammad's chat-tester run, 2026-10-12: lines 1 to 3 word for word (ABCDE was offered on line 3); lines 4 and 5 written by Claude to say how it is for them",
@@ -90,14 +83,11 @@
     }
   },
   "client_documents": {
-    "about": "The person's lines from the client's styles document of 2026-10-12, word for word. In the document the offer comes right after their last line; Mani now checks its understanding there, and a yes brings the offer.",
+    "about": "The person's lines from the client's styles document of 2026-10-12, word for word. In the document the offer comes right after their last line; since 2026-10-26 Mani checks only from their 5th message, once the heart of it is ready (R33), so these lines end before a check.",
     "expect": {},
     "conversations": {
       "client_panic": {
         "source": "the Reflective panic conversation",
-        "expect": {
-          "check_by": 3
-        },
         "lines": [
           "I feel like I might have a panic attack.",
           "My chest feels tight, my thoughts are racing, and I feel like I'm losing control.",
@@ -106,9 +96,6 @@
       },
       "client_overthinking": {
         "source": "the Directive overthinking conversation",
-        "expect": {
-          "check_by": 4
-        },
         "lines": [
           "I'm upset.",
           "My best friend sent me a text and now I think she hates me.",
@@ -118,9 +105,6 @@
       },
       "client_scrolling": {
         "source": "the Directive scrolling conversation",
-        "expect": {
-          "check_by": 4
-        },
         "lines": [
           "I cannot stop scrolling, but I need to.",
           "I tell myself I'm going to put my phone down, but then I keep scrolling. I can lose an hour without even realizing it.",
@@ -130,9 +114,6 @@
       },
       "client_stress": {
         "source": "the Directive stress conversation",
-        "expect": {
-          "check_by": 3
-        },
         "lines": [
           "I'm stressed. I'm trying to balance work, family, and everything else, and I have a deadline coming up.",
           "The deadline. I need to finish a presentation by Friday, but my kids need me, work keeps piling up, and I can't seem to focus.",
@@ -142,10 +123,7 @@
     }
   },
   "answering_the_offer": {
-    "about": "Spec 0003, AC-11: what follows the offer, written by Claude on 2026-10-12. The opening lines are resentful_coworker's; Mani's check is answered yes, and after_offer is sent once ABCDE is offered.",
-    "expect": {
-      "check_by": 5
-    },
+    "about": "Spec 0003, AC-11: what follows the offer, written by Claude on 2026-10-12. The opening lines are resentful_coworker's; Mani's check is answered yes, and after_offer is sent once ABCDE is offered. Since 2026-10-26 a check may come only at their 5th line and only once the heart of it is ready (R33), so the offer is rarely reached; longer opening lines are owed.",
     "conversations": {
       "says_no": {
         "lines": [
@@ -204,9 +182,6 @@
   },
   "names_a_feeling_first": {
     "about": "They open with a feeling and then describe what is behind it. The feeling stays in view in the questions and fills the offer.",
-    "expect": {
-      "check_by": 5
-    },
     "conversations": {
       "frustrated_client_changes": {
         "source": "muhammad's Directive tester run, thread 4ec47e15, 2026-10-13, the person's lines word for word",
@@ -275,10 +250,7 @@
           "he said that i'm not doing enough even though i'm handling 2 projects and working and leading the teams on both projects and after this criticize i feel like i'm not enough.",
           "it's not the first time, whatever i do he finds something missing and it makes me feel like nothing i do will ever be enough for him",
           "i don't know, maybe i could ask him what he actually expects from me"
-        ],
-        "expect": {
-          "check_from": 3
-        }
+        ]
       },
       "boss_vented": {
         "source": "muhammad's Directive tester run, thread 5bbf2b5f, 2026-10-13, the person's lines word for word; A then read \"their boss criticized their client communication\"",
@@ -288,10 +260,7 @@
           "His mood was off due to a client cancelling a projects agreement. he fired all the workers working on that project too. and then he vented his anger on everyone and anyone he found.",
           "that i'm not focusing on the client requirements, i need to communicate with the more and he said that i should found more clients too even though that not in my job requirements. and i do communicate with client efficiently and even send the end of day report.",
           "that i don't communicate with the client. he just said that without looking into what my achievements are"
-        ],
-        "expect": {
-          "check_from": 3
-        }
+        ]
       },
       "overtime_boss": {
         "source": "muhammad's Supportive tester run, thread 7e3062ff, 2026-10-13, the person's lines word for word; B was then seeded from the opening line and C from the rejected belief",
@@ -302,9 +271,6 @@
           "yes i have been doing the overtime for the past month and my team has also started doing overtime.",
           "i think i going to rise this concern with him and involve the HR department as well. this is work abuse i was wrong to have started this culture and my team and i are paying for it."
         ],
-        "expect": {
-          "check_from": 3
-        },
         "after_offer": {
           "answer": "yes",
           "lines": [
@@ -322,9 +288,6 @@
           "yes i have been doing the overtime for the past month and my team has also started doing overtime.",
           "i think i going to rise this concern with him and involve the HR department as well. this is work abuse i was wrong to have started this culture and my team and i are paying for it."
         ],
-        "expect": {
-          "check_from": 3
-        },
         "after_offer": {
           "answer": "yes",
           "lines": [
@@ -379,6 +342,71 @@
             "effective": "asked"
           }
         }
+      }
+    }
+  },
+  "holds_the_feelings": {
+    "about": "They say how it is for them and what they believe it says about them, then a second feeling comes in. Mani asks what it means to them, not only about the situation, and keeps the first feeling in view beside the new one.",
+    "conversations": {
+      "provide_failure_then_frustrated": {
+        "source": "muhammad's research, 2026-10-25: line 1 is his example; lines 2 to 4 are ours, line 3 brings in the second feeling",
+        "lines": [
+          "I'm sad that I won't be able to provide for my family. I'm such a failure.",
+          "I lost my job two months ago and our savings are almost gone.",
+          "I'm just so frustrated today. Another company said no this morning.",
+          "I don't know, I just feel like I'm letting everyone down."
+        ]
+      },
+      "sister_loans": {
+        "source": "Lolly's Directive review, 2026-10-18 (docs/client/messages/2026-10-18-directive-sister-loans-review.md): the person's first seven lines word for word",
+        "lines": [
+          "I don't know if I should say no to someone who really needs me.",
+          "My sister is going through a difficult time financially, and she keeps asking me to lend her money. I've helped her several times already, but she never pays me back. I love her, and I know she's struggling, but I'm starting to feel taken advantage of. I feel guilty even thinking about saying no.",
+          "she says she will pay me back but she never does",
+          "she is my sister and family should come first before money",
+          "i do not know that is why i am discussing it with you",
+          "as i said in the beginning saying no",
+          "i would never do that. You do not do that to family"
+        ]
+      }
+    }
+  },
+  "chatgpt_reference": {
+    "about": "Lolly's two conversations with ChatGPT, the voice she wants. Mani reaches the heart of it through a growing reading and questions that test a guess, and checks only once it knows the conflict, what they want and what is stopping them, where ChatGPT ended. Her lines answered ChatGPT's questions, so judge the first four replies closely and later ones only for reaching what they want and what is in the way, and for asking again.",
+    "conversations": {
+      "boss_who_will_not_lead": {
+        "source": "Lolly's ChatGPT conversation, 2026-10-26 (docs/client/messages/2026-10-26-chatgpt-boss-and-friendship.md): the person's lines word for word",
+        "lines": [
+          "i do not know what to do",
+          "well my boss is just inept. He was hired because of nepotism and his father put him in charge he knows nothing and is so lazy. He has a team that works hard for him every day but frankly he does not nothing all day long. I think he is on his computer all day doing social media, talking to friends, or going out to lunch but no work gets done but his team, myself included work many many hours long days and when we are done we show him the work and he doesnt even understand the work he is looking at. lack of leadership and i do not know what to do",
+          "both",
+          "repeatedly I have spoken to him about his lack of leadership, his lack of actions and his lack of showing up",
+          "he always says sorry that he will do better always, always says he understands and will do better but never does",
+          "I want to leave. That I have none for a long time. That would be good for me, but the issue is the team is so invested, the company is so good but the leader is the issue. I can go but I am leaving behind something that I am clear would be an amazing opportunity",
+          "great question the truth is I run everything the leader hardly does anything I am too attached I am too invested and I know deep down if only he would show up this business could be so successful",
+          "it would end.",
+          "my whole life I wanted to do something meaningful and this is the opportunity I have a wife and kids and they rely on me and I have put my heart and soul into this business and to walk away which would be the right thing would kill me literally destroy me",
+          "I am not overwhelmed I am grieving a massive business opportunity potential",
+          "many many many many many times",
+          "that he would change but he wont"
+        ]
+      },
+      "friend_of_43_years": {
+        "source": "Lolly's ChatGPT conversation, 2026-10-26 (docs/client/messages/2026-10-26-chatgpt-boss-and-friendship.md): the person's lines word for word",
+        "lines": [
+          "i am very frustrated and upset",
+          "my friend and i have not spoken in a while",
+          "She and i stopped talking because we had a diff of opinion",
+          "great question I felt unseen and unheard and not appreciated and frankly dismissed I feel my friend she put  others over me",
+          "I did tell my friend that I felt she was putting others over me and she made me feel like I was wrong",
+          "she saw the situation very differently but I have this history with her that everything is always about her I do a lot of accommodating to her whims and needs.",
+          "yes I give much much more than I receive",
+          "I miss my friend deeply its a 43 year friendship I know her flaws",
+          "for her to acknowledge how she made me feel",
+          "only in words not in actions she will be selfish again and again she only does what she wants to do and has always been this way",
+          "they are like family and I have limited family in my life",
+          "yes I can"
+        ]
       }
     }
   }

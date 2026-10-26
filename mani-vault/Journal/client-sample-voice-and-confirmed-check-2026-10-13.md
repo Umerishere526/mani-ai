@@ -4,6 +4,10 @@ date: 2026-10-13
 tags: [journal, prompts, offers, client, lessons]
 ---
 
+> Superseded 2026-10-26 (the check after the problem, core issue and control or feeling; it now comes on a ready heart of it from their 5th message) - see [[heart-of-it-replaces-the-three-steps-2026-10-26]].
+> Superseded 2026-10-22 (the shared sample as the one voice, `sounds_like` then `example`) - see [[three-styles-read-the-same-2026-10-22]].
+> Superseded 2026-10-25 (a step stored only once the one before it was stored: now stored when said, found one a turn) - see [[core-issue-was-situation-2026-10-25]].
+
 # The client's sample voice, and a confirmed check as the offer gate (2026-10-13)
 
 Three client inputs on one day:

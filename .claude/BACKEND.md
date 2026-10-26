@@ -12,6 +12,7 @@ source .venv/bin/activate
 supabase start             # local Supabase (Docker must be running); see the ports note below
 supabase db reset          # recreate and re-apply migrations
 python scripts/seed.py     # loads content/ into admin.frameworks and admin.prompts (re-run after ANY edit in content/)
+python scripts/grant_admin.py you@example.com [--revoke]  # an existing account reads every conversation read-only, and chats in none
 python scripts/seed_exercises.py  # uploads content/exercises/ audio to the private `exercises` bucket and upserts admin.exercises
 fastapi dev main.py        # dev server with reload on :8000
 fastapi run main.py        # production mode
@@ -33,7 +34,7 @@ Without activating, call the venv binaries directly — `./.venv/bin/python`, `.
 ## Layout
 
 - `main.py` — `create_app()` plus the module-level `app`. Sentry init and the `ServiceError` handler live here; routes do not.
-- `mani/` — the application package, and the only thing that runs. `config.py`, `errors.py`, `routers/`, `auth/`, `models/`, and the `chat/`, `prompts/`, `llm/` and `db/` layers, plus `memory.py`, `summarize.py`, `background.py`, `storage.py` and `auth_admin.py`. `chat/` is the turn: `orchestrator.py` runs it, `safety.py` screens, `context.py` builds the `[ctx]` block and when Mani may check its understanding (the only way to an offer, spec 0006), `walk.py` merges what they said per stage into the thread's stage store and steps a framework one stage at a time, `understanding.py` merges their feeling, the problem, its core issue and what is in their control into the thread's running understanding, `reply_checks.py` counts what the reply missed, `repairs.py` corrects what remains. **It never reads the filesystem for content** — prompts and frameworks come from the database.
+- `mani/` — the application package, and the only thing that runs. `config.py`, `errors.py`, `routers/`, `auth/`, `models/`, and the `chat/`, `prompts/`, `llm/` and `db/` layers, plus `memory.py`, `summarize.py`, `background.py`, `storage.py` and `auth_admin.py`. `chat/` is the turn: `orchestrator.py` runs it, `safety.py` screens, `context.py` builds the `[ctx]` block and when Mani may check its understanding (the only way to an offer, spec 0006), `walk.py` merges what they said per stage into the thread's stage store and steps a framework one stage at a time, `understanding.py` merges the feelings they name, where the reply judged the heart of it, and the case they confirmed into the thread's running understanding, `reply_checks.py` counts what the reply missed, `repairs.py` corrects what remains. **It never reads the filesystem for content** — prompts and frameworks come from the database.
 - `content/` — authored markdown, seeded into the `admin` schema by `scripts/seed.py` and never read at runtime. `content/prompts/*.md` become `admin.prompts` (except `somatic.md`, which `seed.py` merges into every framework as the last stages); `content/frameworks/*.md` (ABCDE and Thought Reframe; the rest are in `paused/`) become `admin.frameworks`, carrying each framework's per-stage content and its activation data (`central_indication`, `signals`, `contraindications`; `to_find_out`, `appropriate_when` and `not_when` are read by nothing). Editing one of these changes nothing until it is re-seeded. Kept outside `mani/` because it is input to the database, not code — the same relationship a migration has to the schema.
 - `supabase/migrations/` — the schema. `test_harness.sql` stubs what Supabase adds (`auth.users`, `auth.uid()`, the three roles) so the schema can be tested on plain Postgres.
 - `tests/unit/` — deterministic logic. `tests/integration/` — whole turns against a live database with a scripted model. `tests/sql/` — schema, RLS and privilege assertions run by `scripts/test_db.sh`.
@@ -123,7 +124,7 @@ Read `mani-vault/Journal/failure-classes-from-later-branches-2026-10-21.md`, the
 
 1. State the root cause in one sentence before the fix. A second fix to the same class goes to the `architecture-reviewer` agent.
 2. No new gate, window, deadline or cooldown, in code or prompt. If one seems needed, stop and run `/architect`.
-3. Cut or swap prompt text; do not add. `mani_base.md` must not grow, and sample wording lives only in its `example`.
+3. Cut or swap prompt text; do not add. `mani_base.md` must not grow, and each style's wording lives only in its own `style_*.md`.
 4. Layout and format belong in code (`repairs.laid_out`), never in a prompt rule.
 5. Free tests first (`pytest tests/unit tests/integration`); a live run costs the client's tokens, so ask muhammad.
 6. Reseed (`python scripts/seed.py`) after content edits, and read the chat against the client's requirements.

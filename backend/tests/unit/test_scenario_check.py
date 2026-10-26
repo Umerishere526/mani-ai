@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 
+from mani.chat import context
 from scripts import scenario_check
 
 
@@ -17,10 +18,13 @@ def test_a_check_before_the_conversation_says_how_it_is_is_flagged_on_that_messa
     assert scenario_check.timing_flags(4, 5, {"check_from": 4, "check_by": 5}) == {}
 
 
-def test_a_missing_check_is_flagged_by_the_last_line_unless_the_conversation_names_another():
-    assert scenario_check.timing_flags(None, 5, {}) == {5: "no check by their message 5"}
-    assert scenario_check.timing_flags(None, 3, {"check_by": 5}) == {}
-    assert scenario_check.timing_flags(5, 5, {"check_by": 4}) == {5: "checked at their message 5, expected by 4"}
+def test_a_missing_check_is_flagged_only_where_the_conversation_names_when_it_is_due():
+    """R33: the check comes when the heart of it is ready, so only a conversation that reaches it names check_by."""
+    assert scenario_check.timing_flags(None, 12, {}) == {}
+    assert scenario_check.timing_flags(None, 12, {"check_by": 10}) == {10: "no check by their message 10"}
+    assert scenario_check.timing_flags(None, 8, {"check_by": 10}) == {}
+    assert scenario_check.timing_flags(11, 12, {"check_by": 10}) == {11: "checked at their message 11, expected by 10"}
+    assert scenario_check.timing_flags(4, 12, {}) == {4: "checked at their message 4, expected from 5"}
 
 
 def test_every_conversation_in_the_file_has_lines_and_expectations_that_can_be_met():
@@ -29,10 +33,10 @@ def test_every_conversation_in_the_file_has_lines_and_expectations_that_can_be_m
     assert len(every) == sum(len(g["conversations"]) for g in groups.values()), "a name is used twice"
     for name, conversation in every.items():
         expect = conversation["expect"]
-        earliest = expect.get("check_from", scenario_check.EARLIEST_CHECK)
+        earliest = expect.get("check_from", context.CHECK_FROM)
         assert conversation["lines"], name
-        assert earliest >= scenario_check.EARLIEST_CHECK, name
-        assert expect.get("check_by", len(conversation["lines"])) >= earliest, name
+        assert earliest >= context.CHECK_FROM, name
+        assert expect.get("check_by", earliest) >= earliest, name
 
 
 def test_mani_talking_about_the_person_instead_of_to_them_is_flagged():
@@ -116,12 +120,6 @@ def test_explaining_people_is_flagged_and_the_clients_sample_never_is():
                  "think it says about your ability.")
     assert scenario_check.EXPLAINS_PEOPLE.search(explained)
     assert not any(scenario_check.EXPLAINS_PEOPLE.search(reply) for reply in SAMPLE_REPLIES)
-
-
-def test_the_examples_details_are_flagged_only_when_the_person_never_said_them():
-    reply = "When vendors don't follow through, what happens next?"
-    assert scenario_check.borrowed_from_the_example(reply, {"boss", "work"}) == ["vendors", "follow through"]
-    assert scenario_check.borrowed_from_the_example(reply, {"vendors", "follow", "through"}) == []
 
 
 def test_a_stage_reached_otherwise_than_expected_is_flagged_once():

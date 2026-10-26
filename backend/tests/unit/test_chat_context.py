@@ -50,22 +50,18 @@ def user(content: str) -> Message:
     )
 
 
-# The three steps before a check, all found (spec 0006).
-FOUND = {
-    "issue": "your boss says you're not doing enough",
-    "core_issue": "your sense of being enough rests on his view of you",
-    "underlying_feeling": "worry that you are not enough",
-}
+# Mani's last reply judged the heart of it ready: the conflict agreed, what they want and what is stopping them known.
+READY = {"feeling": "worried", "heart": "ready"}
 
 
-def found(on: Thread) -> Thread:
-    """A thread where Mani has found the problem, its core issue and the feeling underneath."""
-    return on.model_copy(update={"understanding": FOUND})
+def ready(on: Thread) -> Thread:
+    """A thread whose last reply judged the heart of it ready."""
+    return on.model_copy(update={"understanding": READY})
 
 
 def checked_at(at: int, now: int) -> Thread:
     """A thread whose latest check by Mani was made when it held `at` messages, now holding `now`."""
-    return found(thread(now)).model_copy(update={"check_at_message_count": at})
+    return ready(thread(now)).model_copy(update={"check_at_message_count": at})
 
 
 def test_a_check_is_answered_on_the_next_turn_only_and_then_waits_its_cooldown():
@@ -122,7 +118,7 @@ def test_a_finished_framework_waits_longer_than_a_declined_one():
     """45 messages against 20. The longer wait was unreachable while completion deleted
     the row it is measured from."""
     started_at = 10
-    long_enough_for_a_decline = found(thread(started_at + context.COOLDOWN_AFTER_DECLINE))
+    long_enough_for_a_decline = ready(thread(started_at + context.COOLDOWN_AFTER_DECLINE))
     finished = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
         phase=None, at_message_count=started_at,
@@ -133,7 +129,7 @@ def test_a_finished_framework_waits_longer_than_a_declined_one():
     assert context.may_check(TurnContext(thread=long_enough_for_a_decline, profile=None, technique=declined))
     # Finished, then a new confirmed check may offer it again: nothing refuses the set just done.
     assert context.may_check(TurnContext(
-        thread=found(thread(started_at + context.COOLDOWN_AFTER_COMPLETE)), profile=None, technique=finished,
+        thread=ready(thread(started_at + context.COOLDOWN_AFTER_COMPLETE)), profile=None, technique=finished,
     ))
 
 
@@ -207,6 +203,26 @@ def framework() -> Framework:
     )
 
 
+def test_only_a_stage_that_carries_the_case_asks_for_it_in_its_question():
+    """The case is carried by the stages a framework flags with carries_case, whatever the framework."""
+    flagged = framework()
+    flagged.stages["belief"]["carries_case"] = True
+    at = lambda phase: context.build(  # noqa: E731
+        TurnContext(
+            thread=thread(), profile=Profile(user_id=USER, support_style="directive"),
+            technique=TechniqueState(
+                thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
+                phase=phase, at_message_count=4,
+            ),
+        ),
+        framework=flagged,
+    )
+    lines = lambda phase: at(phase).splitlines()  # noqa: E731
+    assert not any(line.startswith("stage_carries_case:") for line in lines("activate"))
+    assert f"next_stage_carries_case: {context.CARRIES_CASE}" in lines("activate")
+    assert f"stage_carries_case: {context.CARRIES_CASE}" in lines("belief")
+
+
 TONES = ("directive", "supportive", "reflective")
 
 
@@ -234,22 +250,19 @@ def test_what_mani_understands_is_sent_with_its_meaning_only_once_something_is_s
     assert "understanding:" not in empty
     stored = thread().model_copy(update={"understanding": {"feeling": "frustrated"}})
     lines = context.build(TurnContext(thread=stored, profile=None, technique=None)).splitlines()
-    at = lines.index(
-        "understanding: feeling: frustrated; issue: missing; core_issue: missing; underlying_feeling: missing"
-    )
-    assert lines[at + 1].startswith("  means: what they have told you so far")
+    at = lines.index("understanding: feeling: frustrated")
+    assert lines[at + 1].startswith("  means: the feelings they named")
 
 
 def test_the_findings_are_their_case_once_a_framework_is_running_or_about_to_start():
-    """muhammad, 2026-10-22: the stage questions and possibilities are about the problem, the core issue
-    and the feeling found before the offer, so the line carries that meaning inside a framework."""
-    found = {"issue": "your boss says you're not doing enough", "core_issue": "your worth rests on his view",
-             "underlying_feeling": "worry that you are not enough"}
+    """muhammad, 2026-10-22: the stage questions and possibilities are about what was found before the
+    offer, so the line carries that meaning inside a framework; since 2026-10-26 that is the confirmed case."""
+    found = {"feeling": "worried", "case": "Your worth rests on his view. You want him to see your work."}
     stored = thread().model_copy(update={"understanding": found})
     running = dataclasses.replace(_running_at("belief"), thread=stored)
     block = context.build(running, framework=_five_stage_framework()).splitlines()
     at = next(i for i, line in enumerate(block) if line.startswith("their_case: "))
-    assert "your worth rests on his view" in block[at] and "worry that you are not enough" in block[at]
+    assert "Your worth rests on his view" in block[at] and "worried" in block[at]
     assert "every question you ask and every possibility you offer" in block[at + 1].lower()
     assert not any(line.startswith("understanding: ") for line in block)
 
@@ -427,34 +440,22 @@ def _on_message(person_message: int, technique=None, style: str | None = None):
     return TurnContext(thread=on, profile=None, technique=technique)
 
 
-def test_no_check_until_the_problem_its_core_issue_and_the_feeling_underneath_are_all_found():
-    """muhammad's run, 2026-10-13: Mani checked at their second message having asked about neither the
-    core issue nor the feeling underneath. The steps are code's now (spec 0006, AC-2, AC-18): the next missing one is
-    named in [ctx] in order, and the check field waits for all three."""
-    steps = [{}, {"issue": FOUND["issue"]}, {k: FOUND[k] for k in ("issue", "core_issue")}, FOUND]
-    on = [_on_message(6, style="directive").thread.model_copy(update={"understanding": u}) for u in steps]
-    contexts = [TurnContext(thread=t, profile=None, technique=None) for t in on]
-    # The turn that receives their answer about the feeling may carry the check; code stores it only if
-    # that answer came (the orchestrator), so [ctx] says to check only once it is answered.
-    assert [context.may_check(c) for c in contexts] == [False, False, True, True]
+def test_no_check_before_their_fifth_message_and_a_ready_heart_of_it_makes_the_check_due():
+    """R33, muhammad 2026-10-26: Lolly's chats reached the heart of it at about the tenth exchange, so a check
+    never comes before their 5th message however ready the reading seems. From there the shape carries the
+    check; once the last reply judged the heart of it ready, [ctx] says it is due, so code names the turn."""
+    def line(c):
+        return next((l for l in context.build(c).splitlines() if l.startswith("check:")), None)
 
-    def line(c, key):
-        return next((l for l in context.build(c).splitlines() if l.startswith(f"{key}:")), None)
-
-    assert [line(c, "understanding_next") for c in contexts] == [
-        "understanding_next: problem", "understanding_next: core_issue", "understanding_next: underlying_feeling", None,
-    ]
-    assert [line(c, "check") for c in contexts] == [
-        None, None, "check: once_feeling_is_answered", "check: may_check",
-    ]
-
-
-def test_the_context_tells_the_model_the_check_the_code_allows():
-    ready = TurnContext(thread=found(_on_message(4).thread), profile=None, technique=None)
-    assert "check:" not in context.build(_on_message(4, style="directive"))
-    lines = context.build(ready).splitlines()
-    assert lines[lines.index("check: may_check") + 1].startswith("  means: ")
-    assert "check:" not in context.build(ready, safety_concern=True)
+    early = TurnContext(thread=ready(_on_message(context.CHECK_FROM - 1).thread), profile=None, technique=None)
+    assert not context.may_check(early) and line(early) is None
+    exploring = TurnContext(thread=_on_message(context.CHECK_FROM).thread, profile=None, technique=None)
+    assert context.may_check(exploring) and line(exploring) == "check: may_check"
+    due = TurnContext(thread=ready(_on_message(context.CHECK_FROM).thread), profile=None, technique=None)
+    lines = context.build(due).splitlines()
+    assert "check: due" in lines and lines[lines.index("check: due") + 1].startswith("  means: ")
+    assert "check:" not in context.build(due, safety_concern=True)
+    assert not any(l.startswith("understanding_next") for l in lines), "no step is named for the model"
 
 
 def test_after_keep_chatting_mani_may_check_again_once_the_cooldown_has_passed():
@@ -463,7 +464,7 @@ def test_after_keep_chatting_mani_may_check_again_once_the_cooldown_has_passed()
         at_message_count=10,
     )
     def may(message_count: int) -> bool:
-        return context.may_check(TurnContext(thread=found(thread(message_count)), profile=None, technique=state))
+        return context.may_check(TurnContext(thread=ready(thread(message_count)), profile=None, technique=state))
 
     assert not may(10 + context.COOLDOWN_AFTER_DECLINE - 1)
     assert may(10 + context.COOLDOWN_AFTER_DECLINE)
@@ -675,11 +676,10 @@ def test_a_part_still_to_ask_is_shown_beside_the_stage_it_belongs_to():
 
 def test_their_case_carries_every_feeling_and_what_they_added_and_says_never_to_ask_again():
     """muhammad, 2026-10-22: they had to say they felt trapped a second time though the check held it."""
-    case = {"feeling": "anxious, exhausted, burnt out", "issue": "overtime to meet deadlines",
-            "core_issue": "the work falls on you", "underlying_feeling": "trapped",
-            "also": "the client warned they would remove them"}
+    case = {"feeling": "anxious, exhausted, burnt out, trapped",
+            "case": "The work falls on you. You want the overtime to stop. The client warned they would remove them."}
     running = dataclasses.replace(_running_at("significance"), thread=thread().model_copy(update={"understanding": case}))
     block = context.build(running, framework=_five_stage_framework()).splitlines()
     at = next(i for i, line in enumerate(block) if line.startswith("their_case: "))
-    assert "anxious, exhausted, burnt out" in block[at] and "also: the client warned they would remove them" in block[at]
+    assert "trapped" in block[at] and "The client warned they would remove them" in block[at]
     assert "never ask them again for anything in it" in block[at + 1].lower()

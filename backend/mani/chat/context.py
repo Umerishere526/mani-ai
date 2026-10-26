@@ -21,9 +21,9 @@ from mani.models.rows import (
 # Mani may check its understanding again: three of its replies (muhammad, 2026-09-24).
 COOLDOWN_AFTER_DECLINE = 6
 
-# The message by which a check is expected, "two to four exchanges" in the client's cadence. Only
-# logged when it passes without one, never sent to the model (spec 0006, AC-11).
-CHECK_EXPECTED_BY = 5
+# Their message before which Mani never checks its understanding, however ready its reading seems: Lolly's own
+# conversations reached the heart of it at about the tenth exchange (muhammad, 2026-10-26, R33).
+CHECK_FROM = 5
 # The greeting, the style they tapped, and that style's opener.
 OPENING_MESSAGES = 3
 COOLDOWN_AFTER_COMPLETE = 45
@@ -91,12 +91,11 @@ def check_open(ctx: TurnContext) -> bool:
 
 
 def may_check(ctx: TurnContext) -> bool:
-    """Whether this reply may check Mani's understanding: once the problem and its core issue are
-    stored and the feeling underneath is stored or is what this message answers, which takes at
-    least three of their messages, with no framework live and no check waiting for its answer, and
-    once the cooldowns after the last check and the last offer have passed. The orchestrator stores a
-    check only when all three are found after this turn. The only way to an offer (spec 0006)."""
-    if understanding.next_step(ctx.thread.understanding) not in (None, "underlying_feeling"):
+    """Whether this reply may check Mani's understanding: from their CHECK_FROM-th message, with no framework
+    live and no check waiting for its answer, and once the cooldowns after the last check and the last offer
+    have passed. Code stores the check only when the same reply judges the heart of it ready (R33). The only
+    way to an offer (spec 0006)."""
+    if their_messages(ctx) < CHECK_FROM:
         return False
     if live(ctx.technique) is not None or check_open(ctx):
         return False
@@ -155,8 +154,8 @@ _MEANING: dict[str, str | dict[str, str]] = {
     ),
     "conversation_phase": {
         "understanding": (
-            "nothing has been offered yet. Take in what they said, then ask for what you still "
-            "need: the problem, the core issue under it, or the feeling underneath."
+            "nothing has been offered yet. Follow their story in order toward the heart of it: what "
+            "happened, what it means to them, what they want and what is stopping them."
         ),
         "framework": "the questions are running, so follow the stage.",
         "talking": (
@@ -171,15 +170,13 @@ _MEANING: dict[str, str | dict[str, str]] = {
         ),
     },
     "check": {
-        "once_feeling_is_answered": (
-            "if their message answers the feeling underneath, even with I don't know, report it and "
-            "check your understanding in this reply by filling check, from their words only. If it does "
-            "not, ask about the feeling and leave check empty."
-        ),
         "may_check": (
-            "the problem, its core issue and the feeling underneath are all found. Check your "
-            "understanding with them now by filling check, from their words only. Put a feeling they did "
-            "not name inside the check as a possibility for them to confirm."
+            "when heart is ready in this reply, check your understanding with them by filling check, from "
+            "their words only. Otherwise leave check empty and keep going toward the heart of it."
+        ),
+        "due": (
+            "your last reply judged the heart of it ready. Check your understanding with them now by "
+            "filling check, from their words only, unless their message shows it is not ready after all."
         ),
         "open": (
             "your last reply checked your understanding. Set check_answer. A clear yes always brings the "
@@ -188,36 +185,16 @@ _MEANING: dict[str, str | dict[str, str]] = {
         ),
     },
     "understanding": (
-        "what they have told you so far, kept for you. A step marked missing is still to be found. In "
-        "understanding_update report only what their message names or changes."
+        "the feelings they named, kept for you, and where your last reply judged the heart of it. In "
+        "understanding_update report only the feelings their message adds."
     ),
     "their_case": (
-        "what you and they found before the questions began: the feelings they named, the problem, the core "
-        "issue under it, the feeling underneath and, once they confirmed it, what it comes down to, and "
-        "anything they added since, in their words. Every question you ask and every possibility you offer "
-        "is about this case and the feeling underneath, never generic. Never ask them again for anything in it: say it "
-        "back and build on it. In understanding_update report only what their message names or changes."
+        "what you and they found before the questions began: the feelings they named and the case they "
+        "confirmed, the conflict, what they want and what is stopping them. Every question you ask and every "
+        "possibility you offer is about this case and the feeling underneath it, never generic. Never ask them again for "
+        "anything in it: say it back and build on it. In understanding_update report only the feelings their "
+        "message adds."
     ),
-    "understanding_next": {
-        "problem": (
-            "the problem is not pinned down yet. Help them narrow it to what actually happens: who, "
-            "what, how often, what is expected of them. If their message already gives it, report it "
-            "and ask about the core issue under it."
-        ),
-        "core_issue": (
-            "the problem is clear, what lies under it is not. Ask plainly: what usually happens next, "
-            "what falls on them, or what keeps it going. A feeling, such as not being enough, is not yet "
-            "the core issue: ask what makes them feel it or what keeps it going. Once their answers show "
-            "the core issue, offer it in your reply as your understanding, report it, and ask how it sits "
-            "with them underneath. They don't need to name it themselves."
-        ),
-        "underlying_feeling": (
-            "the problem and its core issue are clear. Ask about the feeling underneath, once, never twice "
-            "in other words: their own word if they have one, otherwise two or three possibilities their "
-            "words point to, in options. If they say they don't know, that is their answer: report your closest "
-            "reading, worded as a possibility, in underlying_feeling."
-        ),
-    },
     "since_last": "how many messages have passed since the last offer.",
     "this_thread": (
         "what was last offered in this conversation and how it went. One they declined may come "
@@ -291,6 +268,14 @@ _MEANING: dict[str, str | dict[str, str]] = {
 }
 
 
+# What a stage that carries the case asks of its question: the case they confirmed, said back in their words,
+# whatever the framework (a stage says so with `carries_case: true`).
+CARRIES_CASE = (
+    "their_case is in this question, in their words: what they feel, the conflict, what they want and what is "
+    "stopping them. Fit as much as the style allows, never a list, never anything they did not say."
+)
+
+
 def _meaning(key: str, value: object) -> list[str]:
     """The line that says what `key` means for the value it has this turn, if it has one."""
     meaning = _MEANING.get(key)
@@ -360,9 +345,6 @@ def build(
             bool(running) or (yes_framework is not None and not safety_concern) or body.closing_shown(history or [])
         )
         lines += _line("their_case" if in_play else "understanding", understood)
-    step = understanding.next_step(ctx.thread.understanding)
-    if step and live(ctx.technique) is None and not safety_concern:
-        lines += _line("understanding_next", step)
     if offer_waiting:
         # Mani's last reply was an offer, and they typed rather than tapped.
         lines += _line("offer_waiting", "yes")
@@ -377,8 +359,7 @@ def build(
         if check_open(ctx):
             lines += _line("check", "open")
         elif may_check(ctx):
-            waiting = understanding.next_step(ctx.thread.understanding) == "underlying_feeling"
-            lines += _line("check", "once_feeling_is_answered" if waiting else "may_check")
+            lines += _line("check", "due" if understanding.ready(ctx.thread.understanding) else "may_check")
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
         lines += _line("since_last", since_last)
@@ -494,4 +475,6 @@ def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> l
     ask = (stage.get("ask") or {}).get(style)
     if ask:
         lines.append(f"{prefix}_ask: {ask}")
+    if stage.get("carries_case"):
+        lines.append(f"{prefix}_carries_case: {CARRIES_CASE}")
     return lines

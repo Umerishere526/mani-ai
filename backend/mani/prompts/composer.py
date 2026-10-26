@@ -230,13 +230,40 @@ def compose(
     )
 
 
-def model_settings(config: Config) -> tuple[str, dict, dict]:
-    """The model id, parameters and routing for a chat turn.
+def compose_conversation(
+    config: Config,
+    profile: Profile | None,
+    *,
+    should_generate_title: bool = False,
+    summary: ThreadSummary | None = None,
+    memory: Memory | None = None,
+) -> SystemPrompt:
+    """The system prompt whenever no framework, offer or check is open: the conversation prompt, which
+    carries all three styles and the client's two example conversations, then what is known of the
+    person. Identical for every style, so the whole prompt row is one cached prefix."""
+    candidates: list[tuple[str, str | None]] = [
+        ("conversation", config.require("conversation").content),
+        ("user_context", user_context(profile)),
+        ("user_memory", user_memory(memory)),
+    ]
+    if should_generate_title:
+        title = config.prompt("title_generation")
+        candidates.append(("title_generation", title.content if title else None))
+    candidates.append(("summary", summary_layer(summary)))
+    present = [(name, body) for name, body in candidates if body]
+    return SystemPrompt(
+        text="\n\n".join(body for _, body in present),
+        layers=[(name, len(body)) for name, body in present],
+    )
 
-    Taken from the mani_base prompt row, so the model is editable as configuration while
-    the key it authenticates with stays in the environment.
+
+def model_settings(config: Config, name: str = "mani_base") -> tuple[str, dict, dict]:
+    """The model id, parameters and routing for a chat turn, from the prompt row `name`.
+
+    Taken from a prompt row, so the model is editable as configuration while the key it
+    authenticates with stays in the environment.
     """
-    prompt = config.require("mani_base")
+    prompt = config.require(name)
     settings = get_settings()
     return (
         prompt.model_id or settings.default_chat_model,

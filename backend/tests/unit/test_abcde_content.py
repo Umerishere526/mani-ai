@@ -179,3 +179,27 @@ def test_an_open_offer_turn_costs_less_prompt_than_before_the_structured_fields(
 
     total = len(system.text) + len(block) + len(json.dumps(shape.model_json_schema()))
     assert total < CHARACTERS_BEFORE_STRUCTURED_FIELDS
+
+
+def test_the_stages_that_look_at_the_belief_or_thought_carry_the_stack_in_both_frameworks():
+    """Lolly, 2026-10-22: the stack must reach C, D and E. A framework says which of its stages carry it."""
+    carrying = {
+        name: sorted(stage for stage, body in parse_framework(FRAMEWORKS_DIR / f"{name}.md")["stages"].items()
+                     if body.get("carries_case"))
+        for name in ("abcde", "thought_reframe")
+    }
+    assert carrying == {
+        "abcde": ["consequence", "dispute", "effective"],
+        "thought_reframe": ["alternative", "feels_true", "painful", "replacement"],
+    }
+
+
+def test_the_stages_keep_clinical_words_and_judgements_out_of_what_mani_says(abcde):
+    """Lolly, 2026-10-22: the language read as artificial. The offer never names the method, B never calls a
+    belief irrational or distorted, C never judges a feeling, and A counts only what happened as the event."""
+    stages = abcde["stages"]
+    assert any("clinical terms such as REBT, CBT" in rule for rule in stages["offering"]["boundaries"])
+    assert any("must not call the belief irrational" in rule for rule in stages["belief"]["boundaries"])
+    assert "must not judge the feeling or behaviour as wrong or unhealthy" in stages["consequence"]["boundaries"]
+    assert "rather than as their interpretation of it" in stages["activate"]["ready_when"]
+    assert "commitment for next time counts as the path" in stages["effective"]["ready_when"]

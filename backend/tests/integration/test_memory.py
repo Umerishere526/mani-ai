@@ -36,7 +36,8 @@ class Scripted:
                 raise RuntimeError("provider down")
             value = self.remembered
         else:
-            value = Reply(text="What happens on those evenings?")
+            # In the shape the turn asked for, as the real call returns it.
+            value = schema.model_validate({"text": "What happens on those evenings?"})
         return client.Call(
             value=value, model="test/model",
             usage=llm_calls.Usage(input_tokens=10, output_tokens=5),
@@ -226,7 +227,7 @@ async def test_the_next_chat_is_shaped_by_the_memory_but_carries_none_of_the_old
 
     async def watching(messages, schema, **kwargs):
         sent.append(messages)
-        return client.Call(value=Reply(text="How has today been?"), model="test/model",
+        return client.Call(value=schema.model_validate({"text": "How has today been?"}), model="test/model",
                            usage=llm_calls.Usage(), latency_ms=1, call_id=uuid.uuid4())
 
     monkeypatch.setattr(client, "complete", watching)

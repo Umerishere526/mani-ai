@@ -286,19 +286,22 @@ def test_the_model_is_never_asked_for_a_mirroring_voice():
 
 def test_a_stored_check_goes_out_in_the_clients_order_whatever_order_the_model_wrote(registry):
     """Spec 0006, muhammad's choice of 2026-10-13: live, the check opened with its last part in
-    every run though the prompt asked twice for the problem first. The words are the model's; the order
-    is code's, and a missing part leaves no gap."""
+    every run though the prompt asked for the order. The words are the model's; the order is code's
+    (since 2026-10-26 the conflict, what they want, what is stopping them, R33)."""
     check = Check(
-        problem="  Your boss says you're not doing enough", core_issue="Nothing you do feels like enough for him.",
-        underlying_feeling="Maybe it feels like worry about being enough.", question="Do I have that right",
+        conflict="  You miss her deeply, but she puts others first", want="You want her to own how she made you feel.",
+        in_the_way="You know she will be selfish again.", question="Does that describe it",
     )
-    model_text = reply(text="Maybe it feels like worry about being enough. Your boss says you're not doing enough?")
+    model_text = reply(text="You know she will be selfish again. You miss her?")
     fixed = fix(registry, model_text, check=check)
     assert fixed.text == (
-        "Your boss says you're not doing enough. Nothing you do feels like enough for him. Maybe it feels like "
-        "worry about being enough.\n\nDo I have that right?"
+        "You miss her deeply, but she puts others first. You want her to own how she made you feel. You know "
+        "she will be selfish again.\n\nDoes that describe it?"
     )
     assert fix(registry, model_text).text == model_text.text, "without a stored check the reply goes as written"
+    # Live, 2026-10-26: a part written to run on into the next went out as "You want to leave,. but".
+    flowing = check.model_copy(update={"want": "You want to leave,", "in_the_way": "but the team needs you"})
+    assert repairs.check_summary(flowing).endswith("You want to leave, but the team needs you.")
 
 
 # Mani's replies from the client's way of communication document, each as the client lays it out.
@@ -319,39 +322,11 @@ CLIENT_LAYOUT = [
 
 
 @pytest.mark.parametrize("laid", CLIENT_LAYOUT)
-def test_manis_own_text_goes_out_as_the_client_lays_it_out(registry, laid):
-    """The client's document (R13): what Mani says back, then each closing question on its own line
-    (muhammad, 2026-10-21). A short reply stays one line."""
-    written = laid.replace("\n\n", " ")
-    assert fix(registry, reply(text=written), lay_out=True).text == laid
-
-
-@pytest.mark.parametrize("text, laid", [
-    ("You said the review is at the 9 a.m. meeting with your manager tomorrow. Did Dr. Lee say anything?",
-     "You said the review is at the 9 a.m. meeting with your manager tomorrow.\n\nDid Dr. Lee say anything?"),
-    ('You told them "I cannot keep doing this with the whole team." What happened then?',
-     'You told them "I cannot keep doing this with the whole team."\n\nWhat happened then?'),
-    ("Your boss criticized your work today.\nWhat did your boss criticize?",
-     "Your boss criticized your work today.\n\nWhat did your boss criticize?"),
-    ("That sounds like a lot to carry at work right now. Take your time.",
-     "That sounds like a lot to carry at work right now. Take your time."),
-    ("A really long day has left you feeling anxious.\nWhat part of the day is weighing on you most?\n"
-     "Something that happened, something still ahead, or the day catching up with you?",
-     "A really long day has left you feeling anxious.\n\nWhat part of the day is weighing on you most?\n\n"
-     "Something that happened, something still ahead, or the day catching up with you?"),
-    ("A really long day has left you feeling anxious.\n\nWhat part of it is weighing on you most? Is it something "
-     "that happened, what still needs doing, or the day catching up with you?",
-     "A really long day has left you feeling anxious.\n\nWhat part of it is weighing on you most?\n\nIs it "
-     "something that happened, what still needs doing, or the day catching up with you?"),
-])
-def test_the_layout_breaks_only_between_sentences_and_keeps_the_models_own_lines(registry, text, laid):
-    assert fix(registry, reply(text=text), lay_out=True).text == laid
-
-
-def test_a_reply_not_laid_out_goes_as_written(registry):
-    """A stage reply keeps the one paragraph the client's ABCDE document writes."""
-    written = CLIENT_LAYOUT[1].replace("\n\n", " ")
-    assert fix(registry, reply(text=written)).text == written
+def test_manis_own_text_keeps_the_models_line_breaks_and_gets_none_added(registry, laid):
+    """muhammad, 2026-10-26: a line break the model wrote is kept, and code adds none of its own."""
+    assert fix(registry, reply(text=laid), chat_text=True).text == laid
+    one_line = laid.replace("\n\n", " ")
+    assert fix(registry, reply(text=one_line), chat_text=True).text == one_line
 
 
 def test_the_options_go_on_the_line_under_the_question_and_only_where_the_reply_is_free_text(registry):
@@ -361,12 +336,12 @@ def test_the_options_go_on_the_line_under_the_question_and_only_where_the_reply_
         text="A really long day has left you feeling anxious.\nWhat part of it is weighing on you most?",
         options="Is it something that happened, what still needs doing, or the day catching up with you",
     )
-    assert fix(registry, asked, lay_out=True).text == (
-        "A really long day has left you feeling anxious.\n\nWhat part of it is weighing on you most?\n\n"
+    assert fix(registry, asked, chat_text=True).text == (
+        "A really long day has left you feeling anxious.\nWhat part of it is weighing on you most?\n\n"
         "Is it something that happened, what still needs doing, or the day catching up with you?"
     )
-    assert fix(registry, reply(text="Take your time."), lay_out=True).text == "Take your time."
+    assert fix(registry, reply(text="Take your time."), chat_text=True).text == "Take your time."
     assert fix(registry, asked).text == asked.text, "a stage reply is not laid out and carries none"
     checked = Check(problem="Your day was long.", core_issue="It all landed on you.",
                     underlying_feeling="You may feel worn down.", question="Do I have that right")
-    assert "Is it something" not in fix(registry, asked, lay_out=True, check=checked).text
+    assert "Is it something" not in fix(registry, asked, chat_text=True, check=checked).text

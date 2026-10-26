@@ -9,20 +9,18 @@ the same change as the work.**
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
 - Tests: `pytest` runs 451 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
   JWKS-configured project).
-- Database: 17 migrations (001 to 010 and 018 to 024), 15 tables (8 `public`, 7 `admin`), 6 frameworks and 5 prompts seeded.
+- Database: 19 migrations (001 to 010 and 018 to 026), 16 tables (8 `public`, 8 `admin`), 6 frameworks and 5 prompts seeded.
   `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
   private `exercises` bucket (`scripts/seed_exercises.py`). A hosted project does not exist yet.
-- Models: `openai/gpt-6-luna` for chat and for summaries (`mani/config.py`), routed only to Azure or
-  OpenAI, the fastest endpoint first. It is a reasoning model: it takes no `temperature` on any provider and reads
+- Models: `openai/gpt-6-luna` for chat and for summaries (`mani/config.py`), routed only to OpenAI,
+  the fastest endpoint first. It is a reasoning model: it takes no `temperature` on any provider and reads
   `reasoning_effort` instead, so `mani/llm/chain.py` sends the sampling parameters an ordinary
   chat model takes only to models that accept them. A prompt row names its own effort in
   `model_parameters.reasoning_effort` and `mani/config.py` holds the default for the calls that have
   no row of their own; `mani_base` is on `medium` (muhammad, 2026-10-22, for comprehension over the 2026-10-12 `low` that cut latency) and so is the exercise pick that
   follows it, while `summarization` and `memory_fold` are on `high`. Effort is billed: measured against Azure,
   `high` spent 26 reasoning tokens where `low` spent 0, about three times the cost of the same call. Every endpoint keeps `data_collection: deny`, so
-  training use stays refused, but OpenAI now serves a turn whenever it is faster, not only when Azure is
-  down, so a larger share is processed by a second company - a data protection question that is open, not
-  settled (muhammad accepted Azure and OpenAI, 2026-10-14).
+  training use stays refused, and one company, OpenAI, processes the conversations.
 - Every call to OpenRouter carries the same providers, data policy and reasoning effort, from
   `chain.request_body`. The voice translation in `mani/stt.py` calls the SDK directly and used to send
   none of them, so a transcript went to whichever provider OpenRouter chose; it now uses the same body.
@@ -97,7 +95,9 @@ the same change as the work.**
   exercise from the whole active catalog with one bound tool call (`mani/llm/tools.py`): the framework's own
   exercises are listed first, and the pick sees the person's last three messages and the issue Mani
   understands (`threads.understanding`). `GET /v1/exercises` is the whole catalog, and responses never carry the storage path.
-- **Admin**: prompt CRUD with versioning, exercise CRUD, crisis event review, a user's memory.
+- **Admin**: prompt CRUD with versioning, exercise CRUD, crisis event review, a user's memory, and every
+  person's conversations read-only (each full read logged in `admin.thread_reads`). An admin cannot send a chat
+  message (`Participant` in `mani/auth/deps.py`). `scripts/grant_admin.py <email>` grants or `--revoke`s it.
 - **Account deletion**: `DELETE /v1/account` removes the user and everything they own.
 - **Scenario check**: `scripts/scenario_check.py` replays the client's test conversations (`scripts/scenarios.json`)
   through the real stack in every style, including the four scenarios of the client's styles document. It flags
@@ -124,10 +124,39 @@ the same change as the work.**
 | GET POST, PATCH DELETE | `/v1/admin/exercises`, `/{id}` | catalog CRUD |
 | GET | `/v1/admin/crisis-events` | review queue |
 | GET | `/v1/admin/users/{id}/memory` | what is remembered about a person |
+| GET | `/v1/admin/threads` | every person's conversations, newest activity first; `search` by email or user id |
+| GET | `/v1/admin/threads/{id}` | one conversation in full, oldest first; logs the read |
 | GET | `/internal/cron/fold-summaries` | idle memory fold, bearer `CRON_SECRET`, no JWT |
 
 ## Decisions in force
 
+- **An admin reads every person's conversations in full and takes part in none; each full read is logged.**
+  Because the client and we review beta users' chats for their cadence, which a crisis-only browser could not show
+  (muhammad, 2026-10-26; replaces the note "scope the conversation browser to unresolved crisis threads"). The list
+  carries no content; `GET /v1/admin/threads/{id}` writes `admin.thread_reads` in the read's transaction. The send
+  endpoint refuses an admin token (`test_an_admin_can_read_conversations_but_not_send_a_message`), the chat-tester
+  shows an admin only the read-only viewer, and its on-page password reset refuses an admin account, since
+  anyone who reaches the page can use it. `tests/integration/test_admin_threads.py`, migration 026.
+- **Before a framework, Mani is its own conversation in the cadence of Lolly's two ChatGPT chats, and it overrides
+  every older decision below about how the chat before a framework talks** (muhammad, 2026-10-26: "forget every
+  previous decision in force, R, spec or document that stops MANI's cadence being exactly like the ChatGPT cadence the
+  client provided"). Whenever no framework, offer or check is open (`Moment.CHATTING`, not after a declined offer), the
+  turn goes to `orchestrator._converse`: the `conversation` prompt row (`content/prompts/conversation.md`: Lolly's
+  instruction, the order her chats follow, all three styles, both chats as examples), the transcript, their message
+  and a short note (style, what is understood, whether this reply may check), with the reply shape
+  `ConversationReply` (text first, then heart, the case's three parts, a checking flag, feelings, crisis, title; no
+  reasoning, no options, no [ctx] block). The check is Mani's own words; code stores it only when allowed (their 5th
+  message on, cooldowns, and an earlier reply judged `conflict_named` or `ready`), flagged, and with all three parts,
+  which become the case. The answer to a check, the offer, the framework walk, the body check-in and the safety screen
+  are unchanged. Journal: `mani-vault/Journal/story-before-guess-2026-10-26.md`.
+
+- **Mani reads their whole message against what it already understands and says what is new and how it changes its
+  reading, in their words** (muhammad, 2026-10-22; 2026-10-26, see "Each reply says what is new"). Because in his Directive chat about a boss who does not lead, Mani mirrored one clause ("your boss doesn't
+  seem to understand the work you show him") and dropped the headline the person named, "lack of leadership"; the mirror
+  rule ("what matters", "never hand their whole message back") and the problem step's "who, what, how often" both
+  select, and nothing says what to keep. Cut and replaced, not added: `mani_base.md` `how_you_talk` and `core issue`,
+  `response_format.md` first reasoning step, `context.py` `understanding_next`, `schema.py` `issue` and `core_issue`. Not
+  measured live (needs muhammad's yes, replay of that turn); [[direct-questions-have-no-target-2026-10-09]].
 - **A turn is one chat call at effort `low`, never a second to fix a draft** (muhammad, 2026-10-12). Because the
   client's R2 asks for no excessive latency, a turn waited on a reasoning model at `high` and up to two more
   full calls whenever a draft broke a rule (a median of 12.6 s and 41 s at worst, 2026-10-07), and the reply
@@ -153,17 +182,17 @@ the same change as the work.**
   next chat turns, then read `admin.llm_calls`). `test_a_call_that_sends_nothing_for_too_long_is_cut_and_tried_once_
   more`, `test_a_call_silent_twice_fails_as_too_slow_after_two_tries_only`, `test_a_streamed_reply_records_its_usage_
   and_generation` in `tests/unit/test_client.py`.
-- **Chat calls go to the fastest Azure or OpenAI endpoint, never a pinned order and never flex**
-  (`openrouter_providers` with `sort: latency`, muhammad, 2026-10-14). Because the pinned `order: ["azure",
-  "openai"]` was carried from the previous system, never chosen for speed: an order turns off OpenRouter's load
-  balancing and falls back only on an error, and the base slug `azure` covers three regions, two of them with a
-  p99 over two minutes on OpenRouter's own figures (`azure/eu` 6.3 s). Base slugs never match the tier endpoints
+- **Calls go only to OpenAI, its fastest endpoint first, never a pinned order and never flex**
+  (`openrouter_providers: ["openai"]` with `sort: latency`, muhammad, 2026-10-26). Because Azure's content filter,
+  which OpenRouter configures and we cannot, stopped every reply in an ordinary conversation about a boss (10 of
+  28 calls on 2026-10-26, each after about 13 tokens), and a filtered reply is not an error, so neither
+  OpenRouter's fallback nor our retry left Azure. An order is avoided because it turns off OpenRouter's load
+  balancing and falls back only on an error (2026-10-14). Base slugs never match the tier endpoints
   (`openai/flex`, `openai/fast`). Every call records OpenRouter's `generation_id` (migration 024), and
   `scripts/llm_call_providers.py` resolves it to the endpoint that served it, so a slow turn is traced, not
   guessed. A timeout has no id (no reply came back); match it by time on OpenRouter's Activity page. If slow
   turns persist, the next step is streaming with a first token deadline, not hedged requests (see
-  `mani-vault/Journal/provider-tail-latency-2026-10-14.md`). `test_routing_sends_a_turn_only_to_azure_or_openai_
-  fastest_first` in `tests/unit/test_config.py`, `test_each_call_records_the_generation_that_served_it` in
+  `mani-vault/Journal/provider-tail-latency-2026-10-14.md`). `test_routing_sends_a_turn_only_to_openai_fastest_first` in `tests/unit/test_config.py`, `test_each_call_records_the_generation_that_served_it` in
   `tests/unit/test_client.py`. Not yet measured live (needs muhammad's yes).
 - **ABCDE's D asks what supports the belief and what might challenge it as two questions, one at a time, and code
   remembers which is still to ask** (muhammad, 2026-10-21). Because in the sister thread D was one stage with one
@@ -191,36 +220,34 @@ the same change as the work.**
   (needs muhammad's yes). `test_after_the_last_stage_a_feeling_that_has_a_place_gets_the_personal_question`,
   `test_no_to_the_personal_question_carries_on_with_the_general_check_in` and `test_a_feeling_word_in_chat_or_inside_a_
   stage_never_starts_a_body_question` in `tests/integration/test_turn.py`.
-- **An offer comes only on a clear yes to Mani's check of its understanding; the check comes only once code has
-  seen the problem, its core issue and the feeling underneath found in that order, each in an exchange of its
-  own, so at their third message at the earliest, in every style** (muhammad, 2026-10-13, spec 0006; the order
-  is code's since muhammad's live run of the same day, where Mani checked at their second message having asked
-  about neither the core issue nor the feeling: `understanding.merge` takes a step only once the one before it was
-  stored on an earlier turn, `[ctx]` names the next step as `understanding_next`, and a check is stored only when
-  their own words give the feeling; a stored check is sent as the model's own sentences in the client's order,
-  problem, core issue, feeling, what it comes down to, then the question, `repairs.check_text`). The third step was what is
-  in their control until muhammad replaced it with the underlying feeling (2026-10-21): the person may name it, or Mani
-  offers it from their words as a possibility inside the check, never as a fact, for them to confirm or correct;
-  "I don't know" at that step stores Mani's closest reading as a possibility so the check still opens, and no new gate
-  or deadline was added (`test_the_feeling_step_replaced_control_and_the_prompt_did_not_grow`, the prompt is held to its
-  size). Because the client's flow
-  (meeting of 2026-10-13, R14) is understand the problem, then its core issue and the feeling underneath,
-  then check that understanding with them and offer only on a yes, and the message count it replaces needed
-  three fixes in a row (scope features 12, 15, 19) without ever recording whether the person agreed. Before
-  that: the client rejected an offer on the first message (R1, 2026-10-12); the three steps put the earliest
-  check at their third message and the earliest offer at their fourth. Code stores only when the last check was made
-  (`threads.check_at_message_count`, migration 023); the next turn is `Moment.CHECK_OPEN`, whose shape alone
-  carries `check_answer` and `offer`. A clear yes makes that reply the client's offer; anything else (a no, a
-  yes with an addition, another topic) keeps chatting, and the check is used either way. A new check waits
-  `COOLDOWN_AFTER_DECLINE` after the last check and `cooldown_for(outcome)` after the last offer, and a set
-  just finished may be offered again on a new confirmed check. The check's words are the model's own, never
-  fixed text (muhammad, 2026-10-13); its `check` field marks it, so no code reads text to find it. "No check by
-  message 5" is only logged. `context.offer_window`, `due` and the one time clarification lines are gone.
-  `test_mani_may_check_from_their_second_message_*` and `test_a_check_is_answered_on_the_next_turn_only_*` in
-  `tests/unit/test_chat_context.py`, and the spec 0006 tests in `tests/integration/test_turn.py`. Not yet
-  measured live (needs muhammad's yes). Every
-  reply before an offer asks one question, and what they say back about how it is for them is how the set
-  is found. The set is chosen by what hurts, by its Use it when and
+- **An offer comes only on a clear yes to Mani's check of its understanding; the check comes from their 5th message,
+  on a reply that judges the heart of it ready: the central conflict agreed, and what they want and what is stopping
+  them known** (muhammad, 2026-10-26, replacing the three steps of 2026-10-13). Because Lolly's ChatGPT conversations
+  of 2026-10-26 reached the heart of it at about the tenth exchange and she wants a framework to begin there (R30,
+  R33), while the three steps (problem, core issue, feeling underneath, one an exchange: `understanding.STEPS`,
+  `advance`, `found`, `[ctx] understanding_next`, all deleted) aimed each question at the next empty slot and checked
+  at message 3 to 4 (baseline 2026-10-26, `chatgpt_reference`, Directive: "what does that mean to you?" three turns
+  running in the boss chat, the friendship chat checked at message 6 before what she wants was known). Every chatting
+  reply reports `heart` (`exploring`, `conflict_named`, `ready`), one closed value that must never grow back into a
+  record (muhammad's guardrail). The shape carries `check` only from `context.CHECK_FROM` (their 5th message), with
+  no framework live, no check waiting and the cooldowns passed; code stores a check only when the same reply says
+  `ready` (otherwise it logs `check without ready` and sends the text), and a `ready` reply that did not check makes
+  the next turn's `[ctx]` say `check: due`, so code names the turn (journal 2026-10-16: a step the model may take
+  never fires). The check is the model's own sentences, the conflict, what they want and what is stopping them,
+  then its question (`repairs.check_summary`, `check_text`); its summary is stored as the `case` the framework is
+  about. Code stores when the last check was made (`threads.check_at_message_count`, migration 023); the next turn
+  is `Moment.CHECK_OPEN`, whose shape alone carries `check_answer`, `heading_toward` and `offer`. A clear yes makes
+  that reply the client's offer; anything else keeps chatting, and the check is used either way. A new check waits
+  `COOLDOWN_AFTER_DECLINE` after the last check and `cooldown_for(outcome)` after the last offer, and a set just
+  finished may be offered again on a new confirmed check. Before that: the client rejected an offer on the first
+  message (R1, 2026-10-12), and check-then-offer comes from the meeting of 2026-10-13 (R14), which stands.
+  `test_no_check_before_their_fifth_message_and_a_ready_heart_of_it_makes_the_check_due` and
+  `test_a_check_is_answered_on_the_next_turn_only_and_then_waits_its_cooldown` in `tests/unit/test_chat_context.py`;
+  `test_a_check_comes_from_their_fifth_message_on_a_reply_that_judges_the_heart_of_it_ready`,
+  `test_a_check_from_a_reply_that_did_not_judge_the_heart_of_it_ready_opens_nothing` and
+  `test_a_reply_that_judged_the_heart_of_it_ready_without_checking_makes_the_check_due` in
+  `tests/integration/test_turn.py`. Measured once, 2026-10-26, Directive: the boss chat checked at their 6th message
+  and the friendship chat at their 9th; ChatGPT reached the same point at about the 12th. The set is chosen by what hurts, by its Use it when and
   Telling them apart; Structured Problem-Solving only once they say they want a decision or plan. No phrase
   matching ranks or shortlists them: the model chooses, code only checks the cooldown and what was already
   offered (muhammad, 2026-10-09; 2026-10-08: when a weak router
@@ -251,11 +278,12 @@ the same change as the work.**
 - **One style file per thread, in the system prompt, written from the client's behavior lists** (muhammad,
   2026-10-12). Because the client separates the styles by what each reply is trying to do, and our own recipe per
   style, under shared rules that contradicted their examples, drifted from it (styles document, 2026-10-12).
-  `content/prompts/style_directive.md`, `style_supportive.md` and `style_reflective.md` each hold only the client's
-  one-sentence description of that style, which muhammad chose over the longer behavior lists on 2026-10-22. Their example conversations were removed
+  `content/prompts/style_directive.md`, `style_supportive.md` and `style_reflective.md` each hold that style's
+  description in the client's words, with what to do and avoid. Their example conversations were removed
   (muhammad, 2026-10-13): the client's terse Directive examples pulled against the newer way of communication
-  document, and the model copies examples over rules; the one example of the sound is now `mani_base.md`
-  `sounds_like`. `composer.compose` sends only the style resolved for the thread, after
+  document, and the model copies examples over rules. Since 2026-10-26 Directive carries Lolly's two ChatGPT
+  conversations as `examples` (R34, muhammad), edited only to drop the announced questions, ChatGPT's two slips and the
+  figures the prompt bans; Supportive and Reflective carry none, so they do not copy Directive's voice. `composer.compose` sends only the style resolved for the thread, after
   `mani_base` and `response_format`, so the prefix before it caches once for all three; the Framework Index lists
   only that style's offer and Keep chatting wording. `[ctx]` names the style and carries no recipe. The stored
   value is `directive` (migration 019), with no `direct` alias. All three rows are required at load
@@ -321,12 +349,15 @@ the same change as the work.**
   frameworks having helped no one. A known stage is confirmed by them before the walk moves; an unclear one keeps the
   conversation on it, with two or three loose possibilities from what they said, never the same twice, and no cap; only
   `stop` ends it (`test_not_knowing_never_moves_the_walk_however_often_it_is_said`,
-  `test_a_wish_to_stop_leaves_the_framework_and_it_comes_back_only_when_asked_for`). The problem, core issue and feeling found before the offer reach every stage turn as `their_case` in `[ctx]`
+  `test_a_wish_to_stop_leaves_the_framework_and_it_comes_back_only_when_asked_for`). What was found before the offer,
+  the feelings they named and the case they confirmed, reaches every stage turn as `their_case` in `[ctx]`
   (the stored understanding, relabelled while a framework runs or is about to start), and every stage question and
-  possibility is about it, in their words (muhammad, 2026-10-22; `test_the_findings_are_their_case_once_a_framework_is_running_or_about_to_start`). Every feeling they name is kept, none twice, and what they raise
-  after the case was found goes in `also` (a new problem, a warning, what is at stake); the problem, core issue and
-  underlying feeling are frozen once an offer is open or a framework runs, so a later detail cannot replace the problem
-  (muhammad, 2026-10-22; `understanding.merge(frozen=)`, `test_once_an_offer_is_open_the_case_is_not_replaced_but_feelings_and_details_still_gather`).
+  possibility is about it, in their words (muhammad, 2026-10-22; `test_the_findings_are_their_case_once_a_framework_is_running_or_about_to_start`).
+  Every feeling they name is kept, none twice, in a framework too. The case is the confirmed check and does not grow:
+  the problem, core issue and underlying feeling that grew add-only from 2026-10-22, because the boss chat's D and E
+  were built on a first read that missed details said later, are gone with the three steps (muhammad, 2026-10-26: the
+  record must not grow back into a form). What they add later is in the transcript, which the model sees whole
+  ("The transcript is the memory within a thread"); whether D and E still use it is not yet measured.
   The stages their case can answer (ABCDE A, B and C; Thought Reframe's thought and why it hurts) are judged against it
   through their `reach`, so they are said back and confirmed once, never asked again.
 - **ABCDE is offered from the client's ABCDE document** (muhammad, 2026-10-09; Thought Reframe joined it 2026-10-21). Because the client's
@@ -369,21 +400,18 @@ the same change as the work.**
   the same open data protection question as before. `test_the_model_sees_the_whole_thread_until_the_budget_then_
   loses_whole_blocks` in `tests/integration/test_queries.py`.
 - **The running understanding** (`threads.understanding`, migration 022, written by code after the reply;
-  muhammad, 2026-10-13, specs 0005 and 0006). Because the feeling they open with was said once and then lost, and
-  `thread_summaries.current_issue` lagged a whole fold behind the 20 message window (the frustrated chat,
-  2026-10-13, R4, R6); muhammad chose this over OpenAI's conversation API (OpenRouter rejects stored state) and
-  over a prompt rewrite alone. Since the whole thread is in view (2026-10-13) the window premise no longer
-  holds; the record stays as the steps' gate state, A's feeling slot and the exercise pick's issue. Every reply reports `understanding_update` (`feeling`, `issue`, and since spec
-  0006 `core_issue` and `underlying_feeling`, the client's pinpointed problem, its core issue and the feeling
-  underneath): only what this message names or changes. On a check turn the check's fields are merged first and
-  `understanding_update` after them, so their own words win. `understanding.merge` keeps the stored value on a null or blank one; anything else
-  replaces it, on one line, at most 200 characters. Nothing is merged on a concern turn. It is sent back every
-  later turn as the `understanding:` line in `[ctx]`, disarmed, and code reads it only to place A's feeling on
-  the start turn and to give the exercise pick its issue; no gate reads it. Its own update, only by
-  `mani_service`; never logged; sent only in its own thread; deleted with the thread. `current_issue` is gone.
-  With `AI_DEBUG_MODE` on, a turn returns `understanding` and the chat tester shows it under "What Mani knows".
-  `tests/unit/test_understanding.py`, the spec 0005 tests at the end of `tests/integration/test_turn.py`,
-  `tests/sql/test_grants.sql`. Not yet measured live (needs muhammad's yes).
+  muhammad, 2026-10-13, specs 0005 and 0006; cut to three keys 2026-10-26). Because the feeling they open with was
+  said once and then lost (the frustrated chat, 2026-10-13, R4, R6). It holds `feeling`, every feeling word they
+  name, gathered, the first kept when full; `heart`, the last reply's judgement of the heart of it, replaced each
+  turn; and `case`, the summary of the last stored check. `understanding_update` reports only `feeling` (muhammad,
+  2026-10-26: the record had grown to seven fields the model filled before it spoke, and Mani filled in a form instead
+  of listening). Nothing is merged on a concern turn. It is sent back every later turn as the `understanding:` line in
+  `[ctx]`, or `their_case:` once a framework is running or about to start, disarmed; code reads `heart` to make the
+  check due, `feeling` for A's feeling slot and the body place check, and `feeling` with `case` for a stage that
+  carries the case. Its own update, only by `mani_service`; never logged; sent only in its own thread; deleted with
+  the thread. With `AI_DEBUG_MODE` on, a turn returns `understanding` and the chat tester shows it under "What Mani
+  knows". `tests/unit/test_understanding.py`, the spec 0005 tests in `tests/integration/test_turn.py`,
+  `tests/sql/test_grants.sql`.
 - **No phrase lists judge the conversation** (muhammad, 2026-10-09). Because literal phrase matching cannot
   read a paraphrase, so its judgments were silently wrong whenever people worded things differently
   (2026-10-09). Code holds no list of what people say
@@ -394,49 +422,48 @@ the same change as the work.**
   its own judgments in typed fields that exist only in the moment the database picks (spec 0003): the answer
   to an offer (`offer_answer`), the offer's slots, and the body route branch (`body`). A paused framework moved back
   brings no phrase list with it; anything it needs to detect is designed when it returns (2026-10-12).
-- **Each question follows from their last answer and keeps their feeling and issue in view; before an offer
-  it asks for what is still missing** (muhammad, 2026-10-09; cut 2026-10-12; spec 0005, 2026-10-13). Because
-  Mani re-asked what they had said and walked them into worst cases (2026-10-09), the client's own questions
-  ask what made them think it, what feels most pressing, and open on their words (styles document, 2026-10-12),
-  and ABCDE's checklist and the bans on using their feeling turned "i am frustrated" into questions about
-  ABCDE's needs and an offer about their judgment of the client (the frustrated chat, 2026-10-13, R4). One
-  positive rule in `mani_base.md` `rules` says it: "Each question follows from their last answer and keeps the
-  feeling and issue they came with in view. Their feeling word may come back inside a question, never as a
-  statement about them." No framework checklist steers the questions (`to_find_out` and "Finding the fit" are
-  gone). What each question is trying to do comes from the style file. Shared by all three: when the basic what is
-  missing (what happened, what they are deciding), it is asked first; a reflection only checks or shows
-  understanding; never asking for something they already made clear, in any words; a feeling word only as a question to confirm
-  or correct, never told to them as what they feel; one question, never harder than the last (a vague or unsure
-  reply gets an easier question about one small part; when they give almost nothing it may name two or three
-  concrete possibilities from what they said, as the client's sample does, R13, 2026-10-13), and no advice or
-  suggestion hidden in a question. Both sides of one decision in one question, and "what would it
-  mean", are allowed: the client asks both (2026-10-12). `heading_toward` only decides what is offered. Mani never joins two things
-  they said into a link they did not make. Told it got something wrong, in any words, it says it misunderstood and asks what would be
-  more accurate (the client's line), never explaining what it meant.
-- **Mani talks like the client's sample conversation, which is the spec for the voice** (muhammad, 2026-10-13).
-  Mani's first five replies from the sample are in `mani_base.md` as `example`, word for word (its summary, which
-  invents facts, is left out), and `how_you_talk` says to copy how it talks: say back the part that matters in
-  their words, ask one question that ends on its own line, with its options on the next line. The lines saying what
-  Mani wants to understand or does not want to assume are cut from the example and the rules, so they do not come
-  back: the client liked the mirror, not that line (muhammad, 2026-10-21). Because rules that
-  described the sample while forbidding its moves ("never repeat their words", "never reuse its words", vary
-  every opener) produced lines like "can make it hard to separate one piece of feedback from what you think it
-  says about your ability" (live, 2026-10-13; diagnosed by a second model). `recent_openers` is gone from `[ctx]`
-  for the same reason. `scripts/scenario_check.py` flags "explains people" and the example's details borrowed. Because
-  muhammad wants human-like language in plain everyday words (2026-10-07), and the client's way of
-  communication document (R13, 2026-10-13) shows the voice: up to four short sentences in short paragraphs, a
-  direct ask answered plainly first, and an understanding
-  of how things fit together said for them to confirm or correct. the options for answering the question are the reply's `options` field, which the model must fill (or leave null
-  for a yes or no question or a check) and code puts on a line of their own under the question, because the prompt
+- **Each reply says what is new and how it changes Mani's reading, offers that reading as a guess for them to confirm
+  or correct, and asks one question that tests or deepens it, which may hold two possibilities; now and then an
+  observation takes its place; a question is never announced** (muhammad, 2026-10-09; cut 2026-10-12; spec 0005,
+  2026-10-13; 2026-10-26). Because Lolly's ChatGPT conversations (2026-10-26, R30 to R32) got to the heart of it
+  with readings and questions that test a guess ("Was it the disagreement itself, or how she treated you?"), which
+  our rules banned ("You never explain people to themselves", "never leads them to a conclusion", "Mani never joins
+  two things they said into a link they did not make", all cut), and the required `options` line made every reply
+  end on two questions; `options` is gone from the chat shapes, and stage and body replies keep it. Kept: never an
+  event, person or motive they did not give, and never a general statement about how people are (the "explains
+  people" voice of 2026-10-13); every feeling they named stays in view and the reasoning reads each message against
+  them (muhammad, 2026-10-25); never asking for what they already made clear, in any words; no advice hidden in a
+  question; told it got something wrong, it says what it missed and never asks them to explain again (R26). The
+  preamble Lolly flagged is not quoted in the prompt, because a quoted ban gets spoken (R3); `scenario_check` flags
+  "announces a question". Before that, Mani re-asked what they had said (2026-10-09) and ABCDE's checklist steered
+  the questions toward its own needs (the frustrated chat, 2026-10-13, R4). `test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_beside_it`,
+  `test_the_heart_of_it_replaced_the_steps_and_the_prompt_did_not_grow` (`mani_base.md` held to 9,180 characters),
+  `test_before_the_check_one_question_carries_its_own_possibilities_and_nothing_is_added_under_it`.
+- **Mani's voice is the shared shape in `mani_base.md` `how_you_talk` plus the chosen style's file; there is no
+  shared example conversation** (muhammad, 2026-10-22, replacing "Mani talks like the client's sample conversation",
+  2026-10-13). Because all three styles read the same: one sample was copied in every style, one line blended
+  Supportive and Reflective for everyone, and each style file was one sentence. The shape stays (what is new and the reading it changes, in their words, one question on its own line,
+  three to six short sentences since 2026-10-26, no dashes), and
+  each style file now says what its replies are for, in the client's own words, with what to do and avoid and the reply
+  shape it reaches for. The client's sample stays in `docs/client/messages/2026-10-13-way-of-communication.md`. Not
+  measured live (needs muhammad's yes; the case-note voice of 2026-10-13 may return). The sample replaced rules
+  that produced lines like "can make it hard to separate one piece of feedback from what you think it says about your
+  ability" (live, 2026-10-13; diagnosed by a second model), because they forbade the sample's own moves;
+  `recent_openers` is gone from `[ctx]` for the same reason, and `scripts/scenario_check.py` flags "explains people".
+  The lines saying what Mani wants to understand or does not want to assume stay out: the client liked the mirror, not
+  that line (muhammad, 2026-10-21). Because muhammad wants human-like language in plain everyday words (2026-10-07),
+  and the client's way of communication document (R13, 2026-10-13) shows the voice: up to four short sentences in
+  short paragraphs, a direct ask answered plainly first, and an understanding
+  of how things fit together said for them to confirm or correct. Inside a framework the options for answering a stage's question are the reply's `options` field, which the model must fill (or leave null
+  for a yes or no question) and code puts on a line of their own under the question; before a framework there is no
+  `options` field since 2026-10-26 (R30), because the prompt
   rule for them was lost to "one question" lines elsewhere three times (muhammad, 2026-10-22;
   `test_the_options_go_on_the_line_under_the_question_and_only_where_the_reply_is_free_text`); framework stage replies carry it too, under the model's own stage question and never under the
   client's fallback line (`test_the_possibilities_go_under_the_models_own_question_and_never_under_the_clients_line`).
-  A reply is a mirror that adds nothing they did not say, an open question that never leads, then possibilities with room
-  for something else; the check reads as one flowing summary of the situation, what lies under it and the feeling, then asks
-  whether it captures it or something was missed (muhammad, 2026-10-22). Its paragraphs are laid out in code, not left
+  The check reads as one flowing summary of the conflict, what they want and what is stopping them, then asks whether it
+  captures it or something was missed (muhammad, 2026-10-26). Its paragraphs are laid out in code, not left
   to the model, which broke the line before its question in some replies and not others: Mani's own text
-  before a framework goes out with each closing question, and the options asked after it, on a line of their
-  own (muhammad, 2026-10-21: the model put them on one line despite the prompt), unless a single question has
+  before a framework goes out with each closing question on a line of its own (muhammad, 2026-10-21: the model put them on one line despite the prompt), unless a single question has
   fewer than 8 words before it (`repairs.laid_out`, gated in `orchestrator.send`; stage replies stay one paragraph, as the ABCDE
   document writes them; `test_manis_own_text_goes_out_as_the_client_lays_it_out`, 2026-10-14). It never adds a fact they did not give, which
   the sample's own summary does (muhammad, 2026-10-13). Correct grammar and punctuation, each sentence short enough
@@ -465,7 +492,7 @@ the same change as the work.**
   (it, that, this, what); a person hitting them still asks.
 - **chat-tester resets a password on the page**: email and new password, set through the Auth Admin API with
   no email. Because the test tool should need no mail setup, accepting that the page stays non-public
-  (2026-10-07); the seven day session: reason unknown, muhammad to confirm. Anyone who can reach the page can reset any account, so it stays non-public. A browser session
+  (2026-10-07); the seven day session: reason unknown, muhammad to confirm. Anyone who can reach the page can reset any ordinary account, so it stays non-public; an admin account is refused, because it reads every conversation (2026-10-26). A browser session
   is remembered for seven days.
 - Also settled: OpenRouter only, asyncpg not PostgREST, the
   `public` and `admin` split, the `mani_service` role, three security definer write functions, the
@@ -512,7 +539,7 @@ Ordered by what breaks first.
 
 ## Open decisions for muhammad
 
-- R2's 4 s median (2026-10-14): at the fastest regular Azure or OpenAI endpoint a 300 token reply takes about
+- R2's 4 s median (2026-10-14): at the fastest regular OpenAI endpoint a 300 token reply takes about
   6.5 s. Only `openai/fast`, at double the price ($0.2 and $1 per million tokens), reaches 4 s. Decide with the
   client whether the target or the price moves.
 - Tell the client (2026-10-13, spec 0004): inside ABCDE, Mani goes one stage per reply, and a stage the person
@@ -527,11 +554,14 @@ Ordered by what breaks first.
 
 - Crisis resources, `PROTOCOLS` and `CLARIFICATION` wording (point 3 above).
 - Tell the client what caused the first message offer (R1) and that an offer now comes only on a yes to
-  Mani's check of its understanding, at their third message at the earliest, in every style, and have them
-  read about five real Supportive and Reflective transcripts.
-- Send the client a short written summary of the flow agreed in the meeting of 2026-10-13 (no transcript
-  exists) so they can confirm it: pinpoint the problem, then its core issue and the feeling underneath,
-  check it with them, and offer only on a yes (R14, spec 0006).
+  Mani's check of its understanding, at their fifth message at the earliest and only once Mani knows the conflict,
+  what they want and what is stopping them (R33), in every style, and have them read about five real Supportive
+  and Reflective transcripts.
+- Send the client a short written summary of the flow (no transcript of the 2026-10-13 meeting exists) so they
+  can confirm it: Mani works toward the heart of it with readings and questions that test them, checks once it
+  knows the conflict, what they want and what is stopping them, and offers only on a yes (R14, R30, R33).
+- Tell the client (2026-10-26): the Directive examples are her two ChatGPT conversations with the announced
+  questions, ChatGPT's two slips (23 years, "he") and the figures Mani avoids taken out (R34).
 - Tell the client (2026-10-13): Mani's check uses only the person's words. The summary in their sample
   conversation adds facts the person never said ("acknowledge the problem when you confront them, promise to
   improve"), and Mani does not copy that (R13).
@@ -574,8 +604,6 @@ Ordered by what breaks first.
   `scripts/seed_exercises.py`; there is no upload route, and the admin exercise CRUD takes an existing
   `audio_path`. The exercise card is also not kept on the message, so it is gone once a thread reloads.
 - **A worker process** for summaries and the memory fold, for when there is more than one instance.
-- **Admin conversation browser**: do not rebuild it as a general reader. Scope it to threads with an unresolved
-  crisis event, log each read, and return metadata by default.
 - **`GET /v1/admin/models`**, which the prompt editor's model dropdown needs.
 - **`threads.vague_streak`** is granted to the backend and written by nothing; the pacing it belongs to is
   designed, not built.
