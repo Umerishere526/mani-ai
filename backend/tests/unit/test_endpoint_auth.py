@@ -138,3 +138,16 @@ def test_a_token_signed_with_the_wrong_secret_is_refused_over_the_wire(client, s
         "/v1/threads", headers={"Authorization": f"Bearer {_token(wrong)}"}
     )
     assert response.status_code == 401
+
+
+def test_an_admin_can_read_conversations_but_not_send_a_message(client, secret):
+    """Admins review beta users' chats; they never take part in one. Refused on the claim
+    alone, before any thread or database is reached."""
+    admin = _token(secret, app_metadata={"admin_role": "admin"})
+    response = client.post(
+        f"/v1/threads/{PLACEHOLDER}/messages",
+        headers={"Authorization": f"Bearer {admin}"},
+        json={"content": "hello"},
+    )
+    assert response.status_code == 403
+    assert response.json()["error"]["category"] == "forbidden"

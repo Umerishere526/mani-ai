@@ -19,7 +19,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani.auth.jwt import Claims  # noqa: E402
 from mani.chat import orchestrator  # noqa: E402
-from mani.chat import repairs, reply_checks, understanding  # noqa: E402
+from mani.chat import context, repairs, reply_checks  # noqa: E402
 from mani.chat.greeting import KEEP_CHATTING_LABEL, TELL_ME_MORE_LABEL, TRY_IT_LABEL  # noqa: E402
 from mani.db import pool  # noqa: E402
 from mani.prompts import cache  # noqa: E402
@@ -37,8 +37,9 @@ EXPLAINS_PEOPLE = re.compile(
     r"\bcan (?:make|leave)\b|\bcan be (?:hard|difficult|painful)\b|\bit'?s (?:natural|normal|common|understandable)\b",
     re.IGNORECASE,
 )
-# One of their messages per step before the check: the problem, its core issue, the feeling underneath.
-EARLIEST_CHECK = len(understanding.STEPS)
+# Mani announcing a question instead of asking it ("Let me ask you something", Lolly 2026-10-26, R31). Eval
+# tooling only, read by a person.
+ANNOUNCES_A_QUESTION = re.compile(r"\b(?:can|could|may) i ask you\b|\blet me ask\b", re.IGNORECASE)
 # Offer wording: the model offering in its own text instead of the offer field, which code never
 # sends as an offer. Eval tooling only; nothing at runtime reads it.
 OFFER_WORDS = re.compile(r"\bframework\b|would you like to try|\btry it\b", re.IGNORECASE)
@@ -154,6 +155,8 @@ def _check(
         exchange.flags.append("internal words")
     if TALKS_ABOUT_THEM.search(exchange.reply):
         exchange.flags.append("talks about them, not to them")
+    if ANNOUNCES_A_QUESTION.search(exchange.reply):
+        exchange.flags.append("announces a question")
     if not exchange.offered and framework is None:
         if EXPLAINS_PEOPLE.search(exchange.reply):
             exchange.flags.append("explains people")
@@ -203,12 +206,15 @@ def conversations(groups: dict) -> dict[str, dict]:
 
 def timing_flags(checked_at: int | None, lines: int, expect: dict) -> dict[int, str]:
     """What is wrong with when Mani's first check came, keyed by the person's line the flag belongs
-    on. `check_from` is the earliest line a check may follow; `check_by` the latest, by default the
-    conversation's last line, checked only when the conversation reaches it (spec 0006)."""
-    earliest = expect.get("check_from", EARLIEST_CHECK)
-    latest = expect.get("check_by", lines)
+    on. `check_from` is the earliest line a check may follow; `check_by` the latest, named only by a
+    conversation whose lines reach what they want and what is stopping them, since the check comes when
+    the heart of it is ready, not by a count (R33), and checked only when the conversation reaches it."""
+    earliest = expect.get("check_from", context.CHECK_FROM)
+    latest = expect.get("check_by")
     if checked_at is not None and checked_at < earliest:
         return {checked_at: f"checked at their message {checked_at}, expected from {earliest}"}
+    if latest is None:
+        return {}
     if checked_at is not None and checked_at > latest:
         return {checked_at: f"checked at their message {checked_at}, expected by {latest}"}
     if checked_at is None and lines >= latest:

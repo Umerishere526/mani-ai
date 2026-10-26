@@ -345,8 +345,8 @@ def reach_line(stage: str) -> str:
         f"its confirmation. {CONFIRM_ASK} Partial: your text asks only for what is missing, built on "
         f"what they said. Missing: its letter line is sent for you, so your text is a short mirror of their "
         f"situation, the feeling underneath and what they said for the stages before, then the stage's question "
-        f"in your own words (keep what next_stage_ask asks, not its wording), and the possibilities for "
-        f"answering go in options."
+        f"in your own words (keep what next_stage_ask asks, not its wording). Possibilities go in options only "
+        f"when options says so."
     )
 
 

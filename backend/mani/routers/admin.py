@@ -1,21 +1,22 @@
-# ABOUTME: Portal endpoints - prompt content and versions, the exercise catalog, crises.
+# ABOUTME: Portal endpoints - prompts and versions, the exercise catalog, crises, and conversations read-only.
 # ABOUTME: Every route here requires an admin claim on the token and a service-role connection.
 
 import datetime as dt
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from mani.auth.deps import AdminUser
-from mani.db import config_tables, exercises as exercises_db
+from mani.db import admin_threads, config_tables, exercises as exercises_db
+from mani.db.admin_threads import AdminThread
 from mani.db.deps import AdminConn
 from mani.db.exercises import AdminExercise, ExerciseInput
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm.schema import Memory
-from mani.models.api import PromptIn, PromptOut, PromptVersionOut
+from mani.models.api import MessageOut, PromptIn, PromptOut, PromptVersionOut
 from mani.prompts import cache
-from mani.routers.serializers import to_prompt, to_prompt_version
+from mani.routers.serializers import to_message, to_prompt, to_prompt_version
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
@@ -27,6 +28,16 @@ class PromptCreateIn(BaseModel):
     model_id: str | None = None
     model_parameters: dict | None = None
     routing: dict | None = None
+
+
+class AdminThreadListOut(BaseModel):
+    threads: list[AdminThread]
+    next_cursor: str | None = None
+
+
+class AdminTranscriptOut(BaseModel):
+    thread: AdminThread
+    messages: list[MessageOut]
 
 
 class CrisisEventOut(BaseModel):
@@ -199,3 +210,36 @@ async def list_crisis_events(conn: AdminConn, unresolved: bool = True) -> list[C
         unresolved,
     )
     return [CrisisEventOut(**dict(r)) for r in rows]
+
+
+@router.get("/threads", response_model=AdminThreadListOut)
+async def list_all_threads(
+    conn: AdminConn,
+    search: str | None = Query(default=None, max_length=200),
+    limit: int = Query(default=admin_threads.DEFAULT_PAGE, ge=1, le=admin_threads.MAX_PAGE),
+    cursor: dt.datetime | None = None,
+) -> AdminThreadListOut:
+    """Every person's conversations, most recently active first, without their content."""
+    page = await admin_threads.list_all(conn, search, limit, cursor)
+    return AdminThreadListOut(threads=page.threads, next_cursor=page.next_cursor)
+
+
+@router.get("/threads/{thread_id}", response_model=AdminTranscriptOut)
+async def read_thread(
+    user: AdminUser, conn: AdminConn, thread_id: uuid.UUID
+) -> AdminTranscriptOut:
+    """One conversation in full, oldest first, for reading only.
+
+    Each call is recorded in admin.thread_reads. That is the one write a GET makes here: it
+    changes nothing in the conversation, and a transcript must not be readable without it.
+    Buttons are never shown live - an admin can read the conversation, not take part in it.
+    """
+    found = await admin_threads.read_transcript(conn, thread_id, user.user_id)
+    if found is None:
+        raise ServiceError(
+            f"thread {thread_id} not found",
+            ErrorCategory.NOT_FOUND,
+            user_message="That conversation does not exist.",
+        )
+    thread, messages = found
+    return AdminTranscriptOut(thread=thread, messages=[to_message(m) for m in messages])

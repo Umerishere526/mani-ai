@@ -1,4 +1,4 @@
-# ABOUTME: Checks delete_user()'s own logic - the request it sends and what it raises.
+# ABOUTME: Checks delete_user() and set_admin()'s own logic - the requests they send and what they raise.
 # ABOUTME: The HTTP client is faked; nothing here needs a database or a network call.
 
 from __future__ import annotations
@@ -44,6 +44,12 @@ class FakeClient:
             raise self._response
         return self._response
 
+    async def put(self, url: str, *, json: dict, headers: dict) -> FakeResponse:
+        self.calls.append({"url": url, "json": json, "headers": headers})
+        if isinstance(self._response, Exception):
+            raise self._response
+        return self._response
+
 
 def install(monkeypatch, fake: FakeClient) -> None:
     monkeypatch.setattr(auth_admin, "_http", lambda: fake)
@@ -83,3 +89,18 @@ async def test_a_connection_failure_raises_the_same_way(monkeypatch):
     with pytest.raises(ServiceError) as exc_info:
         await auth_admin.delete_user("a0000000-0000-4000-8000-00000000000a")
     assert exc_info.value.category == ErrorCategory.AUTH_PROVIDER_ERROR
+
+
+async def test_set_admin_writes_the_claim_where_only_the_service_can(monkeypatch):
+    """app_metadata, never user_metadata: the backend ignores an admin claim a user could set."""
+    fake = FakeClient(FakeResponse(200))
+    install(monkeypatch, fake)
+
+    await auth_admin.set_admin("a0000000-0000-4000-8000-00000000000a", granted=True)
+    await auth_admin.set_admin("a0000000-0000-4000-8000-00000000000a", granted=False)
+
+    assert [c["json"] for c in fake.calls] == [
+        {"app_metadata": {"admin_role": "admin"}},
+        {"app_metadata": {"admin_role": None}},
+    ]
+    assert fake.calls[0]["headers"]["apikey"] == "service-role-key"

@@ -40,10 +40,10 @@ def figures(text: str) -> list[str]:
     return [match.group(0).lower() for match in FIGURES.finditer(text)]
 
 
-def lacks_stack(text: str, stack: str | None) -> bool:
-    """Whether a reply that should carry the stack shares no word of substance with it. With no stack
+def lacks_case(text: str, case: str | None) -> bool:
+    """Whether a reply that should carry the case shares no word of substance with it. With no case
     stored there is nothing to carry."""
-    wanted = set(re.findall(r"[a-z']{4,}", (stack or "").lower())) - _COMMON
+    wanted = set(re.findall(r"[a-z']{4,}", (case or "").lower())) - _COMMON
     return bool(wanted) and not wanted & set(re.findall(r"[a-z']{4,}", text.lower()))
 
 
@@ -55,19 +55,17 @@ def misses(
     needs_question: bool,
     last_mani_text: str | None,
     check_unusable: bool = False,
-    check_too_early: bool = False,
-    no_check_by: int | None = None,
+    check_without_ready: bool = False,
     reach_unjudged: bool = False,
-    stack: str | None = None,
+    case: str | None = None,
 ) -> list[str]:
     """What the draft got wrong that code cannot fix, named for the log. Empty when it stands.
     None of these costs a second call: they are counted, so how often each happens is known.
     `offered` is the set the sent reply offers, as code rendered it. `check_unusable` is a check that
-    lacked one of its parts, `check_too_early` one sent before the three steps were found, and
-    `no_check_by` their message number when it passes with no check ever made (spec 0006).
-    `reach_unjudged` is a stage the walk reached that the reply left without a next_stage judgement.
-    `stack` is what they feel, believe it means and want, given only where the stage the reply asks
-    carries the case."""
+    lacked one of its parts, and `check_without_ready` one sent by a reply that did not judge the heart
+    of it ready (R33). `reach_unjudged` is a stage the walk reached that the reply left without a
+    next_stage judgement. `case` is what they feel and the case they confirmed, given only where the
+    stage the reply asks carries the case."""
     notes: list[str] = []
     technique = offered
     if offer_dropped:
@@ -81,14 +79,12 @@ def misses(
         notes.append("asks no question")
     if check_unusable:
         notes.append("check unusable")
-    if check_too_early:
-        notes.append("check before the three steps")
-    if no_check_by is not None:
-        notes.append(f"no check by message {no_check_by}")
+    if check_without_ready:
+        notes.append("check without ready")
     if reach_unjudged:
         notes.append("reach unjudged")
-    if stack is not None and lacks_stack(reply.text, stack):
-        notes.append("stack missing")
+    if case is not None and lacks_case(reply.text, case):
+        notes.append("case missing")
     if found := figures(reply.text):
         notes.append(f"figure of speech: {', '.join(found)}")
     return notes

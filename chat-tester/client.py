@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import uuid
@@ -21,6 +22,10 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://127.0.0.1:54341")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
+
+# The claim the backend reads to make an account an admin (backend/mani/auth/jwt.py). It lives in
+# app_metadata, which only the service role can write - signing up cannot set it.
+ADMIN_ROLE = "admin"
 
 # Above the backend's own deadline for a chat reply (chat_deadline_seconds, 30), so a slow turn comes back
 # as the backend's "took too long" error rather than this tool giving up first.
@@ -123,8 +128,8 @@ def _admin_headers() -> dict[str, str]:
             "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"}
 
 
-def _user_id_for(email: str) -> str:
-    """The auth user id for this email. GoTrue's admin API has no email filter, so scan pages."""
+def _account_for(email: str) -> dict[str, Any]:
+    """The auth user for this email. GoTrue's admin API has no email filter, so scan pages."""
     wanted = email.strip().lower()
     page = 1
     while True:
@@ -137,7 +142,7 @@ def _user_id_for(email: str) -> str:
         users = listed.json().get("users", [])
         for user in users:
             if (user.get("email") or "").lower() == wanted:
-                return user["id"]
+                return user
         if len(users) < 1000:
             raise RuntimeError("No account with that email.")
         page += 1
@@ -147,16 +152,33 @@ def reset_password(email: str, new_password: str) -> Session:
     """Set a new password for this email straight from the page, then sign in.
 
     No email and no code, so the tester needs no mail setup. That also means anyone who can
-    reach the page can reset any account's password: keep the page non-public.
+    reach the page can reset any ordinary account's password: keep the page non-public. An
+    admin account is refused - whoever reset it could read every person's conversations.
     """
     _require_keys()
+    account = _account_for(email)
+    if (account.get("app_metadata") or {}).get("admin_role") == ADMIN_ROLE:
+        raise RuntimeError(
+            "This account's password cannot be reset here. Ask whoever runs the project to reset it."
+        )
     updated = requests.put(
-        f"{SUPABASE_URL}/auth/v1/admin/users/{_user_id_for(email)}",
+        f"{SUPABASE_URL}/auth/v1/admin/users/{account['id']}",
         json={"password": new_password}, headers=_admin_headers(), timeout=10,
     )
     if not updated.ok:
         raise RuntimeError(f"Could not set the new password: {_reason(updated)}")
     return sign_in_with_password(email, new_password)
+
+
+def is_admin(session: Session) -> bool:
+    """Whether this session's token carries the admin claim, to choose which screen to show.
+
+    Read without verifying the signature: it only decides what this page draws. The backend
+    verifies the token and refuses admin reads to anyone else, and refuses chat to an admin.
+    """
+    payload = session.access_token.split(".")[1]
+    claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    return (claims.get("app_metadata") or {}).get("admin_role") == ADMIN_ROLE
 
 
 def refresh(session: Session) -> Session:
@@ -250,6 +272,18 @@ class ManiClient:
         """
         thread = self._call("GET", f"/v1/threads/{thread_id}")
         return {"thread": thread, "messages": self.full_history(thread_id)}
+
+    def admin_threads(self, search: str = "", limit: int = 200) -> dict[str, Any]:
+        """GET /v1/admin/threads - every person's conversations, newest activity first. Admin only."""
+        params = {"limit": limit, **({"search": search.strip()} if search.strip() else {})}
+        return self._call("GET", "/v1/admin/threads", params=params)
+
+    def admin_transcript(self, thread_id: str) -> dict[str, Any]:
+        """GET /v1/admin/threads/{id} - one conversation in full, oldest first. Admin only.
+
+        The backend logs each call as a read of that conversation.
+        """
+        return self._call("GET", f"/v1/admin/threads/{thread_id}")
 
     def list_exercises(self) -> list[dict[str, Any]]:
         """GET /v1/exercises - the whole library, each item with a signed audio link."""

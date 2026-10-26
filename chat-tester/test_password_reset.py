@@ -29,7 +29,7 @@ def account():
     mani.sign_up(email, "oldpass1")
     yield email
     requests.delete(
-        f"{mani.SUPABASE_URL}/auth/v1/admin/users/{mani._user_id_for(email)}",
+        f"{mani.SUPABASE_URL}/auth/v1/admin/users/{mani._account_for(email)['id']}",
         headers=mani._admin_headers(), timeout=10,
     )
 
@@ -41,6 +41,21 @@ def test_reset_replaces_the_password_whatever_the_email_case(account):
     with pytest.raises(RuntimeError):
         mani.sign_in_with_password(account, "oldpass1")
     assert mani.sign_in_with_password(account, "newpass1").user_id == session.user_id
+
+
+def test_an_admin_accounts_password_cannot_be_reset_from_the_page(account):
+    """Anyone who reaches the page can use this form; resetting an admin would hand them every
+    person's conversations."""
+    requests.put(
+        f"{mani.SUPABASE_URL}/auth/v1/admin/users/{mani._account_for(account)['id']}",
+        json={"app_metadata": {"admin_role": mani.ADMIN_ROLE}},
+        headers=mani._admin_headers(), timeout=10,
+    ).raise_for_status()
+
+    with pytest.raises(RuntimeError, match="cannot be reset here"):
+        mani.reset_password(account, "newpass1")
+
+    assert mani.is_admin(mani.sign_in_with_password(account, "oldpass1"))
 
 
 def test_reset_for_an_unknown_email_is_refused():

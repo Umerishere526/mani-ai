@@ -20,20 +20,12 @@ def test_a_check_missing_one_of_its_parts_is_counted():
     ) == ["check unusable"]
 
 
-def test_a_check_sent_before_their_feeling_was_answered_is_counted():
-    """Spec 0006, AC-18: it opens nothing, so their yes to it brings no offer; how often is measured."""
+def test_a_check_from_a_reply_that_did_not_judge_the_heart_of_it_ready_is_counted():
+    """R33: it opens nothing, so their yes to it brings no offer; how often is measured."""
     assert reply_checks.misses(
         Reply(text="So that is it. Do I have that right?"), offered=None, offer_dropped=None,
-        needs_question=False, last_mani_text=None, check_too_early=True,
-    ) == ["check before the three steps"]
-
-
-def test_no_check_by_the_expected_message_is_counted_never_asked_for():
-    """Spec 0006, AC-11: logged only, so the live runs measure it."""
-    assert reply_checks.misses(
-        Reply(text="What happened next?"), offered=None, offer_dropped=None, needs_question=True,
-        last_mani_text=None, no_check_by=5,
-    ) == ["no check by message 5"]
+        needs_question=False, last_mani_text=None, check_without_ready=True,
+    ) == ["check without ready"]
 
 
 def test_a_comfort_with_no_question_is_missed_before_an_offer():
@@ -107,19 +99,19 @@ def test_a_draft_that_chose_a_shape_asking_nothing_is_not_missing_a_question():
         ) == expected
 
 
-def test_a_question_that_leaves_the_stack_out_is_counted_and_one_that_carries_any_of_it_is_not():
+def test_a_question_that_leaves_the_case_out_is_counted_and_one_that_carries_any_of_it_is_not():
     """Lolly, 2026-10-22: D asked only about her belief and dropped the hurt and the missing. Logged, never re-asked."""
-    stack = "sad hurt you miss her; her silence means you don't matter; you want an apology"
+    case = "sad hurt You miss her. Her silence means you don't matter. You want an apology."
     bare = Reply(text="Is there anything that makes you question that?")
     carried = Reply(text="You miss her and you want an apology. What makes you question that?")
     assert reply_checks.misses(
-        bare, offered=None, offer_dropped=None, needs_question=True, last_mani_text=None, stack=stack,
-    ) == ["stack missing"]
+        bare, offered=None, offer_dropped=None, needs_question=True, last_mani_text=None, case=case,
+    ) == ["case missing"]
     assert reply_checks.misses(
-        carried, offered=None, offer_dropped=None, needs_question=True, last_mani_text=None, stack=stack,
+        carried, offered=None, offer_dropped=None, needs_question=True, last_mani_text=None, case=case,
     ) == []
     assert reply_checks.misses(
-        bare, offered=None, offer_dropped=None, needs_question=True, last_mani_text=None, stack="",
+        bare, offered=None, offer_dropped=None, needs_question=True, last_mani_text=None, case="",
     ) == []
 
 

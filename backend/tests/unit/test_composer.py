@@ -28,6 +28,7 @@ def prompt(name: str, content: str):
 @pytest.fixture
 def config() -> Config:
     named = [
+        prompt("conversation", "CONVERSATION"),
         prompt("mani_base", "IDENTITY"),
         prompt("response_format", "FORMAT"),
         prompt("style_directive", "DIRECTIVE STYLE"),
@@ -316,10 +317,10 @@ def test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_b
 
     prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
     base = yaml.safe_load(parse_prompt(prompts / "mani_base.md")["content"])
-    assert (
-        "Each question follows from their last answer and keeps every feeling they named and the issue "
-        "in view. Their feeling word may come back inside a question, never as a statement about them."
-    ) in base["understanding_them"]
+    assert any(
+        isinstance(rule, str) and rule.startswith("Each question follows from their last answer.")
+        for rule in base["understanding_them"]
+    )
     sent = "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in ("mani_base", "response_format"))
     for cut in ("Build every question from", "Never hand their own words or feelings back",
                 "Am I saying back their own words or feelings"):
@@ -339,9 +340,11 @@ def test_mani_is_never_taught_to_announce_what_it_wants_to_understand():
         assert line not in sent
 
 
-def test_the_feeling_step_replaced_control_and_the_prompt_did_not_grow():
-    """The third step is the feeling underneath (muhammad, 2026-10-21). The prompt is held to the size
-    it had before the swap so rules cannot pile up silently, and no instruction still asks about control."""
+def test_the_heart_of_it_replaced_the_steps_and_the_prompt_did_not_grow():
+    """muhammad, 2026-10-26 (R30, R33): Mani reads for the central conflict, what they want and what is stopping
+    them instead of walking named steps. The prompt is held to its size so rules cannot pile up silently, and no
+    instruction still names a step or asks about control. The chat before a framework has its own prompt since
+    the same day, so the framework prompt carries the cadence but not the client's example conversations."""
     import pathlib
 
     from scripts.seed import parse_prompt
@@ -349,8 +352,11 @@ def test_the_feeling_step_replaced_control_and_the_prompt_did_not_grow():
     prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
     base = (prompts / "mani_base.md").read_text()
     sent = "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in ("mani_base", "response_format"))
-    assert "The feeling underneath." in base and "in their control" not in sent
-    assert len(base) <= 11268
+    assert "what is stopping them" in base
+    for cut in ("understanding_next", "The feeling underneath.", "in their control", "never leads them to a conclusion"):
+        assert cut not in sent, cut
+    assert len(base) <= 11000
+    assert "Them: " not in base
 
 
 def test_no_rule_lets_mani_pass_a_stage_over_and_not_knowing_gets_possibilities():

@@ -124,11 +124,12 @@ def test_cors_origins_still_accepts_a_json_array_from_the_environment(monkeypatc
     assert settings.cors_origins == ["https://a.example.com"]
 
 
-def test_routing_sends_a_turn_only_to_azure_or_openai_fastest_first():
+def test_routing_sends_a_turn_only_to_openai_fastest_first():
     # Unrestricted, OpenRouter may send a conversation to any provider serving the model.
+    # Azure's content filter stopped replies to ordinary conversations (2026-10-26).
     # A pinned order waited out whichever endpoint it named, however slow it was at the time.
     routing = build().routing()
-    assert routing["only"] == ["azure", "openai"]
+    assert routing["only"] == ["openai"]
     assert routing["sort"] == "latency"
     assert "order" not in routing
     assert routing["data_collection"] == "deny"
@@ -145,7 +146,7 @@ def test_a_fallback_never_loosens_the_data_policy():
 def test_a_prompt_can_override_routing_without_losing_the_data_policy():
     routing = build().routing({"sort": "throughput"})
     assert routing["sort"] == "throughput"
-    assert routing["only"] == ["azure", "openai"]
+    assert routing["only"] == ["openai"]
     assert routing["data_collection"] == "deny"
 
 

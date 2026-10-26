@@ -92,7 +92,7 @@ def test_a_stage_with_nothing_known_is_asked_in_the_models_own_words_about_their
 
     line = walk.reach_line("effective")
     assert "as written" not in line
-    assert "a short mirror of their situation" in line and "possibilities for answering go in options" in line
+    assert "a short mirror of their situation" in line and "Possibilities go in options only when options says so" in line
 
 
 def test_the_feeling_underneath_is_carried_into_every_stage_reply():

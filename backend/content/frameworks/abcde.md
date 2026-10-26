@@ -4,15 +4,6 @@ name: ABCDE
 summary: "These questions help you see what happened, what you started believing about it, and how that belief has affected how you feel and what you do. Then you look at whether the belief is true and helpful, and find a more realistic way to see it."
 display_order: 1
 phases: [offering, activate, belief, consequence, dispute, effective]
-# Fallback closing lines for stages B to E, used after Mani says the user's words back when it
-# has no confirmation line of its own for that moment. Stage A always uses its own confirm line.
-confirm_phrases:
-  [
-    "Is that right?",
-    "Do we have this right?",
-    "Did I get that right?",
-    "Does that sound right?",
-  ]
 activation:
   central_indication: >-
     The user links a specific event to a troubling belief about themselves, others, or the
@@ -195,7 +186,7 @@ stages:
     purpose: "Help them examine the belief on two questions, whether it's accurate and whether it's helpful, and separate what they know from what they assume. The aim is to examine the belief, not to prove it wrong."
     listen_for: "What they've actually observed, what supports the belief, what might suggest a different understanding, what they don't yet know, and whether holding the belief is helping them or holding them back."
     reach: "If nothing has been said for it yet, report dispute as missing, so your text asks only what supports the belief. If they've said what supports it but haven't been asked what might challenge it, report it as partial, with that support in their words and the gap 'challenge', so your text asks only what might challenge it."
-    ready_when: "The belief has been looked at properly. They've said what supports it and what might challenge it, or considered whether they have enough information to know it's true. They don't have to disprove it. Reflecting on whether the belief helps them is welcome but not required."
+    ready_when: "The belief has been looked at properly. They've said what supports it and what might challenge it, or considered whether they have enough information to know it's true. Saying the belief comes from fear, worry or the pressure they are under, rather than from something they know or were told, is what challenges it, and answers D. They don't have to disprove it. Reflecting on whether the belief helps them is welcome but not required."
     # Optional angles, one per turn, only when they fit and haven't been covered.
     question_bank:
       - "What makes you think it's true? Is there anything that suggests otherwise?"
@@ -212,7 +203,7 @@ stages:
       - "must not call the belief irrational or distorted, or say they are 'catastrophising', 'overgeneralising' and so on"
     if_unclear:
       - id: information
-        when: "they were asked what might challenge the belief and nothing came to mind, so ask only whether they have enough information to know it's true"
+        when: "they were asked what might challenge the belief and nothing at all came to mind, so ask only whether they have enough information to know it's true. Never when they said it comes from fear, worry or pressure: that answered D"
         reply: "Nothing comes to mind. Do you have enough information to know it is true?"
       - id: challenge
         # The stage whose words fill the reply's slot.
@@ -237,7 +228,9 @@ stages:
       - "Saying it that way, how do you feel now?"
       - "Next time something like this happens, what would you like to remind yourself?"
     boundaries:
-      - "when they're unsure, may offer two or three loose possibilities for the view or the path, never as advice and never deciding for them"
+      - "when they're unsure or ask what to do, may suggest two or three concrete, sensible things they could do in their situation, from what they told you, such as telling their manager what happened or asking someone they trust to be with the person who needs them, as ideas for them to choose from, never deciding for them"
+      - "each possibility is one plain thing a person would actually think or do, never a quoted belief joined to a plan"
+      - "once they choose, say their choice back in their words and stop: never add a conclusion of your own"
       - "the new belief must be realistic and believable to them, not forced positivity ('everything will be great')"
       - "must not offer reassurance they didn't ask for"
       - "must not reinterpret danger or mistreatment"

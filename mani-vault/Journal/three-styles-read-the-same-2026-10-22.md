@@ -4,6 +4,8 @@ date: 2026-10-22
 tags: [journal, prompts, styles, voice, lessons]
 ---
 
+> Superseded 2026-10-26 (no example conversation in any style file: Directive now carries Lolly's two ChatGPT chats) - see [[heart-of-it-replaces-the-three-steps-2026-10-26]].
+
 # The three styles read the same (2026-10-22)
 
 muhammad: Directive, Supportive and Reflective felt 100 percent the same.

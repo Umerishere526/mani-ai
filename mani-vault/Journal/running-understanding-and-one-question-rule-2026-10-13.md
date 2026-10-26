@@ -4,6 +4,8 @@ date: 2026-10-13
 tags: [journal, prompts, questions, memory, lessons]
 ---
 
+> Superseded 2026-10-26 (the steps before the check and the record's step fields) - see [[heart-of-it-replaces-the-three-steps-2026-10-26]].
+
 # A running understanding and one question rule (2026-10-13)
 
 Spec 0005, scope feature 19. Built with a scripted model; the live run is owed (muhammad's yes).

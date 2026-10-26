@@ -4,6 +4,8 @@ date: 2026-10-25
 tags: [journal, prompts, understanding, feelings, pacing, lessons]
 ---
 
+> Superseded 2026-10-26 (the three steps, their pacing by `found`, and the add-only problem, core issue and feeling) - see [[heart-of-it-replaces-the-three-steps-2026-10-26]].
+
 # The core issue was defined as more situation (2026-10-25)
 
 muhammad's research named two failures: Mani hears "I'm sad I can't provide for my family, I'm a failure" as *sad*

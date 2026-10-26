@@ -11,16 +11,17 @@ import requests
 import streamlit as st
 
 import client as mani
+from admin_view import render_admin
 from library import render_library
 import session_store
-from login import render_login
+from login import render_account, render_login
 
 # Off wherever this flag is unset - a deployed, client-facing instance - so there is no
 # control on screen that could show a framework id, a stage name, or a database read.
 # Muhammad's own local .env sets it; nothing else needs to.
 DEV_MODE = os.environ.get("CHAT_TESTER_DEV_MODE", "") == "1"
 
-st.set_page_config(page_title="Mani chat tester", page_icon="🧠", layout="centered")
+st.set_page_config(page_title="Mani chat tester", page_icon="🧠", layout="wide")
 
 # The greeting's style buttons, by the label the person taps - used only to show which
 # style the conversation is in.
@@ -98,14 +99,14 @@ if "email" not in st.session_state:
 if not isinstance(st.session_state.client, mani.ManiClient):
     st.session_state.client = mani.ManiClient(session=st.session_state.client.session)
 
+# An admin reads everyone's conversations and takes part in none: they get the read-only
+# viewer and never reach the chat below, which would start a conversation of their own.
+if mani.is_admin(st.session_state.client.session):
+    render_admin(st.session_state.client)
+    st.stop()
+
 with st.sidebar:
-    st.header("Session")
-    st.caption(f"backend: {mani.API_BASE_URL}")
-    st.caption(f"signed in: {st.session_state.email}")
-    if st.button("Sign out", use_container_width=True):
-        session_store.end()
-        st.session_state.clear()
-        st.rerun()
+    render_account("tester")
 
     # The control itself is gone, not just off, wherever CHAT_TESTER_DEV_MODE is unset - a
     # deployed, client-facing instance - so there is nothing on screen a client could click
@@ -315,9 +316,7 @@ with st.sidebar:
     understood = (last_turn or {}).get("understanding")
     if understood:
         for key, label in (
-            ("feeling", "Feelings"), ("stack", "Stack"), ("issue", "Problem"), ("core_issue", "Core issue"),
-            ("underlying_feeling", "Underlying feeling"), ("comes_down_to", "What it comes down to"),
-            ("also", "Also raised"), ("found", "Last step found"),
+            ("feeling", "Feelings"), ("heart", "Heart of it"), ("case", "Confirmed case"),
         ):
             if understood.get(key):
                 st.markdown(f"**{label}:** {understood[key]}")

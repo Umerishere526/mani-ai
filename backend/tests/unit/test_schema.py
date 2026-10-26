@@ -4,7 +4,7 @@
 from mani.llm.schema import Moment, Reply, Slots, as_reply, reply_for
 
 SLOTS = Slots(going_through="what they are going through", lead_line="a warm line", their_words="their words")
-CORE = {"reasoning", "style", "understanding_update", "heading_toward", "text", "title", "crisis"}
+CORE = {"reasoning", "style", "understanding_update", "text", "title", "crisis"}
 # Where a stage can be answered or a yes can start one (spec 0004).
 STAGE = {"stage_updates", "stage_answer"}
 # Where the walk can start or move, so the stage it reaches is judged (thread 4b93d612, 2026-10-14).
@@ -17,12 +17,14 @@ def fields(moment: Moment, **flags) -> set[str]:
 
 def test_each_moment_carries_only_the_fields_that_mean_something_in_it():
     assert fields(Moment.CONCERN) == CORE
-    assert fields(Moment.CHATTING) == CORE | {"options"}, "no check before their second message, never an offer"
-    assert fields(Moment.CHATTING, may_check=True) == CORE | {"options", "check"}
-    assert fields(Moment.CHATTING, declined_row=True) == CORE | {"options", "offer_answer", *REACH}
-    assert fields(Moment.CHECK_OPEN) == CORE | {"options", "check_answer", "offer"}
+    # Before an offer one question carries its own possibilities, so there is no options line (R30), and every
+    # reply judges where the heart of it stands (R33).
+    assert fields(Moment.CHATTING) == CORE | {"heart"}, "no check before their fifth message, never an offer"
+    assert fields(Moment.CHATTING, may_check=True) == CORE | {"heart", "check"}
+    assert fields(Moment.CHATTING, declined_row=True) == CORE | {"heart", "offer_answer", *REACH}
+    assert fields(Moment.CHECK_OPEN) == CORE | {"heart", "check_answer", "heading_toward", "offer"}
     assert fields(Moment.CHECK_OPEN, declined_row=True) == CORE | {
-        "options", "check_answer", "offer", "offer_answer", *REACH}
+        "heart", "check_answer", "heading_toward", "offer", "offer_answer", *REACH}
     assert fields(Moment.IN_STAGES) == CORE | REACH | {"options"}
     assert fields(Moment.OFFER_OPEN) == CORE | {"offer_answer", "their_words", "options", *REACH}
     assert fields(Moment.BODY) == CORE | {"body", "options"}
@@ -45,7 +47,7 @@ def test_mani_writes_its_text_before_reading_the_person_into_fields():
     piece of feedback from…", live 2026-10-13). Only reasoning and the answers that decide the moment
     come before the text; inside a framework the stage fields do too; the set comes before the offer."""
     fields = list(Reply.model_fields)
-    for before in ("reasoning", "check_answer", "offer_answer", "stage_updates", "stage_answer", "next_stage"):
+    for before in ("reasoning", "check_answer", "heart", "offer_answer", "stage_updates", "stage_answer", "next_stage"):
         assert fields.index(before) < fields.index("text"), before
     for after in ("understanding_update", "heading_toward", "style", "check", "offer"):
         assert fields.index("text") < fields.index(after), after

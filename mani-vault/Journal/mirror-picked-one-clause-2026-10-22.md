@@ -4,6 +4,7 @@ date: 2026-10-22
 tags: [journal, prompts, mirror, understanding, lessons]
 ---
 
+> Superseded 2026-10-26 (the mirror of the last message: each reply now says what is new and how it changes Mani's reading) - see [[heart-of-it-replaces-the-three-steps-2026-10-26]].
 > Superseded 2026-10-25 (the core issue asked as what happens because of the problem, and the oldest entry dropped first) - see [[core-issue-was-situation-2026-10-25]].
 
 # The mirror picked one clause and dropped the headline (2026-10-22)

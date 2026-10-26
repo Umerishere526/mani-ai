@@ -54,6 +54,7 @@ Query: `select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid
 | `admin` | `crisis_events` | One row per crisis-flagged turn, for care-team review. |
 | `admin` | `llm_calls` | One row per model call — tokens, latency, cost tracking. |
 | `admin` | `user_memory` | What Mani has learned about one person across conversations - backend and admins only. |
+| `admin` | `thread_reads` | One row each time an admin reads a conversation in full - who, which thread, when. |
 | `public` | `profiles` | Onboarding data — nickname, topics, support style. Auto-created on signup (migration 004). |
 | `public` | `threads` | One conversation. |
 | `public` | `messages` | Every message in every thread, both sides. |
@@ -253,6 +254,16 @@ Snapshot taken automatically whenever `admin.prompts` is edited via the admin AP
 | 6 | `detected_at` | timestamptz | default `now()` | |
 | 7 | `resolution` | text | optional | **Read by the admin API, written by nothing** — the triage workflow is unfinished (`PORT-STATUS.md`). |
 | 8 | `resolved_at` | timestamptz | optional | Same gap — `unresolved=true` currently matches every row ever written. |
+
+### `admin.thread_reads`
+One row each time an admin opens a conversation in full (migration 026). No content, only who read which thread and when. Written by `GET /v1/admin/threads/{id}` on the admin connection, in the read's own transaction; `anon` and `authenticated` hold nothing on it.
+
+| # | Column | Type | Required | Purpose |
+|---|---|---|---|---|
+| 1 | `id` | uuid | **PK**, default `gen_random_uuid()` | |
+| 2 | `admin_id` | uuid | FK→`auth.users` cascade | The admin who read it. |
+| 3 | `thread_id` | uuid | FK→`threads` cascade | Goes with the conversation and its owner's account (`supabase_auth_admin` holds DELETE, as in migration 005). |
+| 4 | `read_at` | timestamptz | default `now()` | |
 
 ### `admin.llm_calls`
 | # | Column | Type | Required | Purpose |
