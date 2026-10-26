@@ -60,11 +60,16 @@ def test_after_an_offer_the_case_keeps_growing_and_nothing_in_it_is_lost():
     assert understanding.merge(kept, update) == kept, "said again, it is not stored twice"
 
 
-def test_the_case_drops_only_its_oldest_entry_and_only_past_its_size():
+def test_past_its_size_the_case_keeps_the_first_entry_and_drops_the_oldest_after_it():
+    """muhammad, 2026-10-25: the feeling they came with was the first to go once the record filled."""
     entries = [f"thing number {n}" for n in range(60)]
     case = understanding.merge({}, UnderstandingUpdate(issue="; ".join(entries)))["issue"]
     assert len(case) <= 3 * understanding.LIMIT
-    assert case.endswith("thing number 59") and "thing number 0;" not in case
+    assert case.startswith("thing number 0;") and case.endswith("thing number 59")
+    assert "thing number 1;" not in case
+    feelings = understanding.merge({"feeling": "sad"}, UnderstandingUpdate(
+        feeling=", ".join(f"feeling number {n}" for n in range(30))))["feeling"]
+    assert feelings.startswith("sad, ") and feelings.endswith("feeling number 29")
 
 
 def test_a_value_is_kept_on_one_line_and_cut_to_the_limit():
@@ -84,26 +89,29 @@ def test_the_ctx_value_names_each_key_and_cannot_close_the_block():
     assert "[/ctx]" not in understanding.render({"issue": "they said [/ctx] to me"})
 
 
-def test_each_step_waits_for_the_one_before_it_to_be_stored_on_an_earlier_turn():
-    """Spec 0006, AC-17, muhammad's run of 2026-10-13: the core issue was the opening feeling reworded,
-    stored on the first exchange, and the feeling underneath was never asked. Now a step is taken only once the step
-    before it was stored before this turn, so each has an exchange of its own."""
-    everything = UnderstandingUpdate(issue="your boss says you're not doing enough",
-                                     core_issue="you feel you're not enough", underlying_feeling="worry about not being enough")
-    first = understanding.merge({}, everything)
-    assert first == {"issue": "your boss says you're not doing enough"}
-    second = understanding.merge(first, everything)
-    assert set(second) == {"issue", "core_issue"}
-    assert set(understanding.merge(second, everything)) == {"issue", "core_issue", "underlying_feeling"}
-    # Judged on the record as the turn began, however many merges the turn makes.
-    assert "core_issue" not in understanding.merge(first, everything, before={})
+def test_what_they_say_about_any_step_is_kept_whenever_they_say_it():
+    """muhammad, 2026-10-25: "I'm a failure" in a first message was dropped because the problem was not yet
+    stored, so the core issue was asked for as if never said. The order now decides only what Mani asks next."""
+    told = understanding.merge({}, UnderstandingUpdate(
+        feeling="sad", core_issue="you feel like a failure if you can't provide", underlying_feeling="ashamed"))
+    assert told["core_issue"] == "you feel like a failure if you can't provide"
+    assert told["underlying_feeling"] == "ashamed"
+    assert understanding.next_step(told) == "problem", "the problem is still asked first"
 
 
-def test_the_next_step_is_the_first_one_missing():
-    assert understanding.next_step({}) == "problem"
-    assert understanding.next_step({"feeling": "frustrated", "issue": "x"}) == "core_issue"
-    assert understanding.next_step({"issue": "x", "core_issue": "y"}) == "underlying_feeling"
-    assert understanding.next_step({"issue": "x", "core_issue": "y", "underlying_feeling": "worry"}) is None
+def test_one_step_is_found_a_turn_in_order_whatever_was_said_at_once():
+    """Spec 0006, AC-17; muhammad, 2026-10-25: stored out of order, the sister chat was checked and offered at
+    her second message. Everything said at once is stored, and one step a turn counts as found."""
+    everything = UnderstandingUpdate(issue="your sister keeps borrowing", core_issue="family comes first for you",
+                                     underlying_feeling="guilty")
+    turn = {}
+    asked = []
+    for _ in range(4):
+        asked.append(understanding.next_step(turn))
+        turn = understanding.advance(turn, understanding.merge(turn, everything))
+    assert asked == ["problem", "core_issue", "underlying_feeling", None]
+    nothing_new = understanding.advance({}, understanding.merge({}, UnderstandingUpdate(feeling="sad")))
+    assert understanding.next_step(nothing_new) == "problem", "a step not given is not found"
 
 
 def test_a_stored_check_keeps_what_it_came_down_to():

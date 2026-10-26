@@ -109,6 +109,7 @@ FOUND = {
     "issue": "your coworkers miss deadlines",
     "core_issue": "the work always lands on you",
     "underlying_feeling": "you may feel worn down by it",
+    "found": "underlying_feeling",
 }
 
 
@@ -280,13 +281,11 @@ async def test_an_offer_still_made_on_their_first_message_cannot_start_a_framewo
     assert ctx.technique is None
 
 
-async def test_the_problem_its_core_issue_and_the_feeling_each_take_an_exchange_then_the_check_and_offer(
-    alice, model,
-):
-    """Spec 0006, AC-2 to AC-4, AC-17, AC-18, muhammad's run of 2026-10-13. The model reports
-    everything it can see from the first message; code takes one step per exchange, so the check field
-    first appears on their third message, the check is stored once their own words give the feeling, even an I don't know, and a
-    clear yes at their fourth makes that reply the client's offer. One call each."""
+async def test_all_three_steps_said_at_once_are_kept_and_still_found_one_exchange_each(alice, model):
+    """Spec 0006, AC-2 to AC-4, AC-17, AC-18; muhammad, 2026-10-25. What the model sees in their first
+    message is kept whichever step it answers, but one step is found a turn, so the check field first
+    appears on their third message, the check is stored once their own words give the feeling, and a clear
+    yes at their fourth makes that reply the client's offer. One call each."""
     from mani.models.rows import SupportStyle
 
     everything = UnderstandingUpdate(
@@ -294,20 +293,23 @@ async def test_the_problem_its_core_issue_and_the_feeling_each_take_an_exchange_
         underlying_feeling="you may feel worn down by it",
     )
     scripted = model(
-        Reply(text="That sounds draining. Who does it fall on when they miss them?", understanding_update=everything),
-        Reply(text="That's a lot to carry. How does it sit with you underneath?", understanding_update=everything),
+        Reply(text="That sounds draining. What does it mean to you?", understanding_update=everything),
+        Reply(text="It always lands on you. How is that for you underneath?"),
         _check(),
         _offer("abcde"),
     )
     thread = await _in_style(await start(alice), SupportStyle.SUPPORTIVE)
-    await send(alice, thread.id, "i'm frustrated at work")
+    await send(alice, thread.id, "my coworkers keep missing deadlines, i end up doing their work and it wears me down")
     first = await _thread_row(alice, thread.id)
-    await send(alice, thread.id, "my coworkers keep missing deadlines and i end up doing their work")
+    await send(alice, thread.id, "it always lands on me")
     checked = await send(alice, thread.id, "i don't know, it just wears me down")
     assert (await _thread_row(alice, thread.id)).check_at_message_count is not None
     turn = await send(alice, thread.id, "yes, that's it")
 
-    assert set(first.understanding) == {"issue"}, "the opening message fills the problem only"
+    assert {k: first.understanding.get(k) for k in ("issue", "core_issue", "underlying_feeling", "found")} == {
+        "issue": everything.issue, "core_issue": everything.core_issue,
+        "underlying_feeling": everything.underlying_feeling, "found": "issue",
+    }, "everything they said is kept, and only the problem counts as found"
     assert scripted.calls == 4
     assert ["check" in shape.model_fields for shape in scripted.schemas] == [False, False, True, False]
     assert ["offer" in shape.model_fields for shape in scripted.schemas] == [False, False, False, True]
@@ -320,7 +322,7 @@ async def test_the_problem_its_core_issue_and_the_feeling_each_take_an_exchange_
     assert (await _thread_row(alice, thread.id)).understanding == {
         "issue": "your coworkers miss deadlines", "core_issue": "the work always lands on you",
         "underlying_feeling": "you may feel worn down by it",
-        "comes_down_to": "It seems to come down to carrying what others drop.",
+        "comes_down_to": "It seems to come down to carrying what others drop.", "found": "underlying_feeling",
     }
 
 
@@ -334,7 +336,7 @@ async def test_a_check_whose_feeling_did_not_come_from_them_opens_nothing(alice,
     async with pool.as_admin() as conn:
         await conn.execute(
             "update public.threads set message_count = 11, understanding = $2::jsonb where id = $1",
-            thread.id, {k: FOUND[k] for k in ("issue", "core_issue")},
+            thread.id, {k: FOUND[k] for k in ("issue", "core_issue")} | {"found": "core_issue"},
         )
     turn = await send(alice, thread.id, "it happens every week")
 
@@ -1721,7 +1723,7 @@ async def test_what_they_name_is_stored_and_sent_back_on_every_later_turn(alice,
         await send(alice, thread.id, "my client keeps changing the requirements")
         third = await send(alice, thread.id, "we are moving in circles")
 
-    expected = {"feeling": "frustrated", "issue": "my client keeps changing the requirements"}
+    expected = {"feeling": "frustrated", "issue": "my client keeps changing the requirements", "found": "issue"}
     assert "understanding: feeling: frustrated; issue: my client keeps changing the requirements" in _ctx_sent(scripted)
     assert (first.understanding, third.understanding) == ({"feeling": "frustrated"}, expected)
     assert await _understood(alice, thread.id) == expected

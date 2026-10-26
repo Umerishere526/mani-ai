@@ -306,7 +306,8 @@ def test_every_rule_in_a_prompt_file_is_a_sentence_not_a_yaml_mapping(name):
 
 def test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_beside_it():
     """Spec 0005, AC-9: a framework's checklist steered the questions toward its own needs, and the
-    bans kept the feeling they named out of them (live, 2026-10-13: the frustrated chat)."""
+    bans kept the feeling they named out of them (live, 2026-10-13: the frustrated chat). Every feeling
+    they named stays in view, not only the first (muhammad, 2026-10-25: a second feeling replaced the first)."""
     import pathlib
 
     import yaml
@@ -316,7 +317,7 @@ def test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_b
     prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
     base = yaml.safe_load(parse_prompt(prompts / "mani_base.md")["content"])
     assert (
-        "Each question follows from their last answer and keeps the feeling and issue they came with "
+        "Each question follows from their last answer and keeps every feeling they named and the issue "
         "in view. Their feeling word may come back inside a question, never as a statement about them."
     ) in base["understanding_them"]
     sent = "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in ("mani_base", "response_format"))

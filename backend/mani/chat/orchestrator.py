@@ -583,8 +583,8 @@ async def send(
         offered_now.append(technique.framework_id)
 
     # Nothing a concern turn reports is kept, so what they understand stays as stored. A check is
-    # merged first and their own words after it, so their words win (spec 0006, AC-9). The steps are
-    # judged against the record as this turn began, so each takes an exchange of its own (AC-17).
+    # merged first and their own words after it, so their words win (spec 0006, AC-9). One more step
+    # counts as found a turn, so each takes an exchange of its own (AC-17).
     # Mani's check is stored, so the next turn reads their answer to it, only once their own words
     # (understanding_update, or what is stored) give all three steps; a check whose feeling comes only
     # from the check itself opens nothing (spec 0006, AC-3, AC-7, AC-18).
@@ -593,12 +593,12 @@ async def send(
     check_written = False
     if not guarded:
         before = ctx.thread.understanding
-        theirs = understanding.merge(before, reply.understanding_update, before=before)
+        theirs = understanding.advance(before, understanding.merge(before, reply.understanding_update))
         check_written = with_check and understanding.next_step(theirs) is None
         understood = (
-            understanding.merge(
-                understanding.merge_check(before, reply.check), reply.understanding_update, before=before,
-            )
+            understanding.advance(before, understanding.merge(
+                understanding.merge_check(before, reply.check), reply.understanding_update,
+            ))
             if check_written else theirs
         )
     if understood != ctx.thread.understanding:

@@ -173,9 +173,10 @@ class UnderstandingUpdate(BaseModel):
         default=None,
         description=(
             "Everything they feel about this as one experience, each as a short phrase in their words and "
-            "separated by semicolons: each feeling, what they believe it means, and what they want from it, "
-            "such as \"you miss her\", \"her silence means you don't matter\", \"you want an apology\". "
-            "Only what this message adds that you do not hold yet. Null otherwise."
+            "separated by semicolons: each feeling with what it is about, what they believe it means, and "
+            "what they want from it, such as \"you miss her since she stopped calling\", \"her silence "
+            "means you don't matter\", \"you want an apology\". Never a fact of what happened: that is the "
+            "issue. Only what this message adds that you do not hold yet. Null otherwise."
         ),
     )
     issue: str | None = Field(
@@ -190,12 +191,13 @@ class UnderstandingUpdate(BaseModel):
     core_issue: str | None = Field(
         default=None,
         description=(
-            "The core issue: what the problem comes down to for them underneath, such as what happens "
-            "because of it or what keeps it going. Your understanding, "
-            "formed from their answers and said to them as you. Report it as soon as their answers show "
-            "it, and again for each thing they add that you do not hold yet; they don't need to name it "
-            "themselves. It is added to the ones already known and never replaces them. Never the feeling "
-            "they opened with or the problem reworded. A dozen words at most. Null otherwise."
+            "The core issue: what the problem means to them, such as what they believe it says about "
+            "them, a value it goes against, or two things they want pulling against each other. Your "
+            "understanding, formed from their words and said to them as you. Report it as soon as their "
+            "words show it, even in their first message, and again for each thing they add that you do not "
+            "hold yet; they don't need to name it themselves. It is added to the ones already known and "
+            "never replaces them. Never a bare feeling word, what happens because of the problem, or the "
+            "problem reworded. A dozen words at most. Null otherwise."
         ),
     )
     underlying_feeling: str | None = Field(

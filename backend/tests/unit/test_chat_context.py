@@ -55,6 +55,7 @@ FOUND = {
     "issue": "your boss says you're not doing enough",
     "core_issue": "your sense of being enough rests on his view of you",
     "underlying_feeling": "worry that you are not enough",
+    "found": "underlying_feeling",
 }
 
 
@@ -451,7 +452,10 @@ def test_no_check_until_the_problem_its_core_issue_and_the_feeling_underneath_ar
     """muhammad's run, 2026-10-13: Mani checked at their second message having asked about neither the
     core issue nor the feeling underneath. The steps are code's now (spec 0006, AC-2, AC-18): the next missing one is
     named in [ctx] in order, and the check field waits for all three."""
-    steps = [{}, {"issue": FOUND["issue"]}, {k: FOUND[k] for k in ("issue", "core_issue")}, FOUND]
+    steps = [
+        {}, {"issue": FOUND["issue"], "found": "issue"},
+        {k: FOUND[k] for k in ("issue", "core_issue")} | {"found": "core_issue"}, FOUND,
+    ]
     on = [_on_message(6, style="directive").thread.model_copy(update={"understanding": u}) for u in steps]
     contexts = [TurnContext(thread=t, profile=None, technique=None) for t in on]
     # The turn that receives their answer about the feeling may carry the check; code stores it only if
@@ -467,6 +471,18 @@ def test_no_check_until_the_problem_its_core_issue_and_the_feeling_underneath_ar
     assert [line(c, "check") for c in contexts] == [
         None, None, "check: once_feeling_is_answered", "check: may_check",
     ]
+
+
+def test_a_core_issue_said_before_the_problem_is_kept_but_the_problem_is_still_asked_first():
+    """muhammad, 2026-10-25: what they say about any step is stored when they say it; the order decides
+    only what Mani asks next and when it may check."""
+    early = {k: FOUND[k] for k in ("core_issue", "underlying_feeling")}
+    thread = _on_message(6, style="directive").thread.model_copy(update={"understanding": early})
+    ctx = TurnContext(thread=thread, profile=None, technique=None)
+    block = context.build(ctx)
+    assert not context.may_check(ctx)
+    assert "understanding_next: problem" in block.splitlines()
+    assert FOUND["core_issue"] in block, "what they said about the core issue is in front of the model"
 
 
 def test_the_context_tells_the_model_the_check_the_code_allows():

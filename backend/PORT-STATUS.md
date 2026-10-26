@@ -202,15 +202,23 @@ the same change as the work.**
   seen the problem, its core issue and the feeling underneath found in that order, each in an exchange of its
   own, so at their third message at the earliest, in every style** (muhammad, 2026-10-13, spec 0006; the order
   is code's since muhammad's live run of the same day, where Mani checked at their second message having asked
-  about neither the core issue nor the feeling: `understanding.merge` takes a step only once the one before it was
-  stored on an earlier turn, `[ctx]` names the next step as `understanding_next`, and a check is stored only when
+  about neither the core issue nor the feeling: every step is stored whenever they give it, but one step a turn counts
+  as found, in order (`understanding.advance`, the record's `found` key; muhammad, 2026-10-25, because the order gate
+  on storage dropped "I'm a failure" said in a first message, and storing out of order with no pacing checked and
+  offered the sister chat at her second message, `test_one_step_is_found_a_turn_in_order_whatever_was_said_at_once`),
+  `[ctx]` names the next step as `understanding_next`, and a check is stored only when
   their own words give the feeling; a stored check is sent as the model's own sentences in the client's order,
   problem, core issue, feeling, what it comes down to, then the question, `repairs.check_text`). The third step was what is
   in their control until muhammad replaced it with the underlying feeling (2026-10-21): the person may name it, or Mani
   offers it from their words as a possibility inside the check, never as a fact, for them to confirm or correct;
   "I don't know" at that step stores Mani's closest reading as a possibility so the check still opens, and no new gate
   or deadline was added (`test_the_feeling_step_replaced_control_and_the_prompt_did_not_grow`, the prompt is held to its
-  size). Because the client's flow
+  size). The core issue is what the problem means to them: what they believe it says about them, a value it goes
+  against, or two things they want at once, never what happens because of it, and a self-judgment they state ("I'm a
+  failure") is part of it, never sent back to the situation; the problem is taken whole, no longer narrowed to who,
+  what, how often (muhammad, 2026-10-25, from Lolly's 2026-10-18 sister loans review, R24: our own consequence wording
+  sent Mani to the situation; one Directive run of `holds_the_feelings` found the failure belief at message 1, where
+  before no core issue was found in four turns). Because the client's flow
   (meeting of 2026-10-13, R14) is understand the problem, then its core issue and the feeling underneath,
   then check that understanding with them and offer only on a yes, and the message count it replaces needed
   three fixes in a row (scope features 12, 15, 19) without ever recording whether the person agreed. Before
@@ -332,7 +340,8 @@ the same change as the work.**
   (the stored understanding, relabelled while a framework runs or is about to start), and every stage question and
   possibility is about it, in their words (muhammad, 2026-10-22; `test_the_findings_are_their_case_once_a_framework_is_running_or_about_to_start`). Every feeling they name is kept, none twice. The problem, core issue and underlying feeling
   grow with everything they say, through the whole conversation, in a framework too: each new entry is added after the
-  stored ones, none twice, and nothing is replaced or removed (the oldest entry goes only past 600 characters), so the
+  stored ones, none twice, and nothing is replaced or removed (past 600 characters the oldest entry after the first
+  goes; the first, what they came with, stays, muhammad 2026-10-25), so the
   model sees the whole picture in `[ctx]` every turn; what does not fit them goes in `also` (a warning, a time limit).
   Because the first read went stale (the boss chat: credit taken, his father not listening and low pay were said after the
   case was frozen, so the D and E questions were built on a first read that missed them), and add-only removes the
@@ -391,7 +400,7 @@ the same change as the work.**
   `understanding_update` after them, so their own words win. `understanding.merge` keeps the stored value on a null or blank one; anything else
   replaces it, on one line, at most 200 characters. Nothing is merged on a concern turn. It is sent back every
   later turn as the `understanding:` line in `[ctx]`, disarmed, and code reads it only to place A's feeling on
-  the start turn and to give the exercise pick its issue; no gate reads it. Its own update, only by
+  the start turn, to give the exercise pick its issue and to pace the steps before the check (`found`). Its own update, only by
   `mani_service`; never logged; sent only in its own thread; deleted with the thread. `current_issue` is gone.
   With `AI_DEBUG_MODE` on, a turn returns `understanding` and the chat tester shows it under "What Mani knows".
   `tests/unit/test_understanding.py`, the spec 0005 tests at the end of `tests/integration/test_turn.py`,
@@ -412,8 +421,8 @@ the same change as the work.**
   ask what made them think it, what feels most pressing, and open on their words (styles document, 2026-10-12),
   and ABCDE's checklist and the bans on using their feeling turned "i am frustrated" into questions about
   ABCDE's needs and an offer about their judgment of the client (the frustrated chat, 2026-10-13, R4). One
-  positive rule in `mani_base.md` `rules` says it: "Each question follows from their last answer and keeps the
-  feeling and issue they came with in view. Their feeling word may come back inside a question, never as a
+  positive rule in `mani_base.md` `rules` says it: "Each question follows from their last answer and keeps every
+  feeling they named and the issue in view. Their feeling word may come back inside a question, never as a
   statement about them." No framework checklist steers the questions (`to_find_out` and "Finding the fit" are
   gone). What each question is trying to do comes from the style file. Shared by all three: when the basic what is
   missing (what happened, what they are deciding), it is asked first; a reflection only checks or shows
@@ -423,8 +432,11 @@ the same change as the work.**
   concrete possibilities from what they said, as the client's sample does, R13, 2026-10-13), and no advice or
   suggestion hidden in a question. Both sides of one decision in one question, and "what would it
   mean", are allowed: the client asks both (2026-10-12). `heading_toward` only decides what is offered. Mani never joins two things
-  they said into a link they did not make. Told it got something wrong, in any words, it says it misunderstood and asks what would be
-  more accurate (the client's line), never explaining what it meant.
+  they said into a link they did not make. Told it got something wrong, in any words, it says what it missed, from what they
+  already told it, and never asks them to explain again, never explaining what it meant (Lolly's 2026-10-18 reviews, R26,
+  replacing the older client line "What would be more accurate?", muhammad 2026-10-25). Every feeling they named stays in
+  view, not only the first or the newest, and the reasoning reads each message against them (`response_format.md`, first
+  step; muhammad, 2026-10-25, after a second feeling replaced the first in his research chats).
 - **Mani's voice is the shared shape in `mani_base.md` `how_you_talk` plus the chosen style's file; there is no
   shared example conversation** (muhammad, 2026-10-22, replacing "Mani talks like the client's sample conversation",
   2026-10-13). Because all three styles read the same: one sample was copied in every style, one line blended

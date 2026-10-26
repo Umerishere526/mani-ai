@@ -4,6 +4,8 @@ date: 2026-10-22
 tags: [journal, prompts, mirror, understanding, lessons]
 ---
 
+> Superseded 2026-10-25 (the core issue asked as what happens because of the problem, and the oldest entry dropped first) - see [[core-issue-was-situation-2026-10-25]].
+
 # The mirror picked one clause and dropped the headline (2026-10-22)
 
 muhammad's Directive chat (boss put in charge by his father, does no work, team carries it). The first message

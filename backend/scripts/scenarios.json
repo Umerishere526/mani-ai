@@ -381,5 +381,34 @@
         }
       }
     }
+  },
+  "holds_the_feelings": {
+    "about": "They say how it is for them and what they believe it says about them, then a second feeling comes in. Mani asks what it means to them, not only about the situation, and keeps the first feeling in view beside the new one.",
+    "expect": {
+      "check_by": 5
+    },
+    "conversations": {
+      "provide_failure_then_frustrated": {
+        "source": "muhammad's research, 2026-10-25: line 1 is his example; lines 2 to 4 are ours, line 3 brings in the second feeling",
+        "lines": [
+          "I'm sad that I won't be able to provide for my family. I'm such a failure.",
+          "I lost my job two months ago and our savings are almost gone.",
+          "I'm just so frustrated today. Another company said no this morning.",
+          "I don't know, I just feel like I'm letting everyone down."
+        ]
+      },
+      "sister_loans": {
+        "source": "Lolly's Directive review, 2026-10-18 (docs/client/messages/2026-10-18-directive-sister-loans-review.md): the person's first seven lines word for word",
+        "lines": [
+          "I don't know if I should say no to someone who really needs me.",
+          "My sister is going through a difficult time financially, and she keeps asking me to lend her money. I've helped her several times already, but she never pays me back. I love her, and I know she's struggling, but I'm starting to feel taken advantage of. I feel guilty even thinking about saying no.",
+          "she says she will pay me back but she never does",
+          "she is my sister and family should come first before money",
+          "i do not know that is why i am discussing it with you",
+          "as i said in the beginning saying no",
+          "i would never do that. You do not do that to family"
+        ]
+      }
+    }
   }
 }

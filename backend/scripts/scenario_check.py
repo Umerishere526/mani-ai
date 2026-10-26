@@ -87,6 +87,8 @@ class Exchange:
     check_at: int | None = None
     # Whether this reply was Mani's check of its understanding.
     checked: bool = False
+    # The reply's reasoning, sent only with AI_DEBUG_MODE (orchestrator.Turn.reasoning).
+    reasoning: str | None = None
 
 
 def _words(text: str) -> set[str]:
@@ -294,7 +296,7 @@ async def _exchange(
         person=text, reply=turn.content, buttons=[p.label for p in turn.prompts],
         offered=next((p.technique for p in turn.prompts if p.technique), None),
         cost=await _cost(thread_id, seconds, billed), checks=turn.checks, trace=turn.stage_trace,
-        understanding=turn.understanding, check_at=turn.check_at_message_count,
+        understanding=turn.understanding, check_at=turn.check_at_message_count, reasoning=turn.reasoning,
     )
     _check(exchange, registry, told_more, said, style, previous, framework_id)
     return exchange
@@ -341,6 +343,11 @@ def _report(name: str, runs: dict[str, list[Exchange]], *, full: bool = False) -
             print(f"    > {person}\n      {said}{mark}{checked}\n"
                   f"      {cost.seconds:.1f} s, {cost.calls} call(s), {cost.input_tokens} in "
                   f"({cost.cached_tokens} cached), {cost.output_tokens} out ({cost.reasoning_tokens} thinking)")
+            if full:
+                # Read by a person: does what Mani holds keep every feeling, and does its reasoning weigh them?
+                print(f"      understanding: {exchange.understanding or {}}")
+                if exchange.reasoning:
+                    print(f"      reasoning: {' '.join(exchange.reasoning.split())}")
             if exchange.checked:
                 # Read by a person: does the check use only their words?
                 print(f"      check: {' '.join(exchange.reply.split())}")

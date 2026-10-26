@@ -38,4 +38,6 @@ conflict under "Conflicts" in [requirements.md](requirements.md) and update the 
 | 2026-10-13 | Lolly | [Two chat versions, testing confusion, and ABCDE still not explained](messages/2026-10-13-two-versions-confusion.md) |
 | 2026-10-13 | client | [MANI's way of communication: language and tone](messages/2026-10-13-way-of-communication.md) |
 | 2026-10-13 | client (meeting) | [The conversation flow agreed in the meeting](messages/2026-10-13-meeting-flow.md) |
+| 2026-10-18 | Lolly | [Directive review: speaking up at work](messages/2026-10-18-directive-speak-up-at-work-review.md) |
+| 2026-10-18 | Lolly | [Directive review: the sister who keeps borrowing](messages/2026-10-18-directive-sister-loans-review.md) |
 | 2026-10-13 | Lolly | [Framework Selection Cheat Sheet](messages/2026-10-13-framework-cheat-sheet.md) |

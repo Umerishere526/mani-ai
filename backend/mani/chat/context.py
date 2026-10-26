@@ -201,15 +201,16 @@ _MEANING: dict[str, str | dict[str, str]] = {
     "understanding_next": {
         "problem": (
             "the problem is not pinned down yet. If their message already gives it, report the whole of "
-            "it, with the name they gave it, and ask about the core issue under it. Otherwise help them "
-            "narrow it to what actually happens: who, what, how often, what is expected of them."
+            "it, with the name they gave it, and ask about the core issue under it. Otherwise ask what is "
+            "happening, in plain words about what they told you."
         ),
         "core_issue": (
-            "the problem is clear, what lies under it is not. Ask plainly what happens because of the "
-            "problem as they named it. A feeling, such as not being enough, is not yet "
-            "the core issue: ask what makes them feel it or what keeps it going. Once their answers show "
-            "the core issue, offer it in your reply as your understanding, report it, and ask how it sits "
-            "with them underneath. They don't need to name it themselves."
+            "the problem is clear, what it means to them is not. Ask plainly what it means to them or "
+            "says about them, or what makes it hard. What they believe it says about them, or a value it "
+            "goes against, such as I'm a failure or family comes first, is the core issue: say it back as "
+            "theirs, never send them back to the situation. Once their answers show the core issue, offer "
+            "it in your reply as your understanding, report it, and ask how it sits with them underneath. "
+            "They don't need to name it themselves."
         ),
         "underlying_feeling": (
             "the problem and its core issue are clear. Ask about the feeling underneath, once, never twice "

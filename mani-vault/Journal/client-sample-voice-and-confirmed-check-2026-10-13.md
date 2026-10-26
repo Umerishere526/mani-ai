@@ -5,6 +5,7 @@ tags: [journal, prompts, offers, client, lessons]
 ---
 
 > Superseded 2026-10-22 (the shared sample as the one voice, `sounds_like` then `example`) - see [[three-styles-read-the-same-2026-10-22]].
+> Superseded 2026-10-25 (a step stored only once the one before it was stored: now stored when said, found one a turn) - see [[core-issue-was-situation-2026-10-25]].
 
 # The client's sample voice, and a confirmed check as the offer gate (2026-10-13)
 

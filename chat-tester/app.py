@@ -317,7 +317,7 @@ with st.sidebar:
         for key, label in (
             ("feeling", "Feelings"), ("stack", "Stack"), ("issue", "Problem"), ("core_issue", "Core issue"),
             ("underlying_feeling", "Underlying feeling"), ("comes_down_to", "What it comes down to"),
-            ("also", "Also raised"),
+            ("also", "Also raised"), ("found", "Last step found"),
         ):
             if understood.get(key):
                 st.markdown(f"**{label}:** {understood[key]}")
