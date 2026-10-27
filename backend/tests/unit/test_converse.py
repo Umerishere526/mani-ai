@@ -146,3 +146,87 @@ def test_a_framework_turn_is_a_conversation_the_stage_only_gives_the_direction()
         "Options only when they are unsure",
     ):
         assert rule in framework, rule
+
+
+def test_code_picks_the_help_move_from_the_kind_of_problem_and_the_style():
+    """muhammad, 2026-10-27: the help-move table. A real situation is helped in the conversation, a thought may go to
+    a set of questions, both is a choice, and a risk to someone else always comes first."""
+    situation = {"problem_type": "situation"}
+    assert "concrete, sensible next steps" in converse.help_move("directive", situation)
+    assert "keep talking it through or look at what might help" in converse.help_move("supportive", situation)
+    assert "a pattern or a connection" in converse.help_move("reflective", situation)
+    assert "offer to look at it together" in converse.help_move("directive", {"problem_type": "belief"})
+    assert "which they want to start with" in converse.help_move("directive", {"problem_type": "both"})
+    assert converse.help_move("supportive", {}) == converse.UNSURE_MOVE
+    risky = {**situation, "risks": [{"risk": "children left unsupervised", "to": "others"}]}
+    assert converse.help_move("supportive", risky).startswith(
+        "First name the risk to children left unsupervised plainly"
+    )
+
+
+def test_the_conversation_turns_to_helping_when_it_stops_moving_or_they_ask():
+    """The 2026-10-27 review: heard but not helped. Mani turns when they ask for help, show frustration, add nothing
+    new, or answer in a few words three times running; once turned it stays, until another situation comes in."""
+    quiet = {"picture": {"shift": "nothing_new", "quiet": 1}}
+    moving = {"picture": {"shift": "adds", "quiet": 0}}
+    assert converse.turned({}, reply(asked_for_help=True), moving, [])
+    assert converse.turned({}, reply(frustrated=True), moving, [])
+    assert converse.turned({}, reply(), quiet, [])
+    assert converse.turned({}, reply(), moving, ["fine", "i guess", "yes"])
+    assert not converse.turned({}, reply(), moving, ["yes", "I don't know"]), "two short answers are often answers"
+    assert not converse.turned({}, reply(), moving, ["my boss keeps taking credit for my work", "yes", "no"])
+    assert converse.turned({converse.HELPING: True}, reply(), moving, [])
+    new_issue = {"picture": {"shift": "new_issue", "quiet": 0}}
+    assert not converse.turned({converse.HELPING: True}, reply(asked_for_help=True), new_issue, [])
+
+
+def test_turning_is_kept_on_the_record_and_another_situation_starts_understanding_again():
+    from mani.llm.schema import PictureUpdate
+
+    helped = converse.understood_after({}, reply(asked_for_help=True), check_written=False)
+    assert helped[converse.HELPING] is True
+    moved_on = converse.understood_after(
+        {**helped, "heart": "ready"}, reply(picture=PictureUpdate(focus="your sister's loans", shift="new_issue")),
+        check_written=False,
+    )
+    assert converse.HELPING not in moved_on and "heart" not in moved_on
+
+
+def test_the_note_lists_what_was_asked_and_what_is_unknown_and_while_helping_the_move():
+    """Never the same question twice; ask for the first gap; once helping, every reply gives something."""
+    from mani.models.rows import Message, MessageRole
+
+    asked = [Message(id=uuid.uuid4(), thread_id=THREAD, user_id=USER, role=MessageRole.MANI, created_at=NOW,
+                     content="That sounds hard. What happened between you? Was it the words or the silence?")]
+    assert converse.asked_before(asked) == ["What happened between you?", "Was it the words or the silence?"]
+
+    exploring = converse.note("directive", allowed=False, due=False, wants_title=False,
+                              understood={"picture": {"situations": ["she stopped calling"]}},
+                              asked=converse.asked_before(asked))
+    assert "Questions you already asked, never to ask again in any words: What happened between you? | " in exploring
+    assert "Still unknown: how it is for them, what they want, what is stopping them." in exploring
+    assert "You are helping now" not in exploring
+
+    situation = {converse.HELPING: True, "picture": {"problem_type": "situation"}}
+    helping = converse.note("directive", allowed=True, due=False, wants_title=False, understood=situation)
+    assert "You are helping now" in helping and "concrete, sensible next steps" in helping
+    assert "Still unknown" not in helping
+    assert "this reply checks your understanding" not in helping, "a real situation is helped, not checked toward a set"
+    thought = {converse.HELPING: True, "picture": {"problem_type": "belief"}}
+    assert "this reply checks your understanding" in converse.note(
+        "directive", allowed=True, due=False, wants_title=False, understood=thought,
+    ), "for a thought, the check is the way to the set of questions"
+
+
+def test_the_three_styles_are_three_ways_of_moving_and_help_is_allowed_once_turned():
+    """The 2026-10-27 review: the styles differed in tone only, and Mani heard but did not help."""
+    voice = parse_prompt(PROMPTS / "voice.md")["content"]
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    assert "turns to helping soonest" in voice, "Directive"
+    assert "Each reply opens with genuine acknowledgment of how hard this is" in voice, "Supportive"
+    assert "names a pattern or a connection in what they said that they may not have seen" in voice, "Reflective"
+    assert "never ask them to choose again" in voice
+    assert "Ideas they choose from are help; instructions are not." in voice
+    assert "No advice, tips or plans" not in voice
+    assert "every reply gives them something" in chat
+    assert "name it plainly and treat it as something to act on" in chat

@@ -2257,3 +2257,44 @@ async def test_switching_to_another_situation_ends_the_framework_and_the_chat_ca
     assert scripted.schemas[-1] is ConversationReply
     assert "They stepped out of ABCDE earlier." in _ctx_sent(scripted)
     assert turn.prompts == []
+
+
+async def test_a_yes_to_the_check_about_something_really_happening_brings_help_not_a_framework(alice, model):
+    """The 2026-10-27 review: reframing was offered for a coworker asleep with the children there. Only ABCDE and
+    Thought Reframe are offered, and only for what they tell themselves; a yes about a real situation turns the
+    conversation to helping with it (muhammad)."""
+    from mani.db import pool
+
+    model(_offer().model_copy(update={"text": "Then let's look at what you could do. Would talking to the director first fit?"}))
+    thread = await past_the_opening(await start(alice))
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set understanding = $2::jsonb where id = $1", thread.id,
+            {**UNDERSTOOD, "picture": {"problem_type": "situation",
+                                       "risks": [{"risk": "children left unsupervised", "to": "others"}]}},
+        )
+    turn = await send(alice, thread.id, "yes, that's exactly it")
+
+    assert turn.prompts == [] and turn.content.startswith("Then let's look at what you could do.")
+    assert (await _thread_row(alice, thread.id)).understanding["helping"] is True
+    async with pool.as_user(alice) as conn:
+        assert (await threads.load_turn_context(conn, thread.id, ALICE)).technique is None
+
+
+async def test_asking_for_help_turns_the_conversation_and_the_next_note_carries_the_help_move(alice, model):
+    """The 2026-10-27 review: a direct request for help got another question. Asking turns the conversation to
+    helping, and from then on the note gives each reply the help move for their style and kind of problem."""
+    from mani.models.rows import SupportStyle
+
+    scripted = model(
+        ConversationReply(text="I can help with that. Would talking to her first, or to the director, fit better?",
+                          asked_for_help=True, picture=PictureUpdate(problem_type="situation")),
+        ConversationReply(text="Talking to her first makes sense. What would you want her to hear?"),
+    )
+    thread = await _in_style(await start(alice), SupportStyle.DIRECTIVE)
+    await send(alice, thread.id, "my co-teacher sleeps while i watch 20 kids. what should i do?")
+    await send(alice, thread.id, "talk to her first i think")
+
+    note = _ctx_sent(scripted)
+    assert "You are helping now" in note and "concrete, sensible next steps" in note
+    assert "Still unknown" not in note

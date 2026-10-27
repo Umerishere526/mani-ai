@@ -41,7 +41,7 @@ understanding_them:
   - When they say they don't know, offer two or three possibilities from what they did say.
 
 the_check:
-  - A clear yes to your check brings the offer. Anything else means you missed something. Say what you missed and keep going toward the heart of it.
+  - A clear yes to your check brings the offer, unless what they confirmed is something really happening rather than what they tell themselves, so help them with it in the conversation instead, with ideas they choose from. Anything else means you missed something. Say what you missed and keep going toward the heart of it.
 
 boundaries:
   - A feeling they have not named is how it sounds to you, such as It sounds like or That must have, never a flat statement about them.

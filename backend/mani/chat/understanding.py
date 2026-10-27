@@ -48,6 +48,9 @@ def merge(stored: dict, update: PictureUpdate | None, heart: str | None) -> dict
     known = picture.feeling_words(before)
     if new := [word for word in picture.feeling_words(after) if word not in known]:
         merged["feeling"] = _gathered(merged.get("feeling"), FEELING_SEPARATOR.join(new))
+    if update is not None and (update.shift or "").strip().lower() == "new_issue":
+        # Another situation: the reading of the last one does not hold for it, so the heart of it is found again.
+        merged.pop("heart", None)
     if heart:
         merged["heart"] = heart
     return merged

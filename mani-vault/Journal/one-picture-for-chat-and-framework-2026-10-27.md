@@ -26,3 +26,13 @@ options-every-turn pattern the reviews called a questionnaire.
 
 Changed behaviour to watch: asking for a framework they stepped out of now offers it again with Try it rather than
 starting it in the same turn. The chat path would otherwise have to judge stage A itself.
+
+## Phase 3, same day: understanding turns into helping
+
+`helping` on the understanding record is the turning point; `converse.turned` sets it from the reply's
+`asked_for_help` and `frustrated` flags, the picture's `quiet`, three short answers in a row, or a yes to a check
+about a real situation. Two short answers in a row was tried first and fired on "yes" then "I don't know", which are
+ordinary answers; three is the floor. The help move is code's (`HELP_MOVES`, kind of problem x style), the words the
+model's. A real situation never gets ABCDE or Thought Reframe: the check's yes turns to help in the chat. To watch
+live: whether the model reports `problem_type` early enough for the move to be right, and whether Supportive's
+check-in ("keep talking or look at what might help?") comes too often.

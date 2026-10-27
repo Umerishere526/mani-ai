@@ -133,6 +133,21 @@ the same change as the work.**
 
 ## Decisions in force
 
+- **Every conversation turns from understanding to helping, and code names the turn and the help move.** Because the
+  2026-10-27 review found people heard but not helped: question after question, no progression, the styles alike
+  in how they moved, and a direct request for help answered with another question (muhammad, 2026-10-27). The turn is
+  `helping` on the understanding record, set by `converse.turned` when the reply flags `asked_for_help` or
+  `frustrated`, their message added nothing new (`picture.quiet`), they answered in a few words three times running,
+  or they said yes to a check about something really happening; another situation or a finished framework clears
+  it. Once helping, the note gives each reply the move from `converse.HELP_MOVES` (kind of problem from the picture x
+  style), a risk to someone else first; for a thought the check comes as soon as it may, as the way to ABCDE or
+  Thought Reframe, and a yes to a check about a real situation brings help in the conversation, never a framework.
+  Ideas they choose from are allowed in the chat (Lolly's "we do not fix" motto of 2026-10-18 to be confirmed with
+  her, docs/client/requirements.md). The note also lists the questions already asked and, before helping, what is
+  still unknown. The three styles in `voice.md` are three ways of moving, not three tones. Tests in
+  `tests/unit/test_converse.py`, `test_a_yes_to_the_check_about_something_really_happening_brings_help_not_a_framework`,
+  `test_asking_for_help_turns_the_conversation_and_the_next_note_carries_the_help_move`.
+
 - **A framework's stages speak in the chat's voice; the framework gives the direction, never a script.** Because the
   2026-10-27 review found frameworks mechanical: questions predetermined, the stage ruling over what the person said,
   and the framework carrying on when it no longer helped (muhammad, 2026-10-27). A turn on a stage

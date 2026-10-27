@@ -170,7 +170,9 @@ _MEANING: dict[str, str | dict[str, str]] = {
         "open": (
             "your last reply checked your understanding. Set check_answer. A clear yes always brings the "
             "offer: fill offer for the set closest to what they confirmed, even when its Use it when "
-            "does not fit exactly. Anything else, follow what they said toward the root of it."
+            "does not fit exactly. Anything else, follow what they said toward the root of it. When the picture's "
+            "kind of problem is situation, something really happening, a yes brings no set of questions: start "
+            "helping them with it in your text, with two or three concrete ideas they choose from."
         ),
     },
     "picture": (

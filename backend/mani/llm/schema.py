@@ -559,6 +559,17 @@ class ConversationReply(_ReplyBase):
         default=None,
         description="Only when something they said sounds like they may not be safe, or may hurt themselves or someone else. Null otherwise.",
     )
+    asked_for_help: bool | None = Field(
+        default=None,
+        description="True when their last message asks you for help, ideas, an exercise or what to do.",
+    )
+    frustrated: bool | None = Field(
+        default=None,
+        description=(
+            "True when their last message shows they are frustrated with you or the conversation, such as going in "
+            "circles, already having told you, or wanting something more."
+        ),
+    )
     back_to_framework: bool | None = Field(
         default=None,
         description="Only when the note says they stepped out of a set of questions: true when they ask to go back to it.",

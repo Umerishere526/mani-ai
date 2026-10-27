@@ -313,7 +313,7 @@ async def _converse(
     note = converse.note(
         conversation_style, allowed=allowed, due=understanding.ready(ctx.thread.understanding),
         wants_title=wants_title, understood=ctx.thread.understanding, recent_crisis=ctx.recent_crisis,
-        stepped_out_of=declined.name if declined else None,
+        stepped_out_of=declined.name if declined else None, asked=converse.asked_before(history),
     )
     call = await client.complete(
         [{"role": "system", "content": system.text}]
@@ -337,17 +337,20 @@ async def _converse(
     if guarded:
         logger.info("model reported a safety concern on thread %s: %s", ctx.thread.id, reply.crisis.reason)
     check_written = not guarded and converse.checked(reply, allowed=allowed)
+    their_messages = [m.content for m in history if m.role is MessageRole.USER] + [content]
     understood = (
         ctx.thread.understanding if guarded
-        else converse.understood_after(ctx.thread.understanding, reply, check_written=check_written)
+        else converse.understood_after(
+            ctx.thread.understanding, reply, check_written=check_written, their_messages=their_messages,
+        )
     )
     if understood != ctx.thread.understanding:
         updates.understanding = understood
     if check_written:
         updates.check_at_message_count = ctx.thread.message_count + 2
     logger.info(
-        "thread %s conversation turn: heart %s, check allowed %s, checked %s",
-        ctx.thread.id, reply.heart, allowed, check_written,
+        "thread %s conversation turn: heart %s, check allowed %s, checked %s, helping %s",
+        ctx.thread.id, reply.heart, allowed, check_written, bool(understood.get(converse.HELPING)),
     )
 
     fixed = repairs.apply(
@@ -760,14 +763,20 @@ async def send(
     if retiring_framework_id is not None:
         # The framework that just finished worked through this reading. The next check waits for a fresh one, so
         # Mani never checks again straight away on the case it has just finished.
-        understood = {key: value for key, value in understood.items() if key != "heart"}
+        understood = {key: value for key, value in understood.items() if key not in ("heart", converse.HELPING)}
     if understood != ctx.thread.understanding:
         updates.understanding = understood
-    # A clear yes to the check is the only way to an offer (spec 0006, AC-1, AC-4).
+    # A clear yes to the check is the only way to an offer (spec 0006, AC-1, AC-4). Only ABCDE and Thought Reframe
+    # are offered, and only for what they tell themselves: a yes about something really happening turns the
+    # conversation to helping instead (muhammad, 2026-10-27).
+    real_situation = (understood.get(picture.KEY) or {}).get("problem_type") == "situation"
     confirmed = (
         moment is Moment.CHECK_OPEN and not guarded and starting is None
-        and reply.check_answer == "yes"
+        and reply.check_answer == "yes" and not real_situation
     )
+    if moment is Moment.CHECK_OPEN and not guarded and reply.check_answer == "yes" and real_situation:
+        understood = {**understood, converse.HELPING: True}
+        updates.understanding = understood
 
     fixed = repairs.apply(
         reply,
