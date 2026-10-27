@@ -130,6 +130,19 @@ the same change as the work.**
 
 ## Decisions in force
 
+- **A framework's stages speak in the chat's voice; the framework gives the direction, never a script.** Because the
+  2026-10-27 review found frameworks mechanical: questions predetermined, the stage ruling over what the person said,
+  and the framework carrying on when it no longer helped (muhammad, 2026-10-27). A turn on a stage
+  (`Moment.IN_STAGES`) is composed by `composer.compose_framework` from `voice.md` and `framework.md`, never
+  `mani_base.md`, `response_format.md` or a style file; [ctx] still carries the stage. Its reply shape has no
+  reasoning and no reply shape to pick. Something new mid-framework is talked about on the stage in force (not_yet),
+  a stage already passed takes it from the picture with one short line saying so, the model question is a direction,
+  and another situation is a choice: on switching, stop ends the framework and the chat carries on in
+  `_converse`. Letter lines, confirm-once, when a stage is done, the options line and the body check-in stay code's.
+  Tests: `test_a_framework_stage_speaks_in_the_chats_voice`,
+  `test_switching_to_another_situation_ends_the_framework_and_the_chat_carries_on`,
+  `test_a_framework_turn_is_a_conversation_the_stage_only_gives_the_direction`.
+
 - **One picture of the person, shared by the chat and every framework, updated on every reply.** Because the chat's
   understanding did not run during a framework and the framework's step store forgot everything outside its steps,
   so a new feeling or belief mid-framework was lost and the two never informed each other (muhammad, 2026-10-27).
@@ -158,15 +171,16 @@ the same change as the work.**
 - **Before a framework, Mani is its own conversation in the cadence of Lolly's two ChatGPT chats, and it overrides
   every older decision below about how the chat before a framework talks** (muhammad, 2026-10-26: "forget every
   previous decision in force, R, spec or document that stops MANI's cadence being exactly like the ChatGPT cadence the
-  client provided"). Whenever no framework, offer or check is open (`Moment.CHATTING`, not after a declined offer), the
-  turn goes to `orchestrator._converse`: the `conversation` prompt row (`content/prompts/conversation.md`: Lolly's
-  instruction, the order her chats follow, all three styles, both chats as examples), the transcript, their message
-  and a short note (style, what is understood, whether this reply may check), with the reply shape
-  `ConversationReply` (text first, then heart, the case's three parts, a checking flag, feelings, crisis, title; no
-  reasoning, no options, no [ctx] block). The check is Mani's own words; code stores it only when allowed (their 5th
-  message on, cooldowns, and an earlier reply judged `conflict_named` or `ready`), flagged, and with all three parts,
-  which become the case. The answer to a check, the offer, the framework walk, the body check-in and the safety screen
-  are unchanged. Journal: `mani-vault/Journal/story-before-guess-2026-10-26.md`.
+  client provided"). Whenever no framework, offer or check is open (`Moment.CHATTING`, including after they stepped out
+  of a framework, since 2026-10-27), the turn goes to `orchestrator._converse`: the `voice` prompt row
+  (`content/prompts/voice.md`: Lolly's instruction, how a reply sounds, all three styles, both chats as examples) and the
+  `conversation` row (how the chat moves, the heart of it, the check), the transcript, their message and a short note
+  (style, the picture of them, what is understood, whether this reply may check, the framework they stepped out of),
+  with the reply shape `ConversationReply` (text first, then heart, the case's three parts, a checking flag, picture,
+  back_to_framework, crisis, title; no reasoning, no options, no [ctx] block). The check is Mani's own words; code
+  stores it only when allowed (their 5th message on, cooldowns, and an earlier reply judged `conflict_named` or
+  `ready`), flagged, and with all three parts, which become the case. After stepping out of a framework, asking for it
+  again offers it with Try it (`back_to_framework`). Journal: `mani-vault/Journal/story-before-guess-2026-10-26.md`.
 
 - **Mani reads their whole message against what it already understands and says what is new and how it changes its
   reading, in their words** (muhammad, 2026-10-22; 2026-10-26, see "Each reply says what is new"). Because in his Directive chat about a boss who does not lead, Mani mirrored one clause ("your boss doesn't
@@ -459,7 +473,9 @@ the same change as the work.**
   `test_before_the_check_one_question_carries_its_own_possibilities_and_nothing_is_added_under_it`.
 - **Mani's voice is the shared shape in `mani_base.md` `how_you_talk` plus the chosen style's file; there is no
   shared example conversation** (muhammad, 2026-10-22, replacing "Mani talks like the client's sample conversation",
-  2026-10-13). Because all three styles read the same: one sample was copied in every style, one line blended
+  2026-10-13). Since 2026-10-26 and 2026-10-27 this holds only for the turns still composed from `mani_base.md` (the
+  answer to a check, the offer, the body check-in, a safety concern): the chat and every framework's stages speak from
+  `voice.md`, which does carry the client's two example conversations. Because all three styles read the same: one sample was copied in every style, one line blended
   Supportive and Reflective for everyone, and each style file was one sentence. The shape stays (what is new and the reading it changes, in their words, one question on its own line,
   three to six short sentences since 2026-10-26, no dashes), and
   each style file now says what its replies are for, in the client's own words, with what to do and avoid and the reply

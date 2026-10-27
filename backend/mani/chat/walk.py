@@ -386,8 +386,9 @@ def next_line(framework: Framework, phase: str) -> str:
     else:
         moved = f"the walk reaches {following}: {reach_line(following)}"
     return (
-        f"If you answer agreed, answered or corrected, {moved} If not_yet, the walk stays: think aloud with "
-        f"them about this stage, with two or three possibilities from what they have said and a door left open. "
+        f"If you answer agreed, answered or corrected, {moved} If not_yet, the walk stays: answer what they said "
+        f"as you would in the chat, talk about anything new they brought in, then come back toward this stage "
+        f"from what they have said, in fresh words. Possibilities go in options only when options says so. "
         f"If stop, write one warm line asking what they would like to talk about."
     )
 

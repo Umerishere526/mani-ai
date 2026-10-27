@@ -230,19 +230,21 @@ def compose(
     )
 
 
-def compose_conversation(
+def _in_voice(
     config: Config,
+    part: str,
     profile: Profile | None,
     *,
-    should_generate_title: bool = False,
-    summary: ThreadSummary | None = None,
-    memory: Memory | None = None,
+    should_generate_title: bool,
+    summary: ThreadSummary | None,
+    memory: Memory | None,
 ) -> SystemPrompt:
-    """The system prompt whenever no framework, offer or check is open: the conversation prompt, which
-    carries all three styles and the client's two example conversations, then what is known of the
-    person. Identical for every style, so the whole prompt row is one cached prefix."""
+    """Mani's voice, then `part` (how the chat moves, or how a framework turn goes), then what is known of the
+    person. The voice carries all three styles and the client's two example conversations and is the same for
+    every turn of either kind, so it is one cached prefix."""
     candidates: list[tuple[str, str | None]] = [
-        ("conversation", config.require("conversation").content),
+        ("voice", config.require("voice").content),
+        (part, config.require(part).content),
         ("user_context", user_context(profile)),
         ("user_memory", user_memory(memory)),
     ]
@@ -254,6 +256,35 @@ def compose_conversation(
     return SystemPrompt(
         text="\n\n".join(body for _, body in present),
         layers=[(name, len(body)) for name, body in present],
+    )
+
+
+def compose_conversation(
+    config: Config,
+    profile: Profile | None,
+    *,
+    should_generate_title: bool = False,
+    summary: ThreadSummary | None = None,
+    memory: Memory | None = None,
+) -> SystemPrompt:
+    """The system prompt whenever no framework, offer or check is open."""
+    return _in_voice(
+        config, "conversation", profile, should_generate_title=should_generate_title, summary=summary, memory=memory,
+    )
+
+
+def compose_framework(
+    config: Config,
+    profile: Profile | None,
+    *,
+    should_generate_title: bool = False,
+    summary: ThreadSummary | None = None,
+    memory: Memory | None = None,
+) -> SystemPrompt:
+    """The system prompt for a turn on a framework's stages: the same voice as the chat, then how a framework
+    turn goes. The stage itself arrives in [ctx] with their message."""
+    return _in_voice(
+        config, "framework", profile, should_generate_title=should_generate_title, summary=summary, memory=memory,
     )
 
 

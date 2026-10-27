@@ -492,7 +492,9 @@ def reply_for(
     if moment is Moment.BODY:
         names |= {"body", "options"}
     elif moment is Moment.IN_STAGES:
-        names |= {*_STAGES, *_REACH, "options"}
+        # A stage turn speaks in the chat's voice (prompts/voice.md and framework.md): no reasoning pass and no
+        # reply shape to pick, the stage fields are its judgement.
+        names = (names - {"reasoning", "style"}) | {*_STAGES, *_REACH, "options"}
     elif moment is Moment.OFFER_OPEN:
         names |= {"offer_answer", *_STAGES, *_REACH, "options"}
         if slots.their_words:
@@ -512,7 +514,7 @@ def reply_for(
         names.add("heart")
         if may_check:
             names.add("check")
-    if declined_row and moment in (Moment.CHECK_OPEN, Moment.CHATTING):
+    if declined_row and moment is Moment.CHECK_OPEN:
         names |= {"offer_answer", *_STAGES, *_REACH}
         overrides["offer_answer"] = (
             OfferAnswer | None,
@@ -586,6 +588,10 @@ class ConversationReply(_ReplyBase):
     crisis: Crisis | None = Field(
         default=None,
         description="Only when something they said sounds like they may not be safe, or may hurt themselves or someone else. Null otherwise.",
+    )
+    back_to_framework: bool | None = Field(
+        default=None,
+        description="Only when the note says they stepped out of a set of questions: true when they ask to go back to it.",
     )
     title: str | None = Field(
         default=None,

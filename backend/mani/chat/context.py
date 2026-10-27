@@ -146,8 +146,8 @@ def resolve_style(ctx: TurnContext) -> str:
 # the meanings lived in response_format.md (2026-10-08).
 _MEANING: dict[str, str | dict[str, str]] = {
     "conversation_style": (
-        "the style they chose, for the whole conversation. conversation_style in your instructions "
-        "says what each reply is trying to do in it."
+        "the style they chose, for the whole conversation. Your instructions say what each reply is "
+        "trying to do in it."
     ),
     "conversation_phase": {
         "understanding": (
@@ -375,7 +375,8 @@ def build(
         )
         lines += _line("history", tried)
 
-    if ctx.recent_styles:
+    if ctx.recent_styles and not running:
+        # A stage turn picks no reply shape (it speaks in the chat's voice), so the last shapes mean nothing to it.
         styles = " → ".join(s.shape for s in ctx.recent_styles)
         lines += _line("recent_styles", styles)
 

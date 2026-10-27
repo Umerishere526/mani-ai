@@ -104,7 +104,7 @@ def test_the_conversation_prompt_is_the_clients_cadence_and_her_two_conversation
     """Lolly, 2026-10-26: "I wish mani sounded this way." Her instruction, the order the two ChatGPT
     conversations follow, and both conversations, with the announced questions taken out and her friend's
     43 years kept right."""
-    content = parse_prompt(PROMPTS / "conversation.md")["content"]
+    content = "\n".join(parse_prompt(PROMPTS / f"{name}.md")["content"] for name in ("voice", "conversation"))
     assert "directive, concise and clear, no fluff, but warm and never robotic" in content
     assert "Can you tell me what happened between you?" in content
     assert "never a reason to guess" in content
@@ -120,9 +120,29 @@ def test_the_conversation_prompt_is_the_clients_cadence_and_her_two_conversation
 def test_the_conversation_prompt_is_one_cached_prefix_with_the_person_after_it():
     named = [
         Prompt(id=uuid.uuid4(), name=name, content=body, model_parameters={}, routing={})
-        for name, body in (("conversation", "CONVERSATION"), ("title_generation", "TITLE"))
+        for name, body in (("voice", "VOICE"), ("conversation", "CONVERSATION"), ("framework", "FRAMEWORK"),
+                           ("title_generation", "TITLE"))
     ]
     config = Config(prompts={p.name: p for p in named}, registry=Registry([]), loaded_at=time.monotonic())
     built = composer.compose_conversation(config, None, should_generate_title=True)
-    assert [name for name, _ in built.layers] == ["conversation", "title_generation"]
-    assert built.text.startswith("CONVERSATION")
+    assert [name for name, _ in built.layers] == ["voice", "conversation", "title_generation"]
+    assert built.text.startswith("VOICE")
+    # muhammad, 2026-10-27: a framework's stages speak in the same voice, so it is the same cached prefix.
+    staged = composer.compose_framework(config, None)
+    assert [name for name, _ in staged.layers] == ["voice", "framework"]
+
+
+def test_a_framework_turn_is_a_conversation_the_stage_only_gives_the_direction():
+    """muhammad, 2026-10-27: frameworks felt mechanical. A new feeling or thought is talked about on the stage in force,
+    an earlier stage it changes is said in one short line, the model question is a direction, and another situation
+    is a choice between staying and switching."""
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    for rule in (
+        "The stage waits for as many turns as that takes",
+        "Say so in one short line",
+        "The model question is a direction, never a line to read out",
+        "Do you want to stay with the one we selected?",
+        "What they say is really happening is never a thought to question",
+        "Options only when they are unsure",
+    ):
+        assert rule in framework, rule

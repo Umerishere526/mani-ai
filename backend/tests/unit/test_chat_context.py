@@ -486,7 +486,7 @@ def test_what_they_said_per_stage_is_shown_from_the_store_on_every_stage_turn():
     branch = next(line for line in block if line.startswith("next: "))
     assert "If you answer agreed, answered or corrected, the walk reaches consequence" in branch
     assert "your text is its confirmation" in branch
-    assert "If not_yet, the walk stays: think aloud with them about this stage" in branch
+    assert "If not_yet, the walk stays: answer what they said as you would in the chat" in branch
     assert "If stop, write one warm line asking what they would like to talk about." in branch
 
 

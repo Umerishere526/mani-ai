@@ -298,19 +298,22 @@ async def _converse(
     client_message_id: uuid.UUID | str | None,
     settings,
     updates: threads.ThreadUpdates,
+    declined: Framework | None = None,
 ) -> Turn:
     """One turn of Mani's own conversation, when no framework, offer or check is open: the conversation
     prompt, the transcript and their message, and a note saying what the conversation cannot show. The
-    reply's text is what Mani says, its check included; code only decides whether a check is stored."""
+    reply's text is what Mani says, its check included; code only decides whether a check is stored, and,
+    after they stepped out of `declined`, whether asking for it again offers it with its buttons."""
     allowed = converse.check_allowed(ctx)
     system = composer.compose_conversation(
         config, ctx.profile, should_generate_title=wants_title,
         summary=ctx.summary if window.dropped else None, memory=ctx.memory,
     )
-    model, parameters, routing = composer.model_settings(config, "conversation")
+    model, parameters, routing = composer.model_settings(config, "voice")
     note = converse.note(
         conversation_style, allowed=allowed, due=understanding.ready(ctx.thread.understanding),
         wants_title=wants_title, understood=ctx.thread.understanding, recent_crisis=ctx.recent_crisis,
+        stepped_out_of=declined.name if declined else None,
     )
     call = await client.complete(
         [{"role": "system", "content": system.text}]
@@ -378,9 +381,21 @@ async def _converse(
             user_message="Mani had trouble responding. Please try again.",
         )
 
+    prompts: list[SmartPrompt] = []
+    if declined is not None and reply.back_to_framework and not guarded and not check_written:
+        # They asked to go back to the set they stepped out of: it is offered again, Try it starts it.
+        prompts = repairs.offer_buttons(declined.id, explained=True)
+        updates.retire_technique = False
+        updates.technique = TechniqueState(
+            thread_id=ctx.thread.id, framework_id=declined.id, outcome=TechniqueOutcome.OFFERED,
+            phase=OFFERING, at_message_count=ctx.thread.message_count + 2,
+        )
+        updates.offer_frameworks.append(declined.id)
+        updates.reset_outcomes = True
     pair = await messages_db.create_pair(
         conn, ctx.thread.id, content, fixed.text,
         selected_prompt=tapped.label if tapped else None,
+        prompt_options=[p.model_dump(mode="json", exclude_none=True) for p in prompts] or None,
         client_message_id=client_message_id,
     )
     if fixed.title:
@@ -392,6 +407,7 @@ async def _converse(
         message_id=pair.mani_message_id,
         content=fixed.text,
         created_at=pair.created_at,
+        prompts=prompts,
         title=fixed.title or ctx.thread.title,
         crisis_detected=False,
         crisis_blocks_chat=settings.crisis_blocks_chat,
@@ -633,13 +649,22 @@ async def send(
         technique, outcome, retiring_framework_id,
         concern=assessment.blocks_framework, check_open=context.check_open(ctx),
     )
-    if moment is Moment.CHATTING and not declined_row:
-        # No framework, offer or check is open: Mani's own conversation, in the client's cadence.
+    if moment is Moment.CHATTING:
+        # No framework, offer or check is open: Mani's own conversation, in the client's cadence. After they
+        # stepped out of a framework, it can be offered again when they ask for it.
         return await _converse(
             conn, ctx, for_model=for_model, content=content, tapped=tapped, history=history, window=window,
             config=config, conversation_style=conversation_style, wants_title=wants_title,
             client_message_id=client_message_id, settings=settings, updates=updates,
+            declined=config.registry.get(ctx.technique.framework_id) if declined_row else None,
         )
+    if moment is Moment.IN_STAGES:
+        # A turn on a framework's stages speaks in the same voice as the chat; the stage arrives in [ctx].
+        system = composer.compose_framework(
+            config, ctx.profile, should_generate_title=wants_title,
+            summary=ctx.summary if window.dropped else None, memory=ctx.memory,
+        )
+        model, parameters, routing = composer.model_settings(config, "voice")
     reply_shape = schema.reply_for(
         moment,
         may_check=context.may_check(ctx),

@@ -28,7 +28,9 @@ def prompt(name: str, content: str):
 @pytest.fixture
 def config() -> Config:
     named = [
+        prompt("voice", "VOICE"),
         prompt("conversation", "CONVERSATION"),
+        prompt("framework", "FRAMEWORK"),
         prompt("mani_base", "IDENTITY"),
         prompt("response_format", "FORMAT"),
         prompt("style_directive", "DIRECTIVE STYLE"),

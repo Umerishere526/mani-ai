@@ -21,11 +21,11 @@ def test_each_moment_carries_only_the_fields_that_mean_something_in_it():
     # reply judges where the heart of it stands (R33).
     assert fields(Moment.CHATTING) == CORE | {"heart"}, "no check before their fifth message, never an offer"
     assert fields(Moment.CHATTING, may_check=True) == CORE | {"heart", "check"}
-    assert fields(Moment.CHATTING, declined_row=True) == CORE | {"heart", "offer_answer", *REACH}
     assert fields(Moment.CHECK_OPEN) == CORE | {"heart", "check_answer", "heading_toward", "offer"}
     assert fields(Moment.CHECK_OPEN, declined_row=True) == CORE | {
         "heart", "check_answer", "heading_toward", "offer", "offer_answer", *REACH}
-    assert fields(Moment.IN_STAGES) == CORE | REACH | {"options"}
+    # A stage turn speaks in the chat's voice: no reasoning pass and no reply shape (muhammad, 2026-10-27).
+    assert fields(Moment.IN_STAGES) == (CORE - {"reasoning", "style"}) | REACH | {"options"}
     assert fields(Moment.OFFER_OPEN) == CORE | {"offer_answer", "their_words", "options", *REACH}
     assert fields(Moment.BODY) == CORE | {"body", "options"}
 

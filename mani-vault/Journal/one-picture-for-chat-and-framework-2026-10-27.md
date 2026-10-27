@@ -15,3 +15,14 @@ picture.
 Not yet: framework turns still use `mani_base.md` and `[ctx]` (phase 2 moves them to the chat engine), and the one
 short line saying an earlier step changed comes with that move. Related: [[heart-of-it-replaces-the-three-steps-2026-10-26]],
 [[story-before-guess-2026-10-26]], [[abcde-walk-owned-by-code-2026-10-13]].
+
+## Phase 2, same day: the framework speaks in the chat's voice
+
+The prompt is now three rows: `voice` (who Mani is, how a reply sounds, the three styles, Lolly's two chats),
+`conversation` (how the chat moves, the heart of it, the check) and `framework` (how a stage turn goes as a
+conversation). Stage turns no longer read `mani_base.md`, `response_format.md` or a style file. The `not_yet` line
+in `walk.next_line` no longer asks for "two or three possibilities" every time the walk stays, which was the
+options-every-turn pattern the reviews called a questionnaire.
+
+Changed behaviour to watch: asking for a framework they stepped out of now offers it again with Try it rather than
+starting it in the same turn. The chat path would otherwise have to judge stage A itself.

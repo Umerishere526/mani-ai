@@ -1252,21 +1252,25 @@ async def test_an_offer_they_typed_past_is_flagged_then_closed(alice, model):
     assert ctx.technique.outcome is TechniqueOutcome.DECLINED
 
 
-async def test_asking_for_a_declined_framework_themselves_starts_it(alice, model):
-    """Someone who carried on past an offer and then asks for that help themselves has said
-    yes, even before the cooldown would let Mani offer it again. Observed: Mani began the
-    questions in its own words while nothing was running."""
-    model(
+async def test_asking_for_a_declined_framework_themselves_offers_it_again_and_try_it_starts_it(alice, model):
+    """Someone who carried on past an offer and then asks for that help themselves gets it back, even before the
+    cooldown would let Mani offer it again. Since 2026-10-27 the chat after a framework is Mani's own conversation:
+    it says it can pick it up again and shows Try it, which starts it (muhammad)."""
+    scripted = model(
         _offer(),
         Reply(text="You keep replaying it. Which part stays with you?", offer_answer="moved_on"),
-        Reply(text="What happened?", offer_answer="yes"),
+        ConversationReply(text="Of course, we can pick it back up.", back_to_framework=True),
+        Reply(text="What happened?"),
     )
     from mani.db import pool
 
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "my manager criticized me in front of everyone")
     await send(alice, thread.id, "I keep replaying it")
-    await send(alice, thread.id, "actually I'd like some help looking at it")
+    again = await send(alice, thread.id, "actually I'd like some help looking at it")
+    assert "They stepped out of ABCDE earlier." in _ctx_sent(scripted)
+    assert [(p.label, p.technique) for p in again.prompts] == [("Try it", "abcde"), ("Keep chatting", None)]
+    await send(alice, thread.id, "Try it")
 
     async with pool.as_user(alice) as conn:
         ctx = await threads.load_turn_context(conn, thread.id, ALICE)
@@ -1299,7 +1303,8 @@ async def test_a_declined_framework_can_be_offered_again_after_a_few_replies(ali
     again = await send(alice, thread.id, "yes, that's it")
     assert [p.technique for p in again.prompts if p.technique] == ["abcde"]
     # The way back is a new check once the cooldown has passed, never an offer on its own.
-    assert ["check" in shape.model_fields for shape in scripted.schemas[2:]] == [False, False, False, True, False]
+    assert scripted.schemas[2:6] == [ConversationReply] * 4, "after a decline the chat is Mani's own conversation"
+    assert [_may_check(sent) for sent in scripted.sent[2:6]] == [False, False, False, True]
 
 
 async def test_an_offer_carries_the_clients_three_buttons_and_tell_me_more_offers_again(
@@ -1535,7 +1540,8 @@ async def _say_yes(alice, thread_id, entry: str):
     declining it."""
     if entry == "declined":
         await send(alice, thread_id, "Keep chatting")
-        return await send(alice, thread_id, "actually I'd like to look at it")
+        await send(alice, thread_id, "actually I'd like to look at it")
+        return await send(alice, thread_id, "Try it")
     return await send(alice, thread_id, "Try it" if entry == "tap" else "yes let's do it")
 
 
@@ -1547,7 +1553,10 @@ async def test_what_they_said_before_the_yes_is_said_back_and_confirmed_once_nev
     C, which they never said, is asked."""
     a_own = "So it started with being left out of meetings at work. Is that where this began for you?"
     b_own = "You've been telling yourself nobody wants you there. Is that still how it feels?"
-    declining = [Reply(text="What else is on your mind?", their_words="left out")] if entry == "declined" else []
+    declining = [
+        Reply(text="What else is on your mind?", their_words="left out"),
+        ConversationReply(text="Of course, we can pick it back up.", back_to_framework=True),
+    ] if entry == "declined" else []
     model(
         _offer(), *declining,
         Reply(text=a_own, offer_answer="yes",
@@ -2219,3 +2228,38 @@ async def test_the_framework_reads_the_chats_picture_and_a_new_thought_at_d_upda
     assert (await _offered_row(alice, thread.id)).phase == "dispute"
     picture_now = (await _thread_row(alice, thread.id)).understanding["picture"]
     assert picture_now["beliefs"] == [{"belief": "you're a bad brother", "kind": "thought"}]
+
+
+async def test_a_framework_stage_speaks_in_the_chats_voice(alice, model):
+    """muhammad, 2026-10-27: a framework turn is composed from the same voice as the chat and the framework guide,
+    never from mani_base, and asks for no reasoning pass or reply shape."""
+    scripted = model(Reply(text="That sounds heavy. What were you telling yourself when she said that?",
+                           stage_answer="not_yet"))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "belief")
+    await send(alice, thread.id, "she said it in front of everyone")
+
+    system = scripted.last_messages[0]["content"]
+    assert system.startswith("# Who you are") and "# While a set of questions runs" in system
+    assert "in_a_framework:" not in system, "mani_base.md is not part of a stage turn"
+    assert not {"reasoning", "style"} & set(scripted.schemas[-1].model_fields)
+    assert "stage: belief" in _ctx_sent(scripted)
+
+
+async def test_switching_to_another_situation_ends_the_framework_and_the_chat_carries_on(alice, model):
+    """muhammad, 2026-10-27: another situation mid-framework is a choice; on switching, the framework ends and the
+    conversation goes on in the chat's own path, which can offer the framework again if they ask."""
+    scripted = model(
+        Reply(text="Then let's talk about your sister. What's been happening with her?", stage_answer="stop"),
+        ConversationReply(text="That sounds like a lot to hold together. When did the loans start?"),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "belief")
+
+    await send(alice, thread.id, "the other thing, my sister keeps borrowing money")
+    assert (await _offered_row(alice, thread.id)).outcome is TechniqueOutcome.DECLINED
+    turn = await send(alice, thread.id, "she never pays it back")
+
+    assert scripted.schemas[-1] is ConversationReply
+    assert "They stepped out of ABCDE earlier." in _ctx_sent(scripted)
+    assert turn.prompts == []

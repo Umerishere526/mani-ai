@@ -27,6 +27,7 @@ def note(
     wants_title: bool,
     understood: dict[str, str] | None = None,
     recent_crisis: bool = False,
+    stepped_out_of: str | None = None,
 ) -> str:
     """What this reply needs to know that the conversation does not show. Sent after their message as a
     system message, never stored."""
@@ -49,6 +50,11 @@ def note(
         lines.append("You may check your understanding this turn, only if heart is ready after their message.")
     else:
         lines.append("Do not check your understanding this turn. Keep following their story.")
+    if stepped_out_of:
+        lines.append(
+            f"They stepped out of {stepped_out_of} earlier. If they ask to go back to it, set back_to_framework and say "
+            "warmly that you can pick it up again; code shows them the button to start it."
+        )
     if wants_title:
         lines.append("Give this conversation a title.")
     return "Note for this reply only. Never mention it.\n" + "\n".join(lines)
