@@ -273,8 +273,8 @@ class Reply(_ReplyBase):
         description=(
             "Where your reading of the heart of it stands, from the whole conversation including their "
             "message. exploring: the central conflict is not clear yet. conflict_named: you said the "
-            "tension back to them and they agreed. ready: the conflict is agreed, and you also know what "
-            "they want and what is stopping them."
+            "tension back to them and they did not correct it; carrying on counts. ready: the conflict is "
+            "named, and you also know what they want and what is stopping them."
         ),
     )
     offer_answer: OfferAnswer | None = Field(
@@ -324,12 +324,13 @@ class Reply(_ReplyBase):
     options: str | None = Field(
         default=None,
         description=(
-            "A second, full question that makes it easy to answer: two or three concrete possibilities for "
-            "the question your text ends on, drawn from their case and what they said, and room for "
-            "something else. It starts with a verb, such as Is, Has, Are, Do or Would, reads as you would ask "
-            "it aloud, and never tells them what they feel. Sent on the line under your text, so your text "
-            "never holds them. Null only when your question is yes or no, you ask nothing, or you are "
-            "checking your understanding."
+            "Only when their last message says they don't know or aren't sure, asks what you mean, or asks what "
+            "they should do: a second, full question with two or three possibilities for the question your text "
+            "ends on, drawn from their case and what they said, and room for something else. Each possibility is a "
+            "plain thing a person would actually think or do in their situation. At E, and whenever they ask what "
+            "to do, they may be concrete things they could do, offered as ideas for them to choose from. It starts "
+            "with a verb, such as Is, Has, Are, Do or Would, and never tells them what they feel. Never the same "
+            "possibilities, or the same question, as an earlier reply. Null otherwise."
         ),
     )
     understanding_update: UnderstandingUpdate | None = Field(
@@ -499,8 +500,9 @@ class ConversationReply(_ReplyBase):
         default=None,
         description=(
             "exploring: you don't yet know what they are torn between or what it means to them. conflict_named: "
-            "you said the heart of it back and they agreed. ready: that is agreed, and you also know what they want "
-            "and what is stopping them."
+            "you said the heart of it back and they did not correct it; carrying on or answering your next question "
+            "counts, and it stays named unless they say that is not it. ready: it is named, and you also know what "
+            "they want and what is stopping them."
         ),
     )
     conflict: str | None = Field(
