@@ -678,3 +678,27 @@ def test_their_case_carries_every_feeling_and_what_they_added_and_says_never_to_
     at = next(i for i, line in enumerate(block) if line.startswith("their_case: "))
     assert "trapped" in block[at] and "The client warned they would remove them" in block[at]
     assert "never ask them again for anything in it" in block[at + 1].lower()
+
+
+def test_ctx_says_when_the_questions_stopped_helping_and_when_stepping_out_was_offered():
+    """muhammad, 2026-10-27: code names the turn. Two stalls, or a real situation in the picture, tell the reply to
+    offer to step out; the turn after an offer reads it."""
+    from scripts.seed import FRAMEWORKS_DIR, parse_framework
+
+    parsed = parse_framework(FRAMEWORKS_DIR / "abcde.md")
+    abcde = Framework(id="abcde", name="ABCDE", summary="s", body="b", phases=parsed["phases"], stages=parsed["stages"])
+
+    def at_dispute(entry: dict, understood: dict | None = None) -> str:
+        ctx = _running_at("dispute")
+        ctx = dataclasses.replace(
+            ctx,
+            thread=ctx.thread.model_copy(update={"understanding": understood or {}}),
+            technique=ctx.technique.model_copy(update={"stages_known": {"abcde": {"dispute": entry}}}),
+        )
+        return context.build(ctx, framework=abcde)
+
+    assert "not_helping" not in at_dispute({"status": "partial", "said": "x", "stalls": 1})
+    assert "not_helping: stalled" in at_dispute({"status": "partial", "said": "x", "stalls": 2})
+    assert "not_helping: situation" in at_dispute({}, {"picture": {"problem_type": "situation"}})
+    offered = at_dispute({"status": "partial", "said": "x", "stalls": 2, "exit_offered": True})
+    assert "exit_offered: yes" in offered and "not_helping" not in offered

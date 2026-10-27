@@ -232,6 +232,40 @@ def advance(
     return Walked(stored, following, reached, notes + reach_notes, unjudged=unjudged)
 
 
+# Turns on one stage with nothing new before Mani offers to step out of the questions (muhammad, 2026-10-27).
+STALLS_TO_STEP_OUT = 2
+# What their message did that is new: talking it through is never a stall, the stage simply waits for it.
+_ADDED = frozenset({"adds", "corrects", "new_issue", "back"})
+
+
+def _words(entry: dict | None) -> dict:
+    return {k: v for k, v in (entry or {}).items() if k not in ("stalls", "exit_offered")}
+
+
+def after_turn(
+    before: dict[str, dict], entries: dict[str, dict], in_force: str, *,
+    moved: bool, shift: str | None, offered_exit: bool,
+) -> dict[str, dict]:
+    """The stage in force after a turn that stayed on it: one more stall when their message added nothing new, to
+    the picture or to the stage's own words, none when it did, and whether this reply offered to step out, which only
+    the next turn reads. A stage the walk left keeps none of it."""
+    if moved:
+        return entries
+    out = {stage: dict(entry) for stage, entry in entries.items()}
+    entry = _words(out.get(in_force))
+    progressed = shift in _ADDED or entry != _words(before.get(in_force))
+    stalls = 0 if progressed else (before.get(in_force) or {}).get("stalls", 0) + 1
+    if stalls:
+        entry["stalls"] = stalls
+    if offered_exit:
+        entry["exit_offered"] = True
+    if entry:
+        out[in_force] = entry
+    else:
+        out.pop(in_force, None)
+    return out
+
+
 def from_picture(
     framework: Framework, entries: dict[str, dict], before: dict | None, after: dict | None, *, in_force: str | None,
 ) -> tuple[dict[str, dict], list[str]]:

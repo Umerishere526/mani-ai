@@ -133,6 +133,18 @@ the same change as the work.**
 
 ## Decisions in force
 
+- **A framework that stops helping offers to step out, named by code and the reply together.** Because the
+  2026-10-27 review found Mani pressing on with a framework that no longer helped, and the coworker case questioned
+  something really happening as a belief (muhammad, 2026-10-27). Each stage reply reports `framework_fit` (helping,
+  confused, real_not_belief, already_balanced, disengaging); anything but helping is logged and its text offers to step
+  out. Code counts stalls on the stage in force (`walk.after_turn`): a turn that adds nothing to the picture or to the
+  stage's words is one, talking something through never is. Two stalls (`walk.STALLS_TO_STEP_OUT`) or a picture whose
+  kind of problem is a situation put `not_helping` in `[ctx]`; the turn after an offer reads `exit_offered`, and their
+  yes is `stop`, which ends the framework into the chat. D counts as answered when their words already hold both
+  sides. Tests: `test_a_turn_with_nothing_new_is_a_stall_and_talking_it_through_never_is`,
+  `test_ctx_says_when_the_questions_stopped_helping_and_when_stepping_out_was_offered`,
+  `test_two_turns_with_nothing_new_offer_to_step_out_and_a_yes_ends_the_framework`.
+
 - **Every conversation turns from understanding to helping, and code names the turn and the help move.** Because the
   2026-10-27 review found people heard but not helped: question after question, no progression, the styles alike
   in how they moved, and a direct request for help answered with another question (muhammad, 2026-10-27). The turn is

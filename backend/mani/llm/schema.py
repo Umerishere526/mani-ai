@@ -241,12 +241,16 @@ BodyBranch = Literal[
 ]
 StageAnswer = Literal["agreed", "answered", "corrected", "stop", "not_yet"]
 Heart = Literal["exploring", "conflict_named", "ready"]
+# Whether the set of questions is still helping them (muhammad, 2026-10-27): anything but helping makes the reply offer
+# to step out, and code remembers the offer for their answer.
+FrameworkFit = Literal["helping", "confused", "real_not_belief", "already_balanced", "disengaging"]
 _CLOSED_SETS = {
     "offer_answer": get_args(OfferAnswer),
     "check_answer": get_args(CheckAnswer),
     "body": get_args(BodyBranch),
     "stage_answer": get_args(StageAnswer),
     "heart": get_args(Heart),
+    "framework_fit": get_args(FrameworkFit),
 }
 
 
@@ -278,7 +282,9 @@ class _ReplyBase(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    @field_validator("offer_answer", "check_answer", "heart", "body", "stage_answer", mode="before", check_fields=False)
+    @field_validator(
+        "offer_answer", "check_answer", "heart", "body", "stage_answer", "framework_fit", mode="before", check_fields=False,
+    )
     @classmethod
     def _off_list_is_null(cls, value: object, info) -> object:
         if value is None or value in _CLOSED_SETS[info.field_name]:
@@ -345,6 +351,16 @@ class Reply(_ReplyBase):
             "your possibilities as theirs, with an update for it. corrected: a no with new words, with "
             "an update for it. not_yet: a plain no, unclear, unsure, I don't know, a question back about what you "
             "asked, or only part of what the stage needs, so the walk stays. stop: they clearly want to stop or leave the questions."
+        ),
+    )
+    framework_fit: FrameworkFit | None = Field(
+        default=None,
+        description=(
+            "Whether the set of questions is still helping them, from the whole conversation. helping. confused: "
+            "they do not understand what is asked, again. real_not_belief: what the stage would have them question "
+            "is something really happening. already_balanced: they already see both sides of it. disengaging: "
+            "shorter answers, or they say they already told you or this is going in circles. Anything but helping: "
+            "your text offers to step out of the questions."
         ),
     )
     stage_updates: list[StageUpdate] | None = Field(
@@ -469,7 +485,7 @@ def reply_for(
     elif moment is Moment.IN_STAGES:
         # A stage turn speaks in the chat's voice (prompts/voice.md and framework.md): no reasoning pass and no
         # reply shape to pick, the stage fields are its judgement.
-        names = (names - {"reasoning", "style"}) | {*_STAGES, *_REACH, "options"}
+        names = (names - {"reasoning", "style"}) | {*_STAGES, *_REACH, "options", "framework_fit"}
     elif moment is Moment.OFFER_OPEN:
         names |= {"offer_answer", *_STAGES, *_REACH, "options"}
         if slots.their_words:

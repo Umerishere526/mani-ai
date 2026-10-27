@@ -823,6 +823,17 @@ async def send(
             feeling=understood.get("feeling"),
             seen_before=ctx.thread.understanding.get(picture.KEY), seen_after=understood.get(picture.KEY),
         )
+        if not starting:
+            # Whether the questions are still helping: stalls counted when nothing new came, and an offer to step
+            # out remembered for their answer (muhammad, 2026-10-27).
+            fit = reply.framework_fit
+            if fit and fit != "helping":
+                logger.info("thread %s framework not helping: %s", ctx.thread.id, fit)
+            walked = dataclasses.replace(walked, entries=walk.after_turn(
+                stored_all.get(walking.id) or {}, walked.entries, technique.phase, moved=walked.phase != technique.phase,
+                shift=(understood.get(picture.KEY) or {}).get("shift"),
+                offered_exit=fit is not None and fit != "helping",
+            ))
         if walked.entries != (stored_all.get(walking.id) or {}):
             updates.stages_known = {**stored_all, walking.id: walked.entries}
         if walked.phase == body_route.CHECK:

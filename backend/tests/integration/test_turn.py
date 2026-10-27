@@ -2298,3 +2298,27 @@ async def test_asking_for_help_turns_the_conversation_and_the_next_note_carries_
     note = _ctx_sent(scripted)
     assert "You are helping now" in note and "concrete, sensible next steps" in note
     assert "Still unknown" not in note
+
+
+async def test_two_turns_with_nothing_new_offer_to_step_out_and_a_yes_ends_the_framework(alice, model):
+    """The 2026-10-27 review: the framework carried on when it was no longer helping. Two stalls on a stage make the
+    reply offer to step out; the next turn reads the offer, and their yes ends the framework into the chat."""
+    from mani.db import pool
+
+    scripted = model(
+        Reply(text="What makes you believe that?", stage_answer="not_yet", picture=PictureUpdate(shift="nothing_new")),
+        Reply(text="Is there anything that makes you question it?", stage_answer="not_yet",
+              picture=PictureUpdate(shift="nothing_new")),
+        Reply(text="This doesn't seem to be helping. Would it help more to talk about what to do?",
+              stage_answer="not_yet", framework_fit="disengaging"),
+        Reply(text="Of course. What feels most pressing?", stage_answer="stop"),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "dispute")
+    for said in ("i don't know", "same as before", "whatever", "yes, let's just talk"):
+        await send(alice, thread.id, said)
+
+    ctx_per_turn = [sent[-1]["content"] for sent in scripted.sent]
+    assert ["not_helping: stalled" in c for c in ctx_per_turn] == [False, False, True, False]
+    assert ["exit_offered: yes" in c for c in ctx_per_turn] == [False, False, False, True]
+    assert (await _offered_row(alice, thread.id)).outcome is TechniqueOutcome.DECLINED

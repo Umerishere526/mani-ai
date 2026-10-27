@@ -429,3 +429,19 @@ def test_a_new_thought_or_feeling_brings_the_stages_already_passed_up_to_date(ab
     assert walk.from_picture(abcde, stored, before, after, in_force="belief")[0] == stored
     # A turn that adds nothing to the picture changes nothing.
     assert walk.from_picture(abcde, stored, after, after, in_force="dispute") == (stored, [])
+
+
+def test_a_turn_with_nothing_new_is_a_stall_and_talking_it_through_never_is():
+    """muhammad, 2026-10-27: the framework steps out when it stops helping, and stays while they bring in something
+    new. A turn that adds to the picture or to the stage's own words resets the count; a move clears it all."""
+    before = {"dispute": {"said": "the deadline", "status": "partial", "gap": "challenge"}}
+    once = walk.after_turn(before, before, "dispute", moved=False, shift="nothing_new", offered_exit=False)
+    assert once["dispute"]["stalls"] == 1
+    twice = walk.after_turn(once, once, "dispute", moved=False, shift=None, offered_exit=True)
+    assert (twice["dispute"]["stalls"], twice["dispute"]["exit_offered"]) == (2, True)
+    talked = walk.after_turn(twice, twice, "dispute", moved=False, shift="adds", offered_exit=False)
+    assert talked["dispute"] == before["dispute"], "talking it through resets the stalls and the offer is read once"
+    newer = {"dispute": {"said": "nobody told me", "status": "partial", "gap": "challenge"}}
+    assert "stalls" not in walk.after_turn(once, newer, "dispute", moved=False, shift=None, offered_exit=False)["dispute"]
+    assert walk.after_turn(twice, before, "dispute", moved=True, shift=None, offered_exit=False) == before
+    assert walk.after_turn({}, {}, "belief", moved=False, shift="adds", offered_exit=False) == {}

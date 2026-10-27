@@ -228,6 +228,24 @@ _MEANING: dict[str, str | dict[str, str]] = {
         "force from their message."
     ),
     "landed_on": "what they said for the last of the questions, in their words: where they ended up.",
+    "not_helping": {
+        "stalled": (
+            "two turns on this stage have brought nothing new: the questions have stopped helping. In your own words, "
+            "offer to step out of them and help with what they need in the conversation instead, and set "
+            "framework_fit. Do not ask this stage's question again."
+        ),
+        "situation": (
+            "what they describe is really happening, not a thought to question. Say so plainly, offer in your own "
+            "words to step out of the questions and help with it in the conversation, and set framework_fit to "
+            "real_not_belief."
+        ),
+    },
+    "exit_offered": {
+        "yes": (
+            "your last reply offered to step out of the questions. If they agree, report stop and go on with them in "
+            "your text. If they want to carry on, carry on with the stage."
+        ),
+    },
     "body_step": {
         body.CHECK: (
             "they were asked whether a feeling they named earlier is still felt in the place Mani named, with Yes "
@@ -402,6 +420,15 @@ def _running_lines(
         return lines
     known = technique.stages_known.get(framework.id) or {}
     lines += _line("stages_known", _stored(framework, known, technique.phase))
+    if technique.phase in walk.content_stages(framework):
+        in_force = known.get(technique.phase) or {}
+        kind = ((ctx.thread.understanding or {}).get("picture") or {}).get("problem_type")
+        if in_force.get("exit_offered"):
+            lines += _line("exit_offered", "yes")
+        elif kind == "situation":
+            lines += _line("not_helping", "situation")
+        elif in_force.get("stalls", 0) >= walk.STALLS_TO_STEP_OUT:
+            lines += _line("not_helping", "stalled")
     if technique.phase in walk.content_stages(framework):
         lines.append(f"next: {walk.next_line(framework, technique.phase)}")
     index = framework.phase_index(technique.phase)
