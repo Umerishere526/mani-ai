@@ -600,10 +600,18 @@ async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, m
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
             at_message_count=2, phase="somatic_closing",
         )
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set understanding = $2::jsonb where id = $1",
+            thread.id, {"heart": "ready", "case": "You want her back in your life."},
+        )
 
     turn = await send(alice, thread.id, "that helped, thanks")
 
     assert turn.content == "How has the rest of the week been?"
+    # muhammad, 2026-10-27: with no wait after a finished framework, its reading is cleared, so the next check
+    # needs a fresh understanding. The case stays as history.
+    assert turn.understanding == {"case": "You want her back in your life."}
 
     async with pool.as_user(alice) as conn:
         ctx = await threads.load_turn_context(conn, thread.id, ALICE)
@@ -974,8 +982,8 @@ async def test_a_new_chat_after_a_crisis_carries_the_flag_but_not_the_lock(alice
 
 
 async def test_the_framework_just_finished_is_offered_again_on_a_new_confirmed_check(alice, model):
-    """Spec 0006, AC-6: once the cooldown after finishing has passed, a yes to a new check offers it
-    again. Only ABCDE is active, and refusing the set just done would leave nothing to offer, ever."""
+    """Spec 0006, AC-6: a yes to a new check after a finished framework offers it again, with no wait
+    (muhammad, 2026-10-27). Refusing the set just done would leave nothing to offer."""
     scripted = model(_offer())
     from mani.db import pool
 
@@ -983,7 +991,7 @@ async def test_the_framework_just_finished_is_offered_again_on_a_new_confirmed_c
     async with pool.as_user(alice) as conn:
         await set_technique_outcome(
             conn, thread.id, ALICE, "abcde", TechniqueOutcome.ACCEPTED,
-            at_message_count=-context.COOLDOWN_AFTER_COMPLETE, phase=None,
+            at_message_count=0, phase=None,
         )
     await answering_a_check(thread)
 

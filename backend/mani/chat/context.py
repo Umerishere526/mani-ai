@@ -26,7 +26,6 @@ COOLDOWN_AFTER_DECLINE = 6
 CHECK_FROM = 5
 # The greeting, the style they tapped, and that style's opener.
 OPENING_MESSAGES = 3
-COOLDOWN_AFTER_COMPLETE = 45
 
 # The default when neither the conversation nor the profile has chosen a style yet.
 # `conversation_style` is set per-thread by PATCH /v1/threads/{id} and wins over
@@ -57,14 +56,6 @@ def disarm(text: str) -> str:
     the next twenty turns. Only the brackets change; what they wrote is still sent.
     """
     return _CTX_MARKER.sub(lambda m: f"({m.group(1)}ctx)", text)
-
-
-def cooldown_for(outcome: TechniqueOutcome) -> int:
-    return (
-        COOLDOWN_AFTER_COMPLETE
-        if outcome is TechniqueOutcome.ACCEPTED
-        else COOLDOWN_AFTER_DECLINE
-    )
 
 
 def their_messages(ctx: TurnContext) -> int:
@@ -102,8 +93,14 @@ def may_check(ctx: TurnContext) -> bool:
     count, at = ctx.thread.message_count, ctx.thread.check_at_message_count
     if at is not None and count - at < COOLDOWN_AFTER_DECLINE:
         return False
+    # Only a declined offer holds the next check back. A finished framework does not (muhammad, 2026-10-27): its
+    # reading is cleared when it finishes, so a new check needs a fresh understanding first.
     technique = ctx.technique
-    return technique is None or count - technique.at_message_count >= cooldown_for(technique.outcome)
+    return (
+        technique is None
+        or technique.outcome is not TechniqueOutcome.DECLINED
+        or count - technique.at_message_count >= COOLDOWN_AFTER_DECLINE
+    )
 
 
 def moment(

@@ -130,6 +130,12 @@ the same change as the work.**
 
 ## Decisions in force
 
+- **Only a declined offer holds the next check back; a finished framework does not, and its reading is cleared when it
+  finishes.** Because muhammad removed the 45-message wait after a finished framework, and without clearing the heart of
+  it Mani could check again at once on the case it had just worked through (2026-10-27). `context.may_check`,
+  `orchestrator.send` (retiring); `test_only_a_declined_offer_holds_the_next_check_back`,
+  `test_finishing_a_technique_retires_it_without_losing_the_turn`.
+
 - **An admin reads every person's conversations in full and takes part in none; each full read is logged.**
   Because the client and we review beta users' chats for their cadence, which a crisis-only browser could not show
   (muhammad, 2026-10-26; replaces the note "scope the conversation browser to unresolved crisis threads"). The list

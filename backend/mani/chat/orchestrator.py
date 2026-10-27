@@ -736,6 +736,10 @@ async def send(
         check_written = with_check and heart_ready
         if check_written:
             understood = understanding.merge_check(understood, repairs.check_summary(reply.check))
+    if retiring_framework_id is not None:
+        # The framework that just finished worked through this reading. The next check waits for a fresh one, so
+        # Mani never checks again straight away on the case it has just finished.
+        understood = {key: value for key, value in understood.items() if key != "heart"}
     if understood != ctx.thread.understanding:
         updates.understanding = understood
     if check_written:

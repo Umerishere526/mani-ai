@@ -114,22 +114,21 @@ def test_a_retired_technique_still_holds_the_cooldown_closed():
     assert "current_phase" not in block
 
 
-def test_a_finished_framework_waits_longer_than_a_declined_one():
-    """45 messages against 20. The longer wait was unreachable while completion deleted
-    the row it is measured from."""
+def test_only_a_declined_offer_holds_the_next_check_back():
+    """muhammad, 2026-10-27: a finished framework no longer waits 45 messages. A declined offer still waits
+    three replies."""
     started_at = 10
-    long_enough_for_a_decline = ready(thread(started_at + context.COOLDOWN_AFTER_DECLINE))
+    too_soon = ready(thread(started_at + context.COOLDOWN_AFTER_DECLINE - 1))
     finished = TechniqueState(
         thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
         phase=None, at_message_count=started_at,
     )
     declined = finished.model_copy(update={"outcome": TechniqueOutcome.DECLINED})
 
-    assert not context.may_check(TurnContext(thread=long_enough_for_a_decline, profile=None, technique=finished))
-    assert context.may_check(TurnContext(thread=long_enough_for_a_decline, profile=None, technique=declined))
-    # Finished, then a new confirmed check may offer it again: nothing refuses the set just done.
+    assert context.may_check(TurnContext(thread=too_soon, profile=None, technique=finished))
+    assert not context.may_check(TurnContext(thread=too_soon, profile=None, technique=declined))
     assert context.may_check(TurnContext(
-        thread=ready(thread(started_at + context.COOLDOWN_AFTER_COMPLETE)), profile=None, technique=finished,
+        thread=ready(thread(started_at + context.COOLDOWN_AFTER_DECLINE)), profile=None, technique=declined,
     ))
 
 
