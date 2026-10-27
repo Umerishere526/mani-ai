@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import body as body_route, context, converse, repairs, reply_checks, safety, understanding, walk
+from mani.chat import body as body_route, context, converse, picture, repairs, reply_checks, safety, understanding, walk
 from mani.chat.greeting import (
     EXPLAIN_LABELS,
     OPENERS,
@@ -110,10 +110,12 @@ def _walked(
     style: str,
     thread_id: uuid.UUID,
     feeling: str | None,
+    seen_before: dict | None = None,
+    seen_after: dict | None = None,
 ) -> tuple[repairs.Repaired, walk.Walked]:
-    """The walk's turn: what they said merged into the store, the step taken, and the reply that
-    opens the stage reached, from the reply's judgement of that stage in next_stage. Code decides all
-    three."""
+    """The walk's turn: what they said merged into the store, the stages already passed brought up to date with
+    what the picture of them gained (`seen_before` to `seen_after`), the step taken, and the reply that opens the
+    stage reached, from the reply's judgement of that stage in next_stage. Code decides all of it."""
     if start:
         walked = walk.start(framework, reply.stage_updates, reply.next_stage)
     else:
@@ -121,6 +123,8 @@ def _walked(
             framework, stored, reply.stage_updates, reply.stage_answer,
             in_force=in_force, report=reply.next_stage,
         )
+        synced, sync_notes = walk.from_picture(framework, walked.entries, seen_before, seen_after, in_force=in_force)
+        walked = dataclasses.replace(walked, entries=synced, notes=walked.notes + sync_notes)
     text, notes = walk.reply_text(
         framework, walked, text=fixed.text, style=style, thread_id=thread_id,
         feeling=feeling if start else None, options=reply.options,
@@ -732,7 +736,7 @@ async def send(
     understood = ctx.thread.understanding
     check_written = False
     if not guarded:
-        understood = understanding.merge(ctx.thread.understanding, reply.understanding_update, reply.heart)
+        understood = understanding.merge(ctx.thread.understanding, reply.picture, reply.heart)
         check_written = with_check and heart_ready
         if check_written:
             understood = understanding.merge_check(understood, repairs.check_summary(reply.check))
@@ -794,6 +798,7 @@ async def send(
             start=starting is not None, in_force=None if starting else technique.phase,
             style=conversation_style, thread_id=ctx.thread.id,
             feeling=understood.get("feeling"),
+            seen_before=ctx.thread.understanding.get(picture.KEY), seen_after=understood.get(picture.KEY),
         )
         if walked.entries != (stored_all.get(walking.id) or {}):
             updates.stages_known = {**stored_all, walking.id: walked.entries}

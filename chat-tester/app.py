@@ -320,6 +320,28 @@ with st.sidebar:
         ):
             if understood.get(key):
                 st.markdown(f"**{label}:** {understood[key]}")
+        # The picture of them the chat and every framework share (backend chat/picture.py).
+        seen = understood.get("picture") or {}
+        beliefs = seen.get("beliefs") or []
+        risks = seen.get("risks") or []
+        for label, value in (
+            ("Focus", seen.get("focus")),
+            ("What is happening", " | ".join(seen.get("situations") or [])),
+            ("Feelings", " | ".join(
+                f["feeling"] + (f" (about {f['about']})" if f.get("about") else "") for f in seen.get("feelings") or []
+            )),
+            ("Tells themselves", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "thought")),
+            ("Really happening", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "happening")),
+            ("Wants", seen.get("wants")),
+            ("In the way", seen.get("in_the_way")),
+            ("Risks", " | ".join(f"{r['risk']} ({r['to']})" for r in risks)),
+            ("Kind of problem", seen.get("problem_type")),
+            ("Earlier situations", " | ".join(seen.get("earlier") or [])),
+        ):
+            if value:
+                st.markdown(f"🖼️ **{label}:** {value}")
+        if seen.get("shift"):
+            st.caption(f"Last message: {seen['shift']}, {seen.get('quiet', 0)} in a row with nothing new")
     else:
         st.caption("Nothing understood yet, or AI_DEBUG_MODE is off in the backend.")
     # When Mani last checked its understanding with them; the next message answers it.

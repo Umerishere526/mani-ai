@@ -153,19 +153,82 @@ class NextStage(BaseModel):
     )
 
 
-# Merged into the thread's record by chat/understanding.py. The docstring is sent to the model.
-class UnderstandingUpdate(BaseModel):
-    """The feelings their message names. They are added to the ones already known and never replace them.
-    A null keeps what is already known."""
+class FeelingEntry(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    feeling: str = Field(description="The feeling, in their word, in the form that reads after \"feeling\", such as \"guilty\".")
+    about: str | None = Field(
+        default=None, description="What it is about, a few of their words said to them as you. Null when they did not say.",
+    )
+
+
+class BeliefEntry(BaseModel):
+    """`kind` is checked by code (chat/picture.py), not typed, for the reason the note on SHAPES gives."""
 
     model_config = ConfigDict(extra="ignore")
 
-    feeling: str | None = Field(
+    belief: str = Field(description="What they tell themselves, or say is happening, in their words said to them as you.")
+    kind: str = Field(
+        description=(
+            "thought: something they tell themselves or conclude, such as \"you're a bad brother\". happening: "
+            "something they say is really happening, which is not theirs to question, such as \"she falls asleep "
+            "while the children are there\"."
+        ),
+    )
+
+
+class RiskEntry(BaseModel):
+    """`to` is checked by code (chat/picture.py), not typed, for the reason the note on SHAPES gives."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    risk: str = Field(description="The risk, a few words said to them as you.")
+    to: str = Field(description="self: to them. others: to someone else, such as children in their care.")
+
+
+# Merged into the thread's picture by chat/picture.py on every turn, in the chat and in a framework alike. The
+# docstrings and descriptions are sent to the model.
+class PictureUpdate(BaseModel):
+    """What their last message adds to or changes in your picture of them. Only what is new or changed: never
+    what the picture already holds. Every entry is a few of their words, said to them as you. Not shown to them.
+    `shift` and `problem_type` are checked by code (chat/picture.py), not typed, for the reason the note on SHAPES
+    gives."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    situations: list[str] | None = Field(default=None, description="What is happening, as they tell it. Null when nothing new.")
+    feelings: list[FeelingEntry] | None = Field(default=None, description="Feelings they named for the first time. Null when none.")
+    beliefs: list[BeliefEntry] | None = Field(
+        default=None, description="What they tell themselves, or say is really happening, that is new. Null when none.",
+    )
+    wants: str | None = Field(default=None, description="What they want, when it is new or has changed. Null otherwise.")
+    in_the_way: str | None = Field(
+        default=None, description="What is stopping them, when it is new or has changed. Null otherwise.",
+    )
+    risks: list[RiskEntry] | None = Field(
+        default=None, description="A risk to them or to someone else that their message shows. Null when none.",
+    )
+    drop: list[str] | None = Field(
+        default=None,
+        description="Entries in your picture that their message shows are wrong, copied exactly as the picture shows them. Null when none.",
+    )
+    focus: str | None = Field(
+        default=None,
+        description="The situation the conversation is about now, a few words, only when it is new or has changed. Null otherwise.",
+    )
+    shift: str | None = Field(
         default=None,
         description=(
-            "Each feeling word this message names, in their words and in the form that reads after "
-            "\"feeling\", such as \"frustrated\", separated by commas. Only ones they used and that "
-            "are new. They are added to the ones already known. Null otherwise."
+            "What their message did. adds: something new about the same situation. corrects: something in your "
+            "picture was wrong. new_issue: a different situation. back: back to a situation from earlier. "
+            "nothing_new: it added nothing you did not know."
+        ),
+    )
+    problem_type: str | None = Field(
+        default=None,
+        description=(
+            "Once you can tell, what kind of problem this is. belief: what they tell themselves is what hurts. "
+            "situation: something really happening that needs dealing with. both. Null until you can tell."
         ),
     )
 
@@ -333,12 +396,9 @@ class Reply(_ReplyBase):
             "possibilities, or the same question, as an earlier reply. Null otherwise."
         ),
     )
-    understanding_update: UnderstandingUpdate | None = Field(
+    picture: PictureUpdate | None = Field(
         default=None,
-        description=(
-            "Only what their message names or changes about their feeling, their "
-            "issue, what lies under it, or the feeling underneath it. Not shown to the user."
-        ),
+        description="Fill it after text, every reply: what their message adds to or changes in your picture of them.",
     )
     heading_toward: str | None = Field(
         default=None,
@@ -410,7 +470,7 @@ class Slots:
     their_words: str | None = None
 
 
-_CORE = ("reasoning", "style", "understanding_update", "text", "title", "crisis")
+_CORE = ("reasoning", "style", "picture", "text", "title", "crisis")
 _STAGES = ("stage_updates", "stage_answer")
 # The stage the walk may reach this turn, judged on every turn that can start or move the walk. Not at
 # the closing, which the body route follows.
@@ -519,9 +579,9 @@ class ConversationReply(_ReplyBase):
         default=None,
         description="True only on the reply that pulls it together and asks whether it describes what they feel.",
     )
-    feelings: str | None = Field(
+    picture: PictureUpdate | None = Field(
         default=None,
-        description="Feeling words they used for the first time in their last message, in their words, separated by commas. Null otherwise.",
+        description="Fill it after text, every reply: what their message adds to or changes in your picture of them.",
     )
     crisis: Crisis | None = Field(
         default=None,

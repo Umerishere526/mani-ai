@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
-from mani.chat import context
-from mani.llm.schema import Check, UnderstandingUpdate
+from mani.chat import context, picture
+from mani.llm.schema import Check, PictureUpdate
 
 KEYS = ("feeling", "heart", "case")
 LIMIT = 200
@@ -36,22 +36,33 @@ def _gathered(stored: str | None, value: str) -> str:
     return FEELING_SEPARATOR.join(entries)[:LIMIT].rstrip()
 
 
-def merge(stored: dict[str, str], update: UnderstandingUpdate | None, heart: str | None) -> dict[str, str]:
-    """The record after this turn: the feelings their message names added to those kept, and where the reply
-    judged the heart of it, replacing the last judgement. A null or blank value keeps what is stored."""
-    merged = {key: stored[key] for key in KEYS if stored.get(key)}
-    feeling = " ".join((getattr(update, "feeling", None) or "").split())
-    if feeling:
-        merged["feeling"] = _gathered(merged.get("feeling"), feeling)
+def merge(stored: dict, update: PictureUpdate | None, heart: str | None) -> dict:
+    """The record after this turn: the picture with what their message adds or changes, every feeling it names
+    added to those kept, and where the reply judged the heart of it, replacing the last judgement. A null or blank
+    value keeps what is stored."""
+    merged = {key: stored[key] for key in (*KEYS, picture.KEY) if stored.get(key)}
+    before = stored.get(picture.KEY)
+    after = picture.merge(before, update)
+    if after:
+        merged[picture.KEY] = after
+    known = picture.feeling_words(before)
+    if new := [word for word in picture.feeling_words(after) if word not in known]:
+        merged["feeling"] = _gathered(merged.get("feeling"), FEELING_SEPARATOR.join(new))
     if heart:
         merged["heart"] = heart
     return merged
 
 
-def render(stored: dict[str, str]) -> str | None:
+def render(stored: dict) -> str | None:
     """The record as the value of its [ctx] line, or None when nothing is stored yet."""
     parts = [f"{key}: {context.disarm(stored[key])}" for key in KEYS if stored.get(key)]
     return "; ".join(parts) or None
+
+
+def picture_line(stored: dict) -> str | None:
+    """The picture of them as one line the model reads, or None while it holds nothing."""
+    rendered = picture.render(stored.get(picture.KEY))
+    return context.disarm(rendered) if rendered else None
 
 
 def usable(check: Check | None) -> bool:

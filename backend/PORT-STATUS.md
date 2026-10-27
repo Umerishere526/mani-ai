@@ -130,6 +130,18 @@ the same change as the work.**
 
 ## Decisions in force
 
+- **One picture of the person, shared by the chat and every framework, updated on every reply.** Because the chat's
+  understanding did not run during a framework and the framework's step store forgot everything outside its steps,
+  so a new feeling or belief mid-framework was lost and the two never informed each other (muhammad, 2026-10-27).
+  Every reply shape carries `picture` (`PictureUpdate`: situations, feelings with what they are about, beliefs marked
+  thought or happening, wants, what is in the way, risks, drop, focus, shift, problem type); `chat/picture.py` merges
+  it into `threads.understanding.picture`, and `understanding.merge` derives the feeling line from it. The chat note
+  and `[ctx]` both show it each turn. A framework stage names the part of the picture that feeds it (`picture:
+  thought` or `picture: feelings` in `abcde.md` and `thought_reframe.md`); `walk.from_picture` brings stages already
+  passed up to date when a turn adds a thought or a feeling, and stages ahead are judged from the whole picture when
+  reached. Tests: `test_picture.py`, `test_a_new_thought_or_feeling_brings_the_stages_already_passed_up_to_date`,
+  `test_the_framework_reads_the_chats_picture_and_a_new_thought_at_d_updates_b`.
+
 - **Only a declined offer holds the next check back; a finished framework does not, and its reading is cleared when it
   finishes.** Because muhammad removed the 45-message wait after a finished framework, and without clearing the heart of
   it Mani could check again at once on the case it had just worked through (2026-10-27). `context.may_check`,

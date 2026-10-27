@@ -11,7 +11,7 @@ import uuid
 from mani.chat import converse, understanding
 from mani.chat.techniques import Registry
 from mani.db.threads import TurnContext
-from mani.llm.schema import ConversationReply
+from mani.llm.schema import ConversationReply, FeelingEntry, PictureUpdate
 from mani.models.rows import Prompt, Thread
 from mani.prompts import cache, composer
 from mani.prompts.cache import Config
@@ -61,7 +61,7 @@ def test_a_reply_is_stored_as_the_check_only_when_allowed_flagged_and_complete()
 
 def test_a_stored_check_is_ready_and_its_understanding_becomes_the_case():
     checked = reply(
-        heart="conflict_named", checking=True, feelings="dismissed",
+        heart="conflict_named", checking=True, picture=PictureUpdate(feelings=[FeelingEntry(feeling="dismissed")]),
         conflict="You love her and feel unimportant to her", want="You want her back in your life",
         in_the_way="You expect her to stay the same",
     )
@@ -88,7 +88,16 @@ def test_the_reply_is_written_before_anything_is_judged_about_it():
     """The voice comes first, and nothing in the reply asks for a second question or a reasoning pass."""
     fields = list(ConversationReply.model_fields)
     assert fields[0] == "text"
-    assert not {"reasoning", "options", "understanding_update", "style"} & set(fields)
+    assert not {"reasoning", "options", "style"} & set(fields)
+    assert fields.index("text") < fields.index("picture")
+
+
+def test_the_note_carries_the_picture_of_them():
+    """muhammad, 2026-10-27: the chat and the framework read the same picture each turn."""
+    seen = {"picture": {"focus": "your brother in hospital", "beliefs": [{"belief": "work will stop you", "kind": "thought"}]}}
+    note = converse.note("directive", allowed=False, due=False, wants_title=False, understood=seen)
+    assert "Your picture of them before their message: focus: your brother in hospital; " \
+           "what they tell themselves: work will stop you." in note
 
 
 def test_the_conversation_prompt_is_the_clients_cadence_and_her_two_conversations():

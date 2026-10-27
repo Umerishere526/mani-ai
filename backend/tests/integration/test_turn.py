@@ -13,7 +13,7 @@ from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
 from mani.chat.repairs import PERMISSION_QUESTION
-from mani.llm.schema import Check, ConversationReply, Crisis, NextStage, Offer, Reply, StageUpdate, Style, UnderstandingUpdate
+from mani.llm.schema import BeliefEntry, Check, ConversationReply, Crisis, FeelingEntry, NextStage, Offer, PictureUpdate, Reply, StageUpdate, Style
 from mani.models.rows import TechniqueOutcome, TechniqueState as TechniqueRow
 from tests.integration.cleanup import remove_test_users
 
@@ -31,12 +31,15 @@ def _in_shape(reply: Reply, schema: type) -> dict:
     fields = reply.model_dump()
     if schema is not ConversationReply or not isinstance(reply, Reply):
         return fields
-    if reply.understanding_update and reply.understanding_update.feeling:
-        fields["feelings"] = reply.understanding_update.feeling
     if reply.check is not None:
         fields |= {"checking": True, "conflict": reply.check.conflict, "want": reply.check.want,
                    "in_the_way": reply.check.in_the_way}
     return fields
+
+
+def felt(*words: str) -> PictureUpdate:
+    """A reply whose picture records these feelings from their message."""
+    return PictureUpdate(feelings=[FeelingEntry(feeling=word) for word in words])
 
 
 class ScriptedModel:
@@ -415,7 +418,7 @@ async def test_a_concern_on_the_answer_to_a_check_renders_no_offer_and_lets_the_
     scripted = model(
         _offer().model_copy(update={
             "crisis": Crisis(reason="hopeless"), "text": "I'm here with you.",
-            "understanding_update": UnderstandingUpdate(feeling="should not be stored"),
+            "picture": felt("should not be stored"),
         }),
         Reply(text="What is happening for you right now?"),
     )
@@ -1567,7 +1570,7 @@ async def test_what_they_said_before_the_yes_is_said_back_and_confirmed_once_nev
 
 async def test_a_yes_whose_turn_was_guarded_starts_the_walk_on_the_next_turn(alice, model):
     """AC-3: the row was left accepted at the offer, so the next turn is the start turn."""
-    model(Reply(text="Let's look at it.", understanding_update=UnderstandingUpdate(feeling="overwhelmed")))
+    model(Reply(text="Let's look at it.", picture=felt("overwhelmed")))
     thread = await start(alice)
     await _land_on(alice, thread.id, "offering")
 
@@ -1737,9 +1740,9 @@ async def test_what_they_name_is_stored_and_sent_back_on_every_later_turn(alice,
     second are stored, and the third turn's [ctx] carries both; a blank update keeps them. No log line
     carries their words."""
     scripted = model(
-        Reply(text="What is it about?", understanding_update=UnderstandingUpdate(feeling="frustrated")),
+        Reply(text="What is it about?", picture=felt("frustrated")),
         Reply(text="Is it the changes themselves, or that nobody asks you first?", heart="exploring"),
-        Reply(text="What goes through your mind?", understanding_update=UnderstandingUpdate(feeling=" ")),
+        Reply(text="What goes through your mind?", picture=felt(" ")),
     )
     thread = await start(alice)
 
@@ -1749,9 +1752,11 @@ async def test_what_they_name_is_stored_and_sent_back_on_every_later_turn(alice,
         await send(alice, thread.id, "my client keeps changing the requirements")
         third = await send(alice, thread.id, "we are moving in circles")
 
-    expected = {"feeling": "frustrated", "heart": "exploring"}
+    frustrated = {"feelings": [{"feeling": "frustrated"}]}
+    expected = {"feeling": "frustrated", "heart": "exploring", "picture": frustrated}
     assert "What you understood before their message: feeling: frustrated; heart: exploring." in _ctx_sent(scripted)
-    assert (first.understanding, third.understanding) == ({"feeling": "frustrated"}, expected)
+    assert "Your picture of them before their message: feelings: frustrated." in _ctx_sent(scripted)
+    assert (first.understanding, third.understanding) == ({"feeling": "frustrated", "picture": frustrated}, expected)
     assert await _understood(alice, thread.id) == expected
     assert scripted.calls == 3
     assert "frustrated" not in caplog.text and "changing the requirements" not in caplog.text
@@ -1761,7 +1766,7 @@ async def test_what_they_named_early_stays_in_view_and_in_the_understanding_line
     """AC-2, and 2026-10-13: the whole thread is in view within the budget, so the message that named
     the feeling is still there 25 messages later, and the understanding line still carries it."""
     scripted = model(
-        Reply(text="What is it about?", understanding_update=UnderstandingUpdate(feeling="anxious")),
+        Reply(text="What is it about?", picture=felt("anxious")),
         Reply(text="And then?"),
     )
     thread = await start(alice)
@@ -1779,7 +1784,7 @@ async def test_a_opens_with_the_feeling_they_named_before_the_yes(alice, model, 
     stored it is the client's ask, and the empty slot is logged."""
     model(
         Reply(text="What happened?",
-              understanding_update=UnderstandingUpdate(feeling="overwhelmed") if named else None),
+              picture=felt("overwhelmed") if named else None),
         Reply(text="Let's look at it."),
     )
     thread = await start(alice)
@@ -1799,16 +1804,17 @@ async def test_a_opens_with_the_feeling_they_named_before_the_yes(alice, model, 
 async def test_a_concern_turn_leaves_what_was_understood_as_it_was(alice, model):
     """AC-11: a reply the model flags as a concern reports a feeling and an issue; neither is kept."""
     model(
-        Reply(text="What is it about?", understanding_update=UnderstandingUpdate(feeling="sad")),
+        Reply(text="What is it about?", picture=felt("sad")),
         Reply(text="I'm here with you.", crisis=Crisis(reason="may not be safe"),
-              understanding_update=UnderstandingUpdate(feeling="hopeless", issue="everything")),
+              picture=felt("hopeless")),
     )
     thread = await start(alice)
     await send(alice, thread.id, "I'm sad")
     turn = await send(alice, thread.id, "I don't see the point of anything")
 
-    assert turn.understanding == {"feeling": "sad"}
-    assert await _understood(alice, thread.id) == {"feeling": "sad"}
+    sad = {"feeling": "sad", "picture": {"feelings": [{"feeling": "sad"}]}}
+    assert turn.understanding == sad
+    assert await _understood(alice, thread.id) == sad
 
 
 async def test_not_knowing_keeps_the_framework_on_its_stage_until_they_answer(alice, model):
@@ -1910,7 +1916,7 @@ async def test_feelings_they_add_during_a_framework_are_added_and_the_case_stays
 
     model(Reply(
         text="That makes the deadline feel very real. What would missing it mean for you?",
-        stage_answer="not_yet", understanding_update=UnderstandingUpdate(feeling="burnt out"),
+        stage_answer="not_yet", picture=felt("burnt out"),
     ))
     thread = await start(alice)
     async with pool.as_admin() as conn:
@@ -1923,6 +1929,7 @@ async def test_feelings_they_add_during_a_framework_are_added_and_the_case_stays
     await send(alice, thread.id, "i need about 2 months but the deadline is this week, i am burnt out")
     assert (await _thread_row(alice, thread.id)).understanding == {
         "feeling": "anxious, burnt out", "case": "The work falls on you.",
+        "picture": {"feelings": [{"feeling": "burnt out"}]},
     }
 
 
@@ -2180,3 +2187,35 @@ async def test_a_question_at_d_that_leaves_out_what_they_feel_believe_and_want_i
     assert scripted.calls == 2
     assert bare.checks == ["case missing"]
     assert carried.checks == []
+
+
+async def test_the_framework_reads_the_chats_picture_and_a_new_thought_at_d_updates_b(alice, model):
+    """muhammad, 2026-10-27: the chat and the framework share one picture. A framework turn sees what the chat
+    learned, and a new thought said at D brings B, already passed, up to date while the walk stays on D."""
+    from mani.db import pool
+
+    scripted = model(Reply(
+        text="That's a much heavier thought than the deadline. What makes you feel you're a bad brother?",
+        stage_answer="not_yet",
+        picture=PictureUpdate(beliefs=[BeliefEntry(belief="you're a bad brother", kind="thought")]),
+    ))
+    thread = await start(alice)
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set understanding = $2::jsonb where id = $1", thread.id,
+            {"picture": {"focus": "your brother in hospital", "feelings": [{"feeling": "guilty"}]}},
+        )
+    await _land_on(alice, thread.id, "dispute", stages_known={"abcde": {
+        "activate": {"said": "your brother is in hospital", "status": "done"},
+        "belief": {"said": "work will stop you leaving", "status": "done"},
+        "consequence": {"said": "you feel guilty", "status": "done"},
+    }})
+
+    await send(alice, thread.id, "honestly it's not even about work. i think i'm just a bad brother")
+
+    assert "picture: focus: your brother in hospital; feelings: guilty" in _ctx_sent(scripted)
+    known = await _store(alice, thread.id)
+    assert known["belief"] == {"said": "you're a bad brother", "status": "done"}
+    assert (await _offered_row(alice, thread.id)).phase == "dispute"
+    picture_now = (await _thread_row(alice, thread.id)).understanding["picture"]
+    assert picture_now["beliefs"] == [{"belief": "you're a bad brother", "kind": "thought"}]

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from mani.chat import context, understanding
 from mani.db.threads import TurnContext
-from mani.llm.schema import ConversationReply, UnderstandingUpdate
+from mani.llm.schema import ConversationReply
 
 STYLE_NAMES = {"directive": "Directive", "supportive": "Supportive", "reflective": "Reflective"}
 # The heart of it said back and not corrected. A check may only follow a reply that judged one of these, so the
@@ -36,6 +36,8 @@ def note(
             "Another conversation of theirs was flagged recently. You know only that. Go gently, and never "
             "mention it unless they do."
         )
+    if seen := understanding.picture_line(understood or {}):
+        lines.append(f"Your picture of them before their message: {seen}.")
     if so_far := understanding.render(understood or {}):
         lines.append(f"What you understood before their message: {so_far}.")
     if allowed and due:
@@ -70,9 +72,9 @@ def case(reply: ConversationReply) -> str:
     return " ".join(s for part in (reply.conflict, reply.want, reply.in_the_way) if (s := _sentence(part)))
 
 
-def understood_after(stored: dict[str, str], reply: ConversationReply, *, check_written: bool) -> dict[str, str]:
-    """The record after this turn: new feeling words added, where the reply judged the heart of it, and on a
-    stored check its case. A check is always ready."""
+def understood_after(stored: dict, reply: ConversationReply, *, check_written: bool) -> dict:
+    """The record after this turn: the picture with what their message adds or changes, where the reply judged
+    the heart of it, and on a stored check its case. A check is always ready."""
     heart = understanding.READY if check_written else reply.heart
-    merged = understanding.merge(stored, UnderstandingUpdate(feeling=reply.feelings), heart)
+    merged = understanding.merge(stored, reply.picture, heart)
     return understanding.merge_check(merged, case(reply)) if check_written else merged

@@ -374,7 +374,7 @@ def test_the_heart_of_it_replaced_the_steps_and_the_prompt_did_not_grow():
     assert "what is stopping them" in base
     for cut in ("understanding_next", "The feeling underneath.", "in their control", "never leads them to a conclusion"):
         assert cut not in sent, cut
-    assert len(base) <= 11000
+    assert len(base) <= 11500
     assert "Them: " not in base
 
 

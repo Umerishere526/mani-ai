@@ -8,7 +8,7 @@ import uuid
 import zlib
 from dataclasses import dataclass, field
 
-from mani.chat import repairs
+from mani.chat import picture, repairs
 from mani.chat.techniques import OFFERING
 from mani.llm.schema import NextStage, StageUpdate
 from mani.models.rows import ENDING_STAGES, Framework
@@ -230,6 +230,34 @@ def advance(
     reached = following if following in stages else None
     stored, reach_notes, unjudged = _reach(framework, stored, reached, report)
     return Walked(stored, following, reached, notes + reach_notes, unjudged=unjudged)
+
+
+def from_picture(
+    framework: Framework, entries: dict[str, dict], before: dict | None, after: dict | None, *, in_force: str | None,
+) -> tuple[dict[str, dict], list[str]]:
+    """The stages already passed, brought up to date with what the picture gained this turn: a new thought becomes
+    the words of a stage fed by thoughts, a new feeling is added to the words of a stage fed by feelings. Stages
+    ahead are left alone; each is judged from the whole picture when the walk reaches it. Logged by stage only."""
+    stages = content_stages(framework)
+    at = stages.index(in_force) if in_force in stages else 0
+    thoughts = picture.added_beliefs(before, after)
+    feelings = picture.added_feelings(before, after)
+    synced = {stage: dict(entry) for stage, entry in entries.items()}
+    notes: list[str] = []
+    for stage in stages[:at]:
+        entry = synced.get(stage)
+        feeds = ((framework.stages or {}).get(stage) or {}).get("picture")
+        if not entry:
+            continue
+        if feeds == "thought" and thoughts:
+            entry["said"] = _short(thoughts[-1])
+        elif feeds == "feelings" and feelings:
+            said = (entry.get("said") or "").rstrip(" .")
+            entry["said"] = _short(f"{said}, and you feel {' and '.join(feelings)}" if said else f"you feel {' and '.join(feelings)}")
+        else:
+            continue
+        notes.append(f"{stage} updated from the picture")
+    return synced, notes
 
 
 def confirm_phrase(framework: Framework, stage: str, thread_id: uuid.UUID | str) -> str:

@@ -181,16 +181,18 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "does not fit exactly. Anything else, follow what they said toward the root of it."
         ),
     },
-    "understanding": (
-        "the feelings they named, kept for you, and where your last reply judged the heart of it. In "
-        "understanding_update report only the feelings their message adds."
+    "picture": (
+        "your picture of them so far, from the whole conversation, the same in the chat and in a framework: what "
+        "is happening, what they feel and about what, what they tell themselves, what they say is really "
+        "happening, what they want, what is in the way, risks, and the situation in focus. Build on it and never "
+        "ask for what it holds. In picture, report only what their message adds or changes."
     ),
+    "understanding": "the feelings they named, kept for you, and where your last reply judged the heart of it.",
     "their_case": (
         "what you and they found before the questions began: the feelings they named and the case they "
         "confirmed, the conflict, what they want and what is stopping them. Every question you ask and every "
         "possibility you offer is about this case and the feeling underneath it, never generic. Never ask them again for "
-        "anything in it: say it back and build on it. In understanding_update report only the feelings their "
-        "message adds."
+        "anything in it: say it back and build on it."
     ),
     "since_last": "how many messages have passed since the last offer.",
     "this_thread": (
@@ -335,6 +337,8 @@ def build(
     else:
         phase = "talking"
     lines += _line("conversation_phase", phase)
+    if seen := understanding.picture_line(ctx.thread.understanding):
+        lines += _line("picture", seen)
     understood = understanding.render(ctx.thread.understanding)
     if understood:
         # Once a framework is running or about to start, the findings are the case its questions are about.

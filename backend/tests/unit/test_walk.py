@@ -397,3 +397,35 @@ def test_the_possibilities_go_under_the_models_own_question_and_never_under_the_
     sent, _ = walk.reply_text(abcde, reached_missing, text="Anything.", style="directive", thread_id=THREAD,
                               feeling=None, options=options)
     assert options not in sent, "the client's own line is not followed by possibilities written for another question"
+
+
+def test_a_new_thought_or_feeling_brings_the_stages_already_passed_up_to_date(abcde):
+    """muhammad, 2026-10-27: at D they say "I think I'm just a bad brother". The framework stays on D, and B, already
+    passed, takes the new thought; a new feeling joins C. Stages ahead are judged when the walk reaches them."""
+    from mani.chat import picture
+    from mani.llm.schema import BeliefEntry, FeelingEntry, PictureUpdate
+
+    stored = {
+        "activate": {"said": "your brother is in hospital", "status": "done"},
+        "belief": {"said": "work will stop you leaving", "status": "done"},
+        "consequence": {"said": "you feel guilty.", "status": "done"},
+        "dispute": {"said": "the deadline", "status": "partial", "gap": "challenge"},
+    }
+    before = {"beliefs": [{"belief": "work will stop you leaving", "kind": "thought"}], "feelings": [{"feeling": "guilty"}]}
+    after = picture.merge(before, PictureUpdate(
+        beliefs=[BeliefEntry(belief="you're a bad brother", kind="thought"),
+                 BeliefEntry(belief="he cannot reach the bathroom alone", kind="happening")],
+        feelings=[FeelingEntry(feeling="ashamed")],
+    ))
+
+    synced, notes = walk.from_picture(abcde, stored, before, after, in_force="dispute")
+    assert synced["belief"] == {"said": "you're a bad brother", "status": "done"}
+    assert synced["consequence"] == {"said": "you feel guilty, and you feel ashamed", "status": "done"}
+    assert synced["activate"] == stored["activate"] and synced["dispute"] == stored["dispute"]
+    assert notes == ["belief updated from the picture", "consequence updated from the picture"]
+    assert stored["belief"]["said"] == "work will stop you leaving", "the stored entries are never changed in place"
+
+    # On B itself, the stage in force takes their words from the reply, so nothing before it changes.
+    assert walk.from_picture(abcde, stored, before, after, in_force="belief")[0] == stored
+    # A turn that adds nothing to the picture changes nothing.
+    assert walk.from_picture(abcde, stored, after, after, in_force="dispute") == (stored, [])

@@ -123,6 +123,8 @@ stages:
   thought:
     title: "Identify the Thought"
     intro: "Step 1 is Identify the Thought"
+    # The part of Mani's picture that feeds this stage once it has passed: a new thought replaces its words.
+    picture: thought
     purpose: "Establish the situation, in one plain sentence, and the specific thought about it that they want to examine."
     reach: "If their_case already gives the thought, in what it comes down to for them, report thought as known, in their words. Your text says back the thought and the underlying feeling they confirmed, in one sentence, then asks whether that's what they want to look at. Never ask for it again. The thought is what they tell themselves, in their words, never a reading of it. If their_case has no clear thought, report thought as missing and ask what keeps coming back to their mind."
     listen_for: "The situation, whether an actual event or the memory of one, kept separate from the thought about it. Listen for a specific thought about themselves, another person, or the situation, in their words. Specific thoughts are easier to work with than broad ones: 'I'll freeze when she asks about the budget' rather than 'something bad will happen'."
@@ -163,6 +165,8 @@ stages:
     title: "Name What Makes It Painful"
     carries_case: true
     intro: "Step 2 is Name What Makes It Painful"
+    # The part of Mani's picture that feeds this stage once it has passed: a new feeling is added to its words.
+    picture: feelings
     purpose: "Understand the strongest feeling the thought brings up and what makes it hurt, in their words, without labelling their experience."
     reach: "If their_case already gives the feeling underneath or what makes the thought hurt, report painful as known, in their words, so your text says it back and asks whether that's what makes it hard. Never ask for it again."
     listen_for: "The strongest feeling, which usually falls into one of four groups: fear or anxiety, sadness or low mood, guilt or shame, or anger. Also listen for what they believe the thought says about themselves, another person or the future. If they name more than one strong feeling, the work stays with the strongest one."

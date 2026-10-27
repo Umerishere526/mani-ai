@@ -133,6 +133,8 @@ stages:
   belief:
     title: "B: Belief"
     intro: "B is for Belief."
+    # The part of Mani's picture that feeds this stage once it has passed: a new thought replaces its words.
+    picture: thought
     purpose: "Identify, in their own words, what they started believing or telling themselves about the event: the interpretation that sits between what happened and how they reacted."
     # Sent as next_stage_reach on the previous stage, where the reply assesses this stage for the walk.
     reach: "If several beliefs appear, report belief as partial, with each one in their words, so your text asks which one affected them most. A belief is what they concluded about themselves, others, or what it means for their future. It is never a judgement of whether how they were treated was real or fair. If their_case already gives what it comes down to for them, report belief as known, in their words, so your text says it back and asks whether that's what they started telling themselves."
@@ -163,6 +165,8 @@ stages:
     title: "C: Consequences"
     carries_case: true
     intro: "C is for Consequences."
+    # The part of Mani's picture that feeds this stage once it has passed: a new feeling is added to its words.
+    picture: feelings
     purpose: "Identify how believing that affected what they felt and what they did or avoided, so they can see the link from event to belief to reaction."
     reach: "Report consequence as known where they've tied a feeling or an action to that belief. Where they described feelings or actions that may follow from it but never tied them to it, report it as partial, with those words, so your text says them back and asks whether that's how the belief has affected them. Where their_case already gives the feeling underneath, report consequence as known, in their words, so your text says it back and asks whether that's how the belief has affected them."
     listen_for: "Emotional consequences, such as anxiety, anger, low mood, guilt, shame, frustration or self-pity, and behavioural ones, such as withdrawing, avoiding, snapping at people, moping, drinking or giving up. Note whether the reaction is working for them or against them, but let them be the one to say so."

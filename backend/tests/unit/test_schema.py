@@ -4,7 +4,7 @@
 from mani.llm.schema import Moment, Reply, Slots, as_reply, reply_for
 
 SLOTS = Slots(going_through="what they are going through", lead_line="a warm line", their_words="their words")
-CORE = {"reasoning", "style", "understanding_update", "text", "title", "crisis"}
+CORE = {"reasoning", "style", "picture", "text", "title", "crisis"}
 # Where a stage can be answered or a yes can start one (spec 0004).
 STAGE = {"stage_updates", "stage_answer"}
 # Where the walk can start or move, so the stage it reaches is judged (thread 4b93d612, 2026-10-14).
@@ -49,7 +49,7 @@ def test_mani_writes_its_text_before_reading_the_person_into_fields():
     fields = list(Reply.model_fields)
     for before in ("reasoning", "check_answer", "heart", "offer_answer", "stage_updates", "stage_answer", "next_stage"):
         assert fields.index(before) < fields.index("text"), before
-    for after in ("understanding_update", "heading_toward", "style", "check", "offer"):
+    for after in ("picture", "heading_toward", "style", "check", "offer"):
         assert fields.index("text") < fields.index(after), after
     assert fields.index("heading_toward") < fields.index("offer")
     # On the answer to a check, a yes is the offer, which replaces the text: the set and its slots come

@@ -70,7 +70,7 @@ class Thread(Row):
     # What Mani understands of them so far: feeling, issue, core issue, underlying feeling
     # (chat/understanding.py).
     # Loaded only for a turn, never in a thread list.
-    understanding: dict[str, str] = Field(default_factory=dict)
+    understanding: dict[str, Any] = Field(default_factory=dict)
     # The message_count after the turn whose reply was Mani's latest check of its understanding
     # (spec 0006). Loaded only for a turn, never in a thread list.
     check_at_message_count: int | None = None
