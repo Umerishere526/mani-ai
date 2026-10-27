@@ -654,8 +654,8 @@ def test_reaching_b_carries_its_own_test_and_its_rule_for_several_beliefs():
     abcde = Framework(id="abcde", name="ABCDE", summary="s", body="b", phases=parsed["phases"],
                       stages=parsed["stages"])
     block = context.build(_running_at("activate"), framework=abcde)
-    assert "next_stage_ready_when: A belief they have expressed in their own language. If several appear" in block
-    assert "next_stage_reach: Where several beliefs appear, report belief as partial with each in their words" in block
+    assert "next_stage_ready_when: They've put one belief into words themselves. If several came up" in block
+    assert "next_stage_reach: If several beliefs appear, report belief as partial, with each one in their words" in block
     assert "stage_reach:" not in context.build(_running_at("belief"), framework=abcde).replace("next_stage_reach:", "")
 
 

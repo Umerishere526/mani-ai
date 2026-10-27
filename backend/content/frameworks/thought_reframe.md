@@ -4,6 +4,8 @@ name: Thought Reframe
 summary: "These questions help you look closely at one troubling thought, weigh what supports it and what doesn't, and land on either a more balanced thought you can believe or a next step if the thought points to a real problem."
 display_order: 2
 phases: [offering, thought, painful, feels_true, alternative, replacement]
+# Used only when Mani's own confirmation of a stage cannot be: closes their words said back.
+confirm_phrases: ["Is that right?", "Do we have this right?", "Did I get that right?", "Does that sound right?"]
 activation:
   central_indication: >-
     The user is struggling with one specific thought about themselves, another person, or a

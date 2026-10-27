@@ -112,16 +112,9 @@ async def test_a_missing_style_row_is_refused_when_the_prompts_load(config, monk
         await cache._read()
 
 
-async def test_a_framework_seeded_without_the_body_check_in_script_is_refused_when_it_loads(config, monkeypatch):
-    """Code sends the client's body check-in script for each step, so a framework seeded without it would send
-    nothing at the end of its questions. It is refused at load, naming what is missing."""
+async def _read_with(framework_row: Framework, config, monkeypatch) -> None:
+    """Load the configuration with one framework row, as the database would return it."""
     import mani.db.pool as pool_module
-    from scripts.seed import load_somatic_stages
-
-    stages = load_somatic_stages()
-    del stages["somatic_practice"]["script"]
-    unseeded = Framework(id="abcde", name="ABCDE", summary="s", body="b",
-                         phases=["offering", *stages], stages=stages)
 
     @asynccontextmanager
     async def fake_as_admin():
@@ -131,14 +124,40 @@ async def test_a_framework_seeded_without_the_body_check_in_script_is_refused_wh
         return list(config.prompts.values())
 
     async def active_frameworks(conn):
-        return [unseeded]
+        return [framework_row]
 
     monkeypatch.setattr(pool_module, "as_admin", fake_as_admin)
     monkeypatch.setattr(cache.config_tables, "list_active_prompts", active_prompts)
     monkeypatch.setattr(cache.config_tables, "list_active_frameworks", active_frameworks)
+    await cache._read()
+
+
+async def test_a_framework_seeded_without_the_body_check_in_script_is_refused_when_it_loads(config, monkeypatch):
+    """Code sends the client's body check-in script for each step, so a framework seeded without it would send
+    nothing at the end of its questions. It is refused at load, naming what is missing."""
+    from scripts.seed import load_somatic_stages
+
+    stages = load_somatic_stages()
+    del stages["somatic_practice"]["script"]
+    unseeded = Framework(id="abcde", name="ABCDE", summary="s", body="b", phases=["offering", *stages],
+                         stages=stages, confirm_phrases=["Is that right?"])
 
     with pytest.raises(ServiceError, match="somatic_practice"):
-        await cache._read()
+        await _read_with(unseeded, config, monkeypatch)
+
+
+async def test_a_framework_seeded_without_confirm_phrases_is_refused_when_it_loads(config, monkeypatch):
+    """A stage said back closes with a confirm phrase when Mani's own confirmation cannot be used. With none, the
+    confirmation asked nothing ("B is for Belief. You mentioned I am useless."), so it is refused at load
+    (muhammad, 2026-10-27)."""
+    from scripts.seed import load_somatic_stages
+
+    stages = load_somatic_stages()
+    unseeded = Framework(id="abcde", name="ABCDE", summary="s", body="b", phases=["offering", *stages],
+                         stages=stages, confirm_phrases=[])
+
+    with pytest.raises(ServiceError, match="confirm_phrases"):
+        await _read_with(unseeded, config, monkeypatch)
 
 
 def framework(id: str, name: str, indication: str, distinctions: dict) -> Framework:

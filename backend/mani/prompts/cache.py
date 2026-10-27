@@ -81,6 +81,14 @@ async def _read() -> Config:
     if not frameworks:
         logger.warning("no active frameworks; technique offers will be refused")
     for framework in frameworks:
+        # A stage said back closes with one of these when Mani's own confirmation cannot be used. Without them the
+        # confirmation asks nothing, so it is refused here rather than sent.
+        if not framework.confirm_phrases:
+            raise ServiceError(
+                f"framework {framework.id} has no confirm_phrases; run scripts/seed.py",
+                ErrorCategory.CONFIG_ERROR,
+                user_message="Mani is not available right now.",
+            )
         # Code sends the body check-in's script for each step. A framework seeded without it would send
         # nothing at the end of its questions, so it is refused here rather than discovered mid-conversation.
         if missing := [s for s in BODY_STAGES if not (framework.stages.get(s) or {}).get("script")]:

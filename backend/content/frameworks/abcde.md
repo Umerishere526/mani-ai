@@ -4,6 +4,15 @@ name: ABCDE
 summary: "These questions help you see what happened, what you started believing about it, and how that belief has affected how you feel and what you do. Then you look at whether the belief is true and helpful, and find a more realistic way to see it."
 display_order: 1
 phases: [offering, activate, belief, consequence, dispute, effective]
+# Fallback closing lines for stages B to E, used after Mani says the user's words back when it
+# has no confirmation line of its own for that moment. Stage A always uses its own confirm line.
+confirm_phrases:
+  [
+    "Is that right?",
+    "Do we have this right?",
+    "Did I get that right?",
+    "Does that sound right?",
+  ]
 activation:
   central_indication: >-
     The user links a specific event to a troubling belief about themselves, others, or the
