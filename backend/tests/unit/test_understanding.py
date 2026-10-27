@@ -2,7 +2,7 @@
 # ABOUTME: Spec 0005: a null keeps what is stored. R33: only a ready heart of it lets a check through.
 
 from mani.chat import understanding
-from mani.llm.schema import Check, FeelingEntry, PictureUpdate
+from mani.llm.schema import FeelingEntry, PictureUpdate
 
 STORED = {"feeling": "frustrated", "heart": "exploring"}
 
@@ -51,15 +51,6 @@ def test_the_heart_of_it_is_the_last_judgement_and_only_ready_lets_a_check_throu
     assert ready == {"feeling": "frustrated", "heart": "ready"} and understanding.ready(ready)
     assert not understanding.ready(understanding.merge(ready, None, "conflict_named"))
     assert not understanding.ready({})
-
-
-def test_a_check_needs_the_conflict_what_they_want_and_what_is_stopping_them():
-    """R33: both of Lolly's chats ended at what they want and what is stopping them."""
-    check = Check(conflict="You miss her deeply.", want="You want her to own how she made you feel.",
-                  in_the_way="You know she will be selfish again.", question="Is that it?")
-    assert understanding.usable(check)
-    assert not understanding.usable(check.model_copy(update={"in_the_way": " "}))
-    assert not understanding.usable(None)
 
 
 def test_a_stored_check_becomes_the_case_the_questions_are_about():

@@ -54,16 +54,12 @@ def misses(
     offer_dropped: str | None,
     needs_question: bool,
     last_mani_text: str | None,
-    check_unusable: bool = False,
-    check_without_ready: bool = False,
     reach_unjudged: bool = False,
     case: str | None = None,
 ) -> list[str]:
     """What the draft got wrong that code cannot fix, named for the log. Empty when it stands.
     None of these costs a second call: they are counted, so how often each happens is known.
-    `offered` is the set the sent reply offers, as code rendered it. `check_unusable` is a check that
-    lacked one of its parts, and `check_without_ready` one sent by a reply that did not judge the heart
-    of it ready (R33). `reach_unjudged` is a stage the walk reached that the reply left without a
+    `offered` is the set the sent reply offers, as code rendered it. `reach_unjudged` is a stage the walk reached that the reply left without a
     next_stage judgement. `case` is what they feel and the case they confirmed, given only where the
     stage the reply asks carries the case."""
     notes: list[str] = []
@@ -77,10 +73,6 @@ def misses(
     )
     if needs_question and not technique and "?" not in reply.text and not chose_to_ask_nothing:
         notes.append("asks no question")
-    if check_unusable:
-        notes.append("check unusable")
-    if check_without_ready:
-        notes.append("check without ready")
     if reach_unjudged:
         notes.append("reach unjudged")
     if case is not None and lacks_case(reply.text, case):

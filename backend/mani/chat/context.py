@@ -167,14 +167,6 @@ _MEANING: dict[str, str | dict[str, str]] = {
         ),
     },
     "check": {
-        "may_check": (
-            "when heart is ready in this reply, check your understanding with them by filling check, from "
-            "their words only. Otherwise leave check empty and keep going toward the heart of it."
-        ),
-        "due": (
-            "your last reply judged the heart of it ready. Check your understanding with them now by "
-            "filling check, from their words only, unless their message shows it is not ready after all."
-        ),
         "open": (
             "your last reply checked your understanding. Set check_answer. A clear yes always brings the "
             "offer: fill offer for the set closest to what they confirmed, even when its Use it when "
@@ -354,13 +346,9 @@ def build(
         if landed_on:
             lines += _line("landed_on", disarm(landed_on))
 
-    # Told to the model as the reply shape enforces it: a check only where the shape has the field,
-    # and an offer only on the answer to one (spec 0006).
-    if not safety_concern:
-        if check_open(ctx):
-            lines += _line("check", "open")
-        elif may_check(ctx):
-            lines += _line("check", "due" if understanding.ready(ctx.thread.understanding) else "may_check")
+    # An offer only on the answer to Mani's check (spec 0006). The check itself is made in Mani's own conversation.
+    if not safety_concern and check_open(ctx):
+        lines += _line("check", "open")
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
         lines += _line("since_last", since_last)

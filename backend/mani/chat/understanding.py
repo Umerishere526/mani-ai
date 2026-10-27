@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from mani.chat import context, picture
-from mani.llm.schema import Check, PictureUpdate
+from mani.llm.schema import PictureUpdate
 
 KEYS = ("feeling", "heart", "case")
 LIMIT = 200
@@ -63,14 +63,6 @@ def picture_line(stored: dict) -> str | None:
     """The picture of them as one line the model reads, or None while it holds nothing."""
     rendered = picture.render(stored.get(picture.KEY))
     return context.disarm(rendered) if rendered else None
-
-
-def usable(check: Check | None) -> bool:
-    """Whether a reply's check says the conflict, what they want and what is stopping them, and asks whether
-    it is right."""
-    return bool(check and all(
-        (value or "").strip() for value in (check.conflict, check.want, check.in_the_way, check.question)
-    ))
 
 
 def merge_check(stored: dict[str, str], summary: str) -> dict[str, str]:

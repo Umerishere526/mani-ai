@@ -17,10 +17,7 @@ def fields(moment: Moment, **flags) -> set[str]:
 
 def test_each_moment_carries_only_the_fields_that_mean_something_in_it():
     assert fields(Moment.CONCERN) == CORE
-    # Before an offer one question carries its own possibilities, so there is no options line (R30), and every
-    # reply judges where the heart of it stands (R33).
-    assert fields(Moment.CHATTING) == CORE | {"heart"}, "no check before their fifth message, never an offer"
-    assert fields(Moment.CHATTING, may_check=True) == CORE | {"heart", "check"}
+    # Mani's own conversation (CHATTING) has a reply shape of its own, ConversationReply; its check is made there.
     assert fields(Moment.CHECK_OPEN) == CORE | {"heart", "check_answer", "heading_toward", "offer"}
     assert fields(Moment.CHECK_OPEN, declined_row=True) == CORE | {
         "heart", "check_answer", "heading_toward", "offer", "offer_answer", *REACH}
@@ -49,7 +46,7 @@ def test_mani_writes_its_text_before_reading_the_person_into_fields():
     fields = list(Reply.model_fields)
     for before in ("reasoning", "check_answer", "heart", "offer_answer", "stage_updates", "stage_answer", "next_stage"):
         assert fields.index(before) < fields.index("text"), before
-    for after in ("picture", "heading_toward", "style", "check", "offer"):
+    for after in ("picture", "heading_toward", "style", "offer"):
         assert fields.index("text") < fields.index(after), after
     assert fields.index("heading_toward") < fields.index("offer")
     # On the answer to a check, a yes is the offer, which replaces the text: the set and its slots come

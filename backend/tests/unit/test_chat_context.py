@@ -439,22 +439,18 @@ def _on_message(person_message: int, technique=None, style: str | None = None):
     return TurnContext(thread=on, profile=None, technique=technique)
 
 
-def test_no_check_before_their_fifth_message_and_a_ready_heart_of_it_makes_the_check_due():
+def test_no_check_before_their_fifth_message_and_ctx_names_only_a_check_waiting_for_its_answer():
     """R33, muhammad 2026-10-26: Lolly's chats reached the heart of it at about the tenth exchange, so a check
-    never comes before their 5th message however ready the reading seems. From there the shape carries the
-    check; once the last reply judged the heart of it ready, [ctx] says it is due, so code names the turn."""
+    never comes before their 5th message however ready the reading seems. The check is made in Mani's own
+    conversation (its note says when), so [ctx] names only a check waiting for its answer (2026-10-27)."""
     def line(c):
         return next((l for l in context.build(c).splitlines() if l.startswith("check:")), None)
 
     early = TurnContext(thread=ready(_on_message(context.CHECK_FROM - 1).thread), profile=None, technique=None)
-    assert not context.may_check(early) and line(early) is None
-    exploring = TurnContext(thread=_on_message(context.CHECK_FROM).thread, profile=None, technique=None)
-    assert context.may_check(exploring) and line(exploring) == "check: may_check"
+    assert not context.may_check(early)
     due = TurnContext(thread=ready(_on_message(context.CHECK_FROM).thread), profile=None, technique=None)
-    lines = context.build(due).splitlines()
-    assert "check: due" in lines and lines[lines.index("check: due") + 1].startswith("  means: ")
-    assert "check:" not in context.build(due, safety_concern=True)
-    assert not any(l.startswith("understanding_next") for l in lines), "no step is named for the model"
+    assert context.may_check(due) and line(due) is None
+    assert not any(l.startswith("understanding_next") for l in context.build(due).splitlines())
 
 
 def test_after_keep_chatting_mani_may_check_again_once_the_cooldown_has_passed():

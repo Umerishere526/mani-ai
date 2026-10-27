@@ -5,7 +5,7 @@ import pytest
 
 from mani.chat import repairs
 from mani.chat.techniques import Registry
-from mani.llm.schema import Check, Moment, Offer, Reply, Style
+from mani.llm.schema import Moment, Offer, Reply, Style
 from mani.models.rows import Framework
 from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
@@ -284,26 +284,6 @@ def test_the_model_is_never_asked_for_a_mirroring_voice():
     assert "voice" not in Reply.model_fields["style"].description
 
 
-def test_a_stored_check_goes_out_in_the_clients_order_whatever_order_the_model_wrote(registry):
-    """Spec 0006, muhammad's choice of 2026-10-13: live, the check opened with its last part in
-    every run though the prompt asked for the order. The words are the model's; the order is code's
-    (since 2026-10-26 the conflict, what they want, what is stopping them, R33)."""
-    check = Check(
-        conflict="  You miss her deeply, but she puts others first", want="You want her to own how she made you feel.",
-        in_the_way="You know she will be selfish again.", question="Does that describe it",
-    )
-    model_text = reply(text="You know she will be selfish again. You miss her?")
-    fixed = fix(registry, model_text, check=check)
-    assert fixed.text == (
-        "You miss her deeply, but she puts others first. You want her to own how she made you feel. You know "
-        "she will be selfish again.\n\nDoes that describe it?"
-    )
-    assert fix(registry, model_text).text == model_text.text, "without a stored check the reply goes as written"
-    # Live, 2026-10-26: a part written to run on into the next went out as "You want to leave,. but".
-    flowing = check.model_copy(update={"want": "You want to leave,", "in_the_way": "but the team needs you"})
-    assert repairs.check_summary(flowing).endswith("You want to leave, but the team needs you.")
-
-
 # Mani's replies from the client's way of communication document, each as the client lays it out.
 CLIENT_LAYOUT = [
     "I'm listening. What's frustrating you?",
@@ -342,6 +322,3 @@ def test_the_options_go_on_the_line_under_the_question_and_only_where_the_reply_
     )
     assert fix(registry, reply(text="Take your time."), chat_text=True).text == "Take your time."
     assert fix(registry, asked).text == asked.text, "a stage reply is not laid out and carries none"
-    checked = Check(problem="Your day was long.", core_issue="It all landed on you.",
-                    underlying_feeling="You may feel worn down.", question="Do I have that right")
-    assert "Is it something" not in fix(registry, asked, chat_text=True, check=checked).text

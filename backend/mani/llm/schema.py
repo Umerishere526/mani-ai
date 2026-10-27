@@ -233,23 +233,6 @@ class PictureUpdate(BaseModel):
     )
 
 
-# Read by the orchestrator: a check with all its parts, on a reply that judged the heart of it ready, is written to
-# the thread, and repairs sends its parts in this order in place of the reply's text. The docstring is sent to the
-# model.
-class Check(BaseModel):
-    """Your check of what you understand, filled only on the reply that checks it with them. Together the
-    parts read as a short flowing summary of two or three sentences, in your own words, said to them as you,
-    from their words only. Each part continues the one before it and is never a list. The parts are sent in
-    this order, in place of your text."""
-
-    model_config = ConfigDict(extra="ignore")
-
-    conflict: str | None = Field(default=None, description="The heart of it: what they are torn between or what it means to them, the start of the summary.")
-    want: str | None = Field(default=None, description="What they want, continuing from the conflict as one thought.")
-    in_the_way: str | None = Field(default=None, description="What is stopping them, continuing from the part before.")
-    question: str | None = Field(default=None, description="Your one question asking whether that captures what they have been experiencing, leaving room for something you missed.")
-
-
 OfferAnswer = Literal["yes", "no", "asked", "moved_on"]
 CheckAnswer = Literal["yes", "no"]
 BodyBranch = Literal[
@@ -415,13 +398,6 @@ class Reply(_ReplyBase):
             "The response shape this reply used."
         ),
     )
-    check: Check | None = Field(
-        default=None,
-        description=(
-            "Fill it only when heart is ready in this reply: it checks your understanding with them. "
-            "Null otherwise. Not shown to the user."
-        ),
-    )
     offer: Offer | None = Field(
         default=None,
         description=(
@@ -481,7 +457,6 @@ _REACH = ("next_stage",)
 def reply_for(
     moment: Moment,
     *,
-    may_check: bool = False,
     declined_row: bool = False,
     slots: Slots = Slots(),
 ) -> type[BaseModel]:
@@ -509,11 +484,6 @@ def reply_for(
         if slots.going_through:
             names.add("offer")
             overrides["offer"] = (_offer_model(slots.going_through, slots.lead_line) | None, Reply.model_fields["offer"])
-    elif moment is Moment.CHATTING:
-        # One question carries its own possibilities, so a chatting reply has no options line (R30).
-        names.add("heart")
-        if may_check:
-            names.add("check")
     if declined_row and moment is Moment.CHECK_OPEN:
         names |= {"offer_answer", *_STAGES, *_REACH}
         overrides["offer_answer"] = (

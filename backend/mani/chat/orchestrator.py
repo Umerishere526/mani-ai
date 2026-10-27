@@ -667,7 +667,6 @@ async def send(
         model, parameters, routing = composer.model_settings(config, "voice")
     reply_shape = schema.reply_for(
         moment,
-        may_check=context.may_check(ctx),
         declined_row=declined_row,
         slots=repairs.slots_for(
             config.registry, conversation_style,
@@ -753,26 +752,17 @@ async def send(
         starting = technique.framework_id
         offered_now.append(technique.framework_id)
 
-    # Nothing a concern turn reports is kept, so what they understand stays as stored. Mani's check is
-    # stored, so the next turn reads their answer to it, only when the same reply judges the heart of it
-    # ready; its summary becomes the case (R33).
-    with_check = not guarded and starting is None and understanding.usable(reply.check)
-    heart_ready = reply.heart == understanding.READY
+    # Nothing a concern turn reports is kept, so what they understand stays as stored. Mani's check is made only
+    # in its own conversation (_converse); here the picture and the heart of it are merged.
     understood = ctx.thread.understanding
-    check_written = False
     if not guarded:
         understood = understanding.merge(ctx.thread.understanding, reply.picture, reply.heart)
-        check_written = with_check and heart_ready
-        if check_written:
-            understood = understanding.merge_check(understood, repairs.check_summary(reply.check))
     if retiring_framework_id is not None:
         # The framework that just finished worked through this reading. The next check waits for a fresh one, so
         # Mani never checks again straight away on the case it has just finished.
         understood = {key: value for key, value in understood.items() if key != "heart"}
     if understood != ctx.thread.understanding:
         updates.understanding = understood
-    if check_written:
-        updates.check_at_message_count = ctx.thread.message_count + 2
     # A clear yes to the check is the only way to an offer (spec 0006, AC-1, AC-4).
     confirmed = (
         moment is Moment.CHECK_OPEN and not guarded and starting is None
@@ -792,7 +782,6 @@ async def send(
         # greeting is the first message in view only while nothing has left the window.
         name_said_before=_name_said_before(ctx, history, window),
         feeling=understood.get("feeling"),
-        check=reply.check if check_written else None,
         # Mani's own text before a framework, which may carry an options line under it.
         chat_text=(
             moment in (Moment.CHATTING, Moment.CHECK_OPEN, Moment.OFFER_OPEN)
@@ -858,11 +847,8 @@ async def send(
         reply,
         offered=offered,
         offer_dropped=fixed.offer_dropped,
-        # A written check asks in its own question, which is sent in place of the text.
-        needs_question=needs_question and not check_written,
+        needs_question=needs_question,
         last_mani_text=last_mani_text,
-        check_unusable=not guarded and reply.check is not None and not understanding.usable(reply.check),
-        check_without_ready=with_check and not heart_ready,
         reach_unjudged=walked is not None and walked.unjudged,
         case=_case_words(understood) if carries_case else None,
     )

@@ -46,13 +46,16 @@ the same change as the work.**
      the thread with no model call. An indirect one (including passive ideation and "pills in my hand")
      is a concern: it suspends frameworks and offers without locking.
   2. Which framework fits, and whether one fits yet, is the model's call from the Framework Index. Code owns only when an offer may come (on the answer to Mani's check, `context.check_open`, `context.may_check`) and the safety screen.
-  3. `composer.py` builds the system prompt with the one style file the thread chose, and `context.py`
-     builds the `[ctx]` block: style, offer timing, the stage in progress, what is stored for each stage
+  3. `composer.py` builds the system prompt: `voice.md` and `conversation.md` for Mani's own conversation
+     (`_converse`), `voice.md` and `framework.md` for a framework's stages, and `mani_base.md`, `response_format.md`
+     and the one style file the thread chose for the remaining turns (the answer to a check, the offer, the body
+     check-in, a safety concern). `context.py` builds the `[ctx]` block for every turn but the chat's own: style, offer timing, the stage in progress, what is stored for each stage
      and what this reply's text is for. Nothing in code classifies what the person said: whether a reply is vague, a correction or
      a wish only to be listened to is the model's reading (`response_format.md`, reasoning).
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, the answers
-     that decide the moment (`check_answer`, `offer_answer`, the stage fields), then `text`, then `understanding_update`,
-     `heading_toward`, `style`, `check`, `offer`; on the answer to a check, `heading_toward` and `offer` come before `text`.
+     that decide the moment (`check_answer`, `offer_answer`, the stage fields), then `text`, then `picture`,
+     `heading_toward`, `style`, `offer`; on the answer to a check, `heading_toward` and `offer` come before `text`.
+     Mani's own conversation replies in `ConversationReply` (text first) instead.
      The order is deliberate: with the reading of the person written first, the reply came out as a case note (2026-10-13). Its shape is picked from the database for the
      turn's moment (`context.moment`, `schema.reply_for`): the offer's slots only while an offer may be made,
      `offer_answer` only while one is open or was declined, `body` only on the body route.
@@ -261,21 +264,20 @@ the same change as the work.**
   at message 3 to 4 (baseline 2026-10-26, `chatgpt_reference`, Directive: "what does that mean to you?" three turns
   running in the boss chat, the friendship chat checked at message 6 before what she wants was known). Every chatting
   reply reports `heart` (`exploring`, `conflict_named`, `ready`), one closed value that must never grow back into a
-  record (muhammad's guardrail). The shape carries `check` only from `context.CHECK_FROM` (their 5th message), with
-  no framework live, no check waiting and the cooldowns passed; code stores a check only when the same reply says
-  `ready` (otherwise it logs `check without ready` and sends the text), and a `ready` reply that did not check makes
-  the next turn's `[ctx]` say `check: due`, so code names the turn (journal 2026-10-16: a step the model may take
-  never fires). The check is the model's own sentences, the conflict, what they want and what is stopping them,
-  then its question (`repairs.check_summary`, `check_text`); its summary is stored as the `case` the framework is
-  about. Code stores when the last check was made (`threads.check_at_message_count`, migration 023); the next turn
+  record (muhammad's guardrail). Since 2026-10-26 the check is made in Mani's own conversation (`_converse`): it may
+  come only from `context.CHECK_FROM` (their 5th message), with no framework live, no check waiting, the cooldowns
+  passed and an earlier reply that judged `conflict_named` or `ready` (`converse.check_allowed`); the note says so,
+  and a `ready` reply that did not check makes the next note say the check is due, so code names the turn (journal
+  2026-10-16: a step the model may take never fires). The check is the model's own text, flagged `checking`, with the
+  conflict, what they want and what is stopping them as fields; those become the `case` the framework is about. Code stores when the last check was made (`threads.check_at_message_count`, migration 023); the next turn
   is `Moment.CHECK_OPEN`, whose shape alone carries `check_answer`, `heading_toward` and `offer`. A clear yes makes
   that reply the client's offer; anything else keeps chatting, and the check is used either way. A new check waits
   `COOLDOWN_AFTER_DECLINE` after the last check and `cooldown_for(outcome)` after the last offer, and a set just
   finished may be offered again on a new confirmed check. Before that: the client rejected an offer on the first
   message (R1, 2026-10-12), and check-then-offer comes from the meeting of 2026-10-13 (R14), which stands.
-  `test_no_check_before_their_fifth_message_and_a_ready_heart_of_it_makes_the_check_due` and
+  `test_no_check_before_their_fifth_message_and_ctx_names_only_a_check_waiting_for_its_answer` and
   `test_a_check_is_answered_on_the_next_turn_only_and_then_waits_its_cooldown` in `tests/unit/test_chat_context.py`;
-  `test_a_check_comes_from_their_fifth_message_on_a_reply_that_judges_the_heart_of_it_ready`,
+  `test_a_check_comes_from_their_fifth_message_once_the_heart_of_it_was_agreed`,
   `test_a_check_from_a_reply_that_did_not_judge_the_heart_of_it_ready_opens_nothing` and
   `test_a_reply_that_judged_the_heart_of_it_ready_without_checking_makes_the_check_due` in
   `tests/integration/test_turn.py`. Measured once, 2026-10-26, Directive: the boss chat checked at their 6th message

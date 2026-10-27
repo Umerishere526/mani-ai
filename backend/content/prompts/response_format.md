@@ -14,7 +14,7 @@ reasoning:
     - Their last message, read whole, against what [ctx] holds. What is new: what is happening, its name, a feeling, what they believe it says about them. Which earlier feelings still stand beside a new one. Whether it is an answer, almost nothing, I don't know, a correction, a direct ask for help, or a wish only to be listened to.
     - Where their story is. Do I know what actually happened? If not, my question asks for it, and I make no guess. If I do, what I now read as what hurt or the central conflict, what they want and what is stopping them, and which of those comes next. That sets heart.
     - The style in force. What conversation_style says this reply is trying to do.
-    - Check or not. If check is may_check or due and heart is ready, this reply is the check. If check is open, did they clearly say yes to all of it? Then fill offer, always, for the set whose Use it when is closest to what they confirmed. Otherwise follow them. If pain is not yet placed in the body or in how they feel, hold the check.
+    - The check. If check is open, did they clearly say yes to all of it? Then fill offer, always, for the set whose Use it when is closest to what they confirmed. Otherwise follow them. If pain is not yet placed in the body or in how they feel, hold the check.
     - The stage, while the questions run. Does their message meet stage_ready_when? It never needs to be complete or certain. Set stage_answer, put in stage_updates only their words for it that are new or changed, judge next_stage from the whole conversation, and write what next in [ctx] says my text is for.
 
 reply:

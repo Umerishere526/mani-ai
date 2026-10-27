@@ -13,7 +13,7 @@ from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
 from mani.chat.repairs import PERMISSION_QUESTION
-from mani.llm.schema import BeliefEntry, Check, ConversationReply, Crisis, FeelingEntry, NextStage, Offer, PictureUpdate, Reply, StageUpdate, Style
+from mani.llm.schema import BeliefEntry, ConversationReply, Crisis, FeelingEntry, NextStage, Offer, PictureUpdate, Reply, StageUpdate, Style
 from mani.models.rows import TechniqueOutcome, TechniqueState as TechniqueRow
 from tests.integration.cleanup import remove_test_users
 
@@ -31,9 +31,6 @@ def _in_shape(reply: Reply, schema: type) -> dict:
     fields = reply.model_dump()
     if schema is not ConversationReply or not isinstance(reply, Reply):
         return fields
-    if reply.check is not None:
-        fields |= {"checking": True, "conflict": reply.check.conflict, "want": reply.check.want,
-                   "in_the_way": reply.check.in_the_way}
     return fields
 
 
@@ -207,17 +204,15 @@ def _offer(technique: str = "abcde") -> Reply:
     )
 
 
-def _check() -> Reply:
-    """Mani's check of its understanding from a reply that judged the heart of it ready, each part its own
-    sentence; its free text opens with their last answer, as the model's did live, and is never sent (R33)."""
-    return Reply(
+def _check() -> ConversationReply:
+    """Mani's check of its understanding, in its own words, from a reply that judged the heart of it ready, with
+    the conflict, what they want and what is stopping them (R33)."""
+    return ConversationReply(
         text="You may feel worn down. Your coworkers miss deadlines. Do I have that right?",
-        heart="ready",
-        check=Check(
-            conflict="The work always lands on you when your coworkers miss deadlines",
-            want="You want them to carry their own share.",
-            in_the_way="Saying no feels like letting the team down.", question="Do I have that right",
-        ),
+        heart="ready", checking=True,
+        conflict="The work always lands on you when your coworkers miss deadlines",
+        want="You want them to carry their own share.",
+        in_the_way="Saying no feels like letting the team down.",
     )
 
 
@@ -227,12 +222,11 @@ def _may_check(messages: list[dict]) -> bool:
     return note.startswith("Note for this reply only.") and "Do not check" not in note
 
 
-# _check() as sent: the conflict, what they want and what is stopping them, then the question.
+# _check()'s understanding as the case: the conflict, what they want and what is stopping them.
 CHECK_CASE = (
     "The work always lands on you when your coworkers miss deadlines. You want them to carry their own share. "
     "Saying no feels like letting the team down."
 )
-CHECK_SENT = f"{CHECK_CASE}\n\nDo I have that right?"
 
 
 async def answering_a_check(thread):
@@ -437,7 +431,7 @@ async def test_asking_for_a_declined_set_on_the_answer_to_a_check_starts_it_and_
     """Spec 0006, AC-3, AC-6: a typed request for the set they declined starts it on any turn."""
     from mani.db import pool
 
-    model(Reply(text="Let's begin.", offer_answer="yes", check=_check().check))
+    model(Reply(text="Let's begin.", offer_answer="yes"))
     thread = await past_the_opening(await start(alice))
     async with pool.as_user(alice) as conn:
         await set_technique_outcome(
