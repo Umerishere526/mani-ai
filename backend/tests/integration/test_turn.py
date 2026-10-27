@@ -1055,7 +1055,7 @@ async def test_choosing_a_style_sets_it_and_opens_in_it_with_no_model_call(alice
     # muhammad, 2026-10-26: the conversation prompt carries all three styles, so it is one cached prefix, and
     # the note names the one they chose.
     system = scripted.last_messages[0]["content"]
-    assert system.startswith("# Who you are") and "- Reflective: your reading does more of the work" in system
+    assert system.startswith("# Who you are") and "- Reflective: fewer summaries, more insight." in system
 
 
 async def test_a_greeting_stored_with_the_direct_button_opens_in_directive_after_migration_019(alice, model):
@@ -1507,6 +1507,7 @@ async def test_a_walk_with_nothing_known_names_each_letter_and_asks_one_stage_pe
         _answered("consequence", "I stopped speaking up", _OWN_QUESTIONS["dispute"]),
         _answered("dispute", "they never said why", _OWN_QUESTIONS["effective"]),
         _answered("effective", "I don't know why yet", "Thank you."),
+        Reply(text="ignored", body="yes"),
     )
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "I keep getting left out at work")
@@ -1518,8 +1519,11 @@ async def test_a_walk_with_nothing_known_names_each_letter_and_asks_one_stage_pe
     assert [turn.content for turn in replies[:5]] == [
         _opens(stage, _OWN_QUESTIONS[stage]) for stage in ("activate", "belief", "consequence", "dispute", "effective")
     ]
-    assert replies[5].content.endswith("Where are you noticing any tension or discomfort right now?")
-    assert scripted.calls == 7
+    assert replies[5].content == "Thank you.\n\n" + "Before we finish, would you like to take a moment to check in with your body and notice what you're feeling physically?"
+    assert (await _offered_row(alice, thread.id)).phase == "somatic_ask"
+    opened = await send(alice, thread.id, "Yes")
+    assert opened.content.endswith("Where are you noticing any tension or discomfort right now?")
+    assert scripted.calls == 8
     assert (await _offered_row(alice, thread.id)).phase == "somatic_body"
     store = await _store(alice, thread.id)
     assert {stage: entry["status"] for stage, entry in store.items()} == dict.fromkeys(
@@ -1945,20 +1949,36 @@ async def _outcomes(alice, thread_id) -> tuple[str | None, str | None]:
     return row.physical_response, row.conversation_effect
 
 
-async def test_answering_the_last_stage_goes_straight_into_step_one_with_its_five_buttons(alice, model):
-    """muhammad, 2026-10-22: no question before the client's Step 1; No Tension is the way out."""
+async def test_answering_the_last_stage_asks_before_the_body_check_in_and_yes_opens_step_one(alice, model):
+    """muhammad, 2026-10-27: ask permission before the body check-in (this replaces 2026-10-22's "no question
+    before Step 1"). Yes opens the client's Step 1 with its five buttons."""
     model(Reply(
         text="You'll work on clarifying expectations. Does that feel right?", stage_answer="answered",
         stage_updates=[StageUpdate(stage="effective", said="raise it with my manager", status="known")],
-    ))
+    ), Reply(text="ignored", body="yes"))
     thread = await start(alice)
     await _land_on(alice, thread.id, "effective")
-    turn = await send(alice, thread.id, "it sits easier now")
-    assert turn.content.startswith("You'll work on clarifying expectations.\n\nNow that we've worked through your thoughts")
+    asked = await send(alice, thread.id, "it sits easier now")
+    assert asked.content == "You'll work on clarifying expectations.\n\n" + "Before we finish, would you like to take a moment to check in with your body and notice what you're feeling physically?"
+    assert [p.label for p in asked.prompts] == ["Yes", "Not right now"]
+    assert (await _offered_row(alice, thread.id)).phase == "somatic_ask"
+
+    turn = await send(alice, thread.id, "Yes")
+    assert turn.content.startswith("Now that we've worked through your thoughts")
     assert turn.content.endswith("Where are you noticing any tension or discomfort right now?")
-    assert "check in with your body?" not in turn.content
     assert [p.label for p in turn.prompts] == ["Chest", "Stomach", "Head", "Somewhere Else", "No Tension"]
     assert (await _offered_row(alice, thread.id)).phase == "somatic_body"
+
+
+async def test_not_right_now_skips_the_body_and_asks_whether_the_conversation_helped(alice, model):
+    model(Reply(text="ignored", body="no"))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "somatic_ask")
+    turn = await send(alice, thread.id, "Not right now")
+    assert turn.content.endswith("do you feel our conversation helped you?")
+    assert "tension" not in turn.content
+    assert (await _offered_row(alice, thread.id)).phase == "somatic_effect"
+    assert await _outcomes(alice, thread.id) == (None, None)
 
 
 async def test_the_whole_body_check_in_by_taps_records_each_outcome_apart(alice, model):
@@ -2090,14 +2110,15 @@ def _last_stage_answered() -> Reply:
 
 async def test_after_the_last_stage_a_feeling_that_has_a_place_gets_the_personal_question(alice, model):
     """muhammad, 2026-10-21: the client's introduction, then this in place of the general question."""
-    model(_last_stage_answered())
+    model(_last_stage_answered(), Reply(text="ignored", body="yes"))
     thread = await start(alice)
     await _said_before(alice, thread.id, {"feeling": "embarrassed, anxious", "issue": "my manager criticised my report"})
     await _land_on(alice, thread.id, "effective")
 
-    turn = await send(alice, thread.id, "it sits easier now")
+    await send(alice, thread.id, "it sits easier now")
+    turn = await send(alice, thread.id, "Yes")
 
-    assert turn.content.startswith("You'll raise it with your manager.\n\nNow that we've worked through your thoughts")
+    assert turn.content.startswith("Now that we've worked through your thoughts")
     assert turn.content.endswith(
         "Earlier you mentioned feeling anxious, and that's often felt in the chest. Is that still the case for you right now?"
     )
@@ -2135,12 +2156,13 @@ async def test_no_to_the_personal_question_carries_on_with_the_general_check_in(
 
 
 async def test_a_feeling_with_no_place_gets_the_general_check_in_as_before(alice, model):
-    model(_last_stage_answered())
+    model(_last_stage_answered(), Reply(text="ignored", body="yes"))
     thread = await start(alice)
     await _said_before(alice, thread.id, {"feeling": "embarrassed"})
     await _land_on(alice, thread.id, "effective")
 
-    turn = await send(alice, thread.id, "it sits easier now")
+    await send(alice, thread.id, "it sits easier now")
+    turn = await send(alice, thread.id, "Yes")
 
     assert turn.content.endswith("Where are you noticing any tension or discomfort right now?")
     assert [p.label for p in turn.prompts] == ["Chest", "Stomach", "Head", "Somewhere Else", "No Tension"]

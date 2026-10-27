@@ -163,9 +163,9 @@ def test_an_answer_that_cannot_be_true_of_the_stage_is_read_as_not_yet(abcde):
 
 
 def test_leaving_the_last_stage_enters_the_body_check_in(abcde):
-    """The question about a place comes first; the turn settles whether it is asked or Step 1 follows."""
+    """Whether they would like to check in with their body is asked first (muhammad, 2026-10-27)."""
     left = walk.advance(abcde, {}, [said("effective", "I don't know yet")], "answered", in_force="effective")
-    assert (left.phase, left.reached) == ("somatic_check", None)
+    assert (left.phase, left.reached) == ("somatic_ask", None)
 
 
 def render(abcde, walked, text="", style="supportive", feeling=None):

@@ -15,8 +15,12 @@ client's `label`. The exercises are unreviewed: a change to any line is a reseed
 The buttons for the places a Somewhere Else answer can name are not in the document; they are ours. Step 1 follows the
 framework's last stage directly, and No Tension is the way out for someone who does not want the check in.
 
-seed.py appends `somatic_check`, `somatic_body`, `somatic_practice`, `somatic_effect` and `somatic_closing` to each
-framework's `phases` and merges the five blocks below into its `stages`.
+seed.py appends `somatic_ask`, `somatic_check`, `somatic_body`, `somatic_practice`, `somatic_effect` and
+`somatic_closing` to each framework's `phases` and merges the six blocks below into its `stages`.
+
+`somatic_ask` is ours, not the client's (the testing review of 2026-10-27 asked for permission before a body
+exercise; to be confirmed with Lolly): after a framework's last stage, Mani asks whether they would like to check in
+with their body at all. Yes goes on to `somatic_check` or Step 1; Not right now goes straight to Step 5.
 
 `somatic_check` is ours, not the client's: after a framework's last stage, when what Mani found before it (the
 feelings they named and the feeling underneath) holds a word from `places`, Step 1 asks whether that feeling is still
@@ -25,6 +29,13 @@ general question with its five buttons. Never during chat or inside a framework.
 
 ```yaml
 stages:
+  somatic_ask:
+    purpose: "Before Step 1: asks whether they would like to check in with their body at all. Ours, not the client's. Send the text; the model only reads a typed answer."
+    script:
+      text: "Before we finish, would you like to take a moment to check in with your body and notice what you're feeling physically?"
+      buttons:
+        - {id: "yes", label: "Yes"}
+        - {id: "no", label: "Not right now"}
   somatic_check:
     purpose: "Before Step 1, when a feeling they named usually sits in a place: asks whether it is still felt there. Ours, not the client's. Send the text; the model only reads a typed answer."
     script:

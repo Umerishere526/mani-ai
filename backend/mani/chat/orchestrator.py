@@ -62,10 +62,12 @@ def _body_route(
     technique: TechniqueState | None,
     framework: Framework,
     area: str | None,
+    check: body_route.Check | None = None,
 ) -> tuple[repairs.Repaired, body_route.Step | None]:
     """The body check-in's turn: the client's script for the answer at this step. A tapped button decides
     by itself; a typed answer is the value the reply read from it. Anywhere an answer does not fit, the
-    reply stands as the model wrote it. `area` is the place the question before the first step asked about."""
+    reply stands as the model wrote it. `area` is the place the question before the first step asked about, and
+    `check` the place their feeling points to, asked about once they say yes to a check-in."""
     at = body_route.RETIRING if technique is None else technique.phase
     if tapped is not None and (decided := body_route.tapped_value(at, tapped.label, framework.stages)):
         value = decided
@@ -76,7 +78,7 @@ def _body_route(
         return fixed, None
     step = body_route.step(
         at, value, framework.stages,
-        physical_response=technique.physical_response if technique else None, area=area,
+        physical_response=technique.physical_response if technique else None, area=area, check=check,
     )
     if step is None:
         return dataclasses.replace(fixed, notes=fixed.notes + [f"ignored body {value} at {at}"]), None
@@ -836,23 +838,19 @@ async def send(
             ))
         if walked.entries != (stored_all.get(walking.id) or {}):
             updates.stages_known = {**stored_all, walking.id: walked.entries}
-        if walked.phase == body_route.CHECK:
-            # The last stage was answered: the client's body check-in begins with its first step, asking
-            # about a place when what they said before the framework points to one.
-            check = body_route.check_for(_feelings(understood), walking.stages)
-            text, buttons = body_route.entry(fixed.text, walking.stages, check)
-            fixed = dataclasses.replace(
-                fixed, text=text, prompts=_prompts(buttons),
-                phase=body_route.CHECK if check else body_route.BODY,
-            )
+        if walked.phase == body_route.ASK:
+            # The last stage was answered: before any body check-in, they are asked whether they would like one
+            # (muhammad, 2026-10-27).
+            text, buttons = body_route.ask(fixed.text, walking.stages)
+            fixed = dataclasses.replace(fixed, text=text, prompts=_prompts(buttons), phase=body_route.ASK)
     if moment is Moment.BODY and not guarded:
         route = config.registry.get(technique.framework_id if technique else retiring_framework_id)
-        asked = (
-            body_route.check_for(_feelings(ctx.thread.understanding), route.stages)
-            if technique and technique.phase == body_route.CHECK else None
-        )
+        # The place their feeling points to: asked about on a yes to the check-in, and the place that question named.
+        pointed = body_route.check_for(_feelings(ctx.thread.understanding), route.stages)
         fixed, step = _body_route(
-            fixed, reply.body, reply.options, tapped, technique, route, asked.area if asked else None,
+            fixed, reply.body, reply.options, tapped, technique, route,
+            pointed.area if pointed and technique and technique.phase == body_route.CHECK else None,
+            check=pointed,
         )
         if step is not None:
             updates.physical_response = step.physical_response

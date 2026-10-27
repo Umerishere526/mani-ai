@@ -36,3 +36,17 @@ ordinary answers; three is the floor. The help move is code's (`HELP_MOVES`, kin
 model's. A real situation never gets ABCDE or Thought Reframe: the check's yes turns to help in the chat. To watch
 live: whether the model reports `problem_type` early enough for the move to be right, and whether Supportive's
 check-in ("keep talking or look at what might help?") comes too often.
+
+## Phase 4, same day: stepping out, and asking before the body
+
+A framework that stops helping now says so and offers to step out. The reply reports `framework_fit`, and code
+counts stalls on the stage in force; the subtle part was what counts as a stall. Comparing only the picture's
+`shift` missed turns where their words for the stage changed, so `walk.after_turn` compares the stage's words with
+the state before the turn as well. Talking something new through is never a stall.
+
+The body check-in now asks first (`somatic_ask`). It slots in as the first somatic stage, so the walk leaving the
+last stage lands on it with no special case; `body.entry` became `body.ask` plus `_opening`, which the yes reaches
+with the place their feeling points to. One integration test still expected the old Reflective wording from before
+phase 3's voice rewrite and was fixed along the way. To watch live: whether Not right now feels abrupt going straight
+to "did our conversation help", since the client's script has no line for declining.
+

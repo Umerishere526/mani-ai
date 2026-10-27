@@ -133,7 +133,9 @@ class ThreadSummary(Row):
 
 # The body check-in that ends every framework. Code runs these stages from the client's script, so the model
 # never skips or words them and no stage button is shown on them.
-ENDING_STAGES = frozenset({"somatic_check", "somatic_body", "somatic_practice", "somatic_effect", "somatic_closing"})
+ENDING_STAGES = frozenset({
+    "somatic_ask", "somatic_check", "somatic_body", "somatic_practice", "somatic_effect", "somatic_closing",
+})
 
 
 class Framework(Row):

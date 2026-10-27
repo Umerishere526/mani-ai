@@ -22,12 +22,31 @@ def labels(step: body.Step) -> list[str]:
     return [b.label for b in step.buttons]
 
 
-def test_step_one_follows_the_last_stage_directly_with_manis_reflection_and_the_five_buttons(stages):
-    text, buttons = body.entry("You'll work on clarifying expectations. Does that feel right?", stages)
-    assert text.startswith("You'll work on clarifying expectations.\n\nNow that we've worked through your thoughts")
-    assert text.endswith("Where are you noticing any tension or discomfort right now?")
+def test_after_the_last_stage_mani_asks_before_the_body_check_in(stages):
+    """muhammad, 2026-10-27: ask permission first. The question is ours, not the client's document."""
+    text, buttons = body.ask("You'll work on clarifying expectations. Does that feel right?", stages)
+    assert text.startswith("You'll work on clarifying expectations.\n\nBefore we finish, would you like to take a moment")
     assert "Does that feel right?" not in text
-    assert [b.label for b in buttons] == ["Chest", "Stomach", "Head", "Somewhere Else", "No Tension"]
+    assert [b.label for b in buttons] == ["Yes", "Not right now"]
+    assert body.tapped_value(body.ASK, "Not right now", stages) == "no"
+    assert body.tapped_value(body.ASK, "yes", stages) == "yes"
+
+
+def test_yes_opens_step_one_with_the_clients_introduction_and_the_five_buttons(stages):
+    yes = body.step(body.ASK, "yes", stages)
+    assert yes.text.startswith("Now that we've worked through your thoughts")
+    assert yes.text.endswith("Where are you noticing any tension or discomfort right now?")
+    assert (labels(yes), yes.phase) == (["Chest", "Stomach", "Head", "Somewhere Else", "No Tension"], body.BODY)
+
+
+def test_not_right_now_skips_to_the_overall_question_and_unclear_asks_again(stages):
+    no = body.step(body.ASK, "no", stages)
+    assert no.text == stages["somatic_effect"]["script"]["question"]
+    assert (no.phase, labels(no)) == (body.EFFECT, ["Yes, It Helped", "Somewhat", "No, Not Really"])
+    unclear = body.step(body.ASK, "unclear", stages)
+    assert (unclear.text, unclear.phase, labels(unclear)) == (None, body.ASK, ["Yes", "Not right now"])
+    assert body.step(body.ASK, "chest", stages) is None
+    assert body.step(body.ASK, "pain", stages).phase == body.CLOSING
 
 
 @pytest.mark.parametrize("area", body.AREAS)
@@ -112,15 +131,14 @@ def test_a_feeling_word_they_said_before_the_framework_points_to_its_place(stage
 
 
 def test_with_a_place_the_introduction_is_the_clients_and_only_its_question_changes(stages):
-    plain, plain_buttons = body.entry("You'll raise it.", stages)
-    asked, buttons = body.entry("You'll raise it.", stages, body.Check("chest", "anxious"))
-    introduction = plain.removesuffix(stages["somatic_body"]["script"]["question"]).rstrip()
-    assert asked == (
+    plain = body.step(body.ASK, "yes", stages)
+    asked = body.step(body.ASK, "yes", stages, check=body.Check("chest", "anxious"))
+    introduction = plain.text.removesuffix(stages["somatic_body"]["script"]["question"]).rstrip()
+    assert asked.text == (
         f"{introduction}\n\nEarlier you mentioned feeling anxious, and that's often felt in the chest. "
         "Is that still the case for you right now?"
     )
-    assert [b.label for b in plain_buttons] == ["Chest", "Stomach", "Head", "Somewhere Else", "No Tension"]
-    assert [b.label for b in buttons] == ["Yes", "No"]
+    assert (labels(asked), asked.phase) == (["Yes", "No"], body.CHECK)
 
 
 def test_yes_is_the_exercise_for_the_place_and_no_is_the_general_question_with_its_five_buttons(stages):

@@ -247,6 +247,10 @@ _MEANING: dict[str, str | dict[str, str]] = {
         ),
     },
     "body_step": {
+        body.ASK: (
+            "they were asked whether they would like to check in with their body, with Yes and Not right now. In "
+            "body report yes or no, pain, or unclear. Code sends what follows."
+        ),
         body.CHECK: (
             "they were asked whether a feeling they named earlier is still felt in the place Mani named, with Yes "
             "and No. In body report yes or no; a place they name instead, none for no tension, pain, or unclear "

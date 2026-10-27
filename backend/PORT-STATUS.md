@@ -75,12 +75,13 @@ the same change as the work.**
   is asked). An offer comes only on a clear yes to Mani's check of its understanding, which may come from
   the person's second message, in every style (spec 0006). The shared body check-in comes from `content/prompts/somatic.md`
   and is the client's document "SOMATIC SECTION OF MANI" (2026-10-16), sent word for word in one voice (muhammad,
-  2026-10-22). **The body check-in is the client's six steps, owned by code (`mani/chat/body.py`):** Step 1
-  straight after the framework's last stage, with Chest, Stomach, Head, Somewhere Else and No Tension (muhammad,
-  2026-10-22 later: the question that asked first was removed, and No Tension is the way out), one of the nine
+  2026-10-22). **The body check-in is the client's six steps, owned by code (`mani/chat/body.py`):** after the
+  framework's last stage Mani asks whether they would like to check in with their body (Yes / Not right now, phase
+  `somatic_ask`; muhammad, 2026-10-27, see Decisions in force), then Step 1 with Chest, Stomach, Head, Somewhere Else
+  and No Tension (No Tension is the way out), one of the nine
   exercises sent whole with the check for change (Feel Better / Feel the Same / Feel Worse), the fixed reply, the
   overall question (Yes, It Helped / Somewhat / No, Not Really), and Keep Chatting, Go to Library and Finish for Now.
-  The phases are `somatic_check` (only when a place is asked about, see the decision below), `somatic_body`,
+  The phases are `somatic_ask`, `somatic_check` (only when a place is asked about, see the decision below), `somatic_body`,
   `somatic_practice`, `somatic_effect` and `somatic_closing`;
   the last is final, so the turn after it retires the run. Taps decide by their label; a typed answer is the `body`
   value the reply read, valid only at the step that accepts it, and `unclear` re-asks with the same buttons and never
@@ -132,6 +133,17 @@ the same change as the work.**
 | GET | `/internal/cron/fold-summaries` | idle memory fold, bearer `CRON_SECRET`, no JWT |
 
 ## Decisions in force
+
+- **Mani asks before the body check-in.** Because the 2026-10-27 review found the check-in arriving unasked straight
+  after the last stage, and muhammad chose to ask permission first and tell Lolly (2026-10-27). This replaces
+  2026-10-22's "no question before Step 1". After the last stage the reply is Mani's one-sentence reflection, then
+  "Before we finish, would you like to take a moment to check in with your body and notice what you're feeling
+  physically?" with Yes and Not right now (`somatic_ask`, the first stage in `content/prompts/somatic.md`; the
+  wording is ours, not the client's document). Yes is Step 1, or the question about a place when their feeling points
+  to one; Not right now goes straight to the overall question, with no physical response recorded. Tests:
+  `test_after_the_last_stage_mani_asks_before_the_body_check_in`,
+  `test_answering_the_last_stage_asks_before_the_body_check_in_and_yes_opens_step_one`,
+  `test_not_right_now_skips_the_body_and_asks_whether_the_conversation_helped`.
 
 - **A framework that stops helping offers to step out, named by code and the reply together.** Because the
   2026-10-27 review found Mani pressing on with a framework that no longer helped, and the coworker case questioned

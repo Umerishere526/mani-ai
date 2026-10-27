@@ -8,16 +8,18 @@ from dataclasses import dataclass, field
 
 from mani.chat.repairs import with_the_check_in
 
-CHECK, BODY, PRACTICE, EFFECT, CLOSING = (
-    "somatic_check", "somatic_body", "somatic_practice", "somatic_effect", "somatic_closing",
+ASK, CHECK, BODY, PRACTICE, EFFECT, CLOSING = (
+    "somatic_ask", "somatic_check", "somatic_body", "somatic_practice", "somatic_effect", "somatic_closing",
 )
-STAGES = (CHECK, BODY, PRACTICE, EFFECT, CLOSING)
+STAGES = (ASK, CHECK, BODY, PRACTICE, EFFECT, CLOSING)
 # Where the route is on the turn after its last step, when the run retires.
 RETIRING = "retiring"
 
 AREAS = ("chest", "stomach", "head", "jaw_face", "hands", "eyes", "feet", "toes", "arms")
 # The answers a step accepts. Anywhere else a value is ignored, so a stray reading never moves the route.
 _ANSWERS = {
+    # Whether they would like to check in with their body at all (muhammad, 2026-10-27).
+    ASK: {"yes", "no", "pain", "unclear"},
     BODY: {*AREAS, "other", "nearest", "none", "no", "pain", "unclear"},
     # Yes or No to the question about a place, or any answer the first step takes.
     CHECK: {"yes", "no", *AREAS, "other", "nearest", "none", "pain", "unclear"},
@@ -86,23 +88,30 @@ def _buttons(items: list[dict] | None) -> list[Button]:
     return [Button(label=i["label"], library=i["id"] == LIBRARY_ID) for i in items or []]
 
 
-def entry(text: str, stages: dict, check: Check | None = None) -> tuple[str, list[Button]]:
-    """Step 1, which follows the framework's last stage: Mani's own one-sentence reflection of their last
-    answer, then the client's introduction and its five buttons. With a `check`, the introduction ends on the
-    question about that place with Yes and No in place of the general question."""
+def ask(text: str, stages: dict) -> tuple[str, list[Button]]:
+    """What follows the framework's last stage: Mani's own one-sentence reflection of their last answer, then the
+    question whether they would like to check in with their body at all, with Yes and Not right now."""
+    script = _script(stages, ASK)
+    return with_the_check_in(text, script["text"]), _buttons(script["buttons"])
+
+
+def _opening(stages: dict, check: Check | None) -> Step:
+    """Step 1 once they said yes: the client's introduction and its five buttons. With a `check`, the introduction
+    ends on the question about that place with Yes and No in place of the general question."""
     script = _script(stages, BODY)
     if check is None:
-        return with_the_check_in(text, script["text"]), _buttons(script["buttons"])
+        return Step(script["text"], _buttons(script["buttons"]), BODY)
     asking = _script(stages, CHECK)
     introduction = script["text"].removesuffix(script["question"]).rstrip()
     question = asking["text"].format(
         feeling=check.feeling, place=asking["places"][check.area]["place"],
     )
-    return with_the_check_in(text, f"{introduction}\n\n{question}"), _buttons(asking["buttons"])
+    return Step(f"{introduction}\n\n{question}", _buttons(asking["buttons"]), CHECK)
 
 
 # The button sets whose labels a tap may carry at each step: (stage holding the set, key of the set).
 _TAPS = {
+    ASK: [(ASK, "buttons")],
     CHECK: [(CHECK, "buttons")],
     BODY: [(BODY, "buttons"), (BODY, "other_buttons"), (BODY, "nearest_buttons")],
     PRACTICE: [(PRACTICE, "buttons")],
@@ -136,11 +145,18 @@ def _stop(stages: dict) -> Step:
 
 def step(
     at: str, value: str, stages: dict, *, physical_response: str | None = None, area: str | None = None,
+    check: Check | None = None,
 ) -> Step | None:
     """What the answer `value` does at step `at`, or None when it is not valid there. `area` is the place the
-    question at CHECK asked about."""
+    question at CHECK asked about; `check` is the place their feeling points to, asked about on a yes at ASK."""
     if not fits(value, at):
         return None
+    if at == ASK and value != "pain":
+        if value == "yes":
+            return _opening(stages, check)
+        if value == "no":
+            return _effect_step(stages, "")
+        return Step(None, _buttons(_script(stages, ASK)["buttons"]), ASK)
     if at == CHECK and value != "pain":
         body = _script(stages, BODY)
         if value == "yes":
