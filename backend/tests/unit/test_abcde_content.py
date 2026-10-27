@@ -162,11 +162,10 @@ def test_an_open_offer_turn_costs_less_prompt_than_before_the_structured_fields(
     registry = Registry([framework])
     prompts = {
         name: Prompt(id=uuid.uuid4(), name=name, content=parse_prompt(PROMPTS_DIR / f"{name}.md")["content"])
-        for name in ("mani_base", "response_format", "style_supportive")
+        for name in ("voice", "moments")
     }
-    system = composer.compose(
-        Config(prompts=prompts, registry=registry, loaded_at=time.monotonic()), None,
-        style="supportive", offered=["abcde"],
+    system = composer.compose_moment(
+        Config(prompts=prompts, registry=registry, loaded_at=time.monotonic()), None, offered=["abcde"],
     )
     now = dt.datetime.now(dt.UTC)
     thread = Thread(id=uuid.uuid4(), user_id=uuid.uuid4(), message_count=11, conversation_style="supportive",
@@ -177,7 +176,11 @@ def test_an_open_offer_turn_costs_less_prompt_than_before_the_structured_fields(
                           history=[], offer_waiting=True, yes_framework=framework)
     shape = reply_for(Moment.OFFER_OPEN, slots=repairs.slots_for(registry, "supportive", "abcde"))
 
-    total = len(system.text) + len(block) + len(json.dumps(shape.model_json_schema()))
+    # The voice is the prefix every turn shares, the chat's included, and is cached once for all of them
+    # (muhammad, 2026-10-27); what this turn adds after it is held to the old figure.
+    voice = len(prompts["voice"].content) + 2
+    total = len(system.text) - voice + len(block) + len(json.dumps(shape.model_json_schema()))
+    assert system.text.startswith(prompts["voice"].content)
     assert total < CHARACTERS_BEFORE_STRUCTURED_FIELDS
 
 

@@ -4,7 +4,7 @@
 from mani.llm.schema import Moment, Reply, Slots, as_reply, reply_for
 
 SLOTS = Slots(going_through="what they are going through", lead_line="a warm line", their_words="their words")
-CORE = {"reasoning", "style", "picture", "text", "title", "crisis"}
+CORE = {"reasoning", "picture", "text", "title", "crisis"}
 # Where a stage can be answered or a yes can start one (spec 0004).
 STAGE = {"stage_updates", "stage_answer"}
 # Where the walk can start or move, so the stage it reaches is judged (thread 4b93d612, 2026-10-14).
@@ -22,7 +22,7 @@ def test_each_moment_carries_only_the_fields_that_mean_something_in_it():
     assert fields(Moment.CHECK_OPEN, declined_row=True) == CORE | {
         "heart", "check_answer", "heading_toward", "offer", "offer_answer", *REACH}
     # A stage turn speaks in the chat's voice: no reasoning pass and no reply shape (muhammad, 2026-10-27).
-    assert fields(Moment.IN_STAGES) == (CORE - {"reasoning", "style"}) | REACH | {"options", "framework_fit"}
+    assert fields(Moment.IN_STAGES) == (CORE - {"reasoning"}) | REACH | {"options", "framework_fit"}
     assert fields(Moment.OFFER_OPEN) == CORE | {"offer_answer", "their_words", "options", *REACH}
     assert fields(Moment.BODY) == CORE | {"body", "options"}
 
@@ -46,7 +46,7 @@ def test_mani_writes_its_text_before_reading_the_person_into_fields():
     fields = list(Reply.model_fields)
     for before in ("reasoning", "check_answer", "heart", "offer_answer", "stage_updates", "stage_answer", "next_stage"):
         assert fields.index(before) < fields.index("text"), before
-    for after in ("picture", "heading_toward", "style", "offer"):
+    for after in ("picture", "heading_toward", "offer"):
         assert fields.index("text") < fields.index(after), after
     assert fields.index("heading_toward") < fields.index("offer")
     # On the answer to a check, a yes is the offer, which replaces the text: the set and its slots come

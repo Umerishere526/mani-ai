@@ -12,7 +12,6 @@ import asyncpg
 from mani.llm.schema import Memory
 from mani.models.rows import (
     Profile,
-    ResponseStyle,
     SupportStyle,
     TechniqueState,
     Thread,
@@ -25,8 +24,6 @@ COLUMNS = (
 )
 
 DEFAULT_PAGE = 20
-# How many recent reply shapes the model is shown, to keep it from repeating itself.
-STYLE_WINDOW = 7
 
 
 @dataclass(frozen=True)
@@ -156,7 +153,6 @@ class TurnContext:
     profile: Profile | None
     technique: TechniqueState | None
     techniques_offered: list[str] = field(default_factory=list)
-    recent_styles: list[ResponseStyle] = field(default_factory=list)
     summary: ThreadSummary | None = None
     # Another of this person's conversations was flagged for crisis recently. Only the fact
     # crosses threads, never what was said in it.
@@ -178,12 +174,6 @@ select
   coalesce((select jsonb_agg(o.framework_id order by o.offered_at)
     from public.thread_techniques_offered o
     where o.thread_id = t.id), '[]'::jsonb)        as techniques_offered,
-  coalesce((select jsonb_agg(to_jsonb(style) order by style.created_at)
-    from (select shape, voice, created_at
-            from public.thread_response_styles rs
-           where rs.thread_id = t.id
-           order by rs.created_at desc
-           limit {STYLE_WINDOW}) style), '[]'::jsonb) as recent_styles,
   (select to_jsonb(sm) from public.thread_summaries sm
     where sm.thread_id = t.id)                     as summary,
   -- A flagged thread accepts no further turns, so its last message is when the crisis
@@ -213,9 +203,6 @@ async def load_turn_context(
         technique=TechniqueState.model_validate(row["technique"])
         if row["technique"] else None,
         techniques_offered=list(row["techniques_offered"] or []),
-        recent_styles=[
-            ResponseStyle.model_validate(s) for s in row["recent_styles"] or []
-        ],
         summary=ThreadSummary.model_validate(row["summary"]) if row["summary"] else None,
         recent_crisis=row["recent_crisis"],
         memory=Memory.model_validate(row["memory"]) if row["memory"] else None,
@@ -241,7 +228,6 @@ class ThreadUpdates:
     technique: TechniqueState | None = None
     retire_technique: bool = False
     offer_frameworks: list[str] = field(default_factory=list)
-    style: ResponseStyle | None = None
     # What the body check-in found, set only on the turn that answers its step, never overwritten within a run.
     physical_response: str | None = None
     conversation_effect: str | None = None
@@ -264,7 +250,6 @@ class ThreadUpdates:
             or self.technique is not None
             or self.retire_technique
             or bool(self.offer_frameworks)
-            or self.style is not None
             or self.physical_response is not None
             or self.conversation_effect is not None
             or self.reset_outcomes
@@ -381,12 +366,6 @@ async def apply(
             [(thread_id, fid, user_id) for fid in updates.offer_frameworks],
         )
 
-    if updates.style is not None:
-        await conn.execute(
-            "insert into public.thread_response_styles (thread_id, user_id, shape, voice) "
-            "values ($1, $2, $3, $4)",
-            thread_id, user_id, updates.style.shape, updates.style.voice,
-        )
 
 
 async def mark_crisis(

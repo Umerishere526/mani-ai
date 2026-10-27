@@ -42,3 +42,4 @@ conflict under "Conflicts" in [requirements.md](requirements.md) and update the 
 | 2026-10-18 | Lolly | [Directive review: the sister who keeps borrowing](messages/2026-10-18-directive-sister-loans-review.md) |
 | 2026-10-13 | Lolly | [Framework Selection Cheat Sheet](messages/2026-10-13-framework-cheat-sheet.md) |
 | 2026-10-26 | Lolly | [Two conversations with ChatGPT: the voice MANI should have](messages/2026-10-26-chatgpt-boss-and-friendship.md) |
+| 2026-10-27 | beta tester, via muhammad | [Chat testing review: heard, but not helped](messages/2026-10-27-chat-testing-review.md) |

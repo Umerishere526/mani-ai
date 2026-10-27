@@ -30,18 +30,10 @@ def _listed(values) -> str:
     return ", ".join(f'"{v}"' for v in values)
 
 
-# The closed sets below are named in the descriptions rather than typed as enums, and are
-# checked in repairs.py instead. A value outside an enum is a ValidationError, and a
-# ValidationError here does not degrade one cosmetic field - it costs a second provider call
-# and then raises, losing the message the person typed. Nothing the model reports about its
-# own style is worth a lost turn, so the schema asks and the repair decides.
-SHAPES = (
-    "warmth lead", "honor and follow", "mirror and ask", "mirror and hold",
-    "gentle follow", "presence only",
-)
-# The two shapes that ask nothing. A draft that chose one is not asked for a question: the model
-# reads when someone only wants to be listened to, so no phrase list has to.
-NO_QUESTION_SHAPES = ("mirror and hold", "presence only")
+# CLOSED SETS: a closed set the model reports is named in the field's description rather than typed as an enum, and
+# checked by code instead. A value outside an enum is a ValidationError, and a ValidationError here does not degrade
+# one field - it costs a second provider call and then raises, losing the message the person typed. So the schema
+# asks and code decides.
 
 
 class Button(BaseModel):
@@ -82,17 +74,9 @@ class Crisis(BaseModel):
     reason: str = Field(description="Brief description of the crisis signal")
 
 
-class Style(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    shape: str = Field(
-        description=f"The response shape you used: {_listed(SHAPES)}."
-    )
-
-
 class StageUpdate(BaseModel):
     """What they said this turn for one stage. `status` is checked by code (walk.py), not typed,
-    for the reason the note on SHAPES gives."""
+    for the reason under CLOSED SETS."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -126,7 +110,7 @@ class StageUpdate(BaseModel):
 
 class NextStage(BaseModel):
     """How the conversation answers the stage the walk reaches next. `status` and `gap` are checked
-    by code (walk.py), not typed, for the reason the note on SHAPES gives."""
+    by code (walk.py), not typed, for the reason under CLOSED SETS."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -163,7 +147,7 @@ class FeelingEntry(BaseModel):
 
 
 class BeliefEntry(BaseModel):
-    """`kind` is checked by code (chat/picture.py), not typed, for the reason the note on SHAPES gives."""
+    """`kind` is checked by code (chat/picture.py), not typed, for the reason under CLOSED SETS."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -178,7 +162,7 @@ class BeliefEntry(BaseModel):
 
 
 class RiskEntry(BaseModel):
-    """`to` is checked by code (chat/picture.py), not typed, for the reason the note on SHAPES gives."""
+    """`to` is checked by code (chat/picture.py), not typed, for the reason under CLOSED SETS."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -191,8 +175,8 @@ class RiskEntry(BaseModel):
 class PictureUpdate(BaseModel):
     """What their last message adds to or changes in your picture of them. Only what is new or changed: never
     what the picture already holds. Every entry is a few of their words, said to them as you. Not shown to them.
-    `shift` and `problem_type` are checked by code (chat/picture.py), not typed, for the reason the note on SHAPES
-    gives."""
+    `shift` and `problem_type` are checked by code (chat/picture.py), not typed, for the reason CLOSED SETS
+    says."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -278,7 +262,7 @@ class Offer(BaseModel):
 class _ReplyBase(BaseModel):
     """What every reply shape shares: unknown fields are dropped, and an off-list value in a
     closed set is read as null. A ValidationError there would cost a second call and could
-    lose the message, as the note on SHAPES says."""
+    lose the message, as CLOSED SETS says."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -308,8 +292,7 @@ class Reply(_ReplyBase):
     reasoning: str | None = Field(
         default=None,
         description=(
-            "Fill this first, before text. Work through the steps under 'The reasoning "
-            "field' in your instructions. Not shown to the user."
+            "Fill this first, before text, in a few short notes as your instructions say. Not shown to the user."
         ),
     )
     check_answer: CheckAnswer | None = Field(
@@ -408,12 +391,6 @@ class Reply(_ReplyBase):
             "the user."
         ),
     )
-    style: Style | None = Field(
-        default=None,
-        description=(
-            "The response shape this reply used."
-        ),
-    )
     offer: Offer | None = Field(
         default=None,
         description=(
@@ -462,7 +439,7 @@ class Slots:
     their_words: str | None = None
 
 
-_CORE = ("reasoning", "style", "picture", "text", "title", "crisis")
+_CORE = ("reasoning", "picture", "text", "title", "crisis")
 _STAGES = ("stage_updates", "stage_answer")
 # The stage the walk may reach this turn, judged on every turn that can start or move the walk. Not at
 # the closing, which the body route follows.
@@ -483,9 +460,9 @@ def reply_for(
     if moment is Moment.BODY:
         names |= {"body", "options"}
     elif moment is Moment.IN_STAGES:
-        # A stage turn speaks in the chat's voice (prompts/voice.md and framework.md): no reasoning pass and no
-        # reply shape to pick, the stage fields are its judgement.
-        names = (names - {"reasoning", "style"}) | {*_STAGES, *_REACH, "options", "framework_fit"}
+        # A stage turn speaks in the chat's voice (prompts/voice.md and framework.md): no reasoning pass, the
+        # stage fields are its judgement.
+        names = (names - {"reasoning"}) | {*_STAGES, *_REACH, "options", "framework_fit"}
     elif moment is Moment.OFFER_OPEN:
         names |= {"offer_answer", *_STAGES, *_REACH, "options"}
         if slots.their_words:

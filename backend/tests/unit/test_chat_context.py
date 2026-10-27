@@ -5,7 +5,6 @@ import dataclasses
 import datetime as dt
 import uuid
 
-import pytest
 
 from mani.chat import context
 from mani.chat.orchestrator import find_tapped_prompt, pending_offer
@@ -15,7 +14,6 @@ from mani.models.rows import (
     Message,
     MessageRole,
     Profile,
-    ResponseStyle,
     SupportStyle,
     TechniqueOutcome,
     TechniqueState,
@@ -132,19 +130,9 @@ def test_only_a_declined_offer_holds_the_next_check_back():
     ))
 
 
-def test_recent_styles_are_listed_by_shape_so_a_reply_can_avoid_repeating_one():
-    """Rows stored before the voice field went still carry one; the model is shown shapes only,
-    since it is no longer asked to rotate voices (muhammad, 2026-09-24)."""
-    block = context.build(
-        TurnContext(
-            thread=thread(), profile=None, technique=None,
-            recent_styles=[
-                ResponseStyle(shape="mirror and ask", voice="naming"),
-                ResponseStyle(shape="presence only"),
-            ],
-        )
-    )
-    assert "recent_styles: mirror and ask → presence only" in block
+def test_the_block_names_no_reply_shapes():
+    """muhammad, 2026-10-27: the reply shapes went with mani_base.md, so no turn is shown its last shapes."""
+    assert "recent_styles" not in context.build(TurnContext(thread=thread(), profile=None, technique=None))
 
 
 def test_a_context_block_can_be_stripped_back_out():
@@ -351,7 +339,7 @@ def test_the_conversations_own_style_wins_over_the_profile_default():
 
 
 def test_the_style_in_force_is_named_even_with_no_framework_running():
-    """mani_base.md tells the model the [ctx] block names the style in force. Until this
+    """The [ctx] block names the style in force. Until this
     line existed the block named it nowhere, and outside a framework there was no stage_ask
     or offer_ask to carry it either - so all three styles answered the same way."""
     chose_directive = Thread(
@@ -511,7 +499,7 @@ def _every_kind_of_block() -> list[str]:
     )
     early = TurnContext(
         thread=thread(message_count=5), profile=None, technique=None, summary=summary,
-        recent_styles=[ResponseStyle(shape="mirror and ask")], recent_crisis=True,
+        recent_crisis=True,
     )
     return [
         context.build(early, history=[mani("What happened then?")]),
@@ -555,12 +543,8 @@ def test_the_block_is_weighed_with_the_conversation_never_instead_of_it():
     from scripts.seed import parse_prompt
     import pathlib
 
-    import yaml
-
-    rules = yaml.safe_load(parse_prompt(
-        pathlib.Path(__file__).parents[2] / "content/prompts/response_format.md")["content"])
-    assert set(rules["ctx"]) == {"about"}
-    assert "never in place of it" in rules["ctx"]["about"]
+    prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
+    assert "never in place of it" in parse_prompt(prompts / "moments.md")["content"]
 
 
 def test_a_stage_question_is_asked_as_the_client_wrote_it():

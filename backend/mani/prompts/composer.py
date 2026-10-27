@@ -9,7 +9,7 @@ from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.llm.schema import Memory
 from mani.models.rows import Profile, ThreadSummary
-from mani.prompts.cache import Config, style_prompt
+from mani.prompts.cache import Config
 
 DEBUG_LAYER = (
     "# Debug\n"
@@ -183,53 +183,6 @@ def summary_layer(summary: ThreadSummary | None) -> str | None:
     return "## Conversation Context\n" + "\n".join(lines) if lines else None
 
 
-def compose(
-    config: Config,
-    profile: Profile | None,
-    *,
-    style: str,
-    should_generate_title: bool = False,
-    offered: list[str] | None = None,
-    summary: ThreadSummary | None = None,
-    memory: Memory | None = None,
-) -> SystemPrompt:
-    """Build the system prompt for one turn.
-
-    Order is fixed and identical every turn, which is what lets the provider cache the
-    static prefix: one shared by every style, then one per style. `style` is the conversation
-    style resolved for this turn; only its own layer is sent.
-    """
-    settings = get_settings()
-
-    candidates: list[tuple[str, str | None]] = [
-        # Who Mani is and how a conversation runs, then what a reply must satisfy: identical
-        # for every user and style. Then the chosen style and the catalogue, identical for every
-        # conversation in that style.
-        ("mani_base", config.require("mani_base").content),
-        ("response_format", config.require("response_format").content),
-        ("style", config.require(style_prompt(style)).content),
-        ("framework_index", framework_index(config.registry)),
-        ("user_context", user_context(profile)),
-        ("user_memory", user_memory(memory)),
-    ]
-
-    if should_generate_title:
-        title = config.prompt("title_generation")
-        candidates.append(("title_generation", title.content if title else None))
-
-    candidates += [
-        ("techniques_used", techniques_used(offered or [])),
-        ("debug", DEBUG_LAYER if settings.ai_debug_mode else None),
-        ("summary", summary_layer(summary)),
-    ]
-
-    present = [(name, body) for name, body in candidates if body]
-    return SystemPrompt(
-        text="\n\n".join(body for _, body in present),
-        layers=[(name, len(body)) for name, body in present],
-    )
-
-
 def _in_voice(
     config: Config,
     part: str,
@@ -238,19 +191,24 @@ def _in_voice(
     should_generate_title: bool,
     summary: ThreadSummary | None,
     memory: Memory | None,
+    extra: list[tuple[str, str | None]] | None = None,
+    after: list[tuple[str, str | None]] | None = None,
 ) -> SystemPrompt:
     """Mani's voice, then `part` (how the chat moves, or how a framework turn goes), then what is known of the
     person. The voice carries all three styles and the client's two example conversations and is the same for
-    every turn of either kind, so it is one cached prefix."""
+    every turn of either kind, so it is one cached prefix. `extra` follows `part` in the cached prefix; `after` comes
+    after what is known of the person, since it changes within a conversation."""
     candidates: list[tuple[str, str | None]] = [
         ("voice", config.require("voice").content),
         (part, config.require(part).content),
+        *(extra or []),
         ("user_context", user_context(profile)),
         ("user_memory", user_memory(memory)),
     ]
     if should_generate_title:
         title = config.prompt("title_generation")
         candidates.append(("title_generation", title.content if title else None))
+    candidates += after or []
     candidates.append(("summary", summary_layer(summary)))
     present = [(name, body) for name, body in candidates if body]
     return SystemPrompt(
@@ -288,7 +246,30 @@ def compose_framework(
     )
 
 
-def model_settings(config: Config, name: str = "mani_base") -> tuple[str, dict, dict]:
+def compose_moment(
+    config: Config,
+    profile: Profile | None,
+    *,
+    should_generate_title: bool = False,
+    offered: list[str] | None = None,
+    summary: ThreadSummary | None = None,
+    memory: Memory | None = None,
+) -> SystemPrompt:
+    """The system prompt for the turns between the chat and a framework: the answer to a check or an offer, a
+    safety concern, and the body check-in. The same voice, then how those moments go and the catalogue of
+    frameworks a check's yes chooses from."""
+    settings = get_settings()
+    return _in_voice(
+        config, "moments", profile, should_generate_title=should_generate_title, summary=summary, memory=memory,
+        extra=[("framework_index", framework_index(config.registry))],
+        after=[
+            ("techniques_used", techniques_used(offered or [])),
+            ("debug", DEBUG_LAYER if settings.ai_debug_mode else None),
+        ],
+    )
+
+
+def model_settings(config: Config, name: str = "voice") -> tuple[str, dict, dict]:
     """The model id, parameters and routing for a chat turn, from the prompt row `name`.
 
     Taken from a prompt row, so the model is editable as configuration while the key it

@@ -60,7 +60,7 @@ Query: `select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid
 | `public` | `messages` | Every message in every thread, both sides. |
 | `public` | `thread_technique_state` | Which framework is active in a thread, and its current phase. |
 | `public` | `thread_techniques_offered` | Frequency-limiting: which frameworks have already been offered in a thread. |
-| `public` | `thread_response_styles` | The model's self-reported response shape/voice per reply — anti-repetition signal. |
+| `public` | `thread_response_styles` | No longer written or read (2026-10-27): the model reported a response shape per reply until the reply shapes were retired. Kept for the rows already in it. |
 | `public` | `thread_summaries` | The rolling summary of a thread too long for the model's budget, refreshed once messages have left its view (`CONTEXT_BUDGET_CHARS`). Written by the backend only (migration 007). |
 | `public` | `exercise_completions` | Whether a user found a completed exercise helpful. |
 
@@ -144,7 +144,7 @@ Frequency-limiting log — every framework ever offered in a thread.
 | 4 | `offered_at` | timestamptz | default `clock_timestamp()` | |
 
 ### `public.thread_response_styles`
-Append-only log of the model's self-reported style per reply.
+Append-only log of the model's self-reported style per reply. **Not written or read since 2026-10-27**, when every turn moved to `voice.md` and the reply shapes went; a later migration may drop it.
 
 | # | Column | Type | Required | Purpose |
 |---|---|---|---|---|

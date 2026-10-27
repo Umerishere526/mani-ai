@@ -1,4 +1,4 @@
-# ABOUTME: Checks the system prompt's layer order, that only the chosen style is sent, and that
+# ABOUTME: Checks the system prompt's layer order, that every turn starts with the same voice, and that
 # ABOUTME: a missing layer is not silent. Order is fixed so the static prefix stays cacheable.
 
 import time
@@ -31,11 +31,7 @@ def config() -> Config:
         prompt("voice", "VOICE"),
         prompt("conversation", "CONVERSATION"),
         prompt("framework", "FRAMEWORK"),
-        prompt("mani_base", "IDENTITY"),
-        prompt("response_format", "FORMAT"),
-        prompt("style_directive", "DIRECTIVE STYLE"),
-        prompt("style_supportive", "SUPPORTIVE STYLE"),
-        prompt("style_reflective", "REFLECTIVE STYLE"),
+        prompt("moments", "MOMENTS"),
         prompt("title_generation", "TITLE"),
     ]
     return Config(
@@ -46,10 +42,9 @@ def config() -> Config:
 
 
 def test_the_layers_come_in_a_fixed_order(config):
-    built = composer.compose(
+    built = composer.compose_moment(
         config,
         Profile(user_id=USER, nickname="Al", topics=["anxiety"], support_style="reflective"),
-        style="reflective",
         should_generate_title=True,
         offered=["abcde"],
         summary=ThreadSummary(
@@ -58,42 +53,27 @@ def test_the_layers_come_in_a_fixed_order(config):
         ),
     )
     assert [name for name, _ in built.layers] == [
-        "mani_base", "response_format", "style", "user_context", "title_generation",
-        "techniques_used", "summary",
+        "voice", "moments", "user_context", "title_generation", "techniques_used", "summary",
     ]
 
 
 def test_optional_layers_are_simply_absent(config):
-    built = composer.compose(config, None, style="supportive")
-    assert [name for name, _ in built.layers] == ["mani_base", "response_format", "style"]
+    built = composer.compose_moment(config, None)
+    assert [name for name, _ in built.layers] == ["voice", "moments"]
 
 
-@pytest.mark.parametrize("style", ["directive", "supportive", "reflective"])
-def test_only_the_chosen_style_reaches_the_system_prompt(config, style):
-    """The client's styles document (2026-10-12): the style decides what each reply is trying to
-    do, so the model is given the one it is speaking in and never the other two."""
-    built = composer.compose(config, None, style=style)
-
-    assert f"{style.upper()} STYLE" in built.text
-    for other in {"directive", "supportive", "reflective"} - {style}:
-        assert f"{other.upper()} STYLE" not in built.text
-    # Everything before the style is the same in every style, so it caches once for all three.
-    assert built.text.startswith("IDENTITY\n\nFORMAT\n\n")
+@pytest.mark.parametrize("compose", [composer.compose_conversation, composer.compose_framework, composer.compose_moment])
+def test_every_turn_starts_with_the_same_voice_so_it_caches_once(config, compose):
+    """muhammad, 2026-10-27: the chat, a framework's stages and the moments between them all speak in voice.md,
+    which carries the three styles, so no turn is composed from a style file of its own."""
+    built = compose(config, None)
+    assert built.text.startswith("VOICE\n\n")
+    assert not any(name in ("mani_base", "response_format", "style") for name, _ in built.layers)
+    assert composer.model_settings(config)[0] == "google/gemini-3-flash-preview"
 
 
-def test_a_style_whose_row_is_missing_is_refused_not_dropped(config):
-    without_style = Config(
-        prompts={k: v for k, v in config.prompts.items() if k != "style_reflective"},
-        registry=config.registry,
-        loaded_at=config.loaded_at,
-    )
-    with pytest.raises(ServiceError):
-        composer.compose(without_style, None, style="reflective")
-
-
-async def test_a_missing_style_row_is_refused_when_the_prompts_load(config, monkeypatch):
-    """A deactivated style would otherwise surface mid-conversation, as a turn that fails in
-    that one style only."""
+async def test_a_missing_prompt_row_is_refused_when_the_prompts_load(config, monkeypatch):
+    """A deactivated part would otherwise surface mid-conversation, as a turn that fails in that moment only."""
     import mani.db.pool as pool_module
 
     @asynccontextmanager
@@ -101,7 +81,7 @@ async def test_a_missing_style_row_is_refused_when_the_prompts_load(config, monk
         yield object()
 
     async def active_prompts(conn):
-        return [p for name, p in config.prompts.items() if name != "style_directive"]
+        return [p for name, p in config.prompts.items() if name != "moments"]
 
     async def active_frameworks(conn):
         return []
@@ -110,8 +90,9 @@ async def test_a_missing_style_row_is_refused_when_the_prompts_load(config, monk
     monkeypatch.setattr(cache.config_tables, "list_active_prompts", active_prompts)
     monkeypatch.setattr(cache.config_tables, "list_active_frameworks", active_frameworks)
 
-    with pytest.raises(ServiceError, match="style_directive"):
+    with pytest.raises(ServiceError, match="moments"):
         await cache._read()
+    assert cache.REQUIRED_PROMPTS == ("voice", "conversation", "framework", "moments")
 
 
 async def _read_with(framework_row: Framework, config, monkeypatch) -> None:
@@ -223,11 +204,9 @@ def test_the_generated_index_reaches_the_composed_prompt(config):
         registry=Registry([framework("abcde", "ABCDE", "A specific event.", {})]),
         loaded_at=time.monotonic(),
     )
-    built = composer.compose(with_frameworks, None, style="supportive")
+    built = composer.compose_moment(with_frameworks, None)
 
-    assert [name for name, _ in built.layers] == [
-        "mani_base", "response_format", "style", "framework_index"
-    ]
+    assert [name for name, _ in built.layers] == ["voice", "moments", "framework_index"]
     assert "`abcde`" in built.text
 
 
@@ -235,11 +214,10 @@ def test_onboarding_answers_reach_the_prompt(config):
     """The reference read only the nickname, so topics shaped nothing. The support style is
     not here on purpose: it is resolved per turn and composed as its own layer, so that a
     conversation which chose differently is not contradicted by the profile's answer."""
-    built = composer.compose(
+    built = composer.compose_moment(
         config,
         Profile(user_id=USER, nickname="Al", topics=["burnout", "boundaries"],
                 support_style="directive"),
-        style="directive",
     )
     assert "burnout, boundaries" in built.text
     assert "style of support" not in built.text
@@ -248,13 +226,13 @@ def test_onboarding_answers_reach_the_prompt(config):
 def test_a_missing_required_layer_is_refused_not_dropped(config):
     """The reference pushed each layer only `if (prompt)`, so deactivating one in the
     portal quietly changed Mani's personality instead of failing."""
-    without_format = Config(
-        prompts={k: v for k, v in config.prompts.items() if k != "response_format"},
+    without_moments = Config(
+        prompts={k: v for k, v in config.prompts.items() if k != "moments"},
         registry=config.registry,
         loaded_at=config.loaded_at,
     )
     with pytest.raises(ServiceError):
-        composer.compose(without_format, None, style="supportive")
+        composer.compose_moment(without_moments, None)
 
 
 def test_the_framework_index_carries_each_frameworks_contraindications():
@@ -281,7 +259,7 @@ def test_what_is_remembered_across_chats_reaches_the_prompt_after_the_static_lay
         what_helps=["walking the dog"],
     )
     profile = Profile(user_id=uuid.uuid4(), nickname="Sam")
-    built = composer.compose(config, profile, style="supportive", memory=remembered)
+    built = composer.compose_moment(config, profile, memory=remembered)
 
     names = [name for name, _ in built.layers]
     assert names.index("user_memory") == names.index("user_context") + 1
@@ -291,7 +269,7 @@ def test_what_is_remembered_across_chats_reaches_the_prompt_after_the_static_lay
 
 
 def test_an_empty_memory_adds_nothing(config):
-    built = composer.compose(config, None, style="supportive", memory=Memory())
+    built = composer.compose_moment(config, None, memory=Memory())
     assert "user_memory" not in [name for name, _ in built.layers]
 
 
@@ -307,42 +285,34 @@ def test_the_index_keeps_the_description_from_the_model():
     assert "separate what happened from what you told yourself about it" not in index
 
 
-@pytest.mark.parametrize(
-    "name", ["mani_base", "response_format", "style_directive", "style_supportive", "style_reflective"]
-)
-def test_every_rule_in_a_prompt_file_is_a_sentence_not_a_yaml_mapping(name):
-    """A colon inside a bullet turns it into a mapping, and the rule then reaches the model as a
-    key and a value instead of as the sentence it was written as (it happened to two rules)."""
+def _sent(*names: str) -> str:
     import pathlib
-
-    import yaml
-
-    from scripts.seed import parse_prompt
-
-    path = pathlib.Path(__file__).parents[2] / f"content/prompts/{name}.md"
-    sections = yaml.safe_load(parse_prompt(path)["content"])
-    for section, body in sections.items():
-        if isinstance(body, list):
-            assert all(isinstance(rule, str) for rule in body), section
-
-
-def test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_beside_it():
-    """Spec 0005, AC-9: a framework's checklist steered the questions toward its own needs, and the
-    bans kept the feeling they named out of them (live, 2026-10-13: the frustrated chat). Every feeling
-    they named stays in view, not only the first (muhammad, 2026-10-25: a second feeling replaced the first)."""
-    import pathlib
-
-    import yaml
 
     from scripts.seed import parse_prompt
 
     prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
-    base = yaml.safe_load(parse_prompt(prompts / "mani_base.md")["content"])
-    assert any(
-        isinstance(rule, str) and rule.startswith("Each question follows from their last answer.")
-        for rule in base["understanding_them"]
-    )
-    sent = "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in ("mani_base", "response_format"))
+    return "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in names)
+
+
+def test_the_old_layers_are_gone_and_switched_off_on_seed():
+    """muhammad, 2026-10-27: every turn speaks in voice.md. The old layers are deleted, and the seed switches
+    their rows off by name so a database seeded before still composes nothing from them."""
+    import pathlib
+
+    from scripts.seed import RETIRED_PROMPTS
+
+    prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
+    for name in RETIRED_PROMPTS:
+        assert not (prompts / f"{name}.md").exists(), name
+    assert set(RETIRED_PROMPTS) == {"mani_base", "response_format", "style_directive", "style_supportive",
+                                    "style_reflective"}
+
+
+def test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_beside_it():
+    """Spec 0005, AC-9: a framework's checklist steered the questions toward its own needs, and the
+    bans kept the feeling they named out of them (live, 2026-10-13: the frustrated chat)."""
+    sent = _sent("voice", "conversation", "framework", "moments")
+    assert "Each question follows from their last answer" in sent
     for cut in ("Build every question from", "Never hand their own words or feelings back",
                 "Am I saying back their own words or feelings"):
         assert cut not in sent
@@ -351,69 +321,46 @@ def test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_b
 def test_mani_is_never_taught_to_announce_what_it_wants_to_understand():
     """Live, 2026-10-21: "I want to understand what's behind that before I assume" opened a reply
     because the prompt's example said it four times. The client liked the mirror, not that line."""
-    import pathlib
-
-    from scripts.seed import parse_prompt
-
-    prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
-    sent = "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in ("mani_base", "response_format"))
+    sent = _sent("voice", "conversation", "framework", "moments")
     for line in ("I want to understand", "want to assume", "rather than assume", "and you say so"):
         assert line not in sent
 
 
-def test_the_heart_of_it_replaced_the_steps_and_the_prompt_did_not_grow():
-    """muhammad, 2026-10-26 (R30, R33): Mani reads for the central conflict, what they want and what is stopping
-    them instead of walking named steps. The prompt is held to its size so rules cannot pile up silently, and no
-    instruction still names a step or asks about control. The chat before a framework has its own prompt since
-    the same day, so the framework prompt carries the cadence but not the client's example conversations."""
-    import pathlib
-
-    from scripts.seed import parse_prompt
-
-    prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
-    base = (prompts / "mani_base.md").read_text()
-    sent = "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in ("mani_base", "response_format"))
-    assert "what is stopping them" in base
-    for cut in ("understanding_next", "The feeling underneath.", "in their control", "never leads them to a conclusion"):
+def test_the_moments_prompt_is_held_to_its_size_and_names_no_steps():
+    """The moments between chat and framework have a prompt of their own, held to its size so rules cannot pile up
+    silently, and no instruction there still names a step or asks about control."""
+    sent = _sent("moments")
+    for cut in ("understanding_next", "The feeling underneath.", "in their control", "reply_shapes"):
         assert cut not in sent, cut
-    assert len(base) <= 11500
-    assert "Them: " not in base
+    assert len(sent) <= 6500
 
 
 def test_no_rule_lets_mani_pass_a_stage_over_and_not_knowing_gets_possibilities():
     """muhammad, 2026-10-21: "I don't know" ended frameworks having helped no one because two rules said to
     take what they gave and move on, or to let a stage go. Not knowing is the case Mani thinks aloud for."""
-    import pathlib
-
-    from scripts.seed import parse_prompt
-
-    prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
-    sent = "\n".join(parse_prompt(prompts / f"{name}.md")["content"] for name in ("mani_base", "response_format"))
+    sent = _sent("framework", "moments")
     for rule in ("After two tries", "let it go without pushing", "move to the next stage", "It is difficult to identify"):
         assert rule not in sent
-    assert "think aloud" in sent and "only they decide to stop" in sent
+    assert "think aloud" in sent and "Only they decide to stop" in sent
 
 
 def test_the_framework_rules_point_at_their_case():
     """muhammad, 2026-10-22: stage questions and possibilities are about the case found before the offer."""
-    import pathlib
-
-    from scripts.seed import parse_prompt
-
-    prompts = pathlib.Path(__file__).parents[2] / "content/prompts"
-    sent = parse_prompt(prompts / "mani_base.md")["content"]
-    assert "about their_case in [ctx]" in sent and "from their case and what they said" in sent
+    assert "their_case" in _sent("framework")
 
 
-def test_a_question_back_is_not_an_answer_and_the_plain_words_rule_is_in_the_prompt():
-    """Lolly, 2026-10-22: "what do you mean?" at C moved the walk to D, and Mani said "hold onto". A question
-    back keeps the stage, and the voice is plain words with no figure of speech."""
-    import pathlib
-
+def test_a_question_back_is_not_an_answer():
+    """Lolly, 2026-10-22: "what do you mean?" at C moved the walk to D. A question back keeps the stage."""
     from mani.llm.schema import Reply
-    from scripts.seed import parse_prompt
 
-    base = parse_prompt(pathlib.Path(__file__).parents[2] / "content/prompts/mani_base.md")["content"]
-    assert "they ask what you mean: the stage is not answered" in base
-    assert "never a figure of speech" in base
+    assert "They ask what you mean: the stage is not answered" in _sent("framework")
     assert "a question back about what you asked" in Reply.model_fields["stage_answer"].description
+
+
+def test_the_moments_prompt_keeps_what_the_old_one_held_for_these_turns():
+    """What mani_base.md said about the check, the offer, a concern and staying in role moved to moments.md."""
+    sent = _sent("moments")
+    for rule in ("A clear yes to all of it brings the offer", "no set is offered", "Pain in the body gets no offer",
+                 "Anything else is Keep chatting", "Put any questions and offers down", "body_step in [ctx]",
+                 "never take another name or persona", "Fill reasoning first"):
+        assert rule in sent, rule

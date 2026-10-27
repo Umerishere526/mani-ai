@@ -50,3 +50,23 @@ with the place their feeling points to. One integration test still expected the 
 phase 3's voice rewrite and was fixed along the way. To watch live: whether Not right now feels abrupt going straight
 to "did our conversation help", since the client's script has no line for declining.
 
+
+## Phase 5, same day: the old path is gone
+
+The answer to a check, the offer, the body check-in and a safety concern were the last turns still composed from
+`mani_base.md`, `response_format.md` and a style file, so Mani changed voice at the moments that decide what happens
+next. They now read `voice.md` and a short `moments.md`, with the Framework Index after it. The five old files are
+deleted and the seed switches their rows off by name (not "every row with no file", which would also switch off a
+prompt made in the portal).
+
+The reply shapes went with them, which pulled more out than expected: `Style` in the schema, the shape check in
+`repairs`, the "chose to ask nothing" exception in `reply_checks`, `recent_styles` in `[ctx]` and in the turn
+context, and every write to `thread_response_styles`. The table stays for its rows. The size test for an open-offer
+turn now measures what comes after the voice, since the voice is the cached prefix every turn shares; with it, the
+turn is about 41,000 characters against the 35,752 of 2026-10-12, without it about 21,000.
+
+Not kept: the rule against figures of speech. It lived in `mani_base.md`, and `voice.md` carries Lolly's own example,
+"You're holding on to what this company could become". `reply_checks.FIGURES` still counts them in the log.
+
+The review that started this plan is now in `docs/client/messages/2026-10-27-chat-testing-review.md`, with R36 to
+R40. muhammad's 28 points were pasted in the session and are not kept verbatim.

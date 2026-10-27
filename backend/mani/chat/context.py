@@ -12,7 +12,6 @@ from mani.llm.schema import Moment
 from mani.models.rows import (
     Framework,
     Message,
-    MessageRole,
     TechniqueOutcome,
     TechniqueState,
 )
@@ -209,7 +208,6 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "and slowly, and do not mention it unless they do."
         ),
     },
-    "recent_styles": "the shapes of your last few replies. A shape may come back.",
     "framework_starting": {
         "yes": "they just said yes, so the walk reaches its first stage: next says what your text is for.",
     },
@@ -329,9 +327,7 @@ def build(
     view - nothing new is fetched for it.
     """
     technique = ctx.technique
-    # Named first because every stage_ask and offer_ask below is resolved from it, and named
-    # `conversation_style` rather than `style` because `recent_styles` three lines down means
-    # the response shape, which is a different thing entirely.
+    # Named first because every stage_ask and offer_ask below is resolved from it.
     lines: list[str] = _line("conversation_style", resolve_style(ctx))
     if safety_concern:
         # The deterministic screen heard something that may be a risk. The framework waits:
@@ -386,11 +382,6 @@ def build(
             for t in ctx.summary.techniques_tried
         )
         lines += _line("history", tried)
-
-    if ctx.recent_styles and not running:
-        # A stage turn picks no reply shape (it speaks in the chat's voice), so the last shapes mean nothing to it.
-        styles = " → ".join(s.shape for s in ctx.recent_styles)
-        lines += _line("recent_styles", styles)
 
     if running:
         lines += _running_lines(ctx, framework, offer_waiting=offer_waiting, starting=starting)

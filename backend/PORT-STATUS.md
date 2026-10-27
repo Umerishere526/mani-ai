@@ -17,8 +17,8 @@ the same change as the work.**
   `reasoning_effort` instead, so `mani/llm/chain.py` sends the sampling parameters an ordinary
   chat model takes only to models that accept them. A prompt row names its own effort in
   `model_parameters.reasoning_effort` and `mani/config.py` holds the default for the calls that have
-  no row of their own; `mani_base` is on `medium` (muhammad, 2026-10-22, for comprehension over the 2026-10-12 `low` that cut latency) and so is the exercise pick that
-  follows it, while `summarization` and `memory_fold` are on `high`. Effort is billed: measured against Azure,
+  no row of their own; every chat turn reads the effort of `voice`, on `low` (2026-10-27; `mani_base` was on `medium`
+  from 2026-10-22 until it was retired), while `summarization` and `memory_fold` are on `high`. Effort is billed: measured against Azure,
   `high` spent 26 reasoning tokens where `low` spent 0, about three times the cost of the same call. Every endpoint keeps `data_collection: deny`, so
   training use stays refused, and one company, OpenAI, processes the conversations.
 - Every call to OpenRouter carries the same providers, data policy and reasoning effort, from
@@ -31,8 +31,8 @@ the same change as the work.**
   (2026-10-07). Measured at high: 12.6 s for an average turn, 41 s for the longest. Not measured at
   low: the target is a median of 4 s and a slowest of 10 s, and `scripts/scenario_check.py` now prints each
   turn's time, calls and tokens (`admin.llm_calls.reasoning_tokens`, migration 018) to check it.
-- `mani_base.md` and `response_format.md` are YAML rules rather than prose (ADR-012): about 10,600 tokens
-  became 4,850. The Framework Index and the per-framework rules are not restructured yet.
+- Every turn's prompt is prose read after `voice.md` (`conversation.md`, `framework.md` or `moments.md`). The YAML
+  rules of ADR-012 (`mani_base.md`, `response_format.md`, the style files) were retired on 2026-10-27.
 - Web and mobile do not call this API yet; they run on placeholder data.
 
 ## What the service does
@@ -47,14 +47,14 @@ the same change as the work.**
      is a concern: it suspends frameworks and offers without locking.
   2. Which framework fits, and whether one fits yet, is the model's call from the Framework Index. Code owns only when an offer may come (on the answer to Mani's check, `context.check_open`, `context.may_check`) and the safety screen.
   3. `composer.py` builds the system prompt: `voice.md` and `conversation.md` for Mani's own conversation
-     (`_converse`), `voice.md` and `framework.md` for a framework's stages, and `mani_base.md`, `response_format.md`
-     and the one style file the thread chose for the remaining turns (the answer to a check, the offer, the body
-     check-in, a safety concern). `context.py` builds the `[ctx]` block for every turn but the chat's own: style, offer timing, the stage in progress, what is stored for each stage
+     (`_converse`), `voice.md` and `framework.md` for a framework's stages, and `voice.md` and `moments.md` with
+     the Framework Index for the turns in between (the answer to a check, the offer, the body check-in, a safety
+     concern). `context.py` builds the `[ctx]` block for every turn but the chat's own: style, offer timing, the stage in progress, what is stored for each stage
      and what this reply's text is for. Nothing in code classifies what the person said: whether a reply is vague, a correction or
-     a wish only to be listened to is the model's reading (`response_format.md`, reasoning).
+     a wish only to be listened to is the model's reading.
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, the answers
      that decide the moment (`check_answer`, `offer_answer`, the stage fields), then `text`, then `picture`,
-     `heading_toward`, `style`, `offer`; on the answer to a check, `heading_toward` and `offer` come before `text`.
+     `heading_toward`, `offer`; on the answer to a check, `heading_toward` and `offer` come before `text`.
      Mani's own conversation replies in `ConversationReply` (text first) instead.
      The order is deliberate: with the reading of the person written first, the reply came out as a case note (2026-10-13). Its shape is picked from the database for the
      turn's moment (`context.moment`, `schema.reply_for`): the offer's slots only while an offer may be made,
@@ -133,6 +133,18 @@ the same change as the work.**
 | GET | `/internal/cron/fold-summaries` | idle memory fold, bearer `CRON_SECRET`, no JWT |
 
 ## Decisions in force
+
+- **Every turn speaks in `voice.md`; the old path is gone.** Because the turns between the chat and a framework (the
+  answer to a check, the offer, the body check-in, a safety concern) still read `mani_base.md`, `response_format.md`
+  and a style file, so Mani sounded different at exactly the moments that decide what happens next (muhammad,
+  2026-10-27). Those turns are composed by `composer.compose_moment`: `voice.md`, then `moments.md` (what each of
+  those moments asks, the [ctx] block, the reasoning notes, staying in role), then the Framework Index; model and
+  effort come from the `voice` row. `mani_base.md`, `response_format.md` and the three style files are deleted;
+  `scripts/seed.py` switches their rows off by name (`RETIRED_PROMPTS`), so seed before deploying. The reply shapes
+  went with them: no reply reports a `style`, `[ctx]` carries no `recent_styles`, and `public.thread_response_styles`
+  is no longer written or read (the table stays, for the rows already in it). Tests:
+  `test_every_turn_starts_with_the_same_voice_so_it_caches_once`, `test_the_old_layers_are_gone_and_switched_off_on_seed`,
+  `test_the_moments_prompt_keeps_what_the_old_one_held_for_these_turns`, `test_config_tables_are_readable_and_seeded`.
 
 - **Mani asks before the body check-in.** Because the 2026-10-27 review found the check-in arriving unasked straight
   after the last stage, and muhammad chose to ask permission first and tell Lolly (2026-10-27). This replaces
@@ -348,7 +360,7 @@ the same change as the work.**
   no feeling (spec 0005). Tell me more is the client's longer `offering.explain[style]`; a no is `offering.keep_chatting[style]` with `their_words`. An offer that cannot
   be rendered is dropped, the model's text goes, and `offer unusable: <reason>` is logged.
   `tests/unit/test_repairs.py`, `tests/integration/test_turn.py`.
-- **One style file per thread, in the system prompt, written from the client's behavior lists** (muhammad,
+- **Superseded 2026-10-27 (every turn speaks in `voice.md`, see the decision above). One style file per thread, in the system prompt, written from the client's behavior lists** (muhammad,
   2026-10-12). Because the client separates the styles by what each reply is trying to do, and our own recipe per
   style, under shared rules that contradicted their examples, drifted from it (styles document, 2026-10-12).
   `content/prompts/style_directive.md`, `style_supportive.md` and `style_reflective.md` each hold that style's
@@ -514,9 +526,8 @@ the same change as the work.**
   `test_before_the_check_one_question_carries_its_own_possibilities_and_nothing_is_added_under_it`.
 - **Mani's voice is the shared shape in `mani_base.md` `how_you_talk` plus the chosen style's file; there is no
   shared example conversation** (muhammad, 2026-10-22, replacing "Mani talks like the client's sample conversation",
-  2026-10-13). Since 2026-10-26 and 2026-10-27 this holds only for the turns still composed from `mani_base.md` (the
-  answer to a check, the offer, the body check-in, a safety concern): the chat and every framework's stages speak from
-  `voice.md`, which does carry the client's two example conversations. Because all three styles read the same: one sample was copied in every style, one line blended
+  2026-10-13). Superseded on 2026-10-27: every turn now speaks from `voice.md`, which carries the client's two
+  example conversations, and `mani_base.md` is retired. Because all three styles read the same: one sample was copied in every style, one line blended
   Supportive and Reflective for everyone, and each style file was one sentence. The shape stays (what is new and the reading it changes, in their words, one question on its own line,
   three to six short sentences since 2026-10-26, no dashes), and
   each style file now says what its replies are for, in the client's own words, with what to do and avoid and the reply
@@ -556,7 +567,7 @@ the same change as the work.**
   `test_a_missing_stage_is_its_letter_line_then_manis_own_question_about_their_situation`.
 - **`[ctx]` explains itself.** Because a plain turn paid about 4,900 characters of key dictionary to explain a
   154 character block, and the two drifted apart (2026-10-09). Each line carries its meaning for this turn's value on the line under it
-  (`context._MEANING`), so `response_format.md` holds only what the block is. A test fails if a key is sent
+  (`context._MEANING`), so the prompt (`framework.md`, `moments.md`) says only what the block is. A test fails if a key is sent
   without one.
 - **An open offer is read from the database, not from the buttons on screen.** Because an offer can stay open
   with no buttons showing, and a typed yes to it then started nothing (2026-10-09). A yes to it starts it either

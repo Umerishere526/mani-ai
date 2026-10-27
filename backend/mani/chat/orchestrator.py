@@ -33,7 +33,6 @@ from mani.models.rows import (
     Framework,
     Message,
     MessageRole,
-    ResponseStyle,
     SupportStyle,
     TechniqueOutcome,
     TechniqueState,
@@ -311,7 +310,7 @@ async def _converse(
         config, ctx.profile, should_generate_title=wants_title,
         summary=ctx.summary if window.dropped else None, memory=ctx.memory,
     )
-    model, parameters, routing = composer.model_settings(config, "voice")
+    model, parameters, routing = composer.model_settings(config)
     note = converse.note(
         conversation_style, allowed=allowed, due=understanding.ready(ctx.thread.understanding),
         wants_title=wants_title, understood=ctx.thread.understanding, recent_crisis=ctx.recent_crisis,
@@ -589,15 +588,11 @@ async def send(
     if not ctx.thread.conversation_style:
         # They typed past the greeting's style buttons, so the profile or the default speaks.
         logger.info("thread %s chose no style; composing in %s", ctx.thread.id, conversation_style)
-    system = composer.compose(
-        config,
-        ctx.profile,
-        style=conversation_style,
-        should_generate_title=wants_title,
-        offered=offered_now,
-        # Only once messages have left the window, so it never repeats what the model reads raw.
-        summary=ctx.summary if window.dropped else None,
-        memory=ctx.memory,
+    # The answer to a check or an offer, a concern, and the body check-in: the same voice as the chat. The summary
+    # only once messages have left the window, so it never repeats what the model reads raw.
+    system = composer.compose_moment(
+        config, ctx.profile, should_generate_title=wants_title, offered=offered_now,
+        summary=ctx.summary if window.dropped else None, memory=ctx.memory,
     )
     model, parameters, routing = composer.model_settings(config)
 
@@ -669,7 +664,6 @@ async def send(
             config, ctx.profile, should_generate_title=wants_title,
             summary=ctx.summary if window.dropped else None, memory=ctx.memory,
         )
-        model, parameters, routing = composer.model_settings(config, "voice")
     reply_shape = schema.reply_for(
         moment,
         declined_row=declined_row,
@@ -932,8 +926,6 @@ async def send(
         if accepted_this_turn:
             updates.offer_frameworks.append(decided)
 
-    if fixed.style is not None:
-        updates.style = ResponseStyle(shape=fixed.style.shape)
     if fixed.title:
         updates.title = fixed.title
 

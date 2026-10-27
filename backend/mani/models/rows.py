@@ -107,13 +107,6 @@ class TechniqueState(Row):
     stages_known: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
-class ResponseStyle(Row):
-    """One entry in the rolling window used to keep replies from repeating shape."""
-
-    shape: str
-    voice: str | None = None
-
-
 class TechniqueTried(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 

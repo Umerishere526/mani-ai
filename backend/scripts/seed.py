@@ -22,6 +22,8 @@ from mani.models.rows import ENDING_STAGES, SupportStyle  # noqa: E402
 # nothing in the running service ever opens these files.
 CONTENT_DIR = pathlib.Path(__file__).resolve().parent.parent / "content"
 PROMPTS_DIR = CONTENT_DIR / "prompts"
+# Prompt rows no turn reads any more: switched off on every seed, kept for the calls that reference them.
+RETIRED_PROMPTS = ("mani_base", "response_format", "style_directive", "style_supportive", "style_reflective")
 FRAMEWORKS_DIR = CONTENT_DIR / "frameworks"
 
 # Only the files directly in frameworks/ are seeded. A framework moved into frameworks/paused/ is
@@ -211,6 +213,15 @@ async def seed() -> None:
                 )
                 print(f"  {prompt['name']:<18} {len(prompt['content']):>6} chars")
             print(f"prompts: {len(files)}")
+            # The layers the old path composed, before every turn spoke in voice.md (muhammad, 2026-10-27). Named
+            # rather than "every row with no file", so a prompt made in the portal is never switched off.
+            retired = await conn.fetch(
+                "update admin.prompts set is_active = false "
+                "where is_active and name = any($1::text[]) returning name",
+                list(RETIRED_PROMPTS),
+            )
+            for row in retired:
+                print(f"  {row['name']:<18} retired")
     finally:
         await conn.close()
 

@@ -13,25 +13,18 @@ from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.db import config_tables, pool
 from mani.errors import ErrorCategory, ServiceError
-from mani.models.rows import Prompt, SupportStyle
+from mani.models.rows import Prompt
 
 logger = logging.getLogger(__name__)
-
-
-def style_prompt(style: str) -> str:
-    """The prompt row that holds one conversation style."""
-    return f"style_{style}"
 
 
 # The layers a turn cannot be composed without. The implementation this replaces pushed
 # each layer only `if (prompt)`, so a prompt renamed or deactivated in the portal simply
 # vanished from the system prompt and Mani quietly changed personality.
-# Mani's voice and the two parts read after it (the chat and a framework's stages), then the layers for the turns that
-# still use them and one per style. The framework catalogue is generated from the registry rather than stored as a
-# prompt, so it is not listed here and cannot go missing.
-REQUIRED_PROMPTS = ("voice", "conversation", "framework", "mani_base", "response_format") + tuple(
-    style_prompt(s) for s in SupportStyle
-)
+# Mani's voice, which carries all three styles, and the three parts read after it: the chat, a framework's stages,
+# and the moments in between. The framework catalogue is generated from the registry rather than stored as a prompt,
+# so it is not listed here and cannot go missing.
+REQUIRED_PROMPTS = ("voice", "conversation", "framework", "moments")
 
 # Used by particular paths rather than every turn, but still misconfiguration if absent.
 EXPECTED_PROMPTS = REQUIRED_PROMPTS + ("title_generation", "summarization")

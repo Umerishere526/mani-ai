@@ -5,12 +5,12 @@ from __future__ import annotations
 
 import re
 
-from mani.llm.schema import NO_QUESTION_SHAPES, Reply
+from mani.llm.schema import Reply
 
 _QUESTION = re.compile(r"[^.!?\n]*\?")
 REPEAT_OVERLAP = 0.7
-# Figures of speech Mani is told never to use (mani_base.md, how_you_talk): the ones people have named as
-# artificial. Matched as whole phrases in a reply.
+# Figures of speech people have named as artificial (2026-10), counted in the log, never fixed. Matched as whole
+# phrases in a reply.
 FIGURES = re.compile(
     r"\b(?:hold(?:ing)? (?:onto|on to|space|you|this|that)|carry(?:ing)? (?:this|that)|sit(?:ting)? with"
     r"|weigh(?:s|ing)? on you)\b",
@@ -68,10 +68,7 @@ def misses(
         notes.append(f"offer unusable: {offer_dropped}")
     if not technique and repeats(reply.text, last_mani_text):
         notes.append("repeats the last question")
-    chose_to_ask_nothing = bool(
-        reply.style and reply.style.shape.strip().lower() in NO_QUESTION_SHAPES
-    )
-    if needs_question and not technique and "?" not in reply.text and not chose_to_ask_nothing:
+    if needs_question and not technique and "?" not in reply.text:
         notes.append("asks no question")
     if reach_unjudged:
         notes.append("reach unjudged")

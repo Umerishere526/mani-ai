@@ -13,7 +13,7 @@ from mani.chat.greeting import (
     TRY_IT_LABEL,
 )
 from mani.chat.techniques import OFFERING, Registry
-from mani.llm.schema import SHAPES, Moment, Offer, Reply, Slots, SmartPrompt, Style
+from mani.llm.schema import Moment, Offer, Reply, Slots, SmartPrompt
 from mani.models.rows import Framework
 
 MAX_TITLE_LENGTH = 100
@@ -108,7 +108,6 @@ class Repaired:
     # The framework and phase to record, set by the walk and the body route; never by the reply.
     framework_id: str | None = None
     phase: str | None = None
-    style: Style | None = None
     # What was corrected, for the log and for a metric on how often the model needs it.
     notes: list[str] = field(default_factory=list)
     # Why the reply's offer could not be made, when it carried one; the model's text went instead.
@@ -349,23 +348,10 @@ def apply(
 
     title = clean_title(reply.title) if wants_title else None
 
-    # Case and spacing are normalized before the check because a model reading a table of
-    # names returns "Mirror and ask" far more often than it returns something off-list, and
-    # dropping those would starve the anti-repetition loop this check exists to protect.
-    style = reply.style
-    if style is not None:
-        shape = style.shape.strip().lower()
-        if shape not in SHAPES:
-            notes.append(f"dropped an off-list response shape: {style.shape}")
-            style = None
-        else:
-            style = Style(shape=shape)
-
     return Repaired(
         text=text,
         prompts=prompts,
         title=title,
-        style=style,
         notes=notes,
         offer_dropped=offer_dropped,
     )

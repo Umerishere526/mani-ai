@@ -13,7 +13,7 @@ from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
 from mani.chat.repairs import PERMISSION_QUESTION
-from mani.llm.schema import BeliefEntry, ConversationReply, Crisis, FeelingEntry, NextStage, Offer, PictureUpdate, Reply, StageUpdate, Style
+from mani.llm.schema import BeliefEntry, ConversationReply, Crisis, FeelingEntry, NextStage, Offer, PictureUpdate, Reply, StageUpdate
 from mani.models.rows import TechniqueOutcome, TechniqueState as TechniqueRow
 from tests.integration.cleanup import remove_test_users
 
@@ -173,7 +173,6 @@ async def test_a_turn_costs_exactly_one_provider_call(alice, model):
             heading_toward="made_up_technique",
             offer=Offer(going_through="a hard day", lead_line="That sounds hard."),
             stage_answer="answered",
-            style=Style(shape="mirror and ask"),
         )
     )
     thread = await start(alice)
@@ -476,28 +475,14 @@ async def test_a_comforting_reply_with_no_question_goes_out_as_written_and_is_lo
 
 
 async def test_someone_who_asks_only_to_be_heard_is_not_forced_to_answer_a_question(alice, model):
-    """The model reads that someone only wants to be listened to and picks a shape that asks nothing;
-    no phrase list in code decides it."""
-    scripted = model(Reply(
-        text="That sounds like it has been hard for a long time.",
-        style=Style(shape="mirror and hold"),
-    ))
+    """The model reads that someone only wants to be listened to; no phrase list in code decides it, and code
+    adds no question."""
+    scripted = model(Reply(text="That sounds like it has been hard for a long time."))
     thread = await start(alice)
     turn = await send(alice, thread.id, "please don't ask me anything, i just need to get it out")
 
     assert scripted.calls == 1
     assert "?" not in turn.content
-
-
-async def test_a_reply_that_asks_nothing_and_chose_to_ask_something_is_logged(alice, model):
-    scripted = model(
-        Reply(text="That sounds like it has been hard.", style=Style(shape="mirror and ask")),
-    )
-    thread = await start(alice)
-    turn = await send(alice, thread.id, "work has been a lot lately")
-
-    assert scripted.calls == 1
-    assert turn.checks == ["asks no question"]
 
 
 ASKED_INLINE = "Your coworkers keep missing deadlines and the work lands on you every time. Is that what started this?"
@@ -542,7 +527,7 @@ async def test_a_concern_reported_by_the_model_goes_out_as_written(alice, model)
 
 
 async def test_the_turn_is_stored_and_the_thread_state_follows_it(alice, model):
-    model(_offer().model_copy(update={"style": Style(shape="warmth lead")}))
+    model(_offer())
     from mani.db import pool
 
     thread = await past_the_opening(await start(alice))
@@ -554,7 +539,6 @@ async def test_the_turn_is_stored_and_the_thread_state_follows_it(alice, model):
     assert ctx.technique.framework_id == "abcde"
     assert ctx.technique.outcome is TechniqueOutcome.OFFERED
     assert ctx.techniques_offered == ["abcde"]
-    assert ctx.recent_styles[-1].shape == "warmth lead"
     assert [m.role for m in (await _history(alice, thread.id))][-2:] == ["user", "mani"]
 
 
@@ -2325,7 +2309,6 @@ async def test_asking_for_help_turns_the_conversation_and_the_next_note_carries_
 async def test_two_turns_with_nothing_new_offer_to_step_out_and_a_yes_ends_the_framework(alice, model):
     """The 2026-10-27 review: the framework carried on when it was no longer helping. Two stalls on a stage make the
     reply offer to step out; the next turn reads the offer, and their yes ends the framework into the chat."""
-    from mani.db import pool
 
     scripted = model(
         Reply(text="What makes you believe that?", stage_answer="not_yet", picture=PictureUpdate(shift="nothing_new")),

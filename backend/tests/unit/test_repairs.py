@@ -5,7 +5,7 @@ import pytest
 
 from mani.chat import repairs
 from mani.chat.techniques import Registry
-from mani.llm.schema import Moment, Offer, Reply, Style
+from mani.llm.schema import Moment, Offer, Reply
 from mani.models.rows import Framework
 from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
@@ -79,31 +79,11 @@ def test_a_title_is_ignored_when_none_was_asked_for(registry):
 
 
 def test_a_clean_reply_is_left_alone(registry):
-    clean = reply(style=Style(shape="mirror and ask"))
+    clean = reply()
     fixed = fix(registry, clean)
     assert fixed.notes == []
     assert fixed.text == clean.text
     assert fixed.prompts == []
-
-
-def test_a_style_the_model_reports_in_title_case_still_counts(registry):
-    """The shapes are taught in a table, so the model returns them capitalised as often as
-    not. Dropping those would starve the anti-repetition loop rather than protect it."""
-    titled = reply(style=Style(shape="Mirror And Ask"))
-    fixed = fix(registry, titled)
-    assert fixed.style == Style(shape="mirror and ask")
-    assert fixed.notes == []
-
-
-def test_an_off_list_shape_is_dropped_rather_than_failing_the_turn(registry):
-    """A value outside the set is a ValidationError if the schema types it as an enum, and
-    that costs a second provider call and then the person's message. It is only a self
-    report about a reply that is otherwise fine, so it is dropped and the reply stands."""
-    invented = reply(style=Style(shape="vibes"))
-    fixed = fix(registry, invented)
-    assert fixed.style is None
-    assert fixed.text == "Thank you for telling me."
-    assert fixed.notes
 
 
 @pytest.mark.parametrize("style", ["directive", "supportive", "reflective"])
@@ -276,12 +256,10 @@ def test_internal_words_never_reach_the_person(registry):
     assert any("internal" in note for note in fixed.notes)
 
 
-def test_the_model_is_never_asked_for_a_mirroring_voice():
-    """muhammad, 2026-09-24: mirroring is there but never forced. Asking for a voice every
-    turn, never the same twice, forced the rotation the prompt no longer asks for."""
-    style = Reply.model_json_schema()["$defs"]["Style"]
-    assert set(style["properties"]) == {"shape"}
-    assert "voice" not in Reply.model_fields["style"].description
+def test_no_reply_reports_a_shape_any_more():
+    """muhammad, 2026-10-27: every turn speaks in voice.md, which has no table of reply shapes to pick from."""
+    assert "style" not in Reply.model_fields
+    assert "Style" not in Reply.model_json_schema().get("$defs", {})
 
 
 # Mani's replies from the client's way of communication document, each as the client lays it out.
