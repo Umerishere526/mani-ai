@@ -140,7 +140,12 @@ class NextStage(BaseModel):
 class FeelingEntry(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    feeling: str = Field(description="The feeling, in their word, in the form that reads after \"feeling\", such as \"guilty\".")
+    feeling: str = Field(
+        description=(
+            "A feeling they named, in their word, in the form that reads after \"feeling\", such as \"guilty\". Never "
+            "a belief about themselves: \"incapable\", \"not good enough\" or \"a failure\" are beliefs and go in beliefs."
+        ),
+    )
     about: str | None = Field(
         default=None, description="What it is about, a few of their words said to them as you. Null when they did not say.",
     )
@@ -159,6 +164,29 @@ class BeliefEntry(BaseModel):
             "while the children are there\"."
         ),
     )
+
+
+class CoreEntry(BaseModel):
+    """The core of it (muhammad, 2026-10-28). `about` is checked by code (chat/picture.py), not typed, for the reason
+    under CLOSED SETS."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    belief: str = Field(
+        description=(
+            "The deepest belief their other thoughts lead to, or the tension at the heart of it, in their words said "
+            "to them as you, such as \"one slip proves you can't change\" or \"you love her, and you feel you don't "
+            "matter to her\"."
+        ),
+    )
+    feeling: str | None = Field(
+        default=None,
+        description=(
+            "The feeling under the feelings they named, as you read it, such as shame under guilt or hopelessness "
+            "under frustration. A word or two. Null until you can tell."
+        ),
+    )
+    about: str = Field(description="self: what it says about them. others: about someone else. situation: about what is happening.")
 
 
 class RiskEntry(BaseModel):
@@ -184,6 +212,13 @@ class PictureUpdate(BaseModel):
     feelings: list[FeelingEntry] | None = Field(default=None, description="Feelings they named for the first time. Null when none.")
     beliefs: list[BeliefEntry] | None = Field(
         default=None, description="What they tell themselves, or say is really happening, that is new. Null when none.",
+    )
+    core: CoreEntry | None = Field(
+        default=None,
+        description=(
+            "The core of it, only when you can first tell or it changes: the belief the other thoughts lead to, and "
+            "the feeling underneath. Null otherwise."
+        ),
     )
     wants: str | None = Field(default=None, description="What they want, when it is new or has changed. Null otherwise.")
     in_the_way: str | None = Field(
@@ -224,7 +259,7 @@ BodyBranch = Literal[
     "nearest", "none", "pain", "better", "same", "worse", "helped", "somewhat", "not_really", "finish", "unclear",
 ]
 StageAnswer = Literal["agreed", "answered", "corrected", "stop", "not_yet"]
-Heart = Literal["exploring", "conflict_named", "ready"]
+Heart = Literal["exploring", "core_named", "ready"]
 # Whether the set of questions is still helping them (muhammad, 2026-10-27): anything but helping makes the reply offer
 # to step out, and code remembers the offer for their answer.
 FrameworkFit = Literal["helping", "confused", "real_not_belief", "already_balanced", "disengaging"]
@@ -306,10 +341,7 @@ class Reply(_ReplyBase):
     heart: Heart | None = Field(
         default=None,
         description=(
-            "Where your reading of the heart of it stands, from the whole conversation including their "
-            "message. exploring: the central conflict is not clear yet. conflict_named: you said the "
-            "tension back to them and they did not correct it; carrying on counts. ready: the conflict is "
-            "named, and you also know what they want and what is stopping them."
+            "Where your reading of the core of it stands, from the whole conversation including their message. exploring: you do not know the core yet, the belief the other thoughts lead to and the feeling underneath. core_named: you said the core back to them as an invitation and they did not correct it; carrying on or answering your next question counts, and it stays named unless they say that is not it. ready: it is named, and their message since deepened or confirmed it rather than changing it."
         ),
     )
     offer_answer: OfferAnswer | None = Field(
@@ -524,21 +556,16 @@ class ConversationReply(_ReplyBase):
     heart: Heart | None = Field(
         default=None,
         description=(
-            "exploring: you don't yet know what they are torn between or what it means to them. conflict_named: "
-            "you said the heart of it back and they did not correct it; carrying on or answering your next question "
-            "counts, and it stays named unless they say that is not it. ready: it is named, and you also know what "
-            "they want and what is stopping them."
+            "Where your reading of the core of it stands, from the whole conversation including their message. exploring: you do not know the core yet, the belief the other thoughts lead to and the feeling underneath. core_named: you said the core back to them as an invitation and they did not correct it; carrying on or answering your next question counts, and it stays named unless they say that is not it. ready: it is named, and their message since deepened or confirmed it rather than changing it."
         ),
     )
-    conflict: str | None = Field(
+    core: str | None = Field(
         default=None,
-        description="Once heart is conflict_named or ready: what they are torn between or what it means to them, one sentence said to them as you. Null otherwise.",
-    )
-    want: str | None = Field(
-        default=None, description="Once known: what they want, one sentence said to them as you. Null otherwise.",
-    )
-    in_the_way: str | None = Field(
-        default=None, description="Once known: what is stopping them, one sentence said to them as you. Null otherwise.",
+        description=(
+            "Once heart is core_named or ready: the core of it and the feeling underneath, one or two sentences said "
+            "to them as you, such as \"One slip feels like proof that you can't change, and underneath the guilt "
+            "there is shame about who you are.\" Null otherwise."
+        ),
     )
     checking: bool | None = Field(
         default=None,

@@ -126,7 +126,7 @@ stages:
     # The part of Mani's picture that feeds this stage once it has passed: a new thought replaces its words.
     picture: thought
     purpose: "Establish the situation, in one plain sentence, and the specific thought about it that they want to examine."
-    reach: "If their_case already gives the thought, in what it comes down to for them, report thought as known, in their words. Your text says back the thought and the underlying feeling they confirmed, in one sentence, then asks whether that's what they want to look at. Never ask for it again. The thought is what they tell themselves, in their words, never a reading of it. If their_case has no clear thought, report thought as missing and ask what keeps coming back to their mind."
+    reach: "If their_case already gives the core they confirmed, report thought as known with the core belief, in their words, not the first thought on the way to it. Your text says back the thought and the underlying feeling they confirmed, in one sentence, then asks whether that's what they want to look at. Never ask for it again. The thought is what they tell themselves, in their words, never a reading of it. If their_case has no clear thought, report thought as missing and ask what keeps coming back to their mind."
     listen_for: "The situation, whether an actual event or the memory of one, kept separate from the thought about it. Listen for a specific thought about themselves, another person, or the situation, in their words. Specific thoughts are easier to work with than broad ones: 'I'll freeze when she asks about the budget' rather than 'something bad will happen'."
     ready_when: >-
       One specific thought has been identified, in their own words, and it's clear what situation

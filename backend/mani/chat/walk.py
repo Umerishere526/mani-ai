@@ -270,11 +270,15 @@ def from_picture(
     framework: Framework, entries: dict[str, dict], before: dict | None, after: dict | None, *, in_force: str | None,
 ) -> tuple[dict[str, dict], list[str]]:
     """The stages already passed, brought up to date with what the picture gained this turn: a new thought becomes
-    the words of a stage fed by thoughts, a new feeling is added to the words of a stage fed by feelings. Stages
-    ahead are left alone; each is judged from the whole picture when the walk reaches it. Logged by stage only."""
+    the words of a stage fed by thoughts (a deeper core first), a new feeling is added to the words of a stage fed
+    by feelings. Stages ahead are left alone; each is judged from the whole picture when the walk reaches it.
+    Logged by stage only."""
     stages = content_stages(framework)
     at = stages.index(in_force) if in_force in stages else 0
-    thoughts = picture.added_beliefs(before, after)
+    # A deeper core takes the thought stage before any other new thought: it is what the others lead to
+    # (muhammad, 2026-10-28).
+    deeper = picture.new_core(before, after)
+    thoughts = [deeper] if deeper else picture.added_beliefs(before, after)
     feelings = picture.added_feelings(before, after)
     synced = {stage: dict(entry) for stage, entry in entries.items()}
     notes: list[str] = []

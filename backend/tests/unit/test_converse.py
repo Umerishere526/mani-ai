@@ -45,32 +45,38 @@ def test_a_check_comes_only_after_the_heart_of_it_was_said_back_and_agreed():
     agreed in an exchange of its own first, and never before their fifth message."""
     assert not converse.check_allowed(ctx(FIFTH))
     assert not converse.check_allowed(ctx(FIFTH, "exploring"))
-    assert not converse.check_allowed(ctx(FIFTH - 2, "conflict_named"))
-    assert converse.check_allowed(ctx(FIFTH, "conflict_named"))
+    assert not converse.check_allowed(ctx(FIFTH - 2, "core_named"))
+    assert converse.check_allowed(ctx(FIFTH, "core_named"))
     assert converse.check_allowed(ctx(FIFTH, "ready"))
+    assert converse.check_allowed(ctx(FIFTH, "conflict_named")), "a record from before 2026-10-28 still counts"
 
 
-def test_a_reply_is_stored_as_the_check_only_when_allowed_flagged_and_complete():
-    parts = {"conflict": "You love her and feel unimportant to her", "want": "You want her back in your life",
-             "in_the_way": "You expect her to stay the same"}
-    assert converse.checked(reply(checking=True, **parts), allowed=True)
-    assert not converse.checked(reply(checking=True, **parts), allowed=False)
-    assert not converse.checked(reply(checking=False, **parts), allowed=True)
-    assert not converse.checked(reply(checking=True, **(parts | {"want": " "})), allowed=True)
+def test_a_reply_is_stored_as_the_check_only_when_allowed_flagged_and_it_says_the_core():
+    """muhammad, 2026-10-28: the check is about the core alone; what they want and what is in the way are not asked."""
+    core = {"core": "One slip feels like proof that you can't change, and underneath the guilt there is shame."}
+    assert converse.checked(reply(checking=True, **core), allowed=True)
+    assert not converse.checked(reply(checking=True, **core), allowed=False)
+    assert not converse.checked(reply(checking=False, **core), allowed=True)
+    assert not converse.checked(reply(checking=True, core=" "), allowed=True)
+    assert not {"conflict", "want", "in_the_way"} & set(ConversationReply.model_fields)
 
 
-def test_a_stored_check_is_ready_and_its_understanding_becomes_the_case():
+def test_a_stored_check_is_ready_and_its_core_becomes_the_case_with_the_feeling_underneath():
+    from mani.llm.schema import CoreEntry
+
     checked = reply(
-        heart="conflict_named", checking=True, picture=PictureUpdate(feelings=[FeelingEntry(feeling="dismissed")]),
-        conflict="You love her and feel unimportant to her", want="You want her back in your life",
-        in_the_way="You expect her to stay the same",
+        heart="core_named", checking=True, core="One slip feels like proof that you can't change",
+        picture=PictureUpdate(
+            feelings=[FeelingEntry(feeling="guilty")],
+            core=CoreEntry(belief="you're not capable of change", feeling="shame", about="self"),
+        ),
     )
     after = converse.understood_after({"feeling": "frustrated", "heart": "conflict_named"}, checked, check_written=True)
     assert after["heart"] == understanding.READY
-    assert after["feeling"] == "frustrated, dismissed"
-    assert after["case"] == (
-        "You love her and feel unimportant to her. You want her back in your life. You expect her to stay the same."
-    )
+    assert after["feeling"] == "frustrated, guilty", "the feeling underneath is Mani's reading, kept apart"
+    assert after["case"] == "One slip feels like proof that you can't change. Underneath it you feel shame."
+    said_already = reply(checking=True, core="One slip feels like proof you can't change, and underneath it, shame.")
+    assert converse.case(said_already, after["picture"]) == said_already.core, "the feeling is not said twice"
     exploring = converse.understood_after({}, reply(heart="exploring"), check_written=False)
     assert exploring == {"heart": "exploring"}
 
@@ -204,7 +210,8 @@ def test_the_note_lists_what_was_asked_and_what_is_unknown_and_while_helping_the
                               understood={"picture": {"situations": ["she stopped calling"]}},
                               asked=converse.asked_before(asked))
     assert "Questions you already asked, never to ask again in any words: What happened between you? | " in exploring
-    assert "Still unknown: how it is for them, what they want, what is stopping them." in exploring
+    assert "Still unknown: how it is for them, the core: " in exploring
+    assert exploring.index("the core") < exploring.index("what they want"), "the core is looked for before the want"
     assert "You are helping now" not in exploring
 
     situation = {converse.HELPING: True, "picture": {"problem_type": "situation"}}
@@ -230,3 +237,23 @@ def test_the_three_styles_are_three_ways_of_moving_and_help_is_allowed_once_turn
     assert "No advice, tips or plans" not in voice
     assert "every reply gives them something" in chat
     assert "name it plainly and treat it as something to act on" in chat
+
+
+def test_the_conversation_prompt_goes_down_to_the_core_and_checks_it_alone():
+    """muhammad, 2026-10-28: Mani named fear of failing as the core when the thoughts led to "I'm not capable", and
+    shame under the guilt was never named. The prompt follows the thoughts down, names the core and the feeling
+    underneath as an invitation, talks about it, and checks it alone."""
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    assert "# Finding the core" in chat
+    assert "What it says about them" in chat
+    assert "guilt about a slip on shame about who they are" in chat
+    assert "The core is not what happens because of it" in chat
+    assert "your reply checks the core alone" in chat
+    assert "what they are torn between, what they want and what is stopping them" not in chat
+    assert "conflict_named" not in chat
+
+
+def test_a_belief_about_themselves_is_never_reported_as_a_feeling():
+    from mani.llm.schema import FeelingEntry
+
+    assert "\"incapable\"" in FeelingEntry.model_fields["feeling"].description

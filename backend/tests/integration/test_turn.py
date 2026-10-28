@@ -204,14 +204,12 @@ def _offer(technique: str = "abcde") -> Reply:
 
 
 def _check() -> ConversationReply:
-    """Mani's check of its understanding, in its own words, from a reply that judged the heart of it ready, with
-    the conflict, what they want and what is stopping them (R33)."""
+    """Mani's check of its understanding, in its own words, from a reply that judged the core ready: the core alone
+    (muhammad, 2026-10-28)."""
     return ConversationReply(
         text="You may feel worn down. Your coworkers miss deadlines. Do I have that right?",
         heart="ready", checking=True,
-        conflict="The work always lands on you when your coworkers miss deadlines",
-        want="You want them to carry their own share.",
-        in_the_way="Saying no feels like letting the team down.",
+        core="The work always lands on you, as if saying no would mean letting the team down",
     )
 
 
@@ -221,11 +219,8 @@ def _may_check(messages: list[dict]) -> bool:
     return note.startswith("Note for this reply only.") and "Do not check" not in note
 
 
-# _check()'s understanding as the case: the conflict, what they want and what is stopping them.
-CHECK_CASE = (
-    "The work always lands on you when your coworkers miss deadlines. You want them to carry their own share. "
-    "Saying no feels like letting the team down."
-)
+# _check()'s understanding as the case: the core.
+CHECK_CASE = "The work always lands on you, as if saying no would mean letting the team down."
 
 
 async def answering_a_check(thread):
@@ -308,7 +303,7 @@ async def test_a_check_comes_from_their_fifth_message_once_the_heart_of_it_was_a
     scripted = model(
         *[Reply(text=f"Was it the deadlines themselves, or what they cost you, {n}?", heart="exploring")
           for n in range(3)],
-        Reply(text="It seems the work always lands on you. Is that the heart of it?", heart="conflict_named"),
+        Reply(text="It seems the work always lands on you. Is that the heart of it?", heart="core_named"),
         _check(),
         _offer("abcde"),
     )
@@ -337,7 +332,7 @@ async def test_a_check_before_the_heart_of_it_was_agreed_opens_nothing(alice, mo
     not stored, so their yes to it brings no offer."""
     from mani.db import pool
 
-    scripted = model(_check().model_copy(update={"heart": "conflict_named"}))
+    scripted = model(_check().model_copy(update={"heart": "core_named"}))
     thread = await start(alice)
     async with pool.as_admin() as conn:
         await conn.execute("update public.threads set message_count = 11 where id = $1", thread.id)
@@ -345,7 +340,7 @@ async def test_a_check_before_the_heart_of_it_was_agreed_opens_nothing(alice, mo
 
     assert not _may_check(scripted.sent[-1])
     assert (await _thread_row(alice, thread.id)).check_at_message_count is None
-    assert turn.understanding == {"heart": "conflict_named"}
+    assert turn.understanding == {"heart": "core_named"}
 
 
 @pytest.mark.parametrize("style", ["directive", "supportive", "reflective"])

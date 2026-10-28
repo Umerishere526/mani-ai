@@ -13,6 +13,7 @@ SHIFTS = ("adds", "corrects", "new_issue", "back", "nothing_new")
 PROBLEM_TYPES = ("belief", "situation", "both")
 BELIEF_KINDS = ("thought", "happening")
 RISK_TO = ("self", "others")
+CORE_ABOUT = ("self", "others", "situation")
 # Each list keeps its first entry, what they came with, and the latest ones up to this many.
 LIST_LIMIT = 8
 ENTRY_LIMIT = 150
@@ -61,6 +62,8 @@ def merge(stored: dict | None, update: PictureUpdate | None) -> dict:
     for key in ("wants", "in_the_way"):
         if dropped and picture.get(key) and any(_same(picture[key], d) for d in dropped):
             picture.pop(key)
+    if dropped and picture.get("core") and any(_same(picture["core"]["belief"], d) for d in dropped):
+        picture.pop("core")
 
     situations = picture.get("situations") or []
     for situation in update.situations or []:
@@ -99,6 +102,13 @@ def merge(stored: dict | None, update: PictureUpdate | None) -> dict:
     for key in ("wants", "in_the_way"):
         if value := _clean(getattr(update, key)):
             picture[key] = value
+    if update.core is not None and (belief := _clean(update.core.belief)):
+        about = update.core.about.strip().lower()
+        if about in CORE_ABOUT:
+            # The core is replaced whole: a deeper reading is a new core, not a second one. The feeling underneath
+            # is kept from the last reading when this one does not say it.
+            feeling = _clean(update.core.feeling) or (picture.get("core") or {}).get("feeling")
+            picture["core"] = {"belief": belief, "about": about, **({"feeling": feeling} if feeling else {})}
 
     shift = (update.shift or "").strip().lower()
     shift = shift if shift in SHIFTS else None
@@ -132,6 +142,8 @@ def render(picture: dict | None) -> str | None:
         ("feelings", " | ".join(feelings)),
         ("what they tell themselves", " | ".join(b["belief"] for b in beliefs if b["kind"] == "thought")),
         ("what they say is really happening", " | ".join(b["belief"] for b in beliefs if b["kind"] == "happening")),
+        ("the core", (picture.get("core") or {}).get("belief")),
+        ("the feeling underneath, your reading", (picture.get("core") or {}).get("feeling")),
         ("what they want", picture.get("wants")),
         ("what is in the way", picture.get("in_the_way")),
         ("risks to them", " | ".join(r["risk"] for r in risks if r["to"] == "self")),
@@ -141,6 +153,17 @@ def render(picture: dict | None) -> str | None:
     ]
     rendered = "; ".join(f"{name}: {value}" for name, value in parts if value)
     return rendered or None
+
+
+def core(picture: dict | None) -> dict:
+    """The core of it, {belief, about, feeling}, or {} while it is not known."""
+    return (picture or {}).get("core") or {}
+
+
+def new_core(before: dict | None, after: dict | None) -> str | None:
+    """The core belief when this turn found it or saw it deeper, or None when it stayed the same."""
+    was, now = core(before).get("belief"), core(after).get("belief")
+    return now if now and not (was and _same(was, now)) else None
 
 
 def feeling_words(picture: dict | None) -> list[str]:

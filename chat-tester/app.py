@@ -332,6 +332,8 @@ with st.sidebar:
             )),
             ("Tells themselves", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "thought")),
             ("Really happening", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "happening")),
+            ("Core", (seen.get("core") or {}).get("belief")),
+            ("Feeling underneath (Mani's reading)", (seen.get("core") or {}).get("feeling")),
             ("Wants", seen.get("wants")),
             ("In the way", seen.get("in_the_way")),
             ("Risks", " | ".join(f"{r['risk']} ({r['to']})" for r in risks)),

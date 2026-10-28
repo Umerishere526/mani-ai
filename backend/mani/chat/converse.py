@@ -11,9 +11,9 @@ from mani.llm.schema import ConversationReply
 from mani.models.rows import Message, MessageRole
 
 STYLE_NAMES = {"directive": "Directive", "supportive": "Supportive", "reflective": "Reflective"}
-# The heart of it said back and not corrected. A check may only follow a reply that judged one of these, so the
-# conflict is confirmed in its own exchange before Mani pulls the whole thing together.
-NAMED = ("conflict_named", understanding.READY)
+# The core said back and not corrected. A check may only follow a reply that judged one of these, so the core is
+# offered in its own exchange before Mani checks it (muhammad, 2026-10-28: the check is about the core alone).
+NAMED = (understanding.CORE_NAMED, understanding.READY)
 
 
 # Where understanding turns into helping, kept on the thread's understanding record until a new issue or a
@@ -33,15 +33,15 @@ _QUESTION = re.compile(r"[^.!?\n]*\?")
 HELP_MOVES: dict[str, dict[str, str]] = {
     "belief": {
         "directive": (
-            "What hurts is what they tell themselves. Say plainly what you see in that thought, then offer to look at "
+            "What hurts is what they tell themselves. Say plainly what you see in the core, the belief their other thoughts lead to, then offer to look at "
             "it together through a short set of questions, and let them choose."
         ),
         "supportive": (
-            "What hurts is what they tell themselves. Acknowledge how heavy that thought is, then ask gently whether "
+            "What hurts is what they tell themselves. Acknowledge how heavy the core belief and the feeling under it are, then ask gently whether "
             "they would like to look at it together."
         ),
         "reflective": (
-            "What hurts is what they tell themselves. Name the pattern you notice in that thought, in their words, as "
+            "What hurts is what they tell themselves. Name the pattern you notice in how their thoughts lead to the core, in their words, as "
             "an invitation, then ask whether they would like to look at it more closely together."
         ),
     },
@@ -124,6 +124,7 @@ def still_unknown(picture_now: dict | None) -> list[str]:
     gaps = [
         ("what happened", seen.get("situations")),
         ("how it is for them", seen.get("feelings")),
+        ("the core: what it says about them or what they are torn between, and the feeling underneath", seen.get("core")),
         ("what they want", seen.get("wants")),
         ("what is stopping them", seen.get("in_the_way")),
     ]
@@ -133,7 +134,7 @@ def still_unknown(picture_now: dict | None) -> list[str]:
 def check_allowed(ctx: TurnContext) -> bool:
     """Whether this reply may check Mani's understanding: the floor and cooldowns of context.may_check, and an
     earlier reply that said the heart of it back and was not corrected."""
-    return context.may_check(ctx) and ctx.thread.understanding.get("heart") in NAMED
+    return context.may_check(ctx) and understanding.heart(ctx.thread.understanding) in NAMED
 
 
 def note(
@@ -197,16 +198,19 @@ def _sentence(value: str | None) -> str:
 
 
 def checked(reply: ConversationReply, *, allowed: bool) -> bool:
-    """Whether this reply is Mani's check, stored so their next message answers it: allowed this turn,
-    flagged by the reply, and saying the conflict, what they want and what is stopping them."""
-    return allowed and bool(reply.checking) and all(
-        (part or "").strip() for part in (reply.conflict, reply.want, reply.in_the_way)
-    )
+    """Whether this reply is Mani's check, stored so their next message answers it: allowed this turn, flagged by
+    the reply, and saying the core (muhammad, 2026-10-28: the check is about the core alone)."""
+    return allowed and bool(reply.checking) and bool((reply.core or "").strip())
 
 
-def case(reply: ConversationReply) -> str:
-    """The check's understanding as the case a framework works on: conflict, want, what is in the way."""
-    return " ".join(s for part in (reply.conflict, reply.want, reply.in_the_way) if (s := _sentence(part)))
+def case(reply: ConversationReply, picture_now: dict | None = None) -> str:
+    """The check's understanding as the case a framework works on: the core, and the feeling underneath when the
+    reply's words do not already say it."""
+    said = _sentence(reply.core)
+    feeling = picture.core(picture_now).get("feeling")
+    if said and feeling and feeling.lower() not in said.lower():
+        said += f" Underneath it you feel {feeling}."
+    return said
 
 
 def understood_after(
@@ -218,7 +222,7 @@ def understood_after(
     heart = understanding.READY if check_written else reply.heart
     merged = understanding.merge(stored, reply.picture, heart)
     if check_written:
-        merged = understanding.merge_check(merged, case(reply))
+        merged = understanding.merge_check(merged, case(reply, merged.get(picture.KEY)))
     if turned(stored, reply, merged, their_messages or []):
         merged[HELPING] = True
     else:

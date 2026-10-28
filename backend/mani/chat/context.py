@@ -151,7 +151,7 @@ _MEANING: dict[str, str | dict[str, str]] = {
     "conversation_phase": {
         "understanding": (
             "nothing has been offered yet. Follow their story in order toward the heart of it: what "
-            "happened, what it means to them, what they want and what is stopping them."
+            "happened, what it means to them, what it says about them, down to the core and the feeling underneath."
         ),
         "framework": "the questions are running, so follow the stage.",
         "talking": (
@@ -177,14 +177,15 @@ _MEANING: dict[str, str | dict[str, str]] = {
     "picture": (
         "your picture of them so far, from the whole conversation, the same in the chat and in a framework: what "
         "is happening, what they feel and about what, what they tell themselves, what they say is really "
-        "happening, what they want, what is in the way, risks, and the situation in focus. Build on it and never "
+        "happening, what they want, what is in the way, risks, the situation in focus, and the core with the feeling "
+        "underneath, as you read it. Build on it and never "
         "ask for what it holds. In picture, report only what their message adds or changes."
     ),
     "understanding": "the feelings they named, kept for you, and where your last reply judged the heart of it.",
     "their_case": (
         "what you and they found before the questions began: the feelings they named and the case they "
-        "confirmed, the conflict, what they want and what is stopping them. Every question you ask and every "
-        "possibility you offer is about this case and the feeling underneath it, never generic. Never ask them again for "
+        "confirmed, the core of it and the feeling underneath. Every question you ask and every "
+        "possibility you offer is about this core and the feeling underneath it, never generic. Never ask them again for "
         "anything in it: say it back and build on it."
     ),
     "since_last": "how many messages have passed since the last offer.",
@@ -284,8 +285,8 @@ _MEANING: dict[str, str | dict[str, str]] = {
 # What a stage that carries the case asks of its question: the case they confirmed, said back in their words,
 # whatever the framework (a stage says so with `carries_case: true`).
 CARRIES_CASE = (
-    "their_case is in this question, in their words: what they feel, the conflict, what they want and what is "
-    "stopping them. Fit as much as the style allows, never a list, never anything they did not say."
+    "their_case is in this question, in their words: the core and how they feel, the feeling underneath included "
+    "once they accepted it. Fit as much as the style allows, never a list, never anything they did not say."
 )
 
 

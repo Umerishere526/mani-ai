@@ -134,6 +134,25 @@ the same change as the work.**
 
 ## Decisions in force
 
+- **Mani looks for the core, and the check is about the core alone.** Because in the 2026-10-28 weight-loss run
+  Mani named fear of failing as the heart of it, when her thoughts ("I've ruined everything", "I lack discipline",
+  "I'll never change") led to "I'm not capable of change", and shame under the guilt was never named; B then took the
+  first thought instead of that belief (muhammad, 2026-10-28). The conflict template (what they are torn between, what
+  they want, what is stopping them) forced every story into two pulls. Now the picture holds `core` (the belief the
+  other thoughts lead to, the feeling underneath as Mani's reading, and whether it is about them, someone else or the
+  situation), kept apart from the feelings they named. `conversation.md` adds the step "what it says about them" and
+  "Finding the core": follow the thoughts down, name the core and the feeling underneath as an invitation, then talk
+  about it rather than its effects. `heart` is exploring, `core_named`, ready (a stored `conflict_named` reads as
+  `core_named`). The check says the core alone (muhammad chose this over core plus want and what is in the way); code
+  stores it only when the reply's `core` is filled, and the confirmed case is that core with the feeling underneath.
+  ABCDE's B and Thought Reframe's thought start from the confirmed core, and a deeper core found mid-framework takes
+  that stage. A belief about themselves ("incapable") is never a feeling. Tests:
+  `test_the_core_is_kept_whole_replaced_when_seen_deeper_and_rendered_as_a_reading`,
+  `test_a_reply_is_stored_as_the_check_only_when_allowed_flagged_and_it_says_the_core`,
+  `test_a_stored_check_is_ready_and_its_core_becomes_the_case_with_the_feeling_underneath`,
+  `test_a_deeper_core_found_mid_framework_is_what_b_looks_at`,
+  `test_the_conversation_prompt_goes_down_to_the_core_and_checks_it_alone`.
+
 - **Every turn speaks in `voice.md`; the old path is gone.** Because the turns between the chat and a framework (the
   answer to a check, the offer, the body check-in, a safety concern) still read `mani_base.md`, `response_format.md`
   and a style file, so Mani sounded different at exactly the moments that decide what happens next (muhammad,

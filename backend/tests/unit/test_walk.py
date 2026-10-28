@@ -445,3 +445,35 @@ def test_a_turn_with_nothing_new_is_a_stall_and_talking_it_through_never_is():
     assert "stalls" not in walk.after_turn(once, newer, "dispute", moved=False, shift=None, offered_exit=False)["dispute"]
     assert walk.after_turn(twice, before, "dispute", moved=True, shift=None, offered_exit=False) == before
     assert walk.after_turn({}, {}, "belief", moved=False, shift="adds", offered_exit=False) == {}
+
+
+def test_a_deeper_core_found_mid_framework_is_what_b_looks_at(abcde):
+    """muhammad, 2026-10-28: B went to "I've ruined everything", the first thought, when what it led to was "I'm not
+    capable of change". A core seen deeper takes B ahead of any other new thought."""
+    from mani.chat import picture
+    from mani.llm.schema import BeliefEntry, CoreEntry, PictureUpdate
+
+    stored = {
+        "activate": {"said": "you missed a workout", "status": "done"},
+        "belief": {"said": "you've ruined everything", "status": "done"},
+        "consequence": {"said": "you feel guilty", "status": "done"},
+    }
+    before = {"beliefs": [{"belief": "you've ruined everything", "kind": "thought"}]}
+    after = picture.merge(before, PictureUpdate(
+        beliefs=[BeliefEntry(belief="other people manage it", kind="thought")],
+        core=CoreEntry(belief="you're not capable of change", feeling="shame", about="self"),
+    ))
+    synced, _ = walk.from_picture(abcde, stored, before, after, in_force="dispute")
+    assert synced["belief"]["said"] == "you're not capable of change"
+
+
+def test_the_stage_that_names_the_thought_starts_from_the_confirmed_core_in_both_frameworks():
+    import pathlib
+
+    from scripts.seed import parse_framework
+
+    frameworks = pathlib.Path(__file__).parents[2] / "content/frameworks"
+    b = parse_framework(frameworks / "abcde.md")["stages"]["belief"]["reach"]
+    thought = parse_framework(frameworks / "thought_reframe.md")["stages"]["thought"]["reach"]
+    assert "core belief" in b and "counts only when it is the core" in b
+    assert "core belief" in thought and "not the first thought" in thought

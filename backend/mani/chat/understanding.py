@@ -8,14 +8,23 @@ from mani.llm.schema import PictureUpdate
 
 KEYS = ("feeling", "heart", "case")
 LIMIT = 200
-# The confirmed case says the conflict, what they want and what is stopping them, a few sentences.
+# The confirmed case says the core and the feeling underneath, a sentence or two.
 CASE_LIMIT = 3 * LIMIT
 # Every feeling word they name gathers over the conversation and is never taken away.
 FEELING_SEPARATOR = ", "
-# Where the reply last judged its reading of the heart of it: the central conflict not clear yet, said back and
-# agreed, or agreed with what they want and what is stopping them also known (muhammad, 2026-10-26). Only a reply
+# Where the reply last judged its reading of the core: not known yet, said back and not corrected, or named and
+# since deepened or confirmed (muhammad, 2026-10-28; before it, the central conflict, 2026-10-26). Only a reply
 # that judges it ready may check its understanding (R33).
 READY = "ready"
+# The core said back and not corrected (muhammad, 2026-10-28). A record written before then says conflict_named.
+CORE_NAMED = "core_named"
+_LEGACY_HEART = {"conflict_named": CORE_NAMED}
+
+
+def heart(stored: dict) -> str | None:
+    """Where the last reply judged the core, with a record from before 2026-10-28 read in today's words."""
+    value = (stored or {}).get("heart")
+    return _LEGACY_HEART.get(value, value)
 
 
 def ready(stored: dict[str, str]) -> bool:
@@ -41,6 +50,8 @@ def merge(stored: dict, update: PictureUpdate | None, heart: str | None) -> dict
     added to those kept, and where the reply judged the heart of it, replacing the last judgement. A null or blank
     value keeps what is stored."""
     merged = {key: stored[key] for key in (*KEYS, picture.KEY) if stored.get(key)}
+    if merged.get("heart") in _LEGACY_HEART:
+        merged["heart"] = _LEGACY_HEART[merged["heart"]]
     before = stored.get(picture.KEY)
     after = picture.merge(before, update)
     if after:
@@ -69,6 +80,6 @@ def picture_line(stored: dict) -> str | None:
 
 
 def merge_check(stored: dict[str, str], summary: str) -> dict[str, str]:
-    """The record after a stored check: its summary is the case, the conflict, what they want and what is
-    stopping them, which a yes makes what the questions are about."""
+    """The record after a stored check: its summary is the case, the core and the feeling underneath, which a yes
+    makes what the questions are about."""
     return {**stored, "case": " ".join(summary.split())[:CASE_LIMIT].rstrip()}

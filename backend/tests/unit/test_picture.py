@@ -88,3 +88,26 @@ def test_what_a_turn_added_is_read_for_the_framework():
     ))
     assert picture.added_beliefs(BROTHER, after) == ["you're a bad brother"]
     assert picture.added_feelings(BROTHER, after) == ["ashamed about leaving him alone"]
+
+
+def test_the_core_is_kept_whole_replaced_when_seen_deeper_and_rendered_as_a_reading():
+    """muhammad, 2026-10-28: the weight-loss chat named fear as the core when the thoughts led to "I'm not capable",
+    and shame under the guilt was never named. The core is one belief and the feeling underneath, apart from the
+    feelings they named."""
+    from mani.llm.schema import CoreEntry
+
+    first = picture.merge(BROTHER, PictureUpdate(core=CoreEntry(belief="you've ruined everything", about="self")))
+    assert first["core"] == {"belief": "you've ruined everything", "about": "self"}
+    deeper = picture.merge(first, PictureUpdate(core=CoreEntry(
+        belief="you're not capable of change", feeling="shame", about="SELF")))
+    assert deeper["core"] == {"belief": "you're not capable of change", "about": "self", "feeling": "shame"}
+    kept = picture.merge(deeper, PictureUpdate(core=CoreEntry(belief="you'll never change", about="self")))
+    assert kept["core"]["feeling"] == "shame", "a deeper belief keeps the feeling underneath it said before"
+    assert picture.feeling_words(kept) == ["guilty"], "the feeling underneath is not one they named"
+    assert picture.merge(kept, PictureUpdate(core=CoreEntry(belief="x", about="nobody")))["core"] == kept["core"]
+    assert "core" not in picture.merge(kept, PictureUpdate(drop=["you'll never change"]))
+    line = picture.render(deeper)
+    assert "the core: you're not capable of change" in line
+    assert "the feeling underneath, your reading: shame" in line
+    assert picture.new_core(first, deeper) == "you're not capable of change"
+    assert picture.new_core(deeper, picture.merge(deeper, None)) is None
