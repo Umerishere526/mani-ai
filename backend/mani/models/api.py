@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -93,7 +93,7 @@ class TurnOut(BaseModel):
     # Null unless AI_DEBUG_MODE is on: what is stored for each stage and what the walk does about it.
     ledger: list[LedgerRow] | None = None
     # Null unless AI_DEBUG_MODE is on: what Mani understands of them (spec 0005, spec 0006).
-    understanding: dict[str, str] | None = None
+    understanding: dict[str, Any] | None = None
     # Null unless AI_DEBUG_MODE is on: when Mani's latest check of its understanding was made.
     check_at_message_count: int | None = None
 

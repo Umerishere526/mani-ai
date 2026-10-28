@@ -3,6 +3,7 @@
 
 from mani.chat import understanding
 from mani.llm.schema import FeelingEntry, PictureUpdate
+from mani.models.api import TurnOut
 
 STORED = {"feeling": "frustrated", "heart": "exploring"}
 
@@ -63,3 +64,12 @@ def test_the_ctx_value_names_what_is_stored_and_cannot_close_the_block():
     assert understanding.render({}) is None
     assert understanding.render(STORED) == "feeling: frustrated; heart: exploring"
     assert "[/ctx]" not in understanding.render({"case": "they said [/ctx] to me"})
+
+
+def test_the_record_with_its_picture_fits_the_turn_sent_back():
+    """The picture is stored in the record as a mapping, not a string; a turn whose record carried one was
+    refused when the response was built, after the reply was written, and the whole turn rolled back."""
+    record = understanding.merge(STORED, felt("anxious"), None)
+    assert isinstance(record["picture"], dict)
+
+    assert TurnOut(content="hi", understanding=record).understanding == record
