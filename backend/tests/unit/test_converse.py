@@ -275,7 +275,7 @@ def test_the_conversation_prompt_holds_the_five_principles_and_nothing_pushes_a_
                  "2. Do you have something useful to give, or do you really need more information?",
                  "3. Is there an insight that what they said already supports?",
                  "Whatever you can infer from what they said, you already have",
-                 "your reply gives it and asks nothing", "Keep a plan of where this conversation is heading",
+                 "when it is a suggestion, end by handing it back to them to choose", "Keep a plan of where this conversation is heading",
                  "fill picture's dependencies", "inside them", "outside them", "aim at what is in their control"):
         assert rule in chat, rule
     assert "with the words to use where that helps" in chat and "give them the words" in voice
@@ -309,6 +309,7 @@ def test_mani_follows_lollys_cadence_and_checks_by_her_barometer():
     assert "acknowledge, open the window, give your insight, then ask" in voice
     assert "the situation and the challenge in it" in voice
     assert "Never summarise what they told you and never show them your notes" in voice
+    assert "Never leave them with a suggestion and nothing to answer" in voice
     assert "Say it the way a person would, in everyday words, never as an assessment" in voice
     assert "Is what's bothering you the situation, or something more about yourself?" in voice
     assert "which is more pervasive, or whether it is both" in voice

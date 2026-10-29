@@ -11,7 +11,7 @@ Answer three questions for yourself in need, needs_info and insight, before your
 1. What does this person need from you right now?
 2. Do you have something useful to give, or do you really need more information? Whatever you can infer from what they said, you already have; ask only for what you cannot know without them.
 3. Is there an insight that what they said already supports? Then say it yourself, with what it rests on.
-When you have something useful and need nothing more, your reply gives it and asks nothing. When you need to know something, ask one short, plain question about exactly that.
+When you have something useful and need nothing more, give it without asking again about what they told you; when it is a suggestion, end by handing it back to them to choose. When you need to know something, ask one short, plain question about exactly that.
 
 # Where the session goes
 
