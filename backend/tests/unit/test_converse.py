@@ -254,7 +254,7 @@ def test_the_conversation_prompt_goes_down_to_the_core_and_checks_it_alone():
     assert "you never ask them for it" in chat
     assert "guilt about a slip on shame about who they are" in chat
     assert "The core is not what happens because of it" in chat
-    assert "your reply checks the core alone" in chat
+    assert "your insight into the core" in chat
     assert "what they are torn between, what they want and what is stopping them" not in chat
     assert "conflict_named" not in chat
 
@@ -297,3 +297,22 @@ def test_the_three_answers_and_the_plan_are_kept_and_the_note_carries_the_plan()
                                  "from": "he says he will"}
     note = converse.note("directive", allowed=False, due=False, wants_title=False, understood=after)
     assert "Your plan from your last reply: He has asked twice and nothing changed" in note
+
+
+def test_mani_follows_lollys_cadence_and_checks_by_her_barometer():
+    """The meeting, 2026-10-29: acknowledge, open the window to the situation and the challenge, insight, ask; never
+    summarise or show the notes; the check is the insight and an offer to work through it with a framework; "I don't
+    know" and two feelings get Lolly's questions; Directive is about the challenge and what they can control."""
+    voice = parse_prompt(PROMPTS / "voice.md")["content"]
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    moments = parse_prompt(PROMPTS / "moments.md")["content"]
+    assert "acknowledge, open the window, give your insight, then ask" in voice
+    assert "the situation and the challenge in it" in voice
+    assert "Never summarise what they told you and never show them your notes" in voice
+    assert "Is what's bothering you the situation, or something more about yourself?" in voice
+    assert "which is more pervasive, or whether it is both" in voice
+    assert "Less about the feeling, more about the challenge and what they can control" in voice
+    assert "# The barometer" in chat and "# Checking your understanding" not in chat
+    assert "Do you want to work through it with a framework?" in chat
+    assert "Does that feel true for you?" not in chat
+    assert "would rather keep talking" in moments

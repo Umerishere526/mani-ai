@@ -134,6 +134,16 @@ the same change as the work.**
 
 ## Decisions in force
 
+- **A reply follows Lolly's cadence, and the check is her barometer.** Because the 2026-10-29 meeting
+  ([message](../docs/client/messages/2026-10-29-meeting-cadence-and-role-plays.md), R41 to R48) gave the shape in
+  her words: acknowledge, open the window (from them to the situation and the challenge), insight, ask; never
+  summarise, never show the notes. `voice.md` says so, adds "I don't know" (situation or yourself?) and two feelings
+  (which is more pervasive, or both?), and makes Directive about the challenge and what they can control. The
+  summary-style check in `conversation.md` is now `# The barometer`: the insight into the core, then "Do you want to
+  work through it with a framework?" with why it fits; for something really happening, whether they want to work
+  out what to do. A yes still brings the client's offer (Try it / Tell me more / Keep chatting), which names the
+  set; agreeing but wanting to keep talking is followed, not treated as a miss (`moments.md`, the check's [ctx]
+  line, `check_answer`). Test: `test_mani_follows_lollys_cadence_and_checks_by_her_barometer`.
 - **Mani runs the chat like a therapist runs a session, with Lolly's role-played session as its example.**
   Because three days of rules on `feat/identify-the-connection` did not change the shape of the replies: the model
   copied the mirror-then-question turns of the two ChatGPT conversations at the end of `voice.md` over every rule

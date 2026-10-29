@@ -351,9 +351,9 @@ class Reply(_ReplyBase):
     check_answer: CheckAnswer | None = Field(
         default=None,
         description=(
-            "How they answered the check of your understanding in your last reply. yes only when "
-            "they clearly agree with all of it. no for anything else: a correction, an addition, "
-            "or talking about something else."
+            "How they answered your last reply, which gave your insight into the core and asked whether "
+            "they want to work through it with a framework. yes only when they clearly agree to both. no for "
+            "anything else: a correction, an addition, wanting to keep talking, or something else."
         ),
     )
     heart: Heart | None = Field(

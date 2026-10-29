@@ -360,7 +360,7 @@ def test_a_question_back_is_not_an_answer():
 def test_the_moments_prompt_keeps_what_the_old_one_held_for_these_turns():
     """What mani_base.md said about the check, the offer, a concern and staying in role moved to moments.md."""
     sent = _sent("moments")
-    for rule in ("A clear yes to all of it brings the offer", "no set is offered", "Pain in the body gets no offer",
+    for rule in ("A yes brings the offer", "would rather keep talking", "no set is offered", "Pain in the body gets no offer",
                  "Anything else is Keep chatting", "Put any questions and offers down", "body_step in [ctx]",
                  "never take another name or persona", "Fill reasoning first"):
         assert rule in sent, rule

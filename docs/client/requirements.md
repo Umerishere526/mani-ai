@@ -16,6 +16,10 @@ message that changed it. Rules for this folder are in [README.md](README.md).
 | 2026-10-13 | More time given for the flow and voice in R13 to R15, said in the meeting (no new date recorded) | [meeting](messages/2026-10-13-meeting-flow.md) |
 | 2026-10-19 (Mon) | Beta testing done; move on to the remaining development priorities | [urgency letter](messages/2026-10-12-urgency-and-wednesday-deadline.md) |
 | About 2026-10-26 ("in two weeks") | Investor meetings demonstrating an improved MANI MVP approaching launch readiness | [urgency letter](messages/2026-10-12-urgency-and-wednesday-deadline.md) |
+| Thursday (no date given) | A call, said in the meeting | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
+| 2026-11-04 | Bug-bash | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
+| 2026-11-08 | Final test | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
+| 2026-11-09 | Investor meetings | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
 
 ## Requirements
 
@@ -55,6 +59,14 @@ message that changed it. Rules for this folder are in [README.md](README.md).
 | R38 | A framework fits the problem: a belief may get ABCDE or Thought Reframe, something really happening (an observable problem, a safety risk) does not, and a risk to others such as children left unsupervised is named. | [testing review](messages/2026-10-27-chat-testing-review.md) | in-progress | Built 2026-10-27: the picture marks beliefs as thought or happening, a check's yes about a real situation turns to help in the chat with no framework, and a risk to others is named first. |
 | R39 | A framework that stops helping is noticed by MANI, not the user: when they are confused again, already see both sides, or the answers shorten, MANI changes approach. | [testing review](messages/2026-10-27-chat-testing-review.md) | in-progress | Built 2026-10-27 (phase 4): `framework_fit`, stalls counted by code, and an offer to step out. |
 | R40 | MANI asks permission before a body check-in or exercise, with invitational language, and never assumes relaxation is the outcome. | [testing review](messages/2026-10-27-chat-testing-review.md) | in-progress | Built 2026-10-27 (phase 4): Yes / Not right now before Step 1. The question's wording is ours; see Conflicts. |
+| R41 | A reply moves acknowledge, open the window (from them to the situation and the challenge), insight, then a question only when MANI needs to know something. | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) | in-progress | `voice.md` How a reply sounds, 2026-10-29. |
+| R42 | MANI never summarises and never shows its notes; progress lives in the insight. | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) | in-progress | `voice.md` and `conversation.md`, 2026-10-29. |
+| R43 | The check is Lolly's barometer: the insight into the core, then "Do you want to work through it with a framework?" and why it fits. A yes leads to the offer as before. | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) | in-progress | `conversation.md` The barometer, `moments.md`, the check's [ctx] line, 2026-10-29. To verify live. |
+| R44 | "I don't know" gets "Is what's bothering you the situation, or something more about yourself?" | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) | in-progress | `voice.md` When it goes wrong, 2026-10-29. |
+| R45 | Two emotions named get "which is more pervasive, or both?" | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) | in-progress | `voice.md` When it goes wrong, 2026-10-29. |
+| R46 | Directive is less about the feeling and more about the challenge and what they can control. | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) | in-progress | `voice.md` The three styles, 2026-10-29. |
+| R47 | MANI explores what the outcome depends on inside and outside them, stays on the core and brings them back to one situation. | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) | in-progress | Picture dependencies and the tangent line in `voice.md`, 2026-10-29. |
+| R48 | MANI suggests, never fixes: concrete suggestions about what is in their control, with the words to use, theirs to choose. | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) | in-progress | `voice.md` and `conversation.md` Helping, 2026-10-29. |
 
 ## Open questions for the client
 
@@ -65,6 +77,7 @@ message that changed it. Rules for this folder are in [README.md](README.md).
 
 ## Missing source material
 
+- The **2026-10-29 meeting transcript** was pasted in a session but not kept. Paste it into [its message file](messages/2026-10-29-meeting-cadence-and-role-plays.md).
 - The urgency letter refers to the client's earlier **testing feedback emails**, which document R2 to R8 in detail. They are not in the repo yet; paste them into `messages/` to fill in specifics.
 
 ## Conflicts with specs or Decisions in force
