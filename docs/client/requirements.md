@@ -16,10 +16,10 @@ message that changed it. Rules for this folder are in [README.md](README.md).
 | 2026-10-13 | More time given for the flow and voice in R13 to R15, said in the meeting (no new date recorded) | [meeting](messages/2026-10-13-meeting-flow.md) |
 | 2026-10-19 (Mon) | Beta testing done; move on to the remaining development priorities | [urgency letter](messages/2026-10-12-urgency-and-wednesday-deadline.md) |
 | About 2026-10-26 ("in two weeks") | Investor meetings demonstrating an improved MANI MVP approaching launch readiness | [urgency letter](messages/2026-10-12-urgency-and-wednesday-deadline.md) |
-| Thursday (no date given) | A call, said in the meeting | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
-| 2026-11-04 | Bug-bash | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
+| Thursday, same time as the meeting (no date given) | The next call | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
+| 2026-11-04 | A call to bug-bash everything | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
 | 2026-11-08 | Final test | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
-| 2026-11-09 | Investor meetings | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
+| 2026-11-09 | Investors | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
 
 ## Requirements
 
@@ -77,7 +77,6 @@ message that changed it. Rules for this folder are in [README.md](README.md).
 
 ## Missing source material
 
-- The **2026-10-29 meeting transcript** was pasted in a session but not kept. Paste it into [its message file](messages/2026-10-29-meeting-cadence-and-role-plays.md).
 - The urgency letter refers to the client's earlier **testing feedback emails**, which document R2 to R8 in detail. They are not in the repo yet; paste them into `messages/` to fill in specifics.
 
 ## Conflicts with specs or Decisions in force
