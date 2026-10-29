@@ -111,3 +111,20 @@ def test_the_core_is_kept_whole_replaced_when_seen_deeper_and_rendered_as_a_read
     assert "the feeling underneath, your reading: shame" in line
     assert picture.new_core(first, deeper) == "you're not capable of change"
     assert picture.new_core(deeper, picture.merge(deeper, None)) is None
+
+
+def test_what_the_outcome_depends_on_is_kept_inside_or_outside_them():
+    """muhammad, 2026-10-29: the chat explores the internal and external dependencies the person expresses."""
+    from mani.llm.schema import DependencyEntry
+
+    after = picture.merge({}, PictureUpdate(dependencies=[
+        DependencyEntry(what="his follow-through", kind="external"),
+        DependencyEntry(what="your fear of being let down again", kind="INTERNAL"),
+        DependencyEntry(what="x", kind="both"),
+    ]))
+    assert after["dependencies"] == [{"what": "his follow-through", "kind": "external"},
+                                     {"what": "your fear of being let down again", "kind": "internal"}]
+    line = picture.render(after)
+    assert "depends on, inside them: your fear of being let down again" in line
+    assert "depends on, outside them: his follow-through" in line
+

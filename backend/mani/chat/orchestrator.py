@@ -350,8 +350,10 @@ async def _converse(
     if check_written:
         updates.check_at_message_count = ctx.thread.message_count + 2
     logger.info(
-        "thread %s conversation turn: heart %s, check allowed %s, checked %s, helping %s",
-        ctx.thread.id, reply.heart, allowed, check_written, bool(understood.get(converse.HELPING)),
+        "thread %s conversation turn: needs info %s, insight %s, asks %s, heart %s, check allowed %s, checked %s, "
+        "helping %s",
+        ctx.thread.id, reply.needs_info, bool(reply.insight), "?" in reply.text, reply.heart, allowed, check_written,
+        bool(understood.get(converse.HELPING)),
     )
 
     fixed = repairs.apply(

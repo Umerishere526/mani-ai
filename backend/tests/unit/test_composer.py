@@ -312,7 +312,7 @@ def test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_b
     """Spec 0005, AC-9: a framework's checklist steered the questions toward its own needs, and the
     bans kept the feeling they named out of them (live, 2026-10-13: the frustrated chat)."""
     sent = _sent("voice", "conversation", "framework", "moments")
-    assert "Each question follows from their last answer" in sent
+    assert "each one moves the conversation forward" in sent
     for cut in ("Build every question from", "Never hand their own words or feelings back",
                 "Am I saying back their own words or feelings"):
         assert cut not in sent

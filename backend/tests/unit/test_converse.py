@@ -93,9 +93,11 @@ def test_the_note_says_whether_this_reply_may_check_and_names_the_style():
 def test_the_reply_is_written_before_anything_is_judged_about_it():
     """The voice comes first, and nothing in the reply asks for a second question or a reasoning pass."""
     fields = list(ConversationReply.model_fields)
-    assert fields[0] == "text"
+    # muhammad, 2026-10-29: before its text Mani asks itself what they need, whether it needs more, what insight is
+    # supported, and where the conversation is heading. The reading of the person still comes after the text.
+    assert fields[: fields.index("text")] == ["need", "needs_info", "info_needed", "insight", "insight_from", "plan"]
     assert not {"reasoning", "options", "style"} & set(fields)
-    assert fields.index("text") < fields.index("picture")
+    assert fields.index("text") < fields.index("picture") and fields.index("text") < fields.index("heart")
 
 
 def test_the_note_carries_the_picture_of_them():
@@ -106,20 +108,24 @@ def test_the_note_carries_the_picture_of_them():
            "what they tell themselves: work will stop you." in note
 
 
-def test_the_conversation_prompt_is_the_clients_cadence_and_her_two_conversations():
-    """Lolly, 2026-10-26: "I wish mani sounded this way." Her instruction, the order the two ChatGPT
-    conversations follow, and both conversations, with the announced questions taken out and her friend's
-    43 years kept right."""
-    content = "\n".join(parse_prompt(PROMPTS / f"{name}.md")["content"] for name in ("voice", "conversation"))
-    assert "directive, concise and clear, no fluff, but warm and never robotic" in content
-    assert "Can you tell me what happened between you?" in content
-    assert "never a reason to guess" in content
-    assert "What's happened that's left you so frustrated and upset?" in content
-    assert "If you know he won't change, what is keeping you from making the decision to leave?" in content
-    assert "If you miss her this deeply, what's stopping you from reaching out to her?" in content
-    for announced in ("Can I ask you something", "Let me ask you something", "I'm curious about something"):
-        assert announced not in content
-    assert "Twenty three" not in content and "23 years" not in content
+def test_mani_works_like_lollys_role_played_session():
+    """muhammad, 2026-10-29: Mani runs the chat the way a therapist runs a session, neutral and empathetic, with
+    therapist's questions that move it forward, ending on a step they choose. Lolly's role-played session is the
+    example the model follows; her two ChatGPT conversations are kept only as her tone note, because the model
+    copied their mirror-then-question shape over every rule against it."""
+    voice = parse_prompt(PROMPTS / "voice.md")["content"]
+    assert "Run the conversation the way a good therapist runs a session" in voice
+    assert "directive, concise and clear, no fluff, but warm and never robotic" in voice
+    assert "Never call this therapy, counselling or a session" in voice
+    assert "What you can tell, you never ask." in voice
+    for lolly in ("You: Why are you sad?", "You: What would you like to happen with your parents?",
+                  "Have they ever been there for you in the way you want?",
+                  "You: Do you think that just by wanting it, you're going to get it?",
+                  "You: Have you tried anything to change the wanting into asking?",
+                  "You could text: Hey mom and dad", "Is that a maybe as a yes, or a maybe as a no?"):
+        assert lolly in voice, lolly
+    for chatgpt in ("If you know he won't change", "If you miss her this deeply", "Each reply is your mirror"):
+        assert chatgpt not in voice, chatgpt
     assert "conversation" in cache.REQUIRED_PROMPTS
 
 
@@ -210,8 +216,9 @@ def test_the_note_lists_what_was_asked_and_what_is_unknown_and_while_helping_the
                               understood={"picture": {"situations": ["she stopped calling"]}},
                               asked=converse.asked_before(asked))
     assert "Questions you already asked, never to ask again in any words: What happened between you? | " in exploring
-    assert "Still unknown: how it is for them, the core: " in exploring
-    assert exploring.index("the core") < exploring.index("what they want"), "the core is looked for before the want"
+    assert "Still unknown" not in exploring, "no list of questions to work through (2026-10-29)"
+    assert "What happened is not known yet: let them tell it." in converse.note(
+        "directive", allowed=False, due=False, wants_title=False, understood={})
     assert "You are helping now" not in exploring
 
     situation = {converse.HELPING: True, "picture": {"problem_type": "situation"}}
@@ -229,11 +236,10 @@ def test_the_three_styles_are_three_ways_of_moving_and_help_is_allowed_once_turn
     """The 2026-10-27 review: the styles differed in tone only, and Mani heard but did not help."""
     voice = parse_prompt(PROMPTS / "voice.md")["content"]
     chat = parse_prompt(PROMPTS / "conversation.md")["content"]
-    assert "turns to helping soonest" in voice, "Directive"
-    assert "Each reply opens with genuine acknowledgment of how hard this is" in voice, "Supportive"
+    assert "turns to suggestions soonest" in voice, "Directive"
+    assert "genuine acknowledgment of how hard this is" in voice, "Supportive"
     assert "names a pattern or a connection in what they said that they may not have seen" in voice, "Reflective"
-    assert "never ask them to choose again" in voice
-    assert "Ideas they choose from are help; instructions are not." in voice
+    assert "Suggestions they choose from are help; instructions are not." in voice
     assert "No advice, tips or plans" not in voice
     assert "every reply gives them something" in chat
     assert "name it plainly and treat it as something to act on" in chat
@@ -245,7 +251,7 @@ def test_the_conversation_prompt_goes_down_to_the_core_and_checks_it_alone():
     underneath as an invitation, talks about it, and checks it alone."""
     chat = parse_prompt(PROMPTS / "conversation.md")["content"]
     assert "# Finding the core" in chat
-    assert "What it says about them" in chat
+    assert "you never ask them for it" in chat
     assert "guilt about a slip on shame about who they are" in chat
     assert "The core is not what happens because of it" in chat
     assert "your reply checks the core alone" in chat
@@ -257,3 +263,37 @@ def test_a_belief_about_themselves_is_never_reported_as_a_feeling():
     from mani.llm.schema import FeelingEntry
 
     assert "\"incapable\"" in FeelingEntry.model_fields["feeling"].description
+
+
+def test_the_conversation_prompt_holds_the_five_principles_and_nothing_pushes_a_question():
+    """muhammad, 2026-10-29, on feat/fix-chat-flow: infer and never ask what can be inferred, three questions every
+    turn; internal and external dependencies; action-oriented suggestions; a progression from chat to framework;
+    simple questions only when needed."""
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    voice = parse_prompt(PROMPTS / "voice.md")["content"]
+    for rule in ("1. What does this person need from you right now?",
+                 "2. Do you have something useful to give, or do you really need more information?",
+                 "3. Is there an insight that what they said already supports?",
+                 "Whatever you can infer from what they said, you already have",
+                 "your reply gives it and asks nothing", "Keep a plan of where this conversation is heading",
+                 "fill picture's dependencies", "inside them", "outside them", "aim at what is in their control"):
+        assert rule in chat, rule
+    assert "with the words to use where that helps" in chat and "give them the words" in voice
+    for gone in ("Follow their story in order", "What it says about them", "your question goes to the first"):
+        assert gone not in chat, gone
+    assert parse_prompt(PROMPTS / "voice.md")["model_parameters"]["reasoning_effort"] == "medium"
+
+
+def test_the_three_answers_and_the_plan_are_kept_and_the_note_carries_the_plan():
+    told = {"picture": {"situations": ["he never reaches out first"]}}
+    after = converse.understood_after(told, reply(
+        need="to make sense of why he keeps doing this", needs_info=False,
+        insight="his promises keep the friendship going without him changing anything", insight_from="he says he will",
+        plan="He has asked twice and nothing changed; next, what he needs to say clearly.",
+    ), check_written=False)
+    assert after["plan"] == "He has asked twice and nothing changed; next, what he needs to say clearly."
+    assert after["thinking"] == {"need": "to make sense of why he keeps doing this", "needs_info": False,
+                                 "insight": "his promises keep the friendship going without him changing anything",
+                                 "from": "he says he will"}
+    note = converse.note("directive", allowed=False, due=False, wants_title=False, understood=after)
+    assert "Your plan from your last reply: He has asked twice and nothing changed" in note

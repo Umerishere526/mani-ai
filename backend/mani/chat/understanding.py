@@ -49,7 +49,8 @@ def merge(stored: dict, update: PictureUpdate | None, heart: str | None) -> dict
     """The record after this turn: the picture with what their message adds or changes, every feeling it names
     added to those kept, and where the reply judged the heart of it, replacing the last judgement. A null or blank
     value keeps what is stored."""
-    merged = {key: stored[key] for key in (*KEYS, picture.KEY) if stored.get(key)}
+    # The chat's plan and its last answers to its own three questions ride along on every other kind of turn.
+    merged = {key: stored[key] for key in (*KEYS, picture.KEY, "plan", "thinking") if stored.get(key)}
     if merged.get("heart") in _LEGACY_HEART:
         merged["heart"] = _LEGACY_HEART[merged["heart"]]
     before = stored.get(picture.KEY)

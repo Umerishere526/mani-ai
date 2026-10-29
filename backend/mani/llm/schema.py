@@ -198,6 +198,20 @@ class RiskEntry(BaseModel):
     to: str = Field(description="self: to them. others: to someone else, such as children in their care.")
 
 
+class DependencyEntry(BaseModel):
+    """`kind` is checked by code (chat/picture.py), not typed, for the reason under CLOSED SETS."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    what: str = Field(description="What the outcome depends on, a few words said to them as you.")
+    kind: str = Field(
+        description=(
+            "internal: inside them, such as their fear of being let down again. external: outside them, such as the "
+            "other person's follow-through or a manager's decision."
+        ),
+    )
+
+
 # Merged into the thread's picture by chat/picture.py on every turn, in the chat and in a framework alike. The
 # docstrings and descriptions are sent to the model.
 class PictureUpdate(BaseModel):
@@ -226,6 +240,10 @@ class PictureUpdate(BaseModel):
     )
     risks: list[RiskEntry] | None = Field(
         default=None, description="A risk to them or to someone else that their message shows. Null when none.",
+    )
+    dependencies: list[DependencyEntry] | None = Field(
+        default=None,
+        description="What the outcome depends on that their message shows for the first time, inside or outside them. Null when none.",
     )
     drop: list[str] | None = Field(
         default=None,
@@ -550,9 +568,29 @@ def as_reply(parsed: BaseModel) -> Reply:
 # The reply whenever no framework, offer or check is open (orchestrator.converse). The model reads every
 # description. Text comes first, so the voice is written before anything is judged about it.
 class ConversationReply(_ReplyBase):
-    """Mani's reply, and where the conversation stands after it."""
+    """Mani's reply, and where the conversation stands after it. The fields before text are Mani asking itself what this
+    turn calls for, so the text follows from them (muhammad, 2026-10-29)."""
 
-    text: str = Field(description="What Mani says to them. Required.")
+    need: str | None = Field(
+        default=None, description="Fill it first: what they need from you right now, a few words.",
+    )
+    needs_info: bool | None = Field(
+        default=None,
+        description=(
+            "Whether you need to know something from them that you cannot infer from the conversation. False when you "
+            "have something useful to give."
+        ),
+    )
+    info_needed: str | None = Field(default=None, description="Only when needs_info is true: what exactly, a few words.")
+    insight: str | None = Field(
+        default=None, description="An insight that what they said already supports, a sentence, or null.",
+    )
+    insight_from: str | None = Field(default=None, description="Only with an insight: what of theirs it rests on.")
+    plan: str | None = Field(
+        default=None,
+        description="Where this conversation is heading, one line: what you know, and what comes next toward a step they can take.",
+    )
+    text: str = Field(description="What Mani says to them, following from the fields above. Required.")
     heart: Heart | None = Field(
         default=None,
         description=(

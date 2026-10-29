@@ -13,6 +13,7 @@ SHIFTS = ("adds", "corrects", "new_issue", "back", "nothing_new")
 PROBLEM_TYPES = ("belief", "situation", "both")
 BELIEF_KINDS = ("thought", "happening")
 RISK_TO = ("self", "others")
+DEPENDENCY_KINDS = ("internal", "external")
 CORE_ABOUT = ("self", "others", "situation")
 # Each list keeps its first entry, what they came with, and the latest ones up to this many.
 LIST_LIMIT = 8
@@ -94,7 +95,15 @@ def merge(stored: dict | None, update: PictureUpdate | None) -> dict:
         risk, to = _clean(entry.risk), entry.to.strip().lower()
         if risk and to in RISK_TO and not any(_same(r["risk"], risk) for r in risks):
             risks.append({"risk": risk, "to": to})
-    for key, entries in (("situations", situations), ("feelings", feelings), ("beliefs", beliefs), ("risks", risks)):
+    dependencies = picture.get("dependencies") or []
+    for entry in update.dependencies or []:
+        what, kind = _clean(entry.what), entry.kind.strip().lower()
+        if what and kind in DEPENDENCY_KINDS and not any(_same(d["what"], what) for d in dependencies):
+            dependencies.append({"what": what, "kind": kind})
+    for key, entries in (
+        ("situations", situations), ("feelings", feelings), ("beliefs", beliefs), ("risks", risks),
+        ("dependencies", dependencies),
+    ):
         if entries:
             picture[key] = _capped(entries)
         else:
@@ -148,6 +157,10 @@ def render(picture: dict | None) -> str | None:
         ("what is in the way", picture.get("in_the_way")),
         ("risks to them", " | ".join(r["risk"] for r in risks if r["to"] == "self")),
         ("risks to others", " | ".join(r["risk"] for r in risks if r["to"] == "others")),
+        ("depends on, inside them", " | ".join(
+            d["what"] for d in picture.get("dependencies") or [] if d["kind"] == "internal")),
+        ("depends on, outside them", " | ".join(
+            d["what"] for d in picture.get("dependencies") or [] if d["kind"] == "external")),
         ("kind of problem", picture.get("problem_type")),
         ("earlier situations", " | ".join(picture.get("earlier") or [])),
     ]

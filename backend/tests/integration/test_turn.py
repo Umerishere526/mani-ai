@@ -1034,7 +1034,7 @@ async def test_choosing_a_style_sets_it_and_opens_in_it_with_no_model_call(alice
     # muhammad, 2026-10-26: the conversation prompt carries all three styles, so it is one cached prefix, and
     # the note names the one they chose.
     system = scripted.last_messages[0]["content"]
-    assert system.startswith("# Who you are") and "- Reflective: fewer summaries, more insight." in system
+    assert system.startswith("# Who you are") and "- Reflective: names a pattern or a connection" in system
 
 
 async def test_a_greeting_stored_with_the_direct_button_opens_in_directive_after_migration_019(alice, model):

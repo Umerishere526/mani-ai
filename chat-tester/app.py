@@ -320,6 +320,17 @@ with st.sidebar:
         ):
             if understood.get(key):
                 st.markdown(f"**{label}:** {understood[key]}")
+        # What Mani asked itself before its last reply, and where it is heading (backend chat/converse.py, 2026-10-29).
+        thinking = understood.get("thinking") or {}
+        if thinking.get("need"):
+            st.markdown(f"🤔 **Needs right now:** {thinking['need']}")
+        if "needs_info" in thinking:
+            st.markdown("🤔 **Needs more information:** " + ("yes" if thinking["needs_info"] else "no")
+                        + (f": {thinking['info']}" if thinking.get("info") else ""))
+        if thinking.get("insight"):
+            st.markdown(f"🤔 **Insight:** {thinking['insight']}" + (f" (from: {thinking['from']})" if thinking.get("from") else ""))
+        if understood.get("plan"):
+            st.markdown(f"🧭 **Plan:** {understood['plan']}")
         # The picture of them the chat and every framework share (backend chat/picture.py).
         seen = understood.get("picture") or {}
         beliefs = seen.get("beliefs") or []
@@ -337,6 +348,8 @@ with st.sidebar:
             ("Wants", seen.get("wants")),
             ("In the way", seen.get("in_the_way")),
             ("Risks", " | ".join(f"{r['risk']} ({r['to']})" for r in risks)),
+            ("Depends on (inside)", " | ".join(d["what"] for d in seen.get("dependencies") or [] if d.get("kind") == "internal")),
+            ("Depends on (outside)", " | ".join(d["what"] for d in seen.get("dependencies") or [] if d.get("kind") == "external")),
             ("Kind of problem", seen.get("problem_type")),
             ("Earlier situations", " | ".join(seen.get("earlier") or [])),
         ):

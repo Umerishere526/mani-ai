@@ -134,6 +134,24 @@ the same change as the work.**
 
 ## Decisions in force
 
+- **Mani runs the chat like a therapist runs a session, with Lolly's role-played session as its example.**
+  Because three days of rules on `feat/identify-the-connection` did not change the shape of the replies: the model
+  copied the mirror-then-question turns of the two ChatGPT conversations at the end of `voice.md` over every rule
+  against them. That branch was deleted and this one started from `feat/understand-then-help` (muhammad,
+  2026-10-29). `voice.md` now asks for a session that is neutral, empathetic and always moving somewhere, ending on
+  a step they choose; never asking what can be inferred; a line of acknowledgment, then what Mani has, then one
+  plain therapist's question only when it needs to know something; concrete suggestions with the words to use. Its
+  example is Lolly's role play with manasa, lightly cleaned (one line of hers read "easy to do if they were
+  narcissistic" and is given as "easy if they weren't"); the ChatGPT conversations are gone, their tone kept as one
+  line. `conversation.md` holds muhammad's five principles: three questions before every reply (`need`,
+  `needs_info`, `insight`, filled before the text with a `plan` of where the conversation is heading), internal and
+  external dependencies (picture `dependencies`), suggestions aimed at what is in their control, a progression to a
+  step and to the framework, and simple questions only when needed. The note carries the last plan and no list of
+  questions to ask. Chat turns reason at `medium`. Tests: `test_mani_works_like_lollys_role_played_session`,
+  `test_the_conversation_prompt_holds_the_five_principles_and_nothing_pushes_a_question`,
+  `test_the_three_answers_and_the_plan_are_kept_and_the_note_carries_the_plan`,
+  `test_what_the_outcome_depends_on_is_kept_inside_or_outside_them`.
+
 - **Mani looks for the core, and the check is about the core alone.** Because in the 2026-10-28 weight-loss run
   Mani named fear of failing as the heart of it, when her thoughts ("I've ruined everything", "I lack discipline",
   "I'll never change") led to "I'm not capable of change", and shame under the guilt was never named; B then took the

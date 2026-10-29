@@ -23,6 +23,10 @@ HELPING = "helping"
 # few: "yes" then "I don't know" are often plain answers to Mani's questions.
 SHORT_WORDS = 3
 SHORT_IN_A_ROW = 3
+# Where the conversation is heading, as the last reply put it, and what that reply asked itself first (muhammad,
+# 2026-10-29: what do they need, does Mani need more, what insight is supported).
+PLAN = "plan"
+THINKING = "thinking"
 # How many of Mani's own questions the note lists, so none is asked again.
 ASKED_LIMIT = 6
 _QUESTION = re.compile(r"[^.!?\n]*\?")
@@ -118,19 +122,6 @@ def asked_before(history: list[Message]) -> list[str]:
     return [q for q in asked if q][-ASKED_LIMIT:]
 
 
-def still_unknown(picture_now: dict | None) -> list[str]:
-    """What the picture does not hold yet, in the order the conversation looks for it."""
-    seen = picture_now or {}
-    gaps = [
-        ("what happened", seen.get("situations")),
-        ("how it is for them", seen.get("feelings")),
-        ("the core: what it says about them or what they are torn between, and the feeling underneath", seen.get("core")),
-        ("what they want", seen.get("wants")),
-        ("what is stopping them", seen.get("in_the_way")),
-    ]
-    return [name for name, value in gaps if not value]
-
-
 def check_allowed(ctx: TurnContext) -> bool:
     """Whether this reply may check Mani's understanding: the floor and cooldowns of context.may_check, and an
     earlier reply that said the heart of it back and was not corrected."""
@@ -164,8 +155,12 @@ def note(
     helping = bool((understood or {}).get(HELPING))
     if asked:
         lines.append("Questions you already asked, never to ask again in any words: " + " | ".join(asked))
-    if not helping and (gaps := still_unknown(seen)):
-        lines.append("Still unknown: " + ", ".join(gaps) + ". Your question goes to the first of these that fits.")
+    if plan := (understood or {}).get(PLAN):
+        lines.append(f"Your plan from your last reply: {plan}. Keep it, or change it if their message does.")
+    if not helping and not seen.get("situations"):
+        # Only the story is ever pointed at: a list of what is still unknown drove a question every turn
+        # (2026-10-29), and what Mani can infer it never asks for.
+        lines.append("What happened is not known yet: let them tell it.")
     if helping:
         lines.append(
             "You are helping now: you understand enough. Each reply moves the help forward and gives them something, "
@@ -223,6 +218,18 @@ def understood_after(
     merged = understanding.merge(stored, reply.picture, heart)
     if check_written:
         merged = understanding.merge_check(merged, case(reply, merged.get(picture.KEY)))
+    if plan := " ".join((reply.plan or "").split()):
+        merged[PLAN] = plan
+    thinking = {
+        key: value for key, value in (
+            ("need", reply.need), ("needs_info", reply.needs_info), ("info", reply.info_needed),
+            ("insight", reply.insight), ("from", reply.insight_from),
+        ) if value not in (None, "")
+    }
+    if thinking:
+        merged[THINKING] = thinking
+    else:
+        merged.pop(THINKING, None)
     if turned(stored, reply, merged, their_messages or []):
         merged[HELPING] = True
     else:
