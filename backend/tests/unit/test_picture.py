@@ -128,3 +128,64 @@ def test_what_the_outcome_depends_on_is_kept_inside_or_outside_them():
     assert "depends on, inside them: your fear of being let down again" in line
     assert "depends on, outside them: his follow-through" in line
 
+
+
+def test_a_short_answer_to_manis_question_is_not_counted_as_adding_nothing():
+    """muhammad, 2026-10-29: "both", answering Mani's either-or question, counted as nothing new and turned the chat
+    to helping before the core was named. A short answer is `answered`, and the count starts again."""
+    once = picture.merge(BROTHER, PictureUpdate(shift="nothing_new"))
+    answered = picture.merge(once, PictureUpdate(shift="answered"))
+    assert answered["shift"] == "answered" and answered["quiet"] == 0
+
+
+def test_the_heart_of_the_picture_holds_feelings_underneath_need_desire_and_the_tension():
+    """muhammad, 2026-10-29: the friends chat stored "happy, worse, hate" and nothing under them, so the core had
+    nothing to rest on. Mani keeps its reading under what they named: feelings underneath with what each rests on,
+    the need under the want, the life they long for, and the tension in the core."""
+    from mani.llm.schema import CoreEntry, UnderneathEntry
+
+    after = picture.merge({}, PictureUpdate(
+        feelings=[FeelingEntry(feeling="worse", about="your own life")],
+        underneath=[UnderneathEntry(feeling="inadequacy", rests_on="I feel worse about my own"),
+                    UnderneathEntry(feeling="time pressure")],
+        wants="comfortable",
+        needs="to feel you're enough by your own measure",
+        desire="a settled life, secure and at ease",
+        core=CoreEntry(belief="you're not doing enough", feeling="inadequacy", about="self",
+                       tension="you're glad for them, and their news makes you feel you're failing"),
+    ))
+    assert after["underneath"] == [
+        {"feeling": "inadequacy", "rests_on": "I feel worse about my own"}, {"feeling": "time pressure"},
+    ]
+    assert (after["wants"], after["needs"], after["desire"]) == (
+        "comfortable", "to feel you're enough by your own measure", "a settled life, secure and at ease",
+    )
+    assert picture.feeling_words(after) == ["worse"], "a reading is never a feeling they named"
+    deeper = picture.merge(after, PictureUpdate(
+        underneath=[UnderneathEntry(feeling="Inadequacy", rests_on="whether I'm doing enough")],
+        core=CoreEntry(belief="you've fallen behind", about="self"),
+    ))
+    assert deeper["underneath"][0] == {"feeling": "inadequacy", "rests_on": "whether I'm doing enough"}
+    assert deeper["core"]["tension"] == after["core"]["tension"], "a deeper belief keeps the tension"
+    assert "underneath" not in picture.merge(deeper, PictureUpdate(drop=["inadequacy", "time pressure"]))
+    assert "needs" not in picture.merge(deeper, PictureUpdate(drop=["to feel you're enough by your own measure"]))
+    line = picture.render(deeper)
+    for part in ("feelings: worse (about your own life)",
+                 'feelings under the ones they named, your reading: inadequacy (from "whether I\'m doing enough")',
+                 "what they want, in their words: comfortable",
+                 "what they need underneath, your reading: to feel you're enough by your own measure",
+                 "what they long for, your reading: a settled life, secure and at ease",
+                 "the tension: you're glad for them"):
+        assert part in line, part
+
+
+def test_a_thought_makes_a_situation_both():
+    """muhammad, 2026-10-29 (approach C): the partner chat held "you may be settling" as a thought and called the
+    problem a situation, so help offered only ways to make time."""
+    held = picture.merge({}, PictureUpdate(
+        beliefs=[BeliefEntry(belief="you may be settling", kind="thought")], problem_type="situation"))
+    assert picture.reconcile(held)["problem_type"] == "both"
+    real = picture.merge({}, PictureUpdate(
+        beliefs=[BeliefEntry(belief="she sleeps while the children are there", kind="happening")],
+        problem_type="situation"))
+    assert picture.reconcile(real)["problem_type"] == "situation", "what is really happening stays a situation"

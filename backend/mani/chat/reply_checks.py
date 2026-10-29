@@ -77,3 +77,45 @@ def misses(
     if found := figures(reply.text):
         notes.append(f"figure of speech: {', '.join(found)}")
     return notes
+
+
+# Wording that fixes their situation instead of moving the conversation (the client's test, 2026-10-29: the framework
+# is the solution). Moves that clarify, choose where to look, or stay with one thing are allowed, so "could we stay
+# with", "it might help to look at" and questions about what they tried are not matched.
+SOLUTION = re.compile(
+    r"\byou (?:could|might|may want to|can) (?!be\b|feel\b|tell me\b|say\b|share\b|see\b|have\b|also\b|still\b|already\b|notice\b|both\b|love\b|want\b|miss\b)\w+"
+    r"|\b(?:try|consider|start) (?:to \w+|\w+ing)\b"
+    r"|\bone (?:option|idea|thing you could do) (?:is|would be|might be)\b"
+    r"|\b(?:a|the|your) (?:first|next|small) step\b"
+    r"|\bwhat if you (?:tried|asked|told|talked|scheduled|planned|set|started)\b"
+    r"|\bit (?:might|may|could) help to (?!look\b|think\b|stay\b|talk about\b|understand\b|notice\b)\w+",
+    re.IGNORECASE,
+)
+
+
+def solutions(text: str) -> list[str]:
+    """The phrases in a chat reply that offer a fix, lower-cased, in order."""
+    return [match.group(0).lower() for match in SOLUTION.finditer(text)]
+
+
+def chat_misses(
+    text: str, *, shape: str | None, window, insight: str | None, move: str | None, asked_for_help: bool,
+) -> list[str]:
+    """What a chat reply got wrong about the three shapes and the line between moving the conversation and solving
+    it, named for the log and the scenario check. Counted, never fixed. One small idea is allowed when they asked."""
+    notes: list[str] = []
+    fixes = solutions(text)
+    if fixes and not (move == "small_idea" and asked_for_help):
+        notes.append(f"solution in chat: {', '.join(fixes)}")
+    if move == "small_idea" and not asked_for_help:
+        notes.append("small idea they did not ask for")
+    if shape is None:
+        notes.append("no shape")
+    tied = [t for t in (getattr(window, "tied_to", None) or []) if t and t.strip()]
+    if shape in ("window", "insight") and not tied:
+        notes.append(f"{shape} reply names no outside thing")
+    if shape == "insight" and not (insight or "").strip():
+        notes.append("insight shape without an insight")
+    if insight and solutions(insight):
+        notes.append("insight is a solution")
+    return notes

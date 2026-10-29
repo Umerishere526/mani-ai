@@ -11,7 +11,7 @@ import uuid
 from mani.chat import converse, understanding
 from mani.chat.techniques import Registry
 from mani.db.threads import TurnContext
-from mani.llm.schema import ConversationReply, FeelingEntry, PictureUpdate
+from mani.llm.schema import BeliefEntry, ConversationReply, FeelingEntry, PictureUpdate
 from mani.models.rows import Prompt, Thread
 from mani.prompts import cache, composer
 from mani.prompts.cache import Config
@@ -90,14 +90,74 @@ def test_the_note_says_whether_this_reply_may_check_and_names_the_style():
     assert "this reply checks" not in converse.note("directive", allowed=False, due=True, wants_title=False)
 
 
-def test_the_reply_is_written_before_anything_is_judged_about_it():
-    """The voice comes first, and nothing in the reply asks for a second question or a reasoning pass."""
+def test_mani_reads_the_person_before_it_writes_the_reply():
+    """muhammad, 2026-10-29 (approach A): written first, the text followed the facts of the last message, and the
+    picture judged after it never shaped what Mani said. The whole reading comes first, then the facts, the heart,
+    what this turn calls for, and the text last of those; nothing asks for a second question or a reasoning pass."""
     fields = list(ConversationReply.model_fields)
-    # muhammad, 2026-10-29: before its text Mani asks itself what they need, whether it needs more, what insight is
-    # supported, and where the conversation is heading. The reading of the person still comes after the text.
-    assert fields[: fields.index("text")] == ["need", "needs_info", "info_needed", "insight", "insight_from", "plan"]
+    assert fields[: fields.index("text")] == [
+        "reading", "picture", "heart", "need", "needs_info", "info_needed", "shape", "window", "insight", "insight_from",
+        "link", "move", "plan",
+    ]
     assert not {"reasoning", "options", "style"} & set(fields)
-    assert fields.index("text") < fields.index("picture") and fields.index("text") < fields.index("heart")
+
+
+def test_the_reading_is_required_of_the_model_but_a_reply_without_it_still_reads():
+    from openai.lib._pydantic import to_strict_json_schema
+
+    sent = to_strict_json_schema(ConversationReply)
+    assert sent["required"][0] == "reading" and "anyOf" not in sent["properties"]["reading"]
+    assert set(sent["$defs"]["Reading"]["required"]) >= {"underneath", "wants", "needs", "desire", "core", "problem_type"}
+    assert reply().reading is None, "code never pays a second call for a missing reading"
+
+
+def test_the_reading_is_laid_over_the_picture_and_unclear_keeps_what_was_held():
+    from mani.llm.schema import Reading, UnderneathEntry
+
+    def reading(**fields):
+        return Reading(**({
+            "underneath": [], "wants": "unclear", "needs": "unclear", "desire": "unclear", "core": "unclear",
+            "core_from": "unclear", "core_feeling": "unclear", "core_about": "self", "tension": "none",
+            "problem_type": "unclear",
+        } | fields))
+
+    first = converse.understood_after({}, reply(reading=reading(
+        underneath=[UnderneathEntry(feeling="loneliness", rests_on="we barely have meaningful conversations")],
+        wants="meaningful conversations", needs="to feel close and chosen", desire="a relationship that feels alive",
+        core="you might be settling for something that isn't fulfilling", core_from="I wonder if I'm settling",
+        core_feeling="fear", core_about="situation", tension="you love them, and you're not sure you're happy",
+        problem_type="situation",
+    ), picture=PictureUpdate(beliefs=[BeliefEntry(belief="relationships become less exciting", kind="thought")])),
+        check_written=False)
+    seen = first["picture"]
+    assert seen["core"] == {
+        "belief": "you might be settling for something that isn't fulfilling", "about": "situation", "feeling": "fear",
+        "tension": "you love them, and you're not sure you're happy", "rests_on": "I wonder if I'm settling",
+    }
+    assert (seen["wants"], seen["needs"], seen["desire"]) == (
+        "meaningful conversations", "to feel close and chosen", "a relationship that feels alive")
+    assert seen["problem_type"] == "both", "what they tell themselves is never a situation alone"
+    kept = converse.understood_after(first, reply(reading=reading()), check_written=False)["picture"]
+    assert kept["core"] == seen["core"] and kept["wants"] == seen["wants"], "unclear never writes over a reading"
+
+
+def test_the_note_names_what_the_reading_lacks_and_what_is_already_known():
+    held = {"picture": {
+        "situations": ["you both got busy with work"], "in_the_way": "work",
+        "beliefs": [{"belief": "you may be settling", "kind": "thought"}],
+    }}
+    sent = converse.note("directive", allowed=False, due=False, wants_title=False, understood=held,
+                         their_count=3, latest="work")
+    assert "Your picture holds what they tell themselves (you may be settling) but no core" in sent
+    assert "Still empty in your reading: what they want, the need underneath, what they long for" in sent
+    assert "Already known, never ask for it again: what is in the way: work." in sent
+    assert "Their answer only repeats what they already told you" in sent
+    early = converse.note("directive", allowed=False, due=False, wants_title=False, understood=held,
+                          their_count=1, latest="I've been with my partner for five years")
+    assert "but no core" not in early and "Still empty" not in early and "only repeats" not in early
+    named = {"picture": {"core": {"belief": "you might be settling", "about": "situation"}}, "heart": "exploring"}
+    assert "a core you have not said to them yet" in converse.note(
+        "directive", allowed=False, due=False, wants_title=False, understood=named, their_count=3)
 
 
 def test_the_note_carries_the_picture_of_them():
@@ -160,51 +220,50 @@ def test_a_framework_turn_is_a_conversation_the_stage_only_gives_the_direction()
         assert rule in framework, rule
 
 
-def test_code_picks_the_help_move_from_the_kind_of_problem_and_the_style():
-    """muhammad, 2026-10-27: the help-move table. A real situation is helped in the conversation, a thought may go to
-    a set of questions, both is a choice, and a risk to someone else always comes first."""
-    situation = {"problem_type": "situation"}
-    assert "concrete, sensible next steps" in converse.help_move("directive", situation)
-    assert "keep talking it through or look at what might help" in converse.help_move("supportive", situation)
-    assert "a pattern or a connection" in converse.help_move("reflective", situation)
-    assert "offer to look at it together" in converse.help_move("directive", {"problem_type": "belief"})
-    assert "which they want to start with" in converse.help_move("directive", {"problem_type": "both"})
-    assert converse.help_move("supportive", {}) == converse.UNSURE_MOVE
-    risky = {**situation, "risks": [{"risk": "children left unsupervised", "to": "others"}]}
-    assert converse.help_move("supportive", risky).startswith(
-        "First name the risk to children left unsupervised plainly"
-    )
+def test_the_chat_never_carries_a_help_move_and_a_risk_to_others_still_comes_first():
+    """The client's test, 2026-10-29: the framework is the solution, so the chat has no help moves. A risk to
+    someone else is still named and acted on first."""
+    assert not hasattr(converse, "HELP_MOVES") and not hasattr(converse, "help_move")
+    risky = {"picture": {"risks": [{"risk": "children left unsupervised", "to": "others"}]}}
+    sent = converse.note("supportive", allowed=False, due=False, wants_title=False, understood=risky)
+    assert "First name the risk to children left unsupervised plainly" in sent
+    assert converse.risk_first({}) is None
 
 
-def test_the_conversation_turns_to_helping_when_it_stops_moving_or_they_ask():
-    """The 2026-10-27 review: heard but not helped. Mani turns when they ask for help, show frustration, add nothing
-    new, or answer in a few words three times running; once turned it stays, until another situation comes in."""
-    quiet = {"picture": {"shift": "nothing_new", "quiet": 1}}
+def test_the_conversation_presses_toward_the_framework_when_it_stops_moving_or_they_ask():
+    """The 2026-10-27 review, then the client's test 2026-10-29: when they ask what to do, show frustration, add
+    nothing new, or answer in a few words three times running, Mani presses toward the framework, never into
+    solving it in the chat; it stays so until another situation comes in."""
+    quiet = {"picture": {"shift": "nothing_new", "quiet": converse.QUIET_TO_HELP}}
+    once = {"picture": {"shift": "nothing_new", "quiet": 1}}
+    answered = {"picture": {"shift": "answered", "quiet": 0}}
     moving = {"picture": {"shift": "adds", "quiet": 0}}
-    assert converse.turned({}, reply(asked_for_help=True), moving, [])
-    assert converse.turned({}, reply(frustrated=True), moving, [])
-    assert converse.turned({}, reply(), quiet, [])
-    assert converse.turned({}, reply(), moving, ["fine", "i guess", "yes"])
-    assert not converse.turned({}, reply(), moving, ["yes", "I don't know"]), "two short answers are often answers"
-    assert not converse.turned({}, reply(), moving, ["my boss keeps taking credit for my work", "yes", "no"])
-    assert converse.turned({converse.HELPING: True}, reply(), moving, [])
+    assert converse.toward({}, reply(asked_for_help=True), moving, [])
+    assert converse.toward({}, reply(frustrated=True), moving, [])
+    assert converse.toward({}, reply(), quiet, [])
+    assert not converse.toward({}, reply(), once, []), "one message with nothing new is not enough (2026-10-29)"
+    assert not converse.toward({}, reply(), answered, ["comfortable"]), "a short answer to Mani's question is an answer"
+    assert converse.toward({}, reply(), moving, ["fine", "i guess", "yes"])
+    assert not converse.toward({}, reply(), moving, ["yes", "I don't know"]), "two short answers are often answers"
+    assert not converse.toward({}, reply(), moving, ["my boss keeps taking credit for my work", "yes", "no"])
+    assert converse.toward({converse.TOWARD: True}, reply(), moving, [])
     new_issue = {"picture": {"shift": "new_issue", "quiet": 0}}
-    assert not converse.turned({converse.HELPING: True}, reply(asked_for_help=True), new_issue, [])
+    assert not converse.toward({converse.TOWARD: True}, reply(asked_for_help=True), new_issue, [])
 
 
-def test_turning_is_kept_on_the_record_and_another_situation_starts_understanding_again():
+def test_pressing_is_kept_on_the_record_and_another_situation_starts_understanding_again():
     from mani.llm.schema import PictureUpdate
 
-    helped = converse.understood_after({}, reply(asked_for_help=True), check_written=False)
-    assert helped[converse.HELPING] is True
+    pressed = converse.understood_after({"helping": True}, reply(asked_for_help=True), check_written=False)
+    assert pressed[converse.TOWARD] is True and "helping" not in pressed, "an old helping record is dropped"
     moved_on = converse.understood_after(
-        {**helped, "heart": "ready"}, reply(picture=PictureUpdate(focus="your sister's loans", shift="new_issue")),
+        {**pressed, "heart": "ready"}, reply(picture=PictureUpdate(focus="your sister's loans", shift="new_issue")),
         check_written=False,
     )
-    assert converse.HELPING not in moved_on and "heart" not in moved_on
+    assert converse.TOWARD not in moved_on and "heart" not in moved_on
 
 
-def test_the_note_lists_what_was_asked_and_what_is_unknown_and_while_helping_the_move():
+def test_the_note_lists_what_was_asked_and_what_is_unknown_and_when_pressing_the_way_in():
     """Never the same question twice; ask for the first gap; once helping, every reply gives something."""
     from mani.models.rows import Message, MessageRole
 
@@ -219,17 +278,12 @@ def test_the_note_lists_what_was_asked_and_what_is_unknown_and_while_helping_the
     assert "Still unknown" not in exploring, "no list of questions to work through (2026-10-29)"
     assert "What happened is not known yet: let them tell it." in converse.note(
         "directive", allowed=False, due=False, wants_title=False, understood={})
-    assert "You are helping now" not in exploring
 
-    situation = {converse.HELPING: True, "picture": {"problem_type": "situation"}}
-    helping = converse.note("directive", allowed=True, due=False, wants_title=False, understood=situation)
-    assert "You are helping now" in helping and "concrete, sensible next steps" in helping
-    assert "Still unknown" not in helping
-    assert "this reply checks your understanding" not in helping, "a real situation is helped, not checked toward a set"
-    thought = {converse.HELPING: True, "picture": {"problem_type": "belief"}}
-    assert "this reply checks your understanding" in converse.note(
-        "directive", allowed=True, due=False, wants_title=False, understood=thought,
-    ), "for a thought, the check is the way to the set of questions"
+    pressing = {converse.TOWARD: True, "picture": {"problem_type": "situation"}}
+    sent = converse.note("directive", allowed=True, due=False, wants_title=False, understood=pressing)
+    assert "Do not solve it in the chat" in sent and "at most one small idea" in sent
+    assert "this reply checks your understanding" in sent, "pressing toward the framework, the check is the way in"
+    assert "Do not solve it in the chat" not in exploring
 
 
 def test_the_three_styles_are_three_ways_of_moving_and_help_is_allowed_once_turned():
@@ -310,6 +364,10 @@ def test_mani_follows_lollys_cadence_and_checks_by_her_barometer():
     assert "the situation and the challenge in it" in voice
     assert "Never summarise what they told you and never show them your notes" in voice
     assert "Never leave them with a suggestion and nothing to answer" in voice
+    assert "they carry what the person told you, so they know you were listening" in voice
+    assert "Using something they said inside your question, so it lands on their situation, is not summarising" in voice
+    assert "when you see your friends doing well?" in voice
+    assert "short, plain" not in voice and "short, plain" not in chat
     assert "Say it the way a person would, in everyday words, never as an assessment" in voice
     assert "Is what's bothering you the situation, or something more about yourself?" in voice
     assert "which is more pervasive, or whether it is both" in voice
@@ -318,3 +376,59 @@ def test_mani_follows_lollys_cadence_and_checks_by_her_barometer():
     assert "Do you want to work through it with a framework?" in chat
     assert "Does that feel true for you?" not in chat
     assert "would rather keep talking" in moments
+
+
+def test_a_chat_reply_is_checked_for_its_shape_and_for_fixing_what_the_framework_is_for():
+    """The client's test, 2026-10-29: in the chat Mani listens, and suggestions only move the conversation; the
+    three shapes; the insight is the aha, never a solution."""
+    from mani.chat import reply_checks
+    from mani.llm.schema import Window
+
+    window = Window(feeling="unsure you're happy", tied_to=["their 'it'll get better'", "work"], closest="their 'it'll get better'")
+    assert reply_checks.chat_misses(
+        "Work crowded in, and the answer was to wait. How does waiting sit with you?", shape="window", window=window,
+        insight=None, move="none", asked_for_help=False) == []
+    assert reply_checks.chat_misses(
+        "You could set aside one evening a week. Would that work?", shape="open_ask", window=None, insight=None,
+        move="none", asked_for_help=False) == ["solution in chat: you could set"]
+    assert reply_checks.chat_misses(
+        "One small thing: you could text them tonight. Would it help to work through it together?",
+        shape="open_ask", window=None, insight=None, move="small_idea", asked_for_help=True) == []
+    assert "insight reply names no outside thing" in reply_checks.chat_misses(
+        "Maybe it's about being chosen. Is that it?", shape="insight", window=None, insight="it's about being chosen",
+        move="none", asked_for_help=False)
+    assert "insight is a solution" in reply_checks.chat_misses(
+        "x?", shape="insight", window=window, insight="you could plan a trip together", move="none",
+        asked_for_help=False)
+    for allowed in ("Is it more the lack of time, or that it feels one-sided?",
+                    "Could we stay with your brother first, and come back to the money?",
+                    "It might help to look at what comfortable would mean for you.",
+                    "You can still love them and feel unsure. Have you tried talking about it?"):
+        assert reply_checks.solutions(allowed) == [], allowed
+
+
+def test_a_link_back_to_the_core_and_the_shape_are_kept_with_what_mani_asked_itself():
+    from mani.llm.schema import Window
+
+    after = converse.understood_after({}, reply(
+        link="core: the same sense of not doing enough", shape="window", move="clarifying_options",
+        window=Window(feeling="lonely", tied_to=["work"], closest="work"),
+    ), check_written=False)
+    thinking = after[converse.THINKING]
+    assert thinking["link"] == "core: the same sense of not doing enough"
+    assert (thinking["shape"], thinking["move"]) == ("window", "clarifying_options")
+    assert thinking["window"] == {"feeling": "lonely", "tied_to": ["work"], "closest": "work"}
+
+def test_the_conversation_prompt_listens_in_three_shapes_and_leaves_the_solution_to_the_framework():
+    """The client's test, 2026-10-29: the framework is the solution; suggestions in the chat only move it on; the
+    insight is the aha, never a solution; three shapes; opening the window joins a feeling to what it is tied to."""
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    for rule in ("The framework is the solution; the chat never tries to fix the problem.",
+                 "**An insight is not a solution.**",
+                 "# The three reply shapes", "`open_ask`", "`window`", "`insight`",
+                 "When it is tied to two things, name both, then ask about the one closest to the feeling.",
+                 "7. Move the conversation, never fix it",
+                 "give at most one small idea"):
+        assert rule in chat, rule
+    for gone in ("# Helping", "Help the person consider options", "shift toward helping"):
+        assert gone not in chat, gone

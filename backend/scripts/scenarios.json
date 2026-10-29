@@ -64,6 +64,97 @@
           "just told you not being invited to meetingd",
           "i think i might be getting fired"
         ]
+      },
+      "friends_moving_forward": {
+        "source": "muhammad, 2026-10-29: the live Directive chat, the person's lines word for word. Mani went to job-hunting with no core named",
+        "lines": [
+          "I’m happy for my friends, but lately, whenever I hear about something good happening in their lives, I feel worse about my own. I feel like I should be further along by now, and I hate that I keep comparing myself to them.",
+          "I think it's my career. I see my friends getting promoted, earning more, and reaching milestones I thought I'd have reached by now. I'm genuinely happy for them, but it makes me question whether I'm doing enough or whether I've fallen behind.",
+          "comfortable",
+          "both",
+          "exploring other jobs while staying employed?"
+        ],
+        "picture_expect": {
+          "by": 2,
+          "problem_type": [
+            "both",
+            "belief"
+          ],
+          "core": [
+            "enough",
+            "behind",
+            "further along",
+            "failing"
+          ],
+          "underneath": [
+            "inadequa",
+            "not enough",
+            "shame",
+            "guilt",
+            "pressure",
+            "envy",
+            "falling behind"
+          ],
+          "wants": true,
+          "needs": true,
+          "desire": true
+        },
+        "shape_expect": {
+          "1": [
+            "window",
+            "insight"
+          ],
+          "2": [
+            "insight"
+          ]
+        }
+      },
+      "partner_going_through_the_motions": {
+        "source": "muhammad, 2026-10-29: the live Directive chat, the person's lines word for word. Mani followed work as the cause and asked for it twice; the picture held no core, want, need or desire and called it a situation",
+        "lines": [
+          "I've been with my partner for five years, and lately I feel like we're just going through the motions. We don't argue much, but we barely have meaningful conversations anymore. I keep telling myself that relationships naturally become less exciting over time, but when I see other couples making plans, travelling together, and seeming genuinely happy, I wonder if I'm settling for something that's no longer fulfilling. I still love my partner, but I'm not sure whether I'm happy in this relationship anymore.",
+          "I think it started about a year ago. We both got busy with work, and slowly stopped making time for each other",
+          "I brought it up once, but my partner said we've both just been busy and that things will get better when work calms down. We tried having a date night a couple of times, but it didn't really last.",
+          "work"
+        ],
+        "picture_expect": {
+          "by": 1,
+          "problem_type": [
+            "both",
+            "belief"
+          ],
+          "core": [
+            "settl",
+            "fulfil",
+            "happy"
+          ],
+          "underneath": [
+            "lonel",
+            "disconnect",
+            "distan",
+            "fear",
+            "doubt",
+            "uncertain",
+            "sad",
+            "empt"
+          ],
+          "wants": true,
+          "needs": true,
+          "desire": true
+        },
+        "shape_expect": {
+          "1": [
+            "window",
+            "insight"
+          ],
+          "3": [
+            "insight"
+          ],
+          "4": [
+            "insight",
+            "window"
+          ]
+        }
       }
     }
   },

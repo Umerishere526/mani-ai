@@ -194,6 +194,51 @@ def reached_flags(trace: list[dict] | None, expected: dict[str, str], seen: set[
     return []
 
 
+def picture_flags(understanding: dict | None, expect: dict) -> list[str]:
+    """What Mani's reading of them misses by the line `by` (approach D, muhammad 2026-10-29): each named part must be
+    there, and where the conversation gives words, hold one of them (any, case and spelling of a stem). The partner
+    chat said "am I settling" in its first message and the picture still held no core five messages later."""
+    if understanding is None:
+        return ["no understanding returned: turn AI_DEBUG_MODE on to score the picture"]
+    seen = understanding.get("picture") or {}
+    core = seen.get("core") or {}
+    held = {
+        "core": " ".join(filter(None, (core.get("belief"), core.get("feeling"), core.get("tension")))),
+        "underneath": " | ".join(u["feeling"] for u in seen.get("underneath") or []) + " " + (core.get("feeling") or ""),
+        "wants": seen.get("wants") or "",
+        "needs": seen.get("needs") or "",
+        "desire": seen.get("desire") or "",
+        "problem_type": seen.get("problem_type") or "",
+    }
+    flags = []
+    for part, want in expect.items():
+        if part == "by":
+            continue
+        have = held.get(part, "").strip()
+        if not have:
+            flags.append(f"picture has no {part}")
+        elif part == "problem_type" and have not in want:
+            flags.append(f"picture calls it {have}, expected {' or '.join(want)}")
+        elif isinstance(want, list) and part != "problem_type" and not any(w.lower() in have.lower() for w in want):
+            flags.append(f"picture {part} misses it: {have}")
+    return flags
+
+
+# The orchestrator's reply checks that are failures of the chat's shapes or its line against fixing (the client's
+# test, 2026-10-29), raised to flags so they count.
+CHAT_FLAGS = ("solution in chat", "small idea they did not ask for", "reply names no outside thing",
+              "insight shape without an insight", "insight is a solution")
+
+
+def shape_flags(exchange: "Exchange", wanted: list[str] | None) -> list[str]:
+    """The reply's shape against what the conversation expects on this line, and its chat checks raised to flags."""
+    flags = [c for c in exchange.checks or [] if any(c.startswith(f) or f in c for f in CHAT_FLAGS)]
+    shape = ((exchange.understanding or {}).get("thinking") or {}).get("shape")
+    if wanted and not exchange.offered and not exchange.checked and shape not in wanted:
+        flags.append(f"shape {shape}, expected {' or '.join(wanted)}")
+    return flags
+
+
 def conversations(groups: dict) -> dict[str, dict]:
     """Every conversation in scenarios.json by name, carrying its group's expectations under its own."""
     return {
@@ -252,9 +297,11 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
             exchanges.append(exchange)
             return exchange
 
+        shapes = conversation.get("shape_expect") or {}
         for number, text in enumerate(lines, start=1):
             said |= _words(text)
             on_line[number] = exchange = await say(text)
+            exchange.flags += shape_flags(exchange, shapes.get(str(number)))
             if exchange.offered:
                 exchange.flags.append("offer without a confirmed check")
             if not exchange.checked:
@@ -284,6 +331,11 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
         for number, flag in timing_flags(checked_at, len(lines), expect).items():
             if number in on_line:
                 on_line[number].flags.append(flag)
+        if wanted := conversation.get("picture_expect"):
+            by = wanted.get("by", len(lines))
+            judged = on_line.get(by) or (exchanges[-1] if exchanges else None)
+            if judged is not None:
+                judged.flags += picture_flags(judged.understanding, wanted)
         return exchanges
     finally:
         async with pool.as_admin() as conn:

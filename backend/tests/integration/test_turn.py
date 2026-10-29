@@ -2282,22 +2282,22 @@ async def test_a_yes_to_the_check_about_something_really_happening_brings_help_n
         assert (await threads.load_turn_context(conn, thread.id, ALICE)).technique is None
 
 
-async def test_asking_for_help_turns_the_conversation_and_the_next_note_carries_the_help_move(alice, model):
-    """The 2026-10-27 review: a direct request for help got another question. Asking turns the conversation to
-    helping, and from then on the note gives each reply the help move for their style and kind of problem."""
+async def test_asking_for_help_presses_toward_the_framework_and_the_next_note_says_so(alice, model):
+    """The client's test, 2026-10-29: in the chat Mani listens, and the framework is the solution. Asking what to do
+    gets at most one small idea, and from then on the note presses toward the framework instead of a help move."""
     from mani.models.rows import SupportStyle
 
     scripted = model(
-        ConversationReply(text="I can help with that. Would talking to her first, or to the director, fit better?",
-                          asked_for_help=True, picture=PictureUpdate(problem_type="situation")),
-        ConversationReply(text="Talking to her first makes sense. What would you want her to hear?"),
+        ConversationReply(text="One small thing could be talking to her first. Would it help to work through it together?",
+                          asked_for_help=True, move="small_idea", picture=PictureUpdate(problem_type="situation")),
+        ConversationReply(text="It sounds like you've been carrying this alone. What worries you most about raising it?"),
     )
     thread = await _in_style(await start(alice), SupportStyle.DIRECTIVE)
     await send(alice, thread.id, "my co-teacher sleeps while i watch 20 kids. what should i do?")
     await send(alice, thread.id, "talk to her first i think")
 
     note = _ctx_sent(scripted)
-    assert "You are helping now" in note and "concrete, sensible next steps" in note
+    assert "Do not solve it in the chat" in note and "You are helping now" not in note
     assert "Still unknown" not in note
 
 

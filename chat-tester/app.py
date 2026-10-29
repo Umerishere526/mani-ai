@@ -327,8 +327,15 @@ with st.sidebar:
         if "needs_info" in thinking:
             st.markdown("🤔 **Needs more information:** " + ("yes" if thinking["needs_info"] else "no")
                         + (f": {thinking['info']}" if thinking.get("info") else ""))
+        if thinking.get("shape"):
+            st.markdown(f"🧩 **Shape:** {thinking['shape']}" + (f"  ·  **Move:** {thinking['move']}" if thinking.get("move") else ""))
+        if window := thinking.get("window"):
+            st.markdown(f"🪟 **Window:** {window.get('feeling')} ↔ {' | '.join(window.get('tied_to') or [])}"
+                        + (f" (closest: {window['closest']})" if window.get("closest") else ""))
         if thinking.get("insight"):
             st.markdown(f"🤔 **Insight:** {thinking['insight']}" + (f" (from: {thinking['from']})" if thinking.get("from") else ""))
+        if thinking.get("link"):
+            st.markdown(f"🔗 **Ties back to:** {thinking['link']}")
         if understood.get("plan"):
             st.markdown(f"🧭 **Plan:** {understood['plan']}")
         # The picture of them the chat and every framework share (backend chat/picture.py).
@@ -338,14 +345,22 @@ with st.sidebar:
         for label, value in (
             ("Focus", seen.get("focus")),
             ("What is happening", " | ".join(seen.get("situations") or [])),
-            ("Feelings", " | ".join(
+            ("Feelings they named", " | ".join(
                 f["feeling"] + (f" (about {f['about']})" if f.get("about") else "") for f in seen.get("feelings") or []
+            )),
+            ("Feelings underneath (Mani's reading)", " | ".join(
+                u["feeling"] + (f" (from \"{u['rests_on']}\")" if u.get("rests_on") else "")
+                for u in seen.get("underneath") or []
             )),
             ("Tells themselves", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "thought")),
             ("Really happening", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "happening")),
+            ("What they want (their words)", seen.get("wants")),
+            ("Need underneath (Mani's reading)", seen.get("needs")),
+            ("Desire (Mani's reading)", seen.get("desire")),
             ("Core", (seen.get("core") or {}).get("belief")),
-            ("Feeling underneath (Mani's reading)", (seen.get("core") or {}).get("feeling")),
-            ("Wants", seen.get("wants")),
+            ("Feeling under the core (Mani's reading)", (seen.get("core") or {}).get("feeling")),
+            ("Tension", (seen.get("core") or {}).get("tension")),
+            ("Core rests on (their words)", (seen.get("core") or {}).get("rests_on")),
             ("In the way", seen.get("in_the_way")),
             ("Risks", " | ".join(f"{r['risk']} ({r['to']})" for r in risks)),
             ("Depends on (inside)", " | ".join(d["what"] for d in seen.get("dependencies") or [] if d.get("kind") == "internal")),

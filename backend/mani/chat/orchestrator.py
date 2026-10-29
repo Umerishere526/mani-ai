@@ -315,6 +315,7 @@ async def _converse(
         conversation_style, allowed=allowed, due=understanding.ready(ctx.thread.understanding),
         wants_title=wants_title, understood=ctx.thread.understanding, recent_crisis=ctx.recent_crisis,
         stepped_out_of=declined.name if declined else None, asked=converse.asked_before(history),
+        their_count=context.their_messages(ctx), latest=content,
     )
     call = await client.complete(
         [{"role": "system", "content": system.text}]
@@ -350,10 +351,10 @@ async def _converse(
     if check_written:
         updates.check_at_message_count = ctx.thread.message_count + 2
     logger.info(
-        "thread %s conversation turn: needs info %s, insight %s, asks %s, heart %s, check allowed %s, checked %s, "
-        "helping %s",
-        ctx.thread.id, reply.needs_info, bool(reply.insight), "?" in reply.text, reply.heart, allowed, check_written,
-        bool(understood.get(converse.HELPING)),
+        "thread %s conversation turn: shape %s, move %s, needs info %s, insight %s, asks %s, heart %s, check allowed %s, "
+        "checked %s, toward framework %s",
+        ctx.thread.id, reply.shape, reply.move, reply.needs_info, bool(reply.insight), "?" in reply.text, reply.heart,
+        allowed, check_written, bool(understood.get(converse.TOWARD)),
     )
 
     fixed = repairs.apply(
@@ -377,6 +378,12 @@ async def _converse(
         needs_question=not guarded and not check_written,
         last_mani_text=next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None),
     )
+    if not guarded:
+        # The three shapes and no fixes before the framework (the client's test, 2026-10-29). Counted, never fixed.
+        checks += reply_checks.chat_misses(
+            reply.text, shape=reply.shape, window=reply.window, insight=reply.insight, move=reply.move,
+            asked_for_help=bool(reply.asked_for_help),
+        )
     if checks:
         logger.info("thread %s reply checks: %s", ctx.thread.id, "; ".join(checks))
     if not fixed.text.strip():
@@ -761,20 +768,15 @@ async def send(
     if retiring_framework_id is not None:
         # The framework that just finished worked through this reading. The next check waits for a fresh one, so
         # Mani never checks again straight away on the case it has just finished.
-        understood = {key: value for key, value in understood.items() if key not in ("heart", converse.HELPING)}
+        understood = {key: value for key, value in understood.items() if key not in ("heart", converse.TOWARD)}
     if understood != ctx.thread.understanding:
         updates.understanding = understood
-    # A clear yes to the check is the only way to an offer (spec 0006, AC-1, AC-4). Only ABCDE and Thought Reframe
-    # are offered, and only for what they tell themselves: a yes about something really happening turns the
-    # conversation to helping instead (muhammad, 2026-10-27).
-    real_situation = (understood.get(picture.KEY) or {}).get("problem_type") == "situation"
+    # A clear yes to the check is the only way to an offer (spec 0006, AC-1, AC-4). The framework is the solution
+    # (the client's test, 2026-10-29): the chat finds what they tell themselves even about something really
+    # happening, so a yes always brings the offer; it no longer turns the chat to helping.
     confirmed = (
-        moment is Moment.CHECK_OPEN and not guarded and starting is None
-        and reply.check_answer == "yes" and not real_situation
+        moment is Moment.CHECK_OPEN and not guarded and starting is None and reply.check_answer == "yes"
     )
-    if moment is Moment.CHECK_OPEN and not guarded and reply.check_answer == "yes" and real_situation:
-        understood = {**understood, converse.HELPING: True}
-        updates.understanding = understood
 
     fixed = repairs.apply(
         reply,
