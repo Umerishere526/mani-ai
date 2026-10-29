@@ -309,6 +309,7 @@ def test_mani_follows_lollys_cadence_and_checks_by_her_barometer():
     assert "acknowledge, open the window, give your insight, then ask" in voice
     assert "the situation and the challenge in it" in voice
     assert "Never summarise what they told you and never show them your notes" in voice
+    assert "Say it the way a person would, in everyday words, never as an assessment" in voice
     assert "Is what's bothering you the situation, or something more about yourself?" in voice
     assert "which is more pervasive, or whether it is both" in voice
     assert "Less about the feeling, more about the challenge and what they can control" in voice
