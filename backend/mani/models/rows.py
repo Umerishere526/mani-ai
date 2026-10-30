@@ -70,7 +70,7 @@ class Thread(Row):
     # What Mani understands of them so far: feeling, issue, core issue, underlying feeling
     # (chat/understanding.py).
     # Loaded only for a turn, never in a thread list.
-    understanding: dict[str, str] = Field(default_factory=dict)
+    understanding: dict[str, Any] = Field(default_factory=dict)
     # The message_count after the turn whose reply was Mani's latest check of its understanding
     # (spec 0006). Loaded only for a turn, never in a thread list.
     check_at_message_count: int | None = None
@@ -107,13 +107,6 @@ class TechniqueState(Row):
     stages_known: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
-class ResponseStyle(Row):
-    """One entry in the rolling window used to keep replies from repeating shape."""
-
-    shape: str
-    voice: str | None = None
-
-
 class TechniqueTried(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -133,7 +126,9 @@ class ThreadSummary(Row):
 
 # The body check-in that ends every framework. Code runs these stages from the client's script, so the model
 # never skips or words them and no stage button is shown on them.
-ENDING_STAGES = frozenset({"somatic_check", "somatic_body", "somatic_practice", "somatic_effect", "somatic_closing"})
+ENDING_STAGES = frozenset({
+    "somatic_ask", "somatic_check", "somatic_body", "somatic_practice", "somatic_effect", "somatic_closing",
+})
 
 
 class Framework(Row):

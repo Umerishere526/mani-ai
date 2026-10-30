@@ -13,7 +13,7 @@ from mani.chat.greeting import (
     TRY_IT_LABEL,
 )
 from mani.chat.techniques import OFFERING, Registry
-from mani.llm.schema import SHAPES, Check, Moment, Offer, Reply, Slots, SmartPrompt, Style
+from mani.llm.schema import Moment, Offer, Reply, Slots, SmartPrompt
 from mani.models.rows import Framework
 
 MAX_TITLE_LENGTH = 100
@@ -108,7 +108,6 @@ class Repaired:
     # The framework and phase to record, set by the walk and the body route; never by the reply.
     framework_id: str | None = None
     phase: str | None = None
-    style: Style | None = None
     # What was corrected, for the log and for a metric on how often the model needs it.
     notes: list[str] = field(default_factory=list)
     # Why the reply's offer could not be made, when it carried one; the model's text went instead.
@@ -257,22 +256,10 @@ def _offer_text(
 
 
 def _sentence(value: str | None, end: str = ".") -> str:
-    """One of a check's parts as a sentence: on one line, ending in punctuation. A part that ends on a comma
-    or a semicolon runs on into the next, as the check asks its parts to read as one flowing summary."""
+    """A line of the model's own as a sentence: on one line, ending in punctuation. One that ends on a comma or a
+    semicolon is left as it is."""
     cleaned = " ".join((value or "").split())
     return cleaned if not cleaned or cleaned[-1] in ".!?,;" else cleaned + end
-
-
-def check_summary(check: Check) -> str:
-    """What Mani's check says it understands: the conflict, what they want and what is stopping them, each
-    a sentence. Every word is the model's; only the order is code's (R33)."""
-    parts = (check.conflict, check.want, check.in_the_way)
-    return " ".join(sentence for part in parts if (sentence := _sentence(part)))
-
-
-def check_text(check: Check) -> str:
-    """Mani's check: its summary, then its question on a line of its own."""
-    return f"{check_summary(check)}\n\n{_sentence(check.question, '?')}"
 
 
 def keep_chatting(framework: Framework | None, style: str, their_words: str | None) -> str | None:
@@ -309,12 +296,10 @@ def apply(
     nickname: str | None = None,
     name_said_before: bool = False,
     feeling: str | None = None,
-    check: Check | None = None,
     chat_text: bool = False,
 ) -> Repaired:
     """Everything wrong with a reply that can be fixed without asking again, and the client's
-    offer when they said yes to Mani's check (`confirmed`). `check` is a check stored this turn, whose
-    parts are sent in their order in place of the reply's text. `chat_text` is Mani's own text before a
+    offer when they said yes to Mani's check (`confirmed`). `chat_text` is Mani's own text before a
     framework, which goes out with the model's own line breaks and none added (muhammad, 2026-10-26).
 
     The implementation this replaces answered each of these by re-calling the provider,
@@ -324,7 +309,7 @@ def apply(
     """
     notes: list[str] = []
 
-    text, leaked = strip_script_leakage((check_text(check) if check else reply.text).strip())
+    text, leaked = strip_script_leakage(reply.text.strip())
     if leaked:
         notes.append(f"stripped script metadata: {', '.join(leaked)}")
     spoken = without_internal_words(text)
@@ -355,31 +340,18 @@ def apply(
             prompts = offer_buttons(framework_id, explained=False)
 
     # The options for answering the question go on a line of their own under it. They are the model's
-    # words in a field of their own, so the model has to write them, and code owns where they go. A
-    # check or an offer is the client's order and carries none.
+    # words in a field of their own, so the model has to write them, and code owns where they go. An
+    # offer is the client's order and carries none.
     options = _sentence(reply.options, "?")
-    if options and chat_text and check is None and not prompts:
+    if options and chat_text and not prompts:
         text = f"{text}\n\n{options}"
 
     title = clean_title(reply.title) if wants_title else None
-
-    # Case and spacing are normalized before the check because a model reading a table of
-    # names returns "Mirror and ask" far more often than it returns something off-list, and
-    # dropping those would starve the anti-repetition loop this check exists to protect.
-    style = reply.style
-    if style is not None:
-        shape = style.shape.strip().lower()
-        if shape not in SHAPES:
-            notes.append(f"dropped an off-list response shape: {style.shape}")
-            style = None
-        else:
-            style = Style(shape=shape)
 
     return Repaired(
         text=text,
         prompts=prompts,
         title=title,
-        style=style,
         notes=notes,
         offer_dropped=offer_dropped,
     )

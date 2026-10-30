@@ -8,7 +8,7 @@ import uuid
 import zlib
 from dataclasses import dataclass, field
 
-from mani.chat import repairs
+from mani.chat import picture, repairs
 from mani.chat.techniques import OFFERING
 from mani.llm.schema import NextStage, StageUpdate
 from mani.models.rows import ENDING_STAGES, Framework
@@ -171,7 +171,8 @@ def start(
     framework: Framework, updates: list[StageUpdate] | None, report: NextStage | None,
 ) -> Walked:
     """The turn they say yes: the walk opens on the first stage, judged from what they have said, on
-    a cleared store. Nothing is stored for a later stage until the walk reaches it."""
+    a cleared store. Nothing is stored for a later stage until the walk reaches it: every stage is confirmed on its
+    own, one yes at a time (the client, 2026-10-29: confirming two stages in one reply skipped the yes to each)."""
     first = content_stages(framework)[0]
     entries, notes, unjudged = _reach(framework, {}, first, report)
     dropped = [f"dropped update for {u.stage}" for u in updates or []]
@@ -230,6 +231,72 @@ def advance(
     reached = following if following in stages else None
     stored, reach_notes, unjudged = _reach(framework, stored, reached, report)
     return Walked(stored, following, reached, notes + reach_notes, unjudged=unjudged)
+
+
+# Turns on one stage with nothing new before Mani offers to step out of the questions (muhammad, 2026-10-27).
+STALLS_TO_STEP_OUT = 2
+# What their message did that is new: talking it through is never a stall, the stage simply waits for it.
+_ADDED = frozenset({"adds", "corrects", "new_issue", "back"})
+
+
+def _words(entry: dict | None) -> dict:
+    return {k: v for k, v in (entry or {}).items() if k not in ("stalls", "exit_offered")}
+
+
+def after_turn(
+    before: dict[str, dict], entries: dict[str, dict], in_force: str, *,
+    moved: bool, shift: str | None, offered_exit: bool,
+) -> dict[str, dict]:
+    """The stage in force after a turn that stayed on it: one more stall when their message added nothing new, to
+    the picture or to the stage's own words, none when it did, and whether this reply offered to step out, which only
+    the next turn reads. A stage the walk left keeps none of it."""
+    if moved:
+        return entries
+    out = {stage: dict(entry) for stage, entry in entries.items()}
+    entry = _words(out.get(in_force))
+    progressed = shift in _ADDED or entry != _words(before.get(in_force))
+    stalls = 0 if progressed else (before.get(in_force) or {}).get("stalls", 0) + 1
+    if stalls:
+        entry["stalls"] = stalls
+    if offered_exit:
+        entry["exit_offered"] = True
+    if entry:
+        out[in_force] = entry
+    else:
+        out.pop(in_force, None)
+    return out
+
+
+def from_picture(
+    framework: Framework, entries: dict[str, dict], before: dict | None, after: dict | None, *, in_force: str | None,
+) -> tuple[dict[str, dict], list[str]]:
+    """The stages already passed, brought up to date with what the picture gained this turn: a new thought becomes
+    the words of a stage fed by thoughts (a deeper core first), a new feeling is added to the words of a stage fed
+    by feelings. Stages ahead are left alone; each is judged from the whole picture when the walk reaches it.
+    Logged by stage only."""
+    stages = content_stages(framework)
+    at = stages.index(in_force) if in_force in stages else 0
+    # A deeper core takes the thought stage before any other new thought: it is what the others lead to
+    # (muhammad, 2026-10-28).
+    deeper = picture.new_core(before, after)
+    thoughts = [deeper] if deeper else picture.added_beliefs(before, after)
+    feelings = picture.added_feelings(before, after)
+    synced = {stage: dict(entry) for stage, entry in entries.items()}
+    notes: list[str] = []
+    for stage in stages[:at]:
+        entry = synced.get(stage)
+        feeds = ((framework.stages or {}).get(stage) or {}).get("picture")
+        if not entry:
+            continue
+        if feeds == "thought" and thoughts:
+            entry["said"] = _short(thoughts[-1])
+        elif feeds == "feelings" and feelings:
+            said = (entry.get("said") or "").rstrip(" .")
+            entry["said"] = _short(f"{said}, and you feel {' and '.join(feelings)}" if said else f"you feel {' and '.join(feelings)}")
+        else:
+            continue
+        notes.append(f"{stage} updated from the picture")
+    return synced, notes
 
 
 def confirm_phrase(framework: Framework, stage: str, thread_id: uuid.UUID | str) -> str:
@@ -358,8 +425,9 @@ def next_line(framework: Framework, phase: str) -> str:
     else:
         moved = f"the walk reaches {following}: {reach_line(following)}"
     return (
-        f"If you answer agreed, answered or corrected, {moved} If not_yet, the walk stays: think aloud with "
-        f"them about this stage, with two or three possibilities from what they have said and a door left open. "
+        f"If you answer agreed, answered or corrected, {moved} If not_yet, the walk stays: answer what they said "
+        f"as you would in the chat, talk about anything new they brought in, then come back toward this stage "
+        f"from what they have said, in fresh words. Possibilities go in options only when options says so. "
         f"If stop, write one warm line asking what they would like to talk about."
     )
 

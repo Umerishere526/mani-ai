@@ -9,9 +9,7 @@ import pytest
 from mani.auth.jwt import Claims
 from mani.config import get_settings
 from mani.db import config_tables, llm_calls, messages, profiles, summaries, threads
-from mani.llm.schema import SHAPES
 from mani.models.rows import (
-    ResponseStyle,
     TechniqueOutcome,
     TechniqueState,
     TechniqueTried,
@@ -139,7 +137,6 @@ async def test_the_composed_read_returns_the_whole_turn(alice):
             thread_id=thread.id, framework_id="abcde",
             outcome=TechniqueOutcome.OFFERED, phase="offering", at_message_count=2),
         offer_frameworks=["abcde"],
-        style=ResponseStyle(shape="mirror and ask", voice="naming"),
     ))
     await summaries.upsert(
         alice, thread.id, ALICE, summary="Talked about work.",
@@ -153,7 +150,6 @@ async def test_the_composed_read_returns_the_whole_turn(alice):
     assert ctx.technique.framework_id == "abcde"
     assert ctx.technique.outcome == TechniqueOutcome.OFFERED
     assert ctx.techniques_offered == ["abcde"]
-    assert ctx.recent_styles[0].shape == "mirror and ask"
     assert ctx.summary.summary == "Talked about work."
     assert ctx.summary.techniques_tried[0].name == "abcde"
 
@@ -212,20 +208,6 @@ async def test_a_turn_keeps_its_halves_in_order(alice):
     ]
 
 
-async def test_the_style_window_keeps_only_the_recent_ones(alice):
-    """Cycles the real shapes rather than synthetic ones: the column is constrained to the
-    set the schema allows, so `shape-0` is no longer a value this table can hold."""
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
-    written = [SHAPES[n % len(SHAPES)] for n in range(10)]
-    for shape in written:
-        await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates(
-            style=ResponseStyle(shape=shape, voice=None)))
-
-    ctx = await threads.load_turn_context(alice, thread.id, ALICE)
-    assert len(ctx.recent_styles) == threads.STYLE_WINDOW
-    assert ctx.recent_styles[-1].shape == written[-1]
-
-
 async def test_an_empty_update_touches_nothing(alice):
     thread, _ = await threads.create_or_reuse(alice, ALICE)
     await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates())
@@ -267,9 +249,11 @@ async def test_config_tables_are_readable_and_seeded(users):
         prompts = await config_tables.list_active_prompts(conn)
         frameworks = await config_tables.list_active_frameworks(conn)
 
-    # The two authored layers. The framework catalogue between them is generated from the
-    # registry at compose time, so it is deliberately not a row here.
-    assert {p.name for p in prompts} >= {"mani_base", "response_format"}
+    # The authored layers. The framework catalogue is generated from the registry at compose time, so it is
+    # deliberately not a row here, and the old path's layers are switched off by the seed (2026-10-27).
+    names = {p.name for p in prompts}
+    assert names >= {"voice", "conversation", "framework", "moments"}
+    assert not names & {"mani_base", "response_format", "style_directive", "style_supportive", "style_reflective"}
     assert "framework_index" not in {p.name for p in prompts}
     # ABCDE and Thought Reframe are offered; the others are paused, not removed.
     assert {f.id for f in frameworks} == {"abcde", "thought_reframe"}

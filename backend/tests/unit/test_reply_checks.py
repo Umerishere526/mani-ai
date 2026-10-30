@@ -12,22 +12,6 @@ def test_a_clean_question_stands():
     ) == []
 
 
-def test_a_check_missing_one_of_its_parts_is_counted():
-    """Spec 0006, AC-3: it is not stored and costs no second call."""
-    assert reply_checks.misses(
-        Reply(text="Do I have that right?"), offered=None, offer_dropped=None, needs_question=False,
-        last_mani_text=None, check_unusable=True,
-    ) == ["check unusable"]
-
-
-def test_a_check_from_a_reply_that_did_not_judge_the_heart_of_it_ready_is_counted():
-    """R33: it opens nothing, so their yes to it brings no offer; how often is measured."""
-    assert reply_checks.misses(
-        Reply(text="So that is it. Do I have that right?"), offered=None, offer_dropped=None,
-        needs_question=False, last_mani_text=None, check_without_ready=True,
-    ) == ["check without ready"]
-
-
 def test_a_comfort_with_no_question_is_missed_before_an_offer():
     comfort = Reply(text="It is okay to feel that way. I am here with you.")
     assert reply_checks.misses(
@@ -86,17 +70,12 @@ def test_a_different_question_after_an_answer_is_not_a_repeat():
     ) == []
 
 
-def test_a_draft_that_chose_a_shape_asking_nothing_is_not_missing_a_question():
-    """Whether someone only wants to be listened to is the model's reading, shown by its shape."""
-    from mani.llm.schema import Style
-
-    holding = Reply(text="That has been hard for you.", style=Style(shape="mirror and hold"))
-    asking = Reply(text="That has been hard for you.", style=Style(shape="mirror and ask"))
-    none = Reply(text="That has been hard for you.")
-    for draft, expected in ((holding, []), (asking, ["asks no question"]), (none, ["asks no question"])):
-        assert reply_checks.misses(
-            draft, offered=None, offer_dropped=None, needs_question=True, last_mani_text=None
-        ) == expected
+def test_a_draft_with_no_question_is_counted_when_one_was_needed():
+    """The reply shapes went with mani_base.md (2026-10-27), so no draft can declare that it asks nothing."""
+    draft = Reply(text="That has been hard for you.")
+    assert reply_checks.misses(draft, offered=None, offer_dropped=None, needs_question=True, last_mani_text=None) == [
+        "asks no question"]
+    assert reply_checks.misses(draft, offered=None, offer_dropped=None, needs_question=False, last_mani_text=None) == []
 
 
 def test_a_question_that_leaves_the_case_out_is_counted_and_one_that_carries_any_of_it_is_not():

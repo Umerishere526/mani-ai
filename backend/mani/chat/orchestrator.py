@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import body as body_route, context, converse, repairs, reply_checks, safety, understanding, walk
+from mani.chat import body as body_route, context, converse, picture, repairs, reply_checks, safety, understanding, walk
 from mani.chat.greeting import (
     EXPLAIN_LABELS,
     OPENERS,
@@ -33,7 +33,6 @@ from mani.models.rows import (
     Framework,
     Message,
     MessageRole,
-    ResponseStyle,
     SupportStyle,
     TechniqueOutcome,
     TechniqueState,
@@ -62,10 +61,12 @@ def _body_route(
     technique: TechniqueState | None,
     framework: Framework,
     area: str | None,
+    check: body_route.Check | None = None,
 ) -> tuple[repairs.Repaired, body_route.Step | None]:
     """The body check-in's turn: the client's script for the answer at this step. A tapped button decides
     by itself; a typed answer is the value the reply read from it. Anywhere an answer does not fit, the
-    reply stands as the model wrote it. `area` is the place the question before the first step asked about."""
+    reply stands as the model wrote it. `area` is the place the question before the first step asked about, and
+    `check` the place their feeling points to, asked about once they say yes to a check-in."""
     at = body_route.RETIRING if technique is None else technique.phase
     if tapped is not None and (decided := body_route.tapped_value(at, tapped.label, framework.stages)):
         value = decided
@@ -76,7 +77,7 @@ def _body_route(
         return fixed, None
     step = body_route.step(
         at, value, framework.stages,
-        physical_response=technique.physical_response if technique else None, area=area,
+        physical_response=technique.physical_response if technique else None, area=area, check=check,
     )
     if step is None:
         return dataclasses.replace(fixed, notes=fixed.notes + [f"ignored body {value} at {at}"]), None
@@ -110,10 +111,12 @@ def _walked(
     style: str,
     thread_id: uuid.UUID,
     feeling: str | None,
+    seen_before: dict | None = None,
+    seen_after: dict | None = None,
 ) -> tuple[repairs.Repaired, walk.Walked]:
-    """The walk's turn: what they said merged into the store, the step taken, and the reply that
-    opens the stage reached, from the reply's judgement of that stage in next_stage. Code decides all
-    three."""
+    """The walk's turn: what they said merged into the store, the stages already passed brought up to date with
+    what the picture of them gained (`seen_before` to `seen_after`), the step taken, and the reply that opens the
+    stage reached, from the reply's judgement of that stage in next_stage. Code decides all of it."""
     if start:
         walked = walk.start(framework, reply.stage_updates, reply.next_stage)
     else:
@@ -121,6 +124,8 @@ def _walked(
             framework, stored, reply.stage_updates, reply.stage_answer,
             in_force=in_force, report=reply.next_stage,
         )
+        synced, sync_notes = walk.from_picture(framework, walked.entries, seen_before, seen_after, in_force=in_force)
+        walked = dataclasses.replace(walked, entries=synced, notes=walked.notes + sync_notes)
     text, notes = walk.reply_text(
         framework, walked, text=fixed.text, style=style, thread_id=thread_id,
         feeling=feeling if start else None, options=reply.options,
@@ -294,19 +299,23 @@ async def _converse(
     client_message_id: uuid.UUID | str | None,
     settings,
     updates: threads.ThreadUpdates,
+    declined: Framework | None = None,
 ) -> Turn:
     """One turn of Mani's own conversation, when no framework, offer or check is open: the conversation
     prompt, the transcript and their message, and a note saying what the conversation cannot show. The
-    reply's text is what Mani says, its check included; code only decides whether a check is stored."""
+    reply's text is what Mani says, its check included; code only decides whether a check is stored, and,
+    after they stepped out of `declined`, whether asking for it again offers it with its buttons."""
     allowed = converse.check_allowed(ctx)
     system = composer.compose_conversation(
         config, ctx.profile, should_generate_title=wants_title,
         summary=ctx.summary if window.dropped else None, memory=ctx.memory,
     )
-    model, parameters, routing = composer.model_settings(config, "conversation")
+    model, parameters, routing = composer.model_settings(config)
     note = converse.note(
         conversation_style, allowed=allowed, due=understanding.ready(ctx.thread.understanding),
         wants_title=wants_title, understood=ctx.thread.understanding, recent_crisis=ctx.recent_crisis,
+        stepped_out_of=declined.name if declined else None, asked=converse.asked_before(history),
+        their_count=context.their_messages(ctx), latest=content,
     )
     call = await client.complete(
         [{"role": "system", "content": system.text}]
@@ -330,17 +339,22 @@ async def _converse(
     if guarded:
         logger.info("model reported a safety concern on thread %s: %s", ctx.thread.id, reply.crisis.reason)
     check_written = not guarded and converse.checked(reply, allowed=allowed)
+    their_messages = [m.content for m in history if m.role is MessageRole.USER] + [content]
     understood = (
         ctx.thread.understanding if guarded
-        else converse.understood_after(ctx.thread.understanding, reply, check_written=check_written)
+        else converse.understood_after(
+            ctx.thread.understanding, reply, check_written=check_written, their_messages=their_messages,
+        )
     )
     if understood != ctx.thread.understanding:
         updates.understanding = understood
     if check_written:
         updates.check_at_message_count = ctx.thread.message_count + 2
     logger.info(
-        "thread %s conversation turn: heart %s, check allowed %s, checked %s",
-        ctx.thread.id, reply.heart, allowed, check_written,
+        "thread %s conversation turn: shape %s, move %s, needs info %s, insight %s, asks %s, heart %s, check allowed %s, "
+        "checked %s, toward framework %s",
+        ctx.thread.id, reply.shape, reply.move, reply.needs_info, bool(reply.insight), "?" in reply.text, reply.heart,
+        allowed, check_written, bool(understood.get(converse.TOWARD)),
     )
 
     fixed = repairs.apply(
@@ -361,9 +375,18 @@ async def _converse(
         Reply(text=reply.text),
         offered=None,
         offer_dropped=None,
-        needs_question=not guarded and not check_written,
+        # A reflect reply lets them go on without a question (the client's review, 2026-10-29).
+        needs_question=not guarded and not check_written and reply.shape != "reflect",
         last_mani_text=next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None),
     )
+    if not guarded:
+        # The three shapes and no fixes before the framework (the client's test, 2026-10-29). Counted, never fixed.
+        checks += reply_checks.chat_misses(
+            reply.text, shape=reply.shape, window=reply.window, insight=reply.insight, move=reply.move,
+            asked_for_help=bool(reply.asked_for_help),
+            earlier_insights=ctx.thread.understanding.get(converse.INSIGHTS),
+            last_shape=(ctx.thread.understanding.get(converse.THINKING) or {}).get("shape"),
+        )
     if checks:
         logger.info("thread %s reply checks: %s", ctx.thread.id, "; ".join(checks))
     if not fixed.text.strip():
@@ -374,9 +397,21 @@ async def _converse(
             user_message="Mani had trouble responding. Please try again.",
         )
 
+    prompts: list[SmartPrompt] = []
+    if declined is not None and reply.back_to_framework and not guarded and not check_written:
+        # They asked to go back to the set they stepped out of: it is offered again, Try it starts it.
+        prompts = repairs.offer_buttons(declined.id, explained=True)
+        updates.retire_technique = False
+        updates.technique = TechniqueState(
+            thread_id=ctx.thread.id, framework_id=declined.id, outcome=TechniqueOutcome.OFFERED,
+            phase=OFFERING, at_message_count=ctx.thread.message_count + 2,
+        )
+        updates.offer_frameworks.append(declined.id)
+        updates.reset_outcomes = True
     pair = await messages_db.create_pair(
         conn, ctx.thread.id, content, fixed.text,
         selected_prompt=tapped.label if tapped else None,
+        prompt_options=[p.model_dump(mode="json", exclude_none=True) for p in prompts] or None,
         client_message_id=client_message_id,
     )
     if fixed.title:
@@ -388,6 +423,7 @@ async def _converse(
         message_id=pair.mani_message_id,
         content=fixed.text,
         created_at=pair.created_at,
+        prompts=prompts,
         title=fixed.title or ctx.thread.title,
         crisis_detected=False,
         crisis_blocks_chat=settings.crisis_blocks_chat,
@@ -564,15 +600,11 @@ async def send(
     if not ctx.thread.conversation_style:
         # They typed past the greeting's style buttons, so the profile or the default speaks.
         logger.info("thread %s chose no style; composing in %s", ctx.thread.id, conversation_style)
-    system = composer.compose(
-        config,
-        ctx.profile,
-        style=conversation_style,
-        should_generate_title=wants_title,
-        offered=offered_now,
-        # Only once messages have left the window, so it never repeats what the model reads raw.
-        summary=ctx.summary if window.dropped else None,
-        memory=ctx.memory,
+    # The answer to a check or an offer, a concern, and the body check-in: the same voice as the chat. The summary
+    # only once messages have left the window, so it never repeats what the model reads raw.
+    system = composer.compose_moment(
+        config, ctx.profile, should_generate_title=wants_title, offered=offered_now,
+        summary=ctx.summary if window.dropped else None, memory=ctx.memory,
     )
     model, parameters, routing = composer.model_settings(config)
 
@@ -629,16 +661,23 @@ async def send(
         technique, outcome, retiring_framework_id,
         concern=assessment.blocks_framework, check_open=context.check_open(ctx),
     )
-    if moment is Moment.CHATTING and not declined_row:
-        # No framework, offer or check is open: Mani's own conversation, in the client's cadence.
+    if moment is Moment.CHATTING:
+        # No framework, offer or check is open: Mani's own conversation, in the client's cadence. After they
+        # stepped out of a framework, it can be offered again when they ask for it.
         return await _converse(
             conn, ctx, for_model=for_model, content=content, tapped=tapped, history=history, window=window,
             config=config, conversation_style=conversation_style, wants_title=wants_title,
             client_message_id=client_message_id, settings=settings, updates=updates,
+            declined=config.registry.get(ctx.technique.framework_id) if declined_row else None,
+        )
+    if moment is Moment.IN_STAGES:
+        # A turn on a framework's stages speaks in the same voice as the chat; the stage arrives in [ctx].
+        system = composer.compose_framework(
+            config, ctx.profile, should_generate_title=wants_title,
+            summary=ctx.summary if window.dropped else None, memory=ctx.memory,
         )
     reply_shape = schema.reply_for(
         moment,
-        may_check=context.may_check(ctx),
         declined_row=declined_row,
         slots=repairs.slots_for(
             config.registry, conversation_style,
@@ -724,26 +763,22 @@ async def send(
         starting = technique.framework_id
         offered_now.append(technique.framework_id)
 
-    # Nothing a concern turn reports is kept, so what they understand stays as stored. Mani's check is
-    # stored, so the next turn reads their answer to it, only when the same reply judges the heart of it
-    # ready; its summary becomes the case (R33).
-    with_check = not guarded and starting is None and understanding.usable(reply.check)
-    heart_ready = reply.heart == understanding.READY
+    # Nothing a concern turn reports is kept, so what they understand stays as stored. Mani's check is made only
+    # in its own conversation (_converse); here the picture and the heart of it are merged.
     understood = ctx.thread.understanding
-    check_written = False
     if not guarded:
-        understood = understanding.merge(ctx.thread.understanding, reply.understanding_update, reply.heart)
-        check_written = with_check and heart_ready
-        if check_written:
-            understood = understanding.merge_check(understood, repairs.check_summary(reply.check))
+        understood = understanding.merge(ctx.thread.understanding, reply.picture, reply.heart)
+    if retiring_framework_id is not None:
+        # The framework that just finished worked through this reading. The next check waits for a fresh one, so
+        # Mani never checks again straight away on the case it has just finished.
+        understood = {key: value for key, value in understood.items() if key not in ("heart", converse.TOWARD)}
     if understood != ctx.thread.understanding:
         updates.understanding = understood
-    if check_written:
-        updates.check_at_message_count = ctx.thread.message_count + 2
-    # A clear yes to the check is the only way to an offer (spec 0006, AC-1, AC-4).
+    # A clear yes to the check is the only way to an offer (spec 0006, AC-1, AC-4). The framework is the solution
+    # (the client's test, 2026-10-29): the chat finds what they tell themselves even about something really
+    # happening, so a yes always brings the offer; it no longer turns the chat to helping.
     confirmed = (
-        moment is Moment.CHECK_OPEN and not guarded and starting is None
-        and reply.check_answer == "yes"
+        moment is Moment.CHECK_OPEN and not guarded and starting is None and reply.check_answer == "yes"
     )
 
     fixed = repairs.apply(
@@ -758,8 +793,9 @@ async def send(
         # The greeting says their name by design; the model's own replies count from there. The
         # greeting is the first message in view only while nothing has left the window.
         name_said_before=_name_said_before(ctx, history, window),
-        feeling=understood.get("feeling"),
-        check=reply.check if check_written else None,
+        # An empty offer slot is filled with the core belief they confirmed: the offer names the belief (the client's
+        # review, 2026-10-29), and the feeling only when no core is held.
+        feeling=picture.core(understood.get(picture.KEY)).get("belief") or understood.get("feeling"),
         # Mani's own text before a framework, which may carry an options line under it.
         chat_text=(
             moment in (Moment.CHATTING, Moment.CHECK_OPEN, Moment.OFFER_OPEN)
@@ -790,26 +826,34 @@ async def send(
             start=starting is not None, in_force=None if starting else technique.phase,
             style=conversation_style, thread_id=ctx.thread.id,
             feeling=understood.get("feeling"),
+            seen_before=ctx.thread.understanding.get(picture.KEY), seen_after=understood.get(picture.KEY),
         )
+        if not starting:
+            # Whether the questions are still helping: stalls counted when nothing new came, and an offer to step
+            # out remembered for their answer (muhammad, 2026-10-27).
+            fit = reply.framework_fit
+            if fit and fit != "helping":
+                logger.info("thread %s framework not helping: %s", ctx.thread.id, fit)
+            walked = dataclasses.replace(walked, entries=walk.after_turn(
+                stored_all.get(walking.id) or {}, walked.entries, technique.phase, moved=walked.phase != technique.phase,
+                shift=(understood.get(picture.KEY) or {}).get("shift"),
+                offered_exit=fit is not None and fit != "helping",
+            ))
         if walked.entries != (stored_all.get(walking.id) or {}):
             updates.stages_known = {**stored_all, walking.id: walked.entries}
-        if walked.phase == body_route.CHECK:
-            # The last stage was answered: the client's body check-in begins with its first step, asking
-            # about a place when what they said before the framework points to one.
-            check = body_route.check_for(_feelings(understood), walking.stages)
-            text, buttons = body_route.entry(fixed.text, walking.stages, check)
-            fixed = dataclasses.replace(
-                fixed, text=text, prompts=_prompts(buttons),
-                phase=body_route.CHECK if check else body_route.BODY,
-            )
+        if walked.phase == body_route.ASK:
+            # The last stage was answered: before any body check-in, they are asked whether they would like one
+            # (muhammad, 2026-10-27).
+            text, buttons = body_route.ask(fixed.text, walking.stages)
+            fixed = dataclasses.replace(fixed, text=text, prompts=_prompts(buttons), phase=body_route.ASK)
     if moment is Moment.BODY and not guarded:
         route = config.registry.get(technique.framework_id if technique else retiring_framework_id)
-        asked = (
-            body_route.check_for(_feelings(ctx.thread.understanding), route.stages)
-            if technique and technique.phase == body_route.CHECK else None
-        )
+        # The place their feeling points to: asked about on a yes to the check-in, and the place that question named.
+        pointed = body_route.check_for(_feelings(ctx.thread.understanding), route.stages)
         fixed, step = _body_route(
-            fixed, reply.body, reply.options, tapped, technique, route, asked.area if asked else None,
+            fixed, reply.body, reply.options, tapped, technique, route,
+            pointed.area if pointed and technique and technique.phase == body_route.CHECK else None,
+            check=pointed,
         )
         if step is not None:
             updates.physical_response = step.physical_response
@@ -824,11 +868,8 @@ async def send(
         reply,
         offered=offered,
         offer_dropped=fixed.offer_dropped,
-        # A written check asks in its own question, which is sent in place of the text.
-        needs_question=needs_question and not check_written,
+        needs_question=needs_question,
         last_mani_text=last_mani_text,
-        check_unusable=not guarded and reply.check is not None and not understanding.usable(reply.check),
-        check_without_ready=with_check and not heart_ready,
         reach_unjudged=walked is not None and walked.unjudged,
         case=_case_words(understood) if carries_case else None,
     )
@@ -894,8 +935,6 @@ async def send(
         if accepted_this_turn:
             updates.offer_frameworks.append(decided)
 
-    if fixed.style is not None:
-        updates.style = ResponseStyle(shape=fixed.style.shape)
     if fixed.title:
         updates.title = fixed.title
 

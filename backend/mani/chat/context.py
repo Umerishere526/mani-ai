@@ -12,7 +12,6 @@ from mani.llm.schema import Moment
 from mani.models.rows import (
     Framework,
     Message,
-    MessageRole,
     TechniqueOutcome,
     TechniqueState,
 )
@@ -26,7 +25,6 @@ COOLDOWN_AFTER_DECLINE = 6
 CHECK_FROM = 5
 # The greeting, the style they tapped, and that style's opener.
 OPENING_MESSAGES = 3
-COOLDOWN_AFTER_COMPLETE = 45
 
 # The default when neither the conversation nor the profile has chosen a style yet.
 # `conversation_style` is set per-thread by PATCH /v1/threads/{id} and wins over
@@ -57,14 +55,6 @@ def disarm(text: str) -> str:
     the next twenty turns. Only the brackets change; what they wrote is still sent.
     """
     return _CTX_MARKER.sub(lambda m: f"({m.group(1)}ctx)", text)
-
-
-def cooldown_for(outcome: TechniqueOutcome) -> int:
-    return (
-        COOLDOWN_AFTER_COMPLETE
-        if outcome is TechniqueOutcome.ACCEPTED
-        else COOLDOWN_AFTER_DECLINE
-    )
 
 
 def their_messages(ctx: TurnContext) -> int:
@@ -102,8 +92,14 @@ def may_check(ctx: TurnContext) -> bool:
     count, at = ctx.thread.message_count, ctx.thread.check_at_message_count
     if at is not None and count - at < COOLDOWN_AFTER_DECLINE:
         return False
+    # Only a declined offer holds the next check back. A finished framework does not (muhammad, 2026-10-27): its
+    # reading is cleared when it finishes, so a new check needs a fresh understanding first.
     technique = ctx.technique
-    return technique is None or count - technique.at_message_count >= cooldown_for(technique.outcome)
+    return (
+        technique is None
+        or technique.outcome is not TechniqueOutcome.DECLINED
+        or count - technique.at_message_count >= COOLDOWN_AFTER_DECLINE
+    )
 
 
 def moment(
@@ -149,13 +145,13 @@ def resolve_style(ctx: TurnContext) -> str:
 # the meanings lived in response_format.md (2026-10-08).
 _MEANING: dict[str, str | dict[str, str]] = {
     "conversation_style": (
-        "the style they chose, for the whole conversation. conversation_style in your instructions "
-        "says what each reply is trying to do in it."
+        "the style they chose, for the whole conversation. Your instructions say what each reply is "
+        "trying to do in it."
     ),
     "conversation_phase": {
         "understanding": (
             "nothing has been offered yet. Follow their story in order toward the heart of it: what "
-            "happened, what it means to them, what they want and what is stopping them."
+            "happened, what it means to them, what it says about them, down to the core and the feeling underneath."
         ),
         "framework": "the questions are running, so follow the stage.",
         "talking": (
@@ -170,30 +166,27 @@ _MEANING: dict[str, str | dict[str, str]] = {
         ),
     },
     "check": {
-        "may_check": (
-            "when heart is ready in this reply, check your understanding with them by filling check, from "
-            "their words only. Otherwise leave check empty and keep going toward the heart of it."
-        ),
-        "due": (
-            "your last reply judged the heart of it ready. Check your understanding with them now by "
-            "filling check, from their words only, unless their message shows it is not ready after all."
-        ),
         "open": (
-            "your last reply checked your understanding. Set check_answer. A clear yes always brings the "
-            "offer: fill offer for the set closest to what they confirmed, even when its Use it when "
-            "does not fit exactly. Anything else, follow what they said toward the root of it."
+            "your last reply gave your insight into the core and asked whether it captures what they feel. Set "
+            "check_answer. A clear yes always brings the offer: fill offer for the set closest to "
+            "what they confirmed, even when its Use it when does not fit exactly; when something really happening is "
+            "part of it, the set looks at what they tell themselves about it. Anything else, follow what they said "
+            "toward the root of it, without offering fixes: the set of questions is the way to work it out."
         ),
     },
-    "understanding": (
-        "the feelings they named, kept for you, and where your last reply judged the heart of it. In "
-        "understanding_update report only the feelings their message adds."
+    "picture": (
+        "your picture of them so far, from the whole conversation, the same in the chat and in a framework: what "
+        "is happening, what they feel and about what, what they tell themselves, what they say is really "
+        "happening, what they want, what is in the way, risks, the situation in focus, and the core with the feeling "
+        "underneath, as you read it. Build on it and never "
+        "ask for what it holds. In picture, report only what their message adds or changes."
     ),
+    "understanding": "the feelings they named, kept for you, and where your last reply judged the heart of it.",
     "their_case": (
         "what you and they found before the questions began: the feelings they named and the case they "
-        "confirmed, the conflict, what they want and what is stopping them. Every question you ask and every "
-        "possibility you offer is about this case and the feeling underneath it, never generic. Never ask them again for "
-        "anything in it: say it back and build on it. In understanding_update report only the feelings their "
-        "message adds."
+        "confirmed, the core of it and the feeling underneath. Every question you ask and every "
+        "possibility you offer is about this core and the feeling underneath it, never generic. Never ask them again for "
+        "anything in it: say it back and build on it."
     ),
     "since_last": "how many messages have passed since the last offer.",
     "this_thread": (
@@ -216,7 +209,6 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "and slowly, and do not mention it unless they do."
         ),
     },
-    "recent_styles": "the shapes of your last few replies. A shape may come back.",
     "framework_starting": {
         "yes": "they just said yes, so the walk reaches its first stage: next says what your text is for.",
     },
@@ -235,7 +227,29 @@ _MEANING: dict[str, str | dict[str, str]] = {
         "force from their message."
     ),
     "landed_on": "what they said for the last of the questions, in their words: where they ended up.",
+    "not_helping": {
+        "stalled": (
+            "two turns on this stage have brought nothing new: the questions have stopped helping. In your own words, "
+            "offer to step out of them and help with what they need in the conversation instead, and set "
+            "framework_fit. Do not ask this stage's question again."
+        ),
+        "situation": (
+            "what they describe is really happening, not a thought to question. Say so plainly, offer in your own "
+            "words to step out of the questions and help with it in the conversation, and set framework_fit to "
+            "real_not_belief."
+        ),
+    },
+    "exit_offered": {
+        "yes": (
+            "your last reply offered to step out of the questions. If they agree, report stop and go on with them in "
+            "your text. If they want to carry on, carry on with the stage."
+        ),
+    },
     "body_step": {
+        body.ASK: (
+            "they were asked whether they would like to check in with their body, with Yes and Not right now. In "
+            "body report yes or no, pain, or unclear. Code sends what follows."
+        ),
         body.CHECK: (
             "they were asked whether a feeling they named earlier is still felt in the place Mani named, with Yes "
             "and No. In body report yes or no; a place they name instead, none for no tension, pain, or unclear "
@@ -271,8 +285,8 @@ _MEANING: dict[str, str | dict[str, str]] = {
 # What a stage that carries the case asks of its question: the case they confirmed, said back in their words,
 # whatever the framework (a stage says so with `carries_case: true`).
 CARRIES_CASE = (
-    "their_case is in this question, in their words: what they feel, the conflict, what they want and what is "
-    "stopping them. Fit as much as the style allows, never a list, never anything they did not say."
+    "their_case is in this question, in their words: the core and how they feel, the feeling underneath included "
+    "once they accepted it. Fit as much as the style allows, never a list, never anything they did not say."
 )
 
 
@@ -314,9 +328,7 @@ def build(
     view - nothing new is fetched for it.
     """
     technique = ctx.technique
-    # Named first because every stage_ask and offer_ask below is resolved from it, and named
-    # `conversation_style` rather than `style` because `recent_styles` three lines down means
-    # the response shape, which is a different thing entirely.
+    # Named first because every stage_ask and offer_ask below is resolved from it.
     lines: list[str] = _line("conversation_style", resolve_style(ctx))
     if safety_concern:
         # The deterministic screen heard something that may be a risk. The framework waits:
@@ -338,6 +350,8 @@ def build(
     else:
         phase = "talking"
     lines += _line("conversation_phase", phase)
+    if seen := understanding.picture_line(ctx.thread.understanding):
+        lines += _line("picture", seen)
     understood = understanding.render(ctx.thread.understanding)
     if understood:
         # Once a framework is running or about to start, the findings are the case its questions are about.
@@ -353,13 +367,9 @@ def build(
         if landed_on:
             lines += _line("landed_on", disarm(landed_on))
 
-    # Told to the model as the reply shape enforces it: a check only where the shape has the field,
-    # and an offer only on the answer to one (spec 0006).
-    if not safety_concern:
-        if check_open(ctx):
-            lines += _line("check", "open")
-        elif may_check(ctx):
-            lines += _line("check", "due" if understanding.ready(ctx.thread.understanding) else "may_check")
+    # An offer only on the answer to Mani's check (spec 0006). The check itself is made in Mani's own conversation.
+    if not safety_concern and check_open(ctx):
+        lines += _line("check", "open")
     if technique is not None:
         since_last = ctx.thread.message_count - technique.at_message_count
         lines += _line("since_last", since_last)
@@ -373,10 +383,6 @@ def build(
             for t in ctx.summary.techniques_tried
         )
         lines += _line("history", tried)
-
-    if ctx.recent_styles:
-        styles = " → ".join(s.shape for s in ctx.recent_styles)
-        lines += _line("recent_styles", styles)
 
     if running:
         lines += _running_lines(ctx, framework, offer_waiting=offer_waiting, starting=starting)
@@ -410,6 +416,15 @@ def _running_lines(
         return lines
     known = technique.stages_known.get(framework.id) or {}
     lines += _line("stages_known", _stored(framework, known, technique.phase))
+    if technique.phase in walk.content_stages(framework):
+        in_force = known.get(technique.phase) or {}
+        kind = ((ctx.thread.understanding or {}).get("picture") or {}).get("problem_type")
+        if in_force.get("exit_offered"):
+            lines += _line("exit_offered", "yes")
+        elif kind == "situation":
+            lines += _line("not_helping", "situation")
+        elif in_force.get("stalls", 0) >= walk.STALLS_TO_STEP_OUT:
+            lines += _line("not_helping", "stalled")
     if technique.phase in walk.content_stages(framework):
         lines.append(f"next: {walk.next_line(framework, technique.phase)}")
     index = framework.phase_index(technique.phase)

@@ -29,7 +29,7 @@ def test_thought_reframe_stays_on_its_last_phase_until_they_believe_a_balanced_t
     parsed = frameworks["thought_reframe"]
     replacement = parsed["stages"]["replacement"]
     assert parsed["phases"] == ["offering", "thought", "painful", "feels_true", "alternative", "replacement"]
-    assert "they say they believe" in replacement["ready_when"] and "does not have to be positive" in replacement["ready_when"]
+    assert "say they believe" in replacement["ready_when"] and "Neither has to be positive" in replacement["ready_when"]
     assert "hopeful" not in replacement["ready_when"] + replacement["purpose"]
     assert any(branch.get("id") == "believe" for branch in replacement["if_unclear"])
     assert not any("positive language" in rule for rule in replacement["boundaries"])
@@ -47,9 +47,9 @@ def test_thought_reframe_has_the_clients_five_steps_by_name(frameworks):
 def test_thought_reframe_asks_what_makes_it_convincing_before_what_complicates_it(frameworks):
     """Step 3 has two parts, asked one at a time as ABCDE's D is, and nothing complicating it is an answer."""
     feels_true = frameworks["thought_reframe"]["stages"]["feels_true"]
-    assert "asks only what makes the thought convincing" in feels_true["reach"] and "gap complicates" in feels_true["reach"]
+    assert "asks only what makes the thought convincing" in feels_true["reach"] and "gap 'complicates'" in feels_true["reach"]
     assert [branch["id"] for branch in feels_true["if_unclear"]] == ["complicates"]
-    assert "Nothing complicating it is an answer" in feels_true["ready_when"]
+    assert "'Nothing complicates it' is a valid answer" in feels_true["ready_when"]
 
 
 def test_thought_reframe_content_is_not_about_one_situation(frameworks):
@@ -75,12 +75,15 @@ def test_the_stages_the_case_can_answer_are_judged_against_it(frameworks):
             assert "their_case" in frameworks[name]["stages"][stage]["reach"], (name, stage)
 
 
-def test_stage_a_says_back_what_happened_together_with_the_feeling_they_confirmed(frameworks):
-    """muhammad, 2026-10-22: A said back one example, and they had to say the feeling again."""
+def test_stage_a_says_back_only_what_happened(frameworks):
+    """muhammad, 2026-10-22: A said back one example, and they had to say it again. The client's review, 2026-10-29:
+    A then added a feeling and a meaning to the event; it says back only what happened, and feelings come in C."""
     reach = frameworks["abcde"]["stages"]["activate"]["reach"]
-    assert "together with the underlying feeling" in reach and "objective trigger" in reach
+    assert "says back only that situation" in reach and "observable trigger" in reach
+    # The client's review, 2026-10-29: A is the situation the core is about, which may be an ongoing pattern.
+    assert "may be an ongoing pattern" in reach and "never the frame" in reach
     thought = frameworks["thought_reframe"]["stages"]["thought"]["reach"]
-    assert "together with the underlying feeling" in thought, "Thought Reframe opens the same way"
+    assert "says back the thought and the underlying feeling they confirmed" in thought, "Thought Reframe opens the same way"
     from mani.chat import walk
 
     assert "unless this stage's reach names it" in walk.CONFIRM_ASK
@@ -108,7 +111,7 @@ def test_the_feeling_underneath_is_carried_into_every_stage_reply():
 def test_d_asks_what_supports_the_belief_and_what_might_challenge_it_as_two_questions(frameworks):
     """muhammad, 2026-10-21: each question has one purpose, never says what it is for and never leads."""
     dispute = frameworks["abcde"]["stages"]["dispute"]
-    assert "asks only what supports the belief" in dispute["reach"] and "gap challenge" in dispute["reach"]
+    assert "asks only what supports the belief" in dispute["reach"] and "gap 'challenge'" in dispute["reach"]
     assert {branch["id"] for branch in dispute["if_unclear"]} == {"information", "challenge"}
-    assert any("never says what it is for" in rule for rule in dispute["boundaries"])
-    assert any("lead them to a conclusion" in rule for rule in dispute["boundaries"])
+    assert any("never explains what it's for" in rule for rule in dispute["boundaries"])
+    assert any("steer them to a conclusion" in rule for rule in dispute["boundaries"])

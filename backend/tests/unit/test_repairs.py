@@ -5,7 +5,7 @@ import pytest
 
 from mani.chat import repairs
 from mani.chat.techniques import Registry
-from mani.llm.schema import Check, Moment, Offer, Reply, Style
+from mani.llm.schema import Moment, Offer, Reply
 from mani.models.rows import Framework
 from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
@@ -79,31 +79,11 @@ def test_a_title_is_ignored_when_none_was_asked_for(registry):
 
 
 def test_a_clean_reply_is_left_alone(registry):
-    clean = reply(style=Style(shape="mirror and ask"))
+    clean = reply()
     fixed = fix(registry, clean)
     assert fixed.notes == []
     assert fixed.text == clean.text
     assert fixed.prompts == []
-
-
-def test_a_style_the_model_reports_in_title_case_still_counts(registry):
-    """The shapes are taught in a table, so the model returns them capitalised as often as
-    not. Dropping those would starve the anti-repetition loop rather than protect it."""
-    titled = reply(style=Style(shape="Mirror And Ask"))
-    fixed = fix(registry, titled)
-    assert fixed.style == Style(shape="mirror and ask")
-    assert fixed.notes == []
-
-
-def test_an_off_list_shape_is_dropped_rather_than_failing_the_turn(registry):
-    """A value outside the set is a ValidationError if the schema types it as an enum, and
-    that costs a second provider call and then the person's message. It is only a self
-    report about a reply that is otherwise fine, so it is dropped and the reply stands."""
-    invented = reply(style=Style(shape="vibes"))
-    fixed = fix(registry, invented)
-    assert fixed.style is None
-    assert fixed.text == "Thank you for telling me."
-    assert fixed.notes
 
 
 @pytest.mark.parametrize("style", ["directive", "supportive", "reflective"])
@@ -120,9 +100,9 @@ def test_presence_reaches_the_person_in_any_style(registry, style):
 
 SUPPORTIVE_OFFER = (
     "Feeling overwhelmed can make you question how well you're handling things.\n"
-    "There's a framework called ABCDE that can help you understand the thoughts behind feeling used "
-    "by your coworker, see whether those thoughts are really true, and find a more helpful way to "
-    "think about what's happening.\n\nWould you like to try it?"
+    "There's a framework called ABCDE that can help you explore the belief that your coworker only "
+    "sees you as useful, look at what's supporting that belief, and find a more balanced way to think "
+    "about it.\n\nWould you like to try it?"
 )
 
 
@@ -140,7 +120,7 @@ def test_an_offer_is_the_clients_template_word_for_word_with_only_the_slots_fill
         Registry([client_abcde]),
         offering(
             lead_line="Feeling overwhelmed can make you question how well you're handling things.",
-            going_through="feeling used by your coworker",
+            going_through="your coworker only sees you as useful",
         ),
     )
     assert fixed.text == SUPPORTIVE_OFFER
@@ -153,12 +133,12 @@ def test_an_offer_is_the_clients_template_word_for_word_with_only_the_slots_fill
 
 def test_a_slot_loses_its_quotes_and_trailing_punctuation_and_keeps_its_case(client_abcde):
     fixed = yes_to_the_check(
-        Registry([client_abcde]), offering(going_through='"Feeling used by Sam."'),
+        Registry([client_abcde]), offering(going_through='"Sam only sees me as useful."'),
         conversation_style="directive",
     )
     assert fixed.text == (
-        "There's a framework called ABCDE that helps you identify the thoughts behind Feeling used by "
-        "Sam, question whether they're true, and replace them with more realistic ones."
+        "There's a framework called ABCDE that helps you look at the belief that Sam only sees me as "
+        "useful, what supports it, and whether there's a more balanced way to see it."
         "\n\nWould you like to try it?"
     )
 
@@ -193,9 +173,9 @@ def test_an_empty_going_through_is_filled_from_the_feeling_they_named(client_abc
     nor when the yes turn's reply forgot the offer field altogether."""
     for model_reply in (offering(going_through=" "), reply(text="Model's own words.", heading_toward="abcde")):
         fixed = yes_to_the_check(
-            Registry([client_abcde]), model_reply, conversation_style="directive", feeling="your frustration",
+            Registry([client_abcde]), model_reply, conversation_style="directive", feeling="you always let people down",
         )
-        assert "the thoughts behind your frustration," in fixed.text, model_reply
+        assert "the belief that you always let people down," in fixed.text, model_reply
 
 
 def test_no_offer_without_a_yes_to_the_check_or_for_a_set_without_a_template(client_abcde):
@@ -228,7 +208,7 @@ def test_once_told_more_the_offer_comes_back_with_two_buttons():
 def test_the_slot_descriptions_are_the_clients_placeholders(client_abcde):
     directive = repairs.slots_for(Registry([client_abcde]), "directive", "abcde")
     assert directive.lead_line is None
-    assert directive.going_through.startswith("their feeling from understanding as a short noun phrase")
+    assert directive.going_through.startswith("the core belief they confirmed, in their words")
     assert directive.their_words == "what they said they are struggling with, in their words"
     assert repairs.slots_for(Registry([client_abcde]), "supportive", None).lead_line.startswith(
         "A short warm line"
@@ -276,32 +256,10 @@ def test_internal_words_never_reach_the_person(registry):
     assert any("internal" in note for note in fixed.notes)
 
 
-def test_the_model_is_never_asked_for_a_mirroring_voice():
-    """muhammad, 2026-09-24: mirroring is there but never forced. Asking for a voice every
-    turn, never the same twice, forced the rotation the prompt no longer asks for."""
-    style = Reply.model_json_schema()["$defs"]["Style"]
-    assert set(style["properties"]) == {"shape"}
-    assert "voice" not in Reply.model_fields["style"].description
-
-
-def test_a_stored_check_goes_out_in_the_clients_order_whatever_order_the_model_wrote(registry):
-    """Spec 0006, muhammad's choice of 2026-10-13: live, the check opened with its last part in
-    every run though the prompt asked for the order. The words are the model's; the order is code's
-    (since 2026-10-26 the conflict, what they want, what is stopping them, R33)."""
-    check = Check(
-        conflict="  You miss her deeply, but she puts others first", want="You want her to own how she made you feel.",
-        in_the_way="You know she will be selfish again.", question="Does that describe it",
-    )
-    model_text = reply(text="You know she will be selfish again. You miss her?")
-    fixed = fix(registry, model_text, check=check)
-    assert fixed.text == (
-        "You miss her deeply, but she puts others first. You want her to own how she made you feel. You know "
-        "she will be selfish again.\n\nDoes that describe it?"
-    )
-    assert fix(registry, model_text).text == model_text.text, "without a stored check the reply goes as written"
-    # Live, 2026-10-26: a part written to run on into the next went out as "You want to leave,. but".
-    flowing = check.model_copy(update={"want": "You want to leave,", "in_the_way": "but the team needs you"})
-    assert repairs.check_summary(flowing).endswith("You want to leave, but the team needs you.")
+def test_no_reply_reports_a_shape_any_more():
+    """muhammad, 2026-10-27: every turn speaks in voice.md, which has no table of reply shapes to pick from."""
+    assert "style" not in Reply.model_fields
+    assert "Style" not in Reply.model_json_schema().get("$defs", {})
 
 
 # Mani's replies from the client's way of communication document, each as the client lays it out.
@@ -342,6 +300,3 @@ def test_the_options_go_on_the_line_under_the_question_and_only_where_the_reply_
     )
     assert fix(registry, reply(text="Take your time."), chat_text=True).text == "Take your time."
     assert fix(registry, asked).text == asked.text, "a stage reply is not laid out and carries none"
-    checked = Check(problem="Your day was long.", core_issue="It all landed on you.",
-                    underlying_feeling="You may feel worn down.", question="Do I have that right")
-    assert "Is it something" not in fix(registry, asked, chat_text=True, check=checked).text

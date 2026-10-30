@@ -85,10 +85,12 @@ def test_the_offer_follows_the_clients_pattern_with_a_slot_for_their_situation(a
     for text in offer.values():
         assert "There's a framework called ABCDE" in text
         assert "<" in text and ">" in text and "?" not in text, "a slot to fill, and no question of its own"
-        # Spec 0005, AC-6: the feeling they named fills it; their worry only when they named none.
-        assert "<their feeling from understanding" in text and "only when they named no feeling>" in text
-    assert "helps you identify the thoughts behind <" in offer["directive"]
-    assert "question whether they're true, and replace them with more realistic ones." in offer["directive"]
+        # The client's review, 2026-10-29: the offer names the belief they confirmed, and never suggests Mani has
+        # already decided it is wrong.
+        assert "the belief that <the core belief they confirmed" in text
+        assert "really true" not in text and "whether they're true" not in text
+    assert "what supports it, and whether there's a more balanced way to see it." in offer["directive"]
+    assert "look at what's supporting that belief, and find a more balanced way to think about it." in offer["supportive"]
 
 
 def test_the_clients_offer_wording_reaches_the_person_but_never_the_framework_index(abcde):
@@ -162,11 +164,10 @@ def test_an_open_offer_turn_costs_less_prompt_than_before_the_structured_fields(
     registry = Registry([framework])
     prompts = {
         name: Prompt(id=uuid.uuid4(), name=name, content=parse_prompt(PROMPTS_DIR / f"{name}.md")["content"])
-        for name in ("mani_base", "response_format", "style_supportive")
+        for name in ("voice", "moments")
     }
-    system = composer.compose(
-        Config(prompts=prompts, registry=registry, loaded_at=time.monotonic()), None,
-        style="supportive", offered=["abcde"],
+    system = composer.compose_moment(
+        Config(prompts=prompts, registry=registry, loaded_at=time.monotonic()), None, offered=["abcde"],
     )
     now = dt.datetime.now(dt.UTC)
     thread = Thread(id=uuid.uuid4(), user_id=uuid.uuid4(), message_count=11, conversation_style="supportive",
@@ -177,7 +178,11 @@ def test_an_open_offer_turn_costs_less_prompt_than_before_the_structured_fields(
                           history=[], offer_waiting=True, yes_framework=framework)
     shape = reply_for(Moment.OFFER_OPEN, slots=repairs.slots_for(registry, "supportive", "abcde"))
 
-    total = len(system.text) + len(block) + len(json.dumps(shape.model_json_schema()))
+    # The voice is the prefix every turn shares, the chat's included, and is cached once for all of them
+    # (muhammad, 2026-10-27); what this turn adds after it is held to the old figure.
+    voice = len(prompts["voice"].content) + 2
+    total = len(system.text) - voice + len(block) + len(json.dumps(shape.model_json_schema()))
+    assert system.text.startswith(prompts["voice"].content)
     assert total < CHARACTERS_BEFORE_STRUCTURED_FIELDS
 
 

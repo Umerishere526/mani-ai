@@ -119,6 +119,9 @@ def _offering(registry, framework_id: str | None, key: str, style: str) -> str |
     return (((framework.stages or {}).get("offering") or {}).get(key) or {}).get(style) if framework else None
 
 
+A_INTERPRETS = re.compile(r"\b(?:feel|feels|felt|feeling|brought up|seems to have|lonel\w*|hurt)\b", re.IGNORECASE)
+
+
 def stage_flags(reply: str, trace: list[dict] | None, before: list[dict] | None, stages: dict, style: str) -> list[str]:
     """Inside a framework: a stage reached opens with its letter line, and a stage stored as known or
     possible is said back, never asked with the client's question (spec 0004)."""
@@ -133,6 +136,9 @@ def stage_flags(reply: str, trace: list[dict] | None, before: list[dict] | None,
     ask = (stage.get("ask") or {}).get(style)
     if asking["status"] in ("known", "possible") and ask and ask in reply:
         flags.append("asked a stage already known")
+    # A says back the event only; feelings and meanings come in B and C (the client's review, 2026-10-29).
+    if asking["stage"] == "activate" and A_INTERPRETS.search(reply):
+        flags.append("A says more than the event")
     return flags
 
 
@@ -194,6 +200,74 @@ def reached_flags(trace: list[dict] | None, expected: dict[str, str], seen: set[
     return []
 
 
+def picture_flags(understanding: dict | None, expect: dict) -> list[str]:
+    """What Mani's reading of them misses by the line `by` (approach D, muhammad 2026-10-29): each named part must be
+    there, and where the conversation gives words, hold one of them (any, case and spelling of a stem). The partner
+    chat said "am I settling" in its first message and the picture still held no core five messages later."""
+    if understanding is None:
+        return ["no understanding returned: turn AI_DEBUG_MODE on to score the picture"]
+    seen = understanding.get("picture") or {}
+    core = seen.get("core") or {}
+    held = {
+        "core": " ".join(filter(None, (core.get("belief"), core.get("feeling"), core.get("tension")))),
+        "underneath": " | ".join(u["feeling"] for u in seen.get("underneath") or []) + " " + (core.get("feeling") or ""),
+        "wants": seen.get("wants") or "",
+        "needs": seen.get("needs") or "",
+        "desire": seen.get("desire") or "",
+        "problem_type": seen.get("problem_type") or "",
+        "focus": seen.get("focus") or "",
+        "uncertain": " | ".join(seen.get("uncertain") or []),
+    }
+    flags = []
+    # A fear of missing something read as a wish for it (the client's review, 2026-10-29).
+    if said := [w for w in expect.get("desire_not") or [] if w.lower() in held["desire"].lower()]:
+        flags.append(f"picture desire states what is uncertain: {', '.join(said)}")
+    for part, want in expect.items():
+        if part in ("by", "desire_not"):
+            continue
+        have = held.get(part, "").strip()
+        if not have:
+            flags.append(f"picture has no {part}")
+        elif part == "problem_type" and have not in want:
+            flags.append(f"picture calls it {have}, expected {' or '.join(want)}")
+        elif isinstance(want, list) and part != "problem_type" and not any(w.lower() in have.lower() for w in want):
+            flags.append(f"picture {part} misses it: {have}")
+    return flags
+
+
+# The orchestrator's reply checks that are failures of the chat's shapes or its line against fixing (the client's
+# test, 2026-10-29), raised to flags so they count.
+CHAT_FLAGS = ("solution in chat", "small idea they did not ask for", "reply ties the feeling to nothing",
+              "insight shape without an insight", "insight is a solution")
+
+
+def shape_flags(exchange: "Exchange", wanted: list[str] | None) -> list[str]:
+    """The reply's shape against what the conversation expects on this line, and its chat checks raised to flags."""
+    flags = [c for c in exchange.checks or [] if any(c.startswith(f) or f in c for f in CHAT_FLAGS)]
+    shape = ((exchange.understanding or {}).get("thinking") or {}).get("shape")
+    if wanted and not exchange.offered and not exchange.checked and shape not in wanted:
+        flags.append(f"shape {shape}, expected {' or '.join(wanted)}")
+    return flags
+
+
+# A stage's letter line. Every stage is confirmed on its own, one yes at a time, so a reply carries at most one (the
+# client, 2026-10-29: Step 1 and Step 2 said back in one reply skipped the yes to each).
+LETTER_LINE = re.compile(r"\b[A-E] is for\b|\bStep [1-5] is\b")
+
+
+def framework_flags(exchange: "Exchange", after: dict, *, first: bool) -> list[str]:
+    """What a framework reply got wrong: words a stage must not frame itself around (`stage_not`, such as the
+    birthday in A when the core is about a pattern), and more than one stage in one reply."""
+    flags = []
+    asking = next((row["stage"] for row in exchange.trace or [] if row["asking"]), None)
+    for word in (after.get("stage_not") or {}).get(asking or "", []):
+        if word.lower() in exchange.reply.lower():
+            flags.append(f"{asking} framed around {word}")
+    if len(LETTER_LINE.findall(exchange.reply)) > 1:
+        flags.append("two stages in one reply")
+    return flags
+
+
 def conversations(groups: dict) -> dict[str, dict]:
     """Every conversation in scenarios.json by name, carrying its group's expectations under its own."""
     return {
@@ -252,9 +326,11 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
             exchanges.append(exchange)
             return exchange
 
+        shapes = conversation.get("shape_expect") or {}
         for number, text in enumerate(lines, start=1):
             said |= _words(text)
             on_line[number] = exchange = await say(text)
+            exchange.flags += shape_flags(exchange, shapes.get(str(number)))
             if exchange.offered:
                 exchange.flags.append("offer without a confirmed check")
             if not exchange.checked:
@@ -272,9 +348,10 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
                 break
             framework = answered.offered
             seen: set[str] = set()
-            for line in (after or {}).get("lines") or [TELL_ME_MORE_LABEL]:
+            for number, line in enumerate((after or {}).get("lines") or [TELL_ME_MORE_LABEL]):
                 reached = await say(line, told_more=line == TELL_ME_MORE_LABEL, framework_id=framework)
                 reached.flags += reached_flags(reached.trace, (after or {}).get("stages") or {}, seen)
+                reached.flags += framework_flags(reached, after or {}, first=number == 0)
             if after and after.get("answer") == "no":
                 keep = _offering(registry, framework, "keep_chatting", style)
                 declined = exchanges[exchanges.index(answered) + 1]
@@ -284,6 +361,11 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
         for number, flag in timing_flags(checked_at, len(lines), expect).items():
             if number in on_line:
                 on_line[number].flags.append(flag)
+        if wanted := conversation.get("picture_expect"):
+            by = wanted.get("by", len(lines))
+            judged = on_line.get(by) or (exchanges[-1] if exchanges else None)
+            if judged is not None:
+                judged.flags += picture_flags(judged.understanding, wanted)
         return exchanges
     finally:
         async with pool.as_admin() as conn:

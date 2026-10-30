@@ -13,22 +13,18 @@ from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.db import config_tables, pool
 from mani.errors import ErrorCategory, ServiceError
-from mani.models.rows import Prompt, SupportStyle
+from mani.models.rows import Prompt
 
 logger = logging.getLogger(__name__)
-
-
-def style_prompt(style: str) -> str:
-    """The prompt row that holds one conversation style."""
-    return f"style_{style}"
 
 
 # The layers a turn cannot be composed without. The implementation this replaces pushed
 # each layer only `if (prompt)`, so a prompt renamed or deactivated in the portal simply
 # vanished from the system prompt and Mani quietly changed personality.
-# The conversation prompt, two layers for a framework turn and one per style. The framework catalogue is generated from the
-# registry rather than stored as a prompt, so it is not listed here and cannot go missing.
-REQUIRED_PROMPTS = ("conversation", "mani_base", "response_format") + tuple(style_prompt(s) for s in SupportStyle)
+# Mani's voice, which carries all three styles, and the three parts read after it: the chat, a framework's stages,
+# and the moments in between. The framework catalogue is generated from the registry rather than stored as a prompt,
+# so it is not listed here and cannot go missing.
+REQUIRED_PROMPTS = ("voice", "conversation", "framework", "moments")
 
 # Used by particular paths rather than every turn, but still misconfiguration if absent.
 EXPECTED_PROMPTS = REQUIRED_PROMPTS + ("title_generation", "summarization")
@@ -81,6 +77,14 @@ async def _read() -> Config:
     if not frameworks:
         logger.warning("no active frameworks; technique offers will be refused")
     for framework in frameworks:
+        # A stage said back closes with one of these when Mani's own confirmation cannot be used. Without them the
+        # confirmation asks nothing, so it is refused here rather than sent.
+        if not framework.confirm_phrases:
+            raise ServiceError(
+                f"framework {framework.id} has no confirm_phrases; run scripts/seed.py",
+                ErrorCategory.CONFIG_ERROR,
+                user_message="Mani is not available right now.",
+            )
         # Code sends the body check-in's script for each step. A framework seeded without it would send
         # nothing at the end of its questions, so it is refused here rather than discovered mid-conversation.
         if missing := [s for s in BODY_STAGES if not (framework.stages.get(s) or {}).get("script")]:

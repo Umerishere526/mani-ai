@@ -17,8 +17,8 @@ the same change as the work.**
   `reasoning_effort` instead, so `mani/llm/chain.py` sends the sampling parameters an ordinary
   chat model takes only to models that accept them. A prompt row names its own effort in
   `model_parameters.reasoning_effort` and `mani/config.py` holds the default for the calls that have
-  no row of their own; `mani_base` is on `medium` (muhammad, 2026-10-22, for comprehension over the 2026-10-12 `low` that cut latency) and so is the exercise pick that
-  follows it, while `summarization` and `memory_fold` are on `high`. Effort is billed: measured against Azure,
+  no row of their own; every chat turn reads the effort of `voice`, on `low` (2026-10-27; `mani_base` was on `medium`
+  from 2026-10-22 until it was retired), while `summarization` and `memory_fold` are on `high`. Effort is billed: measured against Azure,
   `high` spent 26 reasoning tokens where `low` spent 0, about three times the cost of the same call. Every endpoint keeps `data_collection: deny`, so
   training use stays refused, and one company, OpenAI, processes the conversations.
 - Every call to OpenRouter carries the same providers, data policy and reasoning effort, from
@@ -31,8 +31,8 @@ the same change as the work.**
   (2026-10-07). Measured at high: 12.6 s for an average turn, 41 s for the longest. Not measured at
   low: the target is a median of 4 s and a slowest of 10 s, and `scripts/scenario_check.py` now prints each
   turn's time, calls and tokens (`admin.llm_calls.reasoning_tokens`, migration 018) to check it.
-- `mani_base.md` and `response_format.md` are YAML rules rather than prose (ADR-012): about 10,600 tokens
-  became 4,850. The Framework Index and the per-framework rules are not restructured yet.
+- Every turn's prompt is prose read after `voice.md` (`conversation.md`, `framework.md` or `moments.md`). The YAML
+  rules of ADR-012 (`mani_base.md`, `response_format.md`, the style files) were retired on 2026-10-27.
 - Web and mobile do not call this API yet; they run on placeholder data.
 
 ## What the service does
@@ -46,13 +46,16 @@ the same change as the work.**
      the thread with no model call. An indirect one (including passive ideation and "pills in my hand")
      is a concern: it suspends frameworks and offers without locking.
   2. Which framework fits, and whether one fits yet, is the model's call from the Framework Index. Code owns only when an offer may come (on the answer to Mani's check, `context.check_open`, `context.may_check`) and the safety screen.
-  3. `composer.py` builds the system prompt with the one style file the thread chose, and `context.py`
-     builds the `[ctx]` block: style, offer timing, the stage in progress, what is stored for each stage
+  3. `composer.py` builds the system prompt: `voice.md` and `conversation.md` for Mani's own conversation
+     (`_converse`), `voice.md` and `framework.md` for a framework's stages, and `voice.md` and `moments.md` with
+     the Framework Index for the turns in between (the answer to a check, the offer, the body check-in, a safety
+     concern). `context.py` builds the `[ctx]` block for every turn but the chat's own: style, offer timing, the stage in progress, what is stored for each stage
      and what this reply's text is for. Nothing in code classifies what the person said: whether a reply is vague, a correction or
-     a wish only to be listened to is the model's reading (`response_format.md`, reasoning).
+     a wish only to be listened to is the model's reading.
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, the answers
-     that decide the moment (`check_answer`, `offer_answer`, the stage fields), then `text`, then `understanding_update`,
-     `heading_toward`, `style`, `check`, `offer`; on the answer to a check, `heading_toward` and `offer` come before `text`.
+     that decide the moment (`check_answer`, `offer_answer`, the stage fields), then `text`, then `picture`,
+     `heading_toward`, `offer`; on the answer to a check, `heading_toward` and `offer` come before `text`.
+     Mani's own conversation replies in `ConversationReply` (text first) instead.
      The order is deliberate: with the reading of the person written first, the reply came out as a case note (2026-10-13). Its shape is picked from the database for the
      turn's moment (`context.moment`, `schema.reply_for`): the offer's slots only while an offer may be made,
      `offer_answer` only while one is open or was declined, `body` only on the body route.
@@ -72,12 +75,13 @@ the same change as the work.**
   is asked). An offer comes only on a clear yes to Mani's check of its understanding, which may come from
   the person's second message, in every style (spec 0006). The shared body check-in comes from `content/prompts/somatic.md`
   and is the client's document "SOMATIC SECTION OF MANI" (2026-10-16), sent word for word in one voice (muhammad,
-  2026-10-22). **The body check-in is the client's six steps, owned by code (`mani/chat/body.py`):** Step 1
-  straight after the framework's last stage, with Chest, Stomach, Head, Somewhere Else and No Tension (muhammad,
-  2026-10-22 later: the question that asked first was removed, and No Tension is the way out), one of the nine
+  2026-10-22). **The body check-in is the client's six steps, owned by code (`mani/chat/body.py`):** after the
+  framework's last stage Mani asks whether they would like to check in with their body (Yes / Not right now, phase
+  `somatic_ask`; muhammad, 2026-10-27, see Decisions in force), then Step 1 with Chest, Stomach, Head, Somewhere Else
+  and No Tension (No Tension is the way out), one of the nine
   exercises sent whole with the check for change (Feel Better / Feel the Same / Feel Worse), the fixed reply, the
   overall question (Yes, It Helped / Somewhat / No, Not Really), and Keep Chatting, Go to Library and Finish for Now.
-  The phases are `somatic_check` (only when a place is asked about, see the decision below), `somatic_body`,
+  The phases are `somatic_ask`, `somatic_check` (only when a place is asked about, see the decision below), `somatic_body`,
   `somatic_practice`, `somatic_effect` and `somatic_closing`;
   the last is final, so the turn after it retires the run. Taps decide by their label; a typed answer is the `body`
   value the reply read, valid only at the step that accepts it, and `unclear` re-asks with the same buttons and never
@@ -130,6 +134,134 @@ the same change as the work.**
 
 ## Decisions in force
 
+- **A reply follows Lolly's cadence, and the check is her barometer.** Because the 2026-10-29 meeting
+  ([message](../docs/client/messages/2026-10-29-meeting-cadence-and-role-plays.md), R41 to R48) gave the shape in
+  her words: acknowledge, open the window (from them to the situation and the challenge), insight, ask; never
+  summarise, never show the notes. `voice.md` says so, adds "I don't know" (situation or yourself?) and two feelings
+  (which is more pervasive, or both?), and makes Directive about the challenge and what they can control. The
+  summary-style check in `conversation.md` is now `# The barometer`: the insight into the core, then "Do you want to
+  work through it with a framework?" with why it fits; for something really happening, whether they want to work
+  out what to do. A yes still brings the client's offer (Try it / Tell me more / Keep chatting), which names the
+  set; agreeing but wanting to keep talking is followed, not treated as a miss (`moments.md`, the check's [ctx]
+  line, `check_answer`). Test: `test_mani_follows_lollys_cadence_and_checks_by_her_barometer`.
+- **Mani runs the chat like a therapist runs a session, with Lolly's role-played session as its example.**
+  Because three days of rules on `feat/identify-the-connection` did not change the shape of the replies: the model
+  copied the mirror-then-question turns of the two ChatGPT conversations at the end of `voice.md` over every rule
+  against them. That branch was deleted and this one started from `feat/understand-then-help` (muhammad,
+  2026-10-29). `voice.md` now asks for a session that is neutral, empathetic and always moving somewhere, ending on
+  a step they choose; never asking what can be inferred; a line of acknowledgment, then what Mani has, then one
+  plain therapist's question only when it needs to know something; concrete suggestions with the words to use. Its
+  example is Lolly's role play with manasa, lightly cleaned (one line of hers read "easy to do if they were
+  narcissistic" and is given as "easy if they weren't"); the ChatGPT conversations are gone, their tone kept as one
+  line. `conversation.md` holds muhammad's five principles: three questions before every reply (`need`,
+  `needs_info`, `insight`, filled before the text with a `plan` of where the conversation is heading), internal and
+  external dependencies (picture `dependencies`), suggestions aimed at what is in their control, a progression to a
+  step and to the framework, and simple questions only when needed. The note carries the last plan and no list of
+  questions to ask. Chat turns reason at `medium`. Tests: `test_mani_works_like_lollys_role_played_session`,
+  `test_the_conversation_prompt_holds_the_five_principles_and_nothing_pushes_a_question`,
+  `test_the_three_answers_and_the_plan_are_kept_and_the_note_carries_the_plan`,
+  `test_what_the_outcome_depends_on_is_kept_inside_or_outside_them`.
+
+- **Mani looks for the core, and the check is about the core alone.** Because in the 2026-10-28 weight-loss run
+  Mani named fear of failing as the heart of it, when her thoughts ("I've ruined everything", "I lack discipline",
+  "I'll never change") led to "I'm not capable of change", and shame under the guilt was never named; B then took the
+  first thought instead of that belief (muhammad, 2026-10-28). The conflict template (what they are torn between, what
+  they want, what is stopping them) forced every story into two pulls. Now the picture holds `core` (the belief the
+  other thoughts lead to, the feeling underneath as Mani's reading, and whether it is about them, someone else or the
+  situation), kept apart from the feelings they named. `conversation.md` adds the step "what it says about them" and
+  "Finding the core": follow the thoughts down, name the core and the feeling underneath as an invitation, then talk
+  about it rather than its effects. `heart` is exploring, `core_named`, ready (a stored `conflict_named` reads as
+  `core_named`). The check says the core alone (muhammad chose this over core plus want and what is in the way); code
+  stores it only when the reply's `core` is filled, and the confirmed case is that core with the feeling underneath.
+  ABCDE's B and Thought Reframe's thought start from the confirmed core, and a deeper core found mid-framework takes
+  that stage. A belief about themselves ("incapable") is never a feeling. Tests:
+  `test_the_core_is_kept_whole_replaced_when_seen_deeper_and_rendered_as_a_reading`,
+  `test_a_reply_is_stored_as_the_check_only_when_allowed_flagged_and_it_says_the_core`,
+  `test_a_stored_check_is_ready_and_its_core_becomes_the_case_with_the_feeling_underneath`,
+  `test_a_deeper_core_found_mid_framework_is_what_b_looks_at`,
+  `test_the_conversation_prompt_goes_down_to_the_core_and_checks_it_alone`.
+
+- **Every turn speaks in `voice.md`; the old path is gone.** Because the turns between the chat and a framework (the
+  answer to a check, the offer, the body check-in, a safety concern) still read `mani_base.md`, `response_format.md`
+  and a style file, so Mani sounded different at exactly the moments that decide what happens next (muhammad,
+  2026-10-27). Those turns are composed by `composer.compose_moment`: `voice.md`, then `moments.md` (what each of
+  those moments asks, the [ctx] block, the reasoning notes, staying in role), then the Framework Index; model and
+  effort come from the `voice` row. `mani_base.md`, `response_format.md` and the three style files are deleted;
+  `scripts/seed.py` switches their rows off by name (`RETIRED_PROMPTS`), so seed before deploying. The reply shapes
+  went with them: no reply reports a `style`, `[ctx]` carries no `recent_styles`, and `public.thread_response_styles`
+  is no longer written or read (the table stays, for the rows already in it). Tests:
+  `test_every_turn_starts_with_the_same_voice_so_it_caches_once`, `test_the_old_layers_are_gone_and_switched_off_on_seed`,
+  `test_the_moments_prompt_keeps_what_the_old_one_held_for_these_turns`, `test_config_tables_are_readable_and_seeded`.
+
+- **Mani asks before the body check-in.** Because the 2026-10-27 review found the check-in arriving unasked straight
+  after the last stage, and muhammad chose to ask permission first and tell Lolly (2026-10-27). This replaces
+  2026-10-22's "no question before Step 1". After the last stage the reply is Mani's one-sentence reflection, then
+  "Before we finish, would you like to take a moment to check in with your body and notice what you're feeling
+  physically?" with Yes and Not right now (`somatic_ask`, the first stage in `content/prompts/somatic.md`; the
+  wording is ours, not the client's document). Yes is Step 1, or the question about a place when their feeling points
+  to one; Not right now goes straight to the overall question, with no physical response recorded. Tests:
+  `test_after_the_last_stage_mani_asks_before_the_body_check_in`,
+  `test_answering_the_last_stage_asks_before_the_body_check_in_and_yes_opens_step_one`,
+  `test_not_right_now_skips_the_body_and_asks_whether_the_conversation_helped`.
+
+- **A framework that stops helping offers to step out, named by code and the reply together.** Because the
+  2026-10-27 review found Mani pressing on with a framework that no longer helped, and the coworker case questioned
+  something really happening as a belief (muhammad, 2026-10-27). Each stage reply reports `framework_fit` (helping,
+  confused, real_not_belief, already_balanced, disengaging); anything but helping is logged and its text offers to step
+  out. Code counts stalls on the stage in force (`walk.after_turn`): a turn that adds nothing to the picture or to the
+  stage's words is one, talking something through never is. Two stalls (`walk.STALLS_TO_STEP_OUT`) or a picture whose
+  kind of problem is a situation put `not_helping` in `[ctx]`; the turn after an offer reads `exit_offered`, and their
+  yes is `stop`, which ends the framework into the chat. D counts as answered when their words already hold both
+  sides. Tests: `test_a_turn_with_nothing_new_is_a_stall_and_talking_it_through_never_is`,
+  `test_ctx_says_when_the_questions_stopped_helping_and_when_stepping_out_was_offered`,
+  `test_two_turns_with_nothing_new_offer_to_step_out_and_a_yes_ends_the_framework`.
+
+- **Every conversation turns from understanding to helping, and code names the turn and the help move.** Because the
+  2026-10-27 review found people heard but not helped: question after question, no progression, the styles alike
+  in how they moved, and a direct request for help answered with another question (muhammad, 2026-10-27). The turn is
+  `helping` on the understanding record, set by `converse.turned` when the reply flags `asked_for_help` or
+  `frustrated`, their message added nothing new (`picture.quiet`), they answered in a few words three times running,
+  or they said yes to a check about something really happening; another situation or a finished framework clears
+  it. Once helping, the note gives each reply the move from `converse.HELP_MOVES` (kind of problem from the picture x
+  style), a risk to someone else first; for a thought the check comes as soon as it may, as the way to ABCDE or
+  Thought Reframe, and a yes to a check about a real situation brings help in the conversation, never a framework.
+  Ideas they choose from are allowed in the chat (Lolly's "we do not fix" motto of 2026-10-18 to be confirmed with
+  her, docs/client/requirements.md). The note also lists the questions already asked and, before helping, what is
+  still unknown. The three styles in `voice.md` are three ways of moving, not three tones. Tests in
+  `tests/unit/test_converse.py`, `test_a_yes_to_the_check_about_something_really_happening_brings_help_not_a_framework`,
+  `test_asking_for_help_turns_the_conversation_and_the_next_note_carries_the_help_move`.
+
+- **A framework's stages speak in the chat's voice; the framework gives the direction, never a script.** Because the
+  2026-10-27 review found frameworks mechanical: questions predetermined, the stage ruling over what the person said,
+  and the framework carrying on when it no longer helped (muhammad, 2026-10-27). A turn on a stage
+  (`Moment.IN_STAGES`) is composed by `composer.compose_framework` from `voice.md` and `framework.md`, never
+  `mani_base.md`, `response_format.md` or a style file; [ctx] still carries the stage. Its reply shape has no
+  reasoning and no reply shape to pick. Something new mid-framework is talked about on the stage in force (not_yet),
+  a stage already passed takes it from the picture with one short line saying so, the model question is a direction,
+  and another situation is a choice: on switching, stop ends the framework and the chat carries on in
+  `_converse`. Letter lines, confirm-once, when a stage is done, the options line and the body check-in stay code's.
+  Tests: `test_a_framework_stage_speaks_in_the_chats_voice`,
+  `test_switching_to_another_situation_ends_the_framework_and_the_chat_carries_on`,
+  `test_a_framework_turn_is_a_conversation_the_stage_only_gives_the_direction`.
+
+- **One picture of the person, shared by the chat and every framework, updated on every reply.** Because the chat's
+  understanding did not run during a framework and the framework's step store forgot everything outside its steps,
+  so a new feeling or belief mid-framework was lost and the two never informed each other (muhammad, 2026-10-27).
+  Every reply shape carries `picture` (`PictureUpdate`: situations, feelings with what they are about, beliefs marked
+  thought or happening, wants, what is in the way, risks, drop, focus, shift, problem type); `chat/picture.py` merges
+  it into `threads.understanding.picture`, and `understanding.merge` derives the feeling line from it. The chat note
+  and `[ctx]` both show it each turn. A framework stage names the part of the picture that feeds it (`picture:
+  thought` or `picture: feelings` in `abcde.md` and `thought_reframe.md`); `walk.from_picture` brings stages already
+  passed up to date when a turn adds a thought or a feeling, and stages ahead are judged from the whole picture when
+  reached. Tests: `test_picture.py`, `test_a_new_thought_or_feeling_brings_the_stages_already_passed_up_to_date`,
+  `test_the_framework_reads_the_chats_picture_and_a_new_thought_at_d_updates_b`.
+
+- **Only a declined offer holds the next check back; a finished framework does not, and its reading is cleared when it
+  finishes.** Because muhammad removed the 45-message wait after a finished framework, and without clearing the heart of
+  it Mani could check again at once on the case it had just worked through (2026-10-27). `context.may_check`,
+  `orchestrator.send` (retiring); `test_only_a_declined_offer_holds_the_next_check_back`,
+  `test_finishing_a_technique_retires_it_without_losing_the_turn`.
+
 - **An admin reads every person's conversations in full and takes part in none; each full read is logged.**
   Because the client and we review beta users' chats for their cadence, which a crisis-only browser could not show
   (muhammad, 2026-10-26; replaces the note "scope the conversation browser to unresolved crisis threads"). The list
@@ -140,15 +272,16 @@ the same change as the work.**
 - **Before a framework, Mani is its own conversation in the cadence of Lolly's two ChatGPT chats, and it overrides
   every older decision below about how the chat before a framework talks** (muhammad, 2026-10-26: "forget every
   previous decision in force, R, spec or document that stops MANI's cadence being exactly like the ChatGPT cadence the
-  client provided"). Whenever no framework, offer or check is open (`Moment.CHATTING`, not after a declined offer), the
-  turn goes to `orchestrator._converse`: the `conversation` prompt row (`content/prompts/conversation.md`: Lolly's
-  instruction, the order her chats follow, all three styles, both chats as examples), the transcript, their message
-  and a short note (style, what is understood, whether this reply may check), with the reply shape
-  `ConversationReply` (text first, then heart, the case's three parts, a checking flag, feelings, crisis, title; no
-  reasoning, no options, no [ctx] block). The check is Mani's own words; code stores it only when allowed (their 5th
-  message on, cooldowns, and an earlier reply judged `conflict_named` or `ready`), flagged, and with all three parts,
-  which become the case. The answer to a check, the offer, the framework walk, the body check-in and the safety screen
-  are unchanged. Journal: `mani-vault/Journal/story-before-guess-2026-10-26.md`.
+  client provided"). Whenever no framework, offer or check is open (`Moment.CHATTING`, including after they stepped out
+  of a framework, since 2026-10-27), the turn goes to `orchestrator._converse`: the `voice` prompt row
+  (`content/prompts/voice.md`: Lolly's instruction, how a reply sounds, all three styles, both chats as examples) and the
+  `conversation` row (how the chat moves, the heart of it, the check), the transcript, their message and a short note
+  (style, the picture of them, what is understood, whether this reply may check, the framework they stepped out of),
+  with the reply shape `ConversationReply` (text first, then heart, the case's three parts, a checking flag, picture,
+  back_to_framework, crisis, title; no reasoning, no options, no [ctx] block). The check is Mani's own words; code
+  stores it only when allowed (their 5th message on, cooldowns, and an earlier reply judged `conflict_named` or
+  `ready`), flagged, and with all three parts, which become the case. After stepping out of a framework, asking for it
+  again offers it with Try it (`back_to_framework`). Journal: `mani-vault/Journal/story-before-guess-2026-10-26.md`.
 
 - **Mani reads their whole message against what it already understands and says what is new and how it changes its
   reading, in their words** (muhammad, 2026-10-22; 2026-10-26, see "Each reply says what is new"). Because in his Directive chat about a boss who does not lead, Mani mirrored one clause ("your boss doesn't
@@ -229,21 +362,20 @@ the same change as the work.**
   at message 3 to 4 (baseline 2026-10-26, `chatgpt_reference`, Directive: "what does that mean to you?" three turns
   running in the boss chat, the friendship chat checked at message 6 before what she wants was known). Every chatting
   reply reports `heart` (`exploring`, `conflict_named`, `ready`), one closed value that must never grow back into a
-  record (muhammad's guardrail). The shape carries `check` only from `context.CHECK_FROM` (their 5th message), with
-  no framework live, no check waiting and the cooldowns passed; code stores a check only when the same reply says
-  `ready` (otherwise it logs `check without ready` and sends the text), and a `ready` reply that did not check makes
-  the next turn's `[ctx]` say `check: due`, so code names the turn (journal 2026-10-16: a step the model may take
-  never fires). The check is the model's own sentences, the conflict, what they want and what is stopping them,
-  then its question (`repairs.check_summary`, `check_text`); its summary is stored as the `case` the framework is
-  about. Code stores when the last check was made (`threads.check_at_message_count`, migration 023); the next turn
+  record (muhammad's guardrail). Since 2026-10-26 the check is made in Mani's own conversation (`_converse`): it may
+  come only from `context.CHECK_FROM` (their 5th message), with no framework live, no check waiting, the cooldowns
+  passed and an earlier reply that judged `conflict_named` or `ready` (`converse.check_allowed`); the note says so,
+  and a `ready` reply that did not check makes the next note say the check is due, so code names the turn (journal
+  2026-10-16: a step the model may take never fires). The check is the model's own text, flagged `checking`, with the
+  conflict, what they want and what is stopping them as fields; those become the `case` the framework is about. Code stores when the last check was made (`threads.check_at_message_count`, migration 023); the next turn
   is `Moment.CHECK_OPEN`, whose shape alone carries `check_answer`, `heading_toward` and `offer`. A clear yes makes
   that reply the client's offer; anything else keeps chatting, and the check is used either way. A new check waits
   `COOLDOWN_AFTER_DECLINE` after the last check and `cooldown_for(outcome)` after the last offer, and a set just
   finished may be offered again on a new confirmed check. Before that: the client rejected an offer on the first
   message (R1, 2026-10-12), and check-then-offer comes from the meeting of 2026-10-13 (R14), which stands.
-  `test_no_check_before_their_fifth_message_and_a_ready_heart_of_it_makes_the_check_due` and
+  `test_no_check_before_their_fifth_message_and_ctx_names_only_a_check_waiting_for_its_answer` and
   `test_a_check_is_answered_on_the_next_turn_only_and_then_waits_its_cooldown` in `tests/unit/test_chat_context.py`;
-  `test_a_check_comes_from_their_fifth_message_on_a_reply_that_judges_the_heart_of_it_ready`,
+  `test_a_check_comes_from_their_fifth_message_once_the_heart_of_it_was_agreed`,
   `test_a_check_from_a_reply_that_did_not_judge_the_heart_of_it_ready_opens_nothing` and
   `test_a_reply_that_judged_the_heart_of_it_ready_without_checking_makes_the_check_due` in
   `tests/integration/test_turn.py`. Measured once, 2026-10-26, Directive: the boss chat checked at their 6th message
@@ -275,7 +407,7 @@ the same change as the work.**
   no feeling (spec 0005). Tell me more is the client's longer `offering.explain[style]`; a no is `offering.keep_chatting[style]` with `their_words`. An offer that cannot
   be rendered is dropped, the model's text goes, and `offer unusable: <reason>` is logged.
   `tests/unit/test_repairs.py`, `tests/integration/test_turn.py`.
-- **One style file per thread, in the system prompt, written from the client's behavior lists** (muhammad,
+- **Superseded 2026-10-27 (every turn speaks in `voice.md`, see the decision above). One style file per thread, in the system prompt, written from the client's behavior lists** (muhammad,
   2026-10-12). Because the client separates the styles by what each reply is trying to do, and our own recipe per
   style, under shared rules that contradicted their examples, drifted from it (styles document, 2026-10-12).
   `content/prompts/style_directive.md`, `style_supportive.md` and `style_reflective.md` each hold that style's
@@ -441,7 +573,8 @@ the same change as the work.**
   `test_before_the_check_one_question_carries_its_own_possibilities_and_nothing_is_added_under_it`.
 - **Mani's voice is the shared shape in `mani_base.md` `how_you_talk` plus the chosen style's file; there is no
   shared example conversation** (muhammad, 2026-10-22, replacing "Mani talks like the client's sample conversation",
-  2026-10-13). Because all three styles read the same: one sample was copied in every style, one line blended
+  2026-10-13). Superseded on 2026-10-27: every turn now speaks from `voice.md`, which carries the client's two
+  example conversations, and `mani_base.md` is retired. Because all three styles read the same: one sample was copied in every style, one line blended
   Supportive and Reflective for everyone, and each style file was one sentence. The shape stays (what is new and the reading it changes, in their words, one question on its own line,
   three to six short sentences since 2026-10-26, no dashes), and
   each style file now says what its replies are for, in the client's own words, with what to do and avoid and the reply
@@ -481,7 +614,7 @@ the same change as the work.**
   `test_a_missing_stage_is_its_letter_line_then_manis_own_question_about_their_situation`.
 - **`[ctx]` explains itself.** Because a plain turn paid about 4,900 characters of key dictionary to explain a
   154 character block, and the two drifted apart (2026-10-09). Each line carries its meaning for this turn's value on the line under it
-  (`context._MEANING`), so `response_format.md` holds only what the block is. A test fails if a key is sent
+  (`context._MEANING`), so the prompt (`framework.md`, `moments.md`) says only what the block is. A test fails if a key is sent
   without one.
 - **An open offer is read from the database, not from the buttons on screen.** Because an offer can stay open
   with no buttons showing, and a typed yes to it then started nothing (2026-10-09). A yes to it starts it either

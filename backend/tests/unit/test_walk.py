@@ -163,9 +163,9 @@ def test_an_answer_that_cannot_be_true_of_the_stage_is_read_as_not_yet(abcde):
 
 
 def test_leaving_the_last_stage_enters_the_body_check_in(abcde):
-    """The question about a place comes first; the turn settles whether it is asked or Step 1 follows."""
+    """Whether they would like to check in with their body is asked first (muhammad, 2026-10-27)."""
     left = walk.advance(abcde, {}, [said("effective", "I don't know yet")], "answered", in_force="effective")
-    assert (left.phase, left.reached) == ("somatic_check", None)
+    assert (left.phase, left.reached) == ("somatic_ask", None)
 
 
 def render(abcde, walked, text="", style="supportive", feeling=None):
@@ -397,3 +397,93 @@ def test_the_possibilities_go_under_the_models_own_question_and_never_under_the_
     sent, _ = walk.reply_text(abcde, reached_missing, text="Anything.", style="directive", thread_id=THREAD,
                               feeling=None, options=options)
     assert options not in sent, "the client's own line is not followed by possibilities written for another question"
+
+
+def test_a_new_thought_or_feeling_brings_the_stages_already_passed_up_to_date(abcde):
+    """muhammad, 2026-10-27: at D they say "I think I'm just a bad brother". The framework stays on D, and B, already
+    passed, takes the new thought; a new feeling joins C. Stages ahead are judged when the walk reaches them."""
+    from mani.chat import picture
+    from mani.llm.schema import BeliefEntry, FeelingEntry, PictureUpdate
+
+    stored = {
+        "activate": {"said": "your brother is in hospital", "status": "done"},
+        "belief": {"said": "work will stop you leaving", "status": "done"},
+        "consequence": {"said": "you feel guilty.", "status": "done"},
+        "dispute": {"said": "the deadline", "status": "partial", "gap": "challenge"},
+    }
+    before = {"beliefs": [{"belief": "work will stop you leaving", "kind": "thought"}], "feelings": [{"feeling": "guilty"}]}
+    after = picture.merge(before, PictureUpdate(
+        beliefs=[BeliefEntry(belief="you're a bad brother", kind="thought"),
+                 BeliefEntry(belief="he cannot reach the bathroom alone", kind="happening")],
+        feelings=[FeelingEntry(feeling="ashamed")],
+    ))
+
+    synced, notes = walk.from_picture(abcde, stored, before, after, in_force="dispute")
+    assert synced["belief"] == {"said": "you're a bad brother", "status": "done"}
+    assert synced["consequence"] == {"said": "you feel guilty, and you feel ashamed", "status": "done"}
+    assert synced["activate"] == stored["activate"] and synced["dispute"] == stored["dispute"]
+    assert notes == ["belief updated from the picture", "consequence updated from the picture"]
+    assert stored["belief"]["said"] == "work will stop you leaving", "the stored entries are never changed in place"
+
+    # On B itself, the stage in force takes their words from the reply, so nothing before it changes.
+    assert walk.from_picture(abcde, stored, before, after, in_force="belief")[0] == stored
+    # A turn that adds nothing to the picture changes nothing.
+    assert walk.from_picture(abcde, stored, after, after, in_force="dispute") == (stored, [])
+
+
+def test_a_turn_with_nothing_new_is_a_stall_and_talking_it_through_never_is():
+    """muhammad, 2026-10-27: the framework steps out when it stops helping, and stays while they bring in something
+    new. A turn that adds to the picture or to the stage's own words resets the count; a move clears it all."""
+    before = {"dispute": {"said": "the deadline", "status": "partial", "gap": "challenge"}}
+    once = walk.after_turn(before, before, "dispute", moved=False, shift="nothing_new", offered_exit=False)
+    assert once["dispute"]["stalls"] == 1
+    twice = walk.after_turn(once, once, "dispute", moved=False, shift=None, offered_exit=True)
+    assert (twice["dispute"]["stalls"], twice["dispute"]["exit_offered"]) == (2, True)
+    talked = walk.after_turn(twice, twice, "dispute", moved=False, shift="adds", offered_exit=False)
+    assert talked["dispute"] == before["dispute"], "talking it through resets the stalls and the offer is read once"
+    newer = {"dispute": {"said": "nobody told me", "status": "partial", "gap": "challenge"}}
+    assert "stalls" not in walk.after_turn(once, newer, "dispute", moved=False, shift=None, offered_exit=False)["dispute"]
+    assert walk.after_turn(twice, before, "dispute", moved=True, shift=None, offered_exit=False) == before
+    assert walk.after_turn({}, {}, "belief", moved=False, shift="adds", offered_exit=False) == {}
+
+
+def test_a_deeper_core_found_mid_framework_is_what_b_looks_at(abcde):
+    """muhammad, 2026-10-28: B went to "I've ruined everything", the first thought, when what it led to was "I'm not
+    capable of change". A core seen deeper takes B ahead of any other new thought."""
+    from mani.chat import picture
+    from mani.llm.schema import BeliefEntry, CoreEntry, PictureUpdate
+
+    stored = {
+        "activate": {"said": "you missed a workout", "status": "done"},
+        "belief": {"said": "you've ruined everything", "status": "done"},
+        "consequence": {"said": "you feel guilty", "status": "done"},
+    }
+    before = {"beliefs": [{"belief": "you've ruined everything", "kind": "thought"}]}
+    after = picture.merge(before, PictureUpdate(
+        beliefs=[BeliefEntry(belief="other people manage it", kind="thought")],
+        core=CoreEntry(belief="you're not capable of change", feeling="shame", about="self"),
+    ))
+    synced, _ = walk.from_picture(abcde, stored, before, after, in_force="dispute")
+    assert synced["belief"]["said"] == "you're not capable of change"
+
+
+def test_the_stage_that_names_the_thought_starts_from_the_confirmed_core_in_both_frameworks():
+    import pathlib
+
+    from scripts.seed import parse_framework
+
+    frameworks = pathlib.Path(__file__).parents[2] / "content/frameworks"
+    b = parse_framework(frameworks / "abcde.md")["stages"]["belief"]["reach"]
+    thought = parse_framework(frameworks / "thought_reframe.md")["stages"]["thought"]["reach"]
+    assert "core belief" in b and "counts only when it is the core" in b
+    assert "core belief" in thought and "not the first thought" in thought
+
+
+def test_every_stage_is_confirmed_on_its_own_one_yes_at_a_time(abcde):
+    """The client, 2026-10-29: Step 1 and Step 2 were said back in one reply, which skipped the yes to each. The
+    start turn stores only the first stage, and a yes moves exactly one stage."""
+    started = walk.start(abcde, [said("belief", "you matter less to them")], judged("known", "the pattern"))
+    assert set(started.entries) == {"activate"} and "dropped update for belief" in started.notes
+    moved = walk.advance(abcde, started.entries, None, "agreed", in_force="activate",
+                         report=judged("known", "you matter less to them"))
+    assert moved.reached == "belief" and moved.phase == "belief"
