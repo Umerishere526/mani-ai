@@ -167,8 +167,8 @@ _MEANING: dict[str, str | dict[str, str]] = {
     },
     "check": {
         "open": (
-            "your last reply gave your insight into the core and asked whether they want to work through it with a "
-            "framework. Set check_answer. A clear yes always brings the offer: fill offer for the set closest to "
+            "your last reply gave your insight into the core and asked whether it captures what they feel. Set "
+            "check_answer. A clear yes always brings the offer: fill offer for the set closest to "
             "what they confirmed, even when its Use it when does not fit exactly; when something really happening is "
             "part of it, the set looks at what they tell themselves about it. Anything else, follow what they said "
             "toward the root of it, without offering fixes: the set of questions is the way to work it out."

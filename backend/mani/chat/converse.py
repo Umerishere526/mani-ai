@@ -33,6 +33,10 @@ QUIET_TO_HELP = 2
 # 2026-10-29: what do they need, does Mani need more, what insight is supported).
 PLAN = "plan"
 THINKING = "thinking"
+# The insights Mani already gave, latest last, so it deepens or moves on instead of reaching the same one from
+# another angle (the client's review, 2026-10-29).
+INSIGHTS = "insights"
+INSIGHTS_KEPT = 4
 # How many of Mani's own questions the note lists, so none is asked again.
 ASKED_LIMIT = 6
 _QUESTION = re.compile(r"[^.!?\n]*\?")
@@ -59,12 +63,27 @@ GAPS_FROM = 2
 # ("work", 2026-10-29, asked "what got in the way?" twice after they had said work).
 REPEAT_WORDS = 4
 _READINGS = (("wants", "what they want"), ("needs", "the need underneath"), ("desire", "what they long for"))
+# A short yes to an insight: understood, so the next reply moves on instead of explaining it again (the client's
+# review, 2026-10-29: "That fear makes sense..." restated the fear the person had just agreed to).
+AGREED = re.compile(
+    r"^\s*(?:yes|yeah|yep|yup|exactly|right|true|definitely|i think so|that's it|that's right|pretty much|kind of|"
+    r"sort of|maybe|mostly)\b[\s.!,]*(?:\w+[\s.!,]*){0,3}$",
+    re.IGNORECASE,
+)
 
 
-def gaps(seen: dict, *, heart: str | None, their_count: int, latest: str | None) -> list[str]:
+def gaps(
+    seen: dict, *, heart: str | None, their_count: int, latest: str | None, last_shape: str | None = None,
+) -> list[str]:
     """Lines for the note about what Mani's picture lacks or already holds, so the reply fills the one and never asks
-    for the other."""
+    for the other, and, when they just agreed with an insight, that it is understood."""
     lines: list[str] = []
+    if last_shape == "insight" and latest and AGREED.match(latest):
+        lines.append(
+            "They agreed with your insight: it is understood. Do not explain or restate it. Move forward: ask what it "
+            "means to them or what it stands for (what they fear losing, what it would cost them), or, when the note "
+            "allows, check the core."
+        )
     thoughts = [b["belief"] for b in seen.get("beliefs") or [] if b.get("kind") == "thought"]
     core_now = picture.core(seen).get("belief")
     if their_count >= GAPS_FROM and thoughts and not core_now:
@@ -164,7 +183,16 @@ def note(
     pressing = bool((understood or {}).get(TOWARD))
     if asked:
         lines.append("Questions you already asked, never to ask again in any words: " + " | ".join(asked))
-    lines += gaps(seen, heart=understanding.heart(understood or {}), their_count=their_count, latest=latest)
+    last_shape = ((understood or {}).get(THINKING) or {}).get("shape")
+    lines += gaps(seen, heart=understanding.heart(understood or {}), their_count=their_count, latest=latest,
+                  last_shape=last_shape)
+    if given := (understood or {}).get(INSIGHTS):
+        lines.append(
+            "Insights you already gave: " + " | ".join(given) + ". Never give another on the same theme from a new "
+            "angle: deepen one with something new they said, ask about what they do, or move forward."
+        )
+    if last_shape == "reflect":
+        lines.append("Your last reply asked nothing: this one asks.")
     if plan := (understood or {}).get(PLAN):
         lines.append(f"Your plan from your last reply: {plan}. Keep it, or change it if their message does.")
     if not pressing and not seen.get("situations"):
@@ -237,6 +265,8 @@ def understood_after(
             ("insight", reply.insight), ("from", reply.insight_from), ("link", reply.link), ("move", reply.move),
         ) if value not in (None, "")
     }
+    if insight := " ".join((reply.insight or "").split()):
+        merged[INSIGHTS] = [*(stored.get(INSIGHTS) or []), insight][-INSIGHTS_KEPT:]
     if thinking:
         merged[THINKING] = thinking
     else:

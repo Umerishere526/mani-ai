@@ -98,8 +98,24 @@ def solutions(text: str) -> list[str]:
     return [match.group(0).lower() for match in SOLUTION.finditer(text)]
 
 
+INSIGHT_OVERLAP = 0.5
+
+
+def _gist(text: str) -> set[str]:
+    return set(re.findall(r"[a-z']{4,}", text.lower())) - _COMMON
+
+
+def repeats_insight(insight: str | None, earlier: list[str] | None) -> bool:
+    """Whether an insight says, by its words, what one of the earlier ones said (the client's review, 2026-10-29)."""
+    now = _gist(insight or "")
+    return bool(now) and any(
+        (before := _gist(e)) and len(now & before) / min(len(now), len(before)) >= INSIGHT_OVERLAP for e in earlier or []
+    )
+
+
 def chat_misses(
     text: str, *, shape: str | None, window, insight: str | None, move: str | None, asked_for_help: bool,
+    earlier_insights: list[str] | None = None, last_shape: str | None = None,
 ) -> list[str]:
     """What a chat reply got wrong about the three shapes and the line between moving the conversation and solving
     it, named for the log and the scenario check. Counted, never fixed. One small idea is allowed when they asked."""
@@ -113,9 +129,13 @@ def chat_misses(
         notes.append("no shape")
     tied = [t for t in (getattr(window, "tied_to", None) or []) if t and t.strip()]
     if shape in ("window", "insight") and not tied:
-        notes.append(f"{shape} reply names no outside thing")
+        notes.append(f"{shape} reply ties the feeling to nothing")
     if shape == "insight" and not (insight or "").strip():
         notes.append("insight shape without an insight")
     if insight and solutions(insight):
         notes.append("insight is a solution")
+    if shape == "insight" and repeats_insight(insight, earlier_insights):
+        notes.append("insight repeats an earlier one")
+    if shape == "reflect" and last_shape == "reflect":
+        notes.append("reflect two in a row")
     return notes

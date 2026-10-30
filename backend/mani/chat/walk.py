@@ -171,7 +171,8 @@ def start(
     framework: Framework, updates: list[StageUpdate] | None, report: NextStage | None,
 ) -> Walked:
     """The turn they say yes: the walk opens on the first stage, judged from what they have said, on
-    a cleared store. Nothing is stored for a later stage until the walk reaches it."""
+    a cleared store. Nothing is stored for a later stage until the walk reaches it: every stage is confirmed on its
+    own, one yes at a time (the client, 2026-10-29: confirming two stages in one reply skipped the yes to each)."""
     first = content_stages(framework)[0]
     entries, notes, unjudged = _reach(framework, {}, first, report)
     dropped = [f"dropped update for {u.stage}" for u in updates or []]

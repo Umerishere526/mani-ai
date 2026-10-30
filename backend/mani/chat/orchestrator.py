@@ -375,7 +375,8 @@ async def _converse(
         Reply(text=reply.text),
         offered=None,
         offer_dropped=None,
-        needs_question=not guarded and not check_written,
+        # A reflect reply lets them go on without a question (the client's review, 2026-10-29).
+        needs_question=not guarded and not check_written and reply.shape != "reflect",
         last_mani_text=next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None),
     )
     if not guarded:
@@ -383,6 +384,8 @@ async def _converse(
         checks += reply_checks.chat_misses(
             reply.text, shape=reply.shape, window=reply.window, insight=reply.insight, move=reply.move,
             asked_for_help=bool(reply.asked_for_help),
+            earlier_insights=ctx.thread.understanding.get(converse.INSIGHTS),
+            last_shape=(ctx.thread.understanding.get(converse.THINKING) or {}).get("shape"),
         )
     if checks:
         logger.info("thread %s reply checks: %s", ctx.thread.id, "; ".join(checks))
@@ -790,7 +793,9 @@ async def send(
         # The greeting says their name by design; the model's own replies count from there. The
         # greeting is the first message in view only while nothing has left the window.
         name_said_before=_name_said_before(ctx, history, window),
-        feeling=understood.get("feeling"),
+        # An empty offer slot is filled with the core belief they confirmed: the offer names the belief (the client's
+        # review, 2026-10-29), and the feeling only when no core is held.
+        feeling=picture.core(understood.get(picture.KEY)).get("belief") or understood.get("feeling"),
         # Mani's own text before a framework, which may carry an options line under it.
         chat_text=(
             moment in (Moment.CHATTING, Moment.CHECK_OPEN, Moment.OFFER_OPEN)

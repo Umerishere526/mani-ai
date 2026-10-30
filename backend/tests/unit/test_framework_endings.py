@@ -75,10 +75,13 @@ def test_the_stages_the_case_can_answer_are_judged_against_it(frameworks):
             assert "their_case" in frameworks[name]["stages"][stage]["reach"], (name, stage)
 
 
-def test_stage_a_says_back_what_happened_together_with_the_feeling_they_confirmed(frameworks):
-    """muhammad, 2026-10-22: A said back one example, and they had to say the feeling again."""
+def test_stage_a_says_back_only_what_happened(frameworks):
+    """muhammad, 2026-10-22: A said back one example, and they had to say it again. The client's review, 2026-10-29:
+    A then added a feeling and a meaning to the event; it says back only what happened, and feelings come in C."""
     reach = frameworks["abcde"]["stages"]["activate"]["reach"]
-    assert "says back what happened and the underlying feeling they confirmed" in reach and "observable trigger" in reach
+    assert "says back only that situation" in reach and "observable trigger" in reach
+    # The client's review, 2026-10-29: A is the situation the core is about, which may be an ongoing pattern.
+    assert "may be an ongoing pattern" in reach and "never the frame" in reach
     thought = frameworks["thought_reframe"]["stages"]["thought"]["reach"]
     assert "says back the thought and the underlying feeling they confirmed" in thought, "Thought Reframe opens the same way"
     from mani.chat import walk

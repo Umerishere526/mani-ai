@@ -80,13 +80,13 @@ stages:
       directive: "Would you like to test that thought against the facts?"
     offer:
       directive: |-
-        There's a framework called Thought Reframe that helps you look at <what is weighing on them, as a short noun phrase that reads naturally after "look at", such as "the thought that you are not doing enough"; their feeling only when they named no thought>, test it against the facts, and land on a more balanced thought you can believe.
+        There's a framework called Thought Reframe that helps you look at the thought that <the core thought they confirmed, in their words, as a clause that reads naturally after "the thought that", such as "you are not doing enough"; their feeling only when they named no thought>, test it against the facts, and land on a more balanced thought you can believe.
       supportive: |-
         <A short warm line in your own words about what they're carrying, never about doubting themselves.>
-        There's a framework called Thought Reframe that can help you look at <what is weighing on them, as a short noun phrase that reads naturally after "look at", such as "the thought that you are not doing enough"; their feeling only when they named no thought>, understand what makes it feel so true, and find a more balanced thought you can actually believe.
+        There's a framework called Thought Reframe that can help you look at the thought that <the core thought they confirmed, in their words, as a clause that reads naturally after "the thought that", such as "you are not doing enough"; their feeling only when they named no thought>, understand what makes it feel so true, and find a more balanced thought you can actually believe.
       reflective: |-
         <A short line about how one thought can start to feel like the whole truth, fitted to what they said.>
-        There's a framework called Thought Reframe that helps you examine <what is weighing on them, as a short noun phrase that reads naturally after "examine", such as "the thought that you are not doing enough"; their feeling only when they named no thought>, notice what supports it and what else might be true, and arrive at a more balanced thought you can believe.
+        There's a framework called Thought Reframe that helps you examine the thought that <the core thought they confirmed, in their words, as a clause that reads naturally after "the thought that", such as "you are not doing enough"; their feeling only when they named no thought>, notice what supports it and what else might be true, and arrive at a more balanced thought you can believe.
     keep_chatting:
       directive: |-
         What's been going through your mind about <what they said is troubling them, in their words>?
@@ -125,7 +125,7 @@ stages:
     intro: "Step 1 is Identify the Thought"
     # The part of Mani's picture that feeds this stage once it has passed: a new thought replaces its words.
     picture: thought
-    purpose: "Establish the situation, in one plain sentence, and the specific thought about it that they want to examine."
+    purpose: "Establish the situation, in one plain sentence, and the specific thought about it that they want to examine. The situation may be an ongoing pattern; it is the one the confirmed core is about, never simply the latest or most vivid event."
     reach: "If their_case already gives the core they confirmed, report thought as known with the core belief, in their words, not the first thought on the way to it. Your text says back the thought and the underlying feeling they confirmed, in one sentence, then asks whether that's what they want to look at. Never ask for it again. The thought is what they tell themselves, in their words, never a reading of it. If their_case has no clear thought, report thought as missing and ask what keeps coming back to their mind."
     listen_for: "The situation, whether an actual event or the memory of one, kept separate from the thought about it. Listen for a specific thought about themselves, another person, or the situation, in their words. Specific thoughts are easier to work with than broad ones: 'I'll freeze when she asks about the budget' rather than 'something bad will happen'."
     ready_when: >-
@@ -168,12 +168,13 @@ stages:
     # The part of Mani's picture that feeds this stage once it has passed: a new feeling is added to its words.
     picture: feelings
     purpose: "Understand the strongest feeling the thought brings up and what makes it hurt, in their words, without labelling their experience."
-    reach: "If their_case already gives the feeling underneath or what makes the thought hurt, report painful as known, in their words, so your text says it back and asks whether that's what makes it hard. Never ask for it again."
+    reach: "If their_case or the chat before the framework already gives the feeling underneath and what makes the thought hurt, report painful as known, in their words, so your text says it back and asks whether that's what makes it hard. Never ask for it again."
     listen_for: "The strongest feeling, which usually falls into one of four groups: fear or anxiety, sadness or low mood, guilt or shame, or anger. Also listen for what they believe the thought says about themselves, another person or the future. If they name more than one strong feeling, the work stays with the strongest one."
     ready_when: "What makes the thought painful is clear, in their words, along with the feeling it brings up most strongly. MANI doesn't assign the meaning or the feeling. No intensity rating is needed."
     boundaries:
       - "must acknowledge the painful meaning they've already described, and ask only if it isn't clear yet"
       - "must not interpret beyond what they've said, assign feelings, or tell them why the thought is painful"
+      - "a feeling from your reading that they never named, such as inadequacy, is offered as a question ('does it leave you feeling inadequate?'), never stated as theirs ('you feel inadequate')"
       - "must not over-validate or repeat their distress back at length"
       - "must not bring in history they haven't mentioned, or turn the brief framework into a deeper investigation"
       - "must not ask them to rate the feeling on a scale"
@@ -193,7 +194,7 @@ stages:
     carries_case: true
     intro: "Step 3 is Explore What Makes the Thought Feel True"
     purpose: "Understand why the thought feels convincing, whether anything complicates it, and help them tell facts apart from feelings or fears."
-    reach: "If nothing has been said for it yet, report feels_true as missing, so your text asks only what makes the thought convincing. If they've said what makes it convincing but haven't been asked whether anything complicates it, report it as partial, with that in their words and the gap 'complicates', so your text asks only whether anything complicates it."
+    reach: "What they said in the chat before the framework counts: when it already holds what makes the thought convincing, report feels_true as partial with the gap 'complicates' from the start. If nothing has been said for it yet, report feels_true as missing, so your text asks only what makes the thought convincing. If they've said what makes it convincing but haven't been asked whether anything complicates it, report it as partial, with that in their words and the gap 'complicates', so your text asks only whether anything complicates it."
     listen_for: "The experience, feedback, evidence or pattern that makes the thought convincing, and anything that complicates it. Notice for yourself whether each piece is something that happened (an observation or fact) or something that comes from how it felt (fear, a hunch, 'I just know'). Feelings are real but are weaker evidence than facts."
     ready_when: "They've said what makes the thought convincing and have been asked whether anything complicates it. 'Nothing complicates it' is a valid answer; they don't have to disprove the thought."
     # Optional, one at a time, only when it fits and hasn't been covered.
@@ -203,6 +204,8 @@ stages:
       - "Has there been a time when this didn't turn out the way the thought says?"
     boundaries:
       - "must not dismiss what supports the thought, argue with it, or assume it's inaccurate"
+      - "once what makes it convincing is established, acknowledge it in one short clause at most, never a list of it, and never say the thought is true or that you can see why it is; build on any doubt they have already voiced"
+      - "when what complicates it is only a general doubt, ask once for a concrete moment that complicates it"
       - "must not stack questions or turn the step into a demand that they defend themselves"
       - "must not invent contrary evidence, assume another person's intentions, or lead them to a conclusion"
       - "must not reinterpret danger or mistreatment"

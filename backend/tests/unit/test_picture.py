@@ -189,3 +189,28 @@ def test_a_thought_makes_a_situation_both():
         beliefs=[BeliefEntry(belief="she sleeps while the children are there", kind="happening")],
         problem_type="situation"))
     assert picture.reconcile(real)["problem_type"] == "situation", "what is really happening stays a situation"
+
+
+
+def test_readings_are_kept_whole_focus_moves_and_what_is_uncertain_is_kept_apart():
+    """The client's review, 2026-10-29: the core, tension and desire were cut mid-sentence at 150 characters; the
+    focus stayed on the opening concern; a fear of missing a family read as a wish for one; E's new belief was filed
+    with what they tell themselves."""
+    from mani.llm.schema import Reading
+
+    core = ("You're afraid that choosing independence now could leave you alone and without a family later, even "
+            "though you don't yet know whether marriage or children are what you want.")
+    assert len(core) > picture.ENTRY_LIMIT
+    after = picture.apply_reading({"focus": "feeling behind friends' milestones"}, Reading(
+        underneath=[], wants="connection, while keeping my independence", needs="unclear", desire="unclear",
+        uncertain=["whether they want marriage or children"], focus="fear of losing connection while protecting independence",
+        core=core, core_from="unclear", core_feeling="fear", core_about="self", tension="none", problem_type="both",
+    ))
+    assert after["core"]["belief"] == core, "a reading is never cut mid-sentence"
+    assert after["focus"] == "fear of losing connection while protecting independence"
+    assert after["uncertain"] == ["whether they want marriage or children"]
+    line = picture.render(picture.merge(after, PictureUpdate(
+        beliefs=[BeliefEntry(belief="you can let someone close and keep your independence", kind="new")])))
+    assert "new ways of seeing it they reached: you can let someone close" in line
+    assert "what they tell themselves" not in line
+    assert "still uncertain, never say it back as settled: whether they want marriage or children" in line

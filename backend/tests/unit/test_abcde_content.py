@@ -85,10 +85,12 @@ def test_the_offer_follows_the_clients_pattern_with_a_slot_for_their_situation(a
     for text in offer.values():
         assert "There's a framework called ABCDE" in text
         assert "<" in text and ">" in text and "?" not in text, "a slot to fill, and no question of its own"
-        # Spec 0005, AC-6: the feeling they named fills it; their worry only when they named none.
-        assert "<their feeling from understanding" in text and "only when they named no feeling>" in text
-    assert "helps you identify the thoughts behind <" in offer["directive"]
-    assert "question whether they're true, and replace them with more realistic ones." in offer["directive"]
+        # The client's review, 2026-10-29: the offer names the belief they confirmed, and never suggests Mani has
+        # already decided it is wrong.
+        assert "the belief that <the core belief they confirmed" in text
+        assert "really true" not in text and "whether they're true" not in text
+    assert "what supports it, and whether there's a more balanced way to see it." in offer["directive"]
+    assert "look at what's supporting that belief, and find a more balanced way to think about it." in offer["supportive"]
 
 
 def test_the_clients_offer_wording_reaches_the_person_but_never_the_framework_index(abcde):

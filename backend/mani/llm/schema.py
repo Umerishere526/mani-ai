@@ -142,8 +142,10 @@ class FeelingEntry(BaseModel):
 
     feeling: str = Field(
         description=(
-            "A feeling they named, in their word, in the form that reads after \"feeling\", such as \"guilty\". Never "
-            "a belief about themselves: \"incapable\", \"not good enough\" or \"a failure\" are beliefs and go in beliefs."
+            "An emotion they named, in their word, in the form that reads after \"feeling\", such as \"guilty\" or "
+            "\"stuck\". Only an emotion: \"not unhappy\", \"okay with where I am\" or \"fine\" are how they rate their "
+            "life, not feelings, and are left out. Never a belief about themselves: \"incapable\", \"not good enough\" "
+            "or \"a failure\" are beliefs and go in beliefs."
         ),
     )
     about: str | None = Field(
@@ -178,7 +180,8 @@ class BeliefEntry(BaseModel):
         description=(
             "thought: something they tell themselves or conclude, such as \"you're a bad brother\". happening: "
             "something they say is really happening, which is not theirs to question, such as \"she falls asleep "
-            "while the children are there\"."
+            "while the children are there\". new: a new, more balanced way of seeing it they reached, such as at a "
+            "framework's last stage; never filed as a thought."
         ),
     )
 
@@ -262,7 +265,22 @@ class Reading(BaseModel):
     desire: str = Field(
         description=(
             "The life or relationship they long for, your reading, in a line, and any gap between it and what they "
-            "measure themselves against. \"unclear\" only when nothing they said points to it."
+            "measure themselves against. Never states as wanted something they are unsure about: a fear of missing "
+            "a family is not a wish for one. \"unclear\" only when nothing they said points to it."
+        ),
+    )
+    uncertain: list[str] = Field(
+        description=(
+            "What is still uncertain, in a few words each: what they said they don't know yet, or are only starting "
+            "to wonder about, such as \"whether they want marriage or children\" or \"whether they protect their freedom "
+            "at the cost of connection\". Never said back to them as settled. Empty when nothing is."
+        ),
+    )
+    focus: str = Field(
+        description=(
+            "The concern the conversation is really about now, a few words, re-read every reply: when a deeper concern "
+            "has come out, the focus moves to it, such as from \"feeling behind friends' milestones\" to \"fear of losing "
+            "connection while protecting independence\". Always a concern, never a solution."
         ),
     )
     core: str = Field(
@@ -393,7 +411,9 @@ StageAnswer = Literal["agreed", "answered", "corrected", "stop", "not_yet"]
 Heart = Literal["exploring", "core_named", "ready"]
 # The three shapes of a chat reply (the client's test, 2026-10-29): acknowledge and ask openly while there is not enough
 # to go on; open the window when a feeling is tied to something outside them; add the insight when there is enough.
-Shape = Literal["open_ask", "window", "insight"]
+# reflect (the client's review, 2026-10-29): now and then an acknowledgment and an observation that lets them go on,
+# without a question, so the reply is not the same formula every turn. Never two in a row.
+Shape = Literal["open_ask", "window", "insight", "reflect"]
 # What a chat reply offers besides its question. Each moves the conversation; none fixes their situation, which is
 # the framework's work (the client's test, 2026-10-29: suggestions that move it on, never solutions).
 Move = Literal["none", "clarifying_options", "step", "possibilities", "small_idea"]
@@ -473,9 +493,9 @@ class Reply(_ReplyBase):
     check_answer: CheckAnswer | None = Field(
         default=None,
         description=(
-            "How they answered your last reply, which gave your insight into the core and asked whether "
-            "they want to work through it with a framework. yes only when they clearly agree to both. no for "
-            "anything else: a correction, an addition, wanting to keep talking, or something else."
+            "How they answered your last reply, which gave your insight into the core and asked whether it "
+            "captures what they feel. yes only when they clearly agree it does. no for anything else: a correction, "
+            "an addition, wanting to keep talking, or something else."
         ),
     )
     heart: Heart | None = Field(
@@ -688,16 +708,18 @@ def as_reply(parsed: BaseModel) -> Reply:
 
 
 class Window(BaseModel):
-    """Opening the window (the client's test, 2026-10-29): a feeling joined to the outside things it is tied to, so the
-    question lands on both, never on the feeling alone or the outside thing alone."""
+    """Opening the window (the client's test, 2026-10-29): a feeling joined to what it is tied to, outside them or inside
+    them, so the question lands on both, never on the feeling alone (the client's review, 2026-10-29: loneliness and
+    independence)."""
 
     model_config = ConfigDict(extra="ignore")
 
     feeling: str = Field(description="The feeling, in their words or as you read it.")
     tied_to: list[str] = Field(
         description=(
-            "The outside things it is tied to, from your picture: what is happening, another person's behavior, a "
-            "dependency outside them. One or two, a few words each."
+            "What it is tied to, from your picture, one or two, a few words each: outside them (what is happening, "
+            "another person's behavior, a dependency) or inside them (a value, a need or a pull, such as their "
+            "independence)."
         ),
     )
     closest: str = Field(
@@ -763,8 +785,10 @@ class ConversationReply(_ReplyBase):
         description=(
             "The shape of this reply. open_ask: not enough to go on yet; acknowledge, then one open question. "
             "window: a feeling is tied to something outside them; acknowledge, open the window, then ask about the "
-            "feeling with what it is tied to. insight: you have enough; acknowledge, open the window, give the "
-            "insight, then ask a question built on it."
+            "feeling with what it is tied to, outside or inside them. insight: you have enough and there is a new "
+            "connection to make; acknowledge, open the window, give the insight, then ask a question built on it. "
+            "reflect: now and then, never two in a row, never on the reply that checks; a specific acknowledgment and "
+            "an observation that lets them go on, with no direct question."
         ),
     )
     window: Window | None = Field(

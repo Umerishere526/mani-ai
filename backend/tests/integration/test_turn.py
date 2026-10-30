@@ -243,9 +243,9 @@ async def _thread_row(alice, thread_id):
 
 # The client's supportive offer for ABCDE (abcde.md) with _offer's slots in it.
 SUPPORTIVE_OFFER = (
-    "That sounds like a lot to carry.\nThere's a framework called ABCDE that can help you understand "
-    "the thoughts behind what happened at work, see whether those thoughts are really true, and find "
-    "a more helpful way to think about what's happening.\n\nWould you like to try it?"
+    "That sounds like a lot to carry.\nThere's a framework called ABCDE that can help you explore the belief "
+    "that what happened at work, look at what's supporting that belief, and find a more balanced way to "
+    "think about it.\n\nWould you like to try it?"
 )
 
 

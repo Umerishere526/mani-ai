@@ -316,7 +316,7 @@ with st.sidebar:
     understood = (last_turn or {}).get("understanding")
     if understood:
         for key, label in (
-            ("feeling", "Feelings"), ("heart", "Heart of it"), ("case", "Confirmed case"),
+            ("feeling", "Feelings"), ("heart", "Core status"), ("case", "Confirmed case"),
         ):
             if understood.get(key):
                 st.markdown(f"**{label}:** {understood[key]}")
@@ -336,6 +336,8 @@ with st.sidebar:
             st.markdown(f"🤔 **Insight:** {thinking['insight']}" + (f" (from: {thinking['from']})" if thinking.get("from") else ""))
         if thinking.get("link"):
             st.markdown(f"🔗 **Ties back to:** {thinking['link']}")
+        if understood.get("insights"):
+            st.markdown("💡 **Insights given:** " + " | ".join(understood["insights"]))
         if understood.get("plan"):
             st.markdown(f"🧭 **Plan:** {understood['plan']}")
         # The picture of them the chat and every framework share (backend chat/picture.py).
@@ -354,6 +356,8 @@ with st.sidebar:
             )),
             ("Tells themselves", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "thought")),
             ("Really happening", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "happening")),
+            ("New ways of seeing it", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "new")),
+            ("Still uncertain", " | ".join(seen.get("uncertain") or [])),
             ("What they want (their words)", seen.get("wants")),
             ("Need underneath (Mani's reading)", seen.get("needs")),
             ("Desire (Mani's reading)", seen.get("desire")),

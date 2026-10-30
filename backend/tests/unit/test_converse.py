@@ -118,7 +118,7 @@ def test_the_reading_is_laid_over_the_picture_and_unclear_keeps_what_was_held():
         return Reading(**({
             "underneath": [], "wants": "unclear", "needs": "unclear", "desire": "unclear", "core": "unclear",
             "core_from": "unclear", "core_feeling": "unclear", "core_about": "self", "tension": "none",
-            "problem_type": "unclear",
+            "problem_type": "unclear", "uncertain": [], "focus": "unclear",
         } | fields))
 
     first = converse.understood_after({}, reply(reading=reading(
@@ -394,7 +394,7 @@ def test_a_chat_reply_is_checked_for_its_shape_and_for_fixing_what_the_framework
     assert reply_checks.chat_misses(
         "One small thing: you could text them tonight. Would it help to work through it together?",
         shape="open_ask", window=None, insight=None, move="small_idea", asked_for_help=True) == []
-    assert "insight reply names no outside thing" in reply_checks.chat_misses(
+    assert "insight reply ties the feeling to nothing" in reply_checks.chat_misses(
         "Maybe it's about being chosen. Is that it?", shape="insight", window=None, insight="it's about being chosen",
         move="none", asked_for_help=False)
     assert "insight is a solution" in reply_checks.chat_misses(
@@ -432,3 +432,81 @@ def test_the_conversation_prompt_listens_in_three_shapes_and_leaves_the_solution
         assert rule in chat, rule
     for gone in ("# Helping", "Help the person consider options", "shift toward helping"):
         assert gone not in chat, gone
+
+
+
+def test_a_yes_to_an_insight_moves_the_conversation_on_instead_of_explaining_it_again():
+    """The client's review, 2026-10-29: after "yes", Mani explained the same fear back in other words."""
+    held = {"picture": {"situations": ["friends are starting families"]}, converse.THINKING: {"shape": "insight"}}
+    agreed = converse.note("directive", allowed=False, due=False, wants_title=False, understood=held,
+                           their_count=4, latest="yes")
+    assert "They agreed with your insight: it is understood. Do not explain or restate it." in agreed
+    for answer in ("yes", "Yeah, exactly.", "that's it"):
+        assert converse.AGREED.match(answer), answer
+    assert not converse.AGREED.match("yes, but it's really more about my mum and how she talks to me")
+    went_on = converse.note("directive", allowed=False, due=False, wants_title=False,
+                            understood={**held, converse.THINKING: {"shape": "window"}}, their_count=4, latest="yes")
+    assert "They agreed with your insight" not in went_on
+
+
+def test_the_check_asks_only_whether_it_captures_it_and_abcde_keeps_support_apart_and_ends_on_a_new_belief():
+    """The client's review, 2026-10-29: the check pitched the framework before the offer did; D counted support as a
+    challenge; E took an action for a new belief; the close was a one-line summary."""
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    assert "Does that capture it?" in chat and "It does not recap the conversation" in chat
+    assert "Never turn a fear into a wish" in chat and "`reading.uncertain`" in chat
+    abcde = (PROMPTS.parent / "frameworks" / "abcde.md").read_text()
+    for rule in ("'supports: <their words>; challenges: <their words>'",
+                 "must not treat what they say in support of the belief as evidence against it",
+                 "What they said in D never counts as the new belief",
+                 "id: belief", "close in two or three warm sentences"):
+        assert rule in abcde, rule
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    assert "close as a person would" in framework and "stays a wondering" in framework
+
+
+def test_insights_given_are_remembered_so_the_same_theme_is_not_reached_again():
+    """The client's review, 2026-10-29: "you want to matter", "you want them to notice" and "you want to stop holding it
+    together" were one theme reached from three angles."""
+    from mani.chat import reply_checks
+
+    first = converse.understood_after({}, reply(shape="insight", insight="Maybe what stung was not mattering to them."),
+                                      check_written=False)
+    assert first[converse.INSIGHTS] == ["Maybe what stung was not mattering to them."]
+    sent = converse.note("supportive", allowed=False, due=False, wants_title=False, understood=first, their_count=4)
+    assert "Insights you already gave: Maybe what stung was not mattering to them." in sent
+    many = first
+    for n in range(6):
+        many = converse.understood_after(many, reply(insight=f"insight {n}"), check_written=False)
+    assert len(many[converse.INSIGHTS]) == converse.INSIGHTS_KEPT and many[converse.INSIGHTS][-1] == "insight 5"
+    assert reply_checks.repeats_insight("It stung because you felt you weren't mattering to them",
+                                        ["Maybe what stung was not mattering to them."])
+    assert not reply_checks.repeats_insight("Saying yes when exhausted keeps the resentment building",
+                                            ["Maybe what stung was not mattering to them."])
+
+
+def test_a_reflect_reply_lets_them_go_on_but_never_twice_in_a_row():
+    from mani.chat import reply_checks
+
+    assert reply_checks.chat_misses("That's a hard place to be.", shape="reflect", window=None, insight=None,
+                                    move="none", asked_for_help=False) == []
+    assert "reflect two in a row" in reply_checks.chat_misses(
+        "That's hard.", shape="reflect", window=None, insight=None, move="none", asked_for_help=False,
+        last_shape="reflect")
+    after = {converse.THINKING: {"shape": "reflect"}}
+    assert "Your last reply asked nothing: this one asks." in converse.note(
+        "supportive", allowed=False, due=False, wants_title=False, understood=after)
+
+
+def test_abcde_inherits_the_chat_and_a_is_the_event_alone():
+    """The client's review, 2026-10-29: A added a feeling, C and D asked again for what the chat had found, and a
+    general step in E was never tied to practice."""
+    abcde = (PROMPTS.parent / "frameworks" / "abcde.md").read_text()
+    for rule in ("Your text says back only that situation, in one sentence",
+                 "asks whether that's the belief underneath it",
+                 "Feelings and actions they described in the chat before the framework count",
+                 "report dispute as partial with the gap 'challenge' from the start",
+                 "must not say the belief is true or that you can see why it is true",
+                 "id: practice"):
+        assert rule in abcde, rule
+    assert "# The framework carries on from the chat" in parse_prompt(PROMPTS / "framework.md")["content"]

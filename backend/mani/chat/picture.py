@@ -12,7 +12,8 @@ KEY = "picture"
 # answered: a short answer to Mani's last question ("both"), which is not someone pulling away (muhammad, 2026-10-29).
 SHIFTS = ("adds", "corrects", "new_issue", "back", "answered", "nothing_new")
 PROBLEM_TYPES = ("belief", "situation", "both")
-BELIEF_KINDS = ("thought", "happening")
+# new: a balanced way of seeing it they reached, kept apart from what they tell themselves (the client's review, 2026-10-29).
+BELIEF_KINDS = ("thought", "happening", "new")
 RISK_TO = ("self", "others")
 DEPENDENCY_KINDS = ("internal", "external")
 CORE_ABOUT = ("self", "others", "situation")
@@ -22,15 +23,18 @@ LIST_LIMIT = 8
 # the need underneath and the life they long for, beside what is in the way.
 READINGS = ("wants", "needs", "desire", "in_the_way")
 ENTRY_LIMIT = 150
+# Mani's readings are a sentence or two: cut at ENTRY_LIMIT, the core, the tension and the desire ended mid-sentence
+# (the client's review, 2026-10-29).
+READING_LIMIT = 400
 
 
-def _clean(text: str | None) -> str:
-    """An entry on one line, cut at a word boundary to ENTRY_LIMIT characters."""
+def _clean(text: str | None, limit: int = ENTRY_LIMIT) -> str:
+    """An entry on one line, cut at a word boundary to `limit` characters."""
     text = " ".join((text or "").split())
-    if len(text) <= ENTRY_LIMIT:
+    if len(text) <= limit:
         return text
-    head = text[: ENTRY_LIMIT + 1]
-    return head.rsplit(" ", 1)[0] if " " in head else text[:ENTRY_LIMIT]
+    head = text[: limit + 1]
+    return head.rsplit(" ", 1)[0] if " " in head else text[:limit]
 
 
 def _same(a: str, b: str) -> bool:
@@ -125,16 +129,16 @@ def merge(stored: dict | None, update: PictureUpdate | None) -> dict:
         else:
             picture.pop(key, None)
     for key in READINGS:
-        if value := _clean(getattr(update, key)):
+        if value := _clean(getattr(update, key), READING_LIMIT):
             picture[key] = value
-    if update.core is not None and (belief := _clean(update.core.belief)):
+    if update.core is not None and (belief := _clean(update.core.belief, READING_LIMIT)):
         about = update.core.about.strip().lower()
         if about in CORE_ABOUT:
             # The core is replaced whole: a deeper reading is a new core, not a second one. The feeling underneath
             # is kept from the last reading when this one does not say it.
             was = picture.get("core") or {}
             feeling = _clean(update.core.feeling) or was.get("feeling")
-            tension = _clean(update.core.tension) or was.get("tension")
+            tension = _clean(update.core.tension, READING_LIMIT) or was.get("tension")
             picture["core"] = {
                 "belief": belief, "about": about,
                 **({"feeling": feeling} if feeling else {}), **({"tension": tension} if tension else {}),
@@ -165,7 +169,7 @@ UNCLEAR = frozenset({"", "unclear", "unknown", "none", "n/a", "na", "null", "not
 
 def _known(value: str | None) -> str:
     """The reading's value, cleaned, or "" when it says it cannot tell."""
-    value = _clean(value)
+    value = _clean(value, READING_LIMIT)
     return "" if value.casefold().strip(" .") in UNCLEAR else value
 
 
@@ -201,6 +205,16 @@ def apply_reading(stored: dict | None, reading: Reading | None) -> dict:
         picture["core"] = core
     if (problem := reading.problem_type.strip().lower()) in PROBLEM_TYPES:
         picture["problem_type"] = problem
+    # The focus moves with the reading as a deeper concern comes out; another situation still moves it through the
+    # picture's shift, which keeps the earlier one.
+    if focus := _known(reading.focus):
+        picture["focus"] = _clean(focus)
+    # What is still uncertain is replaced whole: the reading is re-read every turn.
+    uncertain = [u for u in (_known(x) for x in reading.uncertain or []) if u]
+    if uncertain:
+        picture["uncertain"] = _capped(uncertain)
+    else:
+        picture.pop("uncertain", None)
     return reconcile(picture)
 
 
@@ -231,6 +245,8 @@ def render(picture: dict | None) -> str | None:
         ("feelings under the ones they named, your reading", " | ".join(underneath)),
         ("what they tell themselves", " | ".join(b["belief"] for b in beliefs if b["kind"] == "thought")),
         ("what they say is really happening", " | ".join(b["belief"] for b in beliefs if b["kind"] == "happening")),
+        ("new ways of seeing it they reached", " | ".join(b["belief"] for b in beliefs if b["kind"] == "new")),
+        ("still uncertain, never say it back as settled", " | ".join(picture.get("uncertain") or [])),
         ("what they want, in their words", picture.get("wants")),
         ("what they need underneath, your reading", picture.get("needs")),
         ("what they long for, your reading", picture.get("desire")),

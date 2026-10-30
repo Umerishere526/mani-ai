@@ -477,3 +477,13 @@ def test_the_stage_that_names_the_thought_starts_from_the_confirmed_core_in_both
     thought = parse_framework(frameworks / "thought_reframe.md")["stages"]["thought"]["reach"]
     assert "core belief" in b and "counts only when it is the core" in b
     assert "core belief" in thought and "not the first thought" in thought
+
+
+def test_every_stage_is_confirmed_on_its_own_one_yes_at_a_time(abcde):
+    """The client, 2026-10-29: Step 1 and Step 2 were said back in one reply, which skipped the yes to each. The
+    start turn stores only the first stage, and a yes moves exactly one stage."""
+    started = walk.start(abcde, [said("belief", "you matter less to them")], judged("known", "the pattern"))
+    assert set(started.entries) == {"activate"} and "dropped update for belief" in started.notes
+    moved = walk.advance(abcde, started.entries, None, "agreed", in_force="activate",
+                         report=judged("known", "you matter less to them"))
+    assert moved.reached == "belief" and moved.phase == "belief"

@@ -155,6 +155,246 @@
             "window"
           ]
         }
+      },
+      "independence_and_connection": {
+        "source": "the client's review, 2026-10-29: the live Directive chat and ABCDE, the person's lines word for word. The reference conversation for listening and connecting; D, E and the close needed work",
+        "lines": [
+          "I've been feeling stuck lately. Most of my friends are getting married, buying houses, or starting families, while I still feel like I'm trying to figure out what I want. I'm not necessarily unhappy with my life, but seeing everyone move into these new stages makes me question whether I'm wasting time. My family keeps asking when I'll settle down, and even though I try not to let it bother me, I find myself wondering if something is wrong with me for not wanting the same things yet.",
+          "I think it's more about feeling judged. I'm actually okay with where I am in some ways, and I'm not sure I even want marriage or children right now. But when my family keeps bringing it up, I start questioning myself. Sometimes I wonder whether I'm genuinely choosing this life or just avoiding commitment because I'm afraid of making the wrong decisions.",
+          "I think it's mostly uncertainty. I enjoy being independent and having the freedom to make my own decisions. I haven't ruled out marriage or having children, but I don't feel ready for either. Sometimes I worry that by the time I figure out what I want, it'll be too late, and I'll have missed my chance.",
+          "yes",
+          "I think I'm afraid of ending up alone. I see my friends building families and having someone to share their lives with, and I wonder if I'll regret not making those choices sooner. I value my independence, but I also don't want to look back in ten years and realise I've prioritised freedom so much that I've missed out on having a family of my own."
+        ],
+        "after_offer": {
+          "lines": [
+            "Try it",
+            "yes",
+            "yes",
+            "yes",
+            "I think because I've spent so much time focusing on my career and personal freedom that I haven't really made space for building a relationship. I don't date very actively, and when someone gets close, I sometimes pull back because I don't want to lose my independence. I'm starting to wonder whether I'm protecting my freedom at the expense of the connection I actually want.",
+            "I guess part of me knows that I'm not completely closed off to relationships. I've had opportunities to date, and there have been people I've genuinely liked. I just tend to pull away when things start getting serious. I think I'm afraid of losing the life I've built, but I also know I can't expect to find a meaningful connection if I never let anyone get close.",
+            "I think I need to learn to recognise when I'm pulling away out of fear rather than because I genuinely don't want the relationship. Instead of immediately creating distance, I could try being more open about what I'm feeling and give the other person a chance to understand me. I don't want to lose my independence, but I also don't want fear to keep making decisions for me."
+          ],
+          "answer": "yes"
+        },
+        "shape_expect": {
+          "3": [
+            "insight",
+            "window"
+          ]
+        },
+        "picture_expect": {
+          "by": 5,
+          "problem_type": [
+            "both",
+            "belief"
+          ],
+          "core": [
+            "alone",
+            "independen",
+            "freedom",
+            "family"
+          ],
+          "focus": [
+            "independen",
+            "connection",
+            "alone",
+            "freedom"
+          ],
+          "uncertain": [
+            "marriage",
+            "children",
+            "family",
+            "want"
+          ],
+          "desire_not": [
+            "want a family",
+            "wants a family",
+            "want children",
+            "wants children",
+            "having a family"
+          ],
+          "wants": true,
+          "needs": true
+        }
+      },
+      "family_relies_on_me": {
+        "source": "the client's review, 2026-10-29: the live Supportive chat and ABCDE, the person's lines word for word. A reference for the emotional progression; repeated insights, A's interpretation and D re-asking what the chat knew needed work",
+        "style": "supportive",
+        "lines": [
+          "I've always been the person my family relies on whenever something goes wrong. Whether it's helping my parents financially, sorting out problems for my siblings, or putting my own plans aside to be there for everyone, I usually step in without being asked twice. But lately, I've started feeling exhausted and a little resentful. When I need help, everyone seems busy or unavailable. I don't want to stop being there for my family, but sometimes I wish someone would notice how much I do without me having to ask. I feel guilty even thinking about putting myself first.",
+          "The last time I needed help, I was dealing with a problem at work and felt completely overwhelmed. I reached out to my sibling, but they were too busy and barely gave me a response. I didn't push it because I know everyone has their own responsibilities, but it hurt. I think what bothered me most was that I wouldn't have hesitated to drop everything if they had needed me.",
+          "I think it makes me feel like I can't really count on them when things get difficult. I know they care about me, but I don't expect them to show up in the same way I would for them. And that makes me wonder whether I need to stop expecting so much and just handle things myself.",
+          "I think it's more about protecting myself from disappointment. I don't want to give up on having that kind of support from my family, but I'm tired of expecting it and feeling let down. Maybe if I expect less, it won't hurt as much when they don't show up.",
+          "I think I just wanted them to acknowledge that I was struggling, maybe ask how I was doing or offer to talk when they had some time. I wasn't expecting them to drop everything. I just wanted to feel like I mattered enough for them to make a little space for me.",
+          "I think it makes me feel like I'm not as important to them as they are to me. I don't want to have to ask someone to care or remind them that I'm struggling. I want to feel like someone is thinking about me too, without me always having to be the one holding everything together.",
+          "I think I'm afraid that if I stop being the one everyone relies on, I'll become less important to them. Being needed has always been how I show my love, and maybe part of me worries that if I stop doing so much, they won't make the same effort to keep me close. I don't want to lose that connection, but I'm starting to feel like I'm losing myself trying to maintain it."
+        ],
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Try it",
+            "yes",
+            "yes",
+            "I think it has made me feel more anxious about how my family sees me. I find myself saying yes even when I'm exhausted, because I don't want them to think I'm becoming selfish or unavailable. But at the same time, I sometimes feel resentful and withdraw from them. It's like I'm constantly torn between wanting to be there for them and wishing someone would be there for me.",
+            "I think it's because they've become so used to me always being available that they don't really notice when I'm struggling. When I say no or can't help, they seem disappointed or make comments about how I'm not around as much. It makes me feel like my value in the family is tied to what I do for them, rather than who I am.",
+            "I suppose they do check in on me sometimes, and my parents tell me they appreciate everything I do. My siblings also come to me for advice because they trust me. So I know they care about me beyond what I can do for them. But I think I'm so used to being the dependable one that I struggle to believe they'll still make space for me when I'm not constantly helping.",
+            "Maybe I need to remind myself that my family does care about me, even if they don't always show it in the way I need. Being dependable is part of who I am, but it doesn't have to be the reason I'm valued. I can still be there for them while allowing myself to say no when I'm exhausted. And I think I need to give them a chance to show up for me too, rather than assuming they won't."
+          ]
+        },
+        "picture_expect": {
+          "by": 7,
+          "problem_type": [
+            "both",
+            "belief"
+          ],
+          "core": [
+            "important",
+            "matter",
+            "valued",
+            "relie",
+            "needed",
+            "place"
+          ],
+          "focus": [
+            "important",
+            "matter",
+            "valued",
+            "relie",
+            "needed",
+            "connection",
+            "place",
+            "losing"
+          ],
+          "wants": true,
+          "needs": true
+        }
+      },
+      "new_city_left_behind": {
+        "source": "muhammad, 2026-10-29: written to test the client's latest rules in Reflective: a request for what to do mid-chat (one small idea, no solutions), a short yes to an insight (no restating), a feeling tied to something inside (wanting to belong) and outside (friends' group chat), uncertainty kept uncertain (moving back), D starting from support the chat already found, and a general step in E",
+        "style": "reflective",
+        "lines": [
+          "I moved to a new city for work about eight months ago. The job is going well and my colleagues are friendly, but I don't really have anyone here I'd call a close friend. Most evenings I end up scrolling through photos of my old friends back home getting together without me. I'm happy they're still close, but it stings, and I've started wondering if they've already moved on from me.",
+          "It's mostly the group chat. They make plans in it all the time, and I'm still in it, but nobody really asks how I'm doing anymore. When I do share something, I get a couple of likes and the conversation moves on. I know I'm the one who left, so maybe I don't have the right to feel hurt about it.",
+          "yes",
+          "I think what scares me is that I'm easy to replace. Like once I'm not physically there, I just stop mattering to people. And here, I haven't built anything yet, so it feels like I don't really belong anywhere right now.",
+          "Honestly, what should I do? Should I just try harder to make friends here, or keep putting effort into the old ones?",
+          "I'm not even sure I want to stay in this city long term. Sometimes I think about moving back, but I don't know if that's because I miss them or because I'm lonely here.",
+          "It's been happening for a while. I stopped messaging first a few months ago because I wanted to see if anyone would reach out, and mostly nobody did. That kind of proved it to me."
+        ],
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Try it",
+            "yes",
+            "yes",
+            "I feel lonely most evenings and kind of invisible. I've stopped suggesting video calls because I don't want to be the needy one, and I spend a lot of time on my phone watching their lives instead of building mine here.",
+            "Well, nobody reached out when I stopped messaging first. And they made plans for a weekend trip I only found out about from photos. So it does feel like I've been dropped.",
+            "I guess my best friend still calls me every few weeks, and when I visited in the summer everyone made time to see me. And I suppose I've also gone quiet, so they might think I'm busy with my new life.",
+            "Maybe it's not that I'm easy to replace, it's that staying close takes more effort from both sides when you're far away, and I've been waiting for them instead of reaching out. I could put a bit more energy into the people who do show up."
+          ]
+        },
+        "shape_expect": {
+          "1": [
+            "window",
+            "insight",
+            "open_ask"
+          ],
+          "4": [
+            "insight",
+            "window"
+          ]
+        },
+        "picture_expect": {
+          "by": 6,
+          "problem_type": [
+            "both",
+            "belief"
+          ],
+          "core": [
+            "replace",
+            "matter",
+            "forgot",
+            "dropped",
+            "belong"
+          ],
+          "focus": [
+            "replace",
+            "matter",
+            "belong",
+            "lonel",
+            "left behind",
+            "forgot"
+          ],
+          "uncertain": [
+            "stay",
+            "move",
+            "city",
+            "back",
+            "miss"
+          ],
+          "desire_not": [
+            "wants to move back",
+            "want to move back",
+            "moving back home"
+          ],
+          "wants": true,
+          "needs": true
+        }
+      },
+      "friends_dont_reach_out": {
+        "source": "the client's review, 2026-10-29: the live Reflective chat and ABCDE, the person's lines word for word. ABCDE narrowed to the birthday when the core is about the ongoing pattern of always being the one who reaches out; D restated the support",
+        "style": "reflective",
+        "lines": [
+          "I've been feeling increasingly disconnected from my friends lately. Everyone seems to have their own lives, relationships, and responsibilities, and I'm usually the one who reaches out or makes plans. If I don't message first, days or even weeks can go by without hearing from anyone. I know people get busy, and I don't want to be someone who constantly needs attention. But lately, it's made me question whether these friendships matter as much to them as they do to me. Part of me wants to stop reaching out and see who actually notices, but I'm worried I'll end up feeling even more alone.",
+          "I think it's become more noticeable over the last few months. I recently had a birthday, and barely anyone remembered or reached out unless I contacted them first. I saw some of them posting pictures and making plans together, and it made me wonder why I'm always the one making an effort. I don't want to keep score, but it hurts feeling like I'd be forgotten if I stopped trying.",
+          "No, I haven't really told anyone. I keep thinking I shouldn't have to explain that being remembered matters to me, especially when I make an effort to remember their important days. But I also worry that if I bring it up, they'll only reach out because I've made them feel guilty, and that won't feel genuine either.",
+          "Yeah, that's a big part of it. I don't want to have to remind people to care about me. I want them to think of me on their own, the way I think of them. But maybe I'm also making it harder by keeping quiet and expecting them to notice something is wrong. I just don't know how to bring it up without feeling like I'm asking for something they should already want to give.",
+          "I think I'd need to see them make an effort without me always initiating. Maybe checking in on me, remembering important things happening in my life, or occasionally making plans themselves. I don't expect constant attention or grand gestures. I just want to feel that they think of me and want me around, even when I'm not the one bringing us together."
+        ],
+        "after_offer": {
+          "answer": "yes",
+          "stage_not": {
+            "activate": [
+              "birthday"
+            ],
+            "dispute": [
+              "birthday"
+            ]
+          },
+          "lines": [
+            "Try it",
+            "yes",
+            "yes",
+            "Yes. I also pull away sometimes because I don't want to keep chasing people, and then I feel even more disconnected.",
+            "I think it's mostly the contrast. I see them making time for each other, while I often have to initiate conversations or plans. It makes me feel like I'm not naturally someone they think to include. But I also know I might be interpreting things through my own hurt, and I don't want to assume they don't care just because they show it differently.",
+            "One of them did check in when I was sick last month, and another always replies warmly when I message, even if she doesn't start it. So maybe it's not that they don't care.",
+            "Maybe a more balanced way to see it is that some of these friendships might be less reciprocal than I'd like, but that doesn't automatically mean I don't matter to them. People show care differently, and I can't know exactly what they feel without talking to them. I think I can acknowledge that I want more effort from them without assuming I'm unimportant or that I have to keep chasing everyone to maintain a friendship."
+          ]
+        },
+        "picture_expect": {
+          "by": 5,
+          "problem_type": [
+            "both",
+            "belief"
+          ],
+          "core": [
+            "matter less",
+            "forgotten",
+            "less important",
+            "matter"
+          ],
+          "focus": [
+            "reach",
+            "effort",
+            "forgotten",
+            "matter",
+            "initiat",
+            "reciproc"
+          ],
+          "wants": true,
+          "needs": true
+        }
       }
     }
   },
