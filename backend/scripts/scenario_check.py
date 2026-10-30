@@ -237,7 +237,7 @@ def picture_flags(understanding: dict | None, expect: dict) -> list[str]:
 
 # The orchestrator's reply checks that are failures of the chat's shapes or its line against fixing (the client's
 # test, 2026-10-29), raised to flags so they count.
-CHAT_FLAGS = ("solution in chat", "small idea they did not ask for", "reply ties the feeling to nothing",
+CHAT_FLAGS = ("solution in chat", "small idea they did not ask for", "reply ties the feeling to nothing", "em dash",
               "insight shape without an insight", "insight is a solution")
 
 
@@ -451,6 +451,7 @@ async def main() -> int:
     parser.add_argument("--scenario", help="run only this conversation, or this group, from scenarios.json")
     parser.add_argument("--style", choices=STYLES, help="run only this style")
     parser.add_argument("--full", action="store_true", help="print every line whole, as a transcript")
+    parser.add_argument("--save", type=pathlib.Path, help="also write every exchange to this JSON file, for compare_runs.py")
     args = parser.parse_args()
     scenarios = conversations(json.loads(SCENARIOS.read_text()))
     chosen = {
@@ -475,9 +476,32 @@ async def main() -> int:
     for (name, style), exchanges in zip(jobs, results):
         by_scenario.setdefault(name, {})[style] = exchanges
     flagged = sum(_report(name, runs, full=args.full) for name, runs in by_scenario.items())
+    if args.save:
+        _save(args.save, by_scenario)
     _report_cost([e for runs in by_scenario.values() for exchanges in runs.values() for e in exchanges])
     print(f"\n{flagged} flag(s) across {len(jobs)} conversation(s)")
     return 1 if flagged else 0
+
+
+def _save(path: pathlib.Path, by_scenario: dict[str, dict[str, list[Exchange]]]) -> None:
+    """Every exchange as JSON, so two runs (before and after a change) can be compared by compare_runs.py."""
+    out = {
+        name: {
+            style: [
+                {
+                    "person": e.person, "reply": e.reply, "buttons": e.buttons, "offered": e.offered,
+                    "checked": e.checked, "check_at": e.check_at, "trace": e.trace, "flags": e.flags,
+                    "checks": e.checks, "seconds": round(e.cost.seconds, 2),
+                    "thinking": (e.understanding or {}).get("thinking"),
+                }
+                for e in exchanges
+            ]
+            for style, exchanges in runs.items()
+        }
+        for name, runs in by_scenario.items()
+    }
+    path.write_text(json.dumps(out, indent=2, ensure_ascii=False))
+    print(f"\n  saved to {path}")
 
 
 def _report_cost(exchanges: list[Exchange]) -> None:

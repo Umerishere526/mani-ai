@@ -76,6 +76,8 @@ def misses(
         notes.append("case missing")
     if found := figures(reply.text):
         notes.append(f"figure of speech: {', '.join(found)}")
+    if "\u2014" in reply.text:
+        notes.append("em dash")
     return notes
 
 

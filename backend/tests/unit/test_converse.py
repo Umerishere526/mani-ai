@@ -423,7 +423,8 @@ def test_the_conversation_prompt_listens_in_three_shapes_and_leaves_the_solution
     """The client's test, 2026-10-29: the framework is the solution; suggestions in the chat only move it on; the
     insight is the aha, never a solution; three shapes; opening the window joins a feeling to what it is tied to."""
     chat = parse_prompt(PROMPTS / "conversation.md")["content"]
-    for rule in ("The framework is the solution; the chat never tries to fix the problem.",
+    for rule in ("The framework is the solution: it brings a new thought, another way to see it, and something to do.",
+                 "The chat never tries to fix the problem.",
                  "**An insight is not a solution.**",
                  "# The three reply shapes", "`open_ask`", "`window`", "`insight`",
                  "When it is tied to two things, name both, then ask about the one closest to the feeling.",
@@ -510,3 +511,33 @@ def test_abcde_inherits_the_chat_and_a_is_the_event_alone():
                  "id: practice"):
         assert rule in abcde, rule
     assert "# The framework carries on from the chat" in parse_prompt(PROMPTS / "framework.md")["content"]
+
+
+def test_the_chat_stays_with_the_feeling_in_plain_words_and_acknowledges_before_anything_else():
+    """The client, 2026-10-30: casual Directive, empathetic Supportive, acknowledge more than summarise, stay with
+    the feeling before moving on, acknowledge before the insight, no poetic phrasing, no em dashes, easy words;
+    the chat makes them feel heard and calmer, the framework brings the new thought and action."""
+    from mani.chat import reply_checks
+    from mani.llm.schema import Reply
+
+    voice = parse_prompt(PROMPTS / "voice.md")["content"]
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    for rule in ("# Mirror, then acknowledge", "Acknowledge more than you summarize.", "# Plain, everyday words",
+                 "Don't use em dashes", "like a friend who gets to the point", "Don't sound like an interviewer",
+                 "never a template", "never repeat their words back mechanically", "not any particular word",
+                 "**The chat** is where the person feels heard and gets calmer."):
+        assert rule in voice, rule
+    for rule in ("2. **Stay with them in the feeling.**", "Don't rush past an important emotional moment",
+                 "sometimes one reply, sometimes a few", "Never give an insight before you have acknowledged."):
+        assert rule in chat, rule
+    # The client's guidance, 2026-10-30: stay with the feeling without a hard gate on the core, check or framework.
+    assert "no core, no check, no framework yet" not in chat and "usually takes more than one reply" not in chat
+    assert "Keep the same plain, everyday words as the chat" in framework
+    for prompt in (voice, chat, framework):
+        assert prompt.count("\u2014") <= 1, "the prompts model no em dashes beyond naming the rule"
+    held = {"picture": {"beliefs": [{"belief": "you may be settling", "kind": "thought"}]}}
+    sent = converse.note("supportive", allowed=False, due=False, wants_title=False, understood=held, their_count=2)
+    assert "when the moment fits" in sent and "in this reply" not in sent.split("but no core")[1][:200]
+    assert "em dash" in reply_checks.misses(Reply(text="Where does it go first\u2014work or home?"), offered=None,
+                                            offer_dropped=None, needs_question=True, last_mani_text=None)

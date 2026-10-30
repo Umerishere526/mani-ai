@@ -89,13 +89,14 @@ def gaps(
     if their_count >= GAPS_FROM and thoughts and not core_now:
         lines.append(
             "Your picture holds what they tell themselves (" + " | ".join(thoughts) + ") but no core. Their words "
-            "point to one: give it in your reading, and say it to them in this reply as your reading, with the "
-            "feeling underneath, then set heart to core_named."
+            "point to one: give it in your reading now. Say it to them as your reading, with the feeling underneath, "
+            "when the moment fits, and then set heart to core_named. If something painful has only just come up, "
+            "stay with it first (the client, 2026-10-30)."
         )
     elif core_now and heart in (None, "exploring") and their_count >= GAPS_FROM + 1:
         lines.append(
-            f"Your reading has a core you have not said to them yet: {core_now}. Say it in this reply as your "
-            "reading, in everyday words, and let them correct it."
+            f"Your reading has a core you have not said to them yet: {core_now}. When the moment fits, say it as "
+            "your reading, in everyday words, and let them correct it."
         )
     if their_count >= GAPS_FROM and (empty := [name for key, name in _READINGS if not seen.get(key)]):
         lines.append(
