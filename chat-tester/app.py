@@ -358,6 +358,7 @@ with st.sidebar:
             ("Really happening", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "happening")),
             ("New ways of seeing it", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "new")),
             ("Still uncertain", " | ".join(seen.get("uncertain") or [])),
+            ("How they react", " | ".join(seen.get("reactions") or [])),
             ("What they want (their words)", seen.get("wants")),
             ("Need underneath (Mani's reading)", seen.get("needs")),
             ("Desire (Mani's reading)", seen.get("desire")),
