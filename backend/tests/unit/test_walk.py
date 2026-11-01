@@ -107,7 +107,7 @@ def test_a_stage_reached_without_a_judgement_is_asked_and_reported_apart_from_on
     unjudged = walk.advance(abcde, stored, None, "agreed", in_force="belief")
     assert unjudged.unjudged and "consequence" not in unjudged.entries
     assert render(abcde, unjudged, text=own, style="directive") == (
-        "C is for Consequences. How did that thought affect how you felt or what you did?", [],
+        "C is for Consequences. When you believe that, how does it affect how you feel and what you do?", [],
     )
     missing = walk.advance(abcde, stored, None, "agreed", in_force="belief", report=judged("missing"))
     assert not missing.unjudged and "consequence" not in missing.entries
@@ -191,7 +191,7 @@ def test_a_missing_stage_is_its_letter_line_then_manis_own_question_about_their_
 
 def test_a_missing_stage_whose_text_asks_nothing_falls_back_to_the_clients_question(abcde):
     text, notes = render(abcde, walk.Walked({}, "belief", "belief"), text="Thanks for telling me.", style="directive")
-    assert text == "B is for Belief. What did you start telling yourself about what was happening?"
+    assert text == "B is for Belief. When that happens, what thought worries you most?"
     assert notes == ["missing asks nothing"]
 
 
@@ -201,7 +201,7 @@ def test_a_missing_event_is_asked_with_their_own_word_for_the_feeling(abcde):
         "A is for Activating Event. What's been happening that's left you feeling so overwhelmed?"
     )
     assert render(abcde, start) == (
-        "A is for Activating Event. What's been happening that's left things feeling so hard?",
+        "A is for Activating Event. What's been happening that's made things feel so hard?",
         ["slot empty", "missing asks nothing"],
     )
 
@@ -267,7 +267,7 @@ def test_a_partial_stage_asks_only_the_gap_or_falls_back_to_the_clients_question
     gap = "What did you do after that?"
     assert render(abcde, on_c, text=gap) == (f"C is for Consequences. {gap}", [])
     text, notes = render(abcde, on_c, text="That sounds hard.")
-    assert text.endswith("How did that belief affect how you felt or what you did?")
+    assert text.endswith("how does it affect how you feel and what you do?")
     assert notes == ["gap asks nothing"]
 
 

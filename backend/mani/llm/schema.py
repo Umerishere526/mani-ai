@@ -254,12 +254,25 @@ class Reading(BaseModel):
         ),
     )
     wants: str = Field(
-        description="What they want, in their own words, from anywhere in the conversation. \"unclear\" only when they have said nothing about it.",
+        description=(
+            "Everything they said they want, in their own words, from anywhere in the conversation, including how "
+            "they would like it to happen, such as \"closer friendships with my colleagues; to feel wanted without "
+            "having to ask\". \"unclear\" only when they have said nothing about it."
+        ),
+    )
+    reactions: list[str] = Field(
+        description=(
+            "What they do or how they react after it hurts, a few words each, from anywhere in the conversation, such "
+            "as \"pretends it's no big deal\", \"overthinks how they act around them\", \"feels self-conscious\", "
+            "\"holds back from asking\". Empty when they have said nothing about it."
+        ),
     )
     needs: str = Field(
         description=(
-            "What they need underneath what they want, your reading, such as \"to feel close and chosen, not just "
-            "living alongside each other\". \"unclear\" only when nothing they said points to it."
+            "What they need underneath what they want, your reading, such as \"belonging and genuine connection\" or "
+            "\"to feel close and chosen\". The need itself, never the way they would prefer it met: \"to be invited "
+            "without asking\" is a preference and stays in wants, so one way is never treated as the only way. "
+            "\"unclear\" only when nothing they said points to it."
         ),
     )
     desire: str = Field(
@@ -286,14 +299,18 @@ class Reading(BaseModel):
     core: str = Field(
         description=(
             "The belief their thoughts lead to, said to them as you, such as \"you might be settling for something "
-            "that isn't fulfilling anymore\". When they have said what they tell themselves, about themselves, their "
+            "that isn't fulfilling anymore\". Keep any distinction the conversation uncovered, such as feeling part of "
+            "the team at work but not of their circle outside it. When they have said what they tell themselves, about themselves, their "
             "relationship, their life or their choices, there is a core: name it. \"unclear\" only when they have "
             "said nothing of the kind."
         ),
     )
     core_from: str = Field(description="The words of theirs the core rests on, quoted. \"unclear\" when the core is.")
     core_feeling: str = Field(
-        description="The feeling under the core, your reading, a word or two, such as inadequacy or loneliness. \"unclear\" when you cannot tell.",
+        description=(
+            "The feeling under the core, your reading, one or two feelings when both are supported, such as "
+            "\"inadequacy\" or \"insecurity and fear of rejection\". \"unclear\" when you cannot tell."
+        ),
     )
     core_about: str = Field(
         description="self: what it says about them. others: about someone else. situation: about what is happening or their life.",

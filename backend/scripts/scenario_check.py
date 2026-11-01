@@ -217,13 +217,17 @@ def picture_flags(understanding: dict | None, expect: dict) -> list[str]:
         "problem_type": seen.get("problem_type") or "",
         "focus": seen.get("focus") or "",
         "uncertain": " | ".join(seen.get("uncertain") or []),
+        "reactions": " | ".join(seen.get("reactions") or []),
     }
     flags = []
     # A fear of missing something read as a wish for it (the client's review, 2026-10-29).
     if said := [w for w in expect.get("desire_not") or [] if w.lower() in held["desire"].lower()]:
         flags.append(f"picture desire states what is uncertain: {', '.join(said)}")
+    # A preferred way of meeting a need read as the need itself (the client's review, 2026-10-30).
+    if said := [w for w in expect.get("needs_not") or [] if w.lower() in held["needs"].lower()]:
+        flags.append(f"picture need holds a preferred way: {', '.join(said)}")
     for part, want in expect.items():
-        if part in ("by", "desire_not"):
+        if part in ("by", "desire_not", "needs_not"):
             continue
         have = held.get(part, "").strip()
         if not have:

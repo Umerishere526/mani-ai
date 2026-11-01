@@ -54,10 +54,10 @@ stages:
       directive: |-
         There's a framework called ABCDE that helps you look at the belief that <the core belief they confirmed, in their words, as a clause that reads naturally after "the belief that", such as "your place in the family depends on how much you do for them">, what supports it, and whether there's a more balanced way to see it.
       supportive: |-
-        <A short warm line in your own words about what they're facing and what they've decided, never about doubting themselves, such as "That's a lot to carry for you and your team, and it takes something to decide to speak up.">
+        <A short warm line in your own words about what they're facing and what they've decided, never about doubting themselves, such as "That's a lot to carry for you and your team, and it takes something to decide to speak up." When their yes added something new, such as a wish or a fear ("I just want to feel wanted without having to ask"), this line acknowledges that first, plainly, before the framework is named.>
         There's a framework called ABCDE that can help you explore the belief that <the core belief they confirmed, in their words, as a clause that reads naturally after "the belief that", such as "your place in the family depends on how much you do for them">, look at what's supporting that belief, and find a more balanced way to think about it.
       reflective: |-
-        <A short line about how the way we interpret what is happening can make it feel harder, fitted to what they said, such as "Sometimes the way we interpret what's happening can make a difficult situation feel even harder.">
+        <A short line about how the way we interpret what is happening can make it feel harder, fitted to what they said, such as "Sometimes the way we interpret what's happening can make a difficult situation feel even harder." When their yes added something new, such as a wish or a fear ("I just want to feel wanted without having to ask"), this line acknowledges that first, plainly, before the framework is named.>
         There's a framework called ABCDE that helps you look more closely at the belief that <the core belief they confirmed, in their words, as a clause that reads naturally after "the belief that", such as "your place in the family depends on how much you do for them">, how it shapes what you feel and do, and whether there's a more balanced way to see it.
     keep_chatting:
       directive: |-
@@ -129,9 +129,9 @@ stages:
       - when: "what they describe is abuse, threats, coercion, harassment, discrimination, exploitation, or medical, financial, or legal danger"
         reply: "What happened sounds serious, and I am not going to ask you to see it differently. What would be most helpful to talk through?"
     ask:
-      directive: "What's been happening that's behind this?"
-      supportive: "What's been happening that's left things feeling so hard?"
-      reflective: "What's been happening that seems connected to it?"
+      directive: "What happened, or keeps happening, that sets this off?"
+      supportive: "What's been happening that's made things feel so hard?"
+      reflective: "When you think about how you've been feeling, what's been happening that seems connected to it?"
 
   belief:
     title: "B: Belief"
@@ -160,9 +160,9 @@ stages:
       - when: "several beliefs at once"
         reply: "Several thoughts came at once. Which one affected you most?"
     ask:
-      directive: "What did you start telling yourself about what was happening?"
-      supportive: "Sometimes when things are difficult, we start drawing conclusions about ourselves or what's happening. What were you telling yourself about the situation?"
-      reflective: "When that happened, what did you begin believing about yourself or the situation?"
+      directive: "When that happens, what thought worries you most?"
+      supportive: "When that happens, what's the thought that hurts or worries you the most?"
+      reflective: "When that happens, what does it make you believe about yourself or your situation?"
 
   consequence:
     title: "C: Consequences"
@@ -192,9 +192,9 @@ stages:
       - when: "only a feeling or only an action has been named and the other may matter"
         reply: "You felt <their feeling, in their words>. Did it change anything you did?"
     ask:
-      directive: "How did that thought affect how you felt or what you did?"
-      supportive: "Our thoughts can affect how we feel and respond. How did that belief affect how you felt or what you did?"
-      reflective: "When you believed that thought, how did it influence your feelings or the way you responded?"
+      directive: "When you believe that, how does it affect how you feel and what you do?"
+      supportive: "When that thought is with you, how does it affect how you feel and what you do?"
+      reflective: "What do you notice in how you feel and what you do when you believe that?"
 
   dispute:
     title: "D: Dispute"
@@ -219,7 +219,7 @@ stages:
       - "must not argue with them, steer them to a conclusion or try to prove the belief wrong"
       - "must take evidence that supports the belief seriously and never answer it with a contradiction: acknowledge what happened as real and the interpretation as understandable, never as established, such as 'When people are used to you always being available, their disappointment when you say no can make it feel as though your place depends on what you do for them', then ask what makes them question the rest"
       - "must not say the belief is true or that you can see why it is true: 'I can see why that makes your place depend on what you do' confirms the interpretation D is examining"
-      - "once what supports the belief is established, acknowledge it in one short clause at most, never a list of it, and build on what challenges it, starting from any doubt they have already voiced, in the chat or here"
+      - "once what supports the belief is established, say plainly in one short clause that what they've seen is real, such as 'you really are left out of their plans', never a list of it and never as proof of the belief, and build on what challenges it, starting from any doubt they have already voiced, in the chat or here"
       - "when what challenges it is only a general doubt, such as 'I might be reading it through my own hurt', ask once for concrete moments, such as times they've been shown they matter even when others didn't reach out first, before D is answered"
       - "must not treat what they say in support of the belief as evidence against it"
       - "must not say the other person trusts them, that nothing is wrong, or that everything will be fine"
@@ -237,9 +237,9 @@ stages:
         when: "they've said what supports the belief and haven't been asked what challenges it, so ask only what might make them question it"
         reply: "What might make you question the belief that <their belief, in their words>?"
     ask:
-      directive: "What makes you believe this is true, and what makes you question it?"
-      supportive: "Let's look at that belief together. What makes you think it's true? Is there anything that suggests otherwise?"
-      reflective: "As you think about that belief, what seems to support it, and what might suggest a different explanation?"
+      directive: "What has happened that makes you believe that thought, and has anything happened that doesn't fit it?"
+      supportive: "What has happened that makes this feel true, and is there anything you might be overlooking that doesn't fit it?"
+      reflective: "What makes you connect what's happening with that thought, and what have you actually seen or done that doesn't fit it?"
 
   effective:
     title: "E: Effective New Belief"
@@ -259,6 +259,8 @@ stages:
       - "when they're stuck on the new belief, may offer one balanced belief built only from what they said in D, for them to adjust or reject, never as the answer"
       - "once they have a new belief and a path, close in two or three warm sentences that carry their own new belief and their choice forward, in their words, such as 'You don't have to choose between independence and connection. You can keep the life you've built while letting someone into it. What matters is noticing when fear is making that decision for you.' Never a recap of the stages, never a new idea of your own"
       - "the new belief must be realistic and believable to them, not forced positivity ('everything will be great')"
+      - "the new belief keeps both sides: the real difference they experience, and that it doesn't prove what they feared; it never asks them to dismiss their experience"
+      - "when something they want is still open at the end, such as closer friendships, the close names it gently and says it can be looked at another time, without pushing a plan"
       - "must not offer reassurance they didn't ask for"
       - "must not reinterpret danger or mistreatment"
       - "must stop questioning once they have a clear view and a path"
@@ -273,9 +275,9 @@ stages:
         when: "they've said a new belief and a general path, and haven't been asked where they could practise it"
         reply: "What's one situation coming up where you could practise that?"
     ask:
-      directive: "What's a more realistic and helpful way to think about what's happening?"
-      supportive: "Now that you've looked at both sides, what's a more realistic and helpful way to think about what's happening?"
-      reflective: "After considering both sides, what do you think would be a more accurate and helpful way to understand what happened?"
+      directive: "What might be a more balanced way to look at the situation, one you can believe?"
+      supportive: "What could you tell yourself that recognises both sides without assuming the worst, and that you can believe?"
+      reflective: "What thought could hold both sides of this, in a way you can believe?"
 ---
 
 # ABCDE

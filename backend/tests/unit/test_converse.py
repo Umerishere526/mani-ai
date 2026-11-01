@@ -118,7 +118,7 @@ def test_the_reading_is_laid_over_the_picture_and_unclear_keeps_what_was_held():
         return Reading(**({
             "underneath": [], "wants": "unclear", "needs": "unclear", "desire": "unclear", "core": "unclear",
             "core_from": "unclear", "core_feeling": "unclear", "core_about": "self", "tension": "none",
-            "problem_type": "unclear", "uncertain": [], "focus": "unclear",
+            "problem_type": "unclear", "uncertain": [], "focus": "unclear", "reactions": [],
         } | fields))
 
     first = converse.understood_after({}, reply(reading=reading(
@@ -524,12 +524,12 @@ def test_the_chat_stays_with_the_feeling_in_plain_words_and_acknowledges_before_
     chat = parse_prompt(PROMPTS / "conversation.md")["content"]
     framework = parse_prompt(PROMPTS / "framework.md")["content"]
     for rule in ("# Mirror, then acknowledge", "Acknowledge more than you summarize.", "# Plain, everyday words",
-                 "Don't use em dashes", "like a friend who gets to the point", "Don't sound like an interviewer",
+                 "Don't use em dashes", "like a friend who gets to the point", "without sounding like an interviewer",
                  "never a template", "never repeat their words back mechanically", "not any particular word",
                  "**The chat** is where the person feels heard and gets calmer."):
         assert rule in voice, rule
     for rule in ("2. **Stay with them in the feeling.**", "Don't rush past an important emotional moment",
-                 "sometimes one reply, sometimes a few", "Never give an insight before you have acknowledged."):
+                 "sometimes one reply, sometimes a few", "Never give an insight before they have felt acknowledged."):
         assert rule in chat, rule
     # The client's guidance, 2026-10-30: stay with the feeling without a hard gate on the core, check or framework.
     assert "no core, no check, no framework yet" not in chat and "usually takes more than one reply" not in chat
@@ -541,3 +541,46 @@ def test_the_chat_stays_with_the_feeling_in_plain_words_and_acknowledges_before_
     assert "when the moment fits" in sent and "in this reply" not in sent.split("but no core")[1][:200]
     assert "em dash" in reply_checks.misses(Reply(text="Where does it go first\u2014work or home?"), offered=None,
                                             offer_dropped=None, needs_question=True, last_mani_text=None)
+
+
+def test_the_need_stays_apart_from_how_they_want_it_met_and_the_close_names_what_is_still_open():
+    """The client's review, 2026-10-30: the need held the preferred way of meeting it; acknowledgments restated a fear
+    already agreed; Step 3 did not say the real pattern was real; the open wish for closer friendships was not named
+    at the end; the offer went straight past a vulnerable new wish in the yes."""
+    from mani.llm.schema import Reading
+
+    assert "never the way they would prefer it met" in Reading.model_fields["needs"].description
+    assert "reactions" in Reading.model_fields
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    assert "Never treat one way as the only way the need can be met." in chat
+    assert "The same goes for acknowledgments" in chat
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    assert "Finishing the questions does not mean the whole problem is solved." in framework
+    for name in ("abcde", "thought_reframe"):
+        text = (PROMPTS.parent / "frameworks" / f"{name}.md").read_text()
+        assert "say plainly in one short clause that what they've seen is real" in text, name
+        assert "keeps both sides: the real difference they experience" in text, name
+        assert "the close names it gently and says it can be looked at another time" in text, name
+        assert "When their yes added something new" in text, name
+
+def test_each_style_is_worded_the_way_the_client_wrote_it():
+    """The client's wording document, 2026-10-30: one cadence, three ways of saying it. Mirror, acknowledge and
+    question are told apart; acknowledgment is meaningful, not repeated every reply; each style carries the client's
+    examples; Thought Reframe asks in the client's words. Wording only: the flow is unchanged."""
+    voice = parse_prompt(PROMPTS / "voice.md")["content"]
+    for rule in ("3. **Question** moves the conversation somewhere meaningful.",
+                 "**Mirror in most replies, but acknowledge when it means something.**",
+                 "| Length | Usually short | A little more expressive | Moderate, with room for reflection |",
+                 "\"What has your manager actually committed to?\"",
+                 "\"How has that affected the way you feel about your work?\"",
+                 "\"What has this started to make you believe about your future?\""):
+        assert rule in voice, rule
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    assert "never another version of an acknowledgment you already gave" in chat
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    assert "These are illustrations about someone else, never lines to reuse." in framework
+    reframe = (PROMPTS.parent / "frameworks" / "thought_reframe.md").read_text()
+    for ask in ("what thought worries you most?", "what's the thought that hurts or worries you the most?",
+                "what does that make you believe about yourself or your situation?",
+                "What thought could hold both sides of this, in a way you can believe?"):
+        assert ask in reframe, ask

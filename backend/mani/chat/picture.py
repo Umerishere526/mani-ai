@@ -76,7 +76,9 @@ def merge(stored: dict | None, update: PictureUpdate | None) -> dict:
 
     situations = picture.get("situations") or []
     for situation in update.situations or []:
-        if (situation := _clean(situation)) and not any(_same(situation, s) for s in situations):
+        # Cut at ENTRY_LIMIT, a fact ended mid-sentence ("...leave you feeling outside the", the client's review,
+        # 2026-10-30).
+        if (situation := _clean(situation, READING_LIMIT)) and not any(_same(situation, s) for s in situations):
             situations.append(situation)
     feelings = picture.get("feelings") or []
     for entry in update.feelings or []:
@@ -209,6 +211,11 @@ def apply_reading(stored: dict | None, reading: Reading | None) -> dict:
     # picture's shift, which keeps the earlier one.
     if focus := _known(reading.focus):
         picture["focus"] = _clean(focus)
+    # How they react, what they do after it hurts, replaced whole like what is uncertain (the client's review,
+    # 2026-10-30: overthinking how they act and self-consciousness were lost from the picture).
+    reactions = [r for r in (_known(x) for x in reading.reactions or []) if r]
+    if reactions:
+        picture["reactions"] = _capped(reactions)
     # What is still uncertain is replaced whole: the reading is re-read every turn.
     uncertain = [u for u in (_known(x) for x in reading.uncertain or []) if u]
     if uncertain:
@@ -247,6 +254,7 @@ def render(picture: dict | None) -> str | None:
         ("what they say is really happening", " | ".join(b["belief"] for b in beliefs if b["kind"] == "happening")),
         ("new ways of seeing it they reached", " | ".join(b["belief"] for b in beliefs if b["kind"] == "new")),
         ("still uncertain, never say it back as settled", " | ".join(picture.get("uncertain") or [])),
+        ("how they react, what they do after it hurts", " | ".join(picture.get("reactions") or [])),
         ("what they want, in their words", picture.get("wants")),
         ("what they need underneath, your reading", picture.get("needs")),
         ("what they long for, your reading", picture.get("desire")),

@@ -111,26 +111,27 @@ def test_the_offer_does_not_list_the_steps(abcde):
     assert "steps" not in abcde["stages"]["offering"]
 
 
+# The client's wording, 2026-10-30, made general so it fits any situation.
 CLIENT_QUESTIONS = {
     "belief": {
-        "directive": "What did you start telling yourself about what was happening?",
-        "supportive": "Sometimes when things are difficult, we start drawing conclusions about ourselves or what's happening. What were you telling yourself about the situation?",
-        "reflective": "When that happened, what did you begin believing about yourself or the situation?",
+        "directive": "When that happens, what thought worries you most?",
+        "supportive": "When that happens, what's the thought that hurts or worries you the most?",
+        "reflective": "When that happens, what does it make you believe about yourself or your situation?",
     },
     "consequence": {
-        "directive": "How did that thought affect how you felt or what you did?",
-        "supportive": "Our thoughts can affect how we feel and respond. How did that belief affect how you felt or what you did?",
-        "reflective": "When you believed that thought, how did it influence your feelings or the way you responded?",
+        "directive": "When you believe that, how does it affect how you feel and what you do?",
+        "supportive": "When that thought is with you, how does it affect how you feel and what you do?",
+        "reflective": "What do you notice in how you feel and what you do when you believe that?",
     },
     "dispute": {
-        "directive": "What makes you believe this is true, and what makes you question it?",
-        "supportive": "Let's look at that belief together. What makes you think it's true? Is there anything that suggests otherwise?",
-        "reflective": "As you think about that belief, what seems to support it, and what might suggest a different explanation?",
+        "directive": "What has happened that makes you believe that thought, and has anything happened that doesn't fit it?",
+        "supportive": "What has happened that makes this feel true, and is there anything you might be overlooking that doesn't fit it?",
+        "reflective": "What makes you connect what's happening with that thought, and what have you actually seen or done that doesn't fit it?",
     },
     "effective": {
-        "directive": "What's a more realistic and helpful way to think about what's happening?",
-        "supportive": "Now that you've looked at both sides, what's a more realistic and helpful way to think about what's happening?",
-        "reflective": "After considering both sides, what do you think would be a more accurate and helpful way to understand what happened?",
+        "directive": "What might be a more balanced way to look at the situation, one you can believe?",
+        "supportive": "What could you tell yourself that recognises both sides without assuming the worst, and that you can believe?",
+        "reflective": "What thought could hold both sides of this, in a way you can believe?",
     },
 }
 

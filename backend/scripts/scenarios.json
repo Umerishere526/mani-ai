@@ -395,6 +395,67 @@
           "wants": true,
           "needs": true
         }
+      },
+      "left_out_at_work": {
+        "source": "the client's review, 2026-10-30: the live Supportive chat and Thought Reframe, the person's lines word for word. The chat and framework did their job; the picture lost the reactions, the need held the preferred way, Step 1 said back a feeling, and the open wish for closer friendships was not named at the end",
+        "style": "supportive",
+        "lines": [
+          "I've been feeling a bit left out at work lately. A few of my colleagues have become close and often make plans together, but I usually find out about them afterwards. I don't think they're deliberately excluding me, but it still hurts. I try to act like it doesn't bother me, yet I keep wondering if I'm just not someone they want around.",
+          "Usually I just pretend it's no big deal and carry on with my work. But honestly, I feel a bit awkward around them afterwards. I start wondering whether they didn't think to invite me or whether they simply don't enjoy my company. Then I overthink how I act around them, like maybe I'm doing something that makes them keep their distance.",
+          "I think it's mostly these plans, but there have been a few smaller things too. Sometimes they talk about things they did together over the weekend, and I feel like I'm on the outside of a friendship that everyone else seems to have. They are friendly with me at work, so I don't know if I'm reading too much into it. I just wish I felt more included without having to ask to be.",
+          "I've mostly kept it to myself. I don't want to ask to be included because then I might feel like they're inviting me just because I mentioned it, rather than because they genuinely want me there. Sometimes I'll join their conversations or try to be more involved, but I haven't actually told them how I feel.",
+          "Sometimes they do make space for me, especially when the conversation is about work or something we all know about. But when they start talking about their personal plans or inside jokes, I struggle to join in. I end up listening quietly and feeling like I'm not really part of their group."
+        ],
+        "check_answer": "Yes, that's exactly it. I feel like I'm part of the team when we're working, but outside of that, I'm not really part of their circle. I don't want to force my way into their friendships, but I also don't want to keep feeling like I'm on the outside. I guess I just want to feel wanted without having to ask for it.",
+        "after_offer": {
+          "answer": "yes",
+          "stage_not": {
+            "thought": [
+              "insecur",
+              "lonel"
+            ]
+          },
+          "lines": [
+            "Try it",
+            "Yes, that's the thought I want to work with. I think what bothers me most is the possibility that they enjoy having me around professionally but don't actually want me as part of their social circle. I want to understand why I take being left out as a sign that there's something wrong with me.",
+            "Yes, I think that's what hurts most. I don't mind that they have friendships outside work, but it makes me question whether I'm actually someone people enjoy being around. I start comparing myself to them and wondering what they have that I don't. I know I might be taking it personally, but it's hard not to when I keep feeling left out.",
+            "There have been a few moments that make me question that thought. My colleagues are friendly, sometimes they check in on me, and we have good conversations during breaks. One of them even invited me to lunch recently. So I know it's not like they dislike me. I just struggle to understand why I'm included sometimes but left out of other things.",
+            "Yes, I think so. I know they don't dislike me, and there are moments when they genuinely seem to enjoy my company. Maybe I'm assuming that being left out of some plans means I'm not wanted at all. I still wish they included me more, but I don't have to take every missed invitation as proof that there's something wrong with me.",
+            "Yes, I think it's fair. I can accept that I won't always be included in everything without assuming it means people don't enjoy my company. I still want closer friendships with my colleagues, but I don't want to keep questioning my own worth every time I'm left out."
+          ]
+        },
+        "picture_expect": {
+          "by": 5,
+          "problem_type": [
+            "both",
+            "belief"
+          ],
+          "core": [
+            "work",
+            "team",
+            "social",
+            "circle",
+            "professional"
+          ],
+          "underneath": [
+            "insecur",
+            "reject"
+          ],
+          "reactions": [
+            "overthink",
+            "pretend",
+            "self-conscious",
+            "awkward",
+            "hold"
+          ],
+          "needs_not": [
+            "without having to ask",
+            "without asking",
+            "being invited"
+          ],
+          "wants": true,
+          "needs": true
+        }
       }
     }
   },

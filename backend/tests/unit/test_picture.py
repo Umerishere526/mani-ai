@@ -202,7 +202,7 @@ def test_readings_are_kept_whole_focus_moves_and_what_is_uncertain_is_kept_apart
             "though you don't yet know whether marriage or children are what you want.")
     assert len(core) > picture.ENTRY_LIMIT
     after = picture.apply_reading({"focus": "feeling behind friends' milestones"}, Reading(
-        underneath=[], wants="connection, while keeping my independence", needs="unclear", desire="unclear",
+        underneath=[], wants="connection, while keeping my independence", needs="unclear", desire="unclear", reactions=[],
         uncertain=["whether they want marriage or children"], focus="fear of losing connection while protecting independence",
         core=core, core_from="unclear", core_feeling="fear", core_about="self", tension="none", problem_type="both",
     ))
@@ -214,3 +214,24 @@ def test_readings_are_kept_whole_focus_moves_and_what_is_uncertain_is_kept_apart
     assert "new ways of seeing it they reached: you can let someone close" in line
     assert "what they tell themselves" not in line
     assert "still uncertain, never say it back as settled: whether they want marriage or children" in line
+
+
+def test_facts_are_kept_whole_and_how_they_react_is_kept_apart_from_what_they_feel():
+    """The client's review, 2026-10-30: a fact ended mid-sentence at 150 characters, and overthinking how they act and
+    pretending it's fine were lost from the picture."""
+    from mani.llm.schema import Reading
+
+    fact = ("Your colleagues make space for you in conversations about work or shared topics, but personal plans and "
+            "inside jokes leave you feeling outside the group.")
+    assert len(fact) > picture.ENTRY_LIMIT
+    held = picture.merge({}, PictureUpdate(situations=[fact]))
+    assert held["situations"] == [fact]
+    read = picture.apply_reading(held, Reading(
+        underneath=[], wants="closer friendships; to feel wanted without having to ask", needs="belonging",
+        desire="unclear", reactions=["pretends it's no big deal", "overthinks how they act around them"],
+        uncertain=[], focus="unclear", core="unclear", core_from="unclear", core_feeling="insecurity and fear of rejection",
+        core_about="self", tension="none", problem_type="unclear",
+    ))
+    assert read["reactions"] == ["pretends it's no big deal", "overthinks how they act around them"]
+    assert "how they react, what they do after it hurts: pretends it's no big deal" in picture.render(read)
+    assert picture.feeling_words(read) == [], "a reaction is never a feeling they named"
