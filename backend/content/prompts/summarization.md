@@ -21,7 +21,7 @@ Two to four sentences, third person — "The user is dealing with…". Carry for
 matters and drop what has been superseded; this replaces the previous summary rather than
 being appended to it.
 
-Include what would change how the next reply lands:
+Include what would change what the next reply should say:
 
 - The situations and events they described
 - The emotional states they expressed, **in their own words**

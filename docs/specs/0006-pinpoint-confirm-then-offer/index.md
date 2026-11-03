@@ -6,6 +6,13 @@
 > message (R30, R33; `backend/PORT-STATUS.md`, "An offer comes only on a clear yes…"). The check as the offer gate,
 > the check's record on the thread and the offer on a clear yes still hold.
 
+> Superseded in part 2026-11-03 (the client meeting): there is no check before the offer. On a turn that may check
+> (the same floor and cooldowns, and the core said back and not corrected), the reply that moves to the set of
+> questions is the client's offer itself, with the core in it; nothing waits for a check's answer and no
+> `check_at_message_count` is stored. A correction comes at the offer: `offer_answer = corrected` declines it, drops
+> the unconfirmed case, and the next offer needs no cooldown once they confirm the corrected reading
+> (`context.COOLDOWN_AFTER_CORRECTION`). The `CHECK_OPEN` path stays only for checks stored before the change.
+
 **Date**: 2026-10-13
 **Status**: In Progress
 

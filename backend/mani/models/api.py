@@ -96,6 +96,8 @@ class TurnOut(BaseModel):
     understanding: dict[str, Any] | None = None
     # Null unless AI_DEBUG_MODE is on: when Mani's latest check of its understanding was made.
     check_at_message_count: int | None = None
+    # Null unless AI_DEBUG_MODE is on: what code decided this turn and why (admin.turn_traces), never their words.
+    trace: dict[str, Any] | None = None
 
 
 class StartOut(BaseModel):

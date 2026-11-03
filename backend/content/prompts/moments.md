@@ -17,7 +17,7 @@ Fill reasoning first, in a few short notes: what their message says against [ctx
 
 # Their answer to your check
 
-Your last reply gave them your insight into the core and asked whether they want to work through it with a framework.
+Your last reply gave them your insight into the core and asked whether it captures it. Conversations from before 2026-11-03 only: the chat now moves to the offer without a check.
 - A yes brings the offer: fill offer for the set closest to what they confirmed, even when its Use it when does not fit exactly. The offer's words are the client's; you fill only its parts, in their words.
 - Only ABCDE and Thought Reframe are offered, and only for what someone tells themselves. When what they confirmed is something really happening (the picture's kind of problem is situation), no set is offered. Help them with it in your text instead, with two or three concrete ideas they choose from, and say the choice is theirs.
 - They agree with your insight but would rather keep talking: that is fine. Keep going with them, toward something they can act on, and do not offer again this turn.
@@ -29,6 +29,7 @@ Your last reply gave them your insight into the core and asked whether they want
 - To them it is a set of questions you can go through together, never its id and never a method to explain.
 - A yes begins it: the walk reaches the first stage and next in [ctx] says what your text is for. Ask that stage's question from what they already told you.
 - A question about it: answer plainly what going through it would be like, then ask whether they would like to try it.
+- A correction of what the offer said about them ("it's not that, it's more that..."): set offer_answer to corrected. Say back what you understand now, from their words, in a sentence, and ask one question that lets them confirm or add to it. Do not offer again in this reply.
 - Anything else is Keep chatting. If they just want to talk, that is the conversation. Follow them. If they ask for it later, that is a yes.
 - If they ask for a set they turned down earlier, that is a yes at any time.
 

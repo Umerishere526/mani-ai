@@ -180,8 +180,9 @@ class BeliefEntry(BaseModel):
         description=(
             "thought: something they tell themselves or conclude, such as \"you're a bad brother\". happening: "
             "something they say is really happening, which is not theirs to question, such as \"she falls asleep "
-            "while the children are there\". new: a new, more balanced way of seeing it they reached, such as at a "
-            "framework's last stage; never filed as a thought."
+            "while the children are there\". new: a new, more balanced way of seeing it they reached, or evidence they "
+            "found against what they tell themselves, such as \"your manager has praised your projects\"; never filed as "
+            "a thought."
         ),
     )
 
@@ -239,13 +240,31 @@ class DependencyEntry(BaseModel):
     )
 
 
+# What a feeling may depend on, in the order Mani would explore it (the client meeting, 2026-11-03: muhammad's funnel,
+# narrowing down what it depends on instead of asking around it). `side` is checked by code, as CLOSED SETS says.
+class TiedTo(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    what: str = Field(description="What it may depend on, a few words said to them as you, such as \"your manager's comments\".")
+    side: str = Field(
+        description="outside: a person, a situation or something they depend on. inside: a value, a need or a fear of theirs.",
+    )
+
+
+def _tied_to_required(schema: dict) -> None:
+    """tied_to is asked of the model like every reading field, while a reply without it still reads as empty."""
+    schema.setdefault("required", [])
+    if "tied_to" not in schema["required"]:
+        schema["required"].append("tied_to")
+
+
 # Mani's whole reading of them, given every chat turn before the reply is written (muhammad, 2026-10-29, approach
 # A): the partner chat named "am I settling" in its first message, and five turns later the picture still held no
 # core, want, need or desire, because the picture is only what each message adds and every reading was optional.
 # The reading is never a delta: it is re-read from the whole conversation, the first message included, and every
 # field is filled, "unclear" only when nothing they said points to it. Applied over the picture by chat/picture.py.
 class Reading(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", json_schema_extra=_tied_to_required)
 
     underneath: list[UnderneathEntry] = Field(
         description=(
@@ -255,7 +274,8 @@ class Reading(BaseModel):
     )
     wants: str = Field(
         description=(
-            "Everything they said they want, in their own words, from anywhere in the conversation, including how "
+            "Everything they said they want, in their own words, from anywhere in this conversation, never from what "
+            "you know of earlier ones unless they say it again here, including how "
             "they would like it to happen, such as \"closer friendships with my colleagues; to feel wanted without "
             "having to ask\". \"unclear\" only when they have said nothing about it."
         ),
@@ -269,7 +289,7 @@ class Reading(BaseModel):
     )
     needs: str = Field(
         description=(
-            "What they need underneath what they want, your reading, such as \"belonging and genuine connection\" or "
+            "What they need underneath what they want, your reading of this conversation, such as \"belonging and genuine connection\" or "
             "\"to feel close and chosen\". The need itself, never the way they would prefer it met: \"to be invited "
             "without asking\" is a preference and stays in wants, so one way is never treated as the only way. "
             "\"unclear\" only when nothing they said points to it."
@@ -277,7 +297,7 @@ class Reading(BaseModel):
     )
     desire: str = Field(
         description=(
-            "The life or relationship they long for, your reading, in a line, and any gap between it and what they "
+            "The life or relationship they long for, your reading of this conversation, in a line, and any gap between it and what they "
             "measure themselves against. Never states as wanted something they are unsure about: a fear of missing "
             "a family is not a wish for one. \"unclear\" only when nothing they said points to it."
         ),
@@ -294,6 +314,16 @@ class Reading(BaseModel):
             "The concern the conversation is really about now, a few words, re-read every reply: when a deeper concern "
             "has come out, the focus moves to it, such as from \"feeling behind friends' milestones\" to \"fear of losing "
             "connection while protecting independence\". Always a concern, never a solution."
+        ),
+    )
+    tied_to: list[TiedTo] = Field(
+        default_factory=list,
+        description=(
+            "What their feeling may depend on, outside them and inside them, most relevant first: the one you would "
+            "explore next comes first. Re-read every reply. Never what your picture holds as ruled out, and never what the "
+            "note lists as already explored, in any words: the same person, event or worry counts as explored, unless "
+            "their message reopened it. Empty when "
+            "the feeling has no clear cause, or nothing they said points to anything yet."
         ),
     )
     core: str = Field(
@@ -357,7 +387,8 @@ class PictureUpdate(BaseModel):
         default=None,
         description=(
             "The core of it, only when you can first tell or it changes: the belief the other thoughts lead to, and "
-            "the feeling underneath. Null otherwise."
+            "the feeling underneath. Never a more balanced way of seeing it: inside a set of questions, report a core "
+            "only when they reveal a deeper belief under the one being looked at. Null otherwise."
         ),
     )
     wants: str | None = Field(
@@ -391,6 +422,13 @@ class PictureUpdate(BaseModel):
         default=None,
         description="Entries in your picture that their message shows are wrong, copied exactly as the picture shows them. Null when none.",
     )
+    ruled_out: list[str] | None = Field(
+        default=None,
+        description=(
+            "What their message shows their feeling does not depend on: something you asked about or named that they "
+            "say is not it, or does not matter to them, a few words each. Null when none."
+        ),
+    )
     focus: str | None = Field(
         default=None,
         description=(
@@ -418,13 +456,17 @@ class PictureUpdate(BaseModel):
     )
 
 
-OfferAnswer = Literal["yes", "no", "asked", "moved_on"]
+# corrected (the client meeting, 2026-11-03): the offer says the core back, and they correct it there; Mani says the
+# corrected reading back and may offer again sooner than after a no.
+OfferAnswer = Literal["yes", "no", "asked", "moved_on", "corrected"]
 CheckAnswer = Literal["yes", "no"]
 BodyBranch = Literal[
     "yes", "no", "chest", "stomach", "head", "jaw_face", "hands", "eyes", "feet", "toes", "arms", "other",
     "nearest", "none", "pain", "better", "same", "worse", "helped", "somewhat", "not_really", "finish", "unclear",
 ]
-StageAnswer = Literal["agreed", "answered", "corrected", "stop", "not_yet"]
+# explore (the client meeting, 2026-11-03): a stage said back with something meaningful added, explored before the walk
+# moves on, rather than a "yeah, yeah" through stages the chat already answered.
+StageAnswer = Literal["agreed", "answered", "corrected", "explore", "stop", "not_yet"]
 Heart = Literal["exploring", "core_named", "ready"]
 # The three shapes of a chat reply (the client's test, 2026-10-29): acknowledge and ask openly while there is not enough
 # to go on; open the window when a feeling is tied to something outside them; add the insight when there is enough.
@@ -525,7 +567,8 @@ class Reply(_ReplyBase):
         default=None,
         description=(
             "How they answered the offer in your last reply: yes, no, asked (about it, or what "
-            "it involves), or moved_on (they talked about something else)."
+            "it involves), moved_on (they talked about something else), or corrected (they said what the offer said "
+            "back about them is not quite it, or changed it)."
         ),
     )
     body: BodyBranch | None = Field(
@@ -539,7 +582,9 @@ class Reply(_ReplyBase):
         default=None,
         description=(
             "How their message answers the stage in force. agreed: yes to your check of what they "
-            "said, even with more added. answered: they gave what the stage needs, or picked one of "
+            "said, even with a little more added. explore: on a stage you said back, they agree and add something "
+            "meaningful that is worth exploring before moving on, such as a new feeling, a reason or an example, with "
+            "an update for it; the walk stays while you explore it. answered: they gave what the stage needs, or picked one of "
             "your possibilities as theirs, with an update for it. corrected: a no with new words, with "
             "an update for it. not_yet: a plain no, unclear, unsure, I don't know, a question back about what you "
             "asked, or only part of what the stage needs, so the walk stays. stop: they clearly want to stop or leave the questions."
@@ -740,7 +785,10 @@ class Window(BaseModel):
         ),
     )
     closest: str = Field(
-        description="Of tied_to, the one the feeling is most closely tied to: your question lands on it, with the feeling.",
+        description=(
+            "Of tied_to, the one the feeling is most closely tied to: your question lands on it, with the feeling. "
+            "When the note names one to explore next, it is that one, unless their message points elsewhere."
+        ),
     )
 
 
@@ -757,27 +805,35 @@ def _reading_required(schema: dict) -> None:
     field.pop("default", None)
 
 
-# The reply whenever no framework, offer or check is open (orchestrator.converse). The model reads every
-# description. Understanding comes before the text (muhammad, 2026-10-29, approach A): written first, the text
-# followed the facts of the last message and the picture judged afterwards never shaped it.
-class ConversationReply(_ReplyBase):
-    """Mani's reply, and where the conversation stands after it. Fill the fields in order: first your whole reading of
-    them and what their message adds to the picture, then what this turn calls for, then the text, which follows from
-    all of it (muhammad, 2026-10-29)."""
+# What Mani reads of them after a chat reply has gone out (orchestrator.read_understanding): the whole reading and what
+# their message adds to the picture. Asked for apart from the reply, after it is sent, because written before the text
+# it was most of what the reply waited on and grew with the conversation, until a turn passed the chat deadline
+# (Lolly's chats, 2026-11-03). The reply still reads the picture first: the note carries it as it stood before their
+# message (muhammad, 2026-10-29, approach A: understanding before the text).
+class ConversationUnderstanding(BaseModel):
+    """Your reading of them and the picture, after their last message and your reply to it."""
 
     model_config = ConfigDict(extra="ignore", json_schema_extra=_reading_required)
 
     reading: Reading | None = Field(
         default=None,
         description=(
-            "Fill it first, every reply: your whole reading of them, re-read from the whole conversation including "
-            "their first message, never only their last."
+            "Your whole reading of them, re-read from the whole conversation including their first message, never "
+            "only their last."
         ),
     )
     picture: PictureUpdate | None = Field(
         default=None,
-        description="Fill it second, every reply: what their message adds to or changes in the facts of your picture of them.",
+        description="What their last message adds to or changes in the facts of your picture of them.",
     )
+
+
+# The reply whenever no framework, offer or check is open (orchestrator.converse). The model reads every
+# description. What the turn calls for comes before the text, so the text follows from it.
+class ConversationReply(_ReplyBase):
+    """Mani's reply, and where the conversation stands after it. Your reading of them and the picture are in the note.
+    Fill the fields in order: what this turn calls for, then the text, which follows from all of it."""
+
     heart: Heart | None = Field(
         default=None,
         description=(
@@ -803,7 +859,8 @@ class ConversationReply(_ReplyBase):
             "The shape of this reply. open_ask: not enough to go on yet; acknowledge, then one open question. "
             "window: a feeling is tied to something outside them; acknowledge, open the window, then ask about the "
             "feeling with what it is tied to, outside or inside them. insight: you have enough and there is a new "
-            "connection to make; acknowledge, open the window, give the insight, then ask a question built on it. "
+            "connection to make, and they have felt heard; never in your first two replies. Acknowledge, open the window, "
+            "give the insight, then ask a question built on it. "
             "reflect: now and then, never two in a row, never on the reply that checks; a specific acknowledgment and "
             "an observation that lets them go on, with no direct question."
         ),
@@ -849,13 +906,13 @@ class ConversationReply(_ReplyBase):
         default=None,
         description=(
             "Once heart is core_named or ready: the core of it and the feeling underneath, one or two sentences said "
-            "to them as you, such as \"One slip feels like proof that you can't change, and underneath the guilt "
-            "there is shame about who you are.\" Null otherwise."
+            "to them as you, the feeling underneath as your reading, such as \"One slip feels like proof that you can't "
+            "change, and underneath the guilt there may be shame about who you are.\" Null otherwise."
         ),
     )
     checking: bool | None = Field(
         default=None,
-        description="True only on the reply that pulls it together and asks whether it describes what they feel.",
+        description="True only on the reply that moves to the set of questions, when the note allows it.",
     )
     crisis: Crisis | None = Field(
         default=None,
@@ -880,6 +937,65 @@ class ConversationReply(_ReplyBase):
         default=None,
         description="Only when the instructions ask for a title: a short title for this conversation. Null otherwise.",
     )
+
+# The client meeting (2026-11-03): no check of the summary before the framework. On a turn the note allows it, the
+# reply may move straight to the set of questions: the client's offer says the core back, and they can correct it
+# there. These fields exist only on that turn, filled before the text so the offer's slots are written first.
+_TRANSITION = ("core", "checking", "heading_toward", "offer")
+
+
+@functools.cache
+def conversation_reply_for(*, may_move: bool, slots: Slots = Slots()) -> type[BaseModel]:
+    """The chat's reply shape this turn: ConversationReply, and on a turn that may move to the set of questions, the
+    set it heads toward and the offer's slots in this style. Without a template there is no offer to fill."""
+    if not may_move or not slots.going_through:
+        return ConversationReply
+    lead = (
+        "Your text is not sent when the offer is: its first line, in your words, takes its place."
+        if slots.lead_line
+        else "Your text goes before the offer, without its question: keep it to a short acknowledgment of their message."
+    )
+    overrides = {
+        "checking": (
+            bool | None,
+            Field(
+                default=None,
+                description=(
+                    "True only when this reply moves to the set of questions: then fill core, heading_toward and "
+                    "offer. " + lead
+                ),
+            ),
+        ),
+        "heading_toward": (
+            str | None,
+            Field(
+                default=None,
+                description=(
+                    "Only when checking is true: the id from the Framework Index in the note that fits the core best. "
+                    "Null otherwise."
+                ),
+            ),
+        ),
+        "offer": (
+            _offer_model(slots.going_through, slots.lead_line) | None,
+            Field(
+                default=None,
+                description=(
+                    "Only when checking is true: the set in heading_toward, for the core. The offer's words are the "
+                    "client's: you fill only these parts, in their words. Null otherwise."
+                ),
+            ),
+        ),
+    }
+    order = [n for n in ConversationReply.model_fields if n not in _TRANSITION]
+    at = order.index("text")
+    order[at:at] = list(_TRANSITION)
+    fields = {
+        name: overrides.get(name) or (ConversationReply.model_fields[name].annotation, ConversationReply.model_fields[name])
+        for name in order
+    }
+    return create_model("ConversationReply", __base__=_ReplyBase, **fields)
+
 
 class Extraction(BaseModel):
     """What summarization asks for. Schema-validated rather than parsed out of prose."""

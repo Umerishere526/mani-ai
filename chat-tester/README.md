@@ -100,7 +100,9 @@ The app opens on a **Sign in** / **Sign up** screen. Sign up takes an email, a p
 optional nickname the greeting uses; after that, the same email and password sign back in to the
 same conversations. **Forgot password** takes the account's email and a new password (twice) and,
 on submit, sets that password and signs you in. Refreshing the browser tab keeps you
-signed in - the session is remembered for seven days. The sidebar's **Sign out** switches
+signed in - the session is remembered for seven days. The sidebar's **Nickname** field changes
+the name the greeting uses, from the next new conversation. Every message has a copy icon under it,
+in the chat and in the admin viewer. **Sign out** switches
 accounts, and **New conversation** starts a fresh thread for the signed-in user. Under it,
 **Conversations** lists that user's threads, most recently active first (the latest 20, titled once a
 thread has had an exchange, "Untitled" before that). Tap one to open it and continue; the open one is

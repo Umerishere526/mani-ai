@@ -456,6 +456,56 @@
           "wants": true,
           "needs": true
         }
+      },
+      "anxious_checking": {
+        "source": "the client meeting, 2026-11-03: Manasa's anxiety conversation, her lines word for word where the transcript has them (line 3 from Mani's mirror of it). Mani gave an insight on the first reply, asked what the worry latches on to, followed 'someone you care about' sideways, and repeated her words back",
+        "lines": [
+          "I'm feeling anxious lately, but I can't figure out exactly why. Nothing particularly bad is happening in my life right now, but I constantly feel like something is about to go wrong. Even when I'm trying to relax, my mind finds things to worry about.",
+          "Usually it's work responsibilities or things I haven't finished. But sometimes I'll suddenly start worrying about something bad happening to someone I care about, even when there's no reason to think anything's wrong.",
+          "I usually start going through every possible scenario, or checking, and it eases things for a few minutes. Then my mind just focuses on something else.",
+          "I think I'm scared that if I don't check, I'll miss something important and I'll be at fault if something goes wrong. I know that sounds irrational, but checking feels like the only way I can relax, even if it's just for a little while. I wish I could just trust that things are okay without needing to constantly prove it to myself."
+        ],
+        "after_offer": {
+          "answer": "yes",
+          "lines": [
+            "Try it",
+            "yes",
+            "yes",
+            "yes",
+            "Nothing specific has happened. I have noticed a pattern in the past when I forget about things and don't check in on them, I go back and feel as though I missed important progress.",
+            "Yes, there have been many times.",
+            "Holding both beliefs alongside my fear, I feel a better way of understanding whether I have to check would be based on what I actually have going on that day. And if there's nothing going on, I don't have to be afraid that I'm not checking my phone, because I know nothing is going on. I can give myself time to relax freely."
+          ]
+        },
+        "picture_expect": {
+          "by": 4,
+          "problem_type": [
+            "both",
+            "belief"
+          ],
+          "core": [
+            "fault",
+            "miss",
+            "check",
+            "wrong",
+            "trust"
+          ],
+          "underneath": [
+            "fear",
+            "control",
+            "certain",
+            "responsib",
+            "blame",
+            "anxi"
+          ],
+          "reactions": [
+            "check",
+            "scenario",
+            "review"
+          ],
+          "wants": true,
+          "needs": true
+        }
       }
     }
   },

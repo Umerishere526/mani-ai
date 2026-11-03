@@ -22,10 +22,12 @@ seed.py appends `somatic_ask`, `somatic_check`, `somatic_body`, `somatic_practic
 exercise; to be confirmed with Lolly): after a framework's last stage, Mani asks whether they would like to check in
 with their body at all. Yes goes on to `somatic_check` or Step 1; Not right now goes straight to Step 5.
 
-`somatic_check` is ours, not the client's: after a framework's last stage, when what Mani found before it (the
-feelings they named and the feeling underneath) holds a word from `places`, Step 1 asks whether that feeling is still
-felt in its place instead of the general question, with Yes and No. Yes is the exercise for that place; No is the
-general question with its five buttons. Never during chat or inside a framework.
+`somatic_check` is ours, not the client's: after a framework's last stage, when they named a feeling before it,
+Step 1's introduction ends by asking how that feeling is now, in place of the general question, with no buttons
+(Manasa, the client meeting of 2026-11-03: naming a place, "that's often felt in the chest", told them where they
+should feel it). Whatever they say about how they feel, Mani says one sentence about it, then the client's general
+question follows with its five buttons. A place they name goes straight to its exercise. Never during chat or inside a
+framework.
 
 ```yaml
 stages:
@@ -37,15 +39,9 @@ stages:
         - {id: "yes", label: "Yes"}
         - {id: "no", label: "Not right now"}
   somatic_check:
-    purpose: "Before Step 1, when a feeling they named usually sits in a place: asks whether it is still felt there. Ours, not the client's. Send the text; the model only reads a typed answer."
+    purpose: "Ends Step 1's introduction when they named a feeling before the framework: asks how that feeling is now, never where it is felt. Ours, not the client's. Send the text; the model writes one sentence about their answer and reads it into body."
     script:
-      text: "Earlier you mentioned feeling {feeling}, and that's often felt in the {place}. Is that still the case for you right now?"
-      buttons:
-        - {id: "yes", label: "Yes"}
-        - {id: "no", label: "No"}
-      places:
-        chest: {place: chest, feelings: {anxious: anxious, anxiety: anxious, nervous: nervous}}
-        head: {place: head, feelings: {stress: stressed, stressed: stressed, stressful: stressed}}
+      text: "Earlier you mentioned feeling {feeling}. Now that we've worked through it, how are you feeling right now?"
   somatic_body:
     purpose: "Step 1: the mind-body introduction and the place of any tension. Send the client's text; the model only reads a typed place."
     script:

@@ -61,7 +61,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 - `sentry-sdk` is initialised in `create_app()` when `SENTRY_DSN` is set, with `send_default_pii=False` — conversation content is special-category health data and must not ride along on an error report.
 - Postgres is reached directly with `asyncpg`, not through PostgREST. A chat turn makes many writes that must succeed or fail together, and PostgREST cannot hold a transaction across statements.
 - OpenRouter is the only model provider. LangChain (`langchain-openai`) composes the call and parses the structured reply; the `openai` protocol is used because OpenRouter speaks it — it is not a second provider. The key lives in the environment, never in the database.
-- A turn is one model call, or more when a draft has to be asked for again (an offer too early or ruled out, no question, a question asked again).
+- A turn waits on one model call; a chat turn's reading of the person is one more call after the reply is sent (`orchestrator.read_understanding`).
 
 ## Identity and authorization
 

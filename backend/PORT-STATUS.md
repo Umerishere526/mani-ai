@@ -45,7 +45,7 @@ the same change as the work.**
   1. The deterministic safety screen (`safety.py`) runs before anything else. An explicit statement locks
      the thread with no model call. An indirect one (including passive ideation and "pills in my hand")
      is a concern: it suspends frameworks and offers without locking.
-  2. Which framework fits, and whether one fits yet, is the model's call from the Framework Index. Code owns only when an offer may come (on the answer to Mani's check, `context.check_open`, `context.may_check`) and the safety screen.
+  2. Which framework fits, and whether one fits yet, is the model's call from the Framework Index. Code owns only when an offer may come (`context.may_check`; since the client meeting of 2026-11-03 the chat's reply that moves to the set is the offer itself, with no check before it, and `context.check_open` serves only checks stored before then) and the safety screen.
   3. `composer.py` builds the system prompt: `voice.md` and `conversation.md` for Mani's own conversation
      (`_converse`), `voice.md` and `framework.md` for a framework's stages, and `voice.md` and `moments.md` with
      the Framework Index for the turns in between (the answer to a check, the offer, the body check-in, a safety
@@ -55,7 +55,9 @@ the same change as the work.**
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, the answers
      that decide the moment (`check_answer`, `offer_answer`, the stage fields), then `text`, then `picture`,
      `heading_toward`, `offer`; on the answer to a check, `heading_toward` and `offer` come before `text`.
-     Mani's own conversation replies in `ConversationReply` (text first) instead.
+     Mani's own conversation replies in `ConversationReply` instead: what the turn calls for, then the text, with the
+     reading and the picture read by a second call after the reply is sent (`orchestrator.read_understanding`, see
+     Decisions in force).
      The order is deliberate: with the reading of the person written first, the reply came out as a case note (2026-10-13). Its shape is picked from the database for the
      turn's moment (`context.moment`, `schema.reply_for`): the offer's slots only while an offer may be made,
      `offer_answer` only while one is open or was declined, `body` only on the body route.
@@ -219,8 +221,8 @@ the same change as the work.**
 - **Every conversation turns from understanding to helping, and code names the turn and the help move.** Because the
   2026-10-27 review found people heard but not helped: question after question, no progression, the styles alike
   in how they moved, and a direct request for help answered with another question (muhammad, 2026-10-27). The turn is
-  `helping` on the understanding record, set by `converse.turned` when the reply flags `asked_for_help` or
-  `frustrated`, their message added nothing new (`picture.quiet`), they answered in a few words three times running,
+  `toward_framework` on the understanding record, set by `converse.toward` when the reply flags `asked_for_help`,
+  their message added nothing new (`picture.quiet`), they answered in a few words three times running,
   or they said yes to a check about something really happening; another situation or a finished framework clears
   it. Once helping, the note gives each reply the move from `converse.HELP_MOVES` (kind of problem from the picture x
   style), a risk to someone else first; for a thought the check comes as soon as it may, as the way to ABCDE or
@@ -229,7 +231,11 @@ the same change as the work.**
   her, docs/client/requirements.md). The note also lists the questions already asked and, before helping, what is
   still unknown. The three styles in `voice.md` are three ways of moving, not three tones. Tests in
   `tests/unit/test_converse.py`, `test_a_yes_to_the_check_about_something_really_happening_brings_help_not_a_framework`,
-  `test_asking_for_help_turns_the_conversation_and_the_next_note_carries_the_help_move`.
+  `test_asking_for_help_turns_the_conversation_and_the_next_note_carries_the_help_move`. Frustration with Mani does
+  not turn it (muhammad, 2026-11-03): in Lolly's chat of that day "that is not the point" set it, and with no offer yet
+  allowed the reply named the framework at her fourth message, against R27 and R28; a frustrated turn repairs and
+  offers clarifying options or an insight, never the framework. `test_the_conversation_presses_toward_the_framework_
+  when_it_stops_moving_or_they_ask`.
 
 - **A framework's stages speak in the chat's voice; the framework gives the direction, never a script.** Because the
   2026-10-27 review found frameworks mechanical: questions predetermined, the stage ruling over what the person said,
@@ -290,7 +296,21 @@ the same change as the work.**
   select, and nothing says what to keep. Cut and replaced, not added: `mani_base.md` `how_you_talk` and `core issue`,
   `response_format.md` first reasoning step, `context.py` `understanding_next`, `schema.py` `issue` and `core_issue`. Not
   measured live (needs muhammad's yes, replay of that turn); [[direct-questions-have-no-target-2026-10-09]].
-- **A turn is one chat call at effort `low`, never a second to fix a draft** (muhammad, 2026-10-12). Because the
+- **A turn waits on one chat call at effort `low`, never a second to fix a draft; a chat turn's reading of them is
+  one more call after the reply is sent** (muhammad, 2026-10-12; the reading after, 2026-11-03). Since 2026-10-29 the chat
+  reply wrote its whole reading (14 fields, re-read every turn) and the picture (16) before its text, so its output grew
+  with the conversation until attempts passed `chat_deadline_seconds`; two of Lolly's chats of 2026-11-03 ended in
+  "504 llm_timeout" on her 11th and 7th messages (R53). Now `ConversationReply` holds what the turn calls for and the
+  text, the note carries the picture as it stood before their message, and `ConversationUnderstanding` (reading and
+  picture) is asked for after the reply, with the same system prompt and the reply in the messages, fired from the
+  route (`messages.send`) and recorded as purpose `understanding` (migration 028, so `latency_report.py`, which reads
+  `chat`, is the person's wait). It merges onto the record as it is when it lands, under the thread's turn lock
+  (`orchestrator._lock_thread`), so a message sent before it lands is never overwritten; that turn's note then has the
+  picture one message behind. A reading that fails costs that message's picture, never a reply. The move to the offer
+  builds its case from the picture as it was before the message. `test_a_chat_reply_waits_on_one_call_and_mani_reads_
+  the_picture_after_it`, `test_a_reading_that_lands_after_the_next_turn_adds_to_it_and_overwrites_nothing`,
+  `test_a_reading_that_fails_costs_the_picture_and_never_the_reply`. Not measured live (needs muhammad's yes); the
+  hosted database needs migration 028, or the reading's cost row is refused (logged, the reading still lands). Because the
   client's R2 asks for no excessive latency, a turn waited on a reasoning model at `high` and up to two more
   full calls whenever a draft broke a rule (a median of 12.6 s and 41 s at worst, 2026-10-07), and the reply
   already carries its own written reasoning. Code shapes the reply instead of asking again: the reply's shape
@@ -452,8 +472,12 @@ the same change as the work.**
   questions, ends the framework (declined, so it returns only when they ask for it). No stage is skipped. Every
   stage reached is one `[ctx]` told the reply about (a start or a move on its answer), so the model's text is used for it when it asks something; a partial D missing its challenge falls
   back to the client's own line for it (its `if_unclear` id, `NextStage.gap`). E is done only when they have a more
-  realistic way to see it and one clear path, a plan ("raise it with HR") counting as the path, and Thought Reframe's
-  last step (`replacement`) only when they have a balanced thought they say they believe, which need not be positive
+  realistic way to see it and one clear path, a plan ("raise it with HR") counting as the path and a permission or
+  intention ("trust them more") never counting, and Thought Reframe's
+  last step (`replacement`) only when they have a balanced thought they say they believe, which need not be positive,
+  and have said, asked once, what they would like to do with it (gap `step`; muhammad, 2026-11-03, the friendship and
+  daughter reviews: E closed with nothing to act on). The close carries that one thing forward and never puts what they
+  want off to another time (`framework.md` Ending, `walk.next_line`)
   (the client's Thought Reframe document, matched by muhammad, 2026-10-21; it replaced his earlier "and hopeful" gate,
   and the old `closing` stage is gone: one acknowledging sentence, then the body check-in; Mani may still offer loose
   possibilities when they are unsure, the person decides; safety and danger boundaries stay); The stage reached opens with its `intro` line, then: for a known or possible stage, A to E, Mani's own

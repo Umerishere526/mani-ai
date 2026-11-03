@@ -9,6 +9,8 @@ from typing import Any
 import streamlit as st
 
 import client as mani
+import trace_view
+from copy_button import copy_button
 from login import render_account
 
 
@@ -104,6 +106,7 @@ def _render_transcript(client: mani.ManiClient, thread_id: str) -> None:
         st.error(str(exc))
         return
     thread, messages = found["thread"], found["messages"]
+    traces = found.get("traces") or {}
 
     st.title(_title(thread))
     st.caption(
@@ -121,6 +124,7 @@ def _render_transcript(client: mani.ManiClient, thread_id: str) -> None:
         is_mani = message["role"] == "mani"
         with st.chat_message("assistant" if is_mani else "user", avatar="🧠" if is_mani else "🧑"):
             st.write(message["content"])
+            copy_button(message["content"])
             timing = _stamp(message["created_at"])
             if previous is not None:
                 waited = _when(message["created_at"]) - _when(previous)
@@ -128,6 +132,8 @@ def _render_transcript(client: mani.ManiClient, thread_id: str) -> None:
             if message.get("selected_prompt"):
                 timing += f"  ·  tapped “{message['selected_prompt']}”"
             st.caption(timing)
+            if is_mani and (stored := traces.get(str(message.get("id")))):
+                trace_view.render(stored.get("trace"), stored.get("raw_reply"))
         previous = message["created_at"]
     if not messages:
         st.caption("This conversation has no messages.")

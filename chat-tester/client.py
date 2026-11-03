@@ -289,6 +289,10 @@ class ManiClient:
         """GET /v1/exercises - the whole library, each item with a signed audio link."""
         return self._call("GET", "/v1/exercises")
 
+    def get_profile(self) -> dict[str, Any]:
+        """GET /v1/profile - what onboarding collected, the nickname among it."""
+        return self._call("GET", "/v1/profile")
+
     def set_profile(self, nickname: str) -> dict[str, Any]:
         """PUT /v1/profile - what onboarding calls, so the greeting can use their name."""
         return self._call("PUT", "/v1/profile", json={"nickname": nickname})

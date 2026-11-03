@@ -44,3 +44,5 @@ conflict under "Conflicts" in [requirements.md](requirements.md) and update the 
 | 2026-10-26 | Lolly | [Two conversations with ChatGPT: the voice MANI should have](messages/2026-10-26-chatgpt-boss-and-friendship.md) |
 | 2026-10-27 | beta tester, via muhammad | [Chat testing review: heard, but not helped](messages/2026-10-27-chat-testing-review.md) |
 | 2026-10-29 | Lolly, manasa, muhammad (meeting) | [The session's cadence, and three role plays](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
+| 2026-11-03 | Lolly | [Four Directive chats: one great, one inconsistent, two cut off by a timeout](messages/2026-11-03-four-directive-chats.md) |
+| 2026-11-03 | muhammad (review pasted by him) | [Review of the friendship chat, and the earlier requirements set aside](messages/2026-11-03-friendship-review-and-requirements-reset.md) |

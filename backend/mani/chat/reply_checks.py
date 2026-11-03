@@ -101,6 +101,17 @@ def solutions(text: str) -> list[str]:
 
 
 INSIGHT_OVERLAP = 0.5
+# A reply whose opening sentence is mostly their own last message, said back (the client, 2026-11-03: "she's repeating
+# what Manasa says"). Counted, never fixed.
+MIRROR_OVERLAP = 0.6
+MIRROR_MIN_WORDS = 4
+
+
+def repeats_their_words(text: str, latest: str | None) -> bool:
+    """Whether the reply's first sentence is, by its words of substance, mostly their last message said back."""
+    first = re.split(r"(?<=[.!?])\s+", text.strip(), maxsplit=1)[0] if text.strip() else ""
+    said, theirs = _gist(first), _gist(latest or "")
+    return len(said) >= MIRROR_MIN_WORDS and len(said & theirs) / len(said) >= MIRROR_OVERLAP
 
 
 def _gist(text: str) -> set[str]:
@@ -117,7 +128,7 @@ def repeats_insight(insight: str | None, earlier: list[str] | None) -> bool:
 
 def chat_misses(
     text: str, *, shape: str | None, window, insight: str | None, move: str | None, asked_for_help: bool,
-    earlier_insights: list[str] | None = None, last_shape: str | None = None,
+    earlier_insights: list[str] | None = None, last_shape: str | None = None, latest: str | None = None,
 ) -> list[str]:
     """What a chat reply got wrong about the three shapes and the line between moving the conversation and solving
     it, named for the log and the scenario check. Counted, never fixed. One small idea is allowed when they asked."""
@@ -140,4 +151,6 @@ def chat_misses(
         notes.append("insight repeats an earlier one")
     if shape == "reflect" and last_shape == "reflect":
         notes.append("reflect two in a row")
+    if repeats_their_words(text, latest):
+        notes.append("mirror repeats their words")
     return notes

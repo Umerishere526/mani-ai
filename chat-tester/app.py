@@ -14,7 +14,9 @@ import client as mani
 from admin_view import render_admin
 from library import render_library
 import session_store
-from login import render_account, render_login
+import trace_view
+from copy_button import copy_button
+from login import render_account, render_login, render_nickname
 
 # Off wherever this flag is unset - a deployed, client-facing instance - so there is no
 # control on screen that could show a framework id, a stage name, or a database read.
@@ -107,6 +109,7 @@ if mani.is_admin(st.session_state.client.session):
 
 with st.sidebar:
     render_account("tester")
+    render_nickname(st.session_state.client)
 
     # The control itself is gone, not just off, wherever CHAT_TESTER_DEV_MODE is unset - a
     # deployed, client-facing instance - so there is nothing on screen a client could click
@@ -166,14 +169,19 @@ for message in st.session_state.messages:
     avatar = "🧠" if message["role"] == "mani" else "🧑"
     with st.chat_message("assistant" if message["role"] == "mani" else "user", avatar=avatar):
         st.write(message["content"])
+        copy_button(message["content"])
+        if developer and message.get("trace"):
+            # What code decided on this turn, sent only with AI_DEBUG_MODE (admin.turn_traces).
+            trace_view.render(message["trace"])
 
 last_turn = st.session_state.get("last_turn")
 
-# The reply that just arrived gets its own callouts - a framework offer or a crisis - which is the
-# whole reason this tool exists.
+# The reply that just arrived gets its own callouts for a developer - a framework offer or a crisis - which is
+# the whole reason this tool exists. The crisis reply is already on screen as Mani's message, so the callout only
+# names it; repeating the text made a person read the crisis reply twice (Lolly, 2026-11-03).
 if last_turn:
-    if last_turn.get("crisis_detected"):
-        st.error("🚨 **Crisis detected.** " + last_turn["content"])
+    if developer and last_turn.get("crisis_detected"):
+        st.error("🚨 **Crisis detected.**")
 
     technique_prompts = [p for p in last_turn.get("prompts") or [] if p.get("technique")]
     if developer and technique_prompts:
@@ -208,6 +216,9 @@ def deliver(content: str) -> None:
         # Kept in session state rather than shown here: the rerun that follows would wipe
         # an st.error before anyone could read it, and a failed send would look like nothing.
         st.session_state.send_error = str(exc)
+        # The message was not stored, so it goes back into the composer to send again rather than vanishing from
+        # the chat (Lolly, 2026-11-03: "it deleted my answer").
+        st.session_state.composer_draft = content
         return
     except requests.exceptions.RequestException:
         # No answer at all within the request timeout, or the backend unreachable. The turn may still
@@ -219,7 +230,7 @@ def deliver(content: str) -> None:
         return
     st.session_state.messages.append({"role": "user", "content": content, "prompts": []})
     st.session_state.messages.append(
-        {"role": "mani", "content": turn["content"], "prompts": turn.get("prompts") or []}
+        {"role": "mani", "content": turn["content"], "prompts": turn.get("prompts") or [], "trace": turn.get("trace")}
     )
     st.session_state.last_turn = turn
     style = next((key for key, label in STYLES.items() if label == content.strip()), None)
@@ -231,11 +242,11 @@ def deliver(content: str) -> None:
         st.session_state.locked = True
 
 
-# A voice transcript waiting to be put into the composer. The composer's own key can't be
-# written once it has rendered this run (Streamlit raises), so the transcript is held here
-# and written into `composer` on the next run, before the field is drawn.
-if "voice_draft" not in st.session_state:
-    st.session_state.voice_draft = None
+# Text waiting to be put into the composer: a voice transcript, or a message whose send failed. The composer's own
+# key can't be written once it has rendered this run (Streamlit raises), so the text is held here and written into
+# `composer` on the next run, before the field is drawn.
+if "composer_draft" not in st.session_state:
+    st.session_state.composer_draft = None
 
 if st.session_state.locked:
     st.warning("This conversation is paused after a crisis flag. Start a new conversation to continue.")
@@ -272,9 +283,9 @@ else:
     # same as if it had been typed. Only sending text calls send() - one trigger, same as a
     # typed message, no parallel path.
     # -----------------------------------------------------------------------
-    if st.session_state.voice_draft is not None:
-        st.session_state.composer = st.session_state.voice_draft
-        st.session_state.voice_draft = None
+    if st.session_state.composer_draft is not None:
+        st.session_state.composer = st.session_state.composer_draft
+        st.session_state.composer_draft = None
 
     # Disabled while a message is on its way: a second submit would rerun the script and
     # stop the one waiting on the reply.
@@ -296,7 +307,7 @@ else:
                 transcript = None
         # Only ever fills the field - nothing here calls send().
         if transcript:
-            st.session_state.voice_draft = transcript
+            st.session_state.composer_draft = transcript
             st.rerun()
     elif submitted and submitted.text.strip():
         send(submitted.text.strip())
@@ -370,6 +381,11 @@ with st.sidebar:
             ("Risks", " | ".join(f"{r['risk']} ({r['to']})" for r in risks)),
             ("Depends on (inside)", " | ".join(d["what"] for d in seen.get("dependencies") or [] if d.get("kind") == "internal")),
             ("Depends on (outside)", " | ".join(d["what"] for d in seen.get("dependencies") or [] if d.get("kind") == "external")),
+            ("Depends on, most relevant first (Mani's reading)", " | ".join(
+                f"{t['what']} ({t['side']})" for t in seen.get("tied_to") or []
+            )),
+            ("Already explored", " | ".join(seen.get("explored") or [])),
+            ("Ruled out", " | ".join(seen.get("ruled_out") or [])),
             ("Kind of problem", seen.get("problem_type")),
             ("Earlier situations", " | ".join(seen.get("earlier") or [])),
         ):

@@ -43,9 +43,9 @@ async def send(
 ) -> TurnOut:
     """One user message in, one reply out.
 
-    Exactly one provider call per turn: the checks that the previous implementation
+    One provider call on the person's wait: the checks that the previous implementation
     answered with a regeneration - up to six of them - are deterministic corrections in
-    `chat/repairs.py`.
+    `chat/repairs.py`. A chat turn's reading of them is a second call, after the reply.
     """
     turn = await orchestrator.send(
         conn, user, thread_id, body.content, body.client_message_id
@@ -59,8 +59,16 @@ async def send(
             orchestrator.link_call(turn.llm_call_id, turn.message_id), name="link_call"
         )
 
+    if turn.trace and turn.message_id and not turn.was_duplicate:
+        # Why this turn went the way it did, stored once the message is committed (admin.turn_traces).
+        fire_and_forget(orchestrator.record_trace(turn, thread_id), name="record_trace")
+
     if turn.needs_summary:
         fire_and_forget(update_quietly(user, thread_id), name="update_summary")
+
+    if turn.read_after and not turn.was_duplicate:
+        # What their message adds to Mani's picture of them, read once the reply is on its way.
+        fire_and_forget(orchestrator.read_understanding(user, turn.read_after), name="read_understanding")
 
     return TurnOut(
         id=turn.message_id,
@@ -75,4 +83,5 @@ async def send(
         ledger=turn.ledger,
         understanding=turn.understanding if get_settings().ai_debug_mode else None,
         check_at_message_count=turn.check_at_message_count if get_settings().ai_debug_mode else None,
+        trace=turn.trace if get_settings().ai_debug_mode else None,
     )

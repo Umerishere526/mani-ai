@@ -80,13 +80,13 @@ stages:
       directive: "Would you like to test that thought against the facts?"
     offer:
       directive: |-
-        There's a framework called Thought Reframe that helps you look at the thought that <the core thought they confirmed, in their words, as a clause that reads naturally after "the thought that", such as "you are not doing enough"; their feeling only when they named no thought>, test it against the facts, and land on a more balanced thought you can believe.
+        There's a framework called Thought Reframe that helps you look at the thought that <the core thought they confirmed, as a short clause of about ten words, in their words, that reads naturally after "the thought that", such as "you are not doing enough"; their feeling only when they named no thought>, test it against the facts, and land on a more balanced thought you can believe.
       supportive: |-
         <A short warm line in your own words about what they're going through, never about doubting themselves. When their yes added something new, such as a wish or a fear ("I just want to feel wanted without having to ask"), this line acknowledges that first, plainly, before the framework is named.>
-        There's a framework called Thought Reframe that can help you look at the thought that <the core thought they confirmed, in their words, as a clause that reads naturally after "the thought that", such as "you are not doing enough"; their feeling only when they named no thought>, understand what makes it feel so true, and find a more balanced thought you can actually believe.
+        There's a framework called Thought Reframe that can help you look at the thought that <the core thought they confirmed, as a short clause of about ten words, in their words, that reads naturally after "the thought that", such as "you are not doing enough"; their feeling only when they named no thought>, understand what makes it feel so true, and find a more balanced thought you can actually believe.
       reflective: |-
         <A short line about how one thought can start to feel like the whole truth, fitted to what they said. When their yes added something new, such as a wish or a fear ("I just want to feel wanted without having to ask"), this line acknowledges that first, plainly, before the framework is named.>
-        There's a framework called Thought Reframe that helps you examine the thought that <the core thought they confirmed, in their words, as a clause that reads naturally after "the thought that", such as "you are not doing enough"; their feeling only when they named no thought>, notice what supports it and what else might be true, and arrive at a more balanced thought you can believe.
+        There's a framework called Thought Reframe that helps you examine the thought that <the core thought they confirmed, as a short clause of about ten words, in their words, that reads naturally after "the thought that", such as "you are not doing enough"; their feeling only when they named no thought>, notice what supports it and what else might be true, and arrive at a more balanced thought you can believe.
     keep_chatting:
       directive: |-
         What's been going through your mind about <what they said is troubling them, in their words>?
@@ -257,15 +257,23 @@ stages:
 
   replacement:
     title: "Create a Believable Replacement Thought"
+    # Where the new view forms (the career chat, 2026-11-03): the core stays the belief the questions looked at, and the
+    # stages before are never rewritten from what is said here (walk.new_view).
+    new_view: true
+    # Reached with anything but the thought or whether they believe it still to ask, the thought is asked first, in
+    # their words: what they said in Step 4 is the material, never the replacement thought (walk._reach; the "can't say
+    # no" chat, 2026-11-03, for E). A thought they said themselves and only have to believe is kept (believe), and so is
+    # a thought they found accurate, which needs a step and never a reframe (step).
+    first_gap: [thought, believe, step]
     carries_case: true
     intro: "Step 5 is Create a Believable Replacement Thought."
     purpose: "Help them decide, from what they've looked at, whether the thought holds up. If it doesn't, help them put into words a more balanced thought they can believe. If it does, and it points to a real problem, help them name one practical step to address it. Sometimes both are needed."
-    reach: "Report replacement as known only where they've given a thought that fits what they know and said they believe it, or concluded the thought is accurate and named one step they'll take. If they offered a thought without saying they believe it, it's partial, with their words and the gap 'believe', so your text asks whether it feels true to them."
+    reach: "Report replacement as known only where they've given a thought that fits what they know, said they believe it and named one thing they would like to do with it, or concluded the thought is accurate and named one step they'll take. A permission or intention they give themselves, such as 'trust them more', is part of the thought, never the step. If they believe their thought and have named nothing to do with it yet, it's partial with the gap 'step', once. If they offered a thought without saying they believe it, it's partial, with their words and the gap 'believe', so your text asks whether it feels true to them. Another interpretation from Step 4 is the material, never the replacement thought: until they have put a thought into their own words, it's partial with the gap 'thought'. If they concluded the thought is accurate and named no step yet, it's partial with the gap 'step'."
     listen_for: "A balanced thought, in their own words, that fits what's known and that they find believable. It may be cautious, partial or uncertain, and often keeps the feeling while putting it in proportion ('Even though I feel anxious, it's unlikely that...'). Also listen for whether they've concluded the thought is accurate, which means the upset is pointing to a real problem."
     ready_when: >-
       Either (a) they've given a thought, in their own words, that fits what's known and that they
       say they believe, or (b) they've concluded the original thought is accurate and named one
-      practical step they'll take. Neither has to be positive. For (a), the test is whether they
+      practical step they'll take. With (a), one thing they would like to do with the new thought, asked once, gently. Neither has to be positive. For (a), the test is whether they
       believe it: "yes", "that feels fairer" and "that's closer" all mean it's done. If it doesn't
       feel true yet, adjust it with them until it does. Check once, plainly, if they haven't said;
       never ask for a number. If they've already arrived at a thought or a step, recognise it and
@@ -276,19 +284,26 @@ stages:
       - "when they're unsure, may offer two or three loose possibilities for a believable thought, based on what they know, never as advice and never deciding for them"
       - "must not force an affirmation, claim the new thought is certainly true, or minimise a real problem"
       - "the balanced thought keeps both sides: the real difference they experience, and that it doesn't prove what they feared; it never asks them to dismiss their experience"
-      - "when something they want is still open at the end, such as closer friendships, the close names it gently and says it can be looked at another time, without pushing a plan"
+      - "the close carries forward the one thing they said they would do, in their words, and never puts what they want off to another time"
       - "must not require them to feel differently or keep revising a thought they already find credible"
       - "if they say it doesn't feel true, must not argue; soften or adjust the thought until it's credible to them"
       - "if the evidence supports the original thought, must not keep reframing it; acknowledge that the concern is real and help them name one step"
       - "the step stays small and concrete; a full plan (define the problem, brainstorm, plan, follow up) belongs to a planning framework, not here"
+      - "when asking for a step or a practice, acknowledge their new thought in a few words, never say it back in full: the close carries it"
+      - "must not offer a body check-in: code sends it once the questions end"
+      - "never word the replacement thought for them before they have tried: what they found in Step 4 is the material, and they put it into a thought that answers the one Step 1 named"
     if_unclear:
+      - id: thought
+        when: "they haven't yet put a more balanced thought into their own words"
+        reply: "Putting together what you've looked at, what could you tell yourself instead, in a way you can believe?"
       - when: 'falsely positive - "Everything is fine, there is nothing to worry about."'
         reply: "You do not know that everything is fine. What thought stays closer to what you know?"
       - id: believe
         when: 'it does not feel true yet - "I don''t really believe that."'
         reply: "It isn't there yet. What would need to change in it to make it feel truer?"
-      - when: "from what they've looked at, the thought seems accurate and points to a real problem"
-        reply: "From what you've looked at, this concern seems real. What is one thing you could do about it?"
+      - id: step
+        when: "they believe their new thought and haven't said what they'd like to do with it, or the thought seems accurate and points to a real problem"
+        reply: "What would you like to do with that, from here?"
     ask:
       supportive: "What could you tell yourself that recognises the uncertainty without assuming the worst, and that you can believe?"
       reflective: "What thought could hold both sides of this, in a way you can believe?"

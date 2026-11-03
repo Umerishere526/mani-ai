@@ -154,6 +154,9 @@ select pg_temp.want('a user cannot read prompt version history',
 select pg_temp.want('a user cannot read the call log',
   has_table_privilege('authenticated', 'admin.llm_calls', 'SELECT'), false);
 
+select pg_temp.want('a user cannot read the turn traces',
+  has_table_privilege('authenticated', 'admin.turn_traces', 'SELECT'), false);
+
 select pg_temp.want('a user cannot read crisis events',
   has_table_privilege('authenticated', 'admin.crisis_events', 'SELECT'), false);
 

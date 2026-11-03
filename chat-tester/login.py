@@ -42,6 +42,27 @@ def render_account(role: str) -> None:
         st.rerun()
 
 
+def render_nickname(client: mani.ManiClient) -> None:
+    """The name Mani greets them by. Sign-up is the only other place it is asked, so an account made without one,
+    or signed in to, would be greeted as "Hi there" in every chat (Lolly, 2026-11-03)."""
+    with st.form("nickname", enter_to_submit=True, border=False):
+        current = st.session_state.get("profile_nickname")
+        if current is None:
+            try:
+                current = client.get_profile().get("nickname") or ""
+            except mani.ApiError:
+                current = ""
+            st.session_state.profile_nickname = current
+        typed = st.text_input("Nickname, used in the greeting", value=current, max_chars=40)
+        if st.form_submit_button("Save nickname", use_container_width=True) and typed.strip() != current:
+            try:
+                st.session_state.profile_nickname = client.set_profile(typed.strip()).get("nickname") or ""
+            except mani.ApiError as exc:
+                st.error(str(exc))
+            else:
+                st.caption("Saved. The greeting of your next new conversation uses it.")
+
+
 def render_login() -> None:
     st.title("🧠 Mani chat tester")
     sign_in_tab, sign_up_tab, reset_tab = st.tabs(["Sign in", "Sign up", "Forgot password"])

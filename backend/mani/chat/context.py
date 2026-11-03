@@ -12,6 +12,7 @@ from mani.llm.schema import Moment
 from mani.models.rows import (
     Framework,
     Message,
+    MessageRole,
     TechniqueOutcome,
     TechniqueState,
 )
@@ -19,6 +20,10 @@ from mani.models.rows import (
 # How many messages must pass after a declined offer, or a check they did not confirm, before
 # Mani may check its understanding again: three of its replies (muhammad, 2026-09-24).
 COOLDOWN_AFTER_DECLINE = 6
+
+# After they corrected what an offer said back about them (the client meeting, 2026-11-03), no wait: the reply to the
+# correction says the corrected reading back, and once their next message confirms it the offer may come again.
+COOLDOWN_AFTER_CORRECTION = 0
 
 # Their message before which Mani never checks its understanding, however ready its reading seems: Lolly's own
 # conversations reached the heart of it at about the tenth exchange (muhammad, 2026-10-26, R33).
@@ -32,6 +37,14 @@ OPENING_MESSAGES = 3
 DEFAULT_STYLE = "supportive"
 
 _CTX_BLOCK = re.compile(r"^\[ctx\].*?\[/ctx\]\s*", re.DOTALL)
+# How many of Mani's own questions a turn is shown, so none is asked again, in the chat and in the questions alike.
+ASKED_LIMIT = 6
+_QUESTION = re.compile(r"[^.!?\n]*\?")
+# The same question in other words, as it was asked twice (the daughter chat, 2026-11-03).
+SAME_QUESTION = (
+    "never ask one again, nor one about the same thing in other words: \"what feels hardest about leaving them\" and "
+    "\"what feels most worrying about being away\" are one question"
+)
 
 
 def strip(content: str) -> str:
@@ -55,6 +68,21 @@ def disarm(text: str) -> str:
     the next twenty turns. Only the brackets change; what they wrote is still sent.
     """
     return _CTX_MARKER.sub(lambda m: f"({m.group(1)}ctx)", text)
+
+
+def asked_before(history: list[Message]) -> list[str]:
+    """The questions Mani asked in this conversation, latest last, so a turn can be shown them."""
+    asked = [
+        " ".join(q.split()) for m in history if m.role is MessageRole.MANI for q in _QUESTION.findall(m.content)
+    ]
+    return [q for q in asked if q][-ASKED_LIMIT:]
+
+
+def last_question(history: list[Message]) -> str | None:
+    """The question Mani's last reply ended on, or None when it asked nothing."""
+    last = next((m for m in reversed(history) if m.role is MessageRole.MANI), None)
+    asked = _QUESTION.findall(last.content) if last else []
+    return " ".join(asked[-1].split()) if asked else None
 
 
 def their_messages(ctx: TurnContext) -> int:
@@ -95,10 +123,14 @@ def may_check(ctx: TurnContext) -> bool:
     # Only a declined offer holds the next check back. A finished framework does not (muhammad, 2026-10-27): its
     # reading is cleared when it finishes, so a new check needs a fresh understanding first.
     technique = ctx.technique
+    cooldown = (
+        COOLDOWN_AFTER_CORRECTION if (ctx.thread.understanding or {}).get(understanding.CORRECTED)
+        else COOLDOWN_AFTER_DECLINE
+    )
     return (
         technique is None
         or technique.outcome is not TechniqueOutcome.DECLINED
-        or count - technique.at_message_count >= COOLDOWN_AFTER_DECLINE
+        or count - technique.at_message_count >= cooldown
     )
 
 
@@ -161,8 +193,9 @@ _MEANING: dict[str, str | dict[str, str]] = {
     },
     "offer_waiting": {
         "yes": (
-            "your last reply offered and they typed instead of tapping. On a yes, begin. "
-            "Otherwise follow them."
+            "your last reply offered and they typed instead of tapping. On a yes, begin. When they correct what the "
+            "offer said about them, set offer_answer corrected: say back what you understand now, from their words, "
+            "in a sentence, and ask one question that lets them confirm or add to it. Otherwise follow them."
         ),
     },
     "check": {
@@ -227,6 +260,7 @@ _MEANING: dict[str, str | dict[str, str]] = {
         "force from their message."
     ),
     "landed_on": "what they said for the last of the questions, in their words: where they ended up.",
+    "asked": f"questions you already asked: {SAME_QUESTION}.",
     "not_helping": {
         "stalled": (
             "two turns on this stage have brought nothing new: the questions have stopped helping. In your own words, "
@@ -237,6 +271,14 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "what they describe is really happening, not a thought to question. Say so plainly, offer in your own "
             "words to step out of the questions and help with it in the conversation, and set framework_fit to "
             "real_not_belief."
+        ),
+    },
+    "explored": {
+        "enough": (
+            "you have explored what they added to this stage for two turns. Unless their message brings something new "
+            "and important, tie it together in one sentence that says back the belief or point they reached, in their "
+            "words, such as \"So underneath it is the fear that you only matter when you're useful.\", answer agreed, "
+            "so the walk moves on, and write your text for the next stage after it."
         ),
     },
     "exit_offered": {
@@ -251,9 +293,12 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "body report yes or no, pain, or unclear. Code sends what follows."
         ),
         body.CHECK: (
-            "they were asked whether a feeling they named earlier is still felt in the place Mani named, with Yes "
-            "and No. In body report yes or no; a place they name instead, none for no tension, pain, or unclear "
-            "are reported as at the first step. Code sends the client's exercise or the general question."
+            "they were asked how a feeling they named earlier is now, after working through it. Write one short, "
+            "warm sentence about what they said, in plain words and with no question: code sends the question "
+            "after it. In body report yes for any answer about how they feel now (better, the same, still there, "
+            "worse); a place in the body if they name one (chest, stomach, head, jaw_face, hands, eyes, feet, toes, "
+            "arms), other or nearest as at the first step, pain, or unclear only when it is no answer at all. Code "
+            "sends the client's question about where they notice it, or the exercise for the place they named."
         ),
         body.BODY: (
             "they were asked where they feel tension, with Chest, Stomach, Head, Somewhere Else and No Tension. "
@@ -386,6 +431,8 @@ def build(
 
     if running:
         lines += _running_lines(ctx, framework, offer_waiting=offer_waiting, starting=starting)
+        if asked := asked_before(history or []):
+            lines += _line("asked", disarm(" | ".join(asked)))
     if yes_framework is not None and not safety_concern:
         lines += _line("if_they_say_yes", yes_framework.id)
         lines += _start_lines(yes_framework, resolve_style(ctx))
@@ -425,6 +472,8 @@ def _running_lines(
             lines += _line("not_helping", "situation")
         elif in_force.get("stalls", 0) >= walk.STALLS_TO_STEP_OUT:
             lines += _line("not_helping", "stalled")
+        elif in_force.get(walk.EXPLORED, 0) >= walk.EXPLORE_TURNS:
+            lines += _line("explored", "enough")
     if technique.phase in walk.content_stages(framework):
         lines.append(f"next: {walk.next_line(framework, technique.phase)}")
     index = framework.phase_index(technique.phase)

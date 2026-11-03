@@ -686,3 +686,60 @@ def test_ctx_says_when_the_questions_stopped_helping_and_when_stepping_out_was_o
     assert "not_helping: situation" in at_dispute({}, {"picture": {"problem_type": "situation"}})
     offered = at_dispute({"status": "partial", "said": "x", "stalls": 2, "exit_offered": True})
     assert "exit_offered: yes" in offered and "not_helping" not in offered
+
+
+def test_ctx_asks_to_tie_it_together_after_two_turns_exploring_what_they_added():
+    """The client meeting, 2026-11-03: what they add to a stage said back is explored, then the walk moves on. After
+    two turns of it, the note asks Mani to tie it together and answer agreed; a known stage is said back as an
+    invitation to add, never just a yes or no."""
+    from mani.chat import walk
+    from scripts.seed import FRAMEWORKS_DIR, parse_framework
+
+    parsed = parse_framework(FRAMEWORKS_DIR / "abcde.md")
+    abcde = Framework(id="abcde", name="ABCDE", summary="s", body="b", phases=parsed["phases"], stages=parsed["stages"])
+
+    def at_activate(entry: dict) -> str:
+        ctx = _running_at("activate")
+        ctx = dataclasses.replace(
+            ctx, technique=ctx.technique.model_copy(update={"stages_known": {"abcde": {"activate": entry}}}),
+        )
+        return context.build(ctx, framework=abcde)
+
+    once = at_activate({"status": "known", "said": "x", walk.EXPLORED: 1})
+    assert "explored: enough" not in once and "If explore, the walk stays" in once
+    twice = at_activate({"status": "known", "said": "x", walk.EXPLORED: walk.EXPLORE_TURNS})
+    assert "explored: enough" in twice and "answer agreed, so the walk moves on" in twice
+    assert "Is that it, or is there more to it?" in walk.CONFIRM_ASK
+
+
+def test_after_a_correction_at_the_offer_the_next_offer_needs_no_cooldown():
+    """The client meeting, 2026-11-03: they correct the reading the offer said back, Mani says the corrected reading
+    back, and once they confirm it the offer may come again, without the wait that follows a no."""
+    state = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED, at_message_count=12,
+    )
+    corrected = {**READY, "heart": "core_named", "corrected_offer": True}
+
+    def may(understood: dict) -> bool:
+        on = thread(12).model_copy(update={"understanding": understood})
+        return context.may_check(TurnContext(thread=on, profile=None, technique=state))
+
+    assert may(corrected)
+    assert not may(READY), "a no still waits COOLDOWN_AFTER_DECLINE messages"
+
+
+def test_inside_the_questions_a_turn_is_shown_what_it_already_asked():
+    """The daughter chat, 2026-11-03: inside C, "what feels most painful about how often you've missed out" was followed
+    by "what have you missed out on most". The chat's note listed Mani's questions; a framework turn never did."""
+    running = TurnContext(
+        thread=thread(), profile=Profile(user_id=USER, support_style="supportive"),
+        technique=TechniqueState(
+            thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED, phase="belief",
+            at_message_count=4,
+        ),
+    )
+    history = [mani("That's a lot to carry. What feels most painful about how often you've missed out?")]
+    lines = context.build(running, framework=framework(), history=history).splitlines()
+    assert "asked: What feels most painful about how often you've missed out?" in lines
+    assert f"  means: questions you already asked: {context.SAME_QUESTION}." in lines
+    assert not any(line.startswith("asked:") for line in context.build(running, framework=framework()).splitlines())

@@ -25,7 +25,8 @@ WORD = re.compile(r"[A-Za-z']+")
 FIRST_SENTENCE = re.compile(r"^.*?(?:[.!?](?=\s|$)|$)", re.S)
 # Flags about what a reply says rather than what the conversation did.
 LANGUAGE_FLAGS = ("em dash", "solution in chat", "explains people", "announces a question", "talks about them",
-                  "insight repeats", "reflect two in a row", "small idea", "shape ")
+                  "insight repeats", "reflect two in a row", "small idea", "shape ",
+                  "window on what they ruled out")
 
 
 def _behaviour(exchanges: list[dict]) -> dict:
