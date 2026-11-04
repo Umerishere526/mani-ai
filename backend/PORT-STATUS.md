@@ -83,7 +83,7 @@ the same change as the work.**
   and No Tension (No Tension is the way out), one of the nine
   exercises sent whole with the check for change (Feel Better / Feel the Same / Feel Worse), the fixed reply, the
   overall question (Yes, It Helped / Somewhat / No, Not Really), and Keep Chatting, Go to Library and Finish for Now.
-  The phases are `somatic_ask`, `somatic_check` (only when a place is asked about, see the decision below), `somatic_body`,
+  The phases are `somatic_ask`, `somatic_body`,
   `somatic_practice`, `somatic_effect` and `somatic_closing`;
   the last is final, so the turn after it retires the run. Taps decide by their label; a typed answer is the `body`
   value the reply read, valid only at the step that accepts it, and `unclear` re-asks with the same buttons and never
@@ -377,21 +377,13 @@ the same change as the work.**
   model asks nothing. Not measured live (needs muhammad's yes). `test_the_part_still_to_ask_is_kept_while_the_stage_
   is_partial_and_dropped_when_it_is_known` in `tests/unit/test_walk.py`, `test_what_is_still_to_ask_at_d_is_stored_
   and_sent_on_the_next_turn` in `tests/integration/test_turn.py`.
-- **The body check-in asks about a place only at its start, after a framework's last stage, and only when what Mani
-  found before the framework points to one** (muhammad, 2026-10-21). Because a feeling that usually sits in the body
-  makes the general question ("Where are you noticing any tension?") personal; it must never interrupt chat or a
-  framework, which an earlier build did (a word in a typed message asked about the chest while Mani was still finding
-  out how they feel, and was removed the same day). After the last stage, if the feelings they named or the one
-  underneath hold a word from `somatic_check.places` in `content/prompts/somatic.md` (anxious, anxiety, nervous to the
-  chest; stress, stressed, stressful to the head), Step 1 is the client's introduction and then "Earlier you
-  mentioned feeling anxious, and that's often felt in the chest. Is that still the case for you right now?" with Yes
-  and No (phase `somatic_check`). Yes is the client's exercise for that place and then the route as before; No is the
-  general question with its five buttons; a typed answer is read as at Step 1; a feeling with no place gets Step 1
-  as before. The place is found again from the stored understanding on the answer, which a running framework
-  freezes. The question, the buttons and the word list are ours, not the client's document. Not measured live
-  (needs muhammad's yes). `test_after_the_last_stage_a_feeling_that_has_a_place_gets_the_personal_question`,
-  `test_no_to_the_personal_question_carries_on_with_the_general_check_in` and `test_a_feeling_word_in_chat_or_inside_a_
-  stage_never_starts_a_body_question` in `tests/integration/test_turn.py`.
+- **A yes to the body check-in always gets the client's Step 1: its introduction, its general question and its five
+  buttons, with no question of ours before them** (muhammad, 2026-11-04). Because the step that asked how a feeling
+  they named was now (`somatic_check`, added 2026-11-03 after Manasa's comment, itself replacing the 2026-10-21
+  question about a place) had no buttons, and testers saw the check-in arrive with nothing to tap. The step, its script
+  and its code are gone; migration 030 moves any thread waiting on it to Step 1. A word in chat or inside a framework
+  still never starts a body question. `test_a_yes_to_the_check_in_gets_the_clients_step_one_with_its_five_buttons` and
+  `test_a_feeling_word_in_chat_or_inside_a_stage_never_starts_a_body_question` in `tests/integration/test_turn.py`.
 - **An offer comes only on a clear yes to Mani's check of its understanding; the check comes from their 5th message,
   on a reply that judges the heart of it ready: the central conflict agreed, and what they want and what is stopping
   them known** (muhammad, 2026-10-26, replacing the three steps of 2026-10-13). Because Lolly's ChatGPT conversations

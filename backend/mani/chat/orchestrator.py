@@ -61,12 +61,10 @@ def _body_route(
     tapped: SmartPrompt | None,
     technique: TechniqueState | None,
     framework: Framework,
-    check: body_route.Check | None = None,
 ) -> tuple[repairs.Repaired, body_route.Step | None]:
     """The body check-in's turn: the client's script for the answer at this step. A tapped button decides
     by itself; a typed answer is the value the reply read from it. Anywhere an answer does not fit, the
-    reply stands as the model wrote it. `check` is the feeling they named, asked about once they say yes to a
-    check-in. A step that leads with Mani's words keeps its one sentence about their answer before the script."""
+    reply stands as the model wrote it."""
     at = body_route.RETIRING if technique is None else technique.phase
     if tapped is not None and (decided := body_route.tapped_value(at, tapped.label, framework.stages)):
         value = decided
@@ -77,16 +75,11 @@ def _body_route(
         return fixed, None
     step = body_route.step(
         at, value, framework.stages,
-        physical_response=technique.physical_response if technique else None, check=check,
+        physical_response=technique.physical_response if technique else None,
     )
     if step is None:
         return dataclasses.replace(fixed, notes=fixed.notes + [f"ignored body {value} at {at}"]), None
-    if step.text is None:
-        text = fixed.text
-    elif step.lead:
-        text = repairs.with_the_check_in(fixed.text, step.text)
-    else:
-        text = step.text
+    text = fixed.text if step.text is None else step.text
     return dataclasses.replace(
         fixed,
         text=text,
@@ -94,11 +87,6 @@ def _body_route(
         framework_id=framework.id if technique else None,
         phase=step.phase if technique else None,
     ), step
-
-
-def _feelings(understood: dict[str, str]) -> str:
-    """The feelings they named before the framework."""
-    return understood.get("feeling", "")
 
 
 def _case_words(understood: dict[str, str]) -> str:
@@ -1047,9 +1035,7 @@ async def send(
             fixed = dataclasses.replace(fixed, text=text, prompts=_prompts(buttons), phase=body_route.ASK)
     if moment is Moment.BODY and not guarded:
         route = config.registry.get(technique.framework_id if technique else retiring_framework_id)
-        # The feeling they named before the framework: asked about, how it is now, on a yes to the check-in.
-        pointed = body_route.check_for(_feelings(ctx.thread.understanding), route.stages)
-        fixed, step = _body_route(fixed, reply.body, reply.options, tapped, technique, route, check=pointed)
+        fixed, step = _body_route(fixed, reply.body, reply.options, tapped, technique, route)
         if step is not None:
             updates.physical_response = step.physical_response
             updates.conversation_effect = step.conversation_effect

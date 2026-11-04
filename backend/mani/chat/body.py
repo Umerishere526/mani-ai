@@ -3,15 +3,14 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 
 from mani.chat.repairs import with_the_check_in
 
-ASK, CHECK, BODY, PRACTICE, EFFECT, CLOSING = (
-    "somatic_ask", "somatic_check", "somatic_body", "somatic_practice", "somatic_effect", "somatic_closing",
+ASK, BODY, PRACTICE, EFFECT, CLOSING = (
+    "somatic_ask", "somatic_body", "somatic_practice", "somatic_effect", "somatic_closing",
 )
-STAGES = (ASK, CHECK, BODY, PRACTICE, EFFECT, CLOSING)
+STAGES = (ASK, BODY, PRACTICE, EFFECT, CLOSING)
 # Where the route is on the turn after its last step, when the run retires.
 RETIRING = "retiring"
 
@@ -21,8 +20,6 @@ _ANSWERS = {
     # Whether they would like to check in with their body at all (muhammad, 2026-10-27).
     ASK: {"yes", "no", "pain", "unclear"},
     BODY: {*AREAS, "other", "nearest", "none", "no", "pain", "unclear"},
-    # Yes or No to the question about a place, or any answer the first step takes.
-    CHECK: {"yes", "no", *AREAS, "other", "nearest", "none", "pain", "unclear"},
     PRACTICE: {"better", "same", "worse", "pain", "unclear"},
     EFFECT: {"helped", "somewhat", "not_really", "unclear"},
     RETIRING: {"finish", "keep_chatting"},
@@ -49,32 +46,14 @@ class Button:
 @dataclass(frozen=True)
 class Step:
     """What a body answer does. `text` is None where the model's own words stand (asking where, offering the
-    closest exercise, a clarifying question, Keep Chatting, Finish for Now). With `lead`, Mani's own sentence about
-    their answer comes first and `text` follows it. `phase` is None when the route has ended."""
+    closest exercise, a clarifying question, Keep Chatting, Finish for Now). `phase` is None when the route has
+    ended."""
 
     text: str | None
     buttons: list[Button] = field(default_factory=list)
     phase: str | None = None
     physical_response: str | None = None
     conversation_effect: str | None = None
-    lead: bool = False
-
-
-@dataclass(frozen=True)
-class Check:
-    """A feeling they named before the framework, asked about as Step 1's introduction ends."""
-
-    feeling: str
-
-
-def check_for(feelings: str, stages: dict) -> Check | None:
-    """The first feeling they named before the framework, what Mani found before it, to ask how it is now. None when
-    they named none, or the framework has no such step. Any feeling: no place is named, so none needs a place
-    (Manasa, the client meeting of 2026-11-03)."""
-    if not _script(stages, CHECK).get("text"):
-        return None
-    first = next((f.strip() for f in re.split(r"[,;]", feelings or "") if f.strip()), None)
-    return Check(first) if first else None
 
 
 def fits(value: str, at: str) -> bool:
@@ -96,22 +75,16 @@ def ask(text: str, stages: dict) -> tuple[str, list[Button]]:
     return with_the_check_in(text, script["text"]), _buttons(script["buttons"])
 
 
-def _opening(stages: dict, check: Check | None) -> Step:
-    """Step 1 once they said yes: the client's introduction and its five buttons. With a `check`, the introduction
-    ends on how the feeling they named is now, with no buttons, in place of the general question."""
+def _opening(stages: dict) -> Step:
+    """Step 1 once they said yes: the client's introduction, its general question and its five buttons (muhammad,
+    2026-11-04: always the client's Step 1, never a question of ours before its buttons)."""
     script = _script(stages, BODY)
-    if check is None:
-        return Step(script["text"], _buttons(script["buttons"]), BODY)
-    introduction = script["text"].removesuffix(script["question"]).rstrip()
-    question = _script(stages, CHECK)["text"].format(feeling=check.feeling)
-    return Step(f"{introduction}\n\n{question}", [], CHECK)
+    return Step(script["text"], _buttons(script["buttons"]), BODY)
 
 
 # The button sets whose labels a tap may carry at each step: (stage holding the set, key of the set).
 _TAPS = {
     ASK: [(ASK, "buttons")],
-    # How they feel now is typed, never tapped (the client meeting, 2026-11-03).
-    CHECK: [],
     BODY: [(BODY, "buttons"), (BODY, "other_buttons"), (BODY, "nearest_buttons")],
     PRACTICE: [(PRACTICE, "buttons")],
     EFFECT: [(EFFECT, "buttons"), (BODY, "no_tension_buttons")],
@@ -142,28 +115,16 @@ def _stop(stages: dict) -> Step:
     return Step(_script(stages, BODY)["pain"], [], CLOSING)
 
 
-def step(
-    at: str, value: str, stages: dict, *, physical_response: str | None = None, check: Check | None = None,
-) -> Step | None:
-    """What the answer `value` does at step `at`, or None when it is not valid there. `check` is the feeling they named
-    before the framework, asked about on a yes at ASK."""
+def step(at: str, value: str, stages: dict, *, physical_response: str | None = None) -> Step | None:
+    """What the answer `value` does at step `at`, or None when it is not valid there."""
     if not fits(value, at):
         return None
     if at == ASK and value != "pain":
         if value == "yes":
-            return _opening(stages, check)
+            return _opening(stages)
         if value == "no":
             return _effect_step(stages, "")
         return Step(None, _buttons(_script(stages, ASK)["buttons"]), ASK)
-    if at == CHECK and value != "pain":
-        body = _script(stages, BODY)
-        if value in AREAS or value in ("other", "nearest"):
-            # A place they name goes straight to Step 1's answer for it.
-            return step(BODY, value, stages)
-        if value == "unclear":
-            return Step(None, [], CHECK)
-        # However they feel now: Mani's sentence about it, then the client's general question and its five buttons.
-        return Step(body["question"], _buttons(body["buttons"]), BODY, lead=True)
     if value == "pain":
         return _stop(stages)
     body, practice, effect = (_script(stages, s) for s in (BODY, PRACTICE, EFFECT))

@@ -316,14 +316,6 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "they were asked whether they would like to check in with their body, with Yes and Not right now. In "
             "body report yes or no, pain, or unclear. Code sends what follows."
         ),
-        body.CHECK: (
-            "they were asked how a feeling they named earlier is now, after working through it. Write one short, "
-            "warm sentence about what they said, in plain words and with no question: code sends the question "
-            "after it. In body report yes for any answer about how they feel now (better, the same, still there, "
-            "worse); a place in the body if they name one (chest, stomach, head, jaw_face, hands, eyes, feet, toes, "
-            "arms), other or nearest as at the first step, pain, or unclear only when it is no answer at all. Code "
-            "sends the client's question about where they notice it, or the exercise for the place they named."
-        ),
         body.BODY: (
             "they were asked where they feel tension, with Chest, Stomach, Head, Somewhere Else and No Tension. "
             "In body report the place they name (chest, stomach, head, jaw_face, hands, eyes, feet, toes, arms), "

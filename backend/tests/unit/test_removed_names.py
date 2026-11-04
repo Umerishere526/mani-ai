@@ -12,7 +12,7 @@ REMOVED = [
     "CHAT_MORE_LABEL", "AFTER_FRAMEWORK_QUESTIONS", "after_framework_question", "_after_framework_question",
     "library_offered_since", "library_pending", "choose_exercise", "_offer_exercise", "StartExercise",
     "list_for_framework", "EXERCISE_SELECT", "PLACE_LABELS", "body_reply", "body_answer_fits", "_awaiting_place",
-    "_offered_handoff", "build_tool_choice", "_closing_unanswered", "somatic_checkin", "CHECKIN",
+    "_offered_handoff", "build_tool_choice", "_closing_unanswered", "somatic_checkin", "CHECKIN", "somatic_check", "check_for",
 ]
 
 

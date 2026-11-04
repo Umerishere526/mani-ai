@@ -2088,6 +2088,7 @@ async def test_answering_the_last_stage_asks_before_the_body_check_in_and_yes_op
     assert turn.content.endswith("Where are you noticing any tension or discomfort right now?")
     assert [p.label for p in turn.prompts] == ["Chest", "Stomach", "Head", "Somewhere Else", "No Tension"]
     assert (await _offered_row(alice, thread.id)).phase == "somatic_body"
+    assert "invisible" not in turn.content
 
 
 async def test_not_right_now_skips_the_body_and_asks_whether_the_conversation_helped(alice, model):
@@ -2228,60 +2229,12 @@ def _last_stage_answered() -> Reply:
     )
 
 
-async def test_after_the_last_stage_a_feeling_they_named_is_asked_about_how_it_is_now(alice, model):
-    """Manasa, the client meeting of 2026-11-03: the client's introduction, then how the feeling they named is now, in
-    place of the general question. No place is named and nothing is tapped."""
+async def test_a_yes_to_the_check_in_gets_the_clients_step_one_with_its_five_buttons(alice, model):
+    """muhammad, 2026-11-04: a feeling named before the framework was asked about first, with no buttons, and the
+    buttons never came. A yes always gets the client's Step 1, whatever they named."""
     model(_last_stage_answered(), Reply(text="ignored", body="yes"))
     thread = await start(alice)
-    await _said_before(alice, thread.id, {"feeling": "anxious, embarrassed", "issue": "my manager criticised my report"})
-    await _land_on(alice, thread.id, "effective")
-
-    await send(alice, thread.id, "it sits easier now")
-    turn = await send(alice, thread.id, "Yes")
-
-    assert turn.content.startswith("Now that we've worked through your thoughts")
-    assert turn.content.endswith(
-        "Earlier you mentioned feeling anxious. Now that we've worked through it, how are you feeling right now?"
-    )
-    assert "often felt" not in turn.content and "Where are you noticing any tension" not in turn.content
-    assert turn.prompts == []
-    assert (await _offered_row(alice, thread.id)).phase == "somatic_check"
-
-
-async def test_how_they_feel_now_gets_a_sentence_then_the_general_question_with_its_five_buttons(alice, model):
-    model(Reply(text="I'm glad it feels a little lighter. What part of you noticed it first?", body="yes"))
-    thread = await start(alice)
-    await _said_before(alice, thread.id, {"feeling": "anxious"})
-    await _land_on(alice, thread.id, "somatic_check")
-
-    turn = await send(alice, thread.id, "a bit lighter honestly")
-
-    assert turn.content == (
-        "I'm glad it feels a little lighter.\n\nWhere are you noticing any tension or discomfort right now?"
-    ), "Mani's sentence stays, its own question gives way to the client's"
-    assert [p.label for p in turn.prompts] == ["Chest", "Stomach", "Head", "Somewhere Else", "No Tension"]
-    assert (await _offered_row(alice, thread.id)).phase == "somatic_body"
-
-
-async def test_a_place_they_name_when_asked_how_they_feel_starts_that_places_exercise(alice, model):
-    scripted = model(Reply(text="ignored", body="head"), Reply(text="ignored", body="better"))
-    thread = await start(alice)
-    await _said_before(alice, thread.id, {"feeling": "stressed"})
-    await _land_on(alice, thread.id, "somatic_check")
-
-    exercise = await send(alice, thread.id, "still a bit of pressure in my head")
-    assert exercise.content.startswith("Let's bring your attention to your head.")
-    assert [p.label for p in exercise.prompts] == ["Feel Better", "Feel the Same", "Feel Worse"]
-    assert (await _offered_row(alice, thread.id)).phase == "somatic_practice"
-    effect = await send(alice, thread.id, "Feel Better")
-    assert effect.content.endswith("do you feel our conversation helped you?")
-    assert scripted.calls == 2
-
-
-async def test_with_no_feeling_named_the_general_check_in_comes_as_before(alice, model):
-    model(_last_stage_answered(), Reply(text="ignored", body="yes"))
-    thread = await start(alice)
-    await _said_before(alice, thread.id, {"issue": "my manager criticised my report"})
+    await _said_before(alice, thread.id, {"issue": "my manager criticised my report", "feeling": "invisible"})
     await _land_on(alice, thread.id, "effective")
 
     await send(alice, thread.id, "it sits easier now")
