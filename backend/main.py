@@ -16,6 +16,7 @@ from mani import auth_admin, storage, stt
 from mani.config import get_settings
 from mani.db import pool
 from mani.errors import ErrorCategory, ServiceError
+from mani.text import EMPTY_MESSAGE, TOO_LONG_MESSAGE
 from mani.routers import (
     account,
     admin,
@@ -35,6 +36,17 @@ logger = logging.getLogger(__name__)
 def error_body(category: ErrorCategory, message: str, retryable: bool) -> dict:
     """The single error shape every client branches on."""
     return {"error": {"category": category, "message": message, "retryable": retryable}}
+
+
+def _what_to_fix(errors: list) -> str | None:
+    """What to tell the person when the message itself was the problem: nothing to send, or too long."""
+    for error in errors:
+        if tuple(error.get("loc", ()))[-1:] != ("content",):
+            continue
+        if error["type"] == "string_too_long":
+            return TOO_LONG_MESSAGE
+        return EMPTY_MESSAGE
+    return None
 
 
 def operation_id(route: APIRoute) -> str:
@@ -129,7 +141,7 @@ def create_app() -> FastAPI:
             status_code=422,
             content=error_body(
                 ErrorCategory.INVALID_REQUEST,
-                "That request was not valid. Please try again.",
+                _what_to_fix(exc.errors()) or "That request was not valid. Please try again.",
                 False,
             ),
         )

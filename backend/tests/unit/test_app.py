@@ -139,3 +139,20 @@ def test_internal_message_is_not_sent_to_the_client(client):
     response = client.get("/leak")
     assert response.status_code == 500
     assert "secret" not in response.text
+
+
+def test_an_empty_or_too_long_message_is_told_what_to_do(client):
+    """A person who sends nothing, or too much, is told how to fix it rather than 'not valid'."""
+    from mani.models.api import SendMessageIn
+    from mani.text import EMPTY_MESSAGE, TOO_LONG_MESSAGE
+
+    app: FastAPI = client.app
+
+    @app.post("/typed")
+    def typed(body: SendMessageIn):
+        return {"ok": True}
+
+    for content, said in (("   ", EMPTY_MESSAGE), ("​​", EMPTY_MESSAGE), ("a" * 4001, TOO_LONG_MESSAGE)):
+        response = client.post("/typed", json={"content": content})
+        assert response.status_code == 422 and response.json()["error"]["message"] == said
+    assert client.post("/typed", json={"content": "hello"}).status_code == 200

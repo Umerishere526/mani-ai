@@ -155,6 +155,14 @@ the same change as the work.**
   `test_editing_the_message_that_answered_a_check_takes_back_the_offer_and_runs_the_new_text`,
   `test_editing_the_last_message_inside_a_framework_puts_the_walk_back_where_it_was`,
   `test_a_message_that_cannot_be_taken_back_safely_is_refused_and_nothing_changes`.
+- **A message is cleaned to its visible text before anything reads it, and an empty one is refused with what to do.**
+  Because a zero-width character inside "kill myself" turned into a space in the safety screen and the phrase was no
+  longer matched, and the same hid a typed `[ctx]` block from its guard (muhammad, 2026-11-04). `text.clean_message`
+  folds full-width and compatibility letters, drops zero-width, control and unassigned characters, makes every space a
+  plain one and collapses runs; `SendMessageIn` and `EditMessageIn` apply it, and `safety.normalize` applies it again.
+  Nothing visible left gives 422 "Write a message first. It can't be empty or only spaces."; over 4000 characters gives
+  "That message is too long..." (`main.py` `_what_to_fix`). Not covered: look-alike letters from other alphabets.
+  Tests: `tests/unit/test_text.py`, `test_an_empty_or_too_long_message_is_told_what_to_do`.
 - **Mani runs the chat like a therapist runs a session, with Lolly's role-played session as its example.**
   Because three days of rules on `feat/identify-the-connection` did not change the shape of the replies: the model
   copied the mirror-then-question turns of the two ChatGPT conversations at the end of `voice.md` over every rule
