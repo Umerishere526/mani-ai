@@ -50,6 +50,10 @@ st.markdown(
         transform: translate(calc(-50% - 0.75px), calc(-50% + 0.25px)); font-size: 18px; width: 18px; height: 18px; line-height: 18px; margin: 0; }
     /* Send and Cancel side by side, close together. */
     .st-key-edit_actions { gap: 0.5rem !important; }
+    /* While a run is still going, Streamlit keeps the last run's elements faded on screen until the new run replaces or
+       drops them. A faded Send and Cancel from an editor that has already closed only confuse, so they are hidden. */
+    .st-key-edit_send[data-stale="true"], .st-key-edit_cancel[data-stale="true"] { display: none; }
+    [data-stale="true"]:has(> .st-key-edit_actions), .st-key-edit_actions:not(:has([data-stale="false"])) { display: none; }
     /* Copy and edit sit close together, as under a message in ChatGPT. */
     [class*="st-key-actions_"] { gap: 0.15rem !important; }
     </style>""",
@@ -312,20 +316,25 @@ editable_at = (
 for index, message in enumerate(messages):
     avatar = "🧠" if message["role"] == "mani" else "🧑"
     with st.chat_message("assistant" if message["role"] == "mani" else "user", avatar=avatar):
-        if index == editable_at and st.session_state.editing:
-            render_editor(message["content"])
-        else:
-            st.write(message["content"])
-            if index >= opening:
-                # Copy and edit side by side on one row, as under a message in ChatGPT.
-                with st.container(horizontal=True, gap="small", vertical_alignment="center", key=f"actions_{index}"):
-                    copy_button(message["content"])
-                    if index == editable_at and st.button(
-                        " ", icon=":material/edit_square:", key="edit_last", type="tertiary", help="Edit message"
-                    ):
-                        st.session_state.editing = True
-                        st.session_state.focus_editor = True
-                        st.rerun()
+        editing_here = index == editable_at and st.session_state.editing
+        # The editor and the plain message are separate keyed boxes. Streamlit reuses an element's slot when the next run
+        # puts something in the same place, so without the key change a closed editor's Send and Cancel stayed on
+        # screen above the edited message.
+        with st.container(key=f"message_{index}_{'editing' if editing_here else 'shown'}"):
+            if editing_here:
+                render_editor(message["content"])
+            else:
+                st.write(message["content"])
+                if index >= opening:
+                    # Copy and edit side by side on one row, as under a message in ChatGPT.
+                    with st.container(horizontal=True, gap="small", vertical_alignment="center", key=f"actions_{index}"):
+                        copy_button(message["content"])
+                        if index == editable_at and st.button(
+                            " ", icon=":material/edit_square:", key="edit_last", type="tertiary", help="Edit message"
+                        ):
+                            st.session_state.editing = True
+                            st.session_state.focus_editor = True
+                            st.rerun()
         if developer and message.get("trace"):
             # What code decided on this turn, sent only with AI_DEBUG_MODE (admin.turn_traces).
             trace_view.render(message["trace"])
