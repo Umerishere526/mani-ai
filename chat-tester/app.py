@@ -14,7 +14,9 @@ import client as mani
 from admin_view import render_admin
 from library import render_library
 import session_store
-from login import render_account, render_login
+import trace_view
+from copy_button import copy_button
+from login import render_account, render_login, render_nickname
 
 # Off wherever this flag is unset - a deployed, client-facing instance - so there is no
 # control on screen that could show a framework id, a stage name, or a database read.
@@ -26,6 +28,33 @@ st.set_page_config(page_title="Mani chat tester", page_icon="🧠", layout="wide
 # The greeting's style buttons, by the label the person taps - used only to show which
 # style the conversation is in.
 STYLES = {"directive": "Directive", "supportive": "Supportive", "reflective": "Reflective"}
+
+# Shown as a popup when there is nothing to send or nothing changed; the backend words its own refusals the same way.
+EMPTY_NOTICE = "Write a message first. It can't be empty or only spaces."
+UNCHANGED_NOTICE = "Nothing has changed yet. Change your message and press Send, or press Cancel to keep it."
+
+# The edit control: a small icon button that lights up on hover, like the one under a sent message in ChatGPT.
+st.markdown(
+    """<style>
+    .st-key-edit_last button { width: 2rem; height: 2rem; min-height: 0; padding: 0; border: 0; border-radius: 8px;
+        background: transparent; color: #8e8ea0; transition: background-color .15s ease, color .15s ease, transform .1s ease; }
+    .st-key-edit_last button:hover { background: rgba(142, 142, 160, .2); color: inherit; }
+    .st-key-edit_last button:active { transform: scale(.92); }
+    .st-key-edit_last button:focus-visible { outline: 2px solid rgba(142, 142, 160, .6); outline-offset: 1px; }
+    /* The button has no label, but Streamlit still lays out spans and a gap for one, which shift the icon. The icon is
+       pinned to the button's exact centre instead, so nothing around it can move it. The glyph's own ink leans right
+       and up a little, hence the small nudge. */
+    .st-key-edit_last button { position: relative; }
+    .st-key-edit_last button span:has(> [data-testid="stMarkdownContainer"]) { display: none; }
+    .st-key-edit_last button [data-testid="stIconMaterial"] { position: absolute; top: 50%; left: 50%;
+        transform: translate(calc(-50% - 0.75px), calc(-50% + 0.25px)); font-size: 18px; width: 18px; height: 18px; line-height: 18px; margin: 0; }
+    /* Send and Cancel side by side, close together. */
+    .st-key-edit_actions { gap: 0.5rem !important; }
+    /* Copy and edit sit close together, as under a message in ChatGPT. */
+    [class*="st-key-actions_"] { gap: 0.15rem !important; }
+    </style>""",
+    unsafe_allow_html=True,
+)
 
 # Where Mani's reply will appear, while it is on its way: three dots pulsing in a pill.
 # Colours are .streamlit/config.toml's secondaryBackgroundColor, borderColor and primaryColor.
@@ -77,6 +106,7 @@ def reset_thread_state(thread: dict, messages: list[dict]) -> None:
     st.session_state.last_turn = None
     # A message still waiting to go belongs to the conversation it was typed in.
     st.session_state.pending = None
+    st.session_state.editing = False
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +137,7 @@ if mani.is_admin(st.session_state.client.session):
 
 with st.sidebar:
     render_account("tester")
+    render_nickname(st.session_state.client)
 
     # The control itself is gone, not just off, wherever CHAT_TESTER_DEV_MODE is unset - a
     # deployed, client-facing instance - so there is nothing on screen a client could click
@@ -162,18 +193,151 @@ if caption:
 # The conversation itself
 # ---------------------------------------------------------------------------
 
-for message in st.session_state.messages:
+def record_turn(content: str, turn: dict, *, replacing: bool = False) -> None:
+    exchange = [
+        {"role": "user", "content": content, "prompts": []},
+        {"role": "mani", "content": turn["content"], "prompts": turn.get("prompts") or [], "trace": turn.get("trace")},
+    ]
+    if replacing:
+        st.session_state.messages[-2:] = exchange
+    else:
+        st.session_state.messages.extend(exchange)
+    st.session_state.last_turn = turn
+    style = next((key for key, label in STYLES.items() if label == content.strip()), None)
+    if style:
+        st.session_state.style = style
+    if turn.get("title"):
+        st.session_state.thread["title"] = turn["title"]
+    if turn.get("crisis_detected") and turn.get("crisis_blocks_chat"):
+        st.session_state.locked = True
+
+
+def refusal_text(exc: mani.ApiError) -> str:
+    # A refusal the backend worded for the person (an empty or too long message) is shown as it says it.
+    error = exc.body.get("error") or {}
+    return error["message"] if exc.status == 422 and error.get("message") else str(exc)
+
+
+def set_send_error(message: str) -> None:
+    st.session_state.send_error = message
+
+
+def notify(message: str) -> None:
+    # Held for the next run, which shows it as a popup: a rerun right after would otherwise swallow it.
+    st.session_state.notice = message
+
+
+def edit_last(content: str) -> None:
+    # Replaces the last message and Mani's reply to it: the backend takes that turn back and runs the new text.
+    # A refused edit leaves the editor open with what they typed, so nothing is lost.
+    try:
+        message_id = client.last_user_message_id(thread["id"])
+        turn = client.edit_message(thread["id"], message_id, content)
+    except mani.ApiError as exc:
+        notify(refusal_text(exc))
+        return
+    except requests.exceptions.RequestException:
+        notify(
+            f"No reply within {mani.REQUEST_TIMEOUT_SECONDS} seconds, or the backend is not reachable. "
+            "Reopen the chat to see whether the edit went through before trying again."
+        )
+        return
+    st.session_state.editing = False
+    st.session_state.pop("edit_text", None)
+    record_turn(content, turn, replacing=True)
+
+
+# Puts the cursor at the end of the edit box as it opens, so it is clear where to type. Streamlit has no focus
+# control, so a script finds the box once it is drawn. The counter makes each opening a new element, which runs again.
+FOCUS_EDITOR = """<script>
+(() => { let tries = 0; const timer = setInterval(() => {
+  const area = document.querySelector(".st-key-edit_text textarea");
+  if (!area && ++tries < 40) return;
+  clearInterval(timer);
+  if (area) { area.focus(); area.setSelectionRange(area.value.length, area.value.length); }
+}, 50); })();
+</script><!-- %d -->"""
+
+
+def render_editor(content: str) -> None:
+    edited = st.text_area("Edit your message", value=content, key="edit_text", label_visibility="collapsed")
+    if st.session_state.pop("focus_editor", False):
+        st.session_state.focus_count = st.session_state.get("focus_count", 0) + 1
+        st.html(FOCUS_EDITOR % st.session_state.focus_count, unsafe_allow_javascript=True)
+    with st.container(horizontal=True, key="edit_actions"):
+        send = st.button("Send", key="edit_send", type="primary")
+        cancel = st.button("Cancel", key="edit_cancel")
+    if cancel:
+        st.session_state.editing = False
+        st.session_state.pop("edit_text", None)
+        st.rerun()
+    if send:
+        text = edited.strip()
+        if not text:
+            notify(EMPTY_NOTICE)
+        elif text == content.strip():
+            notify(UNCHANGED_NOTICE)
+        else:
+            with st.spinner("Sending…"):
+                edit_last(text)
+        st.rerun()
+
+
+notice = st.session_state.pop("notice", None)
+if notice:
+    st.toast(notice, icon="⚠️")
+
+def opening_length(messages: list[dict]) -> int:
+    """How many messages at the top are the opening: Mani's greeting, the style they tapped and Mani's opener to it.
+    These carry no copy or edit icon; there is nothing in them worth copying, and a style is not edited by rewording."""
+    if not messages or messages[0]["role"] != "mani":
+        return 0
+    if len(messages) >= 2 and messages[1]["role"] == "user" and messages[1]["content"].strip() in STYLES.values():
+        return min(3, len(messages))
+    return 1
+
+
+# Only the person's last message can be edited, and only once Mani has answered it.
+messages = st.session_state.messages
+opening = opening_length(messages)
+editable_at = (
+    len(messages) - 2
+    if len(messages) >= 2
+    and len(messages) - 2 >= opening
+    and (messages[-2]["role"], messages[-1]["role"]) == ("user", "mani")
+    and not st.session_state.get("pending")
+    and not st.session_state.locked
+    else None
+)
+for index, message in enumerate(messages):
     avatar = "🧠" if message["role"] == "mani" else "🧑"
     with st.chat_message("assistant" if message["role"] == "mani" else "user", avatar=avatar):
-        st.write(message["content"])
+        if index == editable_at and st.session_state.editing:
+            render_editor(message["content"])
+        else:
+            st.write(message["content"])
+            if index >= opening:
+                # Copy and edit side by side on one row, as under a message in ChatGPT.
+                with st.container(horizontal=True, gap="small", vertical_alignment="center", key=f"actions_{index}"):
+                    copy_button(message["content"])
+                    if index == editable_at and st.button(
+                        " ", icon=":material/edit_square:", key="edit_last", type="tertiary", help="Edit message"
+                    ):
+                        st.session_state.editing = True
+                        st.session_state.focus_editor = True
+                        st.rerun()
+        if developer and message.get("trace"):
+            # What code decided on this turn, sent only with AI_DEBUG_MODE (admin.turn_traces).
+            trace_view.render(message["trace"])
 
 last_turn = st.session_state.get("last_turn")
 
-# The reply that just arrived gets its own callouts - a framework offer or a crisis - which is the
-# whole reason this tool exists.
+# The reply that just arrived gets its own callouts for a developer - a framework offer or a crisis - which is
+# the whole reason this tool exists. The crisis reply is already on screen as Mani's message, so the callout only
+# names it; repeating the text made a person read the crisis reply twice (Lolly, 2026-11-03).
 if last_turn:
-    if last_turn.get("crisis_detected"):
-        st.error("🚨 **Crisis detected.** " + last_turn["content"])
+    if developer and last_turn.get("crisis_detected"):
+        st.error("🚨 **Crisis detected.**")
 
     technique_prompts = [p for p in last_turn.get("prompts") or [] if p.get("technique")]
     if developer and technique_prompts:
@@ -207,7 +371,10 @@ def deliver(content: str) -> None:
     except mani.ApiError as exc:
         # Kept in session state rather than shown here: the rerun that follows would wipe
         # an st.error before anyone could read it, and a failed send would look like nothing.
-        st.session_state.send_error = str(exc)
+        (notify if exc.status == 422 else set_send_error)(refusal_text(exc))
+        # The message was not stored, so it goes back into the composer to send again rather than vanishing from
+        # the chat (Lolly, 2026-11-03: "it deleted my answer").
+        st.session_state.composer_draft = content
         return
     except requests.exceptions.RequestException:
         # No answer at all within the request timeout, or the backend unreachable. The turn may still
@@ -217,25 +384,14 @@ def deliver(content: str) -> None:
             "Reopen the chat to see whether the reply arrived before sending again."
         )
         return
-    st.session_state.messages.append({"role": "user", "content": content, "prompts": []})
-    st.session_state.messages.append(
-        {"role": "mani", "content": turn["content"], "prompts": turn.get("prompts") or []}
-    )
-    st.session_state.last_turn = turn
-    style = next((key for key, label in STYLES.items() if label == content.strip()), None)
-    if style:
-        st.session_state.style = style
-    if turn.get("title"):
-        st.session_state.thread["title"] = turn["title"]
-    if turn.get("crisis_detected") and turn.get("crisis_blocks_chat"):
-        st.session_state.locked = True
+    record_turn(content, turn)
 
 
-# A voice transcript waiting to be put into the composer. The composer's own key can't be
-# written once it has rendered this run (Streamlit raises), so the transcript is held here
-# and written into `composer` on the next run, before the field is drawn.
-if "voice_draft" not in st.session_state:
-    st.session_state.voice_draft = None
+# Text waiting to be put into the composer: a voice transcript, or a message whose send failed. The composer's own
+# key can't be written once it has rendered this run (Streamlit raises), so the text is held here and written into
+# `composer` on the next run, before the field is drawn.
+if "composer_draft" not in st.session_state:
+    st.session_state.composer_draft = None
 
 if st.session_state.locked:
     st.warning("This conversation is paused after a crisis flag. Start a new conversation to continue.")
@@ -272,9 +428,9 @@ else:
     # same as if it had been typed. Only sending text calls send() - one trigger, same as a
     # typed message, no parallel path.
     # -----------------------------------------------------------------------
-    if st.session_state.voice_draft is not None:
-        st.session_state.composer = st.session_state.voice_draft
-        st.session_state.voice_draft = None
+    if st.session_state.composer_draft is not None:
+        st.session_state.composer = st.session_state.composer_draft
+        st.session_state.composer_draft = None
 
     # Disabled while a message is on its way: a second submit would rerun the script and
     # stop the one waiting on the reply.
@@ -296,10 +452,13 @@ else:
                 transcript = None
         # Only ever fills the field - nothing here calls send().
         if transcript:
-            st.session_state.voice_draft = transcript
+            st.session_state.composer_draft = transcript
             st.rerun()
     elif submitted and submitted.text.strip():
         send(submitted.text.strip())
+        st.rerun()
+    elif submitted and submitted.text:
+        notify(EMPTY_NOTICE)
         st.rerun()
 
 # ---------------------------------------------------------------------------
@@ -358,6 +517,7 @@ with st.sidebar:
             ("Really happening", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "happening")),
             ("New ways of seeing it", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "new")),
             ("Still uncertain", " | ".join(seen.get("uncertain") or [])),
+            ("How they react", " | ".join(seen.get("reactions") or [])),
             ("What they want (their words)", seen.get("wants")),
             ("Need underneath (Mani's reading)", seen.get("needs")),
             ("Desire (Mani's reading)", seen.get("desire")),
@@ -369,6 +529,11 @@ with st.sidebar:
             ("Risks", " | ".join(f"{r['risk']} ({r['to']})" for r in risks)),
             ("Depends on (inside)", " | ".join(d["what"] for d in seen.get("dependencies") or [] if d.get("kind") == "internal")),
             ("Depends on (outside)", " | ".join(d["what"] for d in seen.get("dependencies") or [] if d.get("kind") == "external")),
+            ("Depends on, most relevant first (Mani's reading)", " | ".join(
+                f"{t['what']} ({t['side']})" for t in seen.get("tied_to") or []
+            )),
+            ("Already explored", " | ".join(seen.get("explored") or [])),
+            ("Ruled out", " | ".join(seen.get("ruled_out") or [])),
             ("Kind of problem", seen.get("problem_type")),
             ("Earlier situations", " | ".join(seen.get("earlier") or [])),
         ):

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import json
 import pathlib
 import re
@@ -217,13 +218,17 @@ def picture_flags(understanding: dict | None, expect: dict) -> list[str]:
         "problem_type": seen.get("problem_type") or "",
         "focus": seen.get("focus") or "",
         "uncertain": " | ".join(seen.get("uncertain") or []),
+        "reactions": " | ".join(seen.get("reactions") or []),
     }
     flags = []
     # A fear of missing something read as a wish for it (the client's review, 2026-10-29).
     if said := [w for w in expect.get("desire_not") or [] if w.lower() in held["desire"].lower()]:
         flags.append(f"picture desire states what is uncertain: {', '.join(said)}")
+    # A preferred way of meeting a need read as the need itself (the client's review, 2026-10-30).
+    if said := [w for w in expect.get("needs_not") or [] if w.lower() in held["needs"].lower()]:
+        flags.append(f"picture need holds a preferred way: {', '.join(said)}")
     for part, want in expect.items():
-        if part in ("by", "desire_not"):
+        if part in ("by", "desire_not", "needs_not"):
             continue
         have = held.get(part, "").strip()
         if not have:
@@ -237,14 +242,30 @@ def picture_flags(understanding: dict | None, expect: dict) -> list[str]:
 
 # The orchestrator's reply checks that are failures of the chat's shapes or its line against fixing (the client's
 # test, 2026-10-29), raised to flags so they count.
-CHAT_FLAGS = ("solution in chat", "small idea they did not ask for", "reply ties the feeling to nothing",
+CHAT_FLAGS = ("solution in chat", "small idea they did not ask for", "reply ties the feeling to nothing", "em dash",
+              "mirror repeats their words",
               "insight shape without an insight", "insight is a solution")
 
 
-def shape_flags(exchange: "Exchange", wanted: list[str] | None) -> list[str]:
-    """The reply's shape against what the conversation expects on this line, and its chat checks raised to flags."""
+# The first two replies stay with the feeling and never give an insight (the client, 2026-11-03: "not the wrong
+# insight, it's too fast").
+INSIGHT_FROM = 3
+
+
+def shape_flags(
+    exchange: "Exchange", wanted: list[str] | None, number: int | None = None, ruled_out: list[str] | None = None,
+) -> list[str]:
+    """The reply's shape against what the conversation expects on this line, an insight before their INSIGHT_FROM-th
+    message, a window landing on what they had ruled out before this message (the funnel, 2026-11-03), and its chat
+    checks raised to flags."""
     flags = [c for c in exchange.checks or [] if any(c.startswith(f) or f in c for f in CHAT_FLAGS)]
-    shape = ((exchange.understanding or {}).get("thinking") or {}).get("shape")
+    thinking = (exchange.understanding or {}).get("thinking") or {}
+    shape = thinking.get("shape")
+    closest = ((thinking.get("window") or {}).get("closest") or "").casefold().strip()
+    if closest and any(r.casefold().strip() in closest or closest in r.casefold().strip() for r in ruled_out or []):
+        flags.append("window on what they ruled out")
+    if number is not None and number < INSIGHT_FROM and shape == "insight":
+        flags.append(f"insight before message {INSIGHT_FROM}")
     if wanted and not exchange.offered and not exchange.checked and shape not in wanted:
         flags.append(f"shape {shape}, expected {' or '.join(wanted)}")
     return flags
@@ -297,8 +318,9 @@ def timing_flags(checked_at: int | None, lines: int, expect: dict) -> dict[int, 
 
 
 async def _converse(name: str, conversation: dict, style: str, registry) -> list[Exchange]:
-    """One conversation in one style. Each check Mani makes is answered with `check_answer`; a yes
-    is expected to bring the offer, then its Tell me more, or the answers in `after_offer`."""
+    """One conversation in one style. Mani's move to the set of questions is its offer, followed by its Tell me
+    more or the answers in `after_offer`; where the conversation expects no confirmation, `check_answer` is their
+    correction of the offer. A check stored by the code from before 2026-11-03 is answered with `check_answer`."""
     lines, expect, after = conversation["lines"], conversation["expect"], conversation.get("after_offer")
     user = uuid.uuid4()
     claims = Claims(sub=str(user), raw={"sub": str(user), "role": "authenticated"})
@@ -330,22 +352,37 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
         for number, text in enumerate(lines, start=1):
             said |= _words(text)
             on_line[number] = exchange = await say(text)
-            exchange.flags += shape_flags(exchange, shapes.get(str(number)))
-            if exchange.offered:
-                exchange.flags.append("offer without a confirmed check")
-            if not exchange.checked:
+            before = ((exchanges[-2].understanding or {}).get("picture") or {}) if len(exchanges) > 1 else {}
+            exchange.flags += shape_flags(exchange, shapes.get(str(number)), number, before.get("ruled_out"))
+            # The client meeting (2026-11-03): no check before the offer. A chat reply that offers is Mani's move to
+            # the set, counted where the check was, so compare_runs lines a run up against one from before.
+            moved = exchange.offered is not None
+            if not moved and not exchange.checked:
                 continue
             checked_at = checked_at or number
-            answer = conversation.get("check_answer", DEFAULT_CHECK_ANSWER)
-            said |= _words(answer)
-            answered = await say(answer)
-            if not expect.get("check_confirms", True):
-                if answered.offered:
-                    answered.flags.append("offered after a check they did not confirm")
-                continue
-            if not answered.offered:
-                answered.flags.append("confirmed check, no offer")
-                break
+            if moved:
+                exchange.checked = True
+                answered = exchange
+                if not expect.get("check_confirms", True):
+                    # What they said to a check they did not confirm is now their correction of the offer.
+                    answer = conversation.get("check_answer", DEFAULT_CHECK_ANSWER)
+                    said |= _words(answer)
+                    corrected = await say(answer)
+                    if corrected.offered:
+                        corrected.flags.append("offered again on their correction")
+                    continue
+            else:
+                # A check stored by a run from before 2026-11-03, answered as it was then.
+                answer = conversation.get("check_answer", DEFAULT_CHECK_ANSWER)
+                said |= _words(answer)
+                answered = await say(answer)
+                if not expect.get("check_confirms", True):
+                    if answered.offered:
+                        answered.flags.append("offered after a check they did not confirm")
+                    continue
+                if not answered.offered:
+                    answered.flags.append("confirmed check, no offer")
+                    break
             framework = answered.offered
             seen: set[str] = set()
             for number, line in enumerate((after or {}).get("lines") or [TELL_ME_MORE_LABEL]):
@@ -379,7 +416,12 @@ async def _exchange(
 ) -> Exchange:
     started = time.perf_counter()
     turn = await _send(claims, thread_id, text)
+    # The person's wait: the reading after a chat reply is not part of it, and is done before the next message, as
+    # it usually is while they read and type.
     seconds = time.perf_counter() - started
+    if turn.read_after is not None:
+        read = await orchestrator.read_understanding(claims, turn.read_after)
+        turn = dataclasses.replace(turn, understanding=read or turn.understanding)
     exchange = Exchange(
         person=text, reply=turn.content, buttons=[p.label for p in turn.prompts],
         offered=next((p.technique for p in turn.prompts if p.technique), None),
@@ -420,7 +462,7 @@ def _report(name: str, runs: dict[str, list[Exchange]], *, full: bool = False) -
     for style, exchanges in runs.items():
         checks = sum(e.checked for e in exchanges)
         framework = next((e.offered for e in exchanges if e.offered), None)
-        print(f"\n  {style}: {checks} check(s), offer: {framework or 'none'}")
+        print(f"\n  {style}: {checks} move(s) to the set, offer: {framework or 'none'}")
         for exchange in exchanges:
             flagged += len(exchange.flags)
             mark = "  !! " + "; ".join(exchange.flags) if exchange.flags else ""
@@ -436,7 +478,7 @@ def _report(name: str, runs: dict[str, list[Exchange]], *, full: bool = False) -
                 print(f"      understanding: {exchange.understanding or {}}")
                 if exchange.reasoning:
                     print(f"      reasoning: {' '.join(exchange.reasoning.split())}")
-            if exchange.checked:
+            if exchange.checked and not exchange.offered:
                 # Read by a person: does the check use only their words?
                 print(f"      check: {' '.join(exchange.reply.split())}")
             if exchange.offered:
@@ -451,6 +493,7 @@ async def main() -> int:
     parser.add_argument("--scenario", help="run only this conversation, or this group, from scenarios.json")
     parser.add_argument("--style", choices=STYLES, help="run only this style")
     parser.add_argument("--full", action="store_true", help="print every line whole, as a transcript")
+    parser.add_argument("--save", type=pathlib.Path, help="also write every exchange to this JSON file, for compare_runs.py")
     args = parser.parse_args()
     scenarios = conversations(json.loads(SCENARIOS.read_text()))
     chosen = {
@@ -475,9 +518,32 @@ async def main() -> int:
     for (name, style), exchanges in zip(jobs, results):
         by_scenario.setdefault(name, {})[style] = exchanges
     flagged = sum(_report(name, runs, full=args.full) for name, runs in by_scenario.items())
+    if args.save:
+        _save(args.save, by_scenario)
     _report_cost([e for runs in by_scenario.values() for exchanges in runs.values() for e in exchanges])
     print(f"\n{flagged} flag(s) across {len(jobs)} conversation(s)")
     return 1 if flagged else 0
+
+
+def _save(path: pathlib.Path, by_scenario: dict[str, dict[str, list[Exchange]]]) -> None:
+    """Every exchange as JSON, so two runs (before and after a change) can be compared by compare_runs.py."""
+    out = {
+        name: {
+            style: [
+                {
+                    "person": e.person, "reply": e.reply, "buttons": e.buttons, "offered": e.offered,
+                    "checked": e.checked, "check_at": e.check_at, "trace": e.trace, "flags": e.flags,
+                    "checks": e.checks, "seconds": round(e.cost.seconds, 2),
+                    "thinking": (e.understanding or {}).get("thinking"),
+                }
+                for e in exchanges
+            ]
+            for style, exchanges in runs.items()
+        }
+        for name, runs in by_scenario.items()
+    }
+    path.write_text(json.dumps(out, indent=2, ensure_ascii=False))
+    print(f"\n  saved to {path}")
 
 
 def _report_cost(exchanges: list[Exchange]) -> None:

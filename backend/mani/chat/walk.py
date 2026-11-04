@@ -19,18 +19,33 @@ STATUSES = ("partial", "possible", "known", "done")
 _REPORTED = frozenset({"partial", "possible", "known"})
 # A stage stored with one of these is said back and confirmed once, never asked.
 CONFIRMED = frozenset({"known", "possible"})
-# How their message may answer the stage in force and move the walk on. Not knowing never moves it.
+# How their message may answer the stage in force and move the walk on. Not knowing never moves it, and neither does
+# exploring what they added to a stage said back.
 MOVES = frozenset({"agreed", "answered", "corrected"})
+# What they added to a stage said back, explored before moving on: how many turns so far is kept on the stage's entry,
+# and after EXPLORE_TURNS the note asks Mani to tie it together and move on (the client meeting, 2026-11-03).
+EXPLORE = "explore"
+EXPLORED = "explored"
+EXPLORE_TURNS = 2
 SAID_LIMIT = 200
 # How Mani confirms a stage the person already answered, in its own words (muhammad's team lead, 2026-10-13).
 CONFIRM_ASK = (
     "Say back what they said for this stage, never another stage's part unless this stage's reach names it "
-    "(the feeling underneath may frame it, never be its answer), to them as you, and ask whether that is "
-    "right, in one or two sentences, asked differently from the stage before."
+    "(the feeling underneath may frame it, never be its answer), to them as you, and invite them to add to it, "
+    "in one or two sentences, never ending the way your last reply did (last_ending), such as \"Is that it, or is there "
+    "more to it?\", \"Tell me a little more about it.\", \"Is there anything you'd like to add?\" or \"Let's look at it "
+    "a little more.\" Never just a yes-or-no question."
 )
 _LETTER_LINE = re.compile(r"^\s*[A-E] is for\b")
 # "I" and its contractions keep their capital inside a sentence; nothing else that starts their words does.
 _FIRST_PERSON = re.compile(r"^I\b")
+
+
+def new_view(framework: Framework | None, stage: str | None) -> bool:
+    """Whether `stage` is where the new view forms (its `new_view` flag): there the core is never replaced and the
+    stages before are never rewritten from the picture, so the balanced belief cannot become what B looked at (the
+    career chat, 2026-11-03)."""
+    return bool(framework and stage and ((framework.stages or {}).get(stage) or {}).get("new_view"))
 
 
 def content_stages(framework: Framework) -> list[str]:
@@ -148,6 +163,9 @@ class Walked:
     # A stage was reached and the reply did not judge it, so its text was not written for it and the
     # client's question is sent: logged apart from a stage judged missing, which Mani asks itself.
     unjudged: bool = False
+    # The stage reached asks its first gap before the one the reply judged (first_gap), so the reply's own
+    # question was for the wrong part and the client's line for the first gap is asked instead.
+    first_gap: bool = False
 
 
 def _reach(
@@ -162,9 +180,23 @@ def _reach(
         return entries, [], True
     if report.status == "missing":
         return entries, [], False
-    update = StageUpdate(stage=reached, said=report.said or "", status=report.status, gap=report.gap)
+    gap, notes = report.gap, []
+    # first_gap names the gap asked first; as a list, the first is asked and the rest are also kept as reported.
+    asked_first = ((framework.stages or {}).get(reached) or {}).get("first_gap")
+    kept = [asked_first] if isinstance(asked_first, str) else list(asked_first or [])
+    first = kept[0] if kept else None
+    if first and report.status == "partial" and gap not in kept:
+        # E reached with only the path or a practice to ask: what they said in D is never the new belief, so it is
+        # asked first, in their words (the "can't say no" chat, 2026-11-03: Mani wrote the belief for them).
+        notes.append(f"{reached} reached as partial ({gap}): asks {first} first")
+        gap = first
+    update = StageUpdate(stage=reached, said=report.said or "", status=report.status, gap=gap)
     merged = merge(entries, [update], framework, in_force=reached)
-    return merged.entries, merged.notes, False
+    return merged.entries, notes + merged.notes, False
+
+
+def _asks_first(notes: list[str]) -> bool:
+    return any(": asks " in n and n.endswith(" first") for n in notes)
 
 
 def start(
@@ -176,13 +208,14 @@ def start(
     first = content_stages(framework)[0]
     entries, notes, unjudged = _reach(framework, {}, first, report)
     dropped = [f"dropped update for {u.stage}" for u in updates or []]
-    return Walked(entries, first, first, dropped + notes, unjudged=unjudged)
+    return Walked(entries, first, first, dropped + notes, unjudged=unjudged, first_gap=_asks_first(notes))
 
 
 def _counts(answer: str, before: dict, updated: bool) -> bool:
     """Whether the stage answer can be true of the stage in force. agreed answers a check of their
-    words, so only a stage reached as one; answered and corrected bring words for it."""
-    if answer == "agreed":
+    words, so only a stage reached as one, and so does explore, which adds to them; answered and corrected
+    bring words for it."""
+    if answer in ("agreed", EXPLORE):
         return before.get("status") in CONFIRMED
     if answer in ("answered", "corrected"):
         return updated
@@ -220,17 +253,27 @@ def advance(
         answer = "agreed"
     merged = merge(base, now, framework, in_force=in_force)
     notes += merged.notes
+    if (answer in ("agreed", EXPLORE) and before.get("status") not in CONFIRMED and in_force in merged.updated):
+        # A stage not said back, such as E waiting for the path, answered with words for it: it is answered,
+        # whatever the reply called it (the career chat, 2026-11-03: E stayed, and the body check-in came twice).
+        notes.append(f"{answer} with words for a stage not said back read as answered")
+        answer = "answered"
     if answer is not None and not _counts(answer, before, in_force in merged.updated):
         notes.append(f"stage answer invalid: {answer}")
         answer = None
     stored = merged.entries
+    if answer == EXPLORE:
+        # The stage stays while Mani explores what they added; their words for it were merged above.
+        explored = before.get(EXPLORED, 0) + 1
+        stored[in_force] = {**stored.get(in_force, {}), EXPLORED: explored}
+        notes.append(f"exploring what they added to {in_force}: turn {explored}")
     if answer not in MOVES:
         return Walked(stored, in_force, None, notes)
     stored[in_force] = {"said": stored.get(in_force, {}).get("said", ""), "status": "done"}
     following = framework.phases[framework.phase_index(in_force) + 1]
     reached = following if following in stages else None
     stored, reach_notes, unjudged = _reach(framework, stored, reached, report)
-    return Walked(stored, following, reached, notes + reach_notes, unjudged=unjudged)
+    return Walked(stored, following, reached, notes + reach_notes, unjudged=unjudged, first_gap=_asks_first(reach_notes))
 
 
 # Turns on one stage with nothing new before Mani offers to step out of the questions (muhammad, 2026-10-27).
@@ -350,7 +393,13 @@ def reply_text(
             notes.append("confirm text unusable")
             body = _confirm_fallback(framework, reached, said, style, thread_id) or ask
     elif status == "partial":
-        if own_asks:
+        if walked.first_gap:
+            # Mani's own lines stay; its question was for a later part, so the client's line for the first is asked.
+            notes.append("own question for a later part dropped")
+            gap_line = _gap_line(framework, walked.entries, reached, entry.get("gap")) or ask
+            kept = repairs.without_last_question(own) if own_asks else own
+            body = f"{kept} {gap_line}".strip()
+        elif own_asks:
             body = own
         else:
             notes.append("gap asks nothing")
@@ -373,6 +422,13 @@ def reply_text(
     # One paragraph, as the client's document writes it: "A is for Activating Event. You've mentioned..."
     text = " ".join(part for part in (intro, body) if part)
     return (repairs.under(text, options) if body == own else text), notes
+
+
+def stay_question(framework: Framework, entries: dict[str, dict], stage: str, style: str) -> str | None:
+    """The question for a stage the walk stays on when the reply's own was dropped: the client's line for what is
+    still missing, otherwise the stage's own question."""
+    gap = (entries.get(stage) or {}).get("gap")
+    return _gap_line(framework, entries, stage, gap) or _client_line(framework, stage, "ask", style)
 
 
 def _gap_line(framework: Framework, entries: dict[str, dict], stage: str, gap: str | None) -> str | None:
@@ -409,7 +465,7 @@ def reach_line(stage: str) -> str:
     How the stage is judged lives in the next_stage field and the stage's own lines in [ctx]."""
     return (
         f"your text follows what you report for {stage} in next_stage. Known or possible: your text is "
-        f"its confirmation. {CONFIRM_ASK} Partial: your text asks only for what is missing, built on "
+        f"its confirmation, carrying anything they added at the stage before that belongs to it. {CONFIRM_ASK} Partial: your text asks only for what is missing, built on "
         f"what they said. Missing: its letter line is sent for you, so your text is a short mirror of their "
         f"situation, the feeling underneath and what they said for the stages before, then the stage's question "
         f"in your own words (keep what next_stage_ask asks, not its wording). Possibilities go in options only "
@@ -421,12 +477,18 @@ def next_line(framework: Framework, phase: str) -> str:
     """What the reply's text is for, in each way their message can answer the stage in force."""
     following = framework.phases[framework.phase_index(phase) + 1]
     if following in ENDING_STAGES:
-        moved = "the questions end, and the body check-in is sent after your text: write one short sentence, no question."
+        moved = (
+            "the questions end, and code sends the body check-in after your text: write the close the stage asks for, a "
+            "few warm sentences at most, with no question and no mention of the body or a check-in. Never repeat what "
+            "your last reply said back. Carry forward the one thing they said they would do, in their words, and never put "
+            "what they want off to another time."
+        )
     else:
         moved = f"the walk reaches {following}: {reach_line(following)}"
     return (
-        f"If you answer agreed, answered or corrected, {moved} If not_yet, the walk stays: answer what they said "
-        f"as you would in the chat, talk about anything new they brought in, then come back toward this stage "
+        f"If you answer agreed, answered or corrected, {moved} If explore, the walk stays: acknowledge what they "
+        f"added and ask one open question (what or how, never yes or no) that explores it, without moving to the next stage yet. If not_yet, the walk "
+        f"stays: answer what they said as you would in the chat, talk about anything new they brought in, then come back toward this stage "
         f"from what they have said, in fresh words. Possibilities go in options only when options says so. "
         f"If stop, write one warm line asking what they would like to talk about."
     )

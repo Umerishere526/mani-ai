@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -15,6 +16,8 @@ from mani.chat.greeting import (
 from mani.chat.techniques import OFFERING, Registry
 from mani.llm.schema import Moment, Offer, Reply, Slots, SmartPrompt
 from mani.models.rows import Framework
+
+logger = logging.getLogger(__name__)
 
 MAX_TITLE_LENGTH = 100
 
@@ -53,6 +56,48 @@ _INTERNAL_WORDS = re.compile(
     re.IGNORECASE,
 )
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
+
+
+# A dash used as punctuation: an em dash, or an en dash with a space on either side (an en dash between two digits is a
+# range and is left alone). The client asked for none in what Mani says (2026-10-30 and 2026-11-03: they kept coming
+# back however the prompt asked), so code takes them out of every reply the model writes, and reply_checks still counts
+# them in the draft.
+_DASH = re.compile(r"\s*\u2014\s*|\s+\u2013\s+|\s+\u2013(?=\S)|(?<=\S)\u2013\s+")
+# The words that open a new sentence after a dash: "You weren't asked—you were told" reads best as two sentences.
+_STARTS_A_SENTENCE = frozenset({
+    "i", "i'm", "it", "it's", "that", "that's", "this", "there", "there's", "you", "you're", "you've", "they",
+    "they're", "we", "we're", "she", "he", "what", "maybe",
+})
+_WORD = re.compile(r"[A-Za-z']+")
+
+
+def _sentence_after(rest: str) -> bool:
+    """Whether the words after a dash are a full sentence of their own: they open as one, and run on for at least four
+    words before the next stop or the end, with no other dash in between."""
+    words = _WORD.findall(re.split(r"[.!?\u2014\u2013]", rest, maxsplit=1)[0])
+    return len(words) >= 4 and words[0].lower() in _STARTS_A_SENTENCE
+
+
+def without_dashes(text: str) -> str:
+    """The reply with each dash used as punctuation replaced: a full stop when what follows is a sentence of its own,
+    otherwise a comma. A dash at the very end becomes a full stop; one right before other punctuation is dropped."""
+    out: list[str] = []
+    rest = text
+    while (found := _DASH.search(rest)) is not None:
+        before, rest = rest[: found.start()], rest[found.end():]
+        if not rest.strip() and before and before[-1] not in ".!?\n":
+            out.append(f"{before}.")
+            continue
+        if not rest or rest[0] in ".,;:!?)\n" or not before or before[-1] in "\n.!?(":
+            out.append(before)
+            continue
+        before = before.rstrip(",;:")
+        if _sentence_after(rest) and not before.endswith(","):
+            out.append(f"{before}. ")
+            rest = rest[0].upper() + rest[1:]
+        else:
+            out.append(f"{before}, ")
+    return "".join(out) + rest
 
 
 def without_sentences(text: str, drop: Callable[[str], bool]) -> str:
@@ -230,6 +275,39 @@ def offer_framework(heading_toward: str | None, registry: Registry) -> str | Non
     return registry.ids[0] if len(registry) == 1 else None
 
 
+# The offer's belief said to them, when the slot came back in their own first person: "the belief that my dad takes
+# the respect I deserve" (the father chat, 2026-11-04). Word by word, only in that slot.
+_TO_YOU = {
+    "i": "you", "me": "you", "my": "your", "mine": "yours", "myself": "yourself", "i'm": "you're", "i've": "you've",
+    "i'll": "you'll", "i'd": "you'd", "am": "are", "was": "were",
+}
+_FIRST_PERSON_WORD = re.compile(r"\b(?:i|me|my|mine|myself|i'm|i've|i'll|i'd)\b", re.IGNORECASE)
+_WORD = re.compile(r"[A-Za-z']+")
+
+
+def said_to_them(clause: str) -> str:
+    """A clause in their own first person, said to them: "my dad takes what I deserve" is "your dad takes what you
+    deserve". "Am" and "was" change only after "I". A clause with no first person comes back unchanged."""
+    if not _FIRST_PERSON_WORD.search(clause):
+        return clause
+    out: list[str] = []
+    previous = ""
+    last = 0
+    for match in _WORD.finditer(clause):
+        word = match.group(0)
+        key = word.lower().replace("\u2019", "'")
+        swap = _TO_YOU.get(key)
+        if key in ("am", "was") and previous != "i":
+            swap = None
+        out.append(clause[last:match.start()])
+        out.append(swap if swap is not None else word)
+        last = match.end()
+        previous = key
+    out.append(clause[last:])
+    logger.info("offer belief said to them, from their first person")
+    return "".join(out)
+
+
 def _offer_text(
     offer: Offer, framework_id: str | None, registry: Registry, style: str, *,
     confirmed: bool, feeling: str | None,
@@ -239,7 +317,7 @@ def _offer_text(
     framework = registry.get(framework_id)
     template = offer_template(framework, style)
     whole, _ = template_slots(template) if template else (None, None)
-    going_through = offer.going_through if _slot_value(offer.going_through) else feeling
+    going_through = said_to_them(offer.going_through) if _slot_value(offer.going_through) else feeling
     if not confirmed:
         reason = "no yes to the check"
     elif framework is None:
@@ -253,6 +331,48 @@ def _offer_text(
     else:
         return render_template(template, lead_line=offer.lead_line, slot=going_through), None
     return None, reason
+
+
+# A body check-in the model offers on its own, in its own words (the career chat, 2026-11-03: "Would you like to do a
+# brief body check-in now, or skip it?" inside E, then the client's own question once E ended).
+# Only a check-in: a stage may still ask what they notice in their body.
+_BODY_OFFER = re.compile(
+    r"\b(?:body|physical(?:ly)?)\b[^?]*\bcheck(?:[- ]?in|ing in)\b"
+    r"|\bcheck(?:[- ]?in|ing in)\b[^?]*\b(?:body|physical(?:ly)?)\b",
+    re.IGNORECASE,
+)
+
+
+def without_body_offer(text: str) -> str:
+    """The text without a question that offers a body check-in. Only code sends the check-in, when the questions
+    end."""
+    return without_sentences(text, lambda s: "?" in s and bool(_BODY_OFFER.search(s)))
+
+
+def without_last_question(text: str) -> str:
+    """The text without its closing question, or as it is when it ends on none."""
+    match = _LAST_QUESTION.search(text)
+    return text[: match.start(1)].rstrip() if match else text.rstrip()
+
+
+def transition_offer(
+    text: str, offer, heading_toward: str | None, registry: Registry, style: str, *,
+    feeling: str | None,
+) -> tuple[str | None, list[SmartPrompt], str | None, str | None]:
+    """The chat's move to the set of questions, with no check before it (the client meeting, 2026-11-03): the
+    client's offer, its slots filled, and its buttons. A style whose template opens with a line of the model's own
+    sends that line in place of the text; otherwise the text's acknowledgment, its question dropped, goes first.
+    Returns the text, the buttons, the set, and why no offer could be made, when none could."""
+    framework_id = offer_framework(heading_toward, registry)
+    # The style's own offer shape, read into the full one: a style without a lead line has no such field.
+    filled = Offer.model_validate(offer.model_dump()) if offer is not None else Offer()
+    said, dropped = _offer_text(filled, framework_id, registry, style, confirmed=True, feeling=feeling)
+    if said is None:
+        return None, [], None, dropped
+    whole, _ = template_slots(offer_template(registry.get(framework_id), style) or "")
+    if whole is None and (lead := without_last_question(text)):
+        said = f"{lead}\n\n{said}"
+    return said, offer_buttons(framework_id, explained=False), framework_id, None
 
 
 def _sentence(value: str | None, end: str = ".") -> str:

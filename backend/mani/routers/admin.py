@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from mani.auth.deps import AdminUser
-from mani.db import admin_threads, config_tables, exercises as exercises_db
+from mani.db import admin_threads, config_tables, exercises as exercises_db, turn_traces
 from mani.db.admin_threads import AdminThread
 from mani.db.deps import AdminConn
 from mani.db.exercises import AdminExercise, ExerciseInput
@@ -38,6 +38,9 @@ class AdminThreadListOut(BaseModel):
 class AdminTranscriptOut(BaseModel):
     thread: AdminThread
     messages: list[MessageOut]
+    # Each Mani reply's trace by its message id: what code decided and why, and the model's raw reply while it is
+    # kept (admin.turn_traces). Read under the same logged transcript read.
+    traces: dict[str, dict] = {}
 
 
 class CrisisEventOut(BaseModel):
@@ -242,4 +245,7 @@ async def read_thread(
             user_message="That conversation does not exist.",
         )
     thread, messages = found
-    return AdminTranscriptOut(thread=thread, messages=[to_message(m) for m in messages])
+    return AdminTranscriptOut(
+        thread=thread, messages=[to_message(m) for m in messages],
+        traces=await turn_traces.for_thread(conn, thread_id),
+    )

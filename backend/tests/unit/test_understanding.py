@@ -73,3 +73,13 @@ def test_the_record_with_its_picture_fits_the_turn_sent_back():
     assert isinstance(record["picture"], dict)
 
     assert TurnOut(content="hi", understanding=record).understanding == record
+
+
+def test_the_case_said_from_a_deeper_core_names_each_feeling_once():
+    from mani.chat import understanding
+
+    assert understanding.case_from_core({"belief": "you only matter to people when you're useful", "feeling": "Fear"}) \
+        == "You only matter to people when you're useful. Underneath it, there may be fear."
+    assert understanding.case_from_core({"belief": "underneath the help is the fear of not mattering",
+                                         "feeling": "loneliness"}) == "Underneath the help is the fear of not mattering."
+    assert understanding.case_from_core({}) == ""

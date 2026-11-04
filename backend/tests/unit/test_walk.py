@@ -107,7 +107,7 @@ def test_a_stage_reached_without_a_judgement_is_asked_and_reported_apart_from_on
     unjudged = walk.advance(abcde, stored, None, "agreed", in_force="belief")
     assert unjudged.unjudged and "consequence" not in unjudged.entries
     assert render(abcde, unjudged, text=own, style="directive") == (
-        "C is for Consequences. How did that thought affect how you felt or what you did?", [],
+        "C is for Consequences. When you believe that, how does it affect how you feel and what you do?", [],
     )
     missing = walk.advance(abcde, stored, None, "agreed", in_force="belief", report=judged("missing"))
     assert not missing.unjudged and "consequence" not in missing.entries
@@ -191,7 +191,7 @@ def test_a_missing_stage_is_its_letter_line_then_manis_own_question_about_their_
 
 def test_a_missing_stage_whose_text_asks_nothing_falls_back_to_the_clients_question(abcde):
     text, notes = render(abcde, walk.Walked({}, "belief", "belief"), text="Thanks for telling me.", style="directive")
-    assert text == "B is for Belief. What did you start telling yourself about what was happening?"
+    assert text == "B is for Belief. When that happens, what thought worries you most?"
     assert notes == ["missing asks nothing"]
 
 
@@ -201,7 +201,7 @@ def test_a_missing_event_is_asked_with_their_own_word_for_the_feeling(abcde):
         "A is for Activating Event. What's been happening that's left you feeling so overwhelmed?"
     )
     assert render(abcde, start) == (
-        "A is for Activating Event. What's been happening that's left things feeling so hard?",
+        "A is for Activating Event. What's been happening that's made things feel so hard?",
         ["slot empty", "missing asks nothing"],
     )
 
@@ -267,7 +267,7 @@ def test_a_partial_stage_asks_only_the_gap_or_falls_back_to_the_clients_question
     gap = "What did you do after that?"
     assert render(abcde, on_c, text=gap) == (f"C is for Consequences. {gap}", [])
     text, notes = render(abcde, on_c, text="That sounds hard.")
-    assert text.endswith("How did that belief affect how you felt or what you did?")
+    assert text.endswith("how does it affect how you feel and what you do?")
     assert notes == ["gap asks nothing"]
 
 
@@ -487,3 +487,139 @@ def test_every_stage_is_confirmed_on_its_own_one_yes_at_a_time(abcde):
     moved = walk.advance(abcde, started.entries, None, "agreed", in_force="activate",
                          report=judged("known", "you matter less to them"))
     assert moved.reached == "belief" and moved.phase == "belief"
+
+
+def test_something_meaningful_added_to_a_stage_said_back_is_explored_before_the_walk_moves_on(abcde):
+    """The client meeting, 2026-11-03: A, B and C, already answered in the chat, went by with "yes, yes". A stage said
+    back invites them to add; what they add is explored on that stage, counted, and the walk moves on once they agree."""
+    known = {"activate": {"said": "you keep checking when you try to relax", "status": "known"}}
+    first = walk.advance(abcde, known, [said("activate", "it's worst at night, when I'm alone")], "explore",
+                         in_force="activate", report=judged("known", "if you don't check, it'll be your fault"))
+    assert (first.phase, first.reached) == ("activate", None), "the stage stays while Mani explores it"
+    assert first.entries["activate"] == {
+        "said": "it's worst at night, when I'm alone", "status": "known", walk.EXPLORED: 1,
+    }
+    assert "belief" not in first.entries, "the stage ahead is judged only when the walk reaches it"
+    second = walk.advance(abcde, first.entries, None, "explore", in_force="activate")
+    assert second.entries["activate"][walk.EXPLORED] == 2
+    moved = walk.advance(abcde, second.entries, None, "agreed", in_force="activate",
+                         report=judged("known", "if you don't check, it'll be your fault"))
+    assert (moved.phase, moved.reached) == ("belief", "belief")
+    assert moved.entries["activate"] == {"said": "it's worst at night, when I'm alone", "status": "done"}
+
+
+def test_explore_counts_only_on_a_stage_said_back_and_the_other_answers_move_as_before(abcde):
+    partial = {"consequence": {"said": "I felt bad", "status": "partial"}}
+    stays = walk.advance(abcde, partial, None, "explore", in_force="consequence")
+    assert stays.phase == "consequence" and walk.EXPLORED not in stays.entries["consequence"]
+    assert "stage answer invalid: explore" in stays.notes
+    known = {"activate": {"said": "the birthday", "status": "known", walk.EXPLORED: 1}}
+    for answer in ("agreed", "corrected", "answered"):
+        update = [said("activate", "the group chat", "known", corrected=answer == "corrected")] \
+            if answer != "agreed" else None
+        moved = walk.advance(abcde, known, update, answer, in_force="activate", report=judged("missing"))
+        assert moved.phase == "belief", answer
+    assert walk.advance(abcde, known, None, "not_yet", in_force="activate").phase == "activate"
+    assert "explore" not in walk.MOVES
+
+
+def test_a_stage_not_said_back_answered_with_its_words_moves_whatever_the_reply_called_it(abcde):
+    """The career chat, 2026-11-03: E waited for the path, they gave it, the reply called it explore (or agreed), the
+    walk stayed on E, and the body check-in came twice. With words for the stage it is answered; without, nothing moves."""
+    partial = {"effective": {"said": "missed promotions don't prove I'm not good enough", "status": "partial",
+                             "gap": "path"}}
+    for answer in ("explore", "agreed"):
+        moved = walk.advance(abcde, partial, [said("effective", "talk to my manager about expectations")], answer,
+                             in_force="effective")
+        assert moved.phase == "somatic_ask", answer
+        assert f"{answer} with words for a stage not said back read as answered" in moved.notes
+        stays = walk.advance(abcde, partial, None, answer, in_force="effective")
+        assert stays.phase == "effective" and f"stage answer invalid: {answer}" in stays.notes
+
+
+def test_where_the_new_view_forms_is_flagged_in_both_frameworks(abcde):
+    import pathlib
+
+    from scripts.seed import parse_framework
+
+    assert walk.new_view(abcde, "effective")
+    assert not any(walk.new_view(abcde, s) for s in ("activate", "belief", "consequence", "dispute"))
+    reframe = parse_framework(pathlib.Path(__file__).parents[2] / "content/frameworks/thought_reframe.md")["stages"]
+    assert [s for s, body in reframe.items() if body.get("new_view")] == ["replacement"]
+
+
+def test_a_stage_that_stays_asks_its_own_question_in_place_of_a_dropped_one(abcde):
+    entries = {"effective": {"said": "x", "status": "partial", "gap": "path"}}
+    assert walk.stay_question(abcde, entries, "effective", "directive") == "What would you like to do with that new way of seeing it?"
+
+
+def test_e_reached_with_only_the_path_or_a_practice_to_ask_asks_the_new_belief_first(abcde):
+    """The "can't say no" chat, 2026-11-03: E was reached as partial with the gap practice, so Mani wrote the new belief
+    for them and asked where they could practise it. What they said in D is never the new belief."""
+    stored = {"dispute": {"said": "my manager missed me when I was on leave", "status": "partial", "gap": "challenge"}}
+    for gap in ("practice", "path"):
+        moved = walk.advance(abcde, stored, [said("dispute", "they value my input", "known")], "answered",
+                             in_force="dispute", report=judged("partial", "your value isn't only what you do", gap))
+        assert moved.reached == "effective" and moved.first_gap, gap
+        assert moved.entries["effective"]["gap"] == "belief"
+        assert f"effective reached as partial ({gap}): asks belief first" in moved.notes
+        text, notes = render(abcde, moved, text=(
+            "Your manager missed having you around. What's one upcoming situation where you could pause first?"
+        ))
+        assert text == ("E is for Effective New Belief. Your manager missed having you around. "
+                        "Knowing both sides of it, what would you tell yourself now about that thought?")
+        assert "own question for a later part dropped" in notes
+
+    asked = walk.advance(abcde, stored, [said("dispute", "they value my input", "known")], "answered",
+                         in_force="dispute", report=judged("partial", "your value isn't only what you do", "belief"))
+    assert not asked.first_gap and asked.entries["effective"]["gap"] == "belief"
+    known = walk.advance(abcde, stored, [said("dispute", "they value my input", "known")], "answered",
+                         in_force="dispute", report=judged("known", "I matter for more than what I do"))
+    assert not known.first_gap and known.entries["effective"]["status"] == "known", "a view they formed still counts"
+
+
+def test_only_the_stage_where_the_new_view_forms_asks_a_gap_first():
+    from scripts.seed import FRAMEWORKS_DIR, parse_framework
+
+    abcde = parse_framework(FRAMEWORKS_DIR / "abcde.md")["stages"]
+    reframe = parse_framework(FRAMEWORKS_DIR / "thought_reframe.md")["stages"]
+    assert {s: b["first_gap"] for s, b in abcde.items() if b.get("first_gap")} == {"effective": "belief"}
+    assert {s: b["first_gap"] for s, b in reframe.items() if b.get("first_gap")} == {"replacement": ["thought", "believe", "step"]}
+    for stages in (abcde, reframe):
+        for stage, body in stages.items():
+            if first := body.get("first_gap"):
+                ids = {b.get("id") for b in body["if_unclear"]}
+                assert set([first] if isinstance(first, str) else first) <= ids, stage
+
+
+@pytest.fixture(scope="module")
+def reframe() -> Framework:
+    parsed = parse_framework(FRAMEWORKS_DIR / "thought_reframe.md")
+    somatic = load_somatic_stages()
+    return Framework(
+        id=parsed["id"], name=parsed["name"], summary=parsed["summary"], body="b",
+        phases=parsed["phases"] + list(somatic), stages={**parsed["stages"], **somatic},
+        confirm_phrases=parsed["confirm_phrases"],
+    )
+
+
+def test_step_5_asks_for_the_thought_in_their_words_first_and_keeps_one_they_only_have_to_believe(reframe):
+    """The same as E: what they said in Step 4 is the material, never the replacement thought. A thought they said
+    themselves and only have to believe is kept, as the client's ready_when asks."""
+    stored = {"alternative": {"said": "maybe they were just busy", "status": "partial"}}
+    step = dict(in_force="alternative")
+    for gap in (None, "other"):
+        moved = walk.advance(reframe, stored, [said("alternative", "maybe they were just busy", "known")], "answered",
+                             **step, report=judged("partial", "you matter to them even when they're busy", gap))
+        assert moved.reached == "replacement" and moved.first_gap, gap
+        assert moved.entries["replacement"]["gap"] == "thought"
+        text, _ = walk.reply_text(reframe, moved, text="Maybe they were busy. Does that feel true to you?",
+                                  style="directive", thread_id=THREAD, feeling=None)
+        assert text.endswith("Knowing what you've looked at, what would you tell yourself now about that thought?")
+        assert "Does that feel true" not in text
+    believe = walk.advance(reframe, stored, [said("alternative", "maybe they were just busy", "known")], "answered",
+                           **step, report=judged("partial", "I matter to them even when they're busy", "believe"))
+    assert not believe.first_gap and believe.entries["replacement"]["gap"] == "believe"
+    accurate = walk.advance(reframe, stored, [said("alternative", "there is no other explanation", "known")], "answered",
+                            **step, report=judged("partial", "the concern is real", "step"))
+    assert not accurate.first_gap and accurate.entries["replacement"]["gap"] == "step", "an accurate thought is never reframed"

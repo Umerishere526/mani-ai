@@ -66,6 +66,17 @@ async def get(
     return Thread.from_record(row)
 
 
+async def understanding_of(
+    conn: asyncpg.Connection, thread_id: uuid.UUID | str, user_id: uuid.UUID | str
+) -> dict | None:
+    """What Mani understands of them as stored now, or None when the thread is gone."""
+    row = await conn.fetchrow(
+        "select understanding from public.threads where id = $1 and user_id = $2 and deleted_at is null",
+        thread_id, user_id,
+    )
+    return None if row is None else dict(row["understanding"] or {})
+
+
 async def most_recent(
     conn: asyncpg.Connection, user_id: uuid.UUID | str
 ) -> Thread | None:

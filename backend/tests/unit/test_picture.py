@@ -202,7 +202,7 @@ def test_readings_are_kept_whole_focus_moves_and_what_is_uncertain_is_kept_apart
             "though you don't yet know whether marriage or children are what you want.")
     assert len(core) > picture.ENTRY_LIMIT
     after = picture.apply_reading({"focus": "feeling behind friends' milestones"}, Reading(
-        underneath=[], wants="connection, while keeping my independence", needs="unclear", desire="unclear",
+        underneath=[], wants="connection, while keeping my independence", needs="unclear", desire="unclear", reactions=[],
         uncertain=["whether they want marriage or children"], focus="fear of losing connection while protecting independence",
         core=core, core_from="unclear", core_feeling="fear", core_about="self", tension="none", problem_type="both",
     ))
@@ -214,3 +214,121 @@ def test_readings_are_kept_whole_focus_moves_and_what_is_uncertain_is_kept_apart
     assert "new ways of seeing it they reached: you can let someone close" in line
     assert "what they tell themselves" not in line
     assert "still uncertain, never say it back as settled: whether they want marriage or children" in line
+
+
+def test_facts_are_kept_whole_and_how_they_react_is_kept_apart_from_what_they_feel():
+    """The client's review, 2026-10-30: a fact ended mid-sentence at 150 characters, and overthinking how they act and
+    pretending it's fine were lost from the picture."""
+    from mani.llm.schema import Reading
+
+    fact = ("Your colleagues make space for you in conversations about work or shared topics, but personal plans and "
+            "inside jokes leave you feeling outside the group.")
+    assert len(fact) > picture.ENTRY_LIMIT
+    held = picture.merge({}, PictureUpdate(situations=[fact]))
+    assert held["situations"] == [fact]
+    read = picture.apply_reading(held, Reading(
+        underneath=[], wants="closer friendships; to feel wanted without having to ask", needs="belonging",
+        desire="unclear", reactions=["pretends it's no big deal", "overthinks how they act around them"],
+        uncertain=[], focus="unclear", core="unclear", core_from="unclear", core_feeling="insecurity and fear of rejection",
+        core_about="self", tension="none", problem_type="unclear",
+    ))
+    assert read["reactions"] == ["pretends it's no big deal", "overthinks how they act around them"]
+    assert "how they react, what they do after it hurts: pretends it's no big deal" in picture.render(read)
+    assert picture.feeling_words(read) == [], "a reaction is never a feeling they named"
+
+
+def _read(**fields):
+    from mani.llm.schema import Reading
+
+    return Reading(**({
+        "underneath": [], "wants": "unclear", "needs": "unclear", "desire": "unclear", "core": "unclear",
+        "core_from": "unclear", "core_feeling": "unclear", "core_about": "self", "tension": "none",
+        "problem_type": "unclear", "uncertain": [], "focus": "unclear", "reactions": [],
+    } | fields))
+
+
+def test_what_a_feeling_may_depend_on_is_ranked_and_narrowed_down_one_at_a_time():
+    """The client meeting, 2026-11-03 (muhammad's funnel): what the feeling may depend on, most relevant first; what
+    the window landed on is explored; what they say it is not is ruled out and never ranked again."""
+    from mani.llm.schema import TiedTo
+
+    ranked = picture.apply_reading({}, _read(tied_to=[
+        TiedTo(what="your manager's comments", side="outside"), TiedTo(what="the deadline", side="outside"),
+        TiedTo(what="your fear of being seen as slow", side="inside"), TiedTo(what="nothing", side="sideways"),
+    ]))
+    assert [t["what"] for t in ranked[picture.TIED_TO]] == [
+        "your manager's comments", "the deadline", "your fear of being seen as slow",
+    ], "an entry off the two sides is ignored"
+    assert picture.funnel(ranked)[0]["what"] == "your manager's comments"
+
+    explored = picture.explored(ranked, "your manager's comments")
+    assert picture.funnel(explored)[:2] == ({"what": "the deadline", "side": "outside"}, ["your manager's comments"])
+
+    out = picture.merge(explored, PictureUpdate(ruled_out=["the deadline"]))
+    following, done, ruled = picture.funnel(out)
+    assert following["what"] == "your fear of being seen as slow" and ruled == ["the deadline"]
+    assert "the deadline" not in [t["what"] for t in out[picture.TIED_TO]]
+    reread = picture.apply_reading(out, _read(tied_to=[TiedTo(what="the deadline", side="outside")]))
+    assert picture.TIED_TO not in reread, "what they ruled out is never ranked again"
+    assert "they said it is not about, never ask about it again: the deadline" in picture.render(out)
+
+    fresh = picture.merge(out, PictureUpdate(shift="new_issue", focus="your sister"))
+    assert not {picture.TIED_TO, picture.EXPLORED, picture.RULED_OUT} & set(fresh)
+
+
+def test_a_feeling_with_no_clear_cause_points_at_nothing():
+    held = picture.apply_reading({picture.TIED_TO: [{"what": "work", "side": "outside"}]}, _read())
+    assert picture.TIED_TO not in held and picture.funnel(held) == (None, [], [])
+
+
+def test_a_balanced_view_reported_as_the_core_never_replaces_it():
+    """The career chat, 2026-11-03: at E the new belief was reported as the core and replaced it."""
+    from mani.llm.schema import CoreEntry
+
+    held = {"core": {"belief": "you're not as capable as you thought", "about": "self"}}
+    balanced = "a missed promotion doesn't prove you're not good enough"
+    after = picture.merge(held, PictureUpdate(
+        beliefs=[BeliefEntry(belief=balanced, kind="new")], core=CoreEntry(belief=balanced, about="self"),
+    ))
+    assert after["core"]["belief"] == "you're not as capable as you thought"
+    deeper = picture.merge(held, PictureUpdate(core=CoreEntry(belief="you're not good enough for any team", about="self")))
+    assert deeper["core"]["belief"] == "you're not good enough for any team", "a deeper belief still replaces it"
+
+
+def test_a_belief_is_kept_whole():
+    """The "can't say no" chat, 2026-11-03: "...and you'll lose the respect you've" was cut at 150 characters."""
+    belief = ("If you stop being available, people might stop coming to you, leave you out of conversations or "
+              "opportunities, and you'll lose the respect you've earned.")
+    assert len(belief) > picture.ENTRY_LIMIT
+    kept = picture.merge({}, PictureUpdate(beliefs=[BeliefEntry(belief=belief, kind="thought")]))
+    assert kept["beliefs"][0]["belief"] == belief
+    assert "beliefs" not in picture.merge(kept, PictureUpdate(drop=[belief])), "copied whole, it is dropped whole"
+
+
+def test_two_wordings_of_one_fact_are_one_entry_and_the_fuller_is_kept():
+    """The daughter chat, 2026-11-03: the appointment fact was stored twice, once with a clause more, and so was being
+    responsible for being available. Feelings and beliefs keep an exact match."""
+    from mani.llm.schema import DependencyEntry
+
+    short = "When you start making plans, your mum may need help with an appointment."
+    full = short + " You think they could probably manage without you."
+    held = picture.merge({}, PictureUpdate(
+        situations=[short],
+        dependencies=[DependencyEntry(what="feeling responsible for being available to your family", kind="internal")],
+    ))
+    after = picture.merge(held, PictureUpdate(
+        situations=[full, "Your brother handled it while you were away."],
+        dependencies=[
+            DependencyEntry(what="Feeling responsible for always being available to your family", kind="internal"),
+            DependencyEntry(what="your family needs that come up", kind="external"),
+        ],
+    ))
+    assert after["situations"] == [full, "Your brother handled it while you were away."]
+    assert [d["what"] for d in after["dependencies"]] == [
+        "Feeling responsible for always being available to your family", "your family needs that come up",
+    ]
+    beliefs = picture.merge({}, PictureUpdate(beliefs=[
+        BeliefEntry(belief="I'm not good enough", kind="thought"),
+        BeliefEntry(belief="I'm not good enough for him", kind="thought"),
+    ]))["beliefs"]
+    assert len(beliefs) == 2

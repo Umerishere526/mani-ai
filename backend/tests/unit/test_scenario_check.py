@@ -132,3 +132,11 @@ def test_a_stage_reached_otherwise_than_expected_is_flagged_once():
     assert scenario_check.reached_flags(trace, {"consequence": "said back"}, seen) == [], "only when first reached"
     partial = [{"stage": "dispute", "status": "partial", "asking": True}]
     assert scenario_check.reached_flags(partial, {"dispute": "said back"}, seen) == []
+
+
+def test_an_insight_before_their_third_message_is_flagged():
+    """The client meeting, 2026-11-03: the first two replies stay with the feeling."""
+    exchange = scenario_check.Exchange(person="x", reply="y", buttons=[], offered=None,
+                                       understanding={"thinking": {"shape": "insight"}})
+    assert "insight before message 3" in scenario_check.shape_flags(exchange, None, 2)
+    assert "insight before message 3" not in scenario_check.shape_flags(exchange, None, 3)

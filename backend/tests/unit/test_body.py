@@ -119,41 +119,40 @@ def test_a_tapped_button_means_its_answer_and_yes_to_the_closest_exercise_is_lef
     assert body.tapped_value(body.PRACTICE, "Chest", stages) is None
 
 
-def test_a_feeling_word_they_said_before_the_framework_points_to_its_place(stages):
-    """muhammad, 2026-10-21: anxious goes with the chest, stress with the head. Whole words only, the first
-    place wins, and a feeling with no place (embarrassed alone) points nowhere."""
-    assert body.check_for("embarrassed, anxious", stages) == body.Check("chest", "anxious")
-    assert body.check_for("my anxiety is back", stages) == body.Check("chest", "anxious")
-    assert body.check_for("so STRESSFUL", stages) == body.Check("head", "stressed")
-    assert body.check_for("stressed and nervous", stages) == body.Check("chest", "nervous")
-    assert body.check_for("embarrassed", stages) is None
-    assert body.check_for("waiting anxiously, no stressors", stages) is None, "whole words only"
+def test_the_first_feeling_they_named_is_the_one_asked_about_and_no_place_is_named(stages):
+    """Manasa, the client meeting of 2026-11-03: "that's often felt in the chest" told her where she should feel it.
+    Any feeling they named is asked about, the first one, and no place goes with it."""
+    assert body.check_for("embarrassed, anxious", stages) == body.Check("embarrassed")
+    assert body.check_for("  anxious ", stages) == body.Check("anxious")
+    assert body.check_for("", stages) is None and body.check_for(" , ", stages) is None
+    assert "places" not in stages["somatic_check"]["script"]
 
 
-def test_with_a_place_the_introduction_is_the_clients_and_only_its_question_changes(stages):
+def test_with_a_feeling_the_introduction_is_the_clients_and_ends_on_how_they_feel_now(stages):
     plain = body.step(body.ASK, "yes", stages)
-    asked = body.step(body.ASK, "yes", stages, check=body.Check("chest", "anxious"))
+    asked = body.step(body.ASK, "yes", stages, check=body.Check("anxious"))
     introduction = plain.text.removesuffix(stages["somatic_body"]["script"]["question"]).rstrip()
     assert asked.text == (
-        f"{introduction}\n\nEarlier you mentioned feeling anxious, and that's often felt in the chest. "
-        "Is that still the case for you right now?"
+        f"{introduction}\n\nEarlier you mentioned feeling anxious. Now that we've worked through it, how are you "
+        "feeling right now?"
     )
-    assert (labels(asked), asked.phase) == (["Yes", "No"], body.CHECK)
+    assert (labels(asked), asked.phase) == ([], body.CHECK), "how they feel is typed, never tapped"
+    assert "chest" not in asked.text.split("\n\n")[-1]
 
 
-def test_yes_is_the_exercise_for_the_place_and_no_is_the_general_question_with_its_five_buttons(stages):
-    yes = body.step(body.CHECK, "yes", stages, area="chest")
-    assert yes.text == body.step(body.BODY, "chest", stages).text and yes.phase == body.PRACTICE
-    assert labels(yes) == ["Feel Better", "Feel the Same", "Feel Worse"]
-    no = body.step(body.CHECK, "no", stages, area="chest")
-    assert no.text == "Where are you noticing any tension or discomfort right now?"
-    assert (labels(no), no.phase) == (["Chest", "Stomach", "Head", "Somewhere Else", "No Tension"], body.BODY)
-    assert body.step(body.CHECK, "yes", stages, area=None) is None, "no place was asked about"
-    assert body.step(body.CHECK, "head", stages).phase == body.PRACTICE, "a place they name instead is Step 1's"
+def test_however_they_feel_now_mani_says_a_sentence_then_the_general_question_with_its_five_buttons(stages):
+    for value in ("yes", "no", "none"):
+        answered = body.step(body.CHECK, value, stages)
+        assert answered.text == "Where are you noticing any tension or discomfort right now?" and answered.lead
+        assert (labels(answered), answered.phase) == (
+            ["Chest", "Stomach", "Head", "Somewhere Else", "No Tension"], body.BODY), value
+    named = body.step(body.CHECK, "head", stages)
+    assert named.phase == body.PRACTICE and not named.lead, "a place they name goes straight to its exercise"
+    assert body.step(body.CHECK, "other", stages).phase == body.BODY
     unclear = body.step(body.CHECK, "unclear", stages)
-    assert (unclear.text, labels(unclear), unclear.phase) == (None, ["Yes", "No"], body.CHECK)
-    assert body.tapped_value(body.CHECK, "Yes", stages) == "yes"
-    assert body.tapped_value(body.CHECK, " no ", stages) == "no"
+    assert (unclear.text, labels(unclear), unclear.phase) == (None, [], body.CHECK)
+    assert body.step(body.CHECK, "pain", stages).phase == body.CLOSING
+    assert body.tapped_value(body.CHECK, "Yes", stages) is None, "no buttons to tap at this step"
 
 
 @pytest.mark.skipif(not DOCX.exists(), reason="the client's document is not in this checkout")

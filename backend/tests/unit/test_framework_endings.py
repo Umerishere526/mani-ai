@@ -83,7 +83,9 @@ def test_stage_a_says_back_only_what_happened(frameworks):
     # The client's review, 2026-10-29: A is the situation the core is about, which may be an ongoing pattern.
     assert "may be an ongoing pattern" in reach and "never the frame" in reach
     thought = frameworks["thought_reframe"]["stages"]["thought"]["reach"]
-    assert "says back the thought and the underlying feeling they confirmed" in thought, "Thought Reframe opens the same way"
+    # The client's review, 2026-10-30: Step 1 keeps the situation apart from the thought, and the feeling is Step 2's.
+    assert "says back the situation in a few words, then the thought" in thought and "The feeling belongs to Step 2" in thought
+    assert all(stage["intro"].endswith(".") for stage in frameworks["thought_reframe"]["stages"].values() if stage.get("intro"))
     from mani.chat import walk
 
     assert "unless this stage's reach names it" in walk.CONFIRM_ASK

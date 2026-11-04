@@ -8,10 +8,10 @@ import pathlib
 import time
 import uuid
 
-from mani.chat import converse, understanding
+from mani.chat import context, converse, understanding
 from mani.chat.techniques import Registry
 from mani.db.threads import TurnContext
-from mani.llm.schema import BeliefEntry, ConversationReply, FeelingEntry, PictureUpdate
+from mani.llm.schema import BeliefEntry, ConversationReply, ConversationUnderstanding, FeelingEntry, PictureUpdate
 from mani.models.rows import Prompt, Thread
 from mani.prompts import cache, composer
 from mani.prompts.cache import Config
@@ -40,6 +40,15 @@ def reply(**fields) -> ConversationReply:
     return ConversationReply(**({"text": "That sounds difficult. What happened between you?"} | fields))
 
 
+def turn(
+    stored: dict, the_reply: ConversationReply, seen: ConversationUnderstanding | None = None, *,
+    check_written: bool = False, their_messages: tuple[str, ...] = (),
+) -> dict:
+    """The record after a whole chat turn, as the orchestrator stores it: the reply, then the reading after it."""
+    after = converse.replied(stored, the_reply, check_written=check_written)
+    return converse.read(after, seen or ConversationUnderstanding(), their_messages=list(their_messages))
+
+
 def test_a_check_comes_only_after_the_heart_of_it_was_said_back_and_agreed():
     """muhammad, 2026-10-26: one live run went from exploring straight to a check at message 6. The conflict is
     agreed in an exchange of its own first, and never before their fifth message."""
@@ -64,51 +73,67 @@ def test_a_reply_is_stored_as_the_check_only_when_allowed_flagged_and_it_says_th
 def test_a_stored_check_is_ready_and_its_core_becomes_the_case_with_the_feeling_underneath():
     from mani.llm.schema import CoreEntry
 
-    checked = reply(
-        heart="core_named", checking=True, core="One slip feels like proof that you can't change",
-        picture=PictureUpdate(
-            feelings=[FeelingEntry(feeling="guilty")],
-            core=CoreEntry(belief="you're not capable of change", feeling="shame", about="self"),
-        ),
-    )
-    after = converse.understood_after({"feeling": "frustrated", "heart": "conflict_named"}, checked, check_written=True)
+    # The core was read on an earlier turn; this one's reading comes after the reply that moves (2026-11-03).
+    held = understanding.merge({"feeling": "frustrated", "heart": "conflict_named"}, PictureUpdate(
+        core=CoreEntry(belief="you're not capable of change", feeling="shame", about="self"),
+    ), None)
+    checked = reply(heart="core_named", checking=True, core="One slip feels like proof that you can't change")
+    after = turn(held, checked, ConversationUnderstanding(picture=PictureUpdate(feelings=[FeelingEntry(feeling="guilty")])),
+                 check_written=True)
     assert after["heart"] == understanding.READY
     assert after["feeling"] == "frustrated, guilty", "the feeling underneath is Mani's reading, kept apart"
-    assert after["case"] == "One slip feels like proof that you can't change. Underneath it you feel shame."
+    assert after["case"] == "One slip feels like proof that you can't change. Underneath it, there may be shame."
     said_already = reply(checking=True, core="One slip feels like proof you can't change, and underneath it, shame.")
     assert converse.case(said_already, after["picture"]) == said_already.core, "the feeling is not said twice"
-    exploring = converse.understood_after({}, reply(heart="exploring"), check_written=False)
-    assert exploring == {"heart": "exploring"}
+    exploring = turn({}, reply(heart="exploring"))
+    assert exploring == {"heart": "exploring", converse.THINKING: {"heart": "exploring"}}
 
 
-def test_the_note_says_whether_this_reply_may_check_and_names_the_style():
-    assert "Do not check" in converse.note("supportive", allowed=False, due=False, wants_title=False)
+def test_the_note_says_whether_this_reply_may_move_to_the_framework_and_names_the_style():
+    """The client meeting, 2026-11-03: the check of the summary was replaced by the move to the offer."""
+    assert converse.MOVE_NOT in converse.note("supportive", allowed=False, due=False, wants_title=False)
     assert "Supportive" in converse.note("supportive", allowed=False, due=False, wants_title=False)
-    assert "You may check" in converse.note("directive", allowed=True, due=False, wants_title=False)
-    assert "this reply checks" in converse.note("directive", allowed=True, due=True, wants_title=True)
+    assert converse.MOVE_MAY in converse.note("directive", allowed=True, due=False, wants_title=False)
+    assert converse.MOVE_NOW in converse.note("directive", allowed=True, due=True, wants_title=True)
     assert "title" in converse.note("directive", allowed=True, due=True, wants_title=True)
-    assert "this reply checks" not in converse.note("directive", allowed=False, due=True, wants_title=False)
+    assert converse.MOVE_NOW not in converse.note("directive", allowed=False, due=True, wants_title=False)
+    assert "check your understanding" not in converse.note("directive", allowed=True, due=True, wants_title=False)
+    assert "does that capture it" in converse.MOVE_NOW, "no summary and no check before the offer"
 
 
-def test_mani_reads_the_person_before_it_writes_the_reply():
-    """muhammad, 2026-10-29 (approach A): written first, the text followed the facts of the last message, and the
-    picture judged after it never shaped what Mani said. The whole reading comes first, then the facts, the heart,
-    what this turn calls for, and the text last of those; nothing asks for a second question or a reasoning pass."""
+def test_the_framework_index_is_in_the_note_only_when_the_reply_may_move():
+    index = "# Framework Index\n| ABCDE | `abcde` | ... |"
+    assert index in converse.note("directive", allowed=True, due=False, wants_title=False, frameworks=index)
+    assert index not in converse.note("directive", allowed=False, due=False, wants_title=False, frameworks=index)
+
+
+def test_after_a_correction_at_the_offer_the_note_says_to_move_again_once_they_confirm():
+    sent = converse.note("supportive", allowed=True, due=False, wants_title=False,
+                         understood={converse.CORRECTED: True, "heart": "core_named"})
+    assert converse.AFTER_CORRECTION in sent
+    assert converse.AFTER_CORRECTION not in converse.note("supportive", allowed=True, due=False, wants_title=False)
+
+
+def test_the_reply_writes_what_the_turn_calls_for_and_the_reading_comes_after_it():
+    """muhammad, 2026-10-29 (approach A): the reply is built on the reading, so what the turn calls for comes before
+    the text and the picture is in the note. Lolly's chats, 2026-11-03: the whole reading and the picture, written
+    before the text, were most of what a reply waited on and grew with the conversation until turns timed out, so
+    they are read after the reply is sent. Nothing asks for a second question or a reasoning pass."""
     fields = list(ConversationReply.model_fields)
     assert fields[: fields.index("text")] == [
-        "reading", "picture", "heart", "need", "needs_info", "info_needed", "shape", "window", "insight", "insight_from",
-        "link", "move", "plan",
+        "heart", "need", "needs_info", "info_needed", "shape", "window", "insight", "insight_from", "link", "move", "plan",
     ]
-    assert not {"reasoning", "options", "style"} & set(fields)
+    assert not {"reasoning", "options", "style", "reading", "picture"} & set(fields)
+    assert list(ConversationUnderstanding.model_fields) == ["reading", "picture"]
 
 
-def test_the_reading_is_required_of_the_model_but_a_reply_without_it_still_reads():
+def test_the_reading_is_required_of_the_model_but_one_without_it_still_reads():
     from openai.lib._pydantic import to_strict_json_schema
 
-    sent = to_strict_json_schema(ConversationReply)
+    sent = to_strict_json_schema(ConversationUnderstanding)
     assert sent["required"][0] == "reading" and "anyOf" not in sent["properties"]["reading"]
     assert set(sent["$defs"]["Reading"]["required"]) >= {"underneath", "wants", "needs", "desire", "core", "problem_type"}
-    assert reply().reading is None, "code never pays a second call for a missing reading"
+    assert ConversationUnderstanding().reading is None, "code never pays another call for a missing reading"
 
 
 def test_the_reading_is_laid_over_the_picture_and_unclear_keeps_what_was_held():
@@ -118,17 +143,16 @@ def test_the_reading_is_laid_over_the_picture_and_unclear_keeps_what_was_held():
         return Reading(**({
             "underneath": [], "wants": "unclear", "needs": "unclear", "desire": "unclear", "core": "unclear",
             "core_from": "unclear", "core_feeling": "unclear", "core_about": "self", "tension": "none",
-            "problem_type": "unclear", "uncertain": [], "focus": "unclear",
+            "problem_type": "unclear", "uncertain": [], "focus": "unclear", "reactions": [],
         } | fields))
 
-    first = converse.understood_after({}, reply(reading=reading(
+    first = turn({}, reply(), ConversationUnderstanding(reading=reading(
         underneath=[UnderneathEntry(feeling="loneliness", rests_on="we barely have meaningful conversations")],
         wants="meaningful conversations", needs="to feel close and chosen", desire="a relationship that feels alive",
         core="you might be settling for something that isn't fulfilling", core_from="I wonder if I'm settling",
         core_feeling="fear", core_about="situation", tension="you love them, and you're not sure you're happy",
         problem_type="situation",
-    ), picture=PictureUpdate(beliefs=[BeliefEntry(belief="relationships become less exciting", kind="thought")])),
-        check_written=False)
+    ), picture=PictureUpdate(beliefs=[BeliefEntry(belief="relationships become less exciting", kind="thought")])))
     seen = first["picture"]
     assert seen["core"] == {
         "belief": "you might be settling for something that isn't fulfilling", "about": "situation", "feeling": "fear",
@@ -137,7 +161,7 @@ def test_the_reading_is_laid_over_the_picture_and_unclear_keeps_what_was_held():
     assert (seen["wants"], seen["needs"], seen["desire"]) == (
         "meaningful conversations", "to feel close and chosen", "a relationship that feels alive")
     assert seen["problem_type"] == "both", "what they tell themselves is never a situation alone"
-    kept = converse.understood_after(first, reply(reading=reading()), check_written=False)["picture"]
+    kept = turn(first, reply(), ConversationUnderstanding(reading=reading()))["picture"]
     assert kept["core"] == seen["core"] and kept["wants"] == seen["wants"], "unclear never writes over a reading"
 
 
@@ -231,36 +255,43 @@ def test_the_chat_never_carries_a_help_move_and_a_risk_to_others_still_comes_fir
 
 
 def test_the_conversation_presses_toward_the_framework_when_it_stops_moving_or_they_ask():
-    """The 2026-10-27 review, then the client's test 2026-10-29: when they ask what to do, show frustration, add
-    nothing new, or answer in a few words three times running, Mani presses toward the framework, never into
-    solving it in the chat; it stays so until another situation comes in."""
+    """The 2026-10-27 review, then the client's test 2026-10-29: when they ask what to do, add nothing new, or answer
+    in a few words three times running, Mani presses toward the framework, never into solving it in the chat; it stays
+    so until another situation comes in. Frustration with Mani does not (Lolly, 2026-11-03: "that is not the point"
+    brought the framework up at her fourth message)."""
     quiet = {"picture": {"shift": "nothing_new", "quiet": converse.QUIET_TO_HELP}}
     once = {"picture": {"shift": "nothing_new", "quiet": 1}}
     answered = {"picture": {"shift": "answered", "quiet": 0}}
     moving = {"picture": {"shift": "adds", "quiet": 0}}
-    assert converse.toward({}, reply(asked_for_help=True), moving, [])
-    assert converse.toward({}, reply(frustrated=True), moving, [])
-    assert converse.toward({}, reply(), quiet, [])
-    assert not converse.toward({}, reply(), once, []), "one message with nothing new is not enough (2026-10-29)"
-    assert not converse.toward({}, reply(), answered, ["comfortable"]), "a short answer to Mani's question is an answer"
-    assert converse.toward({}, reply(), moving, ["fine", "i guess", "yes"])
-    assert not converse.toward({}, reply(), moving, ["yes", "I don't know"]), "two short answers are often answers"
-    assert not converse.toward({}, reply(), moving, ["my boss keeps taking credit for my work", "yes", "no"])
-    assert converse.toward({converse.TOWARD: True}, reply(), moving, [])
+    assert converse.toward({}, True, moving, [])
+    assert not converse.toward({}, False, moving, []), "frustration alone is not a reason (R27, R28)"
+    assert converse.toward({}, False, quiet, [])
+    assert not converse.toward({}, False, once, []), "one message with nothing new is not enough (2026-10-29)"
+    assert not converse.toward({}, False, answered, ["comfortable"]), "a short answer to Mani's question is an answer"
+    assert converse.toward({}, False, moving, ["fine", "i guess", "yes"])
+    assert not converse.toward({}, False, moving, ["yes", "I don't know"]), "two short answers are often answers"
+    assert not converse.toward({}, False, moving, ["my boss keeps taking credit for my work", "yes", "no"])
+    assert converse.toward({converse.TOWARD: True}, False, moving, [])
     new_issue = {"picture": {"shift": "new_issue", "quiet": 0}}
-    assert not converse.toward({converse.TOWARD: True}, reply(asked_for_help=True), new_issue, [])
+    assert not converse.toward({converse.TOWARD: True}, True, new_issue, [])
+    assert not turn({}, reply(frustrated=True)).get(converse.TOWARD), "frustration calls for a repair (R27, R28)"
 
 
 def test_pressing_is_kept_on_the_record_and_another_situation_starts_understanding_again():
     from mani.llm.schema import PictureUpdate
 
-    pressed = converse.understood_after({"helping": True}, reply(asked_for_help=True), check_written=False)
+    pressed = turn({"helping": True}, reply(asked_for_help=True))
     assert pressed[converse.TOWARD] is True and "helping" not in pressed, "an old helping record is dropped"
-    moved_on = converse.understood_after(
-        {**pressed, "heart": "ready"}, reply(picture=PictureUpdate(focus="your sister's loans", shift="new_issue")),
-        check_written=False,
+    asked = converse.replied({}, reply(asked_for_help=True), check_written=False)
+    assert asked[converse.TOWARD] is True, "kept before the reading, in case it never arrives"
+    moved_on = turn(
+        {**pressed, "heart": "ready"}, reply(),
+        ConversationUnderstanding(picture=PictureUpdate(focus="your sister's loans", shift="new_issue")),
     )
     assert converse.TOWARD not in moved_on and "heart" not in moved_on
+    judged = turn({"heart": "ready"}, reply(heart="exploring"),
+                  ConversationUnderstanding(picture=PictureUpdate(shift="new_issue")))
+    assert judged["heart"] == "exploring", "a heart the reply judged with their message in view stays"
 
 
 def test_the_note_lists_what_was_asked_and_what_is_unknown_and_when_pressing_the_way_in():
@@ -269,12 +300,14 @@ def test_the_note_lists_what_was_asked_and_what_is_unknown_and_when_pressing_the
 
     asked = [Message(id=uuid.uuid4(), thread_id=THREAD, user_id=USER, role=MessageRole.MANI, created_at=NOW,
                      content="That sounds hard. What happened between you? Was it the words or the silence?")]
-    assert converse.asked_before(asked) == ["What happened between you?", "Was it the words or the silence?"]
+    assert context.asked_before(asked) == ["What happened between you?", "Was it the words or the silence?"]
+    assert context.last_question(asked) == "Was it the words or the silence?"
 
     exploring = converse.note("directive", allowed=False, due=False, wants_title=False,
                               understood={"picture": {"situations": ["she stopped calling"]}},
-                              asked=converse.asked_before(asked))
-    assert "Questions you already asked, never to ask again in any words: What happened between you? | " in exploring
+                              asked=context.asked_before(asked))
+    assert "nor one about the same thing in other words" in exploring
+    assert "): What happened between you? | Was it the words or the silence?" in exploring
     assert "Still unknown" not in exploring, "no list of questions to work through (2026-10-29)"
     assert "What happened is not known yet: let them tell it." in converse.note(
         "directive", allowed=False, due=False, wants_title=False, understood={})
@@ -282,7 +315,7 @@ def test_the_note_lists_what_was_asked_and_what_is_unknown_and_when_pressing_the
     pressing = {converse.TOWARD: True, "picture": {"problem_type": "situation"}}
     sent = converse.note("directive", allowed=True, due=False, wants_title=False, understood=pressing)
     assert "Do not solve it in the chat" in sent and "at most one small idea" in sent
-    assert "this reply checks your understanding" in sent, "pressing toward the framework, the check is the way in"
+    assert converse.MOVE_NOW in sent, "pressing toward the framework, the offer is the way in"
     assert "Do not solve it in the chat" not in exploring
 
 
@@ -340,11 +373,11 @@ def test_the_conversation_prompt_holds_the_five_principles_and_nothing_pushes_a_
 
 def test_the_three_answers_and_the_plan_are_kept_and_the_note_carries_the_plan():
     told = {"picture": {"situations": ["he never reaches out first"]}}
-    after = converse.understood_after(told, reply(
+    after = turn(told, reply(
         need="to make sense of why he keeps doing this", needs_info=False,
         insight="his promises keep the friendship going without him changing anything", insight_from="he says he will",
         plan="He has asked twice and nothing changed; next, what he needs to say clearly.",
-    ), check_written=False)
+    ))
     assert after["plan"] == "He has asked twice and nothing changed; next, what he needs to say clearly."
     assert after["thinking"] == {"need": "to make sense of why he keeps doing this", "needs_info": False,
                                  "insight": "his promises keep the friendship going without him changing anything",
@@ -410,10 +443,10 @@ def test_a_chat_reply_is_checked_for_its_shape_and_for_fixing_what_the_framework
 def test_a_link_back_to_the_core_and_the_shape_are_kept_with_what_mani_asked_itself():
     from mani.llm.schema import Window
 
-    after = converse.understood_after({}, reply(
+    after = turn({}, reply(
         link="core: the same sense of not doing enough", shape="window", move="clarifying_options",
         window=Window(feeling="lonely", tied_to=["work"], closest="work"),
-    ), check_written=False)
+    ))
     thinking = after[converse.THINKING]
     assert thinking["link"] == "core: the same sense of not doing enough"
     assert (thinking["shape"], thinking["move"]) == ("window", "clarifying_options")
@@ -423,7 +456,8 @@ def test_the_conversation_prompt_listens_in_three_shapes_and_leaves_the_solution
     """The client's test, 2026-10-29: the framework is the solution; suggestions in the chat only move it on; the
     insight is the aha, never a solution; three shapes; opening the window joins a feeling to what it is tied to."""
     chat = parse_prompt(PROMPTS / "conversation.md")["content"]
-    for rule in ("The framework is the solution; the chat never tries to fix the problem.",
+    for rule in ("The framework is the solution: it brings a new thought, another way to see it, and something to do.",
+                 "The chat never tries to fix the problem.",
                  "**An insight is not a solution.**",
                  "# The three reply shapes", "`open_ask`", "`window`", "`insight`",
                  "When it is tied to two things, name both, then ask about the one closest to the feeling.",
@@ -440,7 +474,7 @@ def test_a_yes_to_an_insight_moves_the_conversation_on_instead_of_explaining_it_
     held = {"picture": {"situations": ["friends are starting families"]}, converse.THINKING: {"shape": "insight"}}
     agreed = converse.note("directive", allowed=False, due=False, wants_title=False, understood=held,
                            their_count=4, latest="yes")
-    assert "They agreed with your insight: it is understood. Do not explain or restate it." in agreed
+    assert "They agreed with your reading: it is understood. Do not explain or restate it" in agreed
     for answer in ("yes", "Yeah, exactly.", "that's it"):
         assert converse.AGREED.match(answer), answer
     assert not converse.AGREED.match("yes, but it's really more about my mum and how she talks to me")
@@ -453,7 +487,8 @@ def test_the_check_asks_only_whether_it_captures_it_and_abcde_keeps_support_apar
     """The client's review, 2026-10-29: the check pitched the framework before the offer did; D counted support as a
     challenge; E took an action for a new belief; the close was a one-line summary."""
     chat = parse_prompt(PROMPTS / "conversation.md")["content"]
-    assert "Does that capture it?" in chat and "It does not recap the conversation" in chat
+    # The client meeting, 2026-11-03: no check before the offer; the offer says the core back.
+    assert "There is no summary before it" in chat and "they correct you there" in chat
     assert "Never turn a fear into a wish" in chat and "`reading.uncertain`" in chat
     abcde = (PROMPTS.parent / "frameworks" / "abcde.md").read_text()
     for rule in ("'supports: <their words>; challenges: <their words>'",
@@ -470,14 +505,14 @@ def test_insights_given_are_remembered_so_the_same_theme_is_not_reached_again():
     together" were one theme reached from three angles."""
     from mani.chat import reply_checks
 
-    first = converse.understood_after({}, reply(shape="insight", insight="Maybe what stung was not mattering to them."),
+    first = turn({}, reply(shape="insight", insight="Maybe what stung was not mattering to them."),
                                       check_written=False)
     assert first[converse.INSIGHTS] == ["Maybe what stung was not mattering to them."]
     sent = converse.note("supportive", allowed=False, due=False, wants_title=False, understood=first, their_count=4)
     assert "Insights you already gave: Maybe what stung was not mattering to them." in sent
     many = first
     for n in range(6):
-        many = converse.understood_after(many, reply(insight=f"insight {n}"), check_written=False)
+        many = turn(many, reply(insight=f"insight {n}"))
     assert len(many[converse.INSIGHTS]) == converse.INSIGHTS_KEPT and many[converse.INSIGHTS][-1] == "insight 5"
     assert reply_checks.repeats_insight("It stung because you felt you weren't mattering to them",
                                         ["Maybe what stung was not mattering to them."])
@@ -510,3 +545,266 @@ def test_abcde_inherits_the_chat_and_a_is_the_event_alone():
                  "id: practice"):
         assert rule in abcde, rule
     assert "# The framework carries on from the chat" in parse_prompt(PROMPTS / "framework.md")["content"]
+
+
+def test_the_chat_stays_with_the_feeling_in_plain_words_and_acknowledges_before_anything_else():
+    """The client, 2026-10-30: casual Directive, empathetic Supportive, acknowledge more than summarise, stay with
+    the feeling before moving on, acknowledge before the insight, no poetic phrasing, no em dashes, easy words;
+    the chat makes them feel heard and calmer, the framework brings the new thought and action."""
+    from mani.chat import reply_checks
+    from mani.llm.schema import Reply
+
+    voice = parse_prompt(PROMPTS / "voice.md")["content"]
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    for rule in ("# Mirror, then acknowledge", "Acknowledge more than you summarize.", "# Plain, everyday words",
+                 "Don't use em dashes", "like a friend who gets to the point", "without sounding like an interviewer",
+                 "never a template", "never repeat their words back mechanically", "not any particular word",
+                 "**The chat** is where the person settles down and feels heard and seen."):
+        assert rule in voice, rule
+    for rule in ("2. **Stay with them in the feeling.**", "Don't rush past an important emotional moment",
+                 "sometimes one reply, sometimes a few", "Never give an insight before they have felt acknowledged."):
+        assert rule in chat, rule
+    # The client's guidance, 2026-10-30: stay with the feeling without a hard gate on the core, check or framework.
+    assert "no core, no check, no framework yet" not in chat and "usually takes more than one reply" not in chat
+    assert "Keep the same plain, everyday words as the chat" in framework
+    for prompt in (voice, chat, framework):
+        assert prompt.count("\u2014") <= 1, "the prompts model no em dashes beyond naming the rule"
+    held = {"picture": {"beliefs": [{"belief": "you may be settling", "kind": "thought"}]}}
+    sent = converse.note("supportive", allowed=False, due=False, wants_title=False, understood=held, their_count=2)
+    assert "when the moment fits" in sent and "in this reply" not in sent.split("but no core")[1][:200]
+    assert "em dash" in reply_checks.misses(Reply(text="Where does it go first\u2014work or home?"), offered=None,
+                                            offer_dropped=None, needs_question=True, last_mani_text=None)
+
+
+def test_the_need_stays_apart_from_how_they_want_it_met_and_the_close_names_what_is_still_open():
+    """The client's review, 2026-10-30: the need held the preferred way of meeting it; acknowledgments restated a fear
+    already agreed; Step 3 did not say the real pattern was real; the open wish for closer friendships was not named
+    at the end; the offer went straight past a vulnerable new wish in the yes."""
+    from mani.llm.schema import Reading
+
+    assert "never the way they would prefer it met" in Reading.model_fields["needs"].description
+    assert "reactions" in Reading.model_fields
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    assert "Never treat one way as the only way the need can be met." in chat
+    assert "The same goes for acknowledgments" in chat
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    assert "Finishing the questions does not mean the whole problem is solved." in framework
+    for name in ("abcde", "thought_reframe"):
+        text = (PROMPTS.parent / "frameworks" / f"{name}.md").read_text()
+        assert "say plainly in one short clause that what they've seen is real" in text, name
+        assert "keeps both sides: the real difference they experience" in text, name
+        assert "never puts what they want off to another time" in text, name
+        assert "looked at another time, without pushing a plan" not in text, name
+        assert "When their yes added something new" in text, name
+
+def test_each_style_is_worded_the_way_the_client_wrote_it():
+    """The client's wording document, 2026-10-30: one cadence, three ways of saying it. Mirror, acknowledge and
+    question are told apart; acknowledgment is meaningful, not repeated every reply; each style carries the client's
+    examples; Thought Reframe asks in the client's words. Wording only: the flow is unchanged."""
+    voice = parse_prompt(PROMPTS / "voice.md")["content"]
+    for rule in ("3. **Question** moves the conversation somewhere meaningful.",
+                 "**Mirror in most replies, but acknowledge when it means something.**",
+                 "| Length | Usually short | A little more expressive | Moderate, with room for reflection |",
+                 "\"What has your manager actually committed to?\"",
+                 "\"How has that affected the way you feel about your work?\"",
+                 "\"What has this started to make you believe about your future?\""):
+        assert rule in voice, rule
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    assert "never another version of an acknowledgment you already gave" in chat
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    assert "These are illustrations about someone else, never lines to reuse." in framework
+    reframe = (PROMPTS.parent / "frameworks" / "thought_reframe.md").read_text()
+    for ask in ("what thought worries you most?", "what's the thought that hurts or worries you the most?",
+                "what does that make you believe about yourself or your situation?",
+                "With both of those in mind, how would you put that thought to yourself now?"):
+        assert ask in reframe, ask
+
+
+def test_mani_settles_them_first_reads_like_a_therapist_and_moves_every_reply_forward():
+    """The client meeting, 2026-11-03: the insight came on the first reply ("not wrong, too fast"); questions hunted
+    for what the worry latches on to instead of calming it; replies repeated her words without progress; Mani should
+    think like an experienced therapist without sounding like one; and chat, framework and body check-in each have
+    their own job, with feeling better in the chat not the end."""
+    voice = parse_prompt(PROMPTS / "voice.md")["content"]
+    for rule in ("Think the way an experienced therapist would", "No therapy language, no labels, no diagnosis",
+                 "**The body check-in** after it helps them notice how they feel in their body now.",
+                 "Feeling better in the chat is not the end",
+                 "Talk about the person, never about a feeling as if it acts on its own.",
+                 "**Every reply adds something new.**",
+                 "Never fall back on one shared question whatever the style.",
+                 "\"When you start to worry, where does your mind go first?\"",
+                 "Constantly feeling like something is about to go wrong can be really exhausting."):
+        assert rule in voice, rule
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    for rule in ("**Your first two replies never give an insight.**", "**When a feeling has no clear cause**",
+                 "**If they feel better before the framework**", "# What feelings usually involve",
+                 "Checking, reviewing or seeking reassurance to feel better for a while",
+                 "Never name the pattern to them."):
+        assert rule in chat, rule
+    assert "never in your first two replies" in ConversationReply.model_fields["shape"].description
+    assert "lands" not in parse_prompt(PROMPTS / "summarization.md")["content"]
+
+
+def test_a_reply_that_mostly_says_their_words_back_is_counted():
+    """The client meeting, 2026-11-03: "she's repeating what Manasa says". The reply below is the one they read out."""
+    from mani.chat import reply_checks
+
+    latest = ("I think I'm scared that if I don't check, I'll miss something important and I'll be at fault if "
+              "something goes wrong. I know that sounds irrational, but checking feels like the only way I can relax, "
+              "even if it's just for a little while. I wish I could just trust that things are okay without needing "
+              "to constantly prove it to myself.")
+    repeated = ("You want to trust that things are okay, but there's a frightening weight in the thought that if you "
+                "don't check and something goes wrong, it will be your fault. Checking gives you a little relief.")
+    assert "mirror repeats their words" in reply_checks.chat_misses(
+        repeated, shape="open_ask", window=None, insight=None, move="none", asked_for_help=False, latest=latest)
+    moving = "That sounds really frightening. What happens when you try not to check?"
+    assert "mirror repeats their words" not in reply_checks.chat_misses(
+        moving, shape="open_ask", window=None, insight=None, move="none", asked_for_help=False, latest=latest)
+
+
+def test_only_a_turn_that_may_move_asks_for_the_set_and_the_offer_before_the_text():
+    """The client meeting, 2026-11-03: the offer replaced the check, so its slots exist only on a turn that may move,
+    written before the text like the answer to a check's were."""
+    from mani.llm import schema
+
+    slots = schema.Slots(going_through="the core belief", lead_line="a warm line")
+    assert schema.conversation_reply_for(may_move=False, slots=slots) is ConversationReply
+    assert schema.conversation_reply_for(may_move=True) is ConversationReply, "no template, no offer"
+    moving = schema.conversation_reply_for(may_move=True, slots=slots)
+    fields = list(moving.model_fields)
+    assert fields[fields.index("plan") + 1: fields.index("text")] == ["core", "checking", "heading_toward", "offer"]
+    assert set(moving.model_fields["offer"].annotation.__args__[0].model_fields) == {"going_through", "lead_line"}
+    assert "reading" not in moving.model_fields, "read after the reply is sent"
+    directive = schema.conversation_reply_for(may_move=True, slots=schema.Slots(going_through="the core belief"))
+    assert "without its question" in directive.model_fields["checking"].description
+
+
+def test_a_correction_drops_the_unconfirmed_case_and_is_kept_until_the_next_offer():
+    stored = {"heart": "ready", "case": "You feel you are not enough.", "feeling": "anxious"}
+    after = understanding.corrected(stored)
+    assert after == {"heart": "core_named", "feeling": "anxious", "corrected_offer": True}
+    assert understanding.merge(after, None, None)["corrected_offer"] is True
+    new_issue = understanding.merge(after, PictureUpdate(shift="new_issue"), None)
+    assert "corrected_offer" not in new_issue
+
+
+def test_the_note_narrows_down_what_it_depends_on_only_once_they_have_felt_heard():
+    """The client meeting, 2026-11-03: muhammad's funnel, never in the first replies, never for a feeling with no
+    clear cause, and never while pressing toward the framework."""
+    from mani.llm.schema import TiedTo, Window
+
+    seen = {"tied_to": [{"what": "your manager's comments", "side": "outside"},
+                        {"what": "the deadline", "side": "outside"}],
+            "explored": ["your manager's comments"], "ruled_out": ["the commute"]}
+    line = converse.funnel_line(seen, their_count=converse.FUNNEL_FROM)
+    assert "Explore next: the deadline (outside them)." in line
+    assert "Already explored: your manager's comments." in line
+    assert "Ruled out, never ask about it again: the commute." in line
+    assert converse.funnel_line(seen, their_count=converse.FUNNEL_FROM - 1) is None
+    assert converse.funnel_line({}, their_count=9) is None, "no clear cause, nothing pointed at"
+
+    understood = {"picture": seen}
+    assert "Explore next: the deadline" in converse.note(
+        "supportive", allowed=False, due=False, wants_title=False, understood=understood, their_count=4)
+    assert "Explore next" not in converse.note(
+        "supportive", allowed=False, due=False, wants_title=False,
+        understood={**understood, converse.TOWARD: True}, their_count=4)
+
+    after = turn(understood, reply(
+        shape="window", window=Window(feeling="anxious", tied_to=["the deadline"], closest="the deadline"),
+    ))
+    assert after["picture"]["explored"] == ["your manager's comments", "the deadline"]
+    assert "everything you saw it depending on has been explored" in converse.funnel_line(
+        after["picture"], their_count=4).lower()
+
+
+def test_the_case_says_each_feeling_underneath_once():
+    """The career chat, 2026-11-03: "...a painful sense of inadequacy. Underneath it you feel Inadequacy and
+    discouragement." """
+    seen = {"core": {"belief": "x", "about": "self", "feeling": "Inadequacy and discouragement"}}
+    said = converse.case(reply(core="You wonder if you're as capable as you thought, a painful sense of inadequacy"), seen)
+    assert said.endswith("a painful sense of inadequacy. Underneath it, there may be discouragement.")
+    whole = converse.case(reply(core="It hurts, with inadequacy and discouragement under it"), seen)
+    assert "Underneath it" not in whole
+
+
+def test_the_case_never_says_underneath_twice():
+    """The "can't say no" chat, 2026-11-03: "...there's fear underneath that. Underneath it you feel pressure." """
+    seen = {"core": {"belief": "x", "about": "self", "feeling": "pressure"}}
+    said = converse.case(reply(core="You feel you have to keep being available, and there's fear underneath that"), seen)
+    assert said == "You feel you have to keep being available, and there's fear underneath that."
+
+
+def test_a_yes_that_opens_a_longer_answer_to_a_yes_no_reading_is_understood_too():
+    """The daughter chat, 2026-11-03: "Is that part of what makes it so hard to go?" got "Yes, definitely. I think I've
+    always been the one my family can count on...", and the next reply said the reading back at length."""
+    asked = "Is that part of what makes it so hard to go?"
+    said = "Yes, definitely. I think I've always been the one my family can count on."
+    assert converse.agreed(said, last_shape="window", last_question=asked)
+    assert not converse.agreed("Yes, but it's more about my mum.", last_shape="window", last_question=asked)
+    assert not converse.agreed(said, last_shape="window", last_question="Is it the time, or that it feels one-sided?")
+    assert not converse.agreed(said, last_shape="window", last_question="What came up with your family?")
+    assert not converse.agreed("I think so, yes.", last_shape="window", last_question=asked), "a yes that opens it"
+    note = converse.note("supportive", allowed=False, due=False, wants_title=False,
+                         understood={"picture": {"situations": ["plans keep falling through"]}}, their_count=3,
+                         latest=said, last_question=asked)
+    assert "They agreed with your reading" in note
+
+
+def test_the_move_to_the_set_waits_a_reply_for_something_new_and_painful():
+    """The daughter chat, 2026-11-03: her deepest worry got one line, then the offer."""
+    assert "brings out something new and painful, which gets this reply of its own" in converse.MOVE_NOW
+
+
+def test_the_last_stage_asks_what_they_would_like_to_do_and_the_close_never_defers():
+    """The friendship and daughter chats, 2026-11-03: E closed on "give myself permission" with nothing to act on,
+    then the close put what she wanted off to "another time". In both sets an intention is part of the new view, the
+    last stage asks once what they would like to do with it, and the close carries it forward."""
+    for name, stage in (("abcde", "effective"), ("thought_reframe", "replacement")):
+        text = (PROMPTS.parent / "frameworks" / f"{name}.md").read_text()
+        assert "is part of the" in text and "'trust them more'" in text, name
+        assert "never puts what they want off to another time" in text, name
+    reframe = (PROMPTS.parent / "frameworks" / "thought_reframe.md").read_text()
+    assert "If they believe their thought and have named nothing to do with it yet, it's partial with the gap 'step', once." in reframe
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    assert "Never put what they want off to another time" in framework and "whenever you want to" not in framework
+    assert "I wish I didn't have to put myself last to prove that I care" in framework
+
+
+def test_the_new_belief_is_asked_in_plain_words_and_a_clarification_is_one_question():
+    """The father chat, 2026-11-04: "what's a more balanced way to think about whether you'll ever be good enough for
+    him?" got "i dont think i understand yoru question", and the clarification stacked two questions and three
+    options. Both sets ask from both sides and the thought, in their words, and never say "balanced" to them."""
+    for name in ("abcde", "thought_reframe"):
+        text = (PROMPTS.parent / "frameworks" / f"{name}.md").read_text()
+        assert "Never say 'balanced', 'perspective' or 'realistic way' to them: say what you mean" in text, name
+        assert "Knowing both of those things, what would you tell yourself now about that thought?" in text, name
+        assert 'the person you are talking to always "you", never "I", "my" or "them"' in text, name
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    assert "one plain question that says what you mean, about their situation and in their words, with nothing in options" in framework
+    assert "Tell me a little more about it." in framework and "never ending the way your last reply did" in framework
+
+
+def test_mani_talks_plainly_and_a_phrase_from_a_book_is_counted():
+    """muhammad, 2026-11-04: "feeling out of step", "still finding your footing", "that comparison stings"."""
+    from mani.chat import reply_checks
+
+    voice = parse_prompt(PROMPTS / "voice.md")["content"]
+    assert '"feeling out of step" is "feeling like you don\'t fit in"' in voice
+    for figurative in ("heavy thought to carry", "costing you yourself", "holding on to the company's potential"):
+        for name in ("voice.md", "conversation.md", "framework.md"):
+            assert figurative not in (PROMPTS / name).read_text(), (figurative, name)
+    found = reply_checks.figures("I can see why that comparison stings. You're still finding your footing.")
+    assert found == ["stings", "finding your footing"]
+
+
+def test_a_step_that_is_more_of_the_pattern_is_asked_about_once():
+    """The friend chat, 2026-11-04: "give people space, focus on my own life" was close to the waiting and pulling back
+    she named at C, and the friend she missed never came up again."""
+    abcde = (PROMPTS.parent / "frameworks" / "abcde.md").read_text()
+    assert "A path that is more of what they said at C, such as pulling back, waiting or holding back, is not the path yet" in abcde
+    reframe = (PROMPTS.parent / "frameworks" / "thought_reframe.md").read_text()
+    assert "A step that is more of what they said the thought makes them do" in reframe
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    assert "What they decide to do at the last stage is their step, never what they want or long for." in framework

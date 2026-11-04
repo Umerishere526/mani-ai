@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import re
 
 from mani.llm.schema import PictureUpdate, Reading
 
@@ -16,6 +17,12 @@ PROBLEM_TYPES = ("belief", "situation", "both")
 BELIEF_KINDS = ("thought", "happening", "new")
 RISK_TO = ("self", "others")
 DEPENDENCY_KINDS = ("internal", "external")
+# The funnel (the client meeting, 2026-11-03): what a feeling may depend on, most relevant first, re-read every reply;
+# what Mani's window already landed on; and what they said it is not. A new issue starts all three again.
+TIED_TO = "tied_to"
+EXPLORED = "explored"
+RULED_OUT = "ruled_out"
+SIDES = ("outside", "inside")
 CORE_ABOUT = ("self", "others", "situation")
 # Each list keeps its first entry, what they came with, and the latest ones up to this many.
 LIST_LIMIT = 8
@@ -41,6 +48,33 @@ def _same(a: str, b: str) -> bool:
     return " ".join(a.split()).casefold() == " ".join(b.split()).casefold()
 
 
+# Two wordings of one fact share nearly all their words ("feeling responsible for being available to your family" and
+# "...for always being available..."), or one holds the other whole (the daughter chat, 2026-11-03). Only for what is
+# happening and what it depends on: a feeling or a belief keeps an exact match, so "I'm not good enough" and "I'm not
+# good enough for him" stay two.
+NEAR_SHARE = 0.8
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9']+", text.casefold())
+
+
+def _near(a: str, b: str) -> bool:
+    """Whether two entries say the same thing: one holds the other, or they share NEAR_SHARE of their words."""
+    x, y = " ".join(_words(a)), " ".join(_words(b))
+    if not x or not y:
+        return False
+    if x in y or y in x:
+        return True
+    left, right = set(x.split()), set(y.split())
+    return len(left & right) / len(left | right) >= NEAR_SHARE
+
+
+def _repeats(entries: list, new: str, text=lambda e: e) -> int | None:
+    """Where `new` goes among `entries`: None when it is a new entry, else the index of the entry it repeats."""
+    return next((i for i, e in enumerate(entries) if _near(text(e), new)), None)
+
+
 def _capped(entries: list) -> list:
     """The first entry and the latest ones, LIST_LIMIT in all."""
     return entries if len(entries) <= LIST_LIMIT else [entries[0], *entries[-(LIST_LIMIT - 1):]]
@@ -64,7 +98,7 @@ def merge(stored: dict | None, update: PictureUpdate | None) -> dict:
     picture = copy.deepcopy(stored or {})
     if update is None:
         return picture
-    dropped = [_clean(d) for d in update.drop or [] if _clean(d)]
+    dropped = [_clean(d, READING_LIMIT) for d in update.drop or [] if _clean(d)]
     for key in ("situations", "feelings", "underneath", "beliefs", "risks"):
         if dropped and picture.get(key):
             picture[key] = _without(picture[key], dropped)
@@ -76,8 +110,14 @@ def merge(stored: dict | None, update: PictureUpdate | None) -> dict:
 
     situations = picture.get("situations") or []
     for situation in update.situations or []:
-        if (situation := _clean(situation)) and not any(_same(situation, s) for s in situations):
+        # Cut at ENTRY_LIMIT, a fact ended mid-sentence ("...leave you feeling outside the", the client's review,
+        # 2026-10-30).
+        if not (situation := _clean(situation, READING_LIMIT)):
+            continue
+        if (at := _repeats(situations, situation)) is None:
             situations.append(situation)
+        elif len(situation) > len(situations[at]):
+            situations[at] = situation
     feelings = picture.get("feelings") or []
     for entry in update.feelings or []:
         feeling, about = _clean(entry.feeling), _clean(entry.about)
@@ -102,7 +142,9 @@ def merge(stored: dict | None, update: PictureUpdate | None) -> dict:
             known["rests_on"] = rests_on
     beliefs = picture.get("beliefs") or []
     for entry in update.beliefs or []:
-        belief, kind = _clean(entry.belief), entry.kind.strip().lower()
+        # A belief is a sentence they said: cut at ENTRY_LIMIT it ended mid-sentence ("...the respect you've", the
+        # "can't say no" chat, 2026-11-03).
+        belief, kind = _clean(entry.belief, READING_LIMIT), entry.kind.strip().lower()
         if not belief or kind not in BELIEF_KINDS:
             continue
         known = next((b for b in beliefs if _same(b["belief"], belief)), None)
@@ -118,8 +160,15 @@ def merge(stored: dict | None, update: PictureUpdate | None) -> dict:
     dependencies = picture.get("dependencies") or []
     for entry in update.dependencies or []:
         what, kind = _clean(entry.what), entry.kind.strip().lower()
-        if what and kind in DEPENDENCY_KINDS and not any(_same(d["what"], what) for d in dependencies):
+        if not what or kind not in DEPENDENCY_KINDS:
+            continue
+        at = _repeats([d for d in dependencies if d["kind"] == kind], what, text=lambda d: d["what"])
+        if at is None:
             dependencies.append({"what": what, "kind": kind})
+        else:
+            same = [d for d in dependencies if d["kind"] == kind][at]
+            if len(what) > len(same["what"]):
+                same["what"] = what
     for key, entries in (
         ("situations", situations), ("feelings", feelings), ("underneath", underneath), ("beliefs", beliefs),
         ("risks", risks), ("dependencies", dependencies),
@@ -131,7 +180,10 @@ def merge(stored: dict | None, update: PictureUpdate | None) -> dict:
     for key in READINGS:
         if value := _clean(getattr(update, key), READING_LIMIT):
             picture[key] = value
-    if update.core is not None and (belief := _clean(update.core.belief, READING_LIMIT)):
+    # A balanced way of seeing it is never the core, even reported as one (the career chat, 2026-11-03).
+    reached = [b["belief"] for b in beliefs if b.get("kind") == "new"]
+    if (update.core is not None and (belief := _clean(update.core.belief, READING_LIMIT))
+            and not any(_same(belief, r) for r in reached)):
         about = update.core.about.strip().lower()
         if about in CORE_ABOUT:
             # The core is replaced whole: a deeper reading is a new core, not a second one. The feeling underneath
@@ -146,6 +198,18 @@ def merge(stored: dict | None, update: PictureUpdate | None) -> dict:
 
     shift = (update.shift or "").strip().lower()
     shift = shift if shift in SHIFTS else None
+    if shift == "new_issue":
+        # Another situation: what was explored and ruled out was about the last one.
+        for key in (TIED_TO, EXPLORED, RULED_OUT):
+            picture.pop(key, None)
+    ruled_out = picture.get(RULED_OUT) or []
+    for what in update.ruled_out or []:
+        if (what := _clean(what)) and not any(_same(r, what) for r in ruled_out):
+            ruled_out.append(what)
+    if ruled_out:
+        picture[RULED_OUT] = _capped(ruled_out)
+        if picture.get(TIED_TO):
+            picture[TIED_TO] = [t for t in picture[TIED_TO] if not any(_same(t["what"], r) for r in ruled_out)]
     if focus := _clean(update.focus):
         earlier = [e for e in picture.get("earlier") or [] if not _same(e, focus)]
         if picture.get("focus") and not _same(picture["focus"], focus) and shift in ("new_issue", "back"):
@@ -209,6 +273,24 @@ def apply_reading(stored: dict | None, reading: Reading | None) -> dict:
     # picture's shift, which keeps the earlier one.
     if focus := _known(reading.focus):
         picture["focus"] = _clean(focus)
+    # How they react, what they do after it hurts, replaced whole like what is uncertain (the client's review,
+    # 2026-10-30: overthinking how they act and self-consciousness were lost from the picture).
+    reactions = [r for r in (_known(x) for x in reading.reactions or []) if r]
+    if reactions:
+        picture["reactions"] = _capped(reactions)
+    # What it may depend on, most relevant first, replaced whole and never what they ruled out (the funnel,
+    # 2026-11-03). An empty ranking is a feeling with no clear cause yet: nothing is pointed at.
+    ruled_out = picture.get(RULED_OUT) or []
+    tied_to: list[dict] = []
+    for entry in reading.tied_to or []:
+        what, side = _known(entry.what), entry.side.strip().lower()
+        if (what and side in SIDES and not any(_same(r, what) for r in ruled_out)
+                and not any(_same(t["what"], what) for t in tied_to)):
+            tied_to.append({"what": _clean(what), "side": side})
+    if tied_to:
+        picture[TIED_TO] = tied_to[:LIST_LIMIT]
+    else:
+        picture.pop(TIED_TO, None)
     # What is still uncertain is replaced whole: the reading is re-read every turn.
     uncertain = [u for u in (_known(x) for x in reading.uncertain or []) if u]
     if uncertain:
@@ -216,6 +298,34 @@ def apply_reading(stored: dict | None, reading: Reading | None) -> dict:
     else:
         picture.pop("uncertain", None)
     return reconcile(picture)
+
+
+def explored(picture: dict | None, closest: str | None) -> dict:
+    """The picture with what the reply's window landed on counted as explored."""
+    picture = copy.deepcopy(picture or {})
+    if not (closest := _clean(closest)):
+        return picture
+    done = picture.get(EXPLORED) or []
+    if not any(_same(e, closest) for e in done):
+        picture[EXPLORED] = _capped([*done, closest])
+    return picture
+
+
+def _covered(what: str, among: list[str]) -> bool:
+    """Whether `what` is one of `among`, or one holds the other: "the deadline" and "the deadline on Friday"."""
+    a = " ".join(what.split()).casefold()
+    return any(a in (b := " ".join(x.split()).casefold()) or b in a for x in among if x.strip())
+
+
+def funnel(picture: dict | None) -> tuple[dict | None, list[str], list[str]]:
+    """What to explore next, the first in the ranking not yet explored or ruled out; what was explored; and what
+    was ruled out."""
+    picture = picture or {}
+    done, out = picture.get(EXPLORED) or [], picture.get(RULED_OUT) or []
+    following = next(
+        (t for t in picture.get(TIED_TO) or [] if not _covered(t["what"], done) and not _covered(t["what"], out)), None,
+    )
+    return following, list(done), list(out)
 
 
 def reconcile(picture: dict) -> dict:
@@ -247,6 +357,7 @@ def render(picture: dict | None) -> str | None:
         ("what they say is really happening", " | ".join(b["belief"] for b in beliefs if b["kind"] == "happening")),
         ("new ways of seeing it they reached", " | ".join(b["belief"] for b in beliefs if b["kind"] == "new")),
         ("still uncertain, never say it back as settled", " | ".join(picture.get("uncertain") or [])),
+        ("how they react, what they do after it hurts", " | ".join(picture.get("reactions") or [])),
         ("what they want, in their words", picture.get("wants")),
         ("what they need underneath, your reading", picture.get("needs")),
         ("what they long for, your reading", picture.get("desire")),
@@ -263,6 +374,7 @@ def render(picture: dict | None) -> str | None:
             d["what"] for d in picture.get("dependencies") or [] if d["kind"] == "external")),
         ("kind of problem", picture.get("problem_type")),
         ("earlier situations", " | ".join(picture.get("earlier") or [])),
+        ("they said it is not about, never ask about it again", " | ".join(picture.get(RULED_OUT) or [])),
     ]
     rendered = "; ".join(f"{name}: {value}" for name, value in parts if value)
     return rendered or None

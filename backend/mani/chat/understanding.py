@@ -19,6 +19,16 @@ READY = "ready"
 # The core said back and not corrected (muhammad, 2026-10-28). A record written before then says conflict_named.
 CORE_NAMED = "core_named"
 _LEGACY_HEART = {"conflict_named": CORE_NAMED}
+# They corrected what an offer said back about them (the client meeting, 2026-11-03). Named here, where the record is
+# merged; converse and context read it under the same name.
+CORRECTED = "corrected_offer"
+
+
+def corrected(stored: dict, *, heart_now: str = CORE_NAMED) -> dict:
+    """The record after they corrected the reading an offer said back: the case they had not confirmed is dropped, the
+    corrected core stands as named, not yet ready, and the next offer may come sooner."""
+    after = {key: value for key, value in stored.items() if key != "case"}
+    return {**after, "heart": heart_now, CORRECTED: True}
 
 
 def heart(stored: dict) -> str | None:
@@ -50,7 +60,12 @@ def merge(stored: dict, update: PictureUpdate | None, heart: str | None) -> dict
     added to those kept, and where the reply judged the heart of it, replacing the last judgement. A null or blank
     value keeps what is stored."""
     # The chat's plan and its last answers to its own three questions ride along on every other kind of turn.
-    merged = {key: stored[key] for key in (*KEYS, picture.KEY, "plan", "thinking", "insights") if stored.get(key)}
+    # Whether they corrected the reading an offer said back rides along too, until the next offer (converse.CORRECTED).
+    merged = {
+        key: stored[key]
+        for key in (*KEYS, picture.KEY, "plan", "thinking", "insights", CORRECTED)
+        if stored.get(key)
+    }
     if merged.get("heart") in _LEGACY_HEART:
         merged["heart"] = _LEGACY_HEART[merged["heart"]]
     before = stored.get(picture.KEY)
@@ -63,6 +78,7 @@ def merge(stored: dict, update: PictureUpdate | None, heart: str | None) -> dict
     if update is not None and (update.shift or "").strip().lower() == "new_issue":
         # Another situation: the reading of the last one does not hold for it, so the heart of it is found again.
         merged.pop("heart", None)
+        merged.pop(CORRECTED, None)
     if heart:
         merged["heart"] = heart
     return merged
@@ -78,6 +94,21 @@ def picture_line(stored: dict) -> str | None:
     """The picture of them as one line the model reads, or None while it holds nothing."""
     rendered = picture.render(stored.get(picture.KEY))
     return context.disarm(rendered) if rendered else None
+
+
+def case_from_core(core: dict) -> str:
+    """The case said from the picture's core, the belief and the feeling underneath, for when the core deepens inside
+    the questions (the "can't say no" chat, 2026-11-03: B found "you only matter when you're useful", and D and E still
+    worked on the belief the offer named)."""
+    belief = " ".join((core.get("belief") or "").split())
+    if not belief:
+        return ""
+    said = belief[0].upper() + belief[1:]
+    said = said if said[-1] in ".!?" else said + "."
+    feeling = " ".join((core.get("feeling") or "").split())
+    if feeling and feeling.lower() not in said.lower() and "underneath" not in said.lower():
+        said += f" Underneath it, there may be {feeling[0].lower() + feeling[1:]}."
+    return said
 
 
 def merge_check(stored: dict[str, str], summary: str) -> dict[str, str]:

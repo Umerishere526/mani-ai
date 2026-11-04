@@ -137,7 +137,7 @@ def test_a_slot_loses_its_quotes_and_trailing_punctuation_and_keeps_its_case(cli
         conversation_style="directive",
     )
     assert fixed.text == (
-        "There's a framework called ABCDE that helps you look at the belief that Sam only sees me as "
+        "There's a framework called ABCDE that helps you look at the belief that Sam only sees you as "
         "useful, what supports it, and whether there's a more balanced way to see it."
         "\n\nWould you like to try it?"
     )
@@ -208,7 +208,7 @@ def test_once_told_more_the_offer_comes_back_with_two_buttons():
 def test_the_slot_descriptions_are_the_clients_placeholders(client_abcde):
     directive = repairs.slots_for(Registry([client_abcde]), "directive", "abcde")
     assert directive.lead_line is None
-    assert directive.going_through.startswith("the core belief they confirmed, in their words")
+    assert directive.going_through.startswith("the core belief they confirmed, as a short clause of about ten words, in their words")
     assert directive.their_words == "what they said they are struggling with, in their words"
     assert repairs.slots_for(Registry([client_abcde]), "supportive", None).lead_line.startswith(
         "A short warm line"
@@ -300,3 +300,82 @@ def test_the_options_go_on_the_line_under_the_question_and_only_where_the_reply_
     )
     assert fix(registry, reply(text="Take your time."), chat_text=True).text == "Take your time."
     assert fix(registry, asked).text == asked.text, "a stage reply is not laid out and carries none"
+
+
+@pytest.mark.parametrize(("draft", "sent"), [
+    # The client's own example (2026-10-30): a list after the dash keeps it one sentence.
+    ("When that anxious feeling starts, where does your mind usually go first—unfinished responsibilities, "
+     "someone you care about, or something else?",
+     "When that anxious feeling starts, where does your mind usually go first, unfinished responsibilities, "
+     "someone you care about, or something else?"),
+    # A sentence of its own after the dash becomes its own sentence.
+    ("You weren't asked—you were told what would happen.", "You weren't asked. You were told what would happen."),
+    ("That sounds hard — it's a lot to carry on your own.", "That sounds hard. It's a lot to carry on your own."),
+    # An aside between two dashes reads between two commas.
+    ("Your friends—the ones from school—still call you.", "Your friends, the ones from school, still call you."),
+    ("It's frustrating—especially after a year of waiting.", "It's frustrating, especially after a year of waiting."),
+    ("You keep going – and nothing changes.", "You keep going, and nothing changes."),
+    # Short words after the dash stay in the sentence.
+    ("Mostly work—maybe also family?", "Mostly work, maybe also family?"),
+    # A dash at the end becomes a full stop.
+    ("I'm not sure—", "I'm not sure."),
+    # Hyphens and number ranges are not dashes.
+    ("A well-known self-check, pages 3–5.", "A well-known self-check, pages 3–5."),
+    ("Nothing to change here.", "Nothing to change here."),
+])
+def test_dashes_are_taken_out_of_what_mani_says(draft, sent):
+    """The client, 2026-10-30 and 2026-11-03: no dashes in Mani's replies. The prompt asks for none, and code takes out
+    any that still come, while reply_checks counts them in the draft."""
+    assert repairs.without_dashes(draft) == sent
+    assert "\u2014" not in repairs.without_dashes(draft)
+
+
+def test_the_move_to_the_framework_sends_the_offer_in_place_of_the_text_when_the_style_has_a_lead_line(client_abcde):
+    """The client meeting, 2026-11-03: no check before the offer; the offer says the core back."""
+    said, buttons, framework_id, dropped = repairs.transition_offer(
+        "That sounds heavy. Does that capture it?",
+        Offer(lead_line="Feeling overwhelmed can make you question how well you're handling things.",
+              going_through="your coworker only sees you as useful"),
+        "abcde", Registry([client_abcde]), "supportive", feeling=None,
+    )
+    assert said == SUPPORTIVE_OFFER and framework_id == "abcde" and dropped is None
+    assert [b.label for b in buttons] == ["Try it", "Tell me more", "Keep chatting"]
+
+
+def test_in_directive_the_move_keeps_the_acknowledgment_and_drops_its_question(client_abcde):
+    said, _, _, _ = repairs.transition_offer(
+        "That's a lot to carry. Want to look at it?", Offer(going_through="you have to hold it all together"),
+        "abcde", Registry([client_abcde]), "directive", feeling=None,
+    )
+    assert said.startswith("That's a lot to carry.\n\nThere's a framework called ABCDE")
+    assert "Want to look at it?" not in said and said.endswith("Would you like to try it?")
+
+
+def test_a_move_whose_offer_cannot_be_made_offers_nothing(client_abcde):
+    said, buttons, framework_id, dropped = repairs.transition_offer(
+        "Words.", Offer(going_through="you let them down"), "abcde", Registry([client_abcde]), "supportive",
+        feeling=None,
+    )
+    assert (said, buttons, framework_id, dropped) == (None, [], None, "no lead_line")
+
+
+def test_a_body_check_in_the_model_offers_itself_is_dropped_and_a_question_about_the_body_is_kept():
+    """The career chat, 2026-11-03: the check-in is code's, sent once the questions end."""
+    assert repairs.without_body_offer(
+        "You can see it differently now. Would you like to do a brief body check-in now, or skip it?"
+    ) == "You can see it differently now."
+    kept = "What do you notice in your body when that thought comes back?"
+    assert repairs.without_body_offer(kept) == kept
+
+
+def test_the_offers_belief_is_said_to_them_even_when_it_came_back_in_their_first_person():
+    """The father chat, 2026-11-04: "the belief that my dad takes the appreciation and respect I deserve"."""
+    assert repairs.said_to_them("my dad takes the appreciation and respect I deserve and gives it to my brother") == (
+        "your dad takes the appreciation and respect you deserve and gives it to your brother"
+    )
+    assert repairs.said_to_them("I was never enough, and I'm always the one who tries") == (
+        "you were never enough, and you're always the one who tries"
+    )
+    assert repairs.said_to_them("nobody listens to me when I am upset") == "nobody listens to you when you are upset"
+    kept = "your dad overlooks what you did, and it was never enough for him"
+    assert repairs.said_to_them(kept) == kept, "no first person: nothing changes, not even 'was'"
