@@ -7,10 +7,11 @@ import datetime as dt
 import uuid
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from mani.llm.schema import SmartPrompt
 from mani.models.rows import MessageRole, SupportStyle
+from mani.text import EMPTY_MESSAGE, clean_message
 
 
 class ThreadOut(BaseModel):
@@ -58,13 +59,33 @@ class MessageListOut(BaseModel):
     next_cursor: str | None = None
 
 
+def _visible_text(value: Any) -> Any:
+    """What the person typed with invisible characters and stray spaces removed; nothing left is an empty message."""
+    if not isinstance(value, str):
+        return value
+    cleaned = clean_message(value)
+    if not cleaned:
+        raise ValueError(EMPTY_MESSAGE)
+    return cleaned
+
+
 class SendMessageIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content: str = Field(min_length=1, max_length=4000)
+
+    _visible = field_validator("content", mode="before")(_visible_text)
     # Supplied by the client so a retried send returns the original reply instead of
     # paying for a second one. It identifies the request, not the person.
     client_message_id: uuid.UUID | None = None
+
+
+class EditMessageIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(min_length=1, max_length=4000)
+
+    _visible = field_validator("content", mode="before")(_visible_text)
 
 
 class LedgerRow(BaseModel):

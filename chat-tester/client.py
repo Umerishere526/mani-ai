@@ -245,6 +245,13 @@ class ManiClient:
             json={"content": content, "client_message_id": client_message_id or str(uuid.uuid4())},
         )
 
+    def edit_message(self, thread_id: str, message_id: str, content: str) -> dict[str, Any]:
+        """POST /v1/threads/{id}/messages/{message_id}/edit - replaces the last message and Mani's reply to it."""
+        return self._call("POST", f"/v1/threads/{thread_id}/messages/{message_id}/edit", json={"content": content})
+
+    def last_user_message_id(self, thread_id: str) -> str:
+        return next(m["id"] for m in reversed(self.full_history(thread_id)) if m["role"] == "user")
+
     def full_history(self, thread_id: str) -> list[dict[str, Any]]:
         """Every message of a thread, oldest first.
 

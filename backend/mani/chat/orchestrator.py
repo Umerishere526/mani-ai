@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import body as body_route, context, converse, picture, repairs, reply_checks, safety, understanding, walk
+from mani.chat import body as body_route, context, converse, picture, repairs, reply_checks, rewind, safety, understanding, walk
 from mani.chat.greeting import (
     COPIED_BACK,
     EXPLAIN_LABELS,
@@ -683,6 +683,8 @@ async def send(
             ErrorCategory.FORBIDDEN,
             user_message="This conversation is paused. Please reach out for support.",
         )
+
+    await rewind.save(conn, ctx, user_id)
 
     config = await cache.load()
     # The whole thread within the budget: the model sees what they said earlier, instead of a store

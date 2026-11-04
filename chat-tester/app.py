@@ -29,6 +29,22 @@ st.set_page_config(page_title="Mani chat tester", page_icon="🧠", layout="wide
 # style the conversation is in.
 STYLES = {"directive": "Directive", "supportive": "Supportive", "reflective": "Reflective"}
 
+# Shown as a popup when there is nothing to send or nothing changed; the backend words its own refusals the same way.
+EMPTY_NOTICE = "Write a message first. It can't be empty or only spaces."
+UNCHANGED_NOTICE = "Nothing has changed yet. Change your message and press Send, or press Cancel to keep it."
+
+# The edit control: a small icon button that lights up on hover, like the one under a sent message in ChatGPT.
+st.markdown(
+    """<style>
+    .st-key-edit_last button { width: 2rem; height: 2rem; min-height: 0; padding: 0; border: 0; border-radius: 8px;
+        background: transparent; color: #8e8ea0; transition: background-color .15s ease, color .15s ease, transform .1s ease; }
+    .st-key-edit_last button:hover { background: rgba(142, 142, 160, .2); color: inherit; }
+    .st-key-edit_last button:active { transform: scale(.92); }
+    .st-key-edit_last button:focus-visible { outline: 2px solid rgba(142, 142, 160, .6); outline-offset: 1px; }
+    </style>""",
+    unsafe_allow_html=True,
+)
+
 # Where Mani's reply will appear, while it is on its way: three dots pulsing in a pill.
 # Colours are .streamlit/config.toml's secondaryBackgroundColor, borderColor and primaryColor.
 THINKING_PILL = """
@@ -79,6 +95,7 @@ def reset_thread_state(thread: dict, messages: list[dict]) -> None:
     st.session_state.last_turn = None
     # A message still waiting to go belongs to the conversation it was typed in.
     st.session_state.pending = None
+    st.session_state.editing = False
 
 
 # ---------------------------------------------------------------------------
@@ -165,10 +182,106 @@ if caption:
 # The conversation itself
 # ---------------------------------------------------------------------------
 
-for message in st.session_state.messages:
+def record_turn(content: str, turn: dict, *, replacing: bool = False) -> None:
+    exchange = [
+        {"role": "user", "content": content, "prompts": []},
+        {"role": "mani", "content": turn["content"], "prompts": turn.get("prompts") or [], "trace": turn.get("trace")},
+    ]
+    if replacing:
+        st.session_state.messages[-2:] = exchange
+    else:
+        st.session_state.messages.extend(exchange)
+    st.session_state.last_turn = turn
+    style = next((key for key, label in STYLES.items() if label == content.strip()), None)
+    if style:
+        st.session_state.style = style
+    if turn.get("title"):
+        st.session_state.thread["title"] = turn["title"]
+    if turn.get("crisis_detected") and turn.get("crisis_blocks_chat"):
+        st.session_state.locked = True
+
+
+def refusal_text(exc: mani.ApiError) -> str:
+    # A refusal the backend worded for the person (an empty or too long message) is shown as it says it.
+    error = exc.body.get("error") or {}
+    return error["message"] if exc.status == 422 and error.get("message") else str(exc)
+
+
+def set_send_error(message: str) -> None:
+    st.session_state.send_error = message
+
+
+def notify(message: str) -> None:
+    # Held for the next run, which shows it as a popup: a rerun right after would otherwise swallow it.
+    st.session_state.notice = message
+
+
+def edit_last(content: str) -> None:
+    # Replaces the last message and Mani's reply to it: the backend takes that turn back and runs the new text.
+    # A refused edit leaves the editor open with what they typed, so nothing is lost.
+    try:
+        message_id = client.last_user_message_id(thread["id"])
+        turn = client.edit_message(thread["id"], message_id, content)
+    except mani.ApiError as exc:
+        notify(refusal_text(exc))
+        return
+    except requests.exceptions.RequestException:
+        notify(
+            f"No reply within {mani.REQUEST_TIMEOUT_SECONDS} seconds, or the backend is not reachable. "
+            "Reopen the chat to see whether the edit went through before trying again."
+        )
+        return
+    st.session_state.editing = False
+    st.session_state.pop("edit_text", None)
+    record_turn(content, turn, replacing=True)
+
+
+def render_last_user_message(content: str) -> None:
+    if not st.session_state.editing:
+        st.write(content)
+        if st.button(" ", icon=":material/edit_square:", key="edit_last", type="tertiary", help="Edit message"):
+            st.session_state.editing = True
+            st.rerun()
+        return
+    edited = st.text_area("Edit your message", value=content, key="edit_text", label_visibility="collapsed")
+    send_col, cancel_col, _ = st.columns([1, 1, 4])
+    if cancel_col.button("Cancel", key="edit_cancel"):
+        st.session_state.editing = False
+        st.session_state.pop("edit_text", None)
+        st.rerun()
+    if send_col.button("Send", key="edit_send", type="primary"):
+        text = edited.strip()
+        if not text:
+            notify(EMPTY_NOTICE)
+        elif text == content.strip():
+            notify(UNCHANGED_NOTICE)
+        else:
+            with st.spinner("Sending…"):
+                edit_last(text)
+        st.rerun()
+
+
+notice = st.session_state.pop("notice", None)
+if notice:
+    st.toast(notice, icon="⚠️")
+
+# Only the person's last message can be edited, and only once Mani has answered it.
+messages = st.session_state.messages
+editable_at = (
+    len(messages) - 2
+    if len(messages) >= 2
+    and (messages[-2]["role"], messages[-1]["role"]) == ("user", "mani")
+    and not st.session_state.get("pending")
+    and not st.session_state.locked
+    else None
+)
+for index, message in enumerate(messages):
     avatar = "🧠" if message["role"] == "mani" else "🧑"
     with st.chat_message("assistant" if message["role"] == "mani" else "user", avatar=avatar):
-        st.write(message["content"])
+        if index == editable_at:
+            render_last_user_message(message["content"])
+        else:
+            st.write(message["content"])
         copy_button(message["content"])
         if developer and message.get("trace"):
             # What code decided on this turn, sent only with AI_DEBUG_MODE (admin.turn_traces).
@@ -215,7 +328,7 @@ def deliver(content: str) -> None:
     except mani.ApiError as exc:
         # Kept in session state rather than shown here: the rerun that follows would wipe
         # an st.error before anyone could read it, and a failed send would look like nothing.
-        st.session_state.send_error = str(exc)
+        (notify if exc.status == 422 else set_send_error)(refusal_text(exc))
         # The message was not stored, so it goes back into the composer to send again rather than vanishing from
         # the chat (Lolly, 2026-11-03: "it deleted my answer").
         st.session_state.composer_draft = content
@@ -228,18 +341,7 @@ def deliver(content: str) -> None:
             "Reopen the chat to see whether the reply arrived before sending again."
         )
         return
-    st.session_state.messages.append({"role": "user", "content": content, "prompts": []})
-    st.session_state.messages.append(
-        {"role": "mani", "content": turn["content"], "prompts": turn.get("prompts") or [], "trace": turn.get("trace")}
-    )
-    st.session_state.last_turn = turn
-    style = next((key for key, label in STYLES.items() if label == content.strip()), None)
-    if style:
-        st.session_state.style = style
-    if turn.get("title"):
-        st.session_state.thread["title"] = turn["title"]
-    if turn.get("crisis_detected") and turn.get("crisis_blocks_chat"):
-        st.session_state.locked = True
+    record_turn(content, turn)
 
 
 # Text waiting to be put into the composer: a voice transcript, or a message whose send failed. The composer's own
@@ -311,6 +413,9 @@ else:
             st.rerun()
     elif submitted and submitted.text.strip():
         send(submitted.text.strip())
+        st.rerun()
+    elif submitted and submitted.text:
+        notify(EMPTY_NOTICE)
         st.rerun()
 
 # ---------------------------------------------------------------------------

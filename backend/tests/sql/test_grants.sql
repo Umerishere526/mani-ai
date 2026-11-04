@@ -190,6 +190,9 @@ select pg_temp.want('a user cannot write a greeting through the function',
   has_function_privilege('authenticated',
     'public.create_greeting(uuid, text, jsonb)', 'EXECUTE'), false);
 
+select pg_temp.want('a user cannot delete messages through the function',
+  has_function_privilege('authenticated', 'public.delete_last_message_pair(uuid, uuid)', 'EXECUTE'), false);
+
 select pg_temp.want('the backend can write a turn through the function',
   has_function_privilege('mani_service',
     'public.create_message_pair(uuid, text, text, text, jsonb, uuid)', 'EXECUTE'), true);
@@ -201,6 +204,9 @@ select pg_temp.want('the backend can record a crisis through the function',
 select pg_temp.want('the backend can write a greeting through the function',
   has_function_privilege('mani_service',
     'public.create_greeting(uuid, text, jsonb)', 'EXECUTE'), true);
+
+select pg_temp.want('the backend can delete a last message pair through the function',
+  has_function_privilege('mani_service', 'public.delete_last_message_pair(uuid, uuid)', 'EXECUTE'), true);
 
 -- `create or replace` would leave the old signature in place, still granted. Dropping
 -- it explicitly is what migration 002 does; this is what catches a regression to that.
@@ -290,6 +296,9 @@ select pg_temp.want('an unauthenticated caller cannot record a crisis',
   has_function_privilege('anon',
     'public.mark_thread_crisis(uuid, text, uuid)', 'EXECUTE'), false);
 
+select pg_temp.want('an unauthenticated caller cannot delete messages',
+  has_function_privilege('anon', 'public.delete_last_message_pair(uuid, uuid)', 'EXECUTE'), false);
+
 select pg_temp.want('an unauthenticated caller cannot write a greeting',
   has_function_privilege('anon', 'public.create_greeting(uuid, text, jsonb)', 'EXECUTE'), false);
 
@@ -302,7 +311,7 @@ begin
       from pg_proc p
       join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
-       and p.proname in ('create_message_pair', 'mark_thread_crisis', 'create_greeting',
+       and p.proname in ('create_message_pair', 'mark_thread_crisis', 'create_greeting', 'delete_last_message_pair',
                          'touch_updated_at', 'sync_thread_message_count',
                          'create_profile_for_new_user')
   loop

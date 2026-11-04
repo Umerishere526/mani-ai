@@ -146,6 +146,25 @@ the same change as the work.**
   out what to do. A yes still brings the client's offer (Try it / Tell me more / Keep chatting), which names the
   set; agreeing but wanting to keep talking is followed, not treated as a miss (`moments.md`, the check's [ctx]
   line, `check_answer`). Test: `test_mani_follows_lollys_cadence_and_checks_by_her_barometer`.
+- **The person can edit their last message: it and Mani's reply are replaced, and the thread state returns to what it
+  was before that turn.** Because muhammad wants ChatGPT's edit for the chat-tester (2026-11-03): replace, last message
+  only, also inside a framework, chat-tester only for now. Every turn saves the state it will overwrite (title,
+  understanding, check position, framework row, offered list) in `threads.rewind_snapshot` (migration 027);
+  `POST /v1/threads/{id}/messages/{message_id}/edit` deletes the pair through `delete_last_message_pair`, restores the
+  snapshot and runs the new text in one transaction (`chat/rewind.py`). Refused: a crisis thread, a message sent by
+  tapping an option, the style tap, a message already inside the thread summary. The overnight memory fold is not
+  undone, so an edit after it leaves the old words in memory (accepted for the tester). Tests:
+  `test_editing_the_message_that_answered_a_check_takes_back_the_offer_and_runs_the_new_text`,
+  `test_editing_the_last_message_inside_a_framework_puts_the_walk_back_where_it_was`,
+  `test_a_message_that_cannot_be_taken_back_safely_is_refused_and_nothing_changes`.
+- **A message is cleaned to its visible text before anything reads it, and an empty one is refused with what to do.**
+  Because a zero-width character inside "kill myself" turned into a space in the safety screen and the phrase was no
+  longer matched, and the same hid a typed `[ctx]` block from its guard (muhammad, 2026-11-04). `text.clean_message`
+  folds full-width and compatibility letters, drops zero-width, control and unassigned characters, makes every space a
+  plain one and collapses runs; `SendMessageIn` and `EditMessageIn` apply it, and `safety.normalize` applies it again.
+  Nothing visible left gives 422 "Write a message first. It can't be empty or only spaces."; over 4000 characters gives
+  "That message is too long..." (`main.py` `_what_to_fix`). Not covered: look-alike letters from other alphabets.
+  Tests: `tests/unit/test_text.py`, `test_an_empty_or_too_long_message_is_told_what_to_do`.
 - **Mani runs the chat like a therapist runs a session, with Lolly's role-played session as its example.**
   Because three days of rules on `feat/identify-the-connection` did not change the shape of the replies: the model
   copied the mirror-then-question turns of the two ChatGPT conversations at the end of `voice.md` over every rule

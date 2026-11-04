@@ -2706,3 +2706,129 @@ async def test_a_reply_that_stays_on_a_stage_and_asks_nothing_gets_the_stages_qu
 
     assert (await _offered_row(alice, thread.id)).phase == "effective"
     assert turn.content.endswith("What would you like to do with that new way of seeing it?")
+
+
+async def _last_user_message_id(thread_id):
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        return await conn.fetchval(
+            "select id from public.messages where thread_id = $1 and role = 'user' order by created_at desc limit 1",
+            thread_id,
+        )
+
+
+async def _user_messages(thread_id) -> list[str]:
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        rows = await conn.fetch(
+            "select content from public.messages where thread_id = $1 and role = 'user' order by created_at", thread_id
+        )
+    return [r["content"] for r in rows]
+
+
+async def _undo(alice, thread_id, message_id=None):
+    from mani.chat import rewind
+    from mani.db import pool
+
+    async with pool.as_user(alice) as conn:
+        await rewind.undo_last_turn(conn, ALICE, thread_id, message_id or await _last_user_message_id(thread_id))
+
+
+async def _edit(alice, thread_id, content):
+    """What the edit endpoint does: take back the last turn, then run the new text, in one transaction."""
+    from mani.chat import rewind
+    from mani.db import pool
+
+    message_id = await _last_user_message_id(thread_id)
+    async with pool.as_user(alice) as conn:
+        await rewind.undo_last_turn(conn, ALICE, thread_id, message_id)
+        return await orchestrator.send(conn, alice, thread_id, content)
+
+
+async def test_editing_the_message_that_answered_a_check_takes_back_the_offer_and_runs_the_new_text(alice, model):
+    from mani.models.rows import SupportStyle
+    from mani.db import pool
+
+    scripted = model(
+        _offer("abcde"),
+        Reply(text="What about it feels most wrong?", check_answer="no"),
+        Reply(text="Go on.", check_answer="no"),
+    )
+    thread = await past_the_opening(await _in_style(await start(alice), SupportStyle.SUPPORTIVE))
+    before = await _thread_row(alice, thread.id)
+    await send(alice, thread.id, "yes, that's right")
+    assert (await _offered_row(alice, thread.id)).outcome is TechniqueOutcome.OFFERED
+
+    turn = await _edit(alice, thread.id, "not really, it's more that I'm tired")
+
+    assert turn.content == "What about it feels most wrong?"
+    assert await _offered_row(alice, thread.id) is None
+    async with pool.as_user(alice) as conn:
+        ctx = await threads.load_turn_context(conn, thread.id, ALICE)
+    assert ctx.techniques_offered == []
+    assert ctx.thread.understanding == before.understanding
+    assert ctx.thread.check_at_message_count == before.check_at_message_count
+    assert ctx.thread.message_count == before.message_count + 2
+    assert await _user_messages(thread.id) == ["not really, it's more that I'm tired"]
+
+    # Each turn keeps the snapshot of the one before it, so the new message can be edited too.
+    await _edit(alice, thread.id, "actually, let me put it differently")
+    assert await _user_messages(thread.id) == ["actually, let me put it differently"]
+    assert scripted.calls == 3
+
+
+async def test_editing_the_last_message_inside_a_framework_puts_the_walk_back_where_it_was(alice, model):
+    a_own = "So it started with being left out of meetings at work. Is that where this began for you?"
+    b_own = "You've been telling yourself nobody wants you there. Is that still how it feels?"
+    model(
+        _offer(),
+        Reply(text=a_own, offer_answer="yes",
+              next_stage=NextStage(status="possible", said="being left out of meetings at work"),
+              stage_updates=[StageUpdate(stage="belief", said="nobody wants me there", status="known")]),
+        Reply(text=b_own, stage_answer="agreed", next_stage=NextStage(status="known", said="nobody wants me there")),
+        Reply(text="Thank you.", stage_answer="agreed", next_stage=_MISSING),
+    )
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "I'm left out of meetings at work and I think nobody wants me there")
+    await send(alice, thread.id, "Try it")
+    await send(alice, thread.id, "yes")
+    row, store = await _offered_row(alice, thread.id), await _store(alice, thread.id)
+    await send(alice, thread.id, "yes")
+    moved = await _offered_row(alice, thread.id)
+    assert (moved.phase, await _store(alice, thread.id)) != (row.phase, store)
+
+    await _undo(alice, thread.id)
+
+    restored = await _offered_row(alice, thread.id)
+    assert (restored.phase, restored.outcome, restored.at_message_count) == (row.phase, row.outcome, row.at_message_count)
+    assert await _store(alice, thread.id) == store
+
+
+async def test_a_message_that_cannot_be_taken_back_safely_is_refused_and_nothing_changes(alice, model):
+    from mani.db import pool
+    from mani.errors import ErrorCategory, ServiceError
+    from mani.models.rows import SupportStyle
+
+    model(Reply(text="Tell me more."))
+    thread = await _in_style(await start(alice), SupportStyle.SUPPORTIVE)
+    await send(alice, thread.id, "first thing")
+    first = await _last_user_message_id(thread.id)
+    await send(alice, thread.id, "second thing")
+    last = await _last_user_message_id(thread.id)
+
+    async def refused(message_id) -> ErrorCategory:
+        with pytest.raises(ServiceError) as raised:
+            await _undo(alice, thread.id, message_id)
+        return raised.value.category
+
+    assert await refused(first) is ErrorCategory.CONFLICT
+    async with pool.as_admin() as conn:
+        await conn.execute("update public.messages set selected_prompt = 'Try it' where id = $1", last)
+    assert await refused(last) is ErrorCategory.CONFLICT
+    async with pool.as_admin() as conn:
+        await conn.execute("update public.messages set selected_prompt = null where id = $1", last)
+        await conn.execute("update public.threads set crisis_detected = true where id = $1", thread.id)
+    assert await refused(last) is ErrorCategory.FORBIDDEN
+    assert await _user_messages(thread.id) == ["first thing", "second thing"]
