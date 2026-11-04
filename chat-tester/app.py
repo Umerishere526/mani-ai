@@ -77,6 +77,7 @@ def reset_thread_state(thread: dict, messages: list[dict]) -> None:
     st.session_state.last_turn = None
     # A message still waiting to go belongs to the conversation it was typed in.
     st.session_state.pending = None
+    st.session_state.editing = False
 
 
 # ---------------------------------------------------------------------------
@@ -162,10 +163,80 @@ if caption:
 # The conversation itself
 # ---------------------------------------------------------------------------
 
-for message in st.session_state.messages:
+def record_turn(content: str, turn: dict, *, replacing: bool = False) -> None:
+    exchange = [
+        {"role": "user", "content": content, "prompts": []},
+        {"role": "mani", "content": turn["content"], "prompts": turn.get("prompts") or []},
+    ]
+    if replacing:
+        st.session_state.messages[-2:] = exchange
+    else:
+        st.session_state.messages.extend(exchange)
+    st.session_state.last_turn = turn
+    style = next((key for key, label in STYLES.items() if label == content.strip()), None)
+    if style:
+        st.session_state.style = style
+    if turn.get("title"):
+        st.session_state.thread["title"] = turn["title"]
+    if turn.get("crisis_detected") and turn.get("crisis_blocks_chat"):
+        st.session_state.locked = True
+
+
+def edit_last(content: str) -> None:
+    # Replaces the last message and Mani's reply to it: the backend takes that turn back and runs the new text.
+    st.session_state.editing = False
+    st.session_state.pop("edit_text", None)
+    try:
+        message_id = client.last_user_message_id(thread["id"])
+        turn = client.edit_message(thread["id"], message_id, content)
+    except mani.ApiError as exc:
+        st.session_state.send_error = str(exc)
+        return
+    except requests.exceptions.RequestException:
+        st.session_state.send_error = (
+            f"No reply within {mani.REQUEST_TIMEOUT_SECONDS} seconds, or the backend is not reachable. "
+            "Reopen the chat to see whether the edit went through before trying again."
+        )
+        return
+    record_turn(content, turn, replacing=True)
+
+
+def render_last_user_message(content: str) -> None:
+    if not st.session_state.editing:
+        st.write(content)
+        if st.button("✏️ Edit", key="edit_last", type="tertiary"):
+            st.session_state.editing = True
+            st.rerun()
+        return
+    edited = st.text_area("Edit your message", value=content, key="edit_text", label_visibility="collapsed")
+    send_col, cancel_col, _ = st.columns([1, 1, 4])
+    if cancel_col.button("Cancel", key="edit_cancel"):
+        st.session_state.editing = False
+        st.session_state.pop("edit_text", None)
+        st.rerun()
+    if send_col.button("Send", key="edit_send", type="primary", disabled=not edited.strip()):
+        with st.spinner("Sending…"):
+            edit_last(edited.strip())
+        st.rerun()
+
+
+# Only the person's last message can be edited, and only once Mani has answered it.
+messages = st.session_state.messages
+editable_at = (
+    len(messages) - 2
+    if len(messages) >= 2
+    and (messages[-2]["role"], messages[-1]["role"]) == ("user", "mani")
+    and not st.session_state.get("pending")
+    and not st.session_state.locked
+    else None
+)
+for index, message in enumerate(messages):
     avatar = "🧠" if message["role"] == "mani" else "🧑"
     with st.chat_message("assistant" if message["role"] == "mani" else "user", avatar=avatar):
-        st.write(message["content"])
+        if index == editable_at:
+            render_last_user_message(message["content"])
+        else:
+            st.write(message["content"])
 
 last_turn = st.session_state.get("last_turn")
 
@@ -217,18 +288,7 @@ def deliver(content: str) -> None:
             "Reopen the chat to see whether the reply arrived before sending again."
         )
         return
-    st.session_state.messages.append({"role": "user", "content": content, "prompts": []})
-    st.session_state.messages.append(
-        {"role": "mani", "content": turn["content"], "prompts": turn.get("prompts") or []}
-    )
-    st.session_state.last_turn = turn
-    style = next((key for key, label in STYLES.items() if label == content.strip()), None)
-    if style:
-        st.session_state.style = style
-    if turn.get("title"):
-        st.session_state.thread["title"] = turn["title"]
-    if turn.get("crisis_detected") and turn.get("crisis_blocks_chat"):
-        st.session_state.locked = True
+    record_turn(content, turn)
 
 
 # A voice transcript waiting to be put into the composer. The composer's own key can't be

@@ -67,6 +67,12 @@ class SendMessageIn(BaseModel):
     client_message_id: uuid.UUID | None = None
 
 
+class EditMessageIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(min_length=1, max_length=4000)
+
+
 class LedgerRow(BaseModel):
     """One stage of the running framework as the stage store holds it after this turn. Debug mode only."""
 
