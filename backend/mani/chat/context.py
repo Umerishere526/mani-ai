@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+from difflib import SequenceMatcher
 
 from mani.chat import body, repairs, understanding, walk
 from mani.chat.techniques import OFFERING
@@ -83,6 +84,25 @@ def last_question(history: list[Message]) -> str | None:
     last = next((m for m in reversed(history) if m.role is MessageRole.MANI), None)
     asked = _QUESTION.findall(last.content) if last else []
     return " ".join(asked[-1].split()) if asked else None
+
+
+# A message this close to Mani's last reply is that reply sent back, not an answer to it. Long enough that "yes",
+# "okay" or a short phrase of Mani's they repeat is never caught (the friend chat, 2026-11-04).
+COPY_SHARE = 0.9
+COPY_MIN_CHARS = 40
+
+
+def _plain(text: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9']+", text.casefold().replace("\u2019", "'")))
+
+
+def copies_last_reply(content: str, history: list[Message]) -> bool:
+    """Whether their message is Mani's last reply sent back, as a copy and paste would."""
+    last = next((m for m in reversed(history) if m.role is MessageRole.MANI), None)
+    theirs = _plain(content)
+    if last is None or len(theirs) < COPY_MIN_CHARS:
+        return False
+    return SequenceMatcher(None, theirs, _plain(last.content)).ratio() >= COPY_SHARE
 
 
 def their_messages(ctx: TurnContext) -> int:
@@ -261,6 +281,10 @@ _MEANING: dict[str, str | dict[str, str]] = {
     ),
     "landed_on": "what they said for the last of the questions, in their words: where they ended up.",
     "asked": f"questions you already asked: {SAME_QUESTION}.",
+    "last_ending": (
+        "how your last reply ended. End this one differently: \"is there more to it?\" twice in a row reads as a script "
+        "(the father chat, 2026-11-04)."
+    ),
     "not_helping": {
         "stalled": (
             "two turns on this stage have brought nothing new: the questions have stopped helping. In your own words, "
@@ -321,7 +345,8 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "finish and write one warm line with no question. Otherwise report keep_chatting and continue from "
             "their_case and landed_on in the same shape as before the questions: a mirror of where they ended up, one "
             "open question, and possibilities in options. Never ask what they would like to talk about, and never ask "
-            "again for anything their_case already holds."
+            "again for anything their_case already holds. What they chose to do in landed_on is settled: never ask "
+            "them to pick, name or narrow it again (the father chat, 2026-11-04); go on from what is still open."
         ),
     },
 }
@@ -433,6 +458,8 @@ def build(
         lines += _running_lines(ctx, framework, offer_waiting=offer_waiting, starting=starting)
         if asked := asked_before(history or []):
             lines += _line("asked", disarm(" | ".join(asked)))
+        if ending := last_question(history or []):
+            lines += _line("last_ending", disarm(ending))
     if yes_framework is not None and not safety_concern:
         lines += _line("if_they_say_yes", yes_framework.id)
         lines += _start_lines(yes_framework, resolve_style(ctx))

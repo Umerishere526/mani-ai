@@ -32,8 +32,9 @@ SAID_LIMIT = 200
 CONFIRM_ASK = (
     "Say back what they said for this stage, never another stage's part unless this stage's reach names it "
     "(the feeling underneath may frame it, never be its answer), to them as you, and invite them to add to it, "
-    "such as \"Is that it, or is there more to it?\", in one or two sentences, asked differently from the stage "
-    "before. Never just a yes-or-no question."
+    "in one or two sentences, never ending the way your last reply did (last_ending), such as \"Is that it, or is there "
+    "more to it?\", \"Tell me a little more about it.\", \"Is there anything you'd like to add?\" or \"Let's look at it "
+    "a little more.\" Never just a yes-or-no question."
 )
 _LETTER_LINE = re.compile(r"^\s*[A-E] is for\b")
 # "I" and its contractions keep their capital inside a sentence; nothing else that starts their words does.

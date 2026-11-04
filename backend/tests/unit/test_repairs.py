@@ -137,7 +137,7 @@ def test_a_slot_loses_its_quotes_and_trailing_punctuation_and_keeps_its_case(cli
         conversation_style="directive",
     )
     assert fixed.text == (
-        "There's a framework called ABCDE that helps you look at the belief that Sam only sees me as "
+        "There's a framework called ABCDE that helps you look at the belief that Sam only sees you as "
         "useful, what supports it, and whether there's a more balanced way to see it."
         "\n\nWould you like to try it?"
     )
@@ -366,3 +366,16 @@ def test_a_body_check_in_the_model_offers_itself_is_dropped_and_a_question_about
     ) == "You can see it differently now."
     kept = "What do you notice in your body when that thought comes back?"
     assert repairs.without_body_offer(kept) == kept
+
+
+def test_the_offers_belief_is_said_to_them_even_when_it_came_back_in_their_first_person():
+    """The father chat, 2026-11-04: "the belief that my dad takes the appreciation and respect I deserve"."""
+    assert repairs.said_to_them("my dad takes the appreciation and respect I deserve and gives it to my brother") == (
+        "your dad takes the appreciation and respect you deserve and gives it to your brother"
+    )
+    assert repairs.said_to_them("I was never enough, and I'm always the one who tries") == (
+        "you were never enough, and you're always the one who tries"
+    )
+    assert repairs.said_to_them("nobody listens to me when I am upset") == "nobody listens to you when you are upset"
+    kept = "your dad overlooks what you did, and it was never enough for him"
+    assert repairs.said_to_them(kept) == kept, "no first person: nothing changes, not even 'was'"

@@ -13,7 +13,7 @@ REPEAT_OVERLAP = 0.7
 # phrases in a reply.
 FIGURES = re.compile(
     r"\b(?:hold(?:ing)? (?:onto|on to|space|you|this|that)|carry(?:ing)? (?:this|that)|sit(?:ting)? with"
-    r"|weigh(?:s|ing)? on you)\b",
+    r"|weigh(?:s|ing)? on you|stings?|out of step|(?:finding|find) your footing|heavy (?:thought|load) to carry)\b",
     re.IGNORECASE,
 )
 # Words that say nothing about a case, so sharing them is no sign a question carries it.

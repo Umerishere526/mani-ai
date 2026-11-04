@@ -477,7 +477,15 @@ the same change as the work.**
   last step (`replacement`) only when they have a balanced thought they say they believe, which need not be positive,
   and have said, asked once, what they would like to do with it (gap `step`; muhammad, 2026-11-03, the friendship and
   daughter reviews: E closed with nothing to act on). The close carries that one thing forward and never puts what they
-  want off to another time (`framework.md` Ending, `walk.next_line`)
+  want off to another time (`framework.md` Ending, `walk.next_line`). E and Thought Reframe's last step ask for the new view in
+  plain words, both sides and the thought in their words, never "a more balanced way", and a clarification is one plain
+  question with no options (muhammad, 2026-11-04: the father chat's "I don't think I understand your question"; the
+  Tell me more list keeps Lolly's wording). A stage that stays always asks: a reply that stays with no question gets the stage's own,
+  not only after a body offer is dropped (the friend chat, 2026-11-04: a close written while E waited ended the
+  conversation with nothing to answer; `test_a_reply_that_stays_on_a_stage_and_asks_nothing_gets_the_stages_question`).
+  Where the new view forms and in the body check-in, a reported want or desire is ignored like the core (R70). Mani's own
+  last reply sent back gets `greeting.COPIED_BACK` with no model call and changes nothing but the saved pair (R67,
+  `test_manis_last_reply_sent_back_gets_the_fixed_line_and_changes_nothing`)
   (the client's Thought Reframe document, matched by muhammad, 2026-10-21; it replaced his earlier "and hopeful" gate,
   and the old `closing` stage is gone: one acknowledging sentence, then the body check-in; Mani may still offer loose
   possibilities when they are unsure, the person decides; safety and danger boundaries stay); The stage reached opens with its `intro` line, then: for a known or possible stage, A to E, Mani's own

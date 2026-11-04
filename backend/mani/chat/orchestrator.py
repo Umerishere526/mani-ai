@@ -13,6 +13,7 @@ import asyncpg
 from mani.auth.jwt import Claims
 from mani.chat import body as body_route, context, converse, picture, repairs, reply_checks, safety, understanding, walk
 from mani.chat.greeting import (
+    COPIED_BACK,
     EXPLAIN_LABELS,
     OPENERS,
     STYLE_OPTIONS,
@@ -748,6 +749,9 @@ async def send(
             updates=updates,
         )
 
+    if tapped is None and context.copies_last_reply(content, history):
+        return await _copied_back(conn, ctx, content, client_message_id)
+
     # Which framework fits is the model's call, from the Framework Index; code owns only when an
     # offer may come. repairs.apply still checks whatever is offered.
     running_framework = config.registry.get(technique.framework_id) if technique else None
@@ -931,9 +935,11 @@ async def send(
         moment is Moment.IN_STAGES and technique is not None and walk.new_view(running_framework, technique.phase)
     )
     seen_now = reply.picture
-    if core_fixed and seen_now is not None and seen_now.core is not None:
-        logger.info("thread %s core reported where it is fixed, ignored", ctx.thread.id)
-        seen_now = seen_now.model_copy(update={"core": None})
+    # What they decide to do there is their step, never what they want or long for (the friend chat, 2026-11-04).
+    fixed_there = ("core", "wants", "desire")
+    if core_fixed and seen_now is not None and (held := [k for k in fixed_there if getattr(seen_now, k)]):
+        logger.info("thread %s %s reported where fixed, ignored", ctx.thread.id, ", ".join(held))
+        seen_now = seen_now.model_copy(update={key: None for key in fixed_there})
     if not guarded:
         understood = understanding.merge(ctx.thread.understanding, seen_now, reply.heart)
         deeper = (
@@ -1019,13 +1025,17 @@ async def send(
                 shift=(understood.get(picture.KEY) or {}).get("shift"),
                 offered_exit=fit is not None and fit != "helping",
             ))
-        if walked.phase not in body_route.STAGES and (kept := repairs.without_body_offer(fixed.text)) != fixed.text:
-            # The check-in is code's, sent when the questions end; a reply offering one before then is dropped, and a
-            # stage that stays asks its own question instead (the career chat, 2026-11-03).
+        if walked.phase not in body_route.STAGES:
+            # The check-in is code's, sent when the questions end; a reply offering one before then is dropped (the
+            # career chat, 2026-11-03). A stage that stays always asks: a reply that stays with no question, such as
+            # a close written while the stage still waits, gets the stage's own (the friend chat, 2026-11-04).
+            kept = repairs.without_body_offer(fixed.text)
+            notes = fixed.notes + (["body offer dropped"] if kept != fixed.text else [])
             if walked.reached is None and walked.phase in walk.content_stages(walking) and "?" not in kept:
-                question = walk.stay_question(walking, walked.entries, walked.phase, conversation_style)
-                kept = f"{kept}\n\n{question}".strip() if question else kept
-            fixed = dataclasses.replace(fixed, text=kept, notes=fixed.notes + ["body offer dropped"])
+                if question := walk.stay_question(walking, walked.entries, walked.phase, conversation_style):
+                    kept = f"{kept}\n\n{question}".strip()
+                    notes.append("stage question added to a reply that asked nothing")
+            fixed = dataclasses.replace(fixed, text=kept, notes=notes)
         if walked.entries != (stored_all.get(walking.id) or {}):
             updates.stages_known = {**stored_all, walking.id: walked.entries}
         if walked.phase == body_route.ASK:
@@ -1267,6 +1277,28 @@ async def _open_in_style(
         content=reply,
         created_at=pair.created_at,
         title=ctx.thread.title,
+    )
+
+
+async def _copied_back(
+    conn: asyncpg.Connection,
+    ctx: threads.TurnContext,
+    content: str,
+    client_message_id: uuid.UUID | str | None,
+) -> Turn:
+    """Answer Mani's own last reply sent back with the fixed line, and change nothing else: no offer, no stage, and
+    the picture as it was. The pair is kept, so the conversation shows what happened."""
+    logger.info("thread %s: their message was Mani's last reply sent back", ctx.thread.id)
+    pair = await messages_db.create_pair(
+        conn, ctx.thread.id, content, COPIED_BACK, client_message_id=client_message_id,
+    )
+    return Turn(
+        message_id=pair.mani_message_id,
+        content=COPIED_BACK,
+        created_at=pair.created_at,
+        title=ctx.thread.title,
+        was_duplicate=pair.was_duplicate,
+        trace=_trace(moment="copied_back", message_count=ctx.thread.message_count),
     )
 
 

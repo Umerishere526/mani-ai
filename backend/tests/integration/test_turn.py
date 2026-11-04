@@ -2645,3 +2645,64 @@ async def test_a_reading_that_fails_costs_the_picture_and_never_the_reply(alice,
     assert turn.content == "That sounds lonely. What happened?"
     assert "picture" not in (await _thread_row(alice, thread.id)).understanding
     assert "reading after the reply failed" in caplog.text
+
+
+
+async def test_manis_last_reply_sent_back_gets_the_fixed_line_and_changes_nothing(alice, model):
+    """The friend chat, 2026-11-04: her message was Mani's previous reply, word for word, and the offer followed it.
+    It is saved, answered without a model call, and moves no stage."""
+    from mani.chat.greeting import COPIED_BACK
+
+    said = ("B is for Belief. The thought underneath seems to be that you've lost your place in the friendship. What "
+            "else, if anything, does this change make you believe?")
+    scripted = model(Reply(text=said))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "belief")
+    asked = await send(alice, thread.id, "I miss how things were")
+    pasted = await send(alice, thread.id, asked.content)
+
+    assert pasted.content == COPIED_BACK
+    assert scripted.calls == 1, "no model call for the copy"
+    assert (await _offered_row(alice, thread.id)).phase == "belief"
+    history = await _history(alice, thread.id)
+    assert [m.content for m in history[-2:]] == [asked.content, COPIED_BACK]
+
+
+async def test_a_want_reported_at_the_last_stage_never_replaces_the_one_they_gave(alice, model):
+    """The friend chat, 2026-11-04: her step at E, "focus on my own life", was stored as what she wants."""
+    from mani.db import pool
+
+    model(Reply(
+        text="That gives you room. Is there something you'd want to say to that friend?", stage_answer="not_yet",
+        picture=PictureUpdate(wants="to focus on my own life", desire="a life of my own"),
+    ))
+    thread = await start(alice)
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set understanding = $2::jsonb where id = $1", thread.id,
+            {"picture": {"wants": "to be someone they still think of", "desire": "closeness again"}},
+        )
+    await _land_on(alice, thread.id, "effective", stages_known={"abcde": {
+        "effective": {"said": "people do make an effort", "status": "partial", "gap": "path"},
+    }})
+    await send(alice, thread.id, "I want to focus on my own life")
+
+    seen = (await _thread_row(alice, thread.id)).understanding["picture"]
+    assert (seen["wants"], seen["desire"]) == ("to be someone they still think of", "closeness again")
+
+
+async def test_a_reply_that_stays_on_a_stage_and_asks_nothing_gets_the_stages_question(alice, model):
+    """The friend chat, 2026-11-04: the reply wrote a close while E still waited, so no body check-in came and
+    nothing was left to answer."""
+    model(Reply(
+        text="Some friendships fading doesn't mean everyone will leave. Focusing on your own life gives you room.",
+        stage_answer="not_yet",
+    ))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "effective", stages_known={"abcde": {
+        "effective": {"said": "not everyone will leave", "status": "partial", "gap": "path"},
+    }})
+    turn = await send(alice, thread.id, "I want to focus on my own life")
+
+    assert (await _offered_row(alice, thread.id)).phase == "effective"
+    assert turn.content.endswith("What would you like to do with that new way of seeing it?")

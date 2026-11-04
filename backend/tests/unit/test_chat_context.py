@@ -743,3 +743,39 @@ def test_inside_the_questions_a_turn_is_shown_what_it_already_asked():
     assert "asked: What feels most painful about how often you've missed out?" in lines
     assert f"  means: questions you already asked: {context.SAME_QUESTION}." in lines
     assert not any(line.startswith("asked:") for line in context.build(running, framework=framework()).splitlines())
+
+
+
+def test_inside_the_questions_a_turn_is_shown_how_its_last_reply_ended():
+    """The father chat, 2026-11-04: A and B both ended "or is there more to it?"."""
+    running = TurnContext(
+        thread=thread(), profile=Profile(user_id=USER, support_style="directive"),
+        technique=TechniqueState(
+            thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED, phase="belief",
+            at_message_count=4,
+        ),
+    )
+    history = [mani("A is for Activating Event. Is that the situation you want to look at, or is there more to it?"),
+               user("yep")]
+    lines = context.build(running, framework=framework(), history=history).splitlines()
+    assert "last_ending: Is that the situation you want to look at, or is there more to it?" in lines
+    assert any(line.startswith("  means: how your last reply ended. End this one differently") for line in lines)
+
+
+def test_after_the_questions_the_step_they_chose_is_settled():
+    """The father chat, 2026-11-04: Keep Chatting asked again which limit he would hold, after he had chosen it."""
+    assert "What they chose to do in landed_on is settled" in context._MEANING["body_step"]["closing"]
+
+
+
+def test_their_message_is_caught_as_manis_last_reply_sent_back_only_when_it_is_one():
+    """The friend chat, 2026-11-04: Mani's reply came back word for word, most likely copied, and was taken as an
+    answer. A short answer, or one that uses a phrase of Mani's, is an answer."""
+    said = ("You're trying to give your friend room to have other friendships, but that leaves you waiting for them "
+            "to show they still want the closeness too.")
+    history = [mani(said)]
+    assert context.copies_last_reply(said, history)
+    assert context.copies_last_reply(said.replace("You're", "You’re").rstrip(".") + " ", history)
+    assert not context.copies_last_reply("yes", history)
+    assert not context.copies_last_reply("I'm waiting for them to show they still want the closeness, yes.", history)
+    assert not context.copies_last_reply(said, [user(said)]), "only Mani's own reply"

@@ -111,7 +111,8 @@ def test_the_offer_does_not_list_the_steps(abcde):
     assert "steps" not in abcde["stages"]["offering"]
 
 
-# The client's wording, 2026-10-30, made general so it fits any situation.
+# The client's wording, 2026-10-30, made general so it fits any situation. E is muhammad's plain wording (2026-11-04):
+# "a more balanced way" left people asking what was meant.
 CLIENT_QUESTIONS = {
     "belief": {
         "directive": "When that happens, what thought worries you most?",
@@ -129,9 +130,9 @@ CLIENT_QUESTIONS = {
         "reflective": "What makes you connect what's happening with that thought, and what have you actually seen or done that doesn't fit it?",
     },
     "effective": {
-        "directive": "What might be a more balanced way to look at the situation, one you can believe?",
-        "supportive": "What could you tell yourself that recognises both sides without assuming the worst, and that you can believe?",
-        "reflective": "What thought could hold both sides of this, in a way you can believe?",
+        "directive": "Knowing both of those things, what would you tell yourself now about that thought?",
+        "supportive": "Knowing both of those things, what could you tell yourself about that thought that feels true to you?",
+        "reflective": "With both of those in mind, how would you put that thought to yourself now?",
     },
 }
 

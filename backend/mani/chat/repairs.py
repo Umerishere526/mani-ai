@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -15,6 +16,8 @@ from mani.chat.greeting import (
 from mani.chat.techniques import OFFERING, Registry
 from mani.llm.schema import Moment, Offer, Reply, Slots, SmartPrompt
 from mani.models.rows import Framework
+
+logger = logging.getLogger(__name__)
 
 MAX_TITLE_LENGTH = 100
 
@@ -272,6 +275,39 @@ def offer_framework(heading_toward: str | None, registry: Registry) -> str | Non
     return registry.ids[0] if len(registry) == 1 else None
 
 
+# The offer's belief said to them, when the slot came back in their own first person: "the belief that my dad takes
+# the respect I deserve" (the father chat, 2026-11-04). Word by word, only in that slot.
+_TO_YOU = {
+    "i": "you", "me": "you", "my": "your", "mine": "yours", "myself": "yourself", "i'm": "you're", "i've": "you've",
+    "i'll": "you'll", "i'd": "you'd", "am": "are", "was": "were",
+}
+_FIRST_PERSON_WORD = re.compile(r"\b(?:i|me|my|mine|myself|i'm|i've|i'll|i'd)\b", re.IGNORECASE)
+_WORD = re.compile(r"[A-Za-z']+")
+
+
+def said_to_them(clause: str) -> str:
+    """A clause in their own first person, said to them: "my dad takes what I deserve" is "your dad takes what you
+    deserve". "Am" and "was" change only after "I". A clause with no first person comes back unchanged."""
+    if not _FIRST_PERSON_WORD.search(clause):
+        return clause
+    out: list[str] = []
+    previous = ""
+    last = 0
+    for match in _WORD.finditer(clause):
+        word = match.group(0)
+        key = word.lower().replace("\u2019", "'")
+        swap = _TO_YOU.get(key)
+        if key in ("am", "was") and previous != "i":
+            swap = None
+        out.append(clause[last:match.start()])
+        out.append(swap if swap is not None else word)
+        last = match.end()
+        previous = key
+    out.append(clause[last:])
+    logger.info("offer belief said to them, from their first person")
+    return "".join(out)
+
+
 def _offer_text(
     offer: Offer, framework_id: str | None, registry: Registry, style: str, *,
     confirmed: bool, feeling: str | None,
@@ -281,7 +317,7 @@ def _offer_text(
     framework = registry.get(framework_id)
     template = offer_template(framework, style)
     whole, _ = template_slots(template) if template else (None, None)
-    going_through = offer.going_through if _slot_value(offer.going_through) else feeling
+    going_through = said_to_them(offer.going_through) if _slot_value(offer.going_through) else feeling
     if not confirmed:
         reason = "no yes to the check"
     elif framework is None:

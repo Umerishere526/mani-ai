@@ -567,7 +567,7 @@ def test_e_reached_with_only_the_path_or_a_practice_to_ask_asks_the_new_belief_f
             "Your manager missed having you around. What's one upcoming situation where you could pause first?"
         ))
         assert text == ("E is for Effective New Belief. Your manager missed having you around. "
-                        "Putting both sides together, what's a more balanced way to see it?")
+                        "Knowing both sides of it, what would you tell yourself now about that thought?")
         assert "own question for a later part dropped" in notes
 
     asked = walk.advance(abcde, stored, [said("dispute", "they value my input", "known")], "answered",
@@ -615,8 +615,7 @@ def test_step_5_asks_for_the_thought_in_their_words_first_and_keeps_one_they_onl
         assert moved.entries["replacement"]["gap"] == "thought"
         text, _ = walk.reply_text(reframe, moved, text="Maybe they were busy. Does that feel true to you?",
                                   style="directive", thread_id=THREAD, feeling=None)
-        assert text.endswith("Putting together what you've looked at, what could you tell yourself instead, in a "
-                             "way you can believe?")
+        assert text.endswith("Knowing what you've looked at, what would you tell yourself now about that thought?")
         assert "Does that feel true" not in text
     believe = walk.advance(reframe, stored, [said("alternative", "maybe they were just busy", "known")], "answered",
                            **step, report=judged("partial", "I matter to them even when they're busy", "believe"))

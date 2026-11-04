@@ -52,13 +52,13 @@ stages:
       directive: "Would you like to try it?"
     offer:
       directive: |-
-        There's a framework called ABCDE that helps you look at the belief that <the core belief they confirmed, as a short clause of about ten words, in their words, that reads naturally after "the belief that", such as "taking time for yourself means letting them down">, what supports it, and whether there's a more balanced way to see it.
+        There's a framework called ABCDE that helps you look at the belief that <the core belief they confirmed, as a short clause of about ten words, in their words but said to them, the person you are talking to always "you", never "I", "my" or "them" ("your dad", never "my dad"; "than it did to you", never "than it did to them"), that reads naturally after "the belief that", such as "taking time for yourself means letting them down">, what supports it, and whether there's a more balanced way to see it.
       supportive: |-
         <A short warm line in your own words about what they're facing and what they've decided, never about doubting themselves, such as "That's a lot to carry for you and your team, and it takes something to decide to speak up." When their yes added something new, such as a wish or a fear ("I just want to feel wanted without having to ask"), this line acknowledges that first, plainly, before the framework is named.>
-        There's a framework called ABCDE that can help you explore the belief that <the core belief they confirmed, as a short clause of about ten words, in their words, that reads naturally after "the belief that", such as "taking time for yourself means letting them down">, look at what's supporting that belief, and find a more balanced way to think about it.
+        There's a framework called ABCDE that can help you explore the belief that <the core belief they confirmed, as a short clause of about ten words, in their words but said to them, the person you are talking to always "you", never "I", "my" or "them" ("your dad", never "my dad"; "than it did to you", never "than it did to them"), that reads naturally after "the belief that", such as "taking time for yourself means letting them down">, look at what's supporting that belief, and find a more balanced way to think about it.
       reflective: |-
         <A short line about how the way we interpret what is happening can make it feel harder, fitted to what they said, such as "Sometimes the way we interpret what's happening can make a difficult situation feel even harder." When their yes added something new, such as a wish or a fear ("I just want to feel wanted without having to ask"), this line acknowledges that first, plainly, before the framework is named.>
-        There's a framework called ABCDE that helps you look more closely at the belief that <the core belief they confirmed, as a short clause of about ten words, in their words, that reads naturally after "the belief that", such as "taking time for yourself means letting them down">, how it shapes what you feel and do, and whether there's a more balanced way to see it.
+        There's a framework called ABCDE that helps you look more closely at the belief that <the core belief they confirmed, as a short clause of about ten words, in their words but said to them, the person you are talking to always "you", never "I", "my" or "them" ("your dad", never "my dad"; "than it did to you", never "than it did to them"), that reads naturally after "the belief that", such as "taking time for yourself means letting them down">, how it shapes what you feel and do, and whether there's a more balanced way to see it.
     keep_chatting:
       directive: |-
         What's been happening that's making you feel like <what they said they are struggling with, in their words>?
@@ -252,7 +252,7 @@ stages:
     carries_case: true
     intro: "E is for Effective New Belief."
     purpose: "Help them reach a more realistic and helpful way of seeing it, based on what they've examined, plus one clear thing they'll focus on from here, both in their own words. Where it fits, help them plan to bring the new belief to mind the next time a similar event happens."
-    reach: "Report effective as known only where they've given, at this stage, both a more balanced way to see it and one path, such as raising it with someone. A permission or intention they give themselves, such as 'trust them more' or 'give myself permission', is part of the new view, never the path: the path is one thing they would do in their life. What they said in D never counts as the new belief: a challenge to the old belief is not yet a new one. If only the new view has come, report it as partial with the gap 'path', so your text asks what one thing they could do. If only an action or intention has come, report it as partial with the gap 'belief', so your text asks for the balanced belief behind it. When the new belief has come and the path is general, such as 'say no when I'm exhausted', report it as partial with the gap 'practice', once, so your text asks for one situation where they could practise it; a specific path, or a practice question already asked, closes the stage. A balanced view already forming in the chat before the framework counts: help them refine it rather than start again."
+    reach: "Report effective as known only where they've given, at this stage, both a more balanced way to see it and one path, such as raising it with someone. A permission or intention they give themselves, such as 'trust them more' or 'give myself permission', is part of the new view, never the path: the path is one thing they would do in their life. A path that is more of what they said at C, such as pulling back, waiting or holding back, is not the path yet: report partial with the gap 'path', once, so your text asks gently about the person or situation it is about, such as 'Is there something you'd want to say to that friend?'. What they said in D never counts as the new belief: a challenge to the old belief is not yet a new one. If only the new view has come, report it as partial with the gap 'path', so your text asks what one thing they could do. If only an action or intention has come, report it as partial with the gap 'belief', so your text asks for the balanced belief behind it. When the new belief has come and the path is general, such as 'say no when I'm exhausted', report it as partial with the gap 'practice', once, so your text asks for one situation where they could practise it; a specific path, or a practice question already asked, closes the stage. A balanced view already forming in the chat before the framework counts: help them refine it rather than start again."
     listen_for: "A more realistic and helpful view that separates what they know from what they assumed, usually more flexible than the original belief ('I made a mistake' rather than 'I'm a failure'). Also listen for the one thing they'll focus on from here, any change in how they feel now, and how they might use the new belief next time."
     ready_when: "They've said, in their own words, a more balanced way to see it, such as 'I don't have to give up my independence to let someone close', and one clear path they'll focus on, or picked one of Mani's suggestions as theirs. A plan, an action or a commitment for next time counts as the path, never as the belief."
     # Optional follow-ups. One at a time, and only before they have a clear view and a path.
@@ -262,6 +262,7 @@ stages:
     boundaries:
       - "when they're unsure or ask what to do, may suggest two or three concrete, sensible things they could do in their situation, from what they told you, such as telling their manager what happened or asking someone they trust to be with the person who needs them, as ideas for them to choose from, never deciding for them"
       - "each possibility is one plain thing a person would actually think or do, never a quoted belief joined to a plan"
+      - "when asking for the new belief, say both sides back in their words and name the thought from B in their words, then ask plainly what they would tell themselves about it now, knowing both, such as 'He came to you when the company needed saving, and he still overlooks you now. Knowing both, what would you tell yourself about whether you'll ever be good enough for him?' Never say 'balanced', 'perspective' or 'realistic way' to them: say what you mean"
       - "when they're stuck on the new belief, may offer one balanced belief built only from what they said in D, for them to adjust or reject, never as the answer"
       - "once they have a new belief and a path, close in two or three warm sentences that carry their own new belief and their choice forward, in their words, such as 'You don't have to choose between independence and connection. You can keep the life you've built while letting someone into it. What matters is noticing when fear is making that decision for you.' Never a recap of the stages, never a new idea of your own"
       - "the new belief must be realistic and believable to them, not forced positivity ('everything will be great')"
@@ -279,14 +280,14 @@ stages:
         reply: "What would you like to do with that new way of seeing it?"
       - id: belief
         when: "they've said an action or intention but not yet a more balanced way to see it"
-        reply: "Putting both sides together, what's a more balanced way to see it?"
+        reply: "Knowing both sides of it, what would you tell yourself now about that thought?"
       - id: practice
         when: "they've said a new belief and a general path, and haven't been asked where they could practise it"
         reply: "What's one situation coming up where you could practise that?"
     ask:
-      directive: "What might be a more balanced way to look at the situation, one you can believe?"
-      supportive: "What could you tell yourself that recognises both sides without assuming the worst, and that you can believe?"
-      reflective: "What thought could hold both sides of this, in a way you can believe?"
+      directive: "Knowing both of those things, what would you tell yourself now about that thought?"
+      supportive: "Knowing both of those things, what could you tell yourself about that thought that feels true to you?"
+      reflective: "With both of those in mind, how would you put that thought to yourself now?"
 ---
 
 # ABCDE

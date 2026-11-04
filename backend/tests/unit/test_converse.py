@@ -617,7 +617,7 @@ def test_each_style_is_worded_the_way_the_client_wrote_it():
     reframe = (PROMPTS.parent / "frameworks" / "thought_reframe.md").read_text()
     for ask in ("what thought worries you most?", "what's the thought that hurts or worries you the most?",
                 "what does that make you believe about yourself or your situation?",
-                "What thought could hold both sides of this, in a way you can believe?"):
+                "With both of those in mind, how would you put that thought to yourself now?"):
         assert ask in reframe, ask
 
 
@@ -770,3 +770,41 @@ def test_the_last_stage_asks_what_they_would_like_to_do_and_the_close_never_defe
     framework = parse_prompt(PROMPTS / "framework.md")["content"]
     assert "Never put what they want off to another time" in framework and "whenever you want to" not in framework
     assert "I wish I didn't have to put myself last to prove that I care" in framework
+
+
+def test_the_new_belief_is_asked_in_plain_words_and_a_clarification_is_one_question():
+    """The father chat, 2026-11-04: "what's a more balanced way to think about whether you'll ever be good enough for
+    him?" got "i dont think i understand yoru question", and the clarification stacked two questions and three
+    options. Both sets ask from both sides and the thought, in their words, and never say "balanced" to them."""
+    for name in ("abcde", "thought_reframe"):
+        text = (PROMPTS.parent / "frameworks" / f"{name}.md").read_text()
+        assert "Never say 'balanced', 'perspective' or 'realistic way' to them: say what you mean" in text, name
+        assert "Knowing both of those things, what would you tell yourself now about that thought?" in text, name
+        assert 'the person you are talking to always "you", never "I", "my" or "them"' in text, name
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    assert "one plain question that says what you mean, about their situation and in their words, with nothing in options" in framework
+    assert "Tell me a little more about it." in framework and "never ending the way your last reply did" in framework
+
+
+def test_mani_talks_plainly_and_a_phrase_from_a_book_is_counted():
+    """muhammad, 2026-11-04: "feeling out of step", "still finding your footing", "that comparison stings"."""
+    from mani.chat import reply_checks
+
+    voice = parse_prompt(PROMPTS / "voice.md")["content"]
+    assert '"feeling out of step" is "feeling like you don\'t fit in"' in voice
+    for figurative in ("heavy thought to carry", "costing you yourself", "holding on to the company's potential"):
+        for name in ("voice.md", "conversation.md", "framework.md"):
+            assert figurative not in (PROMPTS / name).read_text(), (figurative, name)
+    found = reply_checks.figures("I can see why that comparison stings. You're still finding your footing.")
+    assert found == ["stings", "finding your footing"]
+
+
+def test_a_step_that_is_more_of_the_pattern_is_asked_about_once():
+    """The friend chat, 2026-11-04: "give people space, focus on my own life" was close to the waiting and pulling back
+    she named at C, and the friend she missed never came up again."""
+    abcde = (PROMPTS.parent / "frameworks" / "abcde.md").read_text()
+    assert "A path that is more of what they said at C, such as pulling back, waiting or holding back, is not the path yet" in abcde
+    reframe = (PROMPTS.parent / "frameworks" / "thought_reframe.md").read_text()
+    assert "A step that is more of what they said the thought makes them do" in reframe
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    assert "What they decide to do at the last stage is their step, never what they want or long for." in framework

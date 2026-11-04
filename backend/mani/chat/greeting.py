@@ -29,6 +29,10 @@ def greeting(nickname: str | None, returning: bool) -> str:
     return f"{hello} {STYLE_QUESTION}"
 
 
+# What Mani says when their message is its own last reply sent back, most likely copied by mistake (muhammad,
+# 2026-11-04: a pasted reply was taken as an answer and the offer followed). Fixed, so it costs no model call.
+COPIED_BACK = "It looks like you've sent my last message back to me. What did you want to say?"
+
 # The client's three buttons under an offer (muhammad, 2026-10-08), always set by code. Tell me
 # more is the one that asks what the questions involve.
 TRY_IT_LABEL = "Try it"
