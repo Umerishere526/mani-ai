@@ -15,19 +15,12 @@ client's `label`. The exercises are unreviewed: a change to any line is a reseed
 The buttons for the places a Somewhere Else answer can name are not in the document; they are ours. Step 1 follows the
 framework's last stage directly, and No Tension is the way out for someone who does not want the check in.
 
-seed.py appends `somatic_ask`, `somatic_check`, `somatic_body`, `somatic_practice`, `somatic_effect` and
-`somatic_closing` to each framework's `phases` and merges the six blocks below into its `stages`.
+seed.py appends `somatic_ask`, `somatic_body`, `somatic_practice`, `somatic_effect` and
+`somatic_closing` to each framework's `phases` and merges the five blocks below into its `stages`.
 
 `somatic_ask` is ours, not the client's (the testing review of 2026-10-27 asked for permission before a body
 exercise; to be confirmed with Lolly): after a framework's last stage, Mani asks whether they would like to check in
-with their body at all. Yes goes on to `somatic_check` or Step 1; Not right now goes straight to Step 5.
-
-`somatic_check` is ours, not the client's: after a framework's last stage, when they named a feeling before it,
-Step 1's introduction ends by asking how that feeling is now, in place of the general question, with no buttons
-(Manasa, the client meeting of 2026-11-03: naming a place, "that's often felt in the chest", told them where they
-should feel it). Whatever they say about how they feel, Mani says one sentence about it, then the client's general
-question follows with its five buttons. A place they name goes straight to its exercise. Never during chat or inside a
-framework.
+with their body at all. Yes goes on to Step 1, the client's introduction, question and five buttons (muhammad, 2026-11-04); Not right now goes straight to Step 5.
 
 ```yaml
 stages:
@@ -38,10 +31,6 @@ stages:
       buttons:
         - {id: "yes", label: "Yes"}
         - {id: "no", label: "Not right now"}
-  somatic_check:
-    purpose: "Ends Step 1's introduction when they named a feeling before the framework: asks how that feeling is now, never where it is felt. Ours, not the client's. Send the text; the model writes one sentence about their answer and reads it into body."
-    script:
-      text: "Earlier you mentioned feeling {feeling}. Now that we've worked through it, how are you feeling right now?"
   somatic_body:
     purpose: "Step 1: the mind-body introduction and the place of any tension. Send the client's text; the model only reads a typed place."
     script:
@@ -55,7 +44,6 @@ stages:
         That's why it's important to pay attention to how your body is feeling, too.
 
         Where are you noticing any tension or discomfort right now?
-      question: "Where are you noticing any tension or discomfort right now?"
       buttons:
         - {id: chest, label: Chest}
         - {id: stomach, label: Stomach}
