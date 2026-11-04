@@ -87,3 +87,32 @@ def test_the_edit_screen_tells_them_what_to_do_and_only_sends_a_real_change():
     press_send("better words")
     assert not app.session_state.editing and backend.edits[-1] == "better words"
     assert app.session_state.messages[-1]["content"] == "new reply"
+
+
+class OpeningOnlyBackend(EditScreenBackend):
+    def start_or_resume_thread(self):
+        thread = {"id": "T", "message_count": 3, "crisis_detected": False, "conversation_style": "directive", "title": None}
+        return {"is_new": False, "thread": thread, "messages": [
+            {"id": "m0", "role": "mani", "content": "Hi there. How would you like me to speak with you today?", "prompts": []},
+            {"id": "u1", "role": "user", "content": "Directive"},
+            {"id": "m1", "role": "mani", "content": "How can I help you today?", "prompts": []},
+        ]}
+
+
+def test_the_greeting_the_style_they_tapped_and_the_opener_have_no_copy_or_edit():
+    app = AppTest.from_file(str(pathlib.Path(__file__).with_name("app.py")), default_timeout=20)
+    app.session_state["email"], app.session_state["client"] = "a@b.c", OpeningOnlyBackend()
+    app.run()
+
+    assert not [b for b in app.button if b.key == "edit_last"]
+    assert not [h for h in app.get("html") if "mani-copy" in h.proto.body and "data-copy" in h.proto.body]
+
+
+def test_after_the_opening_copy_and_edit_sit_on_one_row():
+    app = AppTest.from_file(str(pathlib.Path(__file__).with_name("app.py")), default_timeout=20)
+    app.session_state["email"], app.session_state["client"] = "a@b.c", EditScreenBackend()
+    app.run()
+
+    copies = [h for h in app.get("html") if "data-copy" in h.proto.body]
+    assert [c.proto.body.split('data-copy="')[1].split('"')[0] for c in copies] == ["first", "reply"]
+    assert [b for b in app.button if b.key == "edit_last"]

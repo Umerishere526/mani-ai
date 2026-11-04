@@ -41,6 +41,17 @@ st.markdown(
     .st-key-edit_last button:hover { background: rgba(142, 142, 160, .2); color: inherit; }
     .st-key-edit_last button:active { transform: scale(.92); }
     .st-key-edit_last button:focus-visible { outline: 2px solid rgba(142, 142, 160, .6); outline-offset: 1px; }
+    /* The button has no label, but Streamlit still lays out spans and a gap for one, which shift the icon. The icon is
+       pinned to the button's exact centre instead, so nothing around it can move it. The glyph's own ink leans right
+       and up a little, hence the small nudge. */
+    .st-key-edit_last button { position: relative; }
+    .st-key-edit_last button span:has(> [data-testid="stMarkdownContainer"]) { display: none; }
+    .st-key-edit_last button [data-testid="stIconMaterial"] { position: absolute; top: 50%; left: 50%;
+        transform: translate(calc(-50% - 0.75px), calc(-50% + 0.25px)); font-size: 18px; width: 18px; height: 18px; line-height: 18px; margin: 0; }
+    /* Send and Cancel side by side, close together. */
+    .st-key-edit_actions { gap: 0.5rem !important; }
+    /* Copy and edit sit close together, as under a message in ChatGPT. */
+    [class*="st-key-actions_"] { gap: 0.15rem !important; }
     </style>""",
     unsafe_allow_html=True,
 )
@@ -236,20 +247,31 @@ def edit_last(content: str) -> None:
     record_turn(content, turn, replacing=True)
 
 
-def render_last_user_message(content: str) -> None:
-    if not st.session_state.editing:
-        st.write(content)
-        if st.button(" ", icon=":material/edit_square:", key="edit_last", type="tertiary", help="Edit message"):
-            st.session_state.editing = True
-            st.rerun()
-        return
+# Puts the cursor at the end of the edit box as it opens, so it is clear where to type. Streamlit has no focus
+# control, so a script finds the box once it is drawn. The counter makes each opening a new element, which runs again.
+FOCUS_EDITOR = """<script>
+(() => { let tries = 0; const timer = setInterval(() => {
+  const area = document.querySelector(".st-key-edit_text textarea");
+  if (!area && ++tries < 40) return;
+  clearInterval(timer);
+  if (area) { area.focus(); area.setSelectionRange(area.value.length, area.value.length); }
+}, 50); })();
+</script><!-- %d -->"""
+
+
+def render_editor(content: str) -> None:
     edited = st.text_area("Edit your message", value=content, key="edit_text", label_visibility="collapsed")
-    send_col, cancel_col, _ = st.columns([1, 1, 4])
-    if cancel_col.button("Cancel", key="edit_cancel"):
+    if st.session_state.pop("focus_editor", False):
+        st.session_state.focus_count = st.session_state.get("focus_count", 0) + 1
+        st.html(FOCUS_EDITOR % st.session_state.focus_count, unsafe_allow_javascript=True)
+    with st.container(horizontal=True, key="edit_actions"):
+        send = st.button("Send", key="edit_send", type="primary")
+        cancel = st.button("Cancel", key="edit_cancel")
+    if cancel:
         st.session_state.editing = False
         st.session_state.pop("edit_text", None)
         st.rerun()
-    if send_col.button("Send", key="edit_send", type="primary"):
+    if send:
         text = edited.strip()
         if not text:
             notify(EMPTY_NOTICE)
@@ -265,11 +287,23 @@ notice = st.session_state.pop("notice", None)
 if notice:
     st.toast(notice, icon="⚠️")
 
+def opening_length(messages: list[dict]) -> int:
+    """How many messages at the top are the opening: Mani's greeting, the style they tapped and Mani's opener to it.
+    These carry no copy or edit icon; there is nothing in them worth copying, and a style is not edited by rewording."""
+    if not messages or messages[0]["role"] != "mani":
+        return 0
+    if len(messages) >= 2 and messages[1]["role"] == "user" and messages[1]["content"].strip() in STYLES.values():
+        return min(3, len(messages))
+    return 1
+
+
 # Only the person's last message can be edited, and only once Mani has answered it.
 messages = st.session_state.messages
+opening = opening_length(messages)
 editable_at = (
     len(messages) - 2
     if len(messages) >= 2
+    and len(messages) - 2 >= opening
     and (messages[-2]["role"], messages[-1]["role"]) == ("user", "mani")
     and not st.session_state.get("pending")
     and not st.session_state.locked
@@ -278,11 +312,20 @@ editable_at = (
 for index, message in enumerate(messages):
     avatar = "🧠" if message["role"] == "mani" else "🧑"
     with st.chat_message("assistant" if message["role"] == "mani" else "user", avatar=avatar):
-        if index == editable_at:
-            render_last_user_message(message["content"])
+        if index == editable_at and st.session_state.editing:
+            render_editor(message["content"])
         else:
             st.write(message["content"])
-        copy_button(message["content"])
+            if index >= opening:
+                # Copy and edit side by side on one row, as under a message in ChatGPT.
+                with st.container(horizontal=True, gap="small", vertical_alignment="center", key=f"actions_{index}"):
+                    copy_button(message["content"])
+                    if index == editable_at and st.button(
+                        " ", icon=":material/edit_square:", key="edit_last", type="tertiary", help="Edit message"
+                    ):
+                        st.session_state.editing = True
+                        st.session_state.focus_editor = True
+                        st.rerun()
         if developer and message.get("trace"):
             # What code decided on this turn, sent only with AI_DEBUG_MODE (admin.turn_traces).
             trace_view.render(message["trace"])

@@ -64,17 +64,19 @@ if (!window.__maniCopy) {
 </script>
 """
 
+# The same 2rem square as the edit icon beside it (app.py), so the two sit level on one row.
 _STYLE = (
-    "background:none;border:none;padding:0.15rem;color:#5B6B63;cursor:pointer;line-height:0;border-radius:4px;"
-    "min-width:1.3rem;min-height:1.3rem;"
+    "background:none;border:none;padding:0;color:#8e8ea0;cursor:pointer;line-height:0;border-radius:8px;"
+    "width:2rem;height:2rem;display:inline-flex;align-items:center;justify-content:center;"
 )
+_HOVER = "<style>.mani-copy:hover { background: rgba(142, 142, 160, .2) !important; color: inherit !important; }</style>"
 
 
 def copy_button(text: str) -> None:
     """A copy icon that copies `text` exactly as shown, line breaks included."""
     st.html(
         f'<button class="mani-copy" style="{_STYLE}" title="Copy" aria-label="Copy" '
-        f'data-copy="{html.escape(text, quote=True)}"></button>' + _SCRIPT,
+        f'data-copy="{html.escape(text, quote=True)}"></button>' + _HOVER + _SCRIPT,
         width="content",
         unsafe_allow_javascript=True,
     )
