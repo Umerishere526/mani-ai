@@ -222,6 +222,26 @@ def _counts(answer: str, before: dict, updated: bool) -> bool:
     return True
 
 
+# A message that asks something: the question comes first and the stage waits (muhammad, 2026-11-05: manasa's "should
+# I look at this thought or my numbness? Does one affect the other?" moved the walk and the reply opened on Step 2).
+_ASKS = re.compile(
+    r"\?|^\s*(?:should|does|do|is|are|can|could|would|will|what|why|how|when|where|which|who)\b", re.IGNORECASE,
+)
+# The answers that move the walk, which a question never is.
+_MOVING = ("agreed", "answered", "corrected")
+
+
+def asks(message: str) -> bool:
+    """Whether their message asks something: a question mark, or one that opens like a question."""
+    return bool(_ASKS.search(message or ""))
+
+
+def held_by_question(answer: str | None, message: str) -> str | None:
+    """The stage answer to apply: a moving answer becomes not_yet when their message asks something, so the walk
+    stays and the reply answers it first. Anything else is kept."""
+    return "not_yet" if answer in _MOVING and asks(message) else answer
+
+
 def advance(
     framework: Framework,
     entries: dict[str, dict],

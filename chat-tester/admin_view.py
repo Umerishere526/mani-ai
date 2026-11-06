@@ -119,6 +119,9 @@ def _render_transcript(client: mani.ManiClient, thread_id: str) -> None:
         span = _when(messages[-1]["created_at"]) - _when(messages[0]["created_at"])
         st.caption(f"First to last message: {gap(span.total_seconds()).lstrip('+')}")
 
+    # The "Why" under each reply is for developers; a client or an investor reading the conversation never sees it
+    # unless it is turned on (the client meeting, 2026-11-05).
+    show_why = st.toggle("Show developer details", key="admin_why", value=False)
     previous = None
     for message in messages:
         is_mani = message["role"] == "mani"
@@ -132,7 +135,7 @@ def _render_transcript(client: mani.ManiClient, thread_id: str) -> None:
             if message.get("selected_prompt"):
                 timing += f"  ·  tapped “{message['selected_prompt']}”"
             st.caption(timing)
-            if is_mani and (stored := traces.get(str(message.get("id")))):
+            if show_why and is_mani and (stored := traces.get(str(message.get("id")))):
                 trace_view.render(stored.get("trace"), stored.get("raw_reply"))
         previous = message["created_at"]
     if not messages:

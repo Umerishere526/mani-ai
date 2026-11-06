@@ -150,3 +150,9 @@ def test_it_hit_me_as_a_figure_of_speech_does_not_fire(text):
 )
 def test_a_person_hitting_them_still_asks(text):
     assert screen(text).level is Level.CONCERN
+
+
+def test_not_wanting_to_keep_living_like_this_asks_and_locks_nothing():
+    """manasa's chat, 2026-11-05: it passed the screen, so the stage moved and the safety question came after a step."""
+    for said in ("I don't want to keep living like this.", "I can't keep living like this", "I don't want to go on"):
+        assert screen(said).level is Level.CONCERN, said

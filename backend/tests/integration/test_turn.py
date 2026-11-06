@@ -2785,3 +2785,21 @@ async def test_a_message_that_cannot_be_taken_back_safely_is_refused_and_nothing
         await conn.execute("update public.threads set crisis_detected = true where id = $1", thread.id)
     assert await refused(last) is ErrorCategory.FORBIDDEN
     assert await _user_messages(thread.id) == ["first thing", "second thing"]
+
+
+async def test_a_question_inside_the_questions_is_answered_and_the_stage_waits(alice, model):
+    """muhammad, 2026-11-05: manasa asked "should I look at this thought or my numbness? Does one affect the other?"
+    and the reply opened "Step 2 is Name What Makes It Painful". A message that asks something never moves the stage,
+    whatever the reply reported, so no stage line is put in front of the answer."""
+    model(Reply(
+        text="They can affect each other: telling yourself you should be happy adds guilt on top of the numbness.",
+        stage_answer="answered",
+        stage_updates=[StageUpdate(stage="activate", said="the daily routine", status="known")],
+    ))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "activate")
+    turn = await send(alice, thread.id, "should I look at this thought or my numbness? Does one affect the other")
+
+    assert (await _offered_row(alice, thread.id)).phase == "activate"
+    assert not turn.content.startswith("B is for Belief")
+    assert turn.content.startswith("They can affect each other")

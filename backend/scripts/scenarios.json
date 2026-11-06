@@ -851,5 +851,40 @@
         ]
       }
     }
+  },
+  "client_meeting_2026_11_05": {
+    "about": "manasa's two Reflective chats reviewed in the meeting of 2026-11-05, her messages word for word. Going through the motions: a feeling with no belief behind it, a yes that wants something else, a question and push back inside the questions. Worry during good times: the placating 'not irrational' line, and a safety question at the end of C.",
+    "conversations": {
+      "going_through_the_motions": {
+        "source": "manasa, 2026-11-05, Reflective",
+        "lines": [
+          "Lately I feel like I'm just going through the motions. I'm doing everything I'm supposed to do, but I don't really feel connected to any of it.",
+          "In the mornings, because its right when I wake up, but then it continues into when I go to work, try to get things done, come home, and do it all again.",
+          "I think numbness, it feels like nothing is necessarily wrong, but nothing really excites me either.",
+          "I think its both but either way, they both bother me because I have a pretty good life, so I feel guilty even complaining about it. I should be happy.",
+          "It honestly just makes me feel worse. I start judging myself for feeling this way, and then I try to ignore it and keep myself busy. But I think I've gotten so used to doing what I'm supposed to do that I don't even know what I actually want anymore.",
+          "Honestly, I can't think of a time. Even when I have free time, I feel like I should be doing something productive. And when I finally do relax, I don't really enjoy it because I'm thinking about everything else I could be doing. I don't remember the last time I did something just because it made me happy.",
+          "Yeah, I'm willing to try it. I just don't want to end up convincing myself that everything is fine when it doesn't feel that way. I want to understand why I feel so disconnected from my own life.",
+          "should I look at this thought or my numbness? Does one affect the other in any way",
+          "are you listening to me or are we just going through the steps of thought reframe automatically?",
+          "the past 7 or 8 weeks"
+        ]
+      },
+      "worry_during_good_times": {
+        "source": "manasa, 2026-11-05, Reflective",
+        "lines": [
+          "Things have actually been going really well for me lately, but for some reason I can't fully enjoy it. Whenever something good happens, I immediately start worrying about what could go wrong. It's like I'm waiting for something bad to happen, even when there's no reason to think it will.",
+          "I immediately start thinking about everything that could go wrong. Instead of enjoying whatever good thing is happening, I start looking for signs that something might change. It's exhausting because I know nothing is actually wrong, but I can't seem to stop myself.",
+          "I recently got some really good news about something I'd been working toward for months. I was excited for maybe five minutes before I started thinking about all the ways it could fall apart.",
+          "I think I'm scared that if I let myself get too happy or comfortable, something will happen that takes it all away. I know that probably sounds irrational, but I can't seem to shake that feeling because I've had experiences in the past where things were going really well and then suddenly changed. Maybe I've gotten used to expecting disappointment so it doesn't catch me off guard.",
+          "I think it's more about being blindsided again. I've had times where everything seemed fine and then suddenly fell apart, and I remember how awful that felt. I guess part of me thinks that if I'm always prepared for something bad, it won't hurt as much if it happens.",
+          "Try it",
+          "Yeah, that's the situation I want to talk about. I worked really hard for that opportunity, and I should be excited about it. But instead, I keep worrying that something will happen and I'll lose it. I think I'm so afraid of being disappointed again that I'm not even letting myself enjoy what I've accomplished.",
+          "I think I started tying a lot of my self-worth to whether or not I succeeded. I spent so long questioning if I was good enough that getting this opportunity felt like I finally had proof that I was. And now I'm scared that if I lose it, I'll go right back to feeling like I'm not good enough.",
+          "Yeah, I think it's made it really hard for me to relax or enjoy anything without feeling guilty. Even when I'm doing something fun, part of me feels like I should be working toward something. And I think it's affecting my relationships too, because I'm so focused on achieving things that I'm not always present with the people I care about. I don't want to keep living like this.",
+          "No, I'm not thinking about hurting myself or not being alive. I just mean I don't want to keep putting so much pressure on myself or feeling like my worth depends on what I accomplish."
+        ]
+      }
+    }
   }
 }

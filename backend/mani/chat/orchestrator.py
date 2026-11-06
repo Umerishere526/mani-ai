@@ -107,6 +107,7 @@ def _walked(
     feeling: str | None,
     seen_before: dict | None = None,
     seen_after: dict | None = None,
+    their_message: str = "",
 ) -> tuple[repairs.Repaired, walk.Walked]:
     """The walk's turn: what they said merged into the store, the stages already passed brought up to date with
     what the picture of them gained (`seen_before` to `seen_after`), the step taken, and the reply that opens the
@@ -114,10 +115,15 @@ def _walked(
     if start:
         walked = walk.start(framework, reply.stage_updates, reply.next_stage)
     else:
+        answer = walk.held_by_question(reply.stage_answer, their_message)
         walked = walk.advance(
-            framework, stored, reply.stage_updates, reply.stage_answer,
+            framework, stored, reply.stage_updates, answer,
             in_force=in_force, report=reply.next_stage,
         )
+        if answer != reply.stage_answer:
+            walked = dataclasses.replace(
+                walked, notes=walked.notes + [f"their message asks something: {reply.stage_answer} held as not_yet"],
+            )
         if not walk.new_view(framework, in_force):
             synced, sync_notes = walk.from_picture(
                 framework, walked.entries, seen_before, seen_after, in_force=in_force,
@@ -441,8 +447,8 @@ async def _converse(
         Reply(text=reply.text),
         offered=offering,
         offer_dropped=dropped,
-        # A reflect reply lets them go on without a question (the client's review, 2026-10-29).
-        needs_question=not guarded and offering is None and reply.shape != "reflect",
+        # A chat reply may support without asking (the client meeting, 2026-11-05: "mainly driven by questions").
+        needs_question=False,
         last_mani_text=next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None),
     )
     if not guarded and offering is None:
@@ -940,7 +946,7 @@ async def send(
             # The core deepened before the new view forms: the case the later stages work on follows it.
             logger.info("thread %s core deepened inside the questions: the case follows it", ctx.thread.id)
             understood = understanding.merge_check(understood, said)
-    if moment is Moment.OFFER_OPEN and not guarded and answer == "corrected":
+    if moment is Moment.OFFER_OPEN and not guarded and answer in ("corrected", "wants_other"):
         # They corrected what the offer said back (the client meeting, 2026-11-03): the reply says the corrected
         # reading back, the case they had not confirmed is dropped, and the next offer may come once they confirm it.
         understood = understanding.corrected(understood)
@@ -1003,6 +1009,7 @@ async def send(
             style=conversation_style, thread_id=ctx.thread.id,
             feeling=understood.get("feeling"),
             seen_before=ctx.thread.understanding.get(picture.KEY), seen_after=understood.get(picture.KEY),
+            their_message=content,
         )
         if not starting:
             # Whether the questions are still helping: stalls counted when nothing new came, and an offer to step
@@ -1017,11 +1024,12 @@ async def send(
             ))
         if walked.phase not in body_route.STAGES:
             # The check-in is code's, sent when the questions end; a reply offering one before then is dropped (the
-            # career chat, 2026-11-03). A stage that stays always asks: a reply that stays with no question, such as
-            # a close written while the stage still waits, gets the stage's own (the friend chat, 2026-11-04).
+            # career chat, 2026-11-03). The last stage, while it waits, always asks: a close written there would end
+            # the conversation with nothing to answer (the friend chat, 2026-11-04). Earlier stages may stay with
+            # them without a question (the client meeting, 2026-11-05: no questionnaire).
             kept = repairs.without_body_offer(fixed.text)
             notes = fixed.notes + (["body offer dropped"] if kept != fixed.text else [])
-            if walked.reached is None and walked.phase in walk.content_stages(walking) and "?" not in kept:
+            if walked.reached is None and walked.phase == walk.content_stages(walking)[-1] and "?" not in kept:
                 if question := walk.stay_question(walking, walked.entries, walked.phase, conversation_style):
                     kept = f"{kept}\n\n{question}".strip()
                     notes.append("stage question added to a reply that asked nothing")

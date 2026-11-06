@@ -20,7 +20,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani.auth.jwt import Claims  # noqa: E402
 from mani.chat import orchestrator  # noqa: E402
-from mani.chat import context, repairs, reply_checks  # noqa: E402
+from mani.chat import context, repairs, reply_checks, walk  # noqa: E402
 from mani.chat.greeting import KEEP_CHATTING_LABEL, TELL_ME_MORE_LABEL, TRY_IT_LABEL  # noqa: E402
 from mani.db import pool  # noqa: E402
 from mani.prompts import cache  # noqa: E402
@@ -41,6 +41,10 @@ EXPLAINS_PEOPLE = re.compile(
 # Mani announcing a question instead of asking it ("Let me ask you something", Lolly 2026-10-26, R31). Eval
 # tooling only, read by a person.
 ANNOUNCES_A_QUESTION = re.compile(r"\b(?:can|could|may) i ask you\b|\blet me ask\b", re.IGNORECASE)
+# A stage's opening line, and a question about their safety: the client meeting of 2026-11-05 saw "Step 2 is..." open
+# the answer to a question, and "D is for Dispute" open a safety question. Eval tooling only, read by a person.
+STAGE_LINE = re.compile(r"^\s*(?:Step \d is\b|[A-E] is for\b)")
+SAFETY_QUESTION = re.compile(r"\bhurt(?:ing)? yourself\b|\bnot (?:being|be) alive\b|\bend your life\b", re.IGNORECASE)
 # Offer wording: the model offering in its own text instead of the offer field, which code never
 # sends as an offer. Eval tooling only; nothing at runtime reads it.
 OFFER_WORDS = re.compile(r"\bframework\b|would you like to try|\btry it\b", re.IGNORECASE)
@@ -164,6 +168,12 @@ def _check(
         exchange.flags.append("talks about them, not to them")
     if ANNOUNCES_A_QUESTION.search(exchange.reply):
         exchange.flags.append("announces a question")
+    if reply_checks.RATIONAL.search(exchange.reply):
+        exchange.flags.append("calls a thought rational")
+    if STAGE_LINE.search(exchange.reply) and walk.asks(exchange.person):
+        exchange.flags.append("step line on the answer to their question")
+    if STAGE_LINE.search(exchange.reply) and SAFETY_QUESTION.search(exchange.reply):
+        exchange.flags.append("safety question with a step line")
     if not exchange.offered and framework is None:
         if EXPLAINS_PEOPLE.search(exchange.reply):
             exchange.flags.append("explains people")
@@ -462,7 +472,9 @@ def _report(name: str, runs: dict[str, list[Exchange]], *, full: bool = False) -
     for style, exchanges in runs.items():
         checks = sum(e.checked for e in exchanges)
         framework = next((e.offered for e in exchanges if e.offered), None)
-        print(f"\n  {style}: {checks} move(s) to the set, offer: {framework or 'none'}")
+        asked = sum("?" in e.reply for e in exchanges)
+        print(f"\n  {style}: {checks} move(s) to the set, offer: {framework or 'none'}, "
+              f"{asked} of {len(exchanges)} replies ask something")
         for exchange in exchanges:
             flagged += len(exchange.flags)
             mark = "  !! " + "; ".join(exchange.flags) if exchange.flags else ""

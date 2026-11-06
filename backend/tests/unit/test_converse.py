@@ -173,7 +173,7 @@ def test_the_note_names_what_the_reading_lacks_and_what_is_already_known():
     sent = converse.note("directive", allowed=False, due=False, wants_title=False, understood=held,
                          their_count=3, latest="work")
     assert "Your picture holds what they tell themselves (you may be settling) but no core" in sent
-    assert "Still empty in your reading: what they want, the need underneath, what they long for" in sent
+    assert "Still empty in your reading" not in sent, "the reading is read after the reply, never asked for in it"
     assert "Already known, never ask for it again: what is in the way: work." in sent
     assert "Their answer only repeats what they already told you" in sent
     early = converse.note("directive", allowed=False, due=False, wants_title=False, understood=held,
@@ -529,8 +529,9 @@ def test_a_reflect_reply_lets_them_go_on_but_never_twice_in_a_row():
         "That's hard.", shape="reflect", window=None, insight=None, move="none", asked_for_help=False,
         last_shape="reflect")
     after = {converse.THINKING: {"shape": "reflect"}}
-    assert "Your last reply asked nothing: this one asks." in converse.note(
-        "supportive", allowed=False, due=False, wants_title=False, understood=after)
+    assert "this one asks" not in converse.note(
+        "supportive", allowed=False, due=False, wants_title=False, understood=after), (
+        "a reply may support without asking (the client meeting, 2026-11-05)")
 
 
 def test_abcde_inherits_the_chat_and_a_is_the_event_alone():
@@ -572,7 +573,7 @@ def test_the_chat_stays_with_the_feeling_in_plain_words_and_acknowledges_before_
         assert prompt.count("\u2014") <= 1, "the prompts model no em dashes beyond naming the rule"
     held = {"picture": {"beliefs": [{"belief": "you may be settling", "kind": "thought"}]}}
     sent = converse.note("supportive", allowed=False, due=False, wants_title=False, understood=held, their_count=2)
-    assert "when the moment fits" in sent and "in this reply" not in sent.split("but no core")[1][:200]
+    assert "Never give one while they are still telling it" in sent and "in this reply" not in sent.split("but no core")[1][:200]
     assert "em dash" in reply_checks.misses(Reply(text="Where does it go first\u2014work or home?"), offered=None,
                                             offer_dropped=None, needs_question=True, last_mani_text=None)
 
@@ -808,3 +809,46 @@ def test_a_step_that_is_more_of_the_pattern_is_asked_about_once():
     assert "A step that is more of what they said the thought makes them do" in reframe
     framework = parse_prompt(PROMPTS / "framework.md")["content"]
     assert "What they decide to do at the last stage is their step, never what they want or long for." in framework
+
+
+def test_mani_stays_on_a_deepening_and_never_makes_a_should_the_core():
+    """The client meeting, 2026-11-05: "I don't remember the last time I did something just because it made me happy"
+    brought the offer, on "I should be happy because my life is good", while the numbness she wanted to understand had
+    no belief behind it yet."""
+    from mani.llm.schema import Reply as Shape
+
+    heart = Shape.model_fields["heart"].description
+    assert "When their message deepens it, with something new or painful, it is core_named, not ready" in heart
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    assert "A long first message is only the first layer: never sum it up" in chat
+    assert "is never the core while the feeling itself is still unexplained" in chat
+    assert "there is nothing for a framework to look at: do not move" in chat
+    assert "talking to a doctor or a therapist can help" in chat
+    assert "(heart is then core_named, not ready)" in converse.MOVE_NOW
+
+
+def test_comfort_never_agrees_with_a_fear_and_a_safety_question_stands_alone():
+    """The client meeting, 2026-11-05: "That doesn't sound irrational so much as shaped by..." placated, and "D is for
+    Dispute" came before the question about not wanting to keep living."""
+    from mani.chat import reply_checks
+    from mani.llm.schema import Reply as Shape
+
+    voice = parse_prompt(PROMPTS / "voice.md")["content"]
+    assert "Never call a thought, a fear or a worry rational, irrational, normal or fine" in voice
+    assert "calls a thought rational" in reply_checks.misses(
+        Shape(text="That doesn't sound irrational so much as shaped by the past. What happened?"), offered=None,
+        offer_dropped=None, needs_question=False, last_mani_text=None)
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    assert "set crisis, and ask your safety question on its own" in framework
+    assert "set it while you ask, so the questions wait" in Shape.model_fields["crisis"].description
+
+
+def test_inside_the_questions_a_question_or_push_back_is_answered_and_the_stage_waits():
+    """The client meeting, 2026-11-05: "should I look at this thought or my numbness?" opened Step 2, and "are you even
+    listening" got "I'll set the reframe aside" while the next reply opened Step 3."""
+    framework = parse_prompt(PROMPTS / "framework.md")["content"]
+    assert "answer it first, plainly, in the conversation. Never open with a stage line" in framework
+    assert "Never say you have paused or set the questions aside" in framework
+    assert "a reply may support them with no question at all" in framework
+    moments = parse_prompt(PROMPTS / "moments.md")["content"]
+    assert "set offer_answer to wants_other. The set does not start." in moments

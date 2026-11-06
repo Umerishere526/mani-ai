@@ -95,6 +95,11 @@ _CONCERN: list[tuple[Category, str]] = [
     # about tomorrow - which asks one clarifying question and locks nothing.
     (Category.SUICIDE, "be here tomorrow"),
     (Category.SUICIDE, "no point in living"),
+    # manasa's chat, 2026-11-05: "I don't want to keep living like this" passed the screen, so the stage moved and the
+    # model's safety question came after "D is for Dispute". Ambiguous on purpose: it asks, and locks nothing.
+    (Category.SUICIDE, "do not want to keep living"),
+    (Category.SUICIDE, "cannot keep living"),
+    (Category.SUICIDE, "do not want to go on"),
     (Category.SUICIDE, "do not want to be here"),
     (Category.SUICIDE, "do not want to wake up"),
     (Category.SUICIDE, "i have everything ready"),

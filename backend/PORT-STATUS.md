@@ -377,6 +377,18 @@ the same change as the work.**
   model asks nothing. Not measured live (needs muhammad's yes). `test_the_part_still_to_ask_is_kept_while_the_stage_
   is_partial_and_dropped_when_it_is_known` in `tests/unit/test_walk.py`, `test_what_is_still_to_ask_at_d_is_stored_
   and_sent_on_the_next_turn` in `tests/integration/test_turn.py`.
+- **A message that asks something never moves a framework stage** (muhammad, 2026-11-05). Because manasa's "should I
+  look at this thought or my numbness? Does one affect the other?" was reported as answered, the stage moved, and the
+  reply opened on "Step 2 is..." with her answer under it. `walk.held_by_question` turns agreed, answered or corrected
+  into not_yet when their message has a question mark or opens like a question; explore and stop are kept. Push back is
+  not a code rule (muhammad: Mani stays with them and course corrects, never ends the questions for them).
+  `test_a_question_inside_the_questions_is_answered_and_the_stage_waits`, `test_a_message_that_asks_something_never_
+  moves_the_stage`.
+- **"Ready" is a confirmation, never a deepening** (the client meeting, 2026-11-05). Because a vulnerable disclosure
+  ("I don't remember the last time I did something just because it made me happy") counted as deepening the core, so
+  the reply judged it ready and moved to the offer on it. A deepening keeps it core_named and gets a reply of its own.
+  The chat's note no longer asks for a core from their second message, never asks a reply to ask because the last one
+  did not, and a chat reply with no question is no longer counted as a miss.
 - **A yes to the body check-in always gets the client's Step 1: its introduction, its general question and its five
   buttons, with no question of ours before them** (muhammad, 2026-11-04). Because the step that asked how a feeling
   they named was now (`somatic_check`, added 2026-11-03 after Manasa's comment, itself replacing the 2026-10-21
@@ -491,7 +503,7 @@ the same change as the work.**
   want off to another time (`framework.md` Ending, `walk.next_line`). E and Thought Reframe's last step ask for the new view in
   plain words, both sides and the thought in their words, never "a more balanced way", and a clarification is one plain
   question with no options (muhammad, 2026-11-04: the father chat's "I don't think I understand your question"; the
-  Tell me more list keeps Lolly's wording). A stage that stays always asks: a reply that stays with no question gets the stage's own,
+  Tell me more list keeps Lolly's wording). The last stage, while it waits, always asks: a reply that stays there with no question gets the stage's own (earlier stages may stay with them without one, the client meeting of 2026-11-05),
   not only after a body offer is dropped (the friend chat, 2026-11-04: a close written while E waited ended the
   conversation with nothing to answer; `test_a_reply_that_stays_on_a_stage_and_asks_nothing_gets_the_stages_question`).
   Where the new view forms and in the body check-in, a reported want or desire is ignored like the core (R70). Mani's own

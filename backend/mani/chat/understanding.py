@@ -13,7 +13,7 @@ CASE_LIMIT = 3 * LIMIT
 # Every feeling word they name gathers over the conversation and is never taken away.
 FEELING_SEPARATOR = ", "
 # Where the reply last judged its reading of the core: not known yet, said back and not corrected, or named and
-# since deepened or confirmed (muhammad, 2026-10-28; before it, the central conflict, 2026-10-26). Only a reply
+# since confirmed with nothing new (a deepening is named again, the client meeting of 2026-11-05) (muhammad, 2026-10-28; before it, the central conflict, 2026-10-26). Only a reply
 # that judges it ready may check its understanding (R33).
 READY = "ready"
 # The core said back and not corrected (muhammad, 2026-10-28). A record written before then says conflict_named.

@@ -623,3 +623,16 @@ def test_step_5_asks_for_the_thought_in_their_words_first_and_keeps_one_they_onl
     accurate = walk.advance(reframe, stored, [said("alternative", "there is no other explanation", "known")], "answered",
                             **step, report=judged("partial", "the concern is real", "step"))
     assert not accurate.first_gap and accurate.entries["replacement"]["gap"] == "step", "an accurate thought is never reframed"
+
+
+def test_a_message_that_asks_something_never_moves_the_stage():
+    """muhammad, 2026-11-05: "should I look at this thought or my numbness? Does one affect the other in any way" was
+    read as an answer and the reply opened on Step 2."""
+    for asked in ("should I look at this thought or my numbness? Does one affect the other in any way",
+                  "does one affect the other", "What do you mean by that"):
+        assert walk.held_by_question("answered", asked) == "not_yet", asked
+        assert walk.held_by_question("agreed", asked) == "not_yet", asked
+    assert walk.held_by_question("explore", "why does it hurt so much?") == "explore", "staying stays"
+    assert walk.held_by_question("stop", "can we stop?") == "stop", "a wish to stop is still theirs"
+    assert walk.held_by_question("answered", "the past 7 or 8 weeks") == "answered"
+    assert walk.held_by_question("answered", "I think it's being blindsided again.") == "answered"

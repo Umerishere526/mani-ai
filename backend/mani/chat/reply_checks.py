@@ -35,6 +35,11 @@ def repeats(text: str, last_mani_text: str | None) -> bool:
     return bool(now and before and len(now & before) / min(len(now), len(before)) >= REPEAT_OVERLAP)
 
 
+# A thought judged rational or not, which placates the person (the client meeting, 2026-11-05: "That doesn't sound
+# irrational so much as shaped by..."). Counted, never removed.
+RATIONAL = re.compile(r"\b(?:ir)?rational\b", re.IGNORECASE)
+
+
 def figures(text: str) -> list[str]:
     """The figures of speech in a reply, lower-cased, in the order they appear."""
     return [match.group(0).lower() for match in FIGURES.finditer(text)]
@@ -78,6 +83,8 @@ def misses(
         notes.append(f"figure of speech: {', '.join(found)}")
     if "\u2014" in reply.text:
         notes.append("em dash")
+    if RATIONAL.search(reply.text):
+        notes.append("calls a thought rational")
     return notes
 
 

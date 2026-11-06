@@ -332,7 +332,8 @@ class Reading(BaseModel):
             "that isn't fulfilling anymore\". Keep any distinction the conversation uncovered, such as feeling part of "
             "the team at work but not of their circle outside it. When they have said what they tell themselves, about themselves, their "
             "relationship, their life or their choices, there is a core: name it. \"unclear\" only when they have "
-            "said nothing of the kind."
+            "said nothing of the kind. It sits under their main concern, never under a 'should' or guilt about "
+            "having the feeling while the feeling itself is still unexplained."
         ),
     )
     core_from: str = Field(description="The words of theirs the core rests on, quoted. \"unclear\" when the core is.")
@@ -458,7 +459,7 @@ class PictureUpdate(BaseModel):
 
 # corrected (the client meeting, 2026-11-03): the offer says the core back, and they correct it there; Mani says the
 # corrected reading back and may offer again sooner than after a no.
-OfferAnswer = Literal["yes", "no", "asked", "moved_on", "corrected"]
+OfferAnswer = Literal["yes", "no", "asked", "moved_on", "corrected", "wants_other"]
 CheckAnswer = Literal["yes", "no"]
 BodyBranch = Literal[
     "yes", "no", "chest", "stomach", "head", "jaw_face", "hands", "eyes", "feet", "toes", "arms", "other",
@@ -560,15 +561,16 @@ class Reply(_ReplyBase):
     heart: Heart | None = Field(
         default=None,
         description=(
-            "Where your reading of the core of it stands, from the whole conversation including their message. exploring: you do not know the core yet, the belief the other thoughts lead to and the feeling underneath. core_named: you said the core back to them as an invitation and they did not correct it; carrying on or answering your next question counts, and it stays named unless they say that is not it. ready: it is named, and their message since deepened or confirmed it rather than changing it."
+            "Where your reading of the core of it stands, from the whole conversation including their message. exploring: you do not know the core yet, the belief the other thoughts lead to and the feeling underneath. core_named: you said the core back to them as an invitation and they did not correct it; carrying on or answering your next question counts, and it stays named unless they say that is not it. ready: it is named, and their message since confirmed it and brought nothing new that needs room. When their message deepens it, with something new or painful, it is core_named, not ready: stay with what they just said in this reply (the client meeting, 2026-11-05)."
         ),
     )
     offer_answer: OfferAnswer | None = Field(
         default=None,
         description=(
             "How they answered the offer in your last reply: yes, no, asked (about it, or what "
-            "it involves), moved_on (they talked about something else), or corrected (they said what the offer said "
-            "back about them is not quite it, or changed it)."
+            "it involves), moved_on (they talked about something else), corrected (they said what the offer said "
+            "back about them is not quite it, or changed it), or wants_other (they agree, but want something this set "
+            "does not do, such as \"I just want to know why I feel so disconnected\" to a set that looks at a thought)."
         ),
     )
     body: BodyBranch | None = Field(
@@ -669,9 +671,10 @@ class Reply(_ReplyBase):
             "to self-harm, or a wish to die. This does NOT cut off the conversation; it flags "
             "the moment so the framework pauses and the reply stays with them. Do NOT set it "
             "for ordinary sadness or frustration, hopelessness or exhaustion, physical pain or "
-            "injury, or an ambiguous request for help. For anything ambiguous, ask one gentle "
-            "question to learn whether they are in danger or hurting emotionally first. Set to "
-            "null when there is no safety concern."
+            "injury, or an ambiguous request for help. When their words may mean they are not "
+            "safe, such as \"I don't want to keep living like this\", ask one gentle question to learn "
+            "whether they are in danger or hurting emotionally, and set it while you ask, so the "
+            "questions wait and the question stands alone. Set to null when there is no safety concern."
         ),
     )
     # There is no clinical_note field. The model was asked for three or four sentences of
@@ -837,7 +840,7 @@ class ConversationReply(_ReplyBase):
     heart: Heart | None = Field(
         default=None,
         description=(
-            "Where your reading of the core of it stands, from the whole conversation including their message. exploring: you do not know the core yet, the belief the other thoughts lead to and the feeling underneath. core_named: you said the core back to them as an invitation and they did not correct it; carrying on or answering your next question counts, and it stays named unless they say that is not it. ready: it is named, and their message since deepened or confirmed it rather than changing it. Say the core in this reply's text and it is core_named."
+            "Where your reading of the core of it stands, from the whole conversation including their message. exploring: you do not know the core yet, the belief the other thoughts lead to and the feeling underneath. core_named: you said the core back to them as an invitation and they did not correct it; carrying on or answering your next question counts, and it stays named unless they say that is not it. ready: it is named, and their message since confirmed it and brought nothing new that needs room. When their message deepens it, with something new or painful, it is core_named, not ready: stay with what they just said in this reply (the client meeting, 2026-11-05). Say the core in this reply's text and it is core_named."
         ),
     )
 

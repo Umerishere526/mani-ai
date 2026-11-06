@@ -49,7 +49,7 @@ CORRECTED = understanding.CORRECTED
 # The move to the set of questions, which replaced the check of the summary (the client meeting, 2026-11-03).
 MOVE_NOW = (
     "Unless their message changes your reading or brings out something new and painful, which gets this reply of its "
-    "own, this reply moves to the set of questions: set checking, fill core, "
+    "own (heart is then core_named, not ready), this reply moves to the set of questions: set checking, fill core, "
     "heading_toward and offer. No summary before it and no \"does that capture it\": the offer says the core back, "
     "and they can correct it there."
 )
@@ -78,7 +78,6 @@ GAPS_FROM = 2
 # A reply this short that only repeats what the picture already holds answered a question Mani should not have asked
 # ("work", 2026-10-29, asked "what got in the way?" twice after they had said work).
 REPEAT_WORDS = 4
-_READINGS = (("wants", "what they want"), ("needs", "the need underneath"), ("desire", "what they long for"))
 # A short yes to an insight: understood, so the next reply moves on instead of explaining it again (the client's
 # review, 2026-10-29: "That fear makes sense..." restated the fear the person had just agreed to).
 AGREED = re.compile(
@@ -124,20 +123,14 @@ def gaps(
     core_now = picture.core(seen).get("belief")
     if their_count >= GAPS_FROM and thoughts and not core_now:
         lines.append(
-            "Your picture holds what they tell themselves (" + " | ".join(thoughts) + ") but no core. Their words "
-            "point to one: give it in your reading now. Say it to them as your reading, with the feeling underneath, "
-            "when the moment fits, and then set heart to core_named. If something painful has only just come up, "
-            "stay with it first (the client, 2026-10-30)."
+            "Your picture holds what they tell themselves (" + " | ".join(thoughts) + ") but no core yet. Never give one "
+            "while they are still telling it: a long message is the first layer. Stay with them and give room (\"Is "
+            "there more?\") until they have said what they came to say (the client meeting, 2026-11-05)."
         )
     elif core_now and heart in (None, "exploring") and their_count >= GAPS_FROM + 1:
         lines.append(
-            f"Your reading has a core you have not said to them yet: {core_now}. When the moment fits, say it as "
-            "your reading, in everyday words, and let them correct it."
-        )
-    if their_count >= GAPS_FROM and (empty := [name for key, name in _READINGS if not seen.get(key)]):
-        lines.append(
-            "Still empty in your reading: " + ", ".join(empty) + ". Fill them from what they have already said; ask "
-            "only if nothing they said points to them."
+            f"Your reading has a core you have not said to them yet: {core_now}. Hold it until they have said what "
+            "they came to say; then say it as your reading, in everyday words, and let them correct it."
         )
     known = [seen.get("in_the_way"), *(d["what"] for d in seen.get("dependencies") or [] if d.get("kind") == "external")]
     if known := [k for k in known if k]:
@@ -252,8 +245,6 @@ def note(
             "Insights you already gave: " + " | ".join(given) + ". Never give another on the same theme from a new "
             "angle: deepen one with something new they said, ask about what they do, or move forward."
         )
-    if last_shape == "reflect":
-        lines.append("Your last reply asked nothing: this one asks.")
     if plan := (understood or {}).get(PLAN):
         lines.append(f"Your plan from your last reply: {plan}. Keep it, or change it if their message does.")
     if not pressing and not seen.get("situations"):
