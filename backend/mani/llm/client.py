@@ -60,16 +60,21 @@ _SCHEMA_FAILURES = (
 # Failures whose message quotes the reply itself: pydantic's carries `input_value=` excerpts, LangChain's
 # parser the completion it could not parse. Only their type and where they failed are kept.
 _QUOTES_THE_REPLY = (ValidationError, OutputParserException)
+# Failures whose message carries the provider's response body, which can quote the person's own words (a moderation
+# refusal's `flagged_input`). Only their type and status are kept.
+_QUOTES_THEIR_WORDS = (openai.APIStatusError,)
 
 
 def _described(failure: BaseException | None) -> str:
-    """A failure as it may be stored and logged: what went wrong and where, never what the reply said."""
+    """A failure as it may be stored and logged: what went wrong and where, never what the reply or they said."""
     if failure is None:
         return "empty"
     if isinstance(failure, ValidationError):
         return f"ValidationError: {[(e.get('type'), e.get('loc')) for e in failure.errors()]}"
     if isinstance(failure, _QUOTES_THE_REPLY):
         return type(failure).__name__
+    if isinstance(failure, _QUOTES_THEIR_WORDS):
+        return f"{type(failure).__name__}: {failure.status_code}"
     return f"{type(failure).__name__}: {failure}"
 
 
@@ -381,8 +386,8 @@ async def complete[T: BaseModel](
                 prompt_version_id=prompt_version_id, error_message=_described(exc),
                 generation_id=generation_id,
             )
-            # The cause rides along on the log and the error report, so one that quotes the reply is dropped.
-            raise error from (None if isinstance(exc, _QUOTES_THE_REPLY) else exc)
+            # The cause rides along on the log and the error report, so one that quotes the reply or them is dropped.
+            raise error from (None if isinstance(exc, _QUOTES_THE_REPLY + _QUOTES_THEIR_WORDS) else exc)
 
         latency_ms = int((time.perf_counter() - started) * 1000)
         call_id = await _record(

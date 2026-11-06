@@ -1,0 +1,13 @@
+# Never upload secrets on a CLI deploy: Vercel's own defaults skip only .env.local and .env.*.local, and the running app
+# would read a stray .env for any setting the project does not set. Configuration comes from the project's env vars.
+.env*
+!.env.example
+
+# Not needed at runtime: prompts, frameworks and exercises are read from the database, never from disk.
+content
+scripts
+tests
+docs
+.pytest_cache
+.ruff_cache
+test-preferences.json

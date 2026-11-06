@@ -590,15 +590,15 @@ async def test_typing_past_an_offer_is_keep_chatting_and_the_reply_cannot_offer_
 
 
 async def test_a_comforting_reply_with_no_question_goes_out_as_written_and_is_logged(alice, model):
-    """No second call for it: R5 asks for fewer questions, and the miss is counted so how often it
-    happens is known."""
+    """No second call for it: a chat reply may support without asking (the client meeting, 2026-11-05), so what is
+    counted is what else it missed, here that it named no shape."""
     scripted = model(Reply(text="It is okay to feel that way. I am here with you."))
     thread = await start(alice)
     turn = await send(alice, thread.id, "i felt small when she questioned me in front of everyone")
 
     assert scripted.calls == 1
     assert turn.content == "It is okay to feel that way. I am here with you."
-    assert turn.checks == ["asks no question"]
+    assert turn.checks == ["no shape"]
 
 
 async def test_someone_who_asks_only_to_be_heard_is_not_forced_to_answer_a_question(alice, model):
@@ -1226,7 +1226,8 @@ async def test_choosing_a_style_sets_it_and_opens_in_it_with_no_model_call(alice
     # muhammad, 2026-10-26: the conversation prompt carries all three styles, so it is one cached prefix, and
     # the note names the one they chose.
     system = scripted.last_messages[0]["content"]
-    assert system.startswith("# Who you are") and "- Reflective: names a pattern or a connection" in system
+    assert system.startswith("# Who you are")
+    assert all(f"## {style}" in system for style in ("Directive", "Supportive", "Reflective"))
 
 
 async def test_a_greeting_stored_with_the_direct_button_opens_in_directive_after_migration_019(alice, model):
@@ -1467,7 +1468,8 @@ async def test_a_declined_framework_can_be_offered_again_after_a_few_replies(ali
     again = await send(alice, thread.id, "it's still on my mind")
     assert [p.technique for p in again.prompts if p.technique] == ["abcde"]
     # The way back is Mani's move once the cooldown has passed (the client meeting, 2026-11-03: no check first).
-    assert scripted.schemas[2:6] == [ConversationReply] * 4, "after a decline the chat is Mani's own conversation"
+    assert scripted.schemas[2:5] == [ConversationReply] * 3, "after a decline the chat is Mani's own conversation"
+    assert "offer" in scripted.schemas[5].model_fields, "the turn that may move carries the offer's slots"
     assert [_may_check(sent) for sent in scripted.sent[2:6]] == [False, False, False, True]
 
 
@@ -2606,10 +2608,9 @@ async def test_switching_to_another_situation_ends_the_framework_and_the_chat_ca
     assert turn.prompts == []
 
 
-async def test_a_yes_to_the_check_about_something_really_happening_brings_help_not_a_framework(alice, model):
-    """The 2026-10-27 review: reframing was offered for a coworker asleep with the children there. Only ABCDE and
-    Thought Reframe are offered, and only for what they tell themselves; a yes about a real situation turns the
-    conversation to helping with it (muhammad)."""
+async def test_a_yes_to_the_check_about_something_really_happening_still_brings_the_offer(alice, model):
+    """The framework is the solution (the client's test, 2026-10-29): the chat finds what they tell themselves even
+    about something really happening, so a yes brings the offer as any yes does, and the chat never turns to helping."""
     from mani.db import pool
 
     model(_offer().model_copy(update={"text": "Then let's look at what you could do. Would talking to the director first fit?"}))
@@ -2622,10 +2623,10 @@ async def test_a_yes_to_the_check_about_something_really_happening_brings_help_n
         )
     turn = await send(alice, thread.id, "yes, that's exactly it")
 
-    assert turn.prompts == [] and turn.content.startswith("Then let's look at what you could do.")
-    assert (await _thread_row(alice, thread.id)).understanding["helping"] is True
+    assert [p.technique for p in turn.prompts if p.technique] == ["abcde"]
+    assert "helping" not in (await _thread_row(alice, thread.id)).understanding
     async with pool.as_user(alice) as conn:
-        assert (await threads.load_turn_context(conn, thread.id, ALICE)).technique is None
+        assert (await threads.load_turn_context(conn, thread.id, ALICE)).technique.framework_id == "abcde"
 
 
 async def test_asking_for_help_presses_toward_the_framework_and_the_next_note_says_so(alice, model):
@@ -2734,14 +2735,16 @@ async def test_each_turn_stores_what_code_decided_and_never_their_words(alice, m
         "effective": {"said": "missed promotions don't prove I'm not good enough", "status": "partial", "gap": "path"},
     }})
     turn = await send(alice, thread.id, words)
-    await orchestrator.record_trace(turn, thread.id)
+    # The scripted model's call id names no admin.llm_calls row, which the real client writes before it returns one.
+    await orchestrator.record_trace(dataclasses.replace(turn, llm_call_id=None), thread.id)
 
     async with pool.as_admin() as conn:
         stored = await turn_traces.for_thread(conn, thread.id)
         row = stored[str(turn.message_id)]
         assert row["trace"]["moment"] == "in_stages"
         assert row["trace"]["model"]["stage_answer"] == "explore"
-        assert row["trace"]["phase_before"] == "effective" and row["trace"]["phase_after"] == "somatic_ask"
+        # The body check-in is paused (somatic.md), so the framework's last stage goes straight to the close.
+        assert row["trace"]["phase_before"] == "effective" and row["trace"]["phase_after"] == "somatic_closing"
         assert words not in str(row["trace"])
         assert "raw_reply" not in row, "no raw reply without AI_DEBUG_MODE"
 

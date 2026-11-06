@@ -71,6 +71,11 @@ default to the permissive answer.
   it silently overrides column-scoped grants — including the one stopping a user clearing
   their own `crisis_detected` flag. It is set to `false` here, so explicit GRANTs are the
   whole story.
+- **Default privileges.** A new project also grants anon, authenticated and service_role
+  everything on each table, sequence and function `postgres` creates in `public`, so a
+  `revoke ... from public` on a definer function leaves it callable. Migration `000` turns
+  those defaults off before anything is created, and `test_harness.sql` grants them so the
+  suites prove the migrations undo them. Never remove either.
 
 **`config.toml` configures local development only.** A hosted project has its own
 equivalents in the dashboard under Data API settings, and they are **not** migrated by

@@ -156,3 +156,20 @@ def test_an_empty_or_too_long_message_is_told_what_to_do(client):
         response = client.post("/typed", json={"content": content})
         assert response.status_code == 422 and response.json()["error"]["message"] == said
     assert client.post("/typed", json={"content": "hello"}).status_code == 200
+
+
+def test_an_error_report_carries_no_request_body_and_no_local_variables(monkeypatch):
+    """Their message is the request body and transcripts sit in local variables; neither may reach Sentry."""
+    import sentry_sdk
+
+    from mani.config import get_settings
+
+    seen = {}
+    monkeypatch.setattr(get_settings(), "sentry_dsn", "https://key@o0.ingest.sentry.io/0")
+    monkeypatch.setattr(sentry_sdk, "init", lambda **options: seen.update(options))
+
+    create_app()
+
+    assert seen["send_default_pii"] is False
+    assert seen["include_local_variables"] is False
+    assert seen["max_request_body_size"] == "never"

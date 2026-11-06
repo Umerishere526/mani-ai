@@ -54,3 +54,14 @@ grant usage on schema auth to anon, authenticated, service_role, supabase_auth_a
 grant select on auth.users to authenticated, service_role;
 -- Its actual job: GoTrue creates and deletes rows in auth.users directly.
 grant select, insert, update, delete on auth.users to supabase_auth_admin;
+
+-- What every Supabase project grants on functions the migrations create in `public`: EXECUTE straight to the three
+-- API roles, not through PUBLIC, so `revoke ... from public` alone leaves them callable. Recreated so the grants
+-- suite sees what a hosted project does.
+alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
+
+-- What a new Supabase project grants on everything `postgres` creates in `public`, so the suites see what a hosted
+-- project does until 000 turns it off: every table, sequence and function open to the three API roles.
+alter default privileges for role postgres in schema public grant all on tables to anon, authenticated, service_role;
+alter default privileges for role postgres in schema public grant all on sequences to anon, authenticated, service_role;
+alter default privileges for role postgres in schema public grant all on functions to anon, authenticated, service_role;

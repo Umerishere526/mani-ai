@@ -90,7 +90,7 @@ def test_the_follow_up_endpoint_runs_what_waits_for_that_reply(wired):
         response = client.post(f"/v1/threads/{THREAD}/messages/{REPLY}/follow-up", headers=headers)
 
     assert response.status_code == 200
-    assert response.json() == {"read": True, "summarized": True, "understanding": None}, (
+    assert response.json() == {"read": True, "summarized": True, "pending": False, "understanding": None}, (
         "what Mani understands goes to a client only in debug mode"
     )
     assert seen["follow_ups"] == [(USER, THREAD, REPLY)]

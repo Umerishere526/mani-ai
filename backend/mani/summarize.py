@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import uuid
 
@@ -17,6 +18,10 @@ from mani.models.rows import Message, MessageRole, TechniqueTried, ThreadSummary
 from mani.prompts import cache
 
 logger = logging.getLogger(__name__)
+
+# How long after its last message a thread's summary is still caught up on a schedule; past it, one that kept failing
+# is left for the thread's next turn to trigger.
+CATCH_UP_FOR = dt.timedelta(days=1)
 
 # How much raw conversation one summarization run reads.
 BATCH = 200
@@ -181,13 +186,11 @@ async def reconcile_due(*, limit: int = 200) -> int:
         due = await summaries.due_for_summary(
             conn, budget_chars=get_settings().context_budget_chars,
             block=messages_db.CONTEXT_DROP_BLOCK, limit=limit,
+            active_since=dt.datetime.now(dt.UTC) - CATCH_UP_FOR,
         )
 
     done = 0
     for row in due:
-        claims = Claims(
-            sub=str(row["user_id"]), raw={"sub": str(row["user_id"]), "role": "authenticated"}
-        )
-        await update_quietly(claims, row["thread_id"])
+        await update_quietly(Claims.acting_as(row["user_id"]), row["thread_id"])
         done += 1
     return done

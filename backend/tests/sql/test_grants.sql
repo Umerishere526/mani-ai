@@ -52,7 +52,9 @@ $$;
 -- ---------------------------------------------------------------------------
 
 select pg_temp.want('a signed-in user can read their threads',
-  has_table_privilege('authenticated', 'public.threads', 'SELECT'), true);
+  has_column_privilege('authenticated', 'public.threads', 'id', 'SELECT')
+  and has_column_privilege('authenticated', 'public.threads', 'title', 'SELECT')
+  and has_column_privilege('authenticated', 'public.threads', 'last_message_at', 'SELECT'), true);
 
 -- A thread is started by the backend (migration 031): a user's own token writing one could set every column
 -- the backend later reads back as its own state.
@@ -76,6 +78,46 @@ begin
   raise notice 'PASS: a user cannot insert any of the state the backend reads back';
 end
 $$;
+
+-- pending_follow_up holds the reading's whole call, system prompt included; understanding and rewind_snapshot are
+-- Mani's working record. The API hands them out only in debug mode, so the Data API must not hand them out at all.
+do $$
+declare
+  c text;
+begin
+  foreach c in array array['understanding', 'rewind_snapshot', 'pending_follow_up', 'vague_streak',
+                           'check_at_message_count', 'memory_folded_at']
+  loop
+    if has_column_privilege('authenticated', 'public.threads', c, 'SELECT') then
+      raise exception 'FAIL: a user can read threads.% with their own token', c;
+    end if;
+    if not has_column_privilege('mani_service', 'public.threads', c, 'SELECT') then
+      raise exception 'FAIL: the backend cannot read threads.%', c;
+    end if;
+  end loop;
+  raise notice 'PASS: the state the backend reads back is readable by the backend alone';
+end
+$$;
+
+select pg_temp.want('a user still reads their own thread''s title and state flags',
+  has_column_privilege('authenticated', 'public.threads', 'title', 'SELECT')
+  and has_column_privilege('authenticated', 'public.threads', 'crisis_detected', 'SELECT')
+  and has_column_privilege('authenticated', 'public.threads', 'safety', 'SELECT'), true);
+
+-- Deleting an account is GoTrue deleting from auth.users as supabase_auth_admin, and the cascade reaches every table
+-- in `public`: without USAGE on the schema it fails and the account cannot be deleted.
+select pg_temp.want('Supabase Auth can reach the tables an account deletion cascades into',
+  has_schema_privilege('supabase_auth_admin', 'public', 'USAGE'), true);
+
+select pg_temp.want('nobody gets the public schema by default',
+  has_schema_privilege('public', 'public', 'USAGE'), false);
+
+-- A new Supabase project grants the API roles everything on what `postgres` creates in `public`; 000 turns that off,
+-- so a project built from the migrations alone holds exactly the grants they make.
+select pg_temp.want('nothing created in public is granted to the API roles by default',
+  exists (select 1 from pg_default_acl d join pg_namespace n on n.oid = d.defaclnamespace
+           where n.nspname = 'public' and pg_get_userbyid(d.defaclrole) = 'postgres'
+             and d.defaclacl::text ~ '(anon|authenticated|service_role)='), false);
 
 select pg_temp.want('a user cannot record an offered framework',
   has_table_privilege('authenticated', 'public.thread_techniques_offered', 'INSERT'), false);
@@ -216,12 +258,24 @@ select pg_temp.want('a user cannot read crisis events',
 select pg_temp.want('a user cannot write crisis events',
   has_table_privilege('authenticated', 'admin.crisis_events', 'INSERT'), false);
 
--- The exercise catalog and the framework registry are shared content, not private data.
-select pg_temp.want('a user can read the exercise catalog',
-  has_table_privilege('authenticated', 'admin.exercises', 'SELECT'), true);
+-- The exercise catalog and the framework registry are served through the API: the backend's role reads them, a
+-- person's own token reaches neither the schema nor the tables.
+select pg_temp.want('a user cannot enter the admin schema',
+  has_schema_privilege('authenticated', 'admin', 'USAGE'), false);
 
-select pg_temp.want('a user cannot edit the exercise catalog',
-  has_table_privilege('authenticated', 'admin.exercises', 'UPDATE'), false);
+select pg_temp.want('the backend can enter the admin schema',
+  has_schema_privilege('mani_service', 'admin', 'USAGE'), true);
+
+select pg_temp.want('a user cannot read the exercise catalog or the frameworks',
+  has_table_privilege('authenticated', 'admin.exercises', 'SELECT')
+  or has_table_privilege('authenticated', 'admin.frameworks', 'SELECT'), false);
+
+select pg_temp.want('the backend reads the exercise catalog and the frameworks',
+  has_table_privilege('mani_service', 'admin.exercises', 'SELECT')
+  and has_table_privilege('mani_service', 'admin.frameworks', 'SELECT'), true);
+
+select pg_temp.want('the backend cannot edit the exercise catalog as a user',
+  has_table_privilege('mani_service', 'admin.exercises', 'UPDATE'), false);
 
 -- ---------------------------------------------------------------------------
 -- The privileged paths belong to the backend's role, not to the user's

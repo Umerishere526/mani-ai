@@ -1,6 +1,7 @@
 # ABOUTME: Exercises the query layer against a live database, as a real user would be.
 # ABOUTME: Covers the composed turn read, the batched write, and the old leak's shape.
 
+import datetime as dt
 import uuid
 
 import asyncpg
@@ -360,14 +361,28 @@ async def test_threads_needing_summary_lists_across_users(users):
             techniques_tried=[], summarized_through_message_id=None,
             summarized_message_count=24,
         )
+        # Lagging too, but quiet longer than the catch-up keeps trying: one that keeps failing is not paid for forever.
+        thread_c, _ = await threads.create_or_reuse(conn, BOB)
+        await conn.execute(
+            "insert into public.messages (thread_id, user_id, role, content) values ($1, $2, 'user', $3)",
+            thread_c.id, BOB, "a message longer than the budget",
+        )
+        await conn.execute(
+            "update public.threads set message_count = 25, last_message_at = now() - interval '3 days' where id = $1",
+            thread_c.id,
+        )
         # A large limit: this local database carries threads from other test runs already
         # past the threshold, and the point here is inclusion/exclusion, not the limit. Both
         # threads are past a tiny budget; only the one whose summary lags a block is due.
-        due = await summaries.due_for_summary(conn, budget_chars=10, block=20, limit=10_000)
+        due = await summaries.due_for_summary(
+            conn, budget_chars=10, block=20, limit=10_000,
+            active_since=dt.datetime.now(dt.UTC) - dt.timedelta(days=1),
+        )
 
     ids = {(row["thread_id"], row["user_id"]) for row in due}
     assert (thread_a.id, ALICE) in ids
     assert (thread_b.id, BOB) not in ids
+    assert (thread_c.id, BOB) not in ids
 
 
 async def test_the_model_sees_the_whole_thread_until_the_budget_then_loses_whole_blocks(alice):

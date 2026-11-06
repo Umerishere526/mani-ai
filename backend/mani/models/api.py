@@ -129,6 +129,8 @@ class FollowUpOut(BaseModel):
 
     read: bool
     summarized: bool
+    # A part failed and still waits: asking again runs only that part.
+    pending: bool = False
     understanding: dict[str, Any] | None = None
 
 

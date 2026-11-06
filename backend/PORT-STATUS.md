@@ -9,9 +9,11 @@ the same change as the work.**
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
 - Tests: `pytest` runs 451 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
   JWKS-configured project).
-- Database: 19 migrations (001 to 010 and 018 to 026), 16 tables (8 `public`, 8 `admin`), 6 frameworks and 5 prompts seeded.
+- Database: 28 migrations (000 to 010 and 018 to 034), 16 tables (8 `public`, 8 `admin`), 2 frameworks and 7 prompts seeded.
   `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
-  private `exercises` bucket (`scripts/seed_exercises.py`). A hosted project does not exist yet.
+  private `exercises` bucket (`scripts/seed_exercises.py`). Two hosted projects hold every migration and the same
+  data (2026-11-06): `heqenombgkihfeggrxqc` (muhammad's org, ca-central-1, the Hobby deployment's database) and
+  `aipgficduzufstilndbw` "mani-app" (the Mani org, us-east-1, for the Vercel Pro deployment).
 - Models: `openai/gpt-6-luna` for chat and for summaries (`mani/config.py`), routed only to OpenAI,
   the fastest endpoint first. It is a reasoning model: it takes no `temperature` on any provider and reads
   `reasoning_effort` instead, so `mani/llm/chain.py` sends the sampling parameters an ordinary
@@ -100,7 +102,7 @@ the same change as the work.**
   three follow-up questions, the Library nudge and the automatic exercise pick (a second model call) are deleted
   (`tests/unit/test_removed_names.py`); `exercise` is gone from the turn response.
 - **Memory**: per person, folded from earlier chats by `mani/memory.py`; idle threads fold through
-  `scripts/fold_idle_threads.py` or `GET /internal/cron/fold-summaries` behind `CRON_SECRET`.
+  `memory.fold_idle`, run by `scripts/fold_idle_threads.py` or `GET /internal/cron/catch-up` behind `CRON_SECRET`.
 - **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). A completing framework picks one
   exercise from the whole active catalog with one bound tool call (`mani/llm/tools.py`): the framework's own
   exercises are listed first, and the pick sees the person's last three messages and the issue Mani
@@ -123,7 +125,7 @@ the same change as the work.**
 | POST | `/v1/threads/current` | what to show on opening the app; creates a thread on first call |
 | GET PATCH DELETE | `/v1/threads/{id}` | fetch, set `conversation_style`, soft delete |
 | GET POST | `/v1/threads/{id}/messages` | history (paged), **send a turn** |
-| POST | `/v1/threads/{id}/messages/{message_id}/follow-up` | the reading and summary a turn left, asked for once its reply is shown (`follow_up_pending`) |
+| POST | `/v1/threads/{id}/messages/{message_id}/follow-up` | the reading and summary a turn left, asked for once its reply is shown (`follow_up_pending`); a part that fails stays waiting (`pending`) |
 | POST | `/v1/threads/{id}/memory-fold` | folds finished chats into memory, asked for after starting one (`memory_fold_pending`) |
 | GET | `/v1/exercises`, `/home`, `/{id}` | catalog with signed audio |
 | GET POST | `/v1/exercises/completions` | a user's completions |
@@ -138,9 +140,45 @@ the same change as the work.**
 | GET | `/v1/admin/users/{id}/memory` | what is remembered about a person |
 | GET | `/v1/admin/threads` | every person's conversations, newest activity first; `search` by email or user id |
 | GET | `/v1/admin/threads/{id}` | one conversation in full, oldest first; logs the read |
-| GET | `/internal/cron/fold-summaries` | idle memory fold, bearer `CRON_SECRET`, no JWT |
+| GET | `/internal/cron/catch-up` | summaries behind, follow-ups the app never asked for, quiet chats folded into memory (`mani/catch_up.py`); bearer `CRON_SECRET`, no JWT |
 
 ## Decisions in force
+
+- **A scheduled catch-up finishes what the app never asked for** (muhammad, 2026-11-06). Because on Vercel the app
+  triggers the work after a reply and a new chat, so a closed tab lost a reading and someone who never taps New chat
+  was never remembered. `mani/catch_up.py`, every 5 minutes from `backend/vercel.json` (Vercel Pro): summaries behind,
+  follow-ups waiting on a reply quiet for `QUIET_AFTER` (5 min) and given up after `GIVE_UP_AFTER` (1 h), and quiet
+  chats folded (`memory.fold_idle`, longest-quiet people first, the limit counting paid folds), each as its person
+  (`Claims.acting_as`). Each job starts at most `catch_up.LIMIT` (10) items a run and stops at `RUN_SECONDS` (240),
+  inside the function's 300 s. Nothing failing is retried forever: a follow-up for `GIVE_UP_AFTER` (1 h), a summary
+  while its thread had a message in `summarize.CATCH_UP_FOR` (1 day), a fold for `memory.FOLD_RETRY_FOR` (1 day) after
+  `IDLE_AFTER`; past that a summary waits for the thread's next turn and a fold for the person's next New chat. Work
+  a request has claimed is passed over. Tests: `test_follow_up.py`, `test_memory.py`, `test_queries.py`
+  (`due_for_summary`), `test_catch_up.py`, `test_cron.py`.
+- **The hosted chat-tester runs as it does locally, Forgot password included, for testing only** (muhammad,
+  2026-11-06). Because testers need it now and the safe flow can wait. It is a public Streamlit Community Cloud app
+  from the public repo, holding mani-app's Supabase secret key, so anyone with the link can reset any non-admin
+  account's password and read that person's conversations, and create accounts that spend model calls. Accepted for
+  test accounts only; before any real person signs up, remove the Forgot password tab and the secret key from the
+  hosted copy (sign-up works with the publishable key alone, since mani-app auto-confirms) and make the app private.
+- **The migrations alone make a project safe; nothing depends on a hand-run revoke** (2026-11-06). Because a new
+  Supabase project grants anon, authenticated and service_role everything on each table, sequence and function
+  `postgres` creates in `public`, and the hosted project was safe only because someone had removed those defaults by
+  hand: built from the migrations, "mani-app" let any signed-in person call `create_message_pair` and forge Mani's
+  reply. `000_supabase_defaults_off.sql` turns the defaults off before 001; `034_backend_only_state.sql` pins the
+  definer functions to `mani_service`, hides `threads.understanding`, `rewind_snapshot`, `pending_follow_up` (the
+  reading's whole call, system prompt included), `vague_streak`, `check_at_message_count` and `memory_folded_at` from
+  `authenticated` (they were readable through the Data API with the person's own token), and moves `admin` schema
+  usage with `admin.exercises` and `admin.frameworks` from `authenticated` to `mani_service`. `035` takes `public`
+  away from PUBLIC and names each role that uses it, `supabase_auth_admin` included: the hosted project had lost
+  PUBLIC's usage by hand, so deleting an account failed in GoTrue's cascade. `test_harness.sql` now
+  grants the defaults, so `scripts/test_db.sh` proves the migrations undo them. Tests: `tests/sql/test_grants.sql`.
+- **No conversation content in an error report or a stored error** (2026-11-06). Because the request body is their
+  message, the failing frames' locals hold transcripts, and a provider's error body can quote their words. Sentry runs
+  with `send_default_pii=False`, `include_local_variables=False`, `max_request_body_size="never"` (main.py); a
+  provider HTTP error is stored and logged as its type and status only (`client._QUOTES_THEIR_WORDS`). Tests:
+  `test_app.py::test_an_error_report_carries_no_request_body_and_no_local_variables`,
+  `test_client.py::test_a_provider_error_is_stored_without_the_body_that_can_quote_their_message`.
 
 - **One home per rule, and no reply shape is a formula** (muhammad, 2026-11-06, P2). `voice.md`'s "Mirror, then
   acknowledge" (mirror, acknowledge, question, and "Mirror in most replies") is "Showing you understand": only when it
@@ -486,9 +524,16 @@ the same change as the work.**
   purpose `understanding`. Since 2026-11-05 nothing runs after a response (Vercel stops the instance once it is
   sent, and cut off 15 of 49 readings; muhammad chose the app's own request, 2026-11-05; it works the same on AWS).
   A turn stores what it leaves for after its reply in `threads.pending_follow_up` (migration 032: the reading's call
-  and whether the summary is due, keyed by Mani's reply, set or cleared by every turn, cleared when taken), says
-  `follow_up_pending`, and the app posts `/v1/threads/{id}/messages/{reply id}/follow-up`, which runs the reading and
-  the summary side by side, once (`orchestrator.follow_up`). The call link and the trace are database writes only,
+  and whether the summary is due, keyed by Mani's reply, set or cleared by every turn), says `follow_up_pending`, and
+  the app posts `/v1/threads/{id}/messages/{reply id}/follow-up`, which runs the reading and the summary side by side
+  (`orchestrator.follow_up`). The request claims the work for `FOLLOW_UP_CLAIM_SECONDS` (120, in the row's
+  `claimed_at`), so a second request meanwhile does nothing, and clears what finished; a part that fails stays
+  waiting alone and unclaimed (`pending` in the response), so asking again runs only that part, and a request that
+  died frees its work when the claim runs out. Each part stops at `FOLLOW_UP_DEADLINE_SECONDS` (90), inside the claim.
+  A reading whose reply an edit took back is dropped, not merged onto the restored record (`_reply_stands`). Interim (muhammad, 2026-11-06): this is the app asking, for as long as
+  the backend runs on Vercel; on a stateful host (Render, AWS) delete both endpoints, `follow_up_pending`,
+  `memory_fold_pending` and `pending_follow_up`, and run the work in the process after the response. Only the chat
+  tester calls these today; `web/` and `mobile/` are not wired to the API. The call link and the trace are database writes only,
   awaited side by side before the turn's response. Starting a chat says `memory_fold_pending`, and the app posts
   `/v1/threads/{id}/memory-fold`. `mani/background.py` is gone. The chat tester asks on threads of its own
   (`client._in_background`); work the app never asks for is not done (the summary cron route can catch up summaries).
@@ -900,10 +945,9 @@ Ordered by what breaks first.
    `CLARIFICATION` are empty too: the specifications refer to an approved protocol and do not contain one.
    Needs countries and services from muhammad. Do not invent numbers.
 4. **Migrations are not run by anything.** `supabase db push` is manual.
-5. **Memory fold and summaries need a scheduler.** Summaries run as in process background tasks (lost on a
-   crash, and suspended or cut off on Vercel, where production runs: see Open engineering). The cron route exists but
-   nothing calls it (no `vercel.json`, no Vercel Cron). The way off Vercel is a container platform that can run two
-   process types from one image (`render.yaml` was removed).
+5. **The catch-up cron needs Vercel Pro.** `backend/vercel.json` calls `/internal/cron/catch-up` every 5 minutes,
+   with `CRON_SECRET` set on the project. Vercel Hobby refuses to deploy a cron that runs more than once a day, so the
+   file must not reach a branch a Hobby project deploys from.
 6. **`CORS_ORIGINS` must name the deployed web origin**, or `web/` gets no browser response. Mobile is
    unaffected.
 7. **Pool and load.** Set the hosted `DATABASE_URL` to the transaction pooler: host
@@ -965,11 +1009,11 @@ Ordered by what breaks first.
 
 ## Open engineering
 
-- **Production is Vercel Hobby functions in iad1, with the database in ca-central-1, and `fire_and_forget` work is
-  being lost.** `mani/background.py` runs `asyncio.create_task` after the response, which Vercel does not wait for: it
-  suspends or ends the function (Vercel's `waitUntil` is Node and Edge only). 15 of 49 `understanding` calls of
-  2026-11-01 to 05 timed out at 61 to 335 s against a 60 s wait (fixed 2026-11-05: nothing runs after a response any
-  more, see the reading entry in Decisions in force; the rest of this entry is the evidence), background calls spent p50 6.3 s between OpenRouter
+- **Production is Vercel Hobby functions in iad1, with the database in ca-central-1.** Work started after a response
+  was lost there: it suspends or ends the function (Vercel's `waitUntil` is Node and Edge only). Nothing runs after a
+  response any more (2026-11-05); the app asks for it (see the reading entry in Decisions in force). The rest of this
+  entry is the evidence from before that: 15 of 49 `understanding` calls of
+  2026-11-01 to 05 timed out at 61 to 335 s against a 60 s wait, background calls spent p50 6.3 s between OpenRouter
   finishing and our row being written (chat: 0.33 s), and both memory-fold retries never wrote a row, so the person's
   picture and memory are being lost (`docs/latency-report-2026-11-05.md`, sections 5 and 9). Every database round trip
   also crosses from iad1 to ca-central-1. Kept on Vercel for now by muhammad, 2026-11-05. The fix is a container host
@@ -1000,7 +1044,6 @@ Ordered by what breaks first.
   never refuses a person's reply. Unmeasured on Vercel.
 - **A `busy` 503 or a slot 429 logs at ERROR or WARNING per request**, and 5xx goes to Sentry with a traceback. Under
   load that is one report per refused request; consider logging them without `exc_info`.
-- **The index on `admin.turn_traces(llm_call_id)` is missing** (migration 027), so `scripts/test_db.sh` stops there.
 - **`GET /v1/admin/models`**, which the prompt editor's model dropdown needs.
 - **`threads.vague_streak`** is granted to the backend and written by nothing; the pacing it belongs to is
   designed, not built.

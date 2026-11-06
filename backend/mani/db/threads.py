@@ -87,26 +87,72 @@ async def set_pending_follow_up(
     )
 
 
-async def take_pending_follow_up(
+# How long a claimed follow-up is left alone: past the model's own deadline, so a request still working is never
+# run a second time, and one that died frees its work for the next request.
+FOLLOW_UP_CLAIM_SECONDS = 120
+
+
+async def claim_pending_follow_up(
     conn: asyncpg.Connection, thread_id: uuid.UUID | str, user_id: uuid.UUID | str, message_id: uuid.UUID | str
 ) -> dict | None:
-    """What is left to do after Mani's reply `message_id`, cleared as it is taken, so it runs once; None when nothing
-    waits, or what waits is for another reply."""
+    """What is left to do after Mani's reply `message_id`, marked as claimed so no second request runs it meanwhile;
+    None when nothing waits, what waits is for another reply, or another request holds the claim. It stays on the
+    thread until `settle_pending_follow_up`, so a request that fails or dies loses nothing."""
     row = await conn.fetchrow(
         """
         with waiting as (
             select id, pending_follow_up from public.threads
             where id = $1 and user_id = $2 and deleted_at is null
               and pending_follow_up ->> 'message_id' = $3::text
+              and coalesce((pending_follow_up ->> 'claimed_at')::timestamptz, '-infinity')
+                  < now() - make_interval(secs => $4::float8)
             for update
         )
-        update public.threads t set pending_follow_up = null
-        from waiting where t.id = waiting.id
+        update public.threads t
+           set pending_follow_up = waiting.pending_follow_up || jsonb_build_object('claimed_at', now())
+          from waiting where t.id = waiting.id
         returning waiting.pending_follow_up
         """,
-        thread_id, user_id, str(message_id),
+        thread_id, user_id, str(message_id), float(FOLLOW_UP_CLAIM_SECONDS),
     )
     return None if row is None else row["pending_follow_up"]
+
+
+async def waiting_follow_ups(
+    conn: asyncpg.Connection, quiet_since: dt.datetime, given_up_before: dt.datetime, limit: int
+) -> list[asyncpg.Record]:
+    """Threads whose follow-up still waits on a reply that has been quiet since `quiet_since`, oldest first, and not
+    so long that it was given up on, nor claimed by a request still running it: thread_id, user_id and the reply's
+    message_id. Cross-user, so admin-only."""
+    return await conn.fetch(
+        """
+        select id as thread_id, user_id, pending_follow_up ->> 'message_id' as message_id
+          from public.threads
+         where pending_follow_up is not null and deleted_at is null
+           and last_message_at < $1 and last_message_at >= $2
+           and coalesce((pending_follow_up ->> 'claimed_at')::timestamptz, '-infinity')
+               < now() - make_interval(secs => $4::float8)
+         order by last_message_at
+         limit $3
+        """,
+        quiet_since, given_up_before, limit, float(FOLLOW_UP_CLAIM_SECONDS),
+    )
+
+
+async def settle_pending_follow_up(
+    conn: asyncpg.Connection,
+    thread_id: uuid.UUID | str,
+    user_id: uuid.UUID | str,
+    message_id: uuid.UUID | str,
+    remaining: dict | None,
+) -> None:
+    """Leave only what is still to do after reply `message_id`, unclaimed so the next request may run it, or clear it
+    with None. A newer turn's follow-up is never touched."""
+    await conn.execute(
+        "update public.threads set pending_follow_up = $1::jsonb "
+        "where id = $2 and user_id = $3 and pending_follow_up ->> 'message_id' = $4::text",
+        remaining, thread_id, user_id, str(message_id),
+    )
 
 
 async def most_recent(

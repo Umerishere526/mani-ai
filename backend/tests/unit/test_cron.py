@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 from main import create_app
 from mani.config import get_settings
 
+PATH = "/internal/cron/catch-up"
+
 
 @pytest.fixture
 def client() -> TestClient:
@@ -15,29 +17,24 @@ def client() -> TestClient:
 
 def test_no_secret_configured_refuses_every_request(client, monkeypatch):
     monkeypatch.setattr(get_settings(), "cron_secret", "")
-    response = client.get("/internal/cron/fold-summaries")
+    response = client.get(PATH)
     assert response.status_code == 401
 
 
 def test_the_wrong_secret_is_refused(client, monkeypatch):
     monkeypatch.setattr(get_settings(), "cron_secret", "the-real-one")
-    response = client.get(
-        "/internal/cron/fold-summaries", headers={"Authorization": "Bearer guess"}
-    )
+    response = client.get(PATH, headers={"Authorization": "Bearer guess"})
     assert response.status_code == 401
 
 
-def test_the_right_secret_is_accepted(client, monkeypatch):
+def test_the_right_secret_runs_the_catch_up(client, monkeypatch):
     monkeypatch.setattr(get_settings(), "cron_secret", "the-real-one")
     monkeypatch.setattr(
-        "mani.routers.cron.reconcile_due", lambda: _immediate(0)
+        "mani.routers.cron.catch_up.run", lambda: _immediate({"summaries": 1, "follow_ups": 2, "folded": 3})
     )
-    response = client.get(
-        "/internal/cron/fold-summaries",
-        headers={"Authorization": "Bearer the-real-one"},
-    )
+    response = client.get(PATH, headers={"Authorization": "Bearer the-real-one"})
     assert response.status_code == 200
-    assert response.json() == {"processed": 0}
+    assert response.json() == {"summaries": 1, "follow_ups": 2, "folded": 3}
 
 
 async def _immediate(value):

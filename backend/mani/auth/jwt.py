@@ -32,6 +32,12 @@ class Claims(BaseModel):
     # Kept verbatim so the database session can be given exactly what was verified.
     raw: dict[str, Any] = Field(default_factory=dict, repr=False)
 
+    @classmethod
+    def acting_as(cls, user_id) -> "Claims":
+        """A person's identity for work a scheduler runs on their behalf, so RLS scopes every write exactly as it
+        does their own requests. Only for jobs the server starts; a request's identity comes from its verified token."""
+        return cls(sub=str(user_id), raw={"sub": str(user_id), "role": AUDIENCE})
+
     @property
     def user_id(self) -> str:
         return self.sub
