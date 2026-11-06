@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-14
 tags: [journal, latency, openrouter, routing, lessons]
 ---
+> Superseded 2026-11-05 (the `openai/fast` cost decision: chat replies now ask for the priority tier) - see [[latency-where-the-wait-goes-2026-11-05]]
 > Superseded 2026-10-26 (Azure and OpenAI: chat now goes to OpenAI only) - see [[azure-content-filter-dropped-2026-10-26]]
 > Superseded 2026-10-21 (the deadline that was never retried, and "next if slow turns persist") - see [[streamed-chat-call-cut-and-retried-2026-10-21]]
 

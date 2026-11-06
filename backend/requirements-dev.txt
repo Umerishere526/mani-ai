@@ -8,3 +8,6 @@ pytest-asyncio==1.4.0
 
 # `fastapi dev` only. Production runs uvicorn directly.
 fastapi-cli==0.0.32
+
+# The offline load test (scripts/locustfile.py), against scripts/fake_openrouter.py.
+locust==2.47.0

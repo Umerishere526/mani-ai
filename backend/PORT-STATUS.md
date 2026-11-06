@@ -17,8 +17,9 @@ the same change as the work.**
   `reasoning_effort` instead, so `mani/llm/chain.py` sends the sampling parameters an ordinary
   chat model takes only to models that accept them. A prompt row names its own effort in
   `model_parameters.reasoning_effort` and `mani/config.py` holds the default for the calls that have
-  no row of their own; every chat turn reads the effort of `voice`, on `low` (2026-10-27; `mani_base` was on `medium`
-  from 2026-10-22 until it was retired), while `summarization` and `memory_fold` are on `high`. Effort is billed: measured against Azure,
+  no row of their own; every chat turn reads the effort of `voice`, on `medium` (in prod since 2026-10-29, confirmed by
+  `docs/latency-report-2026-11-05.md`), and a body check-in turn its `body_reasoning_effort`, on `low` (2026-11-05;
+  `mani_base` was on `medium` from 2026-10-22 until it was retired), while `summarization` and `memory_fold` are on `high`. Effort is billed: measured against Azure,
   `high` spent 26 reasoning tokens where `low` spent 0, about three times the cost of the same call. Every endpoint keeps `data_collection: deny`, so
   training use stays refused, and one company, OpenAI, processes the conversations.
 - Every call to OpenRouter carries the same providers, data policy and reasoning effort, from
@@ -40,7 +41,8 @@ the same change as the work.**
 - **Auth** (`mani/auth/`): HS256 or JWKS, audience checked, `alg: none` refused. Admin is
   `app_metadata.admin_role == 'admin'` and `user_metadata` cannot grant it.
 - **Database** (`mani/db/`): `as_user()` opens a transaction as `mani_service` with the caller's claims set, so RLS
-  applies to real traffic. `as_admin()` is the named exception. A turn's writes share one transaction.
+  applies to real traffic. `as_admin()` is the named exception. A turn's writes share one transaction, and no
+  transaction is open while the model thinks (`chat/runner.py`).
 - **A chat turn** (`mani/chat/orchestrator.py`), in order:
   1. The deterministic safety screen (`safety.py`) runs before anything else. An explicit statement locks
      the thread with no model call. An indirect one (including passive ideation and "pills in my hand")
@@ -136,6 +138,88 @@ the same change as the work.**
 
 ## Decisions in force
 
+- **A turn reads, thinks, then writes: no database connection is held while the model thinks** (muhammad,
+  2026-11-05). Because a turn held its transaction across the model call (6 to 30 s) and `client._record` took a
+  second connection inside it, so ten turns in flight on one instance emptied its pool of 10, and with no acquire
+  timeout the instance hung. `chat/runner.py` runs `orchestrator.send` twice: the read, in a transaction that rolls
+  back, ends where the turn asks the model (`runner.Model` records the request and the thread's version, its message
+  count and newest message id); the model is called holding nothing; the write runs the same steps in a fresh
+  transaction under `_lock_thread` and answers them with that reply. A turn that never asks the model (a crisis, a
+  style button, a duplicate, their own message sent back) commits in the read, as before. At the write, a message id
+  already stored returns that turn; a thread whose version moved, or a reply asked for in another shape, is refused as
+  `CONFLICT` 409, retryable, "Mani is still answering your last message. Please try again." The write rebuilds from the
+  thread as it is then, so a reading that landed during the call is merged, never written over. The edit route takes
+  the turn back in both passes (`runner.edit`), so a failed edit leaves the original. A retry with the same
+  `client_message_id` waits in process for the first (`runner._one_at_a_time`) and pays nothing; one that reaches
+  another instance pays once more and still stores one turn. The pre-model reads run twice (a few queries, about
+  150 ms cross-region). `tests/integration/test_read_think_write.py`; `test_a_second_message_sent_while_the_first_waits_
+  on_the_model_is_refused_and_stores_one_turn` in `test_turn.py`; [[read-think-write-2026-11-05]].
+  The rule holds everywhere and is enforced (muhammad, after the 500-person load test, 2026-11-05): a task holding a
+  pool connection may not take a second one (`pool._acquire`), call the model (`client.complete`) or read the prompt
+  cache (`cache.load`, which reloads on its own connection); each raises `RuntimeError`, so a test finds it. Because the
+  turn's read still called `cache.load()`, which on a stale cache took a second connection under a process-wide lock:
+  at 500 people every connection was held by a read waiting on it, and 3,694 of 3,708 sends failed `busy`. The runner
+  reads the prompts first and passes them in (`orchestrator.send(config=...)`). Summaries (`summarize.update`) and the
+  memory fold (`memory.fold_one`) read, call the model, then write only onto what they read; the fold no longer claims
+  its thread ahead (`memory_db.next_to_fold`, `mark_folded_through(was=...)`), so a fold that fails or dies leaves the
+  thread waiting. In one process a second summary or fold waits for the first (`mani/one_at_a_time.py`).
+- **The backend reaches Postgres through Supabase's transaction pooler (port 6543), with small pools** (muhammad,
+  2026-11-05). Because each instance opened its own pool against the session pooler, so connections multiplied with
+  instances; the transaction pooler shares backends across every instance. `mani/db/pool.py`: `statement_cache_size=0`,
+  every statement inside a transaction (the jsonb codecs' type lookup and the readiness ping included), asyncpg's
+  session reset replaced by a rollback of a transaction left open, and a 10 s per-statement `command_timeout` now that
+  no transaction spans a model call. Nothing needs a session: no LISTEN, no session-level SET, no session advisory lock
+  (`set local`, `set_config(..., true)` and `pg_advisory_xact_lock` are all transaction-scoped). Settings
+  `DB_POOL_MIN_SIZE` 0, `DB_POOL_MAX_SIZE` 5, `DB_ACQUIRE_TIMEOUT_SECONDS` 5: an empty pool answers `BUSY` 503,
+  retryable, "Mani is busy right now", never a hang. The whole integration suite passes through local Supavisor in
+  transaction mode. `test_an_empty_pool_refuses_quickly_as_busy_instead_of_hanging`.
+- **An instance has at most 100 model calls in flight, and a person at most 10 paid replies a minute** (muhammad,
+  2026-11-05). Because nothing bounded either: a burst queued behind the provider until every turn timed out, and one
+  client could send as fast as it liked. `client.complete` takes one of `MODEL_CALLS_IN_FLIGHT` slots (chat and
+  background calls alike) or, after `MODEL_SLOT_WAIT_SECONDS` 2, refuses with `RATE_LIMITED` 429, retryable.
+  `MINUTE_MESSAGE_LIMIT` 10 is counted from the messages they sent, beside `DAILY_MESSAGE_LIMIT`, after the safety
+  screen, so a crisis is always answered. `test_a_call_that_finds_every_slot_taken_is_refused_quickly_as_busy`,
+  `test_past_the_minute_limit_a_turn_is_refused_and_a_crisis_still_answered`.
+- **Every wait on a turn adds up under 90 s** (muhammad, 2026-11-05). Because the chat-tester gives up at 90 s and a
+  person sooner; Vercel Hobby allows 300 s. Worst case, each wait at its limit: JWKS fetch on a key-cache miss 5
+  (`JWKS_TIMEOUT_SECONDS`; PyJWT's default was 30), pool acquire for the read 5, the read's statements about 0.5, a
+  model slot 2, the model 65 (`CHAT_BUDGET_SECONDS`, the first attempt's cost row inside it), the last cost row's
+  acquire 5, the write's acquire 5 and statements about 0.5: about 88 s. A statement is capped at 10 s, so a database
+  slow on every statement could still pass 90. The JWKS fetch is blocking, and stays off the event loop because
+  `auth/deps.current_user` is a plain `def` dependency, which FastAPI runs in its threadpool.
+- **Only the backend creates a thread or records an offered framework** (migration 031, 2026-11-05). Because with
+  INSERT on `threads` a user's own token, through PostgREST, could create a row with any `understanding`,
+  `rewind_snapshot`, `check_at_message_count`, `memory_folded_at` or `message_count`, which the backend reads back as
+  its own state. `authenticated` loses INSERT and DELETE on `threads` and INSERT on `thread_techniques_offered` and
+  `thread_response_styles`; `mani_service` is granted the INSERTs it makes. No frontend writes these tables
+  (checked 2026-11-05). `tests/sql/test_grants.sql`, `tests/sql/test_rls.sql`. Hosted needs `supabase db push`.
+
+- **Every call that has a thread sends `session_id` and `prompt_cache_key`, both `<thread_id>:<purpose>`.** Because
+  OpenRouter recorded `session_id` null on every call of 2026-11-01 to 05 and turn 2 of a thread was cached in 1 of 8
+  threads, while turn 3 always cached turn 1's whole input; without a key OpenRouter pins a conversation only after a
+  cache hit, and OpenAI may send turn 2 to a machine without turn 1's prefix (`docs/latency-report-2026-11-05.md`,
+  section 6). `session_id` is OpenRouter's sticky routing key (the endpoint that served stays pinned until 10 minutes
+  pass with no call); `prompt_cache_key` is OpenAI's, which OpenRouter's docs (2026-11-05) describe only as the
+  sticky key used without a `session_id`, not as passed on to OpenAI. Per purpose, not per thread (muhammad,
+  2026-11-05): chat may use the priority endpoint and the other calls may not, so one shared key would re-pin the
+  conversation after every call, and their prompts share no cached prefix (each starts from its own reply schema).
+  `chain.build` binds them to the call (`chain.sticky`), merged into the model's `extra_body`, never into the cached
+  model's key, so there is still one model per configuration. Evidence after deploy: `session_id` set on
+  `/api/v1/generation`, and turn 2's cache ratio. `test_a_call_with_a_thread_carries_its_sticky_keys_beside_the_
+  provider_reasoning_and_usage`, `test_a_call_with_no_thread_sends_no_sticky_keys` in `tests/unit/test_client.py`.
+- **A body check-in turn thinks at `low`; every other chat turn at `medium`.** Because thinking before the first
+  token is 75% of a chat call's wait (p50 6.0 s of 9.3 s) and latency follows output tokens almost exactly (r = 0.94),
+  while the body check-in's steps are the client's fixed script (muhammad, 2026-11-05;
+  `docs/latency-report-2026-11-05.md`, sections 1 and 7). The `voice` row carries it as
+  `model_parameters.body_reasoning_effort` beside `reasoning_effort` (`content/prompts/voice.md`, seed after editing),
+  and `composer.model_settings` reads it only when the moment is `Moment.BODY`; the chat, `may_move`, the answers to a
+  check or an offer, a concern and `in_stages` keep `medium`. `test_a_body_check_in_turn_thinks_at_the_voice_rows_body_
+  effort_and_every_other_turn_at_its_own` in `tests/unit/test_composer.py`, `test_a_body_check_in_turn_thinks_at_low_
+  while_the_chat_and_the_stages_keep_medium` in `tests/integration/test_turn.py`.
+- **Mani's text is not streamed to the person; the call is.** Because 75% of a chat call's wait is thinking before
+  the first token, and only about 1.6 s p50 comes after it, so streaming the text would show the reply about 1.6 s
+  sooner for the cost of a streaming API in the backend and both frontends (muhammad, 2026-11-05;
+  `docs/latency-report-2026-11-05.md`, section 7). Revisit if the time after the first token grows.
 - **A reply follows Lolly's cadence, and the check is her barometer.** Because the 2026-10-29 meeting
   ([message](../docs/client/messages/2026-10-29-meeting-cadence-and-role-plays.md), R41 to R48) gave the shape in
   her words: acknowledge, open the window (from them to the situation and the challenge), insight, ask; never
@@ -315,7 +399,7 @@ the same change as the work.**
   select, and nothing says what to keep. Cut and replaced, not added: `mani_base.md` `how_you_talk` and `core issue`,
   `response_format.md` first reasoning step, `context.py` `understanding_next`, `schema.py` `issue` and `core_issue`. Not
   measured live (needs muhammad's yes, replay of that turn); [[direct-questions-have-no-target-2026-10-09]].
-- **A turn waits on one chat call at effort `low`, never a second to fix a draft; a chat turn's reading of them is
+- **A turn waits on one chat call at the `voice` row's effort (`medium`, `low` for the body check-in), never a second to fix a draft; a chat turn's reading of them is
   one more call after the reply is sent** (muhammad, 2026-10-12; the reading after, 2026-11-03). Since 2026-10-29 the chat
   reply wrote its whole reading (14 fields, re-read every turn) and the picture (16) before its text, so its output grew
   with the conversation until attempts passed `chat_deadline_seconds`; two of Lolly's chats of 2026-11-03 ended in
@@ -338,8 +422,14 @@ the same change as the work.**
   asked for again, so how often each happens is known. The one scoped extra call is the exercise pick at the end
   of a framework, at the chat row's effort. `test_a_turn_costs_exactly_one_provider_call` and the
   `reply_checks` tests in `tests/integration/test_turn.py` hold it. Not yet measured live (needs muhammad's yes).
-- **A chat reply is streamed: a call silent for 15 s is cut and tried once more, and one attempt has a deadline of
-  30 s** (`chat_first_token_seconds`, `chat_deadline_seconds`, 2026-10-21; the deadline since 2026-10-14). Because
+- **A chat reply is streamed: a call silent for 15 s is cut and tried once more, one attempt has a deadline of
+  45 s, and both attempts share a 65 s budget** (`chat_first_token_seconds`, `chat_deadline_seconds`,
+  `chat_budget_seconds`, 2026-10-21; the deadline since 2026-10-14, 45 s and the budget since 2026-11-05). Because at 30 s three messages were lost at exactly 30.0 s while the slowest reply that made it took
+  29.2 s, and the first-token cut never fired in that window (`docs/latency-report-2026-11-05.md`, sections 4 and 5).
+  A retry gets the deadline or what is left of the budget, whichever is shorter, so the model costs a turn 65 s at
+  most where 45 + 45 s could follow a malformed first attempt that ran to the deadline (0 of 154 chat calls in that
+  window); every wait on a turn then adds up under the chat-tester's 90 s (see "Every wait on a turn adds up under
+  90 s"; muhammad, 2026-11-05). Because
   `medium` effort makes some turns think 15 to 30 s before the first token (70 percent of output tokens were hidden
   reasoning, p50 9.7 s, 3 of 161 calls timed out), and a flat deadline around a blocking call could only fail them.
   muhammad kept `medium` on purpose. `chain.build` streams through `langchain-openai`'s `astream`, whose
@@ -348,14 +438,28 @@ the same change as the work.**
   get, records the cut attempt as its own `timeout` row, and retries once, sharing `MAX_SCHEMA_ATTEMPTS` with a
   malformed reply and a provider blip. Past the deadline or after the second silence the turn fails as `LLM_TIMEOUT`,
   retryable, "Mani took too long to answer. Please try again."; nothing was written, so a resend is safe. It does not
-  make a thinking-heavy call faster (the median stays about 9.7 s) and a cut attempt is probably billed; if timeouts stay
-  above about 1 percent, `low` effort for plain conversation turns is the next lever. `pytest.ini` ignores one
+  make a thinking-heavy call faster (the median stays about 9.7 s) and a cut attempt is probably billed. `low` effort was
+  taken for the body check-in only (2026-11-05); plain conversation turns stay on `medium`. `pytest.ini` ignores one
   third-party warning the stream emits (`field_name='parsed'`). Not measured live (needs muhammad's yes: his
   next chat turns, then read `admin.llm_calls`). `test_a_call_that_sends_nothing_for_too_long_is_cut_and_tried_once_
   more`, `test_a_call_silent_twice_fails_as_too_slow_after_two_tries_only`, `test_a_streamed_reply_records_its_usage_
   and_generation` in `tests/unit/test_client.py`.
-- **Calls go only to OpenAI, its fastest endpoint first, never a pinned order and never flex**
-  (`openrouter_providers: ["openai"]` with `sort: latency`, muhammad, 2026-10-26). Because Azure's content filter,
+- **Calls go only to OpenAI, its fastest endpoint first, never a pinned order and never flex; the chat reply asks for
+  OpenAI's priority tier** (`openrouter_providers: ["openai"]` with `sort: latency`, muhammad, 2026-10-26; the tier,
+  muhammad, 2026-11-05). Because the priority endpoint (`openai/fast`) ran at 109 tokens a second against the standard
+  endpoint's 65, and thinking before the first token is 75% of a chat call's wait, for about $0.06 a day more at the
+  traffic of 2026-11-03 to 05 (chat cost $0.18 in that window at the standard price, which priority doubles;
+  `docs/latency-report-2026-11-05.md`, sections 7 and 8). A purpose `chat` call sends `service_tier: "priority"` and
+  `provider.only: ["openai", "openai/priority"]` (`Settings.routing(priority=True)`; OpenRouter's docs name
+  `openai/priority` and `openai/fast` as one endpoint). OpenRouter tries the priority endpoints first and falls back to
+  the default ones in the list, so a turn is never failed for want of priority capacity and is billed at the endpoint
+  that served it; the explicit slug is there because a base slug never matches a tier endpoint, and nothing else is
+  allowed, so never Azure, Bedrock or flex; `data_collection: deny` stays; no `provider.order`, which turns off sticky
+  routing. `understanding`, `memory_fold` and `summarize` stay on the default tier. `OPENROUTER_CHAT_SERVICE_TIER=default`
+  turns it off with no change to code. Evidence after deploy: `service_tier` is `priority` on `GET /api/v1/generation`
+  for chat generation ids (`scripts/llm_call_providers.py` prints the endpoint; see the report's section 7 for the
+  call). `test_only_the_chat_reply_asks_for_the_priority_tier_and_each_purpose_keeps_its_own_key`,
+  `test_the_priority_tier_is_switched_off_by_configuration` in `tests/unit/test_client.py`. Because Azure's content filter,
   which OpenRouter configures and we cannot, stopped every reply in an ordinary conversation about a boss (10 of
   28 calls on 2026-10-26, each after about 13 tokens), and a filtered reply is not an error, so neither
   OpenRouter's fallback nor our retry left Azure. An order is avoided because it turns off OpenRouter's load
@@ -677,8 +781,8 @@ the same change as the work.**
   PostgREST cannot do (2026-09-15); anything PostgREST exposes is reachable with the anon key (2026-09-15);
   a backend acting as `authenticated` let users forge Mani's replies (2026-09-16); the definer functions write
   rows no plain grant should allow (2026-09-15); a small model over-fires the crisis flag on ordinary
-  distress (2026-09-29); plain request and response is acceptable while turns stay short (2026-09-14; turns are no longer short,
-  so muhammad to revisit streaming after the next measured run).
+  distress (2026-09-29); plain request and response is acceptable while turns stay short (2026-09-14; measured
+  2026-11-05, see "Mani's text is not streamed to the person").
   In process routing no longer describes the code (`router.py` is gone and the model chooses the framework):
   muhammad to reword or drop it.
 
@@ -690,22 +794,23 @@ Ordered by what breaks first.
    project set `auto_expose_new_tables` off and the exposed schemas to `public` and `graphql_public` by hand;
    `db push` does not carry them. Run `scripts/test_db.sh --local` against the hosted database first, or a
    user could clear their own crisis flag.
-2. **Rate limit and cost ceiling.** `DAILY_MESSAGE_LIMIT` exists and defaults to 0 (off). It needs a number
-   from muhammad. There is no per user cost ceiling; `llm_calls.spend_since()` is what one would read. A retried
+2. **Rate limit and cost ceiling.** `DAILY_MESSAGE_LIMIT` exists and defaults to 0 (off); muhammad sets it in the
+   environment. `MINUTE_MESSAGE_LIMIT` is 10. There is no per user cost ceiling; `llm_calls.spend_since()` is what one would read. A retried
    send with the same `client_message_id` returns the first reply for free.
 3. **Crisis resources are empty.** `mani/chat/crisis.py` returns `[]`, and `safety.PROTOCOLS` and
    `CLARIFICATION` are empty too: the specifications refer to an approved protocol and do not contain one.
    Needs countries and services from muhammad. Do not invent numbers.
 4. **Migrations are not run by anything.** `supabase db push` is manual.
 5. **Memory fold and summaries need a scheduler.** Summaries run as in process background tasks (lost on a
-   crash). The cron route exists but nothing calls it. Hosting is not decided: a container platform that can
-   run two process types from one image (`vercel.json` and `render.yaml` were removed).
+   crash, and suspended or cut off on Vercel, where production runs: see Open engineering). The cron route exists but
+   nothing calls it (no `vercel.json`, no Vercel Cron). The way off Vercel is a container platform that can run two
+   process types from one image (`render.yaml` was removed).
 6. **`CORS_ORIGINS` must name the deployed web origin**, or `web/` gets no browser response. Mobile is
    unaffected.
-7. **Pool and load.** `mani/db/pool.py` is min 2, max 10 with a 90 second command timeout, sized by reasoning.
-   A turn holds a transaction open across the model call, so about 10 turns per process is the ceiling, and
-   any `idle_in_transaction_session_timeout` below the model's latency kills turns. Nothing has been load
-   tested.
+7. **Pool and load.** Set the hosted `DATABASE_URL` to the transaction pooler: host
+   `aws-0-ca-central-1.pooler.supabase.com`, port **6543** (today 5432, the session pooler), same user and database.
+   Then `supabase db push` for migration 031. Load-tested offline only (Latest measurements): one instance served
+   100 people with no errors; at 500 the database held and 30% of sends were refused by the 100 model-call slots.
 8. **The backend's database role.** `001_initial_schema.sql` grants `mani_service` to `postgres`. If the
    deployed `DATABASE_URL` connects as anything else, `set local role mani_service` fails. Grant it to that role,
    never to `authenticator`.
@@ -715,9 +820,9 @@ Ordered by what breaks first.
 
 ## Open decisions for muhammad
 
-- R2's 4 s median (2026-10-14): at the fastest regular OpenAI endpoint a 300 token reply takes about
-  6.5 s. Only `openai/fast`, at double the price ($0.2 and $1 per million tokens), reaches 4 s. Decide with the
-  client whether the target or the price moves.
+- R2's 4 s median (2026-10-14; resolved 2026-11-05): muhammad chose `openai/fast` for chat replies at double the
+  price, with body check-ins at `low` (see Decisions in force). The 2026-11-05 median was 9.8 s, mostly thinking at
+  `medium`, so 4 s is not expected from the tier alone; tell the client the measured median once the change is live.
 - Tell the client (2026-10-13, spec 0004): inside ABCDE, Mani goes one stage per reply, and a stage the person
   already explained is said back and confirmed once ("Is that right?" or a similar short phrase) rather than
   named and passed, as the ABCDE document's Situation 1 shows for A. Only A has a "possible" event; for B to
@@ -761,6 +866,15 @@ Ordered by what breaks first.
 
 ## Open engineering
 
+- **Production is Vercel Hobby functions in iad1, with the database in ca-central-1, and `fire_and_forget` work is
+  being lost.** `mani/background.py` runs `asyncio.create_task` after the response, which Vercel does not wait for: it
+  suspends or ends the function (Vercel's `waitUntil` is Node and Edge only). 15 of 49 `understanding` calls of
+  2026-11-01 to 05 timed out at 61 to 335 s against a 60 s wait, background calls spent p50 6.3 s between OpenRouter
+  finishing and our row being written (chat: 0.33 s), and both memory-fold retries never wrote a row, so the person's
+  picture and memory are being lost (`docs/latency-report-2026-11-05.md`, sections 5 and 9). Every database round trip
+  also crosses from iad1 to ca-central-1. Kept on Vercel for now by muhammad, 2026-11-05. The fix is a container host
+  near ca-central-1 (the `Dockerfile` is ready) or a queue for the background work.
+
 - **Hosted and local schemas match.** Checked read-only on 2026-10-07: the same migrations, columns,
   enums, functions and RLS policies, and the same prompts, frameworks and exercises (only seed timestamps
   differ). The production deployment is `45543ed`, the head of `main`. What prod's environment variables
@@ -780,6 +894,13 @@ Ordered by what breaks first.
   `scripts/seed_exercises.py`; there is no upload route, and the admin exercise CRUD takes an existing
   `audio_path`. The exercise card is also not kept on the message, so it is gone once a thread reloads.
 - **A worker process** for summaries and the memory fold, for when there is more than one instance.
+- **Model-call capacity at 500 people.** One instance's 100 slots run out (Latest measurements). Either more
+  instances (Vercel adds them on its own; each has its own 100), a higher `MODEL_CALLS_IN_FLIGHT` once OpenRouter's
+  rate limit for the key is known, or the reading after a reply given a share of the slots it cannot exceed so it
+  never refuses a person's reply. Unmeasured on Vercel.
+- **A `busy` 503 or a slot 429 logs at ERROR or WARNING per request**, and 5xx goes to Sentry with a traceback. Under
+  load that is one report per refused request; consider logging them without `exc_info`.
+- **The index on `admin.turn_traces(llm_call_id)` is missing** (migration 027), so `scripts/test_db.sh` stops there.
 - **`GET /v1/admin/models`**, which the prompt editor's model dropdown needs.
 - **`threads.vague_streak`** is granted to the backend and written by nothing; the pacing it belongs to is
   designed, not built.
@@ -788,6 +909,21 @@ Ordered by what breaks first.
   them.
 
 ## Latest measurements
+
+**Offline load test, 2026-11-05** (`scripts/locustfile.py`, one backend process on this machine, local Supabase
+through its Supavisor in transaction mode, `scripts/fake_openrouter.py` at the production profile: first token p50
+6 s and p90 12 s, then 1.6 s of text; each person sends every 30 to 60 s for 10 minutes, after a 20 s ramp):
+
+| people | sends | errors | turn p50 / p95 / max | pooled DB backends, peak (active) | backend CPU mean / peak |
+|---|---|---|---|---|---|
+| 100 | 1,140 | 0 | 7.7 / 16 / 15.8 s | 5 (3) | 17% / 43% |
+| 500 | 5,786 | 1,766 `429 rate_limited` (31%) | 7.6 / 17 / 17.8 s | 5 (5) | 35% / 68% |
+
+At 500 the first thing to break is the instance's 100 model-call slots: about 9 sends a second, each holding a slot
+for the reply (~8 s) and again for the reading after it (~8 s), need ~150. 977 readings were refused too, so those
+people's pictures went unread. No `busy`, no database error. Before the prompt-cache fix the same run failed 3,694
+of 3,708 sends `busy` (Decisions in force, the read-think-write entry). Not measured: Vercel's own concurrency per
+instance, the cross-region round trips (local is ~0 ms), and a real provider's tail.
 
 Taken 2026-10-01 with the earlier eval harness, since removed. `scripts/scenario_check.py` replaces it; its first
 run is the next baseline. Re-measure after any change to prompts, framework content or the offer rules.

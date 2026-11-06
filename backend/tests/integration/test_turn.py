@@ -9,7 +9,7 @@ import asyncpg
 import pytest
 
 from mani.auth.jwt import Claims
-from mani.chat import context, converse, crisis, orchestrator
+from mani.chat import context, converse, crisis, orchestrator, runner
 from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
@@ -161,10 +161,7 @@ async def past_the_opening(thread):
 async def send(claims: Claims, thread_id, content, **kwargs):
     """A turn as the endpoint runs it: committed, then the reading after a chat reply, whose record the turn
     returns."""
-    from mani.db import pool
-
-    async with pool.as_user(claims) as conn:
-        turn = await orchestrator.send(conn, claims, thread_id, content, **kwargs)
+    turn = await runner.send(claims, thread_id, content, **kwargs)
     if turn.read_after is not None:
         read = await orchestrator.read_understanding(claims, turn.read_after)
         turn = dataclasses.replace(turn, understanding=read or turn.understanding)
@@ -1451,21 +1448,33 @@ class _SlowModel(ScriptedModel):
         return await super().__call__(messages, schema, **kwargs)
 
 
-async def test_a_second_message_waits_for_the_first_and_sees_its_reply(alice, monkeypatch):
+async def test_a_second_message_sent_while_the_first_waits_on_the_model_is_refused_and_stores_one_turn(
+    alice, monkeypatch
+):
     """muhammad's test, 2026-10-09: "idk yet" was sent again while the first was still waiting on
     a 25 second reply. Both turns ran at once on the same history, neither saw the other's
-    answer, and Mani asked the same question twice."""
+    answer, and Mani asked the same question twice. No connection is held while the model thinks
+    (2026-11-05), so the second is refused at its write, as a conflict they can retry."""
+    from mani.errors import ErrorCategory, ServiceError
+
     slow = _SlowModel(
         Reply(text="What thought comes up when you picture seeing them?"),
         Reply(text="You said you don't know yet. Is it more the people, or the place?"),
     )
     monkeypatch.setattr(orchestrator.client, "complete", slow)
     thread = await past_the_opening(await start(alice))
+    before = await _user_messages(thread.id)
 
-    await asyncio.gather(send(alice, thread.id, "idk yet"), send(alice, thread.id, "idk yet"))
+    results = await asyncio.gather(
+        send(alice, thread.id, "idk yet"), send(alice, thread.id, "idk yet"), return_exceptions=True
+    )
 
-    assert slow.calls == 2
-    assert "What thought comes up when you picture seeing them?" in slow.histories[1]
+    refused = [r for r in results if isinstance(r, ServiceError)]
+    assert len(refused) == 1, results
+    assert refused[0].category is ErrorCategory.CONFLICT and refused[0].status_code == 409
+    assert refused[0].retryable
+    assert refused[0].user_message == "Mani is still answering your last message. Please try again."
+    assert await _user_messages(thread.id) == before + ["idk yet"]
 
 
 async def _offered_row(alice, thread_id):
@@ -1543,6 +1552,21 @@ async def test_the_two_choices_never_come_from_reading_the_reply(alice, model):
 
     turn = await send(alice, thread.id, "hmm")
     assert turn.prompts == []
+
+
+async def test_a_body_check_in_turn_thinks_at_low_while_the_chat_and_the_stages_keep_medium(alice, model):
+    """2026-11-05: thinking is 75% of a turn's wait. The body check-in runs the client's fixed steps, so its turns
+    think at `low`; the chat and a framework's stages keep the voice row's `medium`."""
+    scripted = model(Reply(text="Where do you feel it?"))
+    efforts = {}
+    for moment, phase in (("chatting", None), ("in_stages", "belief"), ("body", "somatic_body")):
+        thread = await start(alice)
+        if phase:
+            await _land_on(alice, thread.id, phase)
+        await send(alice, thread.id, "my chest feels tight")
+        efforts[moment] = scripted.kwargs["reasoning_effort"]
+
+    assert efforts == {"chatting": "medium", "in_stages": "medium", "body": "low"}
 
 
 # The ABCDE walk (spec 0004). What the client wrote is read from the seeded file, so each test pins
@@ -2570,10 +2594,8 @@ async def test_a_reading_that_lands_after_the_next_turn_adds_to_it_and_overwrite
         Reply(text="What did you hope he would say?", heart="core_named"),
     )
     thread = await start(alice)
-    async with pool.as_user(alice) as conn:
-        first = await orchestrator.send(conn, alice, thread.id, "my brother never calls")
-    async with pool.as_user(alice) as conn:
-        await orchestrator.send(conn, alice, thread.id, "he only calls when he needs something")
+    first = await runner.send(alice, thread.id, "my brother never calls")
+    await runner.send(alice, thread.id, "he only calls when he needs something")
 
     stored = await orchestrator.read_understanding(alice, first.read_after)
 
@@ -2685,19 +2707,14 @@ async def _undo(alice, thread_id, message_id=None):
     from mani.chat import rewind
     from mani.db import pool
 
+    message_id = message_id or await _last_user_message_id(thread_id)
     async with pool.as_user(alice) as conn:
-        await rewind.undo_last_turn(conn, ALICE, thread_id, message_id or await _last_user_message_id(thread_id))
+        await rewind.undo_last_turn(conn, ALICE, thread_id, message_id)
 
 
 async def _edit(alice, thread_id, content):
-    """What the edit endpoint does: take back the last turn, then run the new text, in one transaction."""
-    from mani.chat import rewind
-    from mani.db import pool
-
-    message_id = await _last_user_message_id(thread_id)
-    async with pool.as_user(alice) as conn:
-        await rewind.undo_last_turn(conn, ALICE, thread_id, message_id)
-        return await orchestrator.send(conn, alice, thread_id, content)
+    """What the edit endpoint does: take back the last turn, then run the new text."""
+    return await runner.edit(alice, thread_id, await _last_user_message_id(thread_id), content)
 
 
 async def test_editing_the_message_that_answered_a_check_takes_back_the_offer_and_runs_the_new_text(alice, model):

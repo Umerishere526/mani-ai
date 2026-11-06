@@ -50,7 +50,7 @@ def gotrue() -> str:
 @pytest.fixture
 def model(monkeypatch):
     """Same fake test_turn.py uses, installed the same way - a plain module-attribute
-    patch, so it applies whether the call originates from orchestrator.send() directly or,
+    patch, so it applies whether the call originates from a turn run directly or,
     as here, from a request routed through TestClient's in-process ASGI transport."""
     scripted_calls = {"count": 0}
 
@@ -58,9 +58,12 @@ def model(monkeypatch):
         from mani.db import llm_calls
         from mani.llm import client as client_module
 
-        scripted_calls["count"] += 1
+        # The person waits on the chat reply alone; the reading of them after it is a call of its own.
+        if kwargs.get("purpose") is llm_calls.Purpose.CHAT:
+            scripted_calls["count"] += 1
         return client_module.Call(
-            value=Reply(text="How can I support you with that today?"),
+            # In the shape the turn asked for, as the real call parses it.
+            value=schema.model_validate(Reply(text="How can I support you with that today?").model_dump()),
             model="test/model",
             usage=llm_calls.Usage(input_tokens=100, output_tokens=20),
             latency_ms=1,

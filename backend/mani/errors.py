@@ -15,6 +15,8 @@ class ErrorCategory(StrEnum):
     INVALID_REQUEST = "invalid_request"
     # The request contradicts one already made, e.g. a message id reused for a new message.
     CONFLICT = "conflict"
+    # This instance has no free database connection right now; a retry a moment later is served.
+    BUSY = "busy"
     # No usable token. Distinct from FORBIDDEN because a client refreshes its session
     # on 401 and gives up on 403 - collapsing the two makes an expired token look like
     # a permission failure and logs the person out instead of renewing them.
@@ -33,6 +35,7 @@ STATUS_BY_CATEGORY = {
     ErrorCategory.NOT_FOUND: 404,
     ErrorCategory.INVALID_REQUEST: 422,
     ErrorCategory.CONFLICT: 409,
+    ErrorCategory.BUSY: 503,
     ErrorCategory.UNAUTHENTICATED: 401,
     ErrorCategory.FORBIDDEN: 403,
     ErrorCategory.UNKNOWN: 500,

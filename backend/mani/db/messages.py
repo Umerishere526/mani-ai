@@ -219,14 +219,14 @@ async def create_greeting(
 
 
 async def count_from_user_since(
-    conn: asyncpg.Connection, user_id: uuid.UUID | str, hours: int
+    conn: asyncpg.Connection, user_id: uuid.UUID | str, window: dt.timedelta
 ) -> int:
-    """How many messages this person has sent in the last `hours`, across every conversation.
+    """How many messages this person has sent in the last `window`, across every conversation.
 
     Served by idx_messages_user (user_id, created_at desc).
     """
     return await conn.fetchval(
         "select count(*) from public.messages "
-        "where user_id = $1 and role = 'user' and created_at > now() - make_interval(hours => $2)",
-        user_id, hours,
+        "where user_id = $1 and role = 'user' and created_at > now() - $2::interval",
+        user_id, window,
     )

@@ -1,8 +1,10 @@
 # ABOUTME: The asyncpg pool and the two ways to take a connection from it.
 # ABOUTME: as_user() applies RLS from the caller's claims; as_admin() bypasses it.
 
+import asyncio
 import json
 import logging
+import weakref
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -19,15 +21,12 @@ logger = logging.getLogger(__name__)
 # transaction across statements.
 _pool: asyncpg.Pool | None = None
 
-# Total Postgres backend connections are (running instances) x MAX_POOL_SIZE, capped by
-# nothing in this repo: the Supabase session pooler (required because asyncpg uses prepared
-# statements, which the transaction pooler doesn't support) holds one backend connection per
-# pooled client connection. Check the project's pooler connection ceiling (Supabase dashboard
-# -> Settings -> Database -> connection pooling) before raising these.
-MIN_POOL_SIZE = 2
-MAX_POOL_SIZE = 10
-# A turn holds its connection across a model call, so this has to exceed that.
-COMMAND_TIMEOUT_SECONDS = 90.0
+# The pool runs behind Supabase's transaction pooler (port 6543), which hands each transaction
+# whichever backend is free. So every statement runs inside a transaction, state is only ever
+# `set local` or transaction-scoped, and no statement is prepared under a name that a later
+# transaction would expect to find. Sizes are settings (db_pool_min_size, db_pool_max_size).
+# Each statement may take this long; no transaction spans a model call any more.
+COMMAND_TIMEOUT_SECONDS = 10.0
 
 
 async def _configure(conn: asyncpg.Connection) -> None:
@@ -36,13 +35,27 @@ async def _configure(conn: asyncpg.Connection) -> None:
     asyncpg hands jsonb back as raw text unless told otherwise. Decoding it here means
     every query module gets dicts, rather than each one remembering to json.loads its
     own columns - which is the kind of thing that works until the one place that forgot.
+    The codecs live in this client; the type lookup they need runs in a transaction, so the
+    transaction pooler keeps it on one backend.
     """
-    await conn.set_type_codec(
-        "jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
-    )
-    await conn.set_type_codec(
-        "json", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
-    )
+    async with conn.transaction():
+        await conn.set_type_codec(
+            "jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
+        )
+        await conn.set_type_codec(
+            "json", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
+        )
+
+
+async def _reset(conn: asyncpg.Connection) -> None:
+    """Run when a connection goes back to the pool, in place of asyncpg's session reset.
+
+    asyncpg's own reset unlocks session advisory locks, unlistens and resets every setting. Behind the
+    transaction pooler those statements reach whichever backend is free, not one this client set anything
+    on, and nothing here sets session state. A transaction left open by a cancelled request is still
+    rolled back."""
+    if conn.is_in_transaction():
+        await conn.execute("rollback")
 
 
 async def open_pool() -> asyncpg.Pool:
@@ -51,10 +64,13 @@ async def open_pool() -> asyncpg.Pool:
         settings = get_settings()
         _pool = await asyncpg.create_pool(
             settings.database_url,
-            min_size=MIN_POOL_SIZE,
-            max_size=MAX_POOL_SIZE,
+            min_size=settings.db_pool_min_size,
+            max_size=settings.db_pool_max_size,
             command_timeout=COMMAND_TIMEOUT_SECONDS,
+            # Named server-side statements do not survive the transaction pooler.
+            statement_cache_size=0,
             init=_configure,
+            reset=_reset,
         )
         logger.info("database pool opened")
     return _pool
@@ -78,6 +94,48 @@ def get_pool() -> asyncpg.Pool:
     return _pool
 
 
+# The tasks holding a connection right now. A task that holds one and waits for a second, or for a model,
+# holds the first for as long as that wait: enough of them empty the pool and every request stalls behind
+# them (the turn before 2026-11-05, then the prompt cache, summaries and memory folds). So it is refused.
+# Tracked per task rather than in a context variable, which a background task started meanwhile would copy.
+_holding: weakref.WeakSet[asyncio.Task] = weakref.WeakSet()
+
+
+def holding() -> bool:
+    """Whether the running task holds a connection from this pool."""
+    task = asyncio.current_task()
+    return task is not None and task in _holding
+
+
+def refuse_while_holding(what: str) -> None:
+    """Raise when the running task holds a connection: `what` must happen before it is taken or after."""
+    if holding():
+        raise RuntimeError(f"{what} while this task holds a database connection")
+
+
+@asynccontextmanager
+async def _acquire() -> AsyncIterator[asyncpg.Connection]:
+    """A connection from the pool, or a quick retryable refusal when none frees up in time."""
+    refuse_while_holding("a second connection was asked for")
+    pool = get_pool()
+    try:
+        conn = await pool.acquire(timeout=get_settings().db_acquire_timeout_seconds)
+    except TimeoutError as exc:
+        raise ServiceError(
+            "no database connection free within the acquire timeout",
+            ErrorCategory.BUSY,
+            retryable=True,
+            user_message="Mani is busy right now. Please try again in a moment.",
+        ) from exc
+    task = asyncio.current_task()
+    _holding.add(task)
+    try:
+        yield conn
+    finally:
+        _holding.discard(task)
+        await pool.release(conn)
+
+
 @asynccontextmanager
 async def as_user(claims: Claims) -> AsyncIterator[asyncpg.Connection]:
     """A connection acting as the caller, inside a transaction, with RLS applying.
@@ -89,8 +147,7 @@ async def as_user(claims: Claims) -> AsyncIterator[asyncpg.Connection]:
 
     The whole block is one transaction: either the turn's writes all land or none do.
     """
-    pool = get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire() as conn:
         async with conn.transaction():
             # `set local` reverts when the transaction ends, so a pooled connection
             # cannot leak one caller's identity into the next request.
@@ -116,8 +173,7 @@ async def as_admin() -> AsyncIterator[asyncpg.Connection]:
     would do is how RLS stops applying to real traffic. Legitimate uses: reading the
     prompt and framework registry, writing the call log, admin endpoints.
     """
-    pool = get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire() as conn:
         async with conn.transaction():
             yield conn
 
@@ -125,8 +181,7 @@ async def as_admin() -> AsyncIterator[asyncpg.Connection]:
 async def ping() -> bool:
     """Whether the database answers. Used by the readiness probe."""
     try:
-        pool = get_pool()
-        async with pool.acquire() as conn:
+        async with as_admin() as conn:
             return await conn.fetchval("select 1") == 1
     except (ServiceError, asyncpg.PostgresError, OSError):
         return False

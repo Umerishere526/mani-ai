@@ -69,17 +69,40 @@ def request_body(
     settings: Settings,
     routing: dict[str, Any] | None = None,
     effort: str | None = None,
+    *,
+    priority: bool = False,
 ) -> dict[str, Any]:
     """What OpenRouter is told beside the messages: which providers may serve the call, under
     which data policy, and how hard to think. Every call sends this, so none of them reaches
-    a provider or a default effort the others refuse."""
-    return {
-        "provider": settings.routing(routing),
+    a provider or a default effort the others refuse.
+
+    `priority` asks for the priority tier: OpenRouter tries priority endpoints first and falls back to the
+    default ones in the same `only` list, and bills the endpoint that served. The tier that served is
+    `service_tier` on OpenRouter's /generation record of the call."""
+    body: dict[str, Any] = {
+        "provider": settings.routing(routing, priority=priority),
         # Without this OpenRouter omits the cached-token count, which is the only way to tell
         # whether prompt caching is actually happening.
         "usage": {"include": True},
         **_reasoning(model, settings, effort),
     }
+    if priority:
+        body["service_tier"] = "priority"
+    return body
+
+
+def sticky(key: str) -> dict[str, str]:
+    """The fields that keep one conversation's calls together, sent on every call that has a thread.
+
+    `session_id` is OpenRouter's sticky routing key: from the first successful call it pins the
+    conversation to the endpoint that served it, until 10 minutes pass with no call, so the next call
+    finds that endpoint's prompt cache warm. `prompt_cache_key` is OpenAI's own field for grouping
+    requests that share a prefix onto the same cache. OpenRouter's docs (read 2026-11-05) describe it
+    only as the sticky key used when no `session_id` is sent, and show it in their OpenAI request
+    examples, but do not say that it is passed on to OpenAI. A turn-2 cache ratio that rises after
+    deploy is the evidence that it is.
+    """
+    return {"session_id": key, "prompt_cache_key": key}
 
 
 @lru_cache
@@ -124,14 +147,20 @@ def build(
     settings: Settings,
     chunk_timeout: float,
     reasoning_effort: str | None = None,
+    priority: bool = False,
+    session: str | None = None,
 ) -> Runnable:
     """A runnable that takes chat messages and streams raw, parsed and parsing_error.
 
     `include_raw` keeps the provider's own response alongside the parsed object, which is what
     makes the token accounting possible - and turns a malformed reply into a value rather than
     an exception, so the caller can decide what a schema failure is worth.
+
+    `session` is bound to this call alone, never to the cached model, so the cache stays one model
+    per configuration rather than one per conversation. A bound `extra_body` replaces the model's
+    whole, so it is the model's with the sticky fields added.
     """
-    extra_body = request_body(model, settings, routing, reasoning_effort)
+    extra_body = request_body(model, settings, routing, reasoning_effort, priority=priority)
     chat = _model(
         settings.openrouter_api_key,
         settings.openrouter_base_url,
@@ -142,7 +171,8 @@ def build(
         max_tokens,
         json.dumps(extra_body, sort_keys=True),
     )
-    return chat.with_structured_output(schema, method="json_schema", include_raw=True)
+    per_call = {"extra_body": {**chat.extra_body, **sticky(session)}} if session else {}
+    return chat.with_structured_output(schema, method="json_schema", include_raw=True, **per_call)
 
 
 def generation_id_from(raw: Any) -> str | None:

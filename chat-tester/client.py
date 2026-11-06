@@ -27,7 +27,7 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 # app_metadata, which only the service role can write - signing up cannot set it.
 ADMIN_ROLE = "admin"
 
-# Above the backend's own deadline for a chat reply (chat_deadline_seconds, 30), so a slow turn comes back
+# Above the backend's own deadline for a chat reply (chat_deadline_seconds, 45), so a slow turn comes back
 # as the backend's "took too long" error rather than this tool giving up first.
 REQUEST_TIMEOUT_SECONDS = 90
 

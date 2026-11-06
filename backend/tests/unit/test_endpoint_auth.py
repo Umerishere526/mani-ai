@@ -12,7 +12,7 @@ from mani.auth.jwt import AUDIENCE
 from mani.config import get_settings
 from main import create_app
 
-# Every turn test in the suite calls orchestrator.send() directly, which is the right shape
+# Every turn test in the suite runs the turn directly (chat/runner.py), which is the right shape
 # for testing a turn but means nothing had ever exercised the wire: whether the dependency
 # that makes an endpoint admin-only is actually attached to it. That is invisible to a unit
 # test of require_admin - the function can be perfect and simply not wired to a route - and

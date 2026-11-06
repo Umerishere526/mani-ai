@@ -7,6 +7,7 @@ provider: openrouter
 model_id: openai/gpt-6-luna
 model_parameters:
   reasoning_effort: medium
+  body_reasoning_effort: low
 ---
 
 # Who you are
