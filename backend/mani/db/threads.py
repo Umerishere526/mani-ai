@@ -228,7 +228,7 @@ select
                                                    as recent_crisis,
   (select um.memory from admin.user_memory um
     where um.user_id = t.user_id)                  as memory
-from (select {COLUMNS}, understanding, check_at_message_count from public.threads
+from (select {COLUMNS}, understanding, check_at_message_count, safety from public.threads
        where id = $1 and user_id = $2 and deleted_at is null) t
 """
 
@@ -281,6 +281,8 @@ class ThreadUpdates:
     stages_known: dict | None = None
     # What Mani understands of them, set only when this turn's merge changed it.
     understanding: dict | None = None
+    # Where the conversation stands on safety, set only when this turn moved it (chat/safety.after).
+    safety: str | None = None
     # When Mani's check of its understanding was made, set only on the turn whose reply is one.
     check_at_message_count: int | None = None
 
@@ -299,6 +301,7 @@ class ThreadUpdates:
             or self.conversation_style is not None
             or self.stages_known is not None
             or self.understanding is not None
+            or self.safety is not None
             or self.check_at_message_count is not None
         )
 
@@ -383,6 +386,10 @@ async def apply(
             updates.stages_known, thread_id, user_id,
         )
 
+    if updates.safety is not None:
+        await conn.execute(
+            "update public.threads set safety = $1 where id = $2 and user_id = $3", updates.safety, thread_id, user_id,
+        )
     if updates.understanding is not None:
         # Its own column grant, to mani_service only (migration 022).
         await conn.execute(

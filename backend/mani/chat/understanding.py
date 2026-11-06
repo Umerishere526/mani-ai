@@ -60,10 +60,14 @@ def merge(stored: dict, update: PictureUpdate | None, heart: str | None) -> dict
     added to those kept, and where the reply judged the heart of it, replacing the last judgement. A null or blank
     value keeps what is stored."""
     # The chat's plan and its last answers to its own three questions ride along on every other kind of turn.
-    # Whether they corrected the reading an offer said back rides along too, until the next offer (converse.CORRECTED).
+    # Whether they corrected the reading an offer said back rides along too, until the next offer (converse.CORRECTED),
+    # and what is still ahead after the questions and what Mani is helping them prepare (context.FOLLOW_THROUGH).
     merged = {
         key: stored[key]
-        for key in (*KEYS, picture.KEY, "plan", "thinking", "insights", CORRECTED)
+        for key in (
+            *KEYS, picture.KEY, "plan", "thinking", context.INSIGHTS, CORRECTED, context.FOLLOW_THROUGH,
+            context.PREPARING, context.PROGRESS, context.EXPLORATION,
+        )
         if stored.get(key)
     }
     if merged.get("heart") in _LEGACY_HEART:

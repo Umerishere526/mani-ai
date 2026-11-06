@@ -26,3 +26,10 @@ means deciding whether the prompts or the decisions those tests hold are right, 
   2026-11-03).
 
 Related: [[latency-where-the-wait-goes-2026-11-05]].
+
+## Resolved for the unit tests, 2026-11-06
+
+In P2 muhammad chose to align them: each of the six (`test_converse.py` five, `test_composer.py` one) keeps the
+decision it protects and checks it against the current prompts; wording that earlier rewrites removed is dropped, and
+"acknowledge, open the window, give your insight, then ask" is now asserted absent (it was the formula every reply
+took). The five integration tests in `test_turn.py` are untouched and still fail as described above.

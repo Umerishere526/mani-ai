@@ -66,7 +66,7 @@ do $$
 declare
   c text;
 begin
-  foreach c in array array['understanding', 'rewind_snapshot', 'pending_follow_up', 'check_at_message_count',
+  foreach c in array array['understanding', 'rewind_snapshot', 'pending_follow_up', 'safety', 'check_at_message_count',
                            'memory_folded_at', 'message_count']
   loop
     if has_column_privilege('authenticated', 'public.threads', c, 'INSERT') then
@@ -150,6 +150,13 @@ select pg_temp.want('a user cannot write the work waiting after a reply',
 
 select pg_temp.want('the backend can store the work waiting after a reply',
   has_column_privilege('mani_service', 'public.threads', 'pending_follow_up', 'UPDATE'), true);
+
+-- Migration 033: a user who could write where the conversation stands on safety could close their own concern.
+select pg_temp.want('a user cannot settle their own safety concern',
+  has_column_privilege('authenticated', 'public.threads', 'safety', 'UPDATE'), false);
+
+select pg_temp.want('the backend can move the safety state',
+  has_column_privilege('mani_service', 'public.threads', 'safety', 'UPDATE'), true);
 
 -- Migration 023: the offer is made only on the turn right after Mani's check, so a user who
 -- could write when the check was made could open an offer for themselves.

@@ -22,11 +22,14 @@ CONFIRMED = frozenset({"known", "possible"})
 # How their message may answer the stage in force and move the walk on. Not knowing never moves it, and neither does
 # exploring what they added to a stage said back.
 MOVES = frozenset({"agreed", "answered", "corrected"})
-# What they added to a stage said back, explored before moving on: how many turns so far is kept on the stage's entry,
-# and after EXPLORE_TURNS the note asks Mani to tie it together and move on (the client meeting, 2026-11-03).
+# What they added to a stage, explored before moving on: how many turns so far is kept on the stage's entry, for the
+# trace (the client meeting, 2026-11-03). There is no cap on it (muhammad, 2026-11-06: "the goal is not to reduce the
+# number of questions, it is to make every question earn its place"): a stage stays while a part of it not yet explored
+# would help them, and the parts it has opened are kept as COVERED so none is asked again. Two turns with nothing new
+# still offer to step out (STALLS_TO_STEP_OUT).
 EXPLORE = "explore"
 EXPLORED = "explored"
-EXPLORE_TURNS = 2
+COVERED = "covered"
 SAID_LIMIT = 200
 # How Mani confirms a stage the person already answered, in its own words (muhammad's team lead, 2026-10-13).
 CONFIRM_ASK = (
@@ -296,6 +299,17 @@ def advance(
     return Walked(stored, following, reached, notes + reach_notes, unjudged=unjudged, first_gap=_asks_first(reach_notes))
 
 
+def covered(framework: Framework, entries: dict[str, dict], stage: str, opened: list[str] | None) -> dict[str, dict]:
+    """The entries with the parts of `stage` this reply opened added to what it has covered: only ids the stage lists
+    under `explore`, each once. A stage the walk has left is never touched."""
+    allowed = [e["id"] for e in ((framework.stages or {}).get(stage) or {}).get("explore") or []]
+    entry = entries.get(stage) or {}
+    new = [i for i in opened or [] if i in allowed and i not in (entry.get(COVERED) or [])]
+    if not new or entry.get("status") == "done":
+        return entries
+    return {**entries, stage: {**entry, COVERED: [*(entry.get(COVERED) or []), *new]}}
+
+
 # Turns on one stage with nothing new before Mani offers to step out of the questions (muhammad, 2026-10-27).
 STALLS_TO_STEP_OUT = 2
 # What their message did that is new: talking it through is never a stall, the stage simply waits for it.
@@ -507,8 +521,10 @@ def next_line(framework: Framework, phase: str) -> str:
     else:
         moved = f"the walk reaches {following}: {reach_line(following)}"
     return (
-        f"If you answer agreed, answered or corrected, {moved} If explore, the walk stays: acknowledge what they "
-        f"added and ask one open question (what or how, never yes or no) that explores it, without moving to the next stage yet. If not_yet, the walk "
+        f"If you answer agreed, answered or corrected, {moved} If explore, the walk stays: build on what they "
+        f"added, with an insight when they have earned one, and ask one open question (what or how, never yes or no) "
+        f"about a part of this stage not yet explored (stage_explore, stage_explored), never one already asked or "
+        f"answered, without moving to the next stage yet. If not_yet, the walk "
         f"stays: answer what they said as you would in the chat, talk about anything new they brought in, then come back toward this stage "
         f"from what they have said, in fresh words. Possibilities go in options only when options says so. "
         f"If stop, write one warm line asking what they would like to talk about."

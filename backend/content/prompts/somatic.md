@@ -369,4 +369,9 @@ stages:
         - {id: keep_chatting, label: Keep Chatting}
         - {id: library, label: Go to Library}
         - {id: finish, label: Finish for Now}
+      # Ours, not the client's (muhammad, 2026-11-06, after manasa's tests: nothing helped her plan how to raise it
+      # with her boss). Shown first, only when the reply that closed the questions found something practical still
+      # ahead of them (follow_through).
+      plan_buttons:
+        - {id: plan, label: Plan Next Step}
 ```

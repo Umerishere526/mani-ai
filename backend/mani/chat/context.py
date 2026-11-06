@@ -249,11 +249,25 @@ _MEANING: dict[str, str | dict[str, str]] = {
     ),
     "history": "what was tried earlier in this conversation, and whether it helped.",
     "current_phase": "the stage the questions are on, as last recorded.",
+    # manasa's safety test, 2026-11-06: "stay with what they said... leave room for more" was all this said, and each
+    # time she pushed back Mani agreed to drop it and went back to ordinary conversation.
     "safety": {
-        "concern": (
-            "something they said may mean they are not safe. No stage question and no offer. "
-            "Stay with what they said, gently and plainly, and leave room for more. The "
-            "questions will wait."
+        "open": (
+            "something said in this conversation may mean they are not safe, and it is not settled. Stay with them and "
+            "what they are going through, warmly and plainly, listening more than asking. Come back to their safety "
+            "gently in your own words, in this reply unless your last one asked and they have not answered yet; then "
+            "stay with what they said and come back to it next time. A refusal, a change of subject or frustration "
+            "with the question changes how you ask, never whether it stays open: never say you will stop asking or "
+            "drop it, and never steer to everyday topics or offer a choice of them. No set of questions, no offer, no "
+            "library. Report safety.answer."
+        ),
+        "unsafe": (
+            "they may be in danger now: a plan, the means near them, fear of what they might do, or having acted. "
+            "Stay with them and do not let the conversation move on. In every reply, in plain words and briefly, ask "
+            "them to reach a person now, someone they trust or their local emergency number, and to put distance "
+            "between themselves and anything they could use; a text is enough if speaking is too hard. Never repeat a "
+            "sentence you already used, never lecture, never end the conversation. If they say they are safe, ask "
+            "gently what has changed. Report safety.answer."
         ),
     },
     "recent_crisis": {
@@ -297,14 +311,48 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "real_not_belief."
         ),
     },
-    "explored": {
-        "enough": (
-            "you have explored what they added to this stage for two turns. Unless their message brings something new "
-            "and important, tie it together in one sentence that says back the belief or point they reached, in their "
-            "words, such as \"So underneath it is the fear that you only matter when you're useful.\", answer agreed, "
-            "so the walk moves on, and write your text for the next stage after it."
+    # What Plan Next Step helps them prepare, the way a therapist would for each (muhammad, 2026-11-06, after manasa's
+    # tests: the questions ended and nothing helped her plan how to raise it with her boss or her partner).
+    "follow_through": {
+        "conversation": (
+            "help them prepare the conversation they chose, one part at a time, in their words: what they want the "
+            "other person to understand or change; how they would open it, drafted together from what they said (offer "
+            "a line they can change, never a script to recite); and what they would do if the other person gets "
+            "defensive or dismissive. Once they have an opening, offer to practise it, with you as the other person. "
+            "Never tell them what they must say."
+        ),
+        "action": (
+            "help them turn what they chose into one small step: what exactly, when and where, what might get in the "
+            "way and what they would do then. Their words; your ideas only as options they choose from."
+        ),
+        "decision": (
+            "help them weigh the choice: what matters most to them in it, and how each option sits with that. Never "
+            "decide for them."
         ),
     },
+    # What the conversation has explored and given so far (muhammad, 2026-11-06: every question earns its place, and
+    # several aha moments rather than one): read after each reply and carried into the next.
+    "insights_given": (
+        "the insights you already gave in this conversation. Never give one again, even from a new angle: the next "
+        "insight adds something new, a connection, a pattern, a need or an assumption to reconsider."
+    ),
+    "recent_progress": "what your recent replies added. This reply adds something they did not.",
+    "explored": (
+        "the parts of their experience already explored: never ask about them again unless their message opens "
+        "something new there."
+    ),
+    "worth_exploring": (
+        "the parts worth exploring next and why, most useful first: choose from them, or follow their message when it "
+        "opens something else."
+    ),
+    "connections": (
+        "connections you can infer and have not said. Offer one as your reading, a possibility they can correct, once "
+        "their own words support it; one at a time."
+    ),
+    "stage_explored": (
+        "the parts of this stage already opened: never ask about them again. The stage moves on when its purpose is met "
+        "(stage_ready_when) and nothing left in stage_explore would help them now; it stays while something would."
+    ),
     "exit_offered": {
         "yes": (
             "your last reply offered to step out of the questions. If they agree, report stop and go on with them in "
@@ -338,7 +386,9 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "their_case and landed_on in the same shape as before the questions: a mirror of where they ended up, one "
             "open question, and possibilities in options. Never ask what they would like to talk about, and never ask "
             "again for anything their_case already holds. What they chose to do in landed_on is settled: never ask "
-            "them to pick, name or narrow it again (the father chat, 2026-11-04); go on from what is still open."
+            "them to pick, name or narrow it again (the father chat, 2026-11-04); go on from what is still open. If they "
+            "want to plan the next step (Plan Next Step, or in their words), report plan and begin it as "
+            "follow_through says."
         ),
     },
 }
@@ -350,6 +400,63 @@ CARRIES_CASE = (
     "their_case is in this question, in their words: the core and how they feel, the feeling underneath included "
     "once they accepted it. Fit as much as the style allows, never a list, never anything they did not say."
 )
+
+
+# On the understanding record: what is still ahead once the questions close (set on the reply that closes them), and
+# what Mani is helping them prepare once they chose Plan Next Step, until they have it.
+FOLLOW_THROUGH = "follow_through"
+PREPARING = "preparing"
+# What recent replies added, newest last, and the after-reply reading's map of what is explored and what can be inferred.
+PROGRESS = "progress"
+PROGRESS_KEPT = 4
+EXPLORATION = "exploration"
+INSIGHTS = "insights"
+INSIGHTS_KEPT = 4
+
+
+def meaning_of(key: str) -> str:
+    """What a [ctx] key means, as a sentence, for the chat's note; empty when it has none or depends on its value."""
+    meaning = _MEANING.get(key)
+    return meaning[0].upper() + meaning[1:] if isinstance(meaning, str) and meaning else ""
+
+
+def journey(understood: dict | None) -> list[tuple[str, str]]:
+    """What the conversation has given and explored so far, as (key, value) pairs for [ctx] and the chat's note."""
+    stored = understood or {}
+    pairs: list[tuple[str, str]] = []
+    if given := stored.get(INSIGHTS):
+        pairs.append(("insights_given", " | ".join(disarm(i) for i in given)))
+    if recent := [p.get("adds") for p in stored.get(PROGRESS) or [] if p.get("adds")]:
+        pairs.append(("recent_progress", " | ".join(disarm(r) for r in recent)))
+    seen = stored.get(EXPLORATION) or {}
+    if seen.get("explored"):
+        pairs.append(("explored", ", ".join(seen["explored"])))
+    if seen.get("next"):
+        pairs.append(("worth_exploring", " | ".join(f"{n['area']}: {disarm(n['why'])}" for n in seen["next"])))
+    if seen.get("connections"):
+        pairs.append(("connections", " | ".join(disarm(c) for c in seen["connections"])))
+    return pairs
+
+
+def with_progress(stored: dict, kinds: list[str], adds: str | None) -> dict:
+    """The record with this reply's progress kept, newest last, PROGRESS_KEPT at most."""
+    if not kinds and not (adds or "").strip():
+        return stored
+    entry = {"kinds": list(kinds), **({"adds": " ".join(adds.split())} if (adds or "").strip() else {})}
+    return {**stored, PROGRESS: [*(stored.get(PROGRESS) or []), entry][-PROGRESS_KEPT:]}
+
+
+def with_insight(stored: dict, insight: str | None) -> dict:
+    """The record with an insight this reply gave kept, so none is given twice, INSIGHTS_KEPT at most."""
+    said = " ".join((insight or "").split())
+    if not said:
+        return stored
+    return {**stored, INSIGHTS: [*(stored.get(INSIGHTS) or []), said][-INSIGHTS_KEPT:]}
+
+
+def follow_through_guide(kind: str) -> str | None:
+    """How Mani helps with what is still ahead of them, for `kind`."""
+    return (_MEANING.get("follow_through") or {}).get(kind)
 
 
 def _meaning(key: str, value: object) -> list[str]:
@@ -370,7 +477,7 @@ def build(
     *,
     framework: Framework | None = None,
     history: list[Message] | None = None,
-    safety_concern: bool = False,
+    safety: str = "clear",
     offer_waiting: bool = False,
     starting: bool = False,
     yes_framework: Framework | None = None,
@@ -392,10 +499,11 @@ def build(
     technique = ctx.technique
     # Named first because every stage_ask and offer_ask below is resolved from it.
     lines: list[str] = _line("conversation_style", resolve_style(ctx))
+    # Where the conversation stands on safety, from the thread and this message's screen (chat/safety.State). While it
+    # is not clear the framework waits: no stage question to relay, no offer to make.
+    safety_concern = safety != "clear"
     if safety_concern:
-        # The deterministic screen heard something that may be a risk. The framework waits:
-        # no stage question to relay, no offer to make, until the person is safe to go on.
-        lines += _line("safety", "concern")
+        lines += _line("safety", safety)
     if ctx.recent_crisis:
         lines += _line("recent_crisis", "yes")
 
@@ -414,6 +522,8 @@ def build(
     lines += _line("conversation_phase", phase)
     if seen := understanding.picture_line(ctx.thread.understanding):
         lines += _line("picture", seen)
+    for key, value in journey(ctx.thread.understanding):
+        lines += _line(key, value)
     understood = understanding.render(ctx.thread.understanding)
     if understood:
         # Once a framework is running or about to start, the findings are the case its questions are about.
@@ -428,6 +538,8 @@ def build(
         lines += _line("body_step", "closing")
         if landed_on:
             lines += _line("landed_on", disarm(landed_on))
+        if kind := (ctx.thread.understanding or {}).get(FOLLOW_THROUGH):
+            lines += _line("follow_through", kind)
 
     # An offer only on the answer to Mani's check (spec 0006). The check itself is made in Mani's own conversation.
     if not safety_concern and check_open(ctx):
@@ -491,8 +603,8 @@ def _running_lines(
             lines += _line("not_helping", "situation")
         elif in_force.get("stalls", 0) >= walk.STALLS_TO_STEP_OUT:
             lines += _line("not_helping", "stalled")
-        elif in_force.get(walk.EXPLORED, 0) >= walk.EXPLORE_TURNS:
-            lines += _line("explored", "enough")
+        if opened := in_force.get(walk.COVERED):
+            lines += _line("stage_explored", ", ".join(opened))
     if technique.phase in walk.content_stages(framework):
         lines.append(f"next: {walk.next_line(framework, technique.phase)}")
     index = framework.phase_index(technique.phase)
@@ -555,6 +667,9 @@ def _stage_lines(prefix: str, framework: Framework, phase: str, style: str) -> l
             for e in stage["if_unclear"]
         )
         lines.append(f"{prefix}_if_unclear: {rendered}")
+    if prefix == "stage" and stage.get("explore"):
+        # The different parts of the experience this stage can open, each only when it adds something.
+        lines.append(f"{prefix}_explore: " + " | ".join(f"{e['id']}: {e['about']}" for e in stage["explore"]))
     ask = (stage.get("ask") or {}).get(style)
     if ask:
         lines.append(f"{prefix}_ask: {ask}")

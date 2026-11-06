@@ -25,6 +25,7 @@ def snapshot_of(ctx: TurnContext) -> dict:
         "title": ctx.thread.title,
         "understanding": ctx.thread.understanding,
         "check_at_message_count": ctx.thread.check_at_message_count,
+        "safety": ctx.thread.safety,
         "technique": ctx.technique.model_dump(mode="json") if ctx.technique else None,
         "offered": ctx.techniques_offered,
     }
@@ -80,6 +81,11 @@ async def _restore(conn: asyncpg.Connection, user_id, thread_id, snapshot: dict)
         "update public.threads set understanding = $1::jsonb, check_at_message_count = $2, rewind_snapshot = null "
         "where id = $3 and user_id = $4",
         snapshot["understanding"], snapshot["check_at_message_count"], thread_id, user_id,
+    )
+    # A snapshot from before migration 033 has no safety; the state the turn found then was clear.
+    await conn.execute(
+        "update public.threads set safety = $1 where id = $2 and user_id = $3",
+        snapshot.get("safety") or "clear", thread_id, user_id,
     )
     if snapshot["technique"] is None:
         await conn.execute("delete from public.thread_technique_state where thread_id = $1", thread_id)

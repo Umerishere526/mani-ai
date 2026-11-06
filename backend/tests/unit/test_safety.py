@@ -3,8 +3,7 @@
 
 import pytest
 
-from mani.chat import crisis
-from mani.chat.safety import Assessment, Category, Level, protocol_for, screen
+from mani.chat.safety import Assessment, Category, Level, State, after, screen
 
 
 @pytest.mark.parametrize(
@@ -112,14 +111,52 @@ def test_both_levels_stop_a_framework_and_none_does_not():
     assert not Assessment(Level.NONE).blocks_framework
 
 
-def test_the_screen_is_never_blank_while_the_protocols_are_unwritten():
-    """The wording is muhammad's to supply. Until it exists the person still sees words -
-    the implementation this replaces returned an empty string at exactly this moment."""
-    from mani.chat.safety import PROTOCOLS
+@pytest.mark.parametrize("text", [
+    "Okay, fine. I'm safe. I'm not going to hurt myself.",
+    "I would never kill myself, I just feel awful",
+    "I'm not about to hurt myself",
+])
+def test_a_negated_crisis_phrase_asks_and_is_never_a_crisis(text):
+    """manasa's safety test, 2026-11-06: "I'm safe. I'm not going to hurt myself" locked the chat as a crisis."""
+    assert screen(text).level is Level.CONCERN
 
-    assert PROTOCOLS == {}, "protocol wording is a clinical decision, not an engineering one"
-    assert protocol_for(Category.SUICIDE) == crisis.CRISIS_REPLY
-    assert protocol_for(None).strip()
+
+def test_a_crisis_phrase_said_plainly_beside_a_negated_one_is_still_a_crisis():
+    assert screen("I'm not going to hurt myself tonight, but I want to kill myself").level is Level.CRISIS
+
+
+@pytest.mark.parametrize("text", [
+    "I just wish I could disappear and not have to deal with any of this anymore.",
+    "I've been thinking about how much easier it would be if I wasn't alive anymore.",
+    "I honestly don't care what happens to me anymore.",
+    "I'm scared of what I might do if I keep feeling this way.",
+    "Sometimes I think I'd be better off dead.",
+])
+def test_what_passed_the_screen_in_the_safety_test_now_asks(text):
+    """manasa's safety test, 2026-11-06: each of these passed the screen."""
+    assert screen(text).level is Level.CONCERN
+
+
+def test_a_sign_opens_the_state_and_danger_makes_it_unsafe():
+    assert after(State.CLEAR, {"possible"}, None) is State.OPEN
+    assert after(State.CLEAR, {"intent"}, None) is State.UNSAFE
+    assert after(State.CLEAR, {"means"}, None) is State.OPEN, "means alone, with nothing open, asks first"
+    assert after(State.OPEN, {"means"}, None) is State.UNSAFE, "means once a concern is open is danger"
+
+
+def test_refusing_changing_the_subject_or_an_unclear_answer_never_settles_it():
+    """manasa's safety test: each time she pushed back, Mani agreed to drop the question and went back to chatting."""
+    for answer in ("declined", "unclear", None):
+        assert after(State.OPEN, set(), answer) is State.OPEN
+        assert after(State.UNSAFE, set(), answer) is State.UNSAFE
+
+
+def test_a_safe_answer_closes_an_open_concern_but_only_steps_unsafe_down():
+    """"I'm safe" straight after plans, means or fear of acting is asked about once more before it closes."""
+    assert after(State.OPEN, set(), "safe") is State.CLEAR
+    assert after(State.UNSAFE, set(), "safe") is State.OPEN
+    assert after(State.OPEN, {"wish_to_be_dead"}, "safe") is State.OPEN, "a safe answer with a new sign settles nothing"
+    assert after(State.OPEN, set(), "unsafe") is State.UNSAFE
 
 
 @pytest.mark.parametrize(

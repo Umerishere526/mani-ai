@@ -44,9 +44,11 @@ the same change as the work.**
   applies to real traffic. `as_admin()` is the named exception. A turn's writes share one transaction, and no
   transaction is open while the model thinks (`chat/runner.py`).
 - **A chat turn** (`mani/chat/orchestrator.py`), in order:
-  1. The deterministic safety screen (`safety.py`) runs before anything else. An explicit statement locks
-     the thread with no model call. An indirect one (including passive ideation and "pills in my hand")
-     is a concern: it suspends frameworks and offers without locking.
+  1. Safety comes first. The thread's safety state (`threads.safety`: clear, open, unsafe) is raised by the free
+     phrase screen (`safety.py`: an explicit statement to unsafe, an indirect or negated one to open); while it is not
+     clear the turn is the safety moment. The model reads every message for safety before it writes
+     (`SafetyRead`, the first field of every reply), and `safety.after` moves the state. Nothing locks unless
+     `CRISIS_BLOCKS_CHAT` is on (off by default since 2026-11-06).
   2. Which framework fits, and whether one fits yet, is the model's call from the Framework Index. Code owns only when an offer may come (`context.may_check`; since the client meeting of 2026-11-03 the chat's reply that moves to the set is the offer itself, with no check before it, and `context.check_open` serves only checks stored before then) and the safety screen.
   3. `composer.py` builds the system prompt: `voice.md` and `conversation.md` for Mani's own conversation
      (`_converse`), `voice.md` and `framework.md` for a framework's stages, and `voice.md` and `moments.md` with
@@ -139,6 +141,69 @@ the same change as the work.**
 | GET | `/internal/cron/fold-summaries` | idle memory fold, bearer `CRON_SECRET`, no JWT |
 
 ## Decisions in force
+
+- **One home per rule, and no reply shape is a formula** (muhammad, 2026-11-06, P2). `voice.md`'s "Mirror, then
+  acknowledge" (mirror, acknowledge, question, and "Mirror in most replies") is "Showing you understand": only when it
+  helps, some replies are an acknowledgment alone, some start with an observation or a question; each style's example
+  is one natural reply, and the style table compares understanding and warmth, not mirror and acknowledge.
+  `framework.md` no longer acknowledges "before the next question" by habit. Merged to one home: questions and
+  asking for what is known (`voice.md`), the reply kinds (`conversation.md` Choosing the reply; "Choosing the next
+  question" is gone), examples about someone else (`voice.md`), safety (`moments.md` and the [ctx] lines; one line in
+  `conversation.md`). The five "conversational moves" are the areas a question can open, shortened. Frustration (one
+  rule, `voice.md`): stop the pattern, name what went wrong, move differently; the framework only when the note says
+  enough is understood, never as a way out of frustration before that (muhammad). Before the framework, help is one
+  small idea, then working it through together (the client, 2026-10-29; the `practical` kind follows it). Lolly's
+  "steps 4 and 5 before the offer" moved into code: attempts or pattern is the fourth group in
+  `converse.EXPLORED_BEFORE_MOVING`. The six unit tests left failing by earlier rewrites hold the same decisions against
+  the current wording (notes in each). The four chat prompts went from 80,665 to about 76,000 characters.
+
+- **Every question earns its place; Mani reasons before each reply and gives several aha moments** (muhammad,
+  2026-11-06, after manasa's tests, superseding the one-extra-turn cap of the same day: "the goal is not to reduce the
+  number of questions, it is to make every question earn its place"). Mani reasons in its own hidden reasoning before
+  each reply, chat and stages alike, on what it knows, understands, can infer and does not know, what would help most
+  and where the turn takes them (`conversation.md` Before every reply; `framework.md` How a turn goes), at the voice
+  row's medium effort. Every reply reports `progress` (discover, deepen, belief, connect, need, pattern, insight,
+  toward_goal, and what it adds); the record keeps the last four (`context.PROGRESS`), shown as recent_progress, and a
+  reply that adds nothing is counted ("adds nothing new"). The after-reply reading also returns `exploration`: the
+  areas explored (emotion, belief, behaviour, external, outcome, need, attempts, pattern, relationships, meaning), up to
+  three worth exploring next with why, and up to three connections Mani can infer and has not said; it runs on stage
+  turns too (`ReadAfter.picture=False`: there it brings only the map, never the picture, core or heart). Each stage
+  lists the parts it can open (`explore` in `abcde.md` and `thought_reframe.md`); the reply reports `explored_now`, kept
+  on the stage as `covered` and shown as stage_explored, and a stage stays while a part not yet opened would help, with
+  no cap (`walk.EXPLORE_TURNS` is gone; two turns with nothing new still offer to step out). Insights are tracked across
+  the chat and the questions (`context.INSIGHTS`), several per conversation, each new; never on the first reply (was
+  the first two: Lolly's point kept without a count). The chat's reply kinds are chosen, not a formula: open_ask,
+  window, insight, reflect, acknowledge, practical; no reply has to start with a mirror or end with a question. Moving
+  to a set of questions keeps the five-message floor and the confirmed core, and now also needs the emotion, the belief
+  or meaning, and the behaviour or need explored, from the map (`converse.still_to_explore`; with no map yet the
+  heart decides alone).
+- **Plan Next Step: help preparing what they chose, when something practical is ahead** (muhammad, 2026-11-06, after
+  manasa's tests: nothing helped her work out how to raise it with her boss or her partner). The picture keeps what
+  they asked for help with (`asked_for`). The reply that closes the questions reports `follow_through`: conversation,
+  action, decision or none. Anything but none puts Plan Next Step first among the closing choices (`somatic.md`
+  `plan_buttons`, ours, not the client's). Choosing it, tapped or typed (`body: plan`), stores `preparing` on the
+  record, and the chat after it helps them prepare the way a therapist would for its kind (`context` meanings
+  `follow_through`: for a conversation, what they want understood, an opening in their words, what if the other person
+  gets defensive, and an offer to practise it), with no check or offer meanwhile, until the reply sets `prepared`.
+
+- **Safety is a state the conversation holds, and nothing locks on a phrase** (muhammad, 2026-11-06, after manasa's
+  safety test: the concern was gone after one reply, Mani agreed to drop the question each time she pushed back, nine
+  of her ten messages passed the screen, and "I'm safe. I'm not going to hurt myself" locked the chat as a crisis).
+  `threads.safety` (migration 033) is clear, open or unsafe. The screen raises it before the model is asked; the
+  model's `SafetyRead` (signs from the C-SSRS screener's ladder plus `possible`, and while it is open an answer: safe,
+  unsafe, declined, unclear) is the first field of every reply, so the reply is written knowing it; `safety.after`
+  moves it. Danger signs (intent, plan, acted, cannot stay safe, harm to others, a medical emergency), or the means
+  once a concern is open, make it unsafe. A refusal, a new subject or an unclear answer keep it where it is; a safe
+  answer closes open and only steps unsafe down to open. While it is not clear the turn is the safety moment
+  (`moments.md`, the `safety: open|unsafe` lines in [ctx]): no framework, offer or library, never the daily limit, and
+  if the model fails the person gets `crisis.CRISIS_REPLY` (`runner` fallback). The first unsafe turn is recorded in
+  `admin.crisis_events` with the signs, never their words. A negated crisis phrase is a concern, never a crisis; her
+  missed phrases are in the screen. `CRISIS_BLOCKS_CHAT` now defaults to off; the lock remains for anyone who turns it
+  on. An edit that takes back the message restores the state (`rewind`). Still the client's: the approved safety
+  wording and resources, and whether anything alerts a person. The recent_crisis proxy in `threads._TURN_CONTEXT_SQL`
+  reads the last message time, which with no lock is the latest activity, not the crisis. Tests: `test_safety.py`,
+  `test_manasas_safety_test_keeps_safety_open_through_refusals_and_a_change_of_subject` and its neighbours in
+  `test_turn.py`; scenario group `reflective_tests_2026_11_06`.
 
 - **The body check-in is paused: chat, then the framework, then the closing choices** (muhammad, 2026-11-05: "chat ->
   framework (not somatic)", and at the end Keep Chatting, Go to Library and Finish for Now as they come today). `paused`
@@ -809,7 +874,8 @@ the same change as the work.**
   is remembered for seven days.
 - Also settled: OpenRouter only, asyncpg not PostgREST, the
   `public` and `admin` split, the `mani_service` role, three security definer write functions, the
-  deterministic safety screen as the only thing that locks a thread, in process routing, no streaming.
+  deterministic safety screen as the only thing that locks a thread (superseded 2026-11-06: nothing locks by default,
+  see the safety state entry), in process routing, no streaming.
   Because: one provider was ever used (2026-09-14); a turn's writes must succeed or fail together, which
   PostgREST cannot do (2026-09-15); anything PostgREST exposes is reachable with the anon key (2026-09-15);
   a backend acting as `authenticated` let users forge Mani's replies (2026-09-16); the definer functions write

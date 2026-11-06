@@ -310,9 +310,10 @@ def test_the_old_layers_are_gone_and_switched_off_on_seed():
 
 def test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_beside_it():
     """Spec 0005, AC-9: a framework's checklist steered the questions toward its own needs, and the
-    bans kept the feeling they named out of them (live, 2026-10-13: the frustrated chat)."""
+    bans kept the feeling they named out of them (live, 2026-10-13: the frustrated chat). Aligned 2026-11-06 (muhammad,
+    P2): the one rule is that every reply adds something new and a question earns its place."""
     sent = _sent("voice", "conversation", "framework", "moments")
-    assert "Each one moves the conversation forward" in sent
+    assert "**Every reply adds something new.**" in sent and "A question earns its place" in sent
     for cut in ("Build every question from", "Never hand their own words or feelings back",
                 "Am I saying back their own words or feelings"):
         assert cut not in sent

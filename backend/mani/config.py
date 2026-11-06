@@ -173,8 +173,9 @@ class Settings(BaseSettings):
     # every request - there is no host where an unset secret should mean "open".
     cron_secret: str = Field(default="", repr=False)
 
-    # When false the crisis panel still appears but the user can keep chatting.
-    crisis_blocks_chat: bool = True
+    # When false the crisis panel still appears but the user can keep chatting. Off by default since 2026-11-06
+    # (muhammad): a lock cut off the one channel someone at risk was using, and in manasa's test it fired on "I'm safe".
+    crisis_blocks_chat: bool = False
 
     # Paid replies one person may get in 24 hours. 0 turns it off. muhammad's number is 300,
     # off for now so testing is not capped; set it before real traffic. Only turns that call

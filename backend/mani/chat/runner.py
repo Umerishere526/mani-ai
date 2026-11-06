@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
@@ -12,11 +13,13 @@ import asyncpg
 
 from mani.auth.jwt import Claims
 from mani.chat import orchestrator, rewind
-from mani.db import pool
+from mani.db import llm_calls, pool
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
 from mani.one_at_a_time import one_at_a_time
 from mani.prompts import cache
+
+logger = logging.getLogger(__name__)
 
 Steps = Callable[[asyncpg.Connection, "Model"], Awaitable[orchestrator.Turn]]
 
@@ -29,6 +32,8 @@ class _Request:
     schema: type
     kwargs: dict[str, Any]
     version: tuple
+    # What goes out if the model fails, on a turn that must never go unanswered (a safety turn); None elsewhere.
+    fallback: str | None = None
 
 
 class _ModelNeeded(Exception):
@@ -50,10 +55,10 @@ class Model:
     call: client.Call | None = None
     _answered: bool = field(default=False, init=False)
 
-    async def __call__(self, messages, schema, **kwargs) -> client.Call:
+    async def __call__(self, messages, schema, *, fallback: str | None = None, **kwargs) -> client.Call:
         version = await thread_version(self.conn, self.thread_id)
         if self.call is None:
-            raise _ModelNeeded(_Request(messages, schema, kwargs, version))
+            raise _ModelNeeded(_Request(messages, schema, kwargs, version, fallback))
         if self._answered:
             raise RuntimeError("a turn asked the model twice")
         self._answered = True
@@ -97,7 +102,18 @@ async def run(claims: Claims, thread_id: uuid.UUID | str, steps: Steps) -> orche
             return await steps(conn, Model(conn, thread_id))
     except _ModelNeeded as needed:
         request = needed.request
-    call = await client.complete(request.messages, request.schema, **request.kwargs)
+    try:
+        call = await client.complete(request.messages, request.schema, **request.kwargs)
+    except ServiceError:
+        if request.fallback is None:
+            raise
+        # Someone who may not be safe gets words rather than an error: the write stores them as Mani's reply, read
+        # as a reply that reports nothing, so the safety state stays where it was.
+        logger.exception("model failed on a safety turn for thread %s; sending the fallback", thread_id)
+        call = client.Call(
+            value=request.schema.model_validate({"text": request.fallback}), model="fallback",
+            usage=llm_calls.Usage(), latency_ms=0, call_id=None,
+        )
     async with pool.as_user(claims) as conn:
         return await steps(conn, Model(conn, thread_id, request=request, call=call))
 

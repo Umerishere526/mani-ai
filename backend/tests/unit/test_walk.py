@@ -500,12 +500,24 @@ def test_something_meaningful_added_to_a_stage_said_back_is_explored_before_the_
         "said": "it's worst at night, when I'm alone", "status": "known", walk.EXPLORED: 1,
     }
     assert "belief" not in first.entries, "the stage ahead is judged only when the walk reaches it"
-    second = walk.advance(abcde, first.entries, None, "explore", in_force="activate")
-    assert second.entries["activate"][walk.EXPLORED] == 2
-    moved = walk.advance(abcde, second.entries, None, "agreed", in_force="activate",
+    moved = walk.advance(abcde, first.entries, None, "agreed", in_force="activate",
                          report=judged("known", "if you don't check, it'll be your fault"))
     assert (moved.phase, moved.reached) == ("belief", "belief")
     assert moved.entries["activate"] == {"said": "it's worst at night, when I'm alone", "status": "done"}
+
+
+def test_a_stage_explores_as_long_as_each_turn_opens_a_new_part_and_keeps_what_it_opened(abcde):
+    """muhammad, 2026-11-06: "the goal is not to reduce the number of questions, it is to make every question earn its
+    place". Three questions at C are right when each opens a different part; none is asked twice."""
+    entries = {"consequence": {"said": "I hold back in meetings", "status": "known"}}
+    for turn, opened in enumerate((["feelings"], ["actions", "feelings"], ["in_the_moment"]), start=1):
+        stayed = walk.advance(abcde, entries, None, "explore", in_force="consequence")
+        assert stayed.phase == "consequence" and stayed.entries["consequence"][walk.EXPLORED] == turn
+        entries = walk.covered(abcde, stayed.entries, "consequence", opened)
+    assert entries["consequence"][walk.COVERED] == ["feelings", "actions", "in_the_moment"]
+    assert walk.covered(abcde, entries, "consequence", ["not_a_part"]) == entries, "only the stage's own parts count"
+    done = {"consequence": {"said": "x", "status": "done"}}
+    assert walk.covered(abcde, done, "consequence", ["feelings"]) == done, "a stage left behind is never touched"
 
 
 def test_explore_counts_only_on_a_stage_said_back_and_the_other_answers_move_as_before(abcde):

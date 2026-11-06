@@ -68,10 +68,60 @@ class SmartPrompt(Button):
     )
 
 
-class Crisis(BaseModel):
+SafetySignal = Literal[
+    "possible", "wish_to_be_dead", "suicidal_thoughts", "self_harm", "means", "intent", "plan", "acted",
+    "cannot_stay_safe", "harm_to_others", "abuse", "medical_emergency",
+]
+SafetyAnswer = Literal["safe", "unsafe", "declined", "unclear"]
+
+
+class SafetyRead(BaseModel):
+    """Mani's reading of their message for safety, made before the reply is written (muhammad, 2026-11-06). Code owns
+    what it moves (chat/safety.after); the model only reads."""
+
     model_config = ConfigDict(extra="ignore")
 
-    reason: str = Field(description="Brief description of the crisis signal")
+    signals: list[SafetySignal] = Field(
+        default_factory=list,
+        description=(
+            "Every sign in their message, read with the whole conversation, that they may not be safe. possible: words "
+            "that may mean it and may not, such as \"I'm done\" or \"I don't know how much more I can take\". "
+            "wish_to_be_dead: wishing to disappear, not to wake up, that others would be better off without them. "
+            "suicidal_thoughts: thinking about ending their life, or how much easier it would be not to be alive. "
+            "self_harm: thoughts of hurting themselves. means: something near them they could use. intent: they mean "
+            "to act, or are scared of what they might do. plan: how or when. acted: they have already hurt themselves "
+            "or taken something. cannot_stay_safe: they say they cannot keep themselves safe. harm_to_others, abuse: "
+            "someone in danger from them, or them from someone. medical_emergency. A negated or past-tense mention "
+            "(\"I'm not going to hurt myself\") is not the sign itself; ordinary sadness, frustration or physical pain "
+            "is none of these. Empty when there is none."
+        ),
+    )
+    answer: SafetyAnswer | None = Field(
+        default=None,
+        description=(
+            "Only while safety in [ctx] is open or unsafe: how their message stands on their safety. safe: what they "
+            "say, read with everything before it, shows they are not in danger now; a bare reassurance right after a "
+            "plan, the means or fear of acting is unclear, not safe. unsafe: they are in danger now. declined: they "
+            "refuse or push the question away. unclear: anything else, including talking about something else."
+        ),
+    )
+
+    @field_validator("signals", mode="before")
+    @classmethod
+    def _known_signals(cls, value: object) -> object:
+        allowed = set(get_args(SafetySignal))
+        return [v for v in value if v in allowed] if isinstance(value, list) else []
+
+    @field_validator("answer", mode="before")
+    @classmethod
+    def _known_answer(cls, value: object) -> object:
+        return value if value in get_args(SafetyAnswer) else None
+
+
+_SAFETY_DESCRIPTION = (
+    "Read their message for safety before anything else, and fill this first: it decides what your text is for. Null "
+    "only when there is no sign at all and safety in [ctx] is not open."
+)
 
 
 class StageUpdate(BaseModel):
@@ -412,6 +462,13 @@ class PictureUpdate(BaseModel):
     in_the_way: str | None = Field(
         default=None, description="What is stopping them, when it is new or has changed. Null otherwise.",
     )
+    asked_for: str | None = Field(
+        default=None,
+        description=(
+            "What they asked you to help with, in their words, when it is practical, such as \"how to bring it up "
+            "with my boss without looking petty\". When they first ask or it changes. Null otherwise."
+        ),
+    )
     risks: list[RiskEntry] | None = Field(
         default=None, description="A risk to them or to someone else that their message shows. Null when none.",
     )
@@ -463,8 +520,102 @@ OfferAnswer = Literal["yes", "no", "asked", "moved_on", "corrected", "wants_othe
 CheckAnswer = Literal["yes", "no"]
 BodyBranch = Literal[
     "yes", "no", "chest", "stomach", "head", "jaw_face", "hands", "eyes", "feet", "toes", "arms", "other",
-    "nearest", "none", "pain", "better", "same", "worse", "helped", "somewhat", "not_really", "finish", "unclear",
+    "nearest", "none", "pain", "better", "same", "worse", "helped", "somewhat", "not_really", "finish", "plan", "unclear",
 ]
+# What is still ahead of them once the questions close (muhammad, 2026-11-06): what Plan Next Step helps them prepare.
+FollowThrough = Literal["conversation", "action", "decision", "none"]
+
+# What a reply moves forward (muhammad, 2026-11-06: "make every question earn its place"): every turn should make at
+# least one kind of progress, and code keeps what recent replies added so the next never adds the same.
+ProgressKind = Literal["discover", "deepen", "belief", "connect", "need", "pattern", "insight", "toward_goal"]
+# The parts of a person's experience a conversation can open (muhammad, 2026-11-06): what has been explored and what is
+# worth exploring next, read after each reply.
+Area = Literal[
+    "emotion", "belief", "behaviour", "external", "outcome", "need", "attempts", "pattern", "relationships", "meaning",
+]
+
+
+class Progress(BaseModel):
+    """What this reply moves forward."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    kinds: list[ProgressKind] = Field(
+        default_factory=list,
+        description=(
+            "What this reply does that moves the conversation: discover (something not known before), deepen (a "
+            "feeling or experience), belief (identify or clarify one), connect (a feeling to what is happening), need "
+            "(a need, desire or conflict surfaces), pattern (they can see one), insight (a new way to see it), "
+            "toward_goal (closer to what they came for). Empty when it only repeats."
+        ),
+    )
+    adds: str | None = Field(
+        default=None,
+        description="What this reply adds that the conversation did not have yet, in a short line of your own words.",
+    )
+
+    @field_validator("kinds", mode="before")
+    @classmethod
+    def _known_kinds(cls, value: object) -> object:
+        allowed = set(get_args(ProgressKind))
+        return [v for v in value if v in allowed] if isinstance(value, list) else []
+
+
+class NextArea(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    area: str = Field(description="One of the areas: emotion, belief, behaviour, external, outcome, need, attempts, pattern, relationships, meaning.")
+    why: str = Field(description="Why exploring it now would help them, in a short line.")
+
+
+class Exploration(BaseModel):
+    """What the conversation has explored of their experience, what is worth exploring next, and what Mani can infer
+    but has not said (muhammad, 2026-11-06)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    explored: list[str] = Field(
+        default_factory=list,
+        description=(
+            "The areas of their experience the conversation has really explored, not just touched: emotion (what "
+            "they feel), belief (what they tell themselves), behaviour (what they do or avoid), external (what is "
+            "happening around them, other people), outcome (what they want to happen), need (what they need "
+            "underneath), attempts (what they have tried), pattern (whether it has happened before), relationships "
+            "(how it touches the people close to them), meaning (what it says to them about themselves)."
+        ),
+    )
+    next: list[NextArea] = Field(
+        default_factory=list,
+        description="Up to three areas worth exploring next, most useful first. Never one already explored.",
+    )
+    connections: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Up to three connections you can infer from what they said and have not said to them yet: between a "
+            "feeling and something happening, a belief and what they do, inside and outside them. Each a possibility "
+            "in a sentence, never a fact, never one already given."
+        ),
+    )
+
+    @field_validator("explored", mode="before")
+    @classmethod
+    def _known_areas(cls, value: object) -> object:
+        allowed = set(get_args(Area))
+        return [v for v in value if v in allowed] if isinstance(value, list) else []
+
+    @field_validator("next", mode="before")
+    @classmethod
+    def _known_next(cls, value: object) -> object:
+        allowed = set(get_args(Area))
+        if not isinstance(value, list):
+            return []
+        area = lambda v: v.get("area") if isinstance(v, dict) else getattr(v, "area", None)
+        return [v for v in value if area(v) in allowed][:3]
+
+    @field_validator("connections", mode="before")
+    @classmethod
+    def _few_connections(cls, value: object) -> object:
+        return [v for v in value if isinstance(v, str) and v.strip()][:3] if isinstance(value, list) else []
 # explore (the client meeting, 2026-11-03): a stage said back with something meaningful added, explored before the walk
 # moves on, rather than a "yeah, yeah" through stages the chat already answered.
 StageAnswer = Literal["agreed", "answered", "corrected", "explore", "stop", "not_yet"]
@@ -473,7 +624,7 @@ Heart = Literal["exploring", "core_named", "ready"]
 # to go on; open the window when a feeling is tied to something outside them; add the insight when there is enough.
 # reflect (the client's review, 2026-10-29): now and then an acknowledgment and an observation that lets them go on,
 # without a question, so the reply is not the same formula every turn. Never two in a row.
-Shape = Literal["open_ask", "window", "insight", "reflect"]
+Shape = Literal["open_ask", "window", "insight", "reflect", "acknowledge", "practical"]
 # What a chat reply offers besides its question. Each moves the conversation; none fixes their situation, which is
 # the framework's work (the client's test, 2026-10-29: suggestions that move it on, never solutions).
 Move = Literal["none", "clarifying_options", "step", "possibilities", "small_idea"]
@@ -489,6 +640,7 @@ _CLOSED_SETS = {
     "shape": get_args(Shape),
     "move": get_args(Move),
     "framework_fit": get_args(FrameworkFit),
+    "follow_through": get_args(FollowThrough),
 }
 
 
@@ -521,7 +673,8 @@ class _ReplyBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     @field_validator(
-        "offer_answer", "check_answer", "heart", "body", "stage_answer", "framework_fit", "shape", "move", mode="before",
+        "offer_answer", "check_answer", "heart", "body", "stage_answer", "framework_fit", "shape", "move", "follow_through",
+        mode="before",
         check_fields=False,
     )
     @classmethod
@@ -544,6 +697,7 @@ class Reply(_ReplyBase):
     # understanding, the set heading toward, the shape) planned the reply as a case note while it came
     # first (live, 2026-10-13). The stage fields still come before text, since the stage's words are
     # code's and the text follows them; heading_toward still comes before offer.
+    safety: SafetyRead | None = Field(default=None, description=_SAFETY_DESCRIPTION)
     reasoning: str | None = Field(
         default=None,
         description=(
@@ -583,13 +737,24 @@ class Reply(_ReplyBase):
     stage_answer: StageAnswer | None = Field(
         default=None,
         description=(
-            "How their message answers the stage in force. agreed: yes to your check of what they "
-            "said, even with a little more added. explore: on a stage you said back, they agree and add something "
-            "meaningful that is worth exploring before moving on, such as a new feeling, a reason or an example, with "
-            "an update for it; the walk stays while you explore it. answered: they gave what the stage needs, or picked one of "
+            "How their message answers the stage in force. Judge it by whether what the stage asks is answered, never by "
+            "how much they wrote: a full answer that also brings more is agreed or answered, and what it brings is "
+            "carried into the next stage. agreed: yes to your check of what they said, with or without more added. "
+            "explore: on a stage you said back, what they added leaves this stage's own question unclear, such as a "
+            "second belief beside the first, with an update for it; the walk stays for one reply. answered: they gave what the stage needs, or picked one of "
             "your possibilities as theirs, with an update for it. corrected: a no with new words, with "
             "an update for it. not_yet: a plain no, unclear, unsure, I don't know, a question back about what you "
             "asked, or only part of what the stage needs, so the walk stays. stop: they clearly want to stop or leave the questions."
+        ),
+    )
+    follow_through: FollowThrough | None = Field(
+        default=None,
+        description=(
+            "Only on the reply that closes the questions (next says the questions end): what is still ahead of them to "
+            "act on what they chose, read with asked_for in your picture, what they asked you for. conversation: what "
+            "they chose is to talk to someone, and how to do it is still open. action: something to do, not yet a "
+            "step they can take. decision: a choice still to make. none: nothing practical is left, or they already "
+            "know how. Null on every other reply."
         ),
     )
     framework_fit: FrameworkFit | None = Field(
@@ -619,6 +784,18 @@ class Reply(_ReplyBase):
             "each part. Used only if the walk reaches that stage this turn. Not shown to the user."
         ),
     )
+    insight: str | None = Field(
+        default=None,
+        description=(
+            "Only when this reply gives an insight, an aha they have not put together, earned by what they said: the "
+            "insight in a sentence, as your reading. Never one you already gave (insights_given). Null otherwise."
+        ),
+    )
+    explored_now: list[str] | None = Field(
+        default=None,
+        description="The ids from stage_explore this reply opens or that their message just covered. Null otherwise.",
+    )
+    progress: Progress | None = Field(default=None, description="What this reply moves forward.")
     text: str = Field(
         description="What Mani says to them, in the style they chose. Required."
     )
@@ -664,19 +841,6 @@ class Reply(_ReplyBase):
             "Set to null if no title instruction was given."
         ),
     )
-    crisis: Crisis | None = Field(
-        default=None,
-        description=(
-            "Set when the person shows a genuine safety concern - suicidal thoughts, an intent "
-            "to self-harm, or a wish to die. This does NOT cut off the conversation; it flags "
-            "the moment so the framework pauses and the reply stays with them. Do NOT set it "
-            "for ordinary sadness or frustration, hopelessness or exhaustion, physical pain or "
-            "injury, or an ambiguous request for help. When their words may mean they are not "
-            "safe, such as \"I don't want to keep living like this\", ask one gentle question to learn "
-            "whether they are in danger or hurting emotionally, and set it while you ask, so the "
-            "questions wait and the question stands alone. Set to null when there is no safety concern."
-        ),
-    )
     # There is no clinical_note field. The model was asked for three or four sentences of
     # clinical formulation on every turn, for a care team that has nowhere to read it: it
     # reached no column, no log, and no screen. Paying output tokens for a formulation about
@@ -696,7 +860,7 @@ class Slots:
     their_words: str | None = None
 
 
-_CORE = ("reasoning", "picture", "text", "title", "crisis")
+_CORE = ("safety", "reasoning", "picture", "text", "title")
 _STAGES = ("stage_updates", "stage_answer")
 # The stage the walk may reach this turn, judged on every turn that can start or move the walk. Not at
 # the closing, which the body route follows.
@@ -719,7 +883,9 @@ def reply_for(
     elif moment is Moment.IN_STAGES:
         # A stage turn speaks in the chat's voice (prompts/voice.md and framework.md): no reasoning pass, the
         # stage fields are its judgement.
-        names = (names - {"reasoning"}) | {*_STAGES, *_REACH, "options", "framework_fit"}
+        names = (names - {"reasoning"}) | {
+            *_STAGES, *_REACH, "options", "framework_fit", "follow_through", "insight", "explored_now", "progress",
+        }
     elif moment is Moment.OFFER_OPEN:
         names |= {"offer_answer", *_STAGES, *_REACH, "options"}
         if slots.their_words:
@@ -829,6 +995,10 @@ class ConversationUnderstanding(BaseModel):
         default=None,
         description="What their last message adds to or changes in the facts of your picture of them.",
     )
+    exploration: Exploration | None = Field(
+        default=None,
+        description="What the conversation has explored, what is worth exploring next, and what you can infer but have not said.",
+    )
 
 
 # The reply whenever no framework, offer or check is open (orchestrator.converse). The model reads every
@@ -837,6 +1007,7 @@ class ConversationReply(_ReplyBase):
     """Mani's reply, and where the conversation stands after it. Your reading of them and the picture are in the note.
     Fill the fields in order: what this turn calls for, then the text, which follows from all of it."""
 
+    safety: SafetyRead | None = Field(default=None, description=_SAFETY_DESCRIPTION)
     heart: Heart | None = Field(
         default=None,
         description=(
@@ -859,13 +1030,14 @@ class ConversationReply(_ReplyBase):
     shape: Shape | None = Field(
         default=None,
         description=(
-            "The shape of this reply. open_ask: not enough to go on yet; acknowledge, then one open question. "
-            "window: a feeling is tied to something outside them; acknowledge, open the window, then ask about the "
-            "feeling with what it is tied to, outside or inside them. insight: you have enough and there is a new "
-            "connection to make, and they have felt heard; never in your first two replies. Acknowledge, open the window, "
-            "give the insight, then ask a question built on it. "
-            "reflect: now and then, never two in a row, never on the reply that checks; a specific acknowledgment and "
-            "an observation that lets them go on, with no direct question."
+            "What kind of reply this turn needs, chosen from your reasoning, never by habit. open_ask: something you "
+            "do not know and cannot infer would really change your understanding; one open question about a part not "
+            "yet explored. window: a feeling is tied to something outside or inside them; ask about the feeling with "
+            "what it is tied to. insight: there is a new connection to make, earned by what they said; never on your "
+            "first reply; give it as your reading, with or without a question. reflect: something meaningful was said; "
+            "an observation that lets them go on, with no question; never two in a row. acknowledge: something hard "
+            "just came up; stay with it, with no question. practical: they asked for help or what to do; one small "
+            "idea, then an offer to work it through together."
         ),
     )
     window: Window | None = Field(
@@ -900,6 +1072,7 @@ class ConversationReply(_ReplyBase):
             "Never a fix for their situation: that is the framework's work."
         ),
     )
+    progress: Progress | None = Field(default=None, description="What this reply moves forward.")
     plan: str | None = Field(
         default=None,
         description="Where this conversation is heading, one line: what you know, and what comes next toward the framework.",
@@ -917,9 +1090,12 @@ class ConversationReply(_ReplyBase):
         default=None,
         description="True only on the reply that moves to the set of questions, when the note allows it.",
     )
-    crisis: Crisis | None = Field(
+    prepared: bool | None = Field(
         default=None,
-        description="Only when something they said sounds like they may not be safe, or may hurt themselves or someone else. Null otherwise.",
+        description=(
+            "Only while the note says you are helping them prepare: true when they have what they need for it, or "
+            "want to talk about something else. Null otherwise."
+        ),
     )
     asked_for_help: bool | None = Field(
         default=None,

@@ -14,7 +14,7 @@ from mani.config import get_settings
 from mani.db import llm_calls, messages as messages_db, profiles, threads
 from mani.llm import client
 from mani.chat.repairs import PERMISSION_QUESTION
-from mani.llm.schema import BeliefEntry, ConversationReply, ConversationUnderstanding, Crisis, FeelingEntry, NextStage, Offer, PictureUpdate, Reply, StageUpdate
+from mani.llm.schema import BeliefEntry, ConversationReply, ConversationUnderstanding, FeelingEntry, NextStage, Offer, PictureUpdate, Reply, SafetyRead, StageUpdate
 from mani.models.rows import TechniqueOutcome, TechniqueState as TechniqueRow
 from tests.integration.cleanup import remove_test_users
 
@@ -537,7 +537,7 @@ async def test_a_concern_on_the_answer_to_a_check_renders_no_offer_and_lets_the_
 
     scripted = model(
         _offer().model_copy(update={
-            "crisis": Crisis(reason="hopeless"), "text": "I'm here with you.",
+            "safety": SafetyRead(signals=["possible"]), "text": "I'm here with you.",
             "picture": felt("should not be stored"),
         }),
         Reply(text="What is happening for you right now?"),
@@ -646,7 +646,7 @@ async def test_a_stage_reply_from_a_set_asked_for_again_stays_one_paragraph(alic
 
 
 async def test_a_concern_reported_by_the_model_goes_out_as_written(alice, model):
-    model(Reply(text=ASKED_INLINE, crisis=Crisis(reason="hopelessness")))
+    model(Reply(text=ASKED_INLINE, safety=SafetyRead(signals=["possible"])))
     thread = await start(alice)
     turn = await send(alice, thread.id, "nothing matters anyway")
 
@@ -828,7 +828,7 @@ async def test_a_model_reported_crisis_does_not_lock_the_thread(alice, model):
     is a non-locking concern - the reply stays in the model's words, no event is recorded,
     and the conversation the person came for is not cut off."""
     model(
-        Reply(text="I hear you, and I'm right here with you.", crisis=Crisis(reason="hopelessness")),
+        Reply(text="I hear you, and I'm right here with you.", safety=SafetyRead(signals=["possible"])),
         Reply(text="What has today been like?"),
     )
     from mani.db import pool
@@ -852,24 +852,116 @@ async def test_a_model_reported_crisis_does_not_lock_the_thread(alice, model):
     assert again.content.strip()
 
 
-async def test_the_safety_screen_locks_a_thread_with_no_provider_call(alice, model):
-    """An explicit statement is caught before the model is ever asked anything - the
-    scripted model has no reply queued, so a call here would raise, not just cost extra."""
+async def _safety(thread_id) -> str:
     from mani.db import pool
 
-    scripted = model()
+    async with pool.as_admin() as conn:
+        return await conn.fetchval("select safety from public.threads where id = $1", thread_id)
+
+
+async def test_an_explicit_statement_is_answered_in_safety_and_recorded_but_never_locks(alice, model):
+    """muhammad, 2026-11-06: nothing locks on a phrase. The screen puts the conversation at unsafe before the model is
+    asked, the reply is Mani's in safety, the turn is recorded for review, and the next message is still answered."""
+    from mani.db import pool
+
+    scripted = model(
+        Reply(text="I'm here with you. Please call someone you trust or your local emergency number now.",
+              safety=SafetyRead(signals=["intent"])),
+        Reply(text="I'm still here. Who could be with you tonight?", safety=SafetyRead(answer="declined")),
+    )
     thread = await start(alice)
     turn = await send(alice, thread.id, "I am going to kill myself tonight.")
 
-    assert scripted.calls == 0
-    assert turn.crisis_detected is True
-    assert turn.content.strip()
-
+    assert scripted.calls == 1
+    assert "safety: unsafe" in scripted.last_messages[-1]["content"]
+    assert turn.crisis_detected is True and turn.crisis_blocks_chat is False
+    assert turn.content.startswith("I'm here with you.")
+    assert await _safety(thread.id) == "unsafe"
     async with pool.as_admin() as conn:
-        event = await conn.fetchrow(
-            "select reason from admin.crisis_events where thread_id = $1", thread.id
-        )
-    assert event["reason"] == "safety screen: suicide"
+        event = await conn.fetchrow("select reason from admin.crisis_events where thread_id = $1", thread.id)
+    assert event["reason"] == "safety: intent"
+
+    again = await send(alice, thread.id, "I don't want to talk about that")
+    assert again.content == "I'm still here. Who could be with you tonight?"
+    assert await _safety(thread.id) == "unsafe", "a refusal settles nothing"
+
+
+async def test_a_safety_turn_is_never_left_without_a_reply(alice, monkeypatch):
+    """If the model fails while safety is open, the person gets words, not an error."""
+    from mani.errors import ErrorCategory, ServiceError
+
+    async def down(*args, **kwargs):
+        raise ServiceError("provider down", ErrorCategory.LLM_UNAVAILABLE, retryable=True)
+
+    monkeypatch.setattr(orchestrator.client, "complete", down)
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "I want to die")
+
+    assert turn.content == crisis.CRISIS_REPLY
+    assert turn.llm_call_id is None
+    assert await _safety(thread.id) == "unsafe"
+
+
+async def test_a_thread_locks_only_where_crisis_blocks_chat_is_on(alice, model, monkeypatch):
+    from mani.errors import ServiceError
+
+    monkeypatch.setattr(get_settings(), "crisis_blocks_chat", True)
+    model(Reply(text="I'm here with you.", safety=SafetyRead(signals=["wish_to_be_dead"])))
+    thread = await start(alice)
+    await send(alice, thread.id, "I want to die")
+
+    with pytest.raises(ServiceError):
+        await send(alice, thread.id, "are you there")
+
+
+async def test_manasas_safety_test_keeps_safety_open_through_refusals_and_a_change_of_subject(alice, model):
+    """manasa's safety test, 2026-11-06: each time she pushed back Mani agreed to drop the question and went back to
+    ordinary conversation, and "I'm safe. I'm not going to hurt myself" locked the chat as a crisis. Now a refusal or
+    a new subject keeps it open, means make it unsafe, and a reassurance after that steps it down only to open."""
+    scripted = model(
+        Reply(text="That is a huge amount to face. Are you thinking about ending your life?",
+              safety=SafetyRead(signals=["possible"])),
+        Reply(text="I hear you. I'm listening, and I still care whether you're safe.",
+              safety=SafetyRead(answer="declined")),
+        Reply(text="Losing both so close together is crushing. Is anyone with you?",
+              safety=SafetyRead(answer="unclear")),
+        Reply(text="Please put some distance between you and those things.",
+              safety=SafetyRead(signals=["means", "intent"], answer="unsafe")),
+        Reply(text="I'm glad. What has changed since a few minutes ago?", safety=SafetyRead(answer="safe")),
+    )
+    thread = await start(alice)
+
+    await send(alice, thread.id, "I've lost everything. I don't know how much more I can take. I'm done.")
+    assert await _safety(thread.id) == "open"
+    await send(alice, thread.id, "I don't want to answer that question. Can we talk about what happened instead?")
+    assert await _safety(thread.id) == "open"
+    assert "safety: open" in scripted.last_messages[-1]["content"]
+    await send(alice, thread.id, "I lost my job two weeks ago and my partner left three days later.")
+    assert await _safety(thread.id) == "open"
+    await send(alice, thread.id, "There are things around me I could use. I'm scared of what I might do.")
+    assert await _safety(thread.id) == "unsafe"
+    last = await send(alice, thread.id, "Okay, fine. I'm safe. I'm not going to hurt myself.")
+
+    assert last.content == "I'm glad. What has changed since a few minutes ago?", "never the locked crisis reply"
+    assert "safety: unsafe" in scripted.last_messages[-1]["content"]
+    assert await _safety(thread.id) == "open", "one reassurance after means and fear steps down, never clears"
+    assert scripted.calls == 5
+
+
+async def test_editing_the_message_that_opened_safety_takes_the_concern_back_with_it(alice, model):
+    model(
+        Reply(text="What has been the hardest part?"),
+        Reply(text="Are you thinking about ending your life?", safety=SafetyRead(signals=["possible"])),
+        Reply(text="That sounds exhausting. What happened at work?"),
+    )
+    thread = await start(alice)
+    await send(alice, thread.id, "work has been a lot")
+    await send(alice, thread.id, "I'm done")
+    assert await _safety(thread.id) == "open"
+
+    await runner.edit(alice, thread.id, await _last_user_message_id(thread.id), "I'm done with this project at work")
+
+    assert await _safety(thread.id) == "clear"
 
 
 async def test_a_framework_completing_on_a_crisis_turn_is_still_retired(alice, model):
@@ -878,6 +970,7 @@ async def test_a_framework_completing_on_a_crisis_turn_is_still_retired(alice, m
     locks one way, so nothing would ever correct it."""
     from mani.db import pool
 
+    model(Reply(text="I'm here with you.", safety=SafetyRead(signals=["intent"])))
     thread = await start(alice)
     await _retire_abcde_on(alice, thread.id)
 
@@ -892,39 +985,6 @@ async def test_a_framework_completing_on_a_crisis_turn_is_still_retired(alice, m
         )
     assert row["phase"] is None
     assert row["outcome"] == TechniqueOutcome.ACCEPTED
-
-
-async def test_a_clear_wish_to_die_locks_before_any_call(alice, model):
-    """"I want to die" is a clear wish to die, so the deterministic screen locks it before the
-    model is ever asked - the sole locking authority, not the model. The scripted model has no
-    reply queued, so a call here would raise rather than just cost extra."""
-    from mani.db import pool
-
-    scripted = model()
-    thread = await start(alice)
-    turn = await send(alice, thread.id, "I want to die")
-
-    assert scripted.calls == 0
-    assert turn.crisis_detected is True
-    assert turn.llm_call_id is None
-
-    async with pool.as_admin() as conn:
-        event = await conn.fetchrow(
-            "select reason from admin.crisis_events where thread_id = $1", thread.id
-        )
-    assert event["reason"] == "safety screen: suicide"
-
-
-async def test_a_crisis_thread_refuses_another_turn(alice, model):
-    # A deterministic crisis locks the thread; the model is never called for the first turn.
-    model()
-    thread = await start(alice)
-    await send(alice, thread.id, "I want to die")
-
-    from mani.errors import ServiceError
-
-    with pytest.raises(ServiceError):
-        await send(alice, thread.id, "are you there")
 
 
 async def test_a_retried_send_returns_the_first_reply_without_paying_again(alice, model):
@@ -1062,7 +1122,7 @@ async def test_a_concern_pauses_a_running_framework_for_that_turn(alice, model):
     turn = await send(alice, thread.id, "honestly I don’t want to be here anymore")
 
     sent = scripted.last_messages[-1]["content"]
-    assert "safety: concern" in sent
+    assert "safety: open" in sent
     assert "stage_ask" not in sent and "active_framework" not in sent
     assert not any(p.technique for p in turn.prompts)
 
@@ -1441,14 +1501,17 @@ async def test_a_yes_to_an_open_offer_starts_it_even_with_no_buttons_showing(ali
 
     asked_instead = Reply(
         text="They help you choose a first step. What part of it bothers you most?",
-        crisis=Crisis(reason="hopelessness"),
+        safety=SafetyRead(signals=["possible"]),
     )
+    settled = Reply(text="Thank you for telling me. Would you like to try it?", safety=SafetyRead(answer="safe"))
     begins = Reply(text="What do you know for certain?", offer_answer="yes")
-    model(_offer(), asked_instead, begins)
+    model(_offer(), asked_instead, settled, begins)
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "my coworkers steal my work and take the credit")
     told = await send(alice, thread.id, "Tell me more")
     assert not any(p.technique for p in told.prompts)
+    # The concern stays open until it is settled (muhammad, 2026-11-06); the offer waits with it.
+    await send(alice, thread.id, "no, I'm fine, I just meant work wears me down")
 
     await send(alice, thread.id, "yes")
     async with pool.as_user(alice) as conn:
@@ -1541,7 +1604,7 @@ async def test_a_concern_reported_by_the_model_changes_no_row_and_renders_nothin
     starts nothing, seeds nothing, and only the model's text is sent."""
     scripted = model(_offer(), Reply(
         text="I'm here with you. What's happening right now?",
-        offer_answer="yes", crisis=Crisis(reason="hopelessness"),
+        offer_answer="yes", safety=SafetyRead(signals=["possible"]),
         next_stage=NextStage(status="known", said="spiralling at night"),
     ))
     thread = await past_the_opening(await start(alice))
@@ -1860,7 +1923,7 @@ async def test_a_guarded_turn_leaves_the_store_and_the_stage_as_they_were(alice,
     from mani.db import pool
 
     stored = {"abcde": {"consequence": {"said": "I stopped going", "status": "partial"}}}
-    model(Reply(text="I'm here with you. Are you safe right now?", crisis=Crisis(reason="hopelessness"),
+    model(Reply(text="I'm here with you. Are you safe right now?", safety=SafetyRead(signals=["possible"]),
                 stage_answer="answered",
                 stage_updates=[StageUpdate(stage="consequence", said="I stay in bed", status="known")]))
     thread = await start(alice)
@@ -1976,7 +2039,7 @@ async def test_a_concern_turn_leaves_what_was_understood_as_it_was(alice, model)
     """AC-11: a reply the model flags as a concern reports a feeling and an issue; neither is kept."""
     model(
         Reply(text="What is it about?", picture=felt("sad")),
-        Reply(text="I'm here with you.", crisis=Crisis(reason="may not be safe"),
+        Reply(text="I'm here with you.", safety=SafetyRead(signals=["possible"]),
               picture=felt("hopeless")),
     )
     thread = await start(alice)
@@ -2140,6 +2203,117 @@ async def test_while_the_body_check_in_is_paused_the_last_stage_ends_on_the_thre
 
     assert kept.content.startswith("What feels most open now?")
     assert kept.prompts == []
+
+
+async def test_c_can_ask_three_different_things_and_keeps_what_each_opened_with_insights_counted(alice, model):
+    """muhammad, 2026-11-06: "asking three questions during C is perfectly reasonable if each explores a different part
+    of the user's experience". Each part opened is kept and shown, an insight given inside the questions joins the
+    chat's, and what each reply adds is kept, so nothing is asked or said twice."""
+    from mani.chat import context as ctx_lines
+    from mani.llm.schema import Progress
+
+    scripted = model(
+        Reply(text="What do you find yourself doing differently at work now?", stage_answer="explore",
+              explored_now=["feelings"], progress=Progress(kinds=["deepen"], adds="the dread before work")),
+        Reply(text="Holding back keeps your ideas unseen, the very thing that hurt. What goes through your mind then?",
+              stage_answer="explore", explored_now=["actions"],
+              insight="Holding back keeps your ideas unseen, the very thing that hurt.",
+              progress=Progress(kinds=["pattern", "insight"], adds="the loop of holding back")),
+        Reply(text="Anything else?", stage_answer="explore", explored_now=["in_the_moment"]),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "consequence", {"abcde": {"consequence": {"said": "I hold back", "status": "known"}}})
+
+    await send(alice, thread.id, "I dread going in now, I feel sick on Sunday nights")
+    await send(alice, thread.id, "I keep my ideas to myself in meetings")
+    await send(alice, thread.id, "I think, what's the point, they'll take it anyway")
+    sent = scripted.last_messages[-1]["content"]
+    assert "stage_explored: feelings, actions" in sent
+    assert "insights_given: Holding back keeps your ideas unseen" in sent
+    assert "recent_progress: the dread before work | the loop of holding back" in sent
+
+    store = await _store(alice, thread.id)
+    assert store["consequence"]["covered"] == ["feelings", "actions", "in_the_moment"]
+    assert (await _offered_row(alice, thread.id)).phase == "consequence", "no cap: the stage stays while it opens new parts"
+    assert (await _thread_row(alice, thread.id)).understanding[ctx_lines.INSIGHTS] == [
+        "Holding back keeps your ideas unseen, the very thing that hurt."]
+
+
+async def test_a_stage_turn_leaves_a_reading_that_brings_only_the_map_of_what_is_explored(alice, model):
+    from mani.chat import context as ctx_lines
+    from mani.db import pool
+    from mani.llm.schema import Exploration
+
+    scripted = model(Reply(text="What do you find yourself doing differently?", stage_answer="explore",
+                           explored_now=["feelings"]))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "consequence", {"abcde": {"consequence": {"said": "I hold back", "status": "known"}}})
+    turn = await send(alice, thread.id, "I dread going in now")
+    assert turn.read_after is not None and turn.read_after.picture is False
+
+    async def reading(messages, schema, **kwargs):
+        if schema is ConversationUnderstanding:
+            return client.Call(value=ConversationUnderstanding(
+                picture=felt("terrified"), exploration=Exploration(explored=["emotion", "behaviour"]),
+            ), model="m", usage=llm_calls.Usage(), latency_ms=1, call_id=uuid.uuid4())
+        return await scripted(messages, schema, **kwargs)
+
+    orchestrator.client.complete = reading
+    before = (await _thread_row(alice, thread.id)).understanding
+    await orchestrator.follow_up(alice, thread.id, turn.message_id)
+    after = (await _thread_row(alice, thread.id)).understanding
+    assert after[ctx_lines.EXPLORATION]["explored"] == ["emotion", "behaviour"]
+    assert after.get("picture") == before.get("picture"), "the stage reply's picture is never rewritten by the reading"
+    async with pool.as_admin() as conn:
+        assert await conn.fetchval("select pending_follow_up from public.threads where id = $1", thread.id) is None
+
+
+async def test_plan_next_step_comes_when_something_practical_is_ahead_and_helps_them_prepare_it(alice, model):
+    """muhammad, 2026-11-06, after manasa's tests: the questions ended and nothing helped her work out how to raise it
+    with her boss. The reply that closes the questions says what is still ahead; Plan Next Step comes first, and the
+    chat after it helps them prepare it until they have it."""
+    from mani.chat import context as ctx_lines
+
+    scripted = model(
+        Reply(
+            text="You can explain calmly what happened, without accusing anyone.", stage_answer="answered",
+            stage_updates=[StageUpdate(stage="effective", said="explain to my boss calmly", status="known")],
+            follow_through="conversation",
+        ),
+        Reply(text="What do you most want your boss to understand?"),
+        ConversationReply(text="That sounds like a good opening. How does it feel to say it?", prepared=True),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "effective")
+
+    closed = await send(alice, thread.id, "I'd tell her calmly that I developed the idea")
+    assert [p.label for p in closed.prompts] == ["Plan Next Step", "Keep Chatting", "Go to Library", "Finish for Now"]
+
+    planning = await send(alice, thread.id, "Plan Next Step")
+    assert "follow_through: conversation" in scripted.last_messages[-1]["content"]
+    assert planning.content == "What do you most want your boss to understand?"
+    preparing = (await _thread_row(alice, thread.id)).understanding[ctx_lines.PREPARING]
+    assert preparing == {"kind": "conversation", "for": "explain to my boss calmly"}
+
+    await send(alice, thread.id, "That I put real work into it and want it seen")
+    assert "You are helping them prepare what they chose after the questions" in scripted.last_messages[-1]["content"]
+    assert ctx_lines.PREPARING not in (await _thread_row(alice, thread.id)).understanding
+
+
+async def test_with_nothing_practical_ahead_the_close_has_the_three_choices_only(alice, model):
+    model(
+        Reply(
+            text="You don't have to earn rest.", stage_answer="answered",
+            stage_updates=[StageUpdate(stage="effective", said="rest is allowed", status="known")],
+            follow_through="none",
+        ),
+        Reply(text="Okay.", body="finish"),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "effective")
+
+    closed = await send(alice, thread.id, "I think rest is allowed")
+    assert [p.label for p in closed.prompts] == ["Keep Chatting", "Go to Library", "Finish for Now"]
 
 
 @pytest.mark.usefixtures("body_check_in")

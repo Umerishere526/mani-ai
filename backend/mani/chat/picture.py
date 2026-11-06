@@ -28,7 +28,7 @@ CORE_ABOUT = ("self", "others", "situation")
 LIST_LIMIT = 8
 # One line each, replaced whole when their message changes it: what they want in their words, and Mani's reading of
 # the need underneath and the life they long for, beside what is in the way.
-READINGS = ("wants", "needs", "desire", "in_the_way")
+READINGS = ("wants", "needs", "desire", "in_the_way", "asked_for")
 ENTRY_LIMIT = 150
 # Mani's readings are a sentence or two: cut at ENTRY_LIMIT, the core, the tension and the desire ended mid-sentence
 # (the client's review, 2026-10-29).
@@ -366,6 +366,7 @@ def render(picture: dict | None) -> str | None:
         ("the tension", (picture.get("core") or {}).get("tension")),
         ("the core rests on, their words", (picture.get("core") or {}).get("rests_on")),
         ("what is in the way", picture.get("in_the_way")),
+        ("what they asked you to help with, their words", picture.get("asked_for")),
         ("risks to them", " | ".join(r["risk"] for r in risks if r["to"] == "self")),
         ("risks to others", " | ".join(r["risk"] for r in risks if r["to"] == "others")),
         ("depends on, inside them", " | ".join(

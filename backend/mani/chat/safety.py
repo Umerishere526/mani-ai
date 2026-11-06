@@ -1,5 +1,5 @@
-# ABOUTME: The deterministic safety screen that runs before framework selection.
-# ABOUTME: Free - phrase matching in process, no model call, so it cannot be skipped for cost.
+# ABOUTME: The deterministic safety screen, and the conversation's safety state that it and the model's reading move.
+# ABOUTME: The screen is free phrase matching, a backstop under the model's reading; code owns the state.
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from mani.chat import crisis
 from mani.text import clean_message
 
 # The specification asks for "a safety assessment before framework selection", and separates
@@ -19,8 +18,8 @@ from mani.text import clean_message
 #    as 'depressed,' 'hopeless,' 'panicked,' 'furious,' or 'I cannot do this' require attention
 #    and context. They should not automatically produce a crisis response."
 #
-# The asymmetry is deliberate. A false CONCERN costs a clarifying question. A false CRISIS locks
-# someone out of the conversation they came for.
+# Neither level locks the conversation any more (muhammad, 2026-11-06): both open the safety state below, CRISIS at
+# unsafe. The model reads every message for safety first (schema.SafetyRead); this screen is the free backstop under it.
 
 
 class Level(StrEnum):
@@ -111,6 +110,16 @@ _CONCERN: list[tuple[Category, str]] = [
     # phrases, so "my keys keep disappearing" or "I did not exist on social media" pass.
     # Added on muhammad's decision (2026-09-23), pending the client's clinical wording.
     (Category.SUICIDE, "want to disappear"),
+    # manasa's safety test, 2026-11-06: each of these passed the screen.
+    (Category.SUICIDE, "could disappear"),
+    (Category.SUICIDE, "not alive anymore"),
+    (Category.SUICIDE, "was not alive"),
+    (Category.SUICIDE, "were not alive"),
+    (Category.SUICIDE, "better off dead"),
+    (Category.SUICIDE, "rather be dead"),
+    (Category.SUICIDE, "do not care what happens to me"),
+    (Category.SELF_HARM, "scared of what i might do"),
+    (Category.SELF_HARM, "afraid of what i might do"),
     (Category.SUICIDE, "to disappear from"),
     (Category.SUICIDE, "wish i did not exist"),
     (Category.SUICIDE, "if i did not exist"),
@@ -172,43 +181,70 @@ def normalize(text: str) -> str:
 _FIGURATIVE_HIT = re.compile(r"\b(it|that|this|what) (really |just |suddenly )?hits? me\b")
 
 
+# A crisis phrase with a negation just before it ("I'm not going to hurt myself", "I would never kill myself") is not
+# the statement it contains: it asks, as a concern, and never counts as a crisis (manasa's test, 2026-11-06, locked on
+# "I'm safe. I'm not going to hurt myself").
+_NEGATION = re.compile(r"\b(not|never|no)( \w+){0,2} $")
+
+
+def _negated(normalized: str, phrase: str) -> bool:
+    """Whether every place the phrase appears has a negation in the two words before it."""
+    at = [i for i in range(len(normalized)) if normalized.startswith(phrase, i)]
+    return bool(at) and all(_NEGATION.search(normalized[:i]) for i in at)
+
+
 def screen(text: str) -> Assessment:
     """Assess one message. Crisis wins over concern; the first category matched is reported."""
     normalized = _FIGURATIVE_HIT.sub(" ", normalize(text))
 
-    for level, patterns in ((Level.CRISIS, _CRISIS), (Level.CONCERN, _CONCERN)):
-        hits = [(category, phrase) for category, phrase in patterns if phrase in normalized]
-        if hits:
-            return Assessment(
-                level=level,
-                category=hits[0][0],
-                matched=[phrase for _, phrase in hits],
-            )
-
+    crisis_hits = [(c, p) for c, p in _CRISIS if p in normalized and not _negated(normalized, p)]
+    if crisis_hits:
+        return Assessment(level=Level.CRISIS, category=crisis_hits[0][0], matched=[p for _, p in crisis_hits])
+    concern_hits = [(c, p) for c, p in _CRISIS + _CONCERN if p in normalized]
+    if concern_hits:
+        return Assessment(level=Level.CONCERN, category=concern_hits[0][0], matched=[p for _, p in concern_hits])
     return Assessment(level=Level.NONE)
 
 
 # ---------------------------------------------------------------------------
-# What Mani says
+# The conversation's safety state (muhammad, 2026-11-06)
 # ---------------------------------------------------------------------------
-
-# Deliberately empty, exactly as crisis.RESOURCES is. The specifications say precisely when the
-# safety path fires and what Mani must and must not do, and refer throughout to "MANI's approved
-# safety protocol" and "the approved safety clarification" - neither of which they contain.
-# Writing that wording is a clinical decision, not an engineering one.
-PROTOCOLS: dict[Category, str] = {}
-
-# Likewise: the question Mani asks when the level of danger is uncertain. Until it exists, a
-# concern changes routing only - it suppresses the framework and is recorded - and Mani answers
-# in its own words rather than reciting something nobody approved.
-CLARIFICATION: str | None = None
+#
+# Held on the thread (threads.safety), so a concern outlives the reply that raised it: in manasa's test it was gone
+# after one reply, and Mani went back to ordinary conversation each time she pushed back. Code owns it; the screen and
+# the model's reading move it. Nothing here locks the conversation.
 
 
-def protocol_for(category: Category | None) -> str:
-    """What to say for a category, falling back so the screen is never blank.
+class State(StrEnum):
+    CLEAR = "clear"
+    OPEN = "open"
+    UNSAFE = "unsafe"
 
-    The implementation this replaces returned an empty string at the moment it mattered most.
-    """
-    if category is not None and category in PROTOCOLS:
-        return PROTOCOLS[category]
-    return crisis.CRISIS_REPLY
+
+_RANK = {State.CLEAR: 0, State.OPEN: 1, State.UNSAFE: 2}
+
+# Signs that mean danger now, on their own.
+DANGER = frozenset({"intent", "plan", "acted", "cannot_stay_safe", "harm_to_others", "medical_emergency"})
+
+
+def higher(a: State, b: State) -> State:
+    return a if _RANK[a] >= _RANK[b] else b
+
+
+def opened_by(level: Level) -> State:
+    """Where the screen alone puts the conversation."""
+    return {Level.NONE: State.CLEAR, Level.CONCERN: State.OPEN, Level.CRISIS: State.UNSAFE}[level]
+
+
+def after(state: State, signals: set[str], answer: str | None) -> State:
+    """The state once the model has read this message: `signals` are the signs in it, `answer` how it stands on a
+    safety question while one is open. Leaving is slow on purpose: a safe answer closes an open concern, and only
+    steps an unsafe one down to open, so "I'm safe" right after plans or means is asked about once more. A refusal,
+    a change of subject or an unclear answer keeps it where it is."""
+    if answer == "unsafe" or signals & DANGER or (state is not State.CLEAR and "means" in signals):
+        return State.UNSAFE
+    if signals:
+        return higher(state, State.OPEN)
+    if answer == "safe":
+        return State.OPEN if state is State.UNSAFE else State.CLEAR
+    return state

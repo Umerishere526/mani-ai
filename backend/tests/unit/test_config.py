@@ -31,7 +31,8 @@ def build(**overrides) -> Settings:
 
 def test_defaults_are_the_safe_choice():
     settings = build()
-    assert settings.crisis_blocks_chat is True
+    # A lock cut off the one channel someone at risk was using, and fired on "I'm safe" (muhammad, 2026-11-06).
+    assert settings.crisis_blocks_chat is False
     assert settings.ai_debug_mode is False
     assert settings.openrouter_data_collection == "deny"
 

@@ -77,6 +77,9 @@ def misses(
         notes.append("asks no question")
     if reach_unjudged:
         notes.append("reach unjudged")
+    # Every reply moves something forward (muhammad, 2026-11-06); one that reports it adds nothing is counted.
+    if (progress := getattr(reply, "progress", None)) is not None and not progress.kinds:
+        notes.append("adds nothing new")
     if case is not None and lacks_case(reply.text, case):
         notes.append("case missing")
     if found := figures(reply.text):
