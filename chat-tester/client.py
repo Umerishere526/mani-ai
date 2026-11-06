@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
+import threading
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -15,6 +17,8 @@ import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
@@ -237,17 +241,49 @@ class ManiClient:
     def start_new_thread(self) -> dict[str, Any]:
         """POST /v1/threads - reuses an empty thread if the caller already has one,
         exactly as the backend does for a real "new chat" tap."""
-        return self._call("POST", "/v1/threads", json={})
+        started = self._call("POST", "/v1/threads", json={})
+        if started.get("memory_fold_pending"):
+            # A new chat is when the earlier ones count as finished, so they are folded into Mani's memory.
+            self._in_background(
+                lambda: self._call("POST", f"/v1/threads/{started['thread']['id']}/memory-fold"), "memory fold"
+            )
+        return started
 
     def send_message(self, thread_id: str, content: str, client_message_id: str | None = None) -> dict[str, Any]:
-        return self._call(
+        turn = self._call(
             "POST", f"/v1/threads/{thread_id}/messages",
             json={"content": content, "client_message_id": client_message_id or str(uuid.uuid4())},
         )
+        self._ask_for_follow_up(thread_id, turn)
+        return turn
 
     def edit_message(self, thread_id: str, message_id: str, content: str) -> dict[str, Any]:
         """POST /v1/threads/{id}/messages/{message_id}/edit - replaces the last message and Mani's reply to it."""
-        return self._call("POST", f"/v1/threads/{thread_id}/messages/{message_id}/edit", json={"content": content})
+        turn = self._call("POST", f"/v1/threads/{thread_id}/messages/{message_id}/edit", json={"content": content})
+        self._ask_for_follow_up(thread_id, turn)
+        return turn
+
+    def follow_up(self, thread_id: str, message_id: str) -> dict[str, Any]:
+        """POST /v1/threads/{id}/messages/{message_id}/follow-up - what the turn left for after its reply: Mani's
+        reading of them, and the summary when it is due. The backend can no longer run these after its response
+        (Vercel stops the instance once a response is sent), so the app asks once the reply is in hand."""
+        return self._call("POST", f"/v1/threads/{thread_id}/messages/{message_id}/follow-up")
+
+    def _ask_for_follow_up(self, thread_id: str, turn: dict[str, Any]) -> None:
+        if turn.get("follow_up_pending") and turn.get("id"):
+            self._in_background(lambda: self.follow_up(thread_id, turn["id"]), "follow-up")
+
+    @staticmethod
+    def _in_background(work, what: str) -> None:
+        # On a thread of its own, so the reply shows at once and nobody waits for it. Its failure costs Mani some
+        # of what it knows of them, never the conversation, so it is logged and dropped.
+        def run() -> None:
+            try:
+                work()
+            except Exception:
+                logger.exception("%s failed", what)
+
+        threading.Thread(target=run, name=f"mani-{what}", daemon=True).start()
 
     def last_user_message_id(self, thread_id: str) -> str:
         return next(m["id"] for m in reversed(self.full_history(thread_id)) if m["role"] == "user")

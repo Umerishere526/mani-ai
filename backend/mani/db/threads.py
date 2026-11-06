@@ -77,6 +77,38 @@ async def understanding_of(
     return None if row is None else dict(row["understanding"] or {})
 
 
+async def set_pending_follow_up(
+    conn: asyncpg.Connection, thread_id: uuid.UUID | str, user_id: uuid.UUID | str, follow_up: dict | None
+) -> None:
+    """Store what is left to do after this turn's reply, for the app to ask for, or clear the last with None."""
+    await conn.execute(
+        "update public.threads set pending_follow_up = $1::jsonb where id = $2 and user_id = $3",
+        follow_up, thread_id, user_id,
+    )
+
+
+async def take_pending_follow_up(
+    conn: asyncpg.Connection, thread_id: uuid.UUID | str, user_id: uuid.UUID | str, message_id: uuid.UUID | str
+) -> dict | None:
+    """What is left to do after Mani's reply `message_id`, cleared as it is taken, so it runs once; None when nothing
+    waits, or what waits is for another reply."""
+    row = await conn.fetchrow(
+        """
+        with waiting as (
+            select id, pending_follow_up from public.threads
+            where id = $1 and user_id = $2 and deleted_at is null
+              and pending_follow_up ->> 'message_id' = $3::text
+            for update
+        )
+        update public.threads t set pending_follow_up = null
+        from waiting where t.id = waiting.id
+        returning waiting.pending_follow_up
+        """,
+        thread_id, user_id, str(message_id),
+    )
+    return None if row is None else row["pending_follow_up"]
+
+
 async def most_recent(
     conn: asyncpg.Connection, user_id: uuid.UUID | str
 ) -> Thread | None:

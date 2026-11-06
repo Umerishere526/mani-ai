@@ -66,7 +66,7 @@ do $$
 declare
   c text;
 begin
-  foreach c in array array['understanding', 'rewind_snapshot', 'check_at_message_count',
+  foreach c in array array['understanding', 'rewind_snapshot', 'pending_follow_up', 'check_at_message_count',
                            'memory_folded_at', 'message_count']
   loop
     if has_column_privilege('authenticated', 'public.threads', c, 'INSERT') then
@@ -142,6 +142,14 @@ select pg_temp.want('a user cannot write what Mani understands of them',
 
 select pg_temp.want('the backend can store what Mani understands',
   has_column_privilege('mani_service', 'public.threads', 'understanding', 'UPDATE'), true);
+
+-- Migration 032: the reading waiting for the app's request is sent to the model as it is stored, so a user who
+-- could write it could write the prompt.
+select pg_temp.want('a user cannot write the work waiting after a reply',
+  has_column_privilege('authenticated', 'public.threads', 'pending_follow_up', 'UPDATE'), false);
+
+select pg_temp.want('the backend can store the work waiting after a reply',
+  has_column_privilege('mani_service', 'public.threads', 'pending_follow_up', 'UPDATE'), true);
 
 -- Migration 023: the offer is made only on the turn right after Mani's check, so a user who
 -- could write when the check was made could open an offer for themselves.

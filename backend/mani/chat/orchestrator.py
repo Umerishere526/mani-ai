@@ -195,6 +195,24 @@ class ReadAfter:
     parameters: dict
     routing: dict | None
     their_messages: list[str]
+    # Mani's reply this reading follows: the app asks for it by that reply (follow_up).
+    message_id: uuid.UUID | None = None
+
+    def stored(self) -> dict:
+        """As threads.pending_follow_up holds it."""
+        return {
+            "thread_id": str(self.thread_id), "user_id": str(self.user_id), "message_id": str(self.message_id),
+            "messages": self.messages, "model": self.model, "parameters": self.parameters, "routing": self.routing,
+            "their_messages": self.their_messages,
+        }
+
+    @classmethod
+    def from_stored(cls, row: dict) -> ReadAfter:
+        return cls(
+            thread_id=uuid.UUID(row["thread_id"]), user_id=uuid.UUID(row["user_id"]),
+            message_id=uuid.UUID(row["message_id"]), messages=row["messages"], model=row["model"],
+            parameters=row["parameters"] or {}, routing=row["routing"], their_messages=row["their_messages"],
+        )
 
 
 def _trace(**fields) -> dict:
@@ -529,6 +547,17 @@ async def _converse(
         stepped_out_of=declined.id if declined else None, buttons=[p.label for p in prompts],
         notes=fixed.notes, checks=checks,
     )
+    # The same prompt and conversation as the reply, so its prefix is cached, then the reply as it went out. As on
+    # every other turn, the model's own crisis judgment keeps what is understood as it was. Run when the app asks for
+    # it once the reply is shown (send stores it, follow_up runs it).
+    read_after = None if guarded or pair.was_duplicate else ReadAfter(
+        thread_id=ctx.thread.id, user_id=ctx.thread.user_id, message_id=pair.mani_message_id,
+        messages=[{"role": "system", "content": system.text}] + _conversation(history) + [
+            {"role": "user", "content": for_model}, {"role": "assistant", "content": fixed.text},
+            {"role": "system", "content": converse.read_note(conversation_style, understood)},
+        ],
+        model=model, parameters=parameters, routing=routing, their_messages=their_messages,
+    )
     return Turn(
         message_id=pair.mani_message_id,
         content=fixed.text,
@@ -549,16 +578,7 @@ async def _converse(
         ),
         trace=trace,
         raw_reply=_raw(reply, settings),
-        # The same prompt and conversation as the reply, so its prefix is cached, then the reply as it went out. As on
-        # every other turn, the model's own crisis judgment keeps what is understood as it was.
-        read_after=None if guarded else ReadAfter(
-            thread_id=ctx.thread.id, user_id=ctx.thread.user_id,
-            messages=[{"role": "system", "content": system.text}] + _conversation(history) + [
-                {"role": "user", "content": for_model}, {"role": "assistant", "content": fixed.text},
-                {"role": "system", "content": converse.read_note(conversation_style, understood)},
-            ],
-            model=model, parameters=parameters, routing=routing, their_messages=their_messages,
-        ),
+        read_after=read_after,
     )
 
 
@@ -596,6 +616,59 @@ async def read_understanding(claims: Claims, job: ReadAfter) -> dict | None:
     except Exception:
         logger.exception("reading after the reply failed for thread %s", job.thread_id)
         return None
+
+
+def _follow_up(turn: Turn) -> dict | None:
+    """What a turn leaves for after its reply, as threads.pending_follow_up holds it: the reading of a chat turn and
+    whether the summary is due. None when there is nothing, which clears what an earlier reply left."""
+    if turn.message_id is None or not (turn.read_after or turn.needs_summary):
+        return None
+    return {
+        "message_id": str(turn.message_id),
+        "reading": turn.read_after.stored() if turn.read_after else None,
+        "summary": turn.needs_summary,
+    }
+
+
+@dataclass(frozen=True)
+class FollowedUp:
+    """What the work after a reply did: the record the reading stored, and whether the summary was brought up to date."""
+
+    understanding: dict | None = None
+    summarized: bool = False
+
+
+async def follow_up(claims: Claims, thread_id: uuid.UUID | str, message_id: uuid.UUID | str) -> FollowedUp | None:
+    """Run what the turn left for after Mani's reply `message_id`, when the app asks for it once the reply is shown:
+    the reading and the summary, side by side. None when nothing waits for that reply. A request of its own, not work
+    left running after the turn's response: Vercel stops an instance once a response is sent, and 15 of 49 readings
+    started that way were cut off (2026-11-05). Taken in a short transaction, so no connection is held while the model
+    works, and cleared as it is taken, so a repeated request pays nothing. Each part fails alone, logged."""
+    import asyncio
+
+    from mani import summarize
+    from mani.db import pool
+
+    async with pool.as_user(claims) as conn:
+        waiting = await threads.take_pending_follow_up(conn, thread_id, claims.user_id, message_id)
+    if waiting is None:
+        return None
+
+    async def read() -> dict | None:
+        reading = waiting.get("reading")
+        return await read_understanding(claims, ReadAfter.from_stored(reading)) if reading else None
+
+    async def summary() -> bool:
+        if not waiting.get("summary"):
+            return False
+        try:
+            return await summarize.update(claims, thread_id) is not None
+        except Exception:
+            logger.exception("summarization failed for thread %s", thread_id)
+            return False
+
+    understood, summarized = await asyncio.gather(read(), summary())
+    return FollowedUp(understanding=understood, summarized=summarized)
 
 
 async def _within_limits(conn: asyncpg.Connection, user_id: str, settings) -> None:
@@ -642,7 +715,25 @@ async def send(
 ) -> Turn:
     """Run one turn. The connection is already scoped to the caller and in a transaction. `ask` is the model:
     chat/runner.py runs this twice, once to learn what to ask and once to write the reply. `config` is the
-    prompts and frameworks, read before the connection was taken."""
+    prompts and frameworks, read before the connection was taken. What the turn leaves for after its reply is
+    stored with it, for the app to ask for (follow_up); what an earlier reply left and nobody asked for is cleared."""
+    turn = await _turn(conn, claims, thread_id, content, client_message_id, ask=ask, config=config)
+    if not turn.was_duplicate:
+        await threads.set_pending_follow_up(conn, thread_id, claims.user_id, _follow_up(turn))
+    return turn
+
+
+async def _turn(
+    conn: asyncpg.Connection,
+    claims: Claims,
+    thread_id: uuid.UUID | str,
+    content: str,
+    client_message_id: uuid.UUID | str | None,
+    *,
+    ask: Ask,
+    config: cache.Config,
+) -> Turn:
+    """One turn's steps; see send."""
     settings = get_settings()
     user_id = claims.user_id
 

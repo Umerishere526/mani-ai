@@ -121,6 +121,8 @@ the same change as the work.**
 | POST | `/v1/threads/current` | what to show on opening the app; creates a thread on first call |
 | GET PATCH DELETE | `/v1/threads/{id}` | fetch, set `conversation_style`, soft delete |
 | GET POST | `/v1/threads/{id}/messages` | history (paged), **send a turn** |
+| POST | `/v1/threads/{id}/messages/{message_id}/follow-up` | the reading and summary a turn left, asked for once its reply is shown (`follow_up_pending`) |
+| POST | `/v1/threads/{id}/memory-fold` | folds finished chats into memory, asked for after starting one (`memory_fold_pending`) |
 | GET | `/v1/exercises`, `/home`, `/{id}` | catalog with signed audio |
 | GET POST | `/v1/exercises/completions` | a user's completions |
 | GET | `/v1/crisis/resources` | empty until real services exist |
@@ -405,9 +407,18 @@ the same change as the work.**
   with the conversation until attempts passed `chat_deadline_seconds`; two of Lolly's chats of 2026-11-03 ended in
   "504 llm_timeout" on her 11th and 7th messages (R53). Now `ConversationReply` holds what the turn calls for and the
   text, the note carries the picture as it stood before their message, and `ConversationUnderstanding` (reading and
-  picture) is asked for after the reply, with the same system prompt and the reply in the messages, fired from the
-  route (`messages.send`) and recorded as purpose `understanding` (migration 028, so `latency_report.py`, which reads
-  `chat`, is the person's wait). It merges onto the record as it is when it lands, under the thread's turn lock
+  picture) is asked for after the reply, with the same system prompt and the reply in the messages, and recorded as
+  purpose `understanding`. Since 2026-11-05 nothing runs after a response (Vercel stops the instance once it is
+  sent, and cut off 15 of 49 readings; muhammad chose the app's own request, 2026-11-05; it works the same on AWS).
+  A turn stores what it leaves for after its reply in `threads.pending_follow_up` (migration 032: the reading's call
+  and whether the summary is due, keyed by Mani's reply, set or cleared by every turn, cleared when taken), says
+  `follow_up_pending`, and the app posts `/v1/threads/{id}/messages/{reply id}/follow-up`, which runs the reading and
+  the summary side by side, once (`orchestrator.follow_up`). The call link and the trace are database writes only,
+  awaited side by side before the turn's response. Starting a chat says `memory_fold_pending`, and the app posts
+  `/v1/threads/{id}/memory-fold`. `mani/background.py` is gone. The chat tester asks on threads of its own
+  (`client._in_background`); work the app never asks for is not done (the summary cron route can catch up summaries).
+  Purpose `understanding` is migration 028, so `latency_report.py`, which reads `chat`, is the person's wait. Tests:
+  `test_follow_up.py`, `test_follow_up_endpoint.py`, chat-tester `test_follow_up.py`. It merges onto the record as it is when it lands, under the thread's turn lock
   (`orchestrator._lock_thread`), so a message sent before it lands is never overwritten; that turn's note then has the
   picture one message behind. A reading that fails costs that message's picture, never a reply. The move to the offer
   builds its case from the picture as it was before the message. `test_a_chat_reply_waits_on_one_call_and_mani_reads_
@@ -881,7 +892,8 @@ Ordered by what breaks first.
 - **Production is Vercel Hobby functions in iad1, with the database in ca-central-1, and `fire_and_forget` work is
   being lost.** `mani/background.py` runs `asyncio.create_task` after the response, which Vercel does not wait for: it
   suspends or ends the function (Vercel's `waitUntil` is Node and Edge only). 15 of 49 `understanding` calls of
-  2026-11-01 to 05 timed out at 61 to 335 s against a 60 s wait, background calls spent p50 6.3 s between OpenRouter
+  2026-11-01 to 05 timed out at 61 to 335 s against a 60 s wait (fixed 2026-11-05: nothing runs after a response any
+  more, see the reading entry in Decisions in force; the rest of this entry is the evidence), background calls spent p50 6.3 s between OpenRouter
   finishing and our row being written (chat: 0.33 s), and both memory-fold retries never wrote a row, so the person's
   picture and memory are being lost (`docs/latency-report-2026-11-05.md`, sections 5 and 9). Every database round trip
   also crosses from iad1 to ca-central-1. Kept on Vercel for now by muhammad, 2026-11-05. The fix is a container host

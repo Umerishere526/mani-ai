@@ -8,12 +8,12 @@ from fastapi import APIRouter, Query
 
 from mani import memory
 from mani.auth.deps import CurrentUser
-from mani.background import fire_and_forget
 from mani.chat import orchestrator
 from mani.db import messages as messages_db, threads
 from mani.db.deps import UserConn
 from mani.errors import ErrorCategory, ServiceError
 from mani.models.api import (
+    MemoryFoldOut,
     MessageOut,
     StartOut,
     ThreadCreateIn,
@@ -49,16 +49,24 @@ async def start(user: CurrentUser, conn: UserConn, body: ThreadCreateIn) -> Star
     and appears immediately.
     """
     thread, created = await orchestrator.start_thread(conn, user, body.title)
-    # Starting a new chat is when the previous one counts as finished, so its patterns are
-    # folded into the person's memory now. Every thread except this one: tapping New chat
-    # can hand back an untouched thread while another the person returned to still waits.
-    # It reads only earlier, committed threads, and never delays this response.
-    fire_and_forget(memory.fold_finished(user, keep=thread.id), name="fold_memory")
+    # Starting a new chat is when the previous one counts as finished, so its patterns are folded into the
+    # person's memory: the app asks for that next (fold_memory), as a request of its own.
     return StartOut(
         thread=to_thread(thread),
         messages=await _history(conn, thread.id, user.user_id),
         is_new=created,
+        memory_fold_pending=True,
     )
+
+
+@router.post("/{thread_id}/memory-fold", response_model=MemoryFoldOut)
+async def fold_memory(user: CurrentUser, thread_id: uuid.UUID) -> MemoryFoldOut:
+    """Fold the person's finished conversations into what Mani remembers of them, every one except `thread_id`, the
+    chat they just started: tapping New chat can hand back an untouched thread while another they returned to still
+    waits. Asked for by the app after starting a chat, not left running after that response: Vercel stops the instance
+    once a response is sent, and folds started that way never wrote a row (2026-11-05). Folds only what waits, so a
+    repeated request costs nothing; a failure is logged and costs only that memory."""
+    return MemoryFoldOut(folded=await memory.fold_finished(user, keep=thread_id))
 
 
 @router.post("/current", response_model=StartOut)

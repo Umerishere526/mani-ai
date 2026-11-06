@@ -119,6 +119,23 @@ class TurnOut(BaseModel):
     check_at_message_count: int | None = None
     # Null unless AI_DEBUG_MODE is on: what code decided this turn and why (admin.turn_traces), never their words.
     trace: dict[str, Any] | None = None
+    # True when the turn left work for after its reply (Mani's reading of them, the summary): once the reply is
+    # shown, the app posts to /v1/threads/{thread_id}/messages/{id}/follow-up, so the work runs to the end.
+    follow_up_pending: bool = False
+
+
+class FollowUpOut(BaseModel):
+    """What the work after a reply did, and, only with AI_DEBUG_MODE, what Mani understands of them after it."""
+
+    read: bool
+    summarized: bool
+    understanding: dict[str, Any] | None = None
+
+
+class MemoryFoldOut(BaseModel):
+    """How many finished conversations were folded into what Mani remembers of the person."""
+
+    folded: int
 
 
 class StartOut(BaseModel):
@@ -127,6 +144,9 @@ class StartOut(BaseModel):
     thread: ThreadOut
     messages: list[MessageOut]
     is_new: bool
+    # True when the app should post /v1/threads/{thread.id}/memory-fold next: a new chat is when the earlier ones
+    # count as finished.
+    memory_fold_pending: bool = False
 
 
 class ProfileIn(BaseModel):
