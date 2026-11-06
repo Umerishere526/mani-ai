@@ -332,7 +332,7 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
     correction of the offer. A check stored by the code from before 2026-11-03 is answered with `check_answer`."""
     lines, expect, after = conversation["lines"], conversation["expect"], conversation.get("after_offer")
     user = uuid.uuid4()
-    claims = Claims(sub=str(user), raw={"sub": str(user), "role": "authenticated"})
+    claims = Claims.acting_as(user)
     async with pool.as_admin() as conn:
         await conn.execute(
             "insert into auth.users (id, email) values ($1, $2)", user, f"{name}.{style}.{user}@scenario.check"

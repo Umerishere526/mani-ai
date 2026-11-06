@@ -71,12 +71,14 @@ async def follow_up(user: Participant, thread_id: uuid.UUID, message_id: uuid.UU
 
     A request of its own, not work left running after the turn's response: on Vercel the instance stops once a
     response is sent, and about a third of the readings started that way were cut off (2026-11-05). Runs only what
-    the turn stored for this reply, once; any other call does nothing and costs nothing.
+    the turn stored for this reply, once; a part that fails stays waiting (`pending`) and asking again runs only
+    that part. Any other call does nothing and costs nothing.
     """
     done = await orchestrator.follow_up(user, thread_id, message_id)
     return FollowUpOut(
         read=bool(done and done.understanding is not None),
         summarized=bool(done and done.summarized),
+        pending=bool(done and done.pending),
         understanding=done.understanding if done and get_settings().ai_debug_mode else None,
     )
 

@@ -27,6 +27,31 @@ MAX_ENTRY_CHARS = 160
 
 # How long a conversation has to be quiet before the idle job treats it as finished.
 IDLE_AFTER = dt.timedelta(hours=24)
+# How long after that the idle job keeps trying a thread; past it, one whose fold kept failing is left for the
+# person's next New chat, which folds every finished thread whatever its age.
+FOLD_RETRY_FOR = dt.timedelta(days=1)
+
+async def fold_idle(*, limit: int) -> int:
+    """Fold up to `limit` conversations that have gone quiet, the longest-quiet people first, so someone who never
+    starts a new chat is still remembered. Finding who has one is cross-user, so it is the one admin read; each fold
+    runs as its person, so RLS scopes every write exactly as it does when their own New chat triggers one. A fold is
+    written once even when two runs or a New chat reach the same thread together (the mark is conditional), but each
+    may pay for its model call; the in-process lock only covers one instance."""
+    from mani.db import pool
+
+    idle_before = dt.datetime.now(dt.UTC) - IDLE_AFTER
+    async with pool.as_admin() as conn:
+        people = await memory_db.users_with_idle_threads(conn, idle_before, idle_before - FOLD_RETRY_FOR, limit)
+    folded = 0
+    for user_id in people:
+        if folded >= limit:
+            break
+        folded += await fold_finished(
+            Claims.acting_as(user_id), idle_before=idle_before, quiet_since=idle_before - FOLD_RETRY_FOR,
+            most=limit - folded,
+        )
+    return folded
+
 
 # Each fold advances the thread to the last message it read, so the loop below ends on its
 # own. This bounds it anyway: a fault in that condition would otherwise pay for a model
@@ -66,6 +91,7 @@ async def fold_one(
     *,
     keep: uuid.UUID | str | None = None,
     idle_before: dt.datetime | None = None,
+    quiet_since: dt.datetime | None = None,
 ) -> Fold:
     """Fold one finished thread into the person's memory.
 
@@ -76,7 +102,9 @@ async def fold_one(
 
     user_id = claims.user_id
     async with pool.as_user(claims) as conn:
-        waiting = await memory_db.next_to_fold(conn, user_id, keep=keep, idle_before=idle_before)
+        waiting = await memory_db.next_to_fold(
+            conn, user_id, keep=keep, idle_before=idle_before, quiet_since=quiet_since
+        )
         if waiting is None:
             return Fold.NOTHING_WAITING
         thread_id, since = waiting
@@ -117,9 +145,15 @@ async def fold_one(
 
 
 async def fold_finished(
-    claims: Claims, *, keep: uuid.UUID | str | None = None, idle_before: dt.datetime | None = None
+    claims: Claims,
+    *,
+    keep: uuid.UUID | str | None = None,
+    idle_before: dt.datetime | None = None,
+    quiet_since: dt.datetime | None = None,
+    most: int | None = None,
 ) -> int:
-    """Fold every finished thread this person has waiting, one at a time.
+    """Fold every finished thread this person has waiting, one at a time, at most `most` of them (MAX_FOLDS_PER_RUN
+    when not given).
 
     Each fold writes on its own, so a failure costs only that thread, which stays waiting. Stops
     at the first failure, or a fold that found its thread moved, rather than paying for the same
@@ -133,8 +167,10 @@ async def fold_finished(
             prompt = (await cache.load()).prompt("memory_fold")
             if prompt is None:
                 raise RuntimeError("no memory_fold prompt configured")
-            while folded < MAX_FOLDS_PER_RUN:
-                if await fold_one(claims, prompt, keep=keep, idle_before=idle_before) is not Fold.FOLDED:
+            while folded < (MAX_FOLDS_PER_RUN if most is None else most):
+                if await fold_one(
+                    claims, prompt, keep=keep, idle_before=idle_before, quiet_since=quiet_since
+                ) is not Fold.FOLDED:
                     return folded
                 folded += 1
         logger.warning("memory fold stopped at %d threads for user %s", folded, claims.user_id)

@@ -67,11 +67,12 @@ async def next_to_fold(
     *,
     keep: uuid.UUID | str | None = None,
     idle_before: dt.datetime | None = None,
+    quiet_since: dt.datetime | None = None,
 ) -> tuple[uuid.UUID, dt.datetime | None] | None:
     """One of this person's threads that needs folding, and when it was last folded; None when there is
     nothing to do. Nothing is claimed: the fold writes only if the thread is still as read
     (`mark_folded_through`). `keep` is the conversation the person is in now; `idle_before` limits it to
-    threads that have gone quiet.
+    threads that have gone quiet, and `quiet_since` to those that went quiet after it.
     """
     row = await conn.fetchrow(
         f"""
@@ -80,10 +81,11 @@ async def next_to_fold(
          where t.user_id = $1 and {_NEEDS_FOLD}
            and ($2::uuid is null or t.id <> $2)
            and ($3::timestamptz is null or t.last_message_at < $3)
+           and ($4::timestamptz is null or t.last_message_at >= $4)
          order by t.last_message_at
          limit 1
         """,
-        user_id, keep, idle_before,
+        user_id, keep, idle_before, quiet_since,
     )
     return (row["id"], row["since"]) if row else None
 
@@ -126,16 +128,19 @@ async def mark_folded_through(
 
 
 async def users_with_idle_threads(
-    conn: asyncpg.Connection, idle_before: dt.datetime, limit: int
+    conn: asyncpg.Connection, idle_before: dt.datetime, quiet_since: dt.datetime, limit: int
 ) -> list[uuid.UUID]:
-    """People who have a quiet thread waiting to be folded. Cross-user, so admin-only."""
+    """People who have a thread waiting to be folded that went quiet between `quiet_since` and `idle_before`, the
+    longest-quiet first. Cross-user, so admin-only."""
     rows = await conn.fetch(
         f"""
-        select distinct t.user_id from public.threads t
+        select t.user_id from public.threads t
          where {_NEEDS_FOLD}
-           and t.last_message_at < $1
-         limit $2
+           and t.last_message_at < $1 and t.last_message_at >= $2
+         group by t.user_id
+         order by min(t.last_message_at)
+         limit $3
         """,
-        idle_before, limit,
+        idle_before, quiet_since, limit,
     )
     return [r["user_id"] for r in rows]

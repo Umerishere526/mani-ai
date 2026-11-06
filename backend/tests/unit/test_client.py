@@ -614,3 +614,21 @@ async def test_a_reply_that_does_not_fit_is_recorded_and_raised_without_its_word
     assert type(failure).__name__ in recorded[0]["error_message"]
     if which == 0:
         assert "('string_type', ('text',))" in recorded[0]["error_message"], "what and where it failed are kept"
+
+
+def test_a_provider_error_is_stored_without_the_body_that_can_quote_their_message():
+    """A moderation refusal's body can carry the flagged input, which is the person's own words. What is stored and
+    logged is the error's type and status, never its body."""
+    import httpx
+
+    words = "I keep thinking about ending it"
+    response = httpx.Response(403, request=httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions"))
+    refused = openai.PermissionDeniedError(
+        f"Error code: 403 - {{'error': {{'metadata': {{'flagged_input': '{words}'}}}}}}",
+        response=response, body={"error": {"metadata": {"flagged_input": words}}},
+    )
+
+    described = client._described(refused)
+
+    assert words not in described
+    assert described == "PermissionDeniedError: 403"

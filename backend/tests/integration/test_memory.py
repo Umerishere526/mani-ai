@@ -188,27 +188,63 @@ async def test_one_run_folds_no_more_than_its_limit(bea, scripted, monkeypatch, 
     assert await memory.fold_finished(bea) == 1  # the other one is still waiting, not lost
 
 
-async def test_the_idle_job_finds_a_quiet_conversation_and_not_a_live_one(bea, scripted):
+async def test_the_idle_job_folds_a_quiet_conversation_and_not_a_live_one(bea, scripted):
+    """Someone who never taps New chat still has their quiet conversations remembered: the schedule folds them."""
     scripted()
     quiet = await _chat(bea, "I always feel low on Sunday evenings because of work")
     live = await _chat(bea, "today was fine actually")
 
-    from mani.db import memory as memory_db, pool
+    from mani.db import pool
 
     async with pool.as_admin() as conn:
         await conn.execute(
-            "update public.threads set last_message_at = now() - interval '2 days' where id = $1",
+            "update public.threads set last_message_at = now() - interval '30 hours' where id = $1",
             quiet.id,
         )
-        idle_before = dt.datetime.now(dt.UTC) - memory.IDLE_AFTER
         # The local database also holds eval and chat-tester users, so a fixed batch size could
         # leave BEA outside an unordered page. Ask for everyone.
         everyone = await conn.fetchval("select count(*) from auth.users")
-        assert BEA in await memory_db.users_with_idle_threads(conn, idle_before, everyone)
 
-    assert await memory.fold_finished(bea, idle_before=idle_before) == 1
+    await memory.fold_idle(limit=everyone)
+
     assert await _folded_at(quiet.id) is not None
     assert await _folded_at(live.id) is None
+
+
+async def test_the_idle_job_gives_up_on_a_chat_it_could_not_fold_for_a_day(bea, scripted):
+    """A fold that keeps failing is not paid for every run forever; the chat folds at their next New chat instead."""
+    scripted()
+    stale = await _chat(bea, "I always feel low on Sunday evenings because of work")
+
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set last_message_at = now() - $2::interval where id = $1",
+            stale.id, memory.IDLE_AFTER + memory.FOLD_RETRY_FOR + dt.timedelta(hours=1),
+        )
+        everyone = await conn.fetchval("select count(*) from auth.users")
+
+    await memory.fold_idle(limit=everyone)
+
+    assert await _folded_at(stale.id) is None
+
+
+async def test_the_idle_job_folds_no_more_chats_than_its_limit(bea, scripted):
+    """The limit counts paid folds, not people: one person with many quiet chats cannot spend a whole run."""
+    scripted()
+    chats = [await _chat(bea, f"work has been hard, week {week}") for week in (1, 2)]
+
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.threads set last_message_at = now() - interval '30 hours' where id = any($1::uuid[])",
+            [chat.id for chat in chats],
+        )
+
+    assert await memory.fold_idle(limit=1) == 1
+    assert [await _folded_at(chat.id) is not None for chat in chats].count(True) == 1
 
 
 async def test_the_next_chat_is_shaped_by_the_memory_but_carries_none_of_the_old_chat(

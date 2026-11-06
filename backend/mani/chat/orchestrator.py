@@ -593,12 +593,14 @@ async def _converse(
     )
 
 
-async def read_understanding(claims: Claims, job: ReadAfter) -> dict | None:
+async def read_understanding(claims: Claims, job: ReadAfter, *, swallow: bool = True) -> dict | None:
     """Read what their message adds to the picture and Mani's whole reading of them, after the reply is sent, and
-    store it; returns the record stored, or None. Off the person's wait: written before the reply's text, this reading
-    grew with the conversation until turns passed the chat deadline (Lolly's chats, 2026-11-03). It merges onto the
-    record as it is when it lands, under the thread's turn lock, so a turn that started meanwhile is never overwritten.
-    A reading that fails costs this turn's picture, never a reply: logged and swallowed."""
+    store it; returns the record stored, or None when there is nothing to store it on: the thread is gone, or an edit
+    took back the reply it follows and restored the record from before it. Off the person's wait: written before the
+    reply's text, this reading grew with the conversation until turns passed the chat deadline (Lolly's chats,
+    2026-11-03). It merges onto the record as it is when it lands, under the thread's turn lock, so a turn that started
+    meanwhile is never overwritten. A reading that fails costs this turn's picture, never a reply: logged and
+    swallowed, unless the caller runs it again (`swallow=False`, the follow-up), which then gets the error."""
     from mani.db import pool
 
     try:
@@ -618,15 +620,24 @@ async def read_understanding(claims: Claims, job: ReadAfter) -> dict | None:
         async with pool.as_user(claims) as conn:
             await _lock_thread(conn, job.thread_id)
             now = await threads.understanding_of(conn, job.thread_id, job.user_id)
-            if now is None:
+            if now is None or not await _reply_stands(conn, job.message_id):
                 return None
             after = converse.read(now, call.value, their_messages=job.their_messages, with_picture=job.picture)
             if after != now:
                 await threads.apply(conn, job.thread_id, job.user_id, threads.ThreadUpdates(understanding=after))
             return after
     except Exception:
+        if not swallow:
+            raise
         logger.exception("reading after the reply failed for thread %s", job.thread_id)
         return None
+
+
+async def _reply_stands(conn: asyncpg.Connection, message_id: uuid.UUID | None) -> bool:
+    """Whether the reply a reading follows is still in the conversation; an edit deletes it."""
+    return message_id is None or await conn.fetchval(
+        "select exists (select 1 from public.messages where id = $1)", message_id
+    )
 
 
 def _follow_up(turn: Turn) -> dict | None:
@@ -643,43 +654,64 @@ def _follow_up(turn: Turn) -> dict | None:
 
 @dataclass(frozen=True)
 class FollowedUp:
-    """What the work after a reply did: the record the reading stored, and whether the summary was brought up to date."""
+    """What the work after a reply did: the record the reading stored, whether the summary was brought up to date, and
+    whether a part failed and still waits for the app to ask again."""
 
     understanding: dict | None = None
     summarized: bool = False
+    pending: bool = False
+
+
+# Each part of a follow-up stops here, well inside its claim (threads.FOLLOW_UP_CLAIM_SECONDS), so no second request
+# takes the work while it still runs; one that stops stays waiting.
+FOLLOW_UP_DEADLINE_SECONDS = 90
 
 
 async def follow_up(claims: Claims, thread_id: uuid.UUID | str, message_id: uuid.UUID | str) -> FollowedUp | None:
     """Run what the turn left for after Mani's reply `message_id`, when the app asks for it once the reply is shown:
-    the reading and the summary, side by side. None when nothing waits for that reply. A request of its own, not work
-    left running after the turn's response: Vercel stops an instance once a response is sent, and 15 of 49 readings
-    started that way were cut off (2026-11-05). Taken in a short transaction, so no connection is held while the model
-    works, and cleared as it is taken, so a repeated request pays nothing. Each part fails alone, logged."""
+    the reading and the summary, side by side. None when nothing waits for that reply, or another request is running
+    it. A request of its own, not work left running after the turn's response: Vercel stops an instance once a
+    response is sent, and 15 of 49 readings started that way were cut off (2026-11-05). Claimed and settled in short
+    transactions, so no connection is held while the model works. A part that fails stays waiting, alone, and the
+    next request runs only that part; what finished is cleared. Each failure is logged."""
     import asyncio
 
     from mani import summarize
     from mani.db import pool
 
     async with pool.as_user(claims) as conn:
-        waiting = await threads.take_pending_follow_up(conn, thread_id, claims.user_id, message_id)
+        waiting = await threads.claim_pending_follow_up(conn, thread_id, claims.user_id, message_id)
     if waiting is None:
         return None
+    left = {"message_id": str(message_id), "reading": None, "summary": False}
 
     async def read() -> dict | None:
-        reading = waiting.get("reading")
-        return await read_understanding(claims, ReadAfter.from_stored(reading)) if reading else None
+        if not (reading := waiting.get("reading")):
+            return None
+        try:
+            async with asyncio.timeout(FOLLOW_UP_DEADLINE_SECONDS):
+                return await read_understanding(claims, ReadAfter.from_stored(reading), swallow=False)
+        except Exception:
+            logger.exception("reading after the reply failed for thread %s", thread_id)
+            left["reading"] = reading
+            return None
 
     async def summary() -> bool:
         if not waiting.get("summary"):
             return False
         try:
-            return await summarize.update(claims, thread_id) is not None
+            async with asyncio.timeout(FOLLOW_UP_DEADLINE_SECONDS):
+                return await summarize.update(claims, thread_id) is not None
         except Exception:
             logger.exception("summarization failed for thread %s", thread_id)
+            left["summary"] = True
             return False
 
     understood, summarized = await asyncio.gather(read(), summary())
-    return FollowedUp(understanding=understood, summarized=summarized)
+    pending = left["reading"] is not None or left["summary"]
+    async with pool.as_user(claims) as conn:
+        await threads.settle_pending_follow_up(conn, thread_id, claims.user_id, message_id, left if pending else None)
+    return FollowedUp(understanding=understood, summarized=summarized, pending=pending)
 
 
 async def _within_limits(conn: asyncpg.Connection, user_id: str, settings) -> None:

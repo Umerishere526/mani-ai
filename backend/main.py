@@ -86,8 +86,11 @@ def create_app() -> FastAPI:
             dsn=settings.sentry_dsn,
             environment=settings.environment,
             # Conversation content is special-category health data and must not leave
-            # the process attached to an error report.
+            # the process attached to an error report: their message is the request body,
+            # and transcripts and replies sit in the local variables of the failing frames.
             send_default_pii=False,
+            include_local_variables=False,
+            max_request_body_size="never",
         )
 
     app = FastAPI(

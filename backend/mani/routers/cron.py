@@ -1,12 +1,13 @@
 # ABOUTME: Endpoints a scheduler calls, never a person - guarded by a shared secret, not a JWT.
 # ABOUTME: GET, because Vercel Cron always triggers its configured path with GET.
 
+import hmac
 import logging
 
 from fastapi import APIRouter, Header, HTTPException
 
+from mani import catch_up
 from mani.config import get_settings
-from mani.summarize import reconcile_due
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +21,15 @@ def _check_secret(authorization: str | None) -> None:
     mean "open". Runs before anything else in the handler, on every call.
     """
     secret = get_settings().cron_secret
-    if not secret or authorization != f"Bearer {secret}":
+    if not secret or not hmac.compare_digest((authorization or "").encode(), f"Bearer {secret}".encode()):
         raise HTTPException(status_code=401, detail="unauthorized")
 
 
-@router.get("/fold-summaries")
-async def fold_summaries(authorization: str | None = Header(default=None)) -> dict:
-    """Catch up every thread whose rolling summary has fallen behind. See reconcile_due."""
+@router.get("/catch-up")
+async def run_catch_up(authorization: str | None = Header(default=None)) -> dict:
+    """Finish what the app left: summaries fallen behind, follow-ups it never asked for, and quiet chats to fold
+    into memory. See mani/catch_up.py."""
     _check_secret(authorization)
-    processed = await reconcile_due()
-    logger.info("cron fold-summaries: %d thread(s) reconciled", processed)
-    return {"processed": processed}
+    done = await catch_up.run()
+    logger.info("cron catch-up: %s", done)
+    return done
