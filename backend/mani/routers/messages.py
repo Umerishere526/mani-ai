@@ -1,21 +1,19 @@
-# ABOUTME: The chat endpoints - read a thread's history, and send one turn.
-# ABOUTME: Sending runs the orchestrator inside this request's single transaction.
+# ABOUTME: The chat endpoints - read a thread's history, send one turn, and run what it left for after the reply.
+# ABOUTME: Sending holds no connection while the model thinks; the work after a reply is the app's own request.
 
+import asyncio
 import datetime as dt
 import uuid
 
 from fastapi import APIRouter, Query
 
 from mani.auth.deps import CurrentUser, Participant
-from mani.auth.jwt import Claims
-from mani.background import fire_and_forget
-from mani.chat import orchestrator, rewind
+from mani.chat import orchestrator, runner
 from mani.config import get_settings
 from mani.db import messages as messages_db
 from mani.db.deps import UserConn
-from mani.models.api import EditMessageIn, MessageListOut, SendMessageIn, TurnOut
+from mani.models.api import EditMessageIn, FollowUpOut, MessageListOut, SendMessageIn, TurnOut
 from mani.routers.serializers import to_messages
-from mani.summarize import update_quietly
 
 router = APIRouter(prefix="/v1/threads/{thread_id}/messages", tags=["chat"])
 
@@ -38,7 +36,6 @@ async def list_messages(
 @router.post("", response_model=TurnOut, status_code=201)
 async def send(
     user: Participant,
-    conn: UserConn,
     thread_id: uuid.UUID,
     body: SendMessageIn,
 ) -> TurnOut:
@@ -46,49 +43,55 @@ async def send(
 
     One provider call on the person's wait: the checks that the previous implementation
     answered with a regeneration - up to six of them - are deterministic corrections in
-    `chat/repairs.py`. A chat turn's reading of them is a second call, after the reply.
+    `chat/repairs.py`. A chat turn's reading of them is a second call, asked for by the app after the reply
+    (`follow_up` below).
     """
-    turn = await orchestrator.send(
-        conn, user, thread_id, body.content, body.client_message_id
-    )
-    return _turn_out(user, thread_id, turn)
+    turn = await runner.send(user, thread_id, body.content, body.client_message_id)
+    return await _turn_out(thread_id, turn)
 
 
 @router.post("/{message_id}/edit", response_model=TurnOut, status_code=201)
 async def edit(
     user: Participant,
-    conn: UserConn,
     thread_id: uuid.UUID,
     message_id: uuid.UUID,
     body: EditMessageIn,
 ) -> TurnOut:
     """Replace the person's last message: it and Mani's reply are removed, the thread state returns to what it
-    was before that turn, and the new text runs as a fresh turn. All in this request's one transaction, so a
-    failed turn leaves the original exchange in place."""
-    await rewind.undo_last_turn(conn, user.user_id, thread_id, message_id)
-    turn = await orchestrator.send(conn, user, thread_id, body.content)
-    return _turn_out(user, thread_id, turn)
+    was before that turn, and the new text runs as a fresh turn. The write takes it back and runs the new text in
+    one transaction, so a failed turn leaves the original exchange in place."""
+    turn = await runner.edit(user, thread_id, message_id, body.content)
+    return await _turn_out(thread_id, turn)
 
 
-def _turn_out(user: Claims, thread_id: uuid.UUID, turn: orchestrator.Turn) -> TurnOut:
-    # Not FastAPI's BackgroundTasks: both of these read or reference what this turn just
-    # wrote, on a separate connection, and BackgroundTasks run before UserConn's
-    # transaction commits - see mani/background.py for how that was confirmed.
+@router.post("/{message_id}/follow-up", response_model=FollowUpOut)
+async def follow_up(user: Participant, thread_id: uuid.UUID, message_id: uuid.UUID) -> FollowUpOut:
+    """The work a turn leaves for after its reply `message_id` (Mani's reading of them, the summary when it is due),
+    asked for by the app once the reply is shown.
+
+    A request of its own, not work left running after the turn's response: on Vercel the instance stops once a
+    response is sent, and about a third of the readings started that way were cut off (2026-11-05). Runs only what
+    the turn stored for this reply, once; any other call does nothing and costs nothing.
+    """
+    done = await orchestrator.follow_up(user, thread_id, message_id)
+    return FollowUpOut(
+        read=bool(done and done.understanding is not None),
+        summarized=bool(done and done.summarized),
+        understanding=done.understanding if done and get_settings().ai_debug_mode else None,
+    )
+
+
+async def _turn_out(thread_id: uuid.UUID, turn: orchestrator.Turn) -> TurnOut:
+    # Awaited, not left running after the response: Vercel stops the instance once a response is sent, so work
+    # started after it was being lost (2026-11-05). Both are database writes only, side by side, and the turn
+    # is committed by now (chat/runner.py), so the message they reference is there; each swallows its own failure.
+    linking = []
     if turn.llm_call_id and turn.message_id:
-        fire_and_forget(
-            orchestrator.link_call(turn.llm_call_id, turn.message_id), name="link_call"
-        )
-
+        linking.append(orchestrator.link_call(turn.llm_call_id, turn.message_id))
     if turn.trace and turn.message_id and not turn.was_duplicate:
-        # Why this turn went the way it did, stored once the message is committed (admin.turn_traces).
-        fire_and_forget(orchestrator.record_trace(turn, thread_id), name="record_trace")
-
-    if turn.needs_summary:
-        fire_and_forget(update_quietly(user, thread_id), name="update_summary")
-
-    if turn.read_after and not turn.was_duplicate:
-        # What their message adds to Mani's picture of them, read once the reply is on its way.
-        fire_and_forget(orchestrator.read_understanding(user, turn.read_after), name="read_understanding")
+        # Why this turn went the way it did (admin.turn_traces).
+        linking.append(orchestrator.record_trace(turn, thread_id))
+    await asyncio.gather(*linking)
 
     return TurnOut(
         id=turn.message_id,
@@ -104,4 +107,5 @@ def _turn_out(user: Claims, thread_id: uuid.UUID, turn: orchestrator.Turn) -> Tu
         understanding=turn.understanding if get_settings().ai_debug_mode else None,
         check_at_message_count=turn.check_at_message_count if get_settings().ai_debug_mode else None,
         trace=turn.trace if get_settings().ai_debug_mode else None,
+        follow_up_pending=bool(turn.read_after or turn.needs_summary) and not turn.was_duplicate,
     )

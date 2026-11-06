@@ -440,3 +440,177 @@ async def test_the_silence_a_chat_call_may_keep_is_the_first_token_limit_and_a_b
         await client.complete([], Reply, model="m", purpose=purpose, settings=settings())
 
     assert seen == [settings().chat_first_token_seconds, settings().llm_timeout_seconds]
+
+
+@pytest.fixture
+def sent_bodies(monkeypatch):
+    """chain.build, langchain-openai and the OpenAI SDK as they run, with only the HTTP replies scripted: every
+    model chain.build makes talks to a fake OpenRouter that answers each request with a valid reply. Yields the
+    JSON body of each request that reached the network."""
+    import functools
+    import json
+
+    import httpx
+    from langchain_openai import ChatOpenAI
+
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        stream = openrouter_stream('{"text": "hi"}', f"gen-{len(bodies)}")
+        return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=stream())
+
+    transport = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(client.chain, "ChatOpenAI", functools.partial(ChatOpenAI, http_async_client=transport))
+    # Models cached by other tests hold a real HTTP client; none may be reused here, nor these leak out.
+    client.chain._model.cache_clear()
+    yield bodies
+    client.chain._model.cache_clear()
+
+
+THREAD = uuid.UUID("7e5a0000-0000-4000-8000-000000000001")
+OTHER_THREAD = uuid.UUID("7e5a0000-0000-4000-8000-000000000002")
+
+
+async def test_a_call_with_a_thread_carries_its_sticky_keys_beside_the_provider_reasoning_and_usage(
+    sent_bodies, recorded
+):
+    """2026-11-05: OpenRouter recorded session_id null on every call and turn 2 of a thread was almost never
+    cached. The keys ride on the call itself, merged into what every call sends, and the configured model is
+    still one per configuration, not one per conversation."""
+    for thread in (THREAD, OTHER_THREAD):
+        await client.complete(
+            [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+            purpose=llm_calls.Purpose.CHAT, reasoning_effort="medium", thread_id=thread, settings=settings(),
+        )
+
+    first, second = sent_bodies
+    assert first["session_id"] == first["prompt_cache_key"] == f"{THREAD}:chat"
+    assert second["session_id"] == second["prompt_cache_key"] == f"{OTHER_THREAD}:chat"
+    assert first["provider"]["data_collection"] == "deny" and "order" not in first["provider"]
+    assert first["reasoning"] == {"effort": "medium"}
+    assert first["usage"] == {"include": True}
+    assert first["stream"] is True
+    assert client.chain._model.cache_info().currsize == 1, "one model for both threads"
+
+
+async def test_a_call_with_no_thread_sends_no_sticky_keys(sent_bodies, recorded):
+    await client.complete(
+        [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+        purpose=llm_calls.Purpose.MEMORY_FOLD, settings=settings(),
+    )
+
+    assert "session_id" not in sent_bodies[0] and "prompt_cache_key" not in sent_bodies[0]
+
+
+async def test_only_the_chat_reply_asks_for_the_priority_tier_and_each_purpose_keeps_its_own_key(
+    sent_bodies, recorded
+):
+    """The person waits on the chat reply alone: it asks for OpenAI's priority endpoint and may fall back to the
+    standard one, never to Azure, Bedrock or flex. The calls after the reply stay on the default tier, under a
+    key of their own, so they never re-pin the chat's conversation to another endpoint."""
+    purposes = (llm_calls.Purpose.CHAT, llm_calls.Purpose.UNDERSTANDING, llm_calls.Purpose.SUMMARIZE,
+                llm_calls.Purpose.MEMORY_FOLD)
+    for purpose in purposes:
+        await client.complete(
+            [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+            purpose=purpose, thread_id=THREAD, settings=settings(),
+        )
+
+    chat, *background = sent_bodies
+    assert chat["service_tier"] == "priority"
+    assert chat["provider"] == {
+        "only": ["openai", "openai/priority"], "sort": "latency", "allow_fallbacks": True,
+        "data_collection": "deny",
+    }
+    for purpose, body in zip(purposes[1:], background, strict=True):
+        assert "service_tier" not in body, purpose
+        assert body["provider"]["only"] == ["openai"], purpose
+        assert body["session_id"] == body["prompt_cache_key"] == f"{THREAD}:{purpose.value}"
+
+
+async def test_the_priority_tier_is_switched_off_by_configuration(sent_bodies, recorded):
+    await client.complete(
+        [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna", purpose=llm_calls.Purpose.CHAT,
+        thread_id=THREAD, settings=settings().model_copy(update={"openrouter_chat_service_tier": "default"}),
+    )
+
+    assert "service_tier" not in sent_bodies[0]
+    assert sent_bodies[0]["provider"]["only"] == ["openai"]
+
+
+async def test_a_retry_gets_only_what_is_left_of_the_chat_budget(monkeypatch, recorded):
+    """Both attempts share one budget, so a malformed first reply that came late leaves its retry the rest of
+    it, not a whole deadline: every wait on a turn adds up under the chat-tester's 90 s (2026-11-05)."""
+    class LateThenStalled(FakeRunnable):
+        async def scripted(self, messages):
+            self.calls += 1
+            await asyncio.sleep(0.2 if self.calls == 1 else 10)
+            return invalid()
+
+    install(monkeypatch, LateThenStalled())
+    tight = settings().model_copy(update={"chat_deadline_seconds": 10.0, "chat_budget_seconds": 1.5})
+    began = asyncio.get_running_loop().time()
+
+    with pytest.raises(ServiceError) as raised:
+        await client.complete([], Reply, model="m", purpose=llm_calls.Purpose.CHAT, settings=tight)
+
+    assert asyncio.get_running_loop().time() - began < 4.0, "the retry was cut at the budget, not the deadline"
+    assert raised.value.user_message == "Mani took too long to answer. Please try again."
+    assert [r["outcome"] for r in recorded] == [llm_calls.Outcome.SCHEMA_INVALID, llm_calls.Outcome.TIMEOUT]
+
+
+async def test_a_call_that_finds_every_slot_taken_is_refused_quickly_as_busy(monkeypatch, recorded):
+    """An instance caps the model calls it has in flight; past the cap a call is refused fast and retryable,
+    never queued behind the provider."""
+    from mani.errors import ErrorCategory
+
+    class Stalled(FakeRunnable):
+        async def scripted(self, messages):
+            await asyncio.sleep(10)
+
+    install(monkeypatch, Stalled())
+    one_slot = settings().model_copy(update={"model_calls_in_flight": 1, "model_slot_wait_seconds": 0.05})
+    holding = asyncio.create_task(
+        client.complete([], Reply, model="m", purpose=llm_calls.Purpose.SUMMARIZE, settings=one_slot)
+    )
+    await asyncio.sleep(0.01)
+    try:
+        with pytest.raises(ServiceError) as raised:
+            await client.complete([], Reply, model="m", purpose=llm_calls.Purpose.CHAT, settings=one_slot)
+    finally:
+        holding.cancel()
+
+    assert raised.value.category is ErrorCategory.RATE_LIMITED and raised.value.status_code == 429
+    assert raised.value.retryable
+    assert raised.value.user_message == "Mani is busy right now. Please try again in a moment."
+
+
+def _quoting(words: str) -> list[BaseException]:
+    """The two failures whose own text quotes the reply: pydantic's, and LangChain's parser."""
+    from langchain_core.exceptions import OutputParserException
+    from pydantic import ValidationError
+
+    try:
+        Reply.model_validate({"text": [words]})
+    except ValidationError as exc:
+        return [exc, OutputParserException(f"Failed to parse Reply from completion {words}")]
+    raise AssertionError("expected the reply to be refused")
+
+
+@pytest.mark.parametrize("which", [0, 1])
+async def test_a_reply_that_does_not_fit_is_recorded_and_raised_without_its_words(monkeypatch, recorded, which):
+    """Audit #5: the cost row and the error kept pydantic's message, whose `input_value=` quotes the reply.
+    Only the kind of failure and where it failed are kept, as for a request that fails validation."""
+    words = "I told my sister about the diagnosis"
+    failure = _quoting(words)[which]
+    install(monkeypatch, FakeRunnable({"raw": None, "parsed": None, "parsing_error": failure}))
+
+    with pytest.raises(ServiceError) as raised:
+        await client.complete([], Reply, model="m", purpose=llm_calls.Purpose.CHAT, settings=settings())
+
+    kept = [r["error_message"] for r in recorded] + [str(raised.value)]
+    assert all(words not in k and "input_value" not in k for k in kept), kept
+    assert type(failure).__name__ in recorded[0]["error_message"]
+    if which == 0:
+        assert "('string_type', ('text',))" in recorded[0]["error_message"], "what and where it failed are kept"

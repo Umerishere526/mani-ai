@@ -90,9 +90,14 @@ set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-00000000000a"}';
 
 do $$
 begin
-  insert into public.threads (user_id, title)
-  values ('a0000000-0000-4000-8000-00000000000a', 'a thread Alice starts');
-  raise notice 'PASS: a user can create their own thread';
+  begin
+    insert into public.threads (user_id, title)
+    values ('a0000000-0000-4000-8000-00000000000a', 'a thread Alice starts');
+    raise exception 'FAIL: a user created a thread with their own token';
+  exception
+    when insufficient_privilege then
+      raise notice 'PASS: threads are started by the backend, not the user';
+  end;
 
   begin
     insert into public.thread_technique_state
@@ -116,13 +121,28 @@ begin
       raise notice 'PASS: summaries are written by the backend, not the user';
   end;
 
+end
+$$;
+rollback;
+
+-- The backend starts a thread acting as the user, and RLS scopes that write to them.
+begin;
+set local role mani_service;
+set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-00000000000a"}';
+
+do $$
+begin
+  insert into public.threads (user_id, title)
+  values ('a0000000-0000-4000-8000-00000000000a', 'a thread Alice starts');
+  raise notice 'PASS: the backend can start a thread for the user it acts as';
+
   begin
     insert into public.threads (user_id, title)
     values ('a0000000-0000-4000-8000-00000000000b', 'a thread in Bob''s name');
-    raise exception 'FAIL: Alice created a thread owned by Bob';
+    raise exception 'FAIL: acting as Alice, the backend created a thread owned by Bob';
   exception
     when insufficient_privilege then
-      raise notice 'PASS: a user cannot create rows owned by someone else';
+      raise notice 'PASS: a thread cannot be created in someone else''s name';
   end;
 end
 $$;
@@ -435,16 +455,6 @@ begin
     when insufficient_privilege then
       raise notice 'PASS: offered-technique rows require owning the thread';
   end;
-
-  begin
-    insert into public.thread_response_styles (thread_id, user_id, shape)
-    values ('11111111-0000-4000-8000-000000000001',
-            'a0000000-0000-4000-8000-00000000000b', 'mirror and ask');
-    raise exception 'FAIL: Bob wrote a response style onto Alice''s thread';
-  exception
-    when insufficient_privilege then
-      raise notice 'PASS: response styles require owning the thread';
-  end;
 end
 $$;
 rollback;
@@ -453,9 +463,8 @@ rollback;
 -- The closed sets the application validates are also stated in the database
 -- ---------------------------------------------------------------------------
 
+-- No role in the application inserts response styles (migration 031), so the constraints are checked as the owner.
 begin;
-set local role authenticated;
-set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-00000000000a"}';
 
 do $$
 begin

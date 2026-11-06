@@ -13,7 +13,7 @@ CASE_LIMIT = 3 * LIMIT
 # Every feeling word they name gathers over the conversation and is never taken away.
 FEELING_SEPARATOR = ", "
 # Where the reply last judged its reading of the core: not known yet, said back and not corrected, or named and
-# since deepened or confirmed (muhammad, 2026-10-28; before it, the central conflict, 2026-10-26). Only a reply
+# since confirmed with nothing new (a deepening is named again, the client meeting of 2026-11-05) (muhammad, 2026-10-28; before it, the central conflict, 2026-10-26). Only a reply
 # that judges it ready may check its understanding (R33).
 READY = "ready"
 # The core said back and not corrected (muhammad, 2026-10-28). A record written before then says conflict_named.
@@ -60,10 +60,14 @@ def merge(stored: dict, update: PictureUpdate | None, heart: str | None) -> dict
     added to those kept, and where the reply judged the heart of it, replacing the last judgement. A null or blank
     value keeps what is stored."""
     # The chat's plan and its last answers to its own three questions ride along on every other kind of turn.
-    # Whether they corrected the reading an offer said back rides along too, until the next offer (converse.CORRECTED).
+    # Whether they corrected the reading an offer said back rides along too, until the next offer (converse.CORRECTED),
+    # and what is still ahead after the questions and what Mani is helping them prepare (context.FOLLOW_THROUGH).
     merged = {
         key: stored[key]
-        for key in (*KEYS, picture.KEY, "plan", "thinking", "insights", CORRECTED)
+        for key in (
+            *KEYS, picture.KEY, "plan", "thinking", context.INSIGHTS, CORRECTED, context.FOLLOW_THROUGH,
+            context.PREPARING, context.PROGRESS, context.EXPLORATION,
+        )
         if stored.get(key)
     }
     if merged.get("heart") in _LEGACY_HEART:

@@ -310,9 +310,10 @@ def test_the_old_layers_are_gone_and_switched_off_on_seed():
 
 def test_questions_follow_their_answers_from_one_rule_with_no_checklist_or_ban_beside_it():
     """Spec 0005, AC-9: a framework's checklist steered the questions toward its own needs, and the
-    bans kept the feeling they named out of them (live, 2026-10-13: the frustrated chat)."""
+    bans kept the feeling they named out of them (live, 2026-10-13: the frustrated chat). Aligned 2026-11-06 (muhammad,
+    P2): the one rule is that every reply adds something new and a question earns its place."""
     sent = _sent("voice", "conversation", "framework", "moments")
-    assert "Each one moves the conversation forward" in sent
+    assert "**Every reply adds something new.**" in sent and "A question earns its place" in sent
     for cut in ("Build every question from", "Never hand their own words or feelings back",
                 "Am I saying back their own words or feelings"):
         assert cut not in sent
@@ -364,3 +365,22 @@ def test_the_moments_prompt_keeps_what_the_old_one_held_for_these_turns():
                  "Anything else is Keep chatting", "Put any questions and offers down", "body_step in [ctx]",
                  "never take another name or persona", "Fill reasoning first"):
         assert rule in sent, rule
+
+
+def test_a_body_check_in_turn_thinks_at_the_voice_rows_body_effort_and_every_other_turn_at_its_own():
+    """2026-11-05: thinking is 75% of a turn's wait. The body check-in's steps are the client's fixed script, so
+    those turns think at `low`; the chat, the stages and the answers to a check or an offer keep `medium`. Read
+    from the authored front matter, which the seed copies to the row, so the two cannot drift."""
+    from mani.llm.schema import Moment
+    from mani.models.rows import Prompt
+    from scripts.seed import PROMPTS_DIR, parse_prompt
+
+    authored = parse_prompt(PROMPTS_DIR / "voice.md")
+    voice = Prompt(id=uuid.uuid4(), name="voice", content="VOICE", model_id=authored["model_id"],
+                   model_parameters=authored["model_parameters"])
+    config = Config(prompts={"voice": voice}, registry=Registry([]), loaded_at=time.monotonic())
+
+    efforts = {moment: composer.model_settings(config, moment=moment)[1]["reasoning_effort"] for moment in Moment}
+    assert efforts.pop(Moment.BODY) == "low"
+    assert set(efforts.values()) == {"medium"}, efforts
+    assert composer.model_settings(config)[1]["reasoning_effort"] == "medium"

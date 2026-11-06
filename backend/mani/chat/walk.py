@@ -22,11 +22,14 @@ CONFIRMED = frozenset({"known", "possible"})
 # How their message may answer the stage in force and move the walk on. Not knowing never moves it, and neither does
 # exploring what they added to a stage said back.
 MOVES = frozenset({"agreed", "answered", "corrected"})
-# What they added to a stage said back, explored before moving on: how many turns so far is kept on the stage's entry,
-# and after EXPLORE_TURNS the note asks Mani to tie it together and move on (the client meeting, 2026-11-03).
+# What they added to a stage, explored before moving on: how many turns so far is kept on the stage's entry, for the
+# trace (the client meeting, 2026-11-03). There is no cap on it (muhammad, 2026-11-06: "the goal is not to reduce the
+# number of questions, it is to make every question earn its place"): a stage stays while a part of it not yet explored
+# would help them, and the parts it has opened are kept as COVERED so none is asked again. Two turns with nothing new
+# still offer to step out (STALLS_TO_STEP_OUT).
 EXPLORE = "explore"
 EXPLORED = "explored"
-EXPLORE_TURNS = 2
+COVERED = "covered"
 SAID_LIMIT = 200
 # How Mani confirms a stage the person already answered, in its own words (muhammad's team lead, 2026-10-13).
 CONFIRM_ASK = (
@@ -222,6 +225,26 @@ def _counts(answer: str, before: dict, updated: bool) -> bool:
     return True
 
 
+# A message that asks something: the question comes first and the stage waits (muhammad, 2026-11-05: manasa's "should
+# I look at this thought or my numbness? Does one affect the other?" moved the walk and the reply opened on Step 2).
+_ASKS = re.compile(
+    r"\?|^\s*(?:should|does|do|is|are|can|could|would|will|what|why|how|when|where|which|who)\b", re.IGNORECASE,
+)
+# The answers that move the walk, which a question never is.
+_MOVING = ("agreed", "answered", "corrected")
+
+
+def asks(message: str) -> bool:
+    """Whether their message asks something: a question mark, or one that opens like a question."""
+    return bool(_ASKS.search(message or ""))
+
+
+def held_by_question(answer: str | None, message: str) -> str | None:
+    """The stage answer to apply: a moving answer becomes not_yet when their message asks something, so the walk
+    stays and the reply answers it first. Anything else is kept."""
+    return "not_yet" if answer in _MOVING and asks(message) else answer
+
+
 def advance(
     framework: Framework,
     entries: dict[str, dict],
@@ -274,6 +297,17 @@ def advance(
     reached = following if following in stages else None
     stored, reach_notes, unjudged = _reach(framework, stored, reached, report)
     return Walked(stored, following, reached, notes + reach_notes, unjudged=unjudged, first_gap=_asks_first(reach_notes))
+
+
+def covered(framework: Framework, entries: dict[str, dict], stage: str, opened: list[str] | None) -> dict[str, dict]:
+    """The entries with the parts of `stage` this reply opened added to what it has covered: only ids the stage lists
+    under `explore`, each once. A stage the walk has left is never touched."""
+    allowed = [e["id"] for e in ((framework.stages or {}).get(stage) or {}).get("explore") or []]
+    entry = entries.get(stage) or {}
+    new = [i for i in opened or [] if i in allowed and i not in (entry.get(COVERED) or [])]
+    if not new or entry.get("status") == "done":
+        return entries
+    return {**entries, stage: {**entry, COVERED: [*(entry.get(COVERED) or []), *new]}}
 
 
 # Turns on one stage with nothing new before Mani offers to step out of the questions (muhammad, 2026-10-27).
@@ -477,8 +511,9 @@ def next_line(framework: Framework, phase: str) -> str:
     """What the reply's text is for, in each way their message can answer the stage in force."""
     following = framework.phases[framework.phase_index(phase) + 1]
     if following in ENDING_STAGES:
+        after = "the body check-in" if following != "somatic_closing" else "Keep Chatting, Go to Library and Finish for Now"
         moved = (
-            "the questions end, and code sends the body check-in after your text: write the close the stage asks for, a "
+            f"the questions end, and code sends {after} after your text: write the close the stage asks for, a "
             "few warm sentences at most, with no question and no mention of the body or a check-in. Never repeat what "
             "your last reply said back. Carry forward the one thing they said they would do, in their words, and never put "
             "what they want off to another time."
@@ -486,8 +521,10 @@ def next_line(framework: Framework, phase: str) -> str:
     else:
         moved = f"the walk reaches {following}: {reach_line(following)}"
     return (
-        f"If you answer agreed, answered or corrected, {moved} If explore, the walk stays: acknowledge what they "
-        f"added and ask one open question (what or how, never yes or no) that explores it, without moving to the next stage yet. If not_yet, the walk "
+        f"If you answer agreed, answered or corrected, {moved} If explore, the walk stays: build on what they "
+        f"added, with an insight when they have earned one, and ask one open question (what or how, never yes or no) "
+        f"about a part of this stage not yet explored (stage_explore, stage_explored), never one already asked or "
+        f"answered, without moving to the next stage yet. If not_yet, the walk "
         f"stays: answer what they said as you would in the chat, talk about anything new they brought in, then come back toward this stage "
         f"from what they have said, in fresh words. Possibilities go in options only when options says so. "
         f"If stop, write one warm line asking what they would like to talk about."

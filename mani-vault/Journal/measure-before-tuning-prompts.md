@@ -3,6 +3,7 @@ type: journal
 date: 2026-09-23
 tags: [journal, prompts, evals, lessons]
 ---
+> Superseded 2026-11-05 — see [[read-think-write-2026-11-05]] (the fold's `FOR NO KEY UPDATE` claim: the fold no longer claims a thread or holds a connection across its model call)
 
 # Measure before tuning prompts
 

@@ -22,7 +22,12 @@ seed.py appends `somatic_ask`, `somatic_body`, `somatic_practice`, `somatic_effe
 exercise; to be confirmed with Lolly): after a framework's last stage, Mani asks whether they would like to check in
 with their body at all. Yes goes on to Step 1, the client's introduction, question and five buttons (muhammad, 2026-11-04); Not right now goes straight to Step 5.
 
+Paused (muhammad, 2026-11-05: "chat, then the framework, not somatic"): `paused` names the stages left out of
+every framework's phases, so the questions end straight on `somatic_closing`, Mani's close with Keep Chatting, Go to
+Library and Finish for Now. Their scripts stay seeded. To bring the check-in back, empty `paused` and reseed.
+
 ```yaml
+paused: [somatic_ask, somatic_body, somatic_practice, somatic_effect]
 stages:
   somatic_ask:
     purpose: "Before Step 1: asks whether they would like to check in with their body at all. Ours, not the client's. Send the text; the model only reads a typed answer."
@@ -364,4 +369,9 @@ stages:
         - {id: keep_chatting, label: Keep Chatting}
         - {id: library, label: Go to Library}
         - {id: finish, label: Finish for Now}
+      # Ours, not the client's (muhammad, 2026-11-06, after manasa's tests: nothing helped her plan how to raise it
+      # with her boss). Shown first, only when the reply that closed the questions found something practical still
+      # ahead of them (follow_through).
+      plan_buttons:
+        - {id: plan, label: Plan Next Step}
 ```

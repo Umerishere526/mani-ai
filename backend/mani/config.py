@@ -57,12 +57,29 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 60.0
     # The longest a chat reply may take in all. The timeout above bounds each wait for data, not the
     # call: a provider that keeps the connection open sent a reply after 102 s (2026-10-14), past
-    # the chat tester's 90. A reply past this fails as "took too long", and a resend is safe.
-    chat_deadline_seconds: float = 30.0
+    # the chat tester's 90. A reply past this fails as "took too long", and a resend is safe. 45 because at 30
+    # three messages were lost at exactly 30.0 s while the slowest reply that made it took 29.2 s (2026-11-05).
+    chat_deadline_seconds: float = 45.0
     # How long a chat call may send nothing before it is cut and tried once more. A reasoning model
     # thinks before its first token, and the longest of those silences ran past 20 s while its
     # neighbours took 5 (2026-10-21), so a second try usually answers faster than waiting.
     chat_first_token_seconds: float = 15.0
+    # Both attempts of a chat call together, so a retry gets only what the first left. Every wait on a turn's
+    # path adds up under the chat-tester's 90 s (PORT-STATUS, "Every wait on a turn adds up under 90 s").
+    chat_budget_seconds: float = 65.0
+    # Model calls one instance may have in flight, chat and background alike. A call that finds no slot
+    # within the wait is refused as busy rather than queued behind the provider.
+    model_calls_in_flight: int = Field(default=100, ge=1)
+    model_slot_wait_seconds: float = 2.0
+
+    # Connections one instance holds to the database, through Supabase's transaction pooler. No turn
+    # holds one across a model call, so a few serve many turns; every instance multiplies the max.
+    db_pool_min_size: int = Field(default=0, ge=0)
+    db_pool_max_size: int = Field(default=5, ge=1)
+    # How long a request waits for a free connection before it is refused as busy, never left hanging.
+    db_acquire_timeout_seconds: float = 5.0
+    # How long the JWKS fetch may take when the key cache misses. PyJWT's own default is 30 s.
+    jwks_timeout_seconds: float = 5.0
 
     # Used when a prompt row names no model of its own.
     default_chat_model: str = "openai/gpt-6-luna"
@@ -101,16 +118,28 @@ class Settings(BaseSettings):
     # A turn the first endpoint cannot serve goes to the next rather than failing.
     # data_collection stays "deny" on every one, so training use is refused there too.
     openrouter_allow_fallbacks: bool = True
+    # The tier a chat reply, the call the person waits on, asks for. `priority` is OpenAI's faster tier at
+    # twice the price: 109 against 65 tokens a second, about $0.06 a day more at the traffic of 2026-11-05.
+    # Background calls always use the default tier. `default` turns it off with no change to code.
+    openrouter_chat_service_tier: Literal["priority", "default"] = "priority"
 
-    def routing(self, overrides: dict | None = None) -> dict:
-        """OpenRouter `provider` options for a call, with per-prompt overrides applied."""
-        base = {
+    def routing(self, overrides: dict | None = None, *, priority: bool = False) -> dict:
+        """OpenRouter `provider` options for a call, with per-prompt overrides applied.
+
+        With `priority`, each allowed provider's priority endpoint is allowed beside it. A base slug never
+        matches a tier endpoint, so `openai/priority` (OpenRouter's other name for `openai/fast`) has to be
+        named; the standard endpoint stays allowed so the call falls back to it rather than failing. Never
+        an order: an order turns off sticky routing.
+        """
+        provider = {
             "only": self.openrouter_providers,
             "sort": self.openrouter_sort,
             "allow_fallbacks": self.openrouter_allow_fallbacks,
             "data_collection": self.openrouter_data_collection,
-        }
-        return base | (overrides or {})
+        } | (overrides or {})
+        if priority:
+            provider["only"] = [*provider["only"], *(f"{slug}/priority" for slug in provider["only"])]
+        return provider
 
     # Browsers refuse a cross-origin request unless the server names the origin, so
     # web/ cannot call this at all until its origin is listed. Native mobile is not
@@ -144,13 +173,16 @@ class Settings(BaseSettings):
     # every request - there is no host where an unset secret should mean "open".
     cron_secret: str = Field(default="", repr=False)
 
-    # When false the crisis panel still appears but the user can keep chatting.
-    crisis_blocks_chat: bool = True
+    # When false the crisis panel still appears but the user can keep chatting. Off by default since 2026-11-06
+    # (muhammad): a lock cut off the one channel someone at risk was using, and in manasa's test it fired on "I'm safe".
+    crisis_blocks_chat: bool = False
 
     # Paid replies one person may get in 24 hours. 0 turns it off. muhammad's number is 300,
     # off for now so testing is not capped; set it before real traffic. Only turns that call
     # the model count, and the safety screen runs before it - a crisis is always answered.
     daily_message_limit: int = Field(default=0, ge=0)
+    # Paid replies one person may get in a minute, counted the same way. 0 turns it off.
+    minute_message_limit: int = Field(default=10, ge=0)
 
     prompt_cache_ttl_seconds: int = Field(default=0)
 

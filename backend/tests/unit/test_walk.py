@@ -500,12 +500,24 @@ def test_something_meaningful_added_to_a_stage_said_back_is_explored_before_the_
         "said": "it's worst at night, when I'm alone", "status": "known", walk.EXPLORED: 1,
     }
     assert "belief" not in first.entries, "the stage ahead is judged only when the walk reaches it"
-    second = walk.advance(abcde, first.entries, None, "explore", in_force="activate")
-    assert second.entries["activate"][walk.EXPLORED] == 2
-    moved = walk.advance(abcde, second.entries, None, "agreed", in_force="activate",
+    moved = walk.advance(abcde, first.entries, None, "agreed", in_force="activate",
                          report=judged("known", "if you don't check, it'll be your fault"))
     assert (moved.phase, moved.reached) == ("belief", "belief")
     assert moved.entries["activate"] == {"said": "it's worst at night, when I'm alone", "status": "done"}
+
+
+def test_a_stage_explores_as_long_as_each_turn_opens_a_new_part_and_keeps_what_it_opened(abcde):
+    """muhammad, 2026-11-06: "the goal is not to reduce the number of questions, it is to make every question earn its
+    place". Three questions at C are right when each opens a different part; none is asked twice."""
+    entries = {"consequence": {"said": "I hold back in meetings", "status": "known"}}
+    for turn, opened in enumerate((["feelings"], ["actions", "feelings"], ["in_the_moment"]), start=1):
+        stayed = walk.advance(abcde, entries, None, "explore", in_force="consequence")
+        assert stayed.phase == "consequence" and stayed.entries["consequence"][walk.EXPLORED] == turn
+        entries = walk.covered(abcde, stayed.entries, "consequence", opened)
+    assert entries["consequence"][walk.COVERED] == ["feelings", "actions", "in_the_moment"]
+    assert walk.covered(abcde, entries, "consequence", ["not_a_part"]) == entries, "only the stage's own parts count"
+    done = {"consequence": {"said": "x", "status": "done"}}
+    assert walk.covered(abcde, done, "consequence", ["feelings"]) == done, "a stage left behind is never touched"
 
 
 def test_explore_counts_only_on_a_stage_said_back_and_the_other_answers_move_as_before(abcde):
@@ -623,3 +635,27 @@ def test_step_5_asks_for_the_thought_in_their_words_first_and_keeps_one_they_onl
     accurate = walk.advance(reframe, stored, [said("alternative", "there is no other explanation", "known")], "answered",
                             **step, report=judged("partial", "the concern is real", "step"))
     assert not accurate.first_gap and accurate.entries["replacement"]["gap"] == "step", "an accurate thought is never reframed"
+
+
+def test_a_message_that_asks_something_never_moves_the_stage():
+    """muhammad, 2026-11-05: "should I look at this thought or my numbness? Does one affect the other in any way" was
+    read as an answer and the reply opened on Step 2."""
+    for asked in ("should I look at this thought or my numbness? Does one affect the other in any way",
+                  "does one affect the other", "What do you mean by that"):
+        assert walk.held_by_question("answered", asked) == "not_yet", asked
+        assert walk.held_by_question("agreed", asked) == "not_yet", asked
+    assert walk.held_by_question("explore", "why does it hurt so much?") == "explore", "staying stays"
+    assert walk.held_by_question("stop", "can we stop?") == "stop", "a wish to stop is still theirs"
+    assert walk.held_by_question("answered", "the past 7 or 8 weeks") == "answered"
+    assert walk.held_by_question("answered", "I think it's being blindsided again.") == "answered"
+
+
+def test_the_last_stage_tells_the_reply_the_closing_choices_follow_while_the_body_check_in_is_paused():
+    """muhammad, 2026-11-05: the model is told what code sends after its close, so it never promises a check-in."""
+    from mani.models.rows import Framework
+
+    paused = Framework(id="f", name="F", summary="s", body="b", phases=["offering", "a", "e", "somatic_closing"])
+    full = paused.model_copy(update={"phases": ["offering", "a", "e", "somatic_ask", "somatic_closing"]})
+
+    assert "Keep Chatting, Go to Library and Finish for Now after your text" in walk.next_line(paused, "e")
+    assert "the body check-in after your text" in walk.next_line(full, "e")

@@ -96,6 +96,11 @@ stages:
     title: "A: Activating Event"
     intro: "A is for Activating Event."
     purpose: "Identify the activating situation: what happened, or keeps happening, to them or around them that sets off the reaction. An ongoing pattern counts as much as a single event."
+    # The parts of the experience this stage can open, each only when it adds something (muhammad, 2026-11-06).
+    explore:
+      - {id: what_happened, about: "what happened or keeps happening, in plain facts"}
+      - {id: when_where, about: "when and where it happens, and how often"}
+      - {id: who, about: "who was involved and what they said or did"}
     reach: "If their_case already describes what happened, report activate as known, in their words. A is the situation the confirmed core is about, which may be an ongoing pattern ('when you stop reaching out, days or weeks pass without hearing from anyone'), never simply the latest or most vivid event: a single event that made the pattern hurt more, such as a birthday, is at most a short example inside it, never the frame. Your text says back only that situation, in one sentence, then asks whether that's the situation they'd like to explore. No feeling and no interpretation: those come in B and C. Never ask for it again. The event is the observable trigger (what was said, done, or happened), never their belief about it or its consequences. If their_case has no concrete event, report activate as missing and ask what happened."
     listen_for: "What happened or has been happening; what they did; what others said or did; and whether they're describing what they observed or what they inferred."
     ready_when: "The situation is clear from what they've said, one event or an ongoing pattern, and it's described as something that happened or keeps happening rather than as their interpretation of it."
@@ -139,6 +144,12 @@ stages:
     # The part of Mani's picture that feeds this stage once it has passed: a new thought replaces its words.
     picture: thought
     purpose: "Identify, in their own words, what they started believing or telling themselves about the event: the interpretation that sits between what happened and how they reacted."
+    # The parts of the experience this stage can open, each only when it adds something (muhammad, 2026-11-06).
+    explore:
+      - {id: thought, about: "what they told themselves about it"}
+      - {id: about_self, about: "what it says to them about themselves"}
+      - {id: about_future, about: "what they fear it means for what comes next"}
+      - {id: rule, about: "the should or must behind it"}
     # Sent as next_stage_reach on the previous stage, where the reply assesses this stage for the walk.
     reach: "If several beliefs appear, report belief as partial, with each one in their words, so your text asks which one affected them most. A belief is what they concluded about themselves, others, or what it means for their future. It is never a judgement of whether how they were treated was real or fair. When their_case holds the core they confirmed, report belief as known with the core belief, in their words, so your text says it back and asks whether that's the belief underneath it. The belief is tied to the event but need not be the literal thought they had in that moment: it may be one they recognise looking back, so never ask whether it is exactly what they told themselves then. The first thing they told themselves counts only when it is the core: \"I've ruined everything\" on the way to \"I'm not capable of change\" is not it."
     listen_for: "The conclusion, prediction, rule, demand or judgement they attached to what happened: their self-talk. Unhelpful beliefs often sound absolute ('I always...', 'I'm worthless', 'I can't stand this', 'they should have...', 'it's a disaster'). Notice these for yourself, but never label them to the user."
@@ -171,6 +182,13 @@ stages:
     # The part of Mani's picture that feeds this stage once it has passed: a new feeling is added to its words.
     picture: feelings
     purpose: "Identify how believing that affected what they felt and what they did or avoided, so they can see the link from event to belief to reaction."
+    # The parts of the experience this stage can open, each only when it adds something (muhammad, 2026-11-06).
+    explore:
+      - {id: feelings, about: "what they feel when they believe it"}
+      - {id: actions, about: "what they do, avoid or hold back from"}
+      - {id: effects, about: "what it does to their work, health or the people close to them"}
+      - {id: in_the_moment, about: "what goes through their mind in the moment it happens"}
+      - {id: cost, about: "what it is costing them"}
     reach: "Report consequence as known where they've tied a feeling or an action to that belief. Where they described feelings or actions that may follow from it but never tied them to it, report it as partial, with those words, so your text says them back and asks whether that's how the belief has affected them. Where their_case already gives the feeling underneath, report consequence as known, in their words, so your text says it back and asks whether that's how the belief has affected them. Feelings and actions they described in the chat before the framework count: say them back together and ask only what else the belief affects, if anything, never for them again. Consequences are both what they feel and what they do: when only feelings are known, report it as partial and ask openly about the other side, such as 'how does it affect the way you are with them?', rather than asking them to confirm your reading. It is known only when both what they feel and what they do are known."
     listen_for: "Emotional consequences, such as anxiety, anger, low mood, guilt, shame, frustration or self-pity, and behavioural ones, such as withdrawing, avoiding, snapping at people, moping, drinking or giving up. Note whether the reaction is working for them or against them, but let them be the one to say so."
     ready_when: "They've named at least one feeling or behaviour themselves as following from the belief. Don't introduce a consequence they didn't name."
@@ -201,6 +219,13 @@ stages:
     carries_case: true
     intro: "D is for Dispute."
     purpose: "Help them examine the belief on two questions, whether it's accurate and whether it's helpful, and separate what they know from what they assume. The aim is to examine the belief, not to prove it wrong."
+    # The parts of the experience this stage can open, each only when it adds something (muhammad, 2026-11-06).
+    explore:
+      - {id: supports, about: "what makes it feel true"}
+      - {id: challenges, about: "what does not fit it"}
+      - {id: known_vs_assumed, about: "what they know and what they assume"}
+      - {id: friend_view, about: "what they would say to a friend in their place"}
+      - {id: helpful, about: "whether holding it helps them or holds them back"}
     listen_for: "Keep three things apart: what happened (real, never questioned), their interpretation of it (understandable, never confirmed as fact), and what they assume without knowing. Then sort what they say into two piles and keep them apart. What supports the belief: something real they've noticed, such as a pattern in what they do (pulling back when things get serious is support, not a challenge). What challenges it: something that suggests it isn't completely true, such as having liked people and had chances. Also what they don't yet know, and whether holding the belief is helping them or holding them back."
     reach: "In said, keep the two piles apart: 'supports: <their words>; challenges: <their words>'. What they said in the chat before the framework counts for either pile: when the chat already holds what supports it, report dispute as partial with the gap 'challenge' from the start, so your text explores only the side not yet examined. If nothing has been said for it yet, report dispute as missing, so your text asks only what supports the belief: what makes it feel true. If they've said what supports it but nothing that challenges it, report it as partial with the gap 'challenge', so your text first acknowledges that what supports it is real, then asks only what makes them question whether it's completely true. Never count support as a challenge because it came as an explanation."
     ready_when: "The belief has been looked at properly. They've said what supports it and, separately, what might challenge it, or considered whether they have enough information to know it's true. Saying the belief comes from fear, worry or the pressure they are under, rather than from something they know or were told, is what challenges it, and answers D once they have been asked once for a concrete moment that challenges it. When their own words already hold both what supports it and what challenges it, D is answered too. They don't have to disprove it. Reflecting on whether the belief helps them is welcome but not required."
@@ -252,6 +277,11 @@ stages:
     carries_case: true
     intro: "E is for Effective New Belief."
     purpose: "Help them reach a more realistic and helpful way of seeing it, based on what they've examined, plus one clear thing they'll focus on from here, both in their own words. Where it fits, help them plan to bring the new belief to mind the next time a similar event happens."
+    # The parts of the experience this stage can open, each only when it adds something (muhammad, 2026-11-06).
+    explore:
+      - {id: new_view, about: "a more balanced way to see it, in their words"}
+      - {id: path, about: "one thing they will do"}
+      - {id: practice, about: "one situation where they can try it"}
     reach: "Report effective as known only where they've given, at this stage, both a more balanced way to see it and one path, such as raising it with someone. A permission or intention they give themselves, such as 'trust them more' or 'give myself permission', is part of the new view, never the path: the path is one thing they would do in their life. A path that is more of what they said at C, such as pulling back, waiting or holding back, is not the path yet: report partial with the gap 'path', once, so your text asks gently about the person or situation it is about, such as 'Is there something you'd want to say to that friend?'. What they said in D never counts as the new belief: a challenge to the old belief is not yet a new one. If only the new view has come, report it as partial with the gap 'path', so your text asks what one thing they could do. If only an action or intention has come, report it as partial with the gap 'belief', so your text asks for the balanced belief behind it. When the new belief has come and the path is general, such as 'say no when I'm exhausted', report it as partial with the gap 'practice', once, so your text asks for one situation where they could practise it; a specific path, or a practice question already asked, closes the stage. A balanced view already forming in the chat before the framework counts: help them refine it rather than start again."
     listen_for: "A more realistic and helpful view that separates what they know from what they assumed, usually more flexible than the original belief ('I made a mistake' rather than 'I'm a failure'). Also listen for the one thing they'll focus on from here, any change in how they feel now, and how they might use the new belief next time."
     ready_when: "They've said, in their own words, a more balanced way to see it, such as 'I don't have to give up my independence to let someone close', and one clear path they'll focus on, or picked one of Mani's suggestions as theirs. A plan, an action or a commitment for next time counts as the path, never as the belief."
@@ -327,7 +357,7 @@ guide Mani's own understanding but are never said to the user. Mani uses the per
 - Mani asks one question at a time.
 - The event itself is never questioned when it involves danger or mistreatment. Only what the
   person came to believe about themselves afterwards may be examined.
-- The session ends with the shared body check-in, then Chat More and Go to Library.
+- The session ends with Keep Chatting, Go to Library and Finish for Now (the body check-in is paused).
 
 ## Worked example (for Mani's understanding; not a script)
 

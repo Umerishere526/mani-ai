@@ -5,7 +5,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from mani.chat.repairs import with_the_check_in
+from mani.chat.repairs import (
+    with_the_check_in,
+    without_body_offer,
+    without_last_question,
+)
 
 ASK, BODY, PRACTICE, EFFECT, CLOSING = (
     "somatic_ask", "somatic_body", "somatic_practice", "somatic_effect", "somatic_closing",
@@ -22,7 +26,7 @@ _ANSWERS = {
     BODY: {*AREAS, "other", "nearest", "none", "no", "pain", "unclear"},
     PRACTICE: {"better", "same", "worse", "pain", "unclear"},
     EFFECT: {"helped", "somewhat", "not_really", "unclear"},
-    RETIRING: {"finish", "keep_chatting"},
+    RETIRING: {"finish", "keep_chatting", PLAN := "plan"},
 }
 LIBRARY_ID = "library"
 # The closing choice that ends the conversation: shown on the last step, so the turn after it may carry it.
@@ -75,6 +79,15 @@ def ask(text: str, stages: dict) -> tuple[str, list[Button]]:
     return with_the_check_in(text, script["text"]), _buttons(script["buttons"])
 
 
+def close(text: str, stages: dict, *, plan: bool = False) -> tuple[str, list[Button]]:
+    """What follows the framework's last stage while the body check-in is paused (muhammad, 2026-11-05): Mani's own
+    close, without a body offer or a question of its own, and the three closing choices, with Plan Next Step first
+    when something practical is still ahead of them (muhammad, 2026-11-06)."""
+    script = _script(stages, CLOSING)
+    buttons = (script.get("plan_buttons") or [] if plan else []) + script["buttons"]
+    return without_last_question(without_body_offer(text)), _buttons(buttons)
+
+
 def _opening(stages: dict) -> Step:
     """Step 1 once they said yes: the client's introduction, its general question and its five buttons (muhammad,
     2026-11-04: always the client's Step 1, never a question of ours before its buttons)."""
@@ -88,7 +101,7 @@ _TAPS = {
     BODY: [(BODY, "buttons"), (BODY, "other_buttons"), (BODY, "nearest_buttons")],
     PRACTICE: [(PRACTICE, "buttons")],
     EFFECT: [(EFFECT, "buttons"), (BODY, "no_tension_buttons")],
-    RETIRING: [(CLOSING, "buttons")],
+    RETIRING: [(CLOSING, "plan_buttons"), (CLOSING, "buttons")],
 }
 
 

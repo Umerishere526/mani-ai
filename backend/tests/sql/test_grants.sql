@@ -54,8 +54,46 @@ $$;
 select pg_temp.want('a signed-in user can read their threads',
   has_table_privilege('authenticated', 'public.threads', 'SELECT'), true);
 
-select pg_temp.want('a signed-in user can start a thread',
-  has_table_privilege('authenticated', 'public.threads', 'INSERT'), true);
+-- A thread is started by the backend (migration 031): a user's own token writing one could set every column
+-- the backend later reads back as its own state.
+select pg_temp.want('a user cannot start a thread directly',
+  has_table_privilege('authenticated', 'public.threads', 'INSERT'), false);
+
+select pg_temp.want('a user cannot delete a thread outright',
+  has_table_privilege('authenticated', 'public.threads', 'DELETE'), false);
+
+do $$
+declare
+  c text;
+begin
+  foreach c in array array['understanding', 'rewind_snapshot', 'pending_follow_up', 'safety', 'check_at_message_count',
+                           'memory_folded_at', 'message_count']
+  loop
+    if has_column_privilege('authenticated', 'public.threads', c, 'INSERT') then
+      raise exception 'FAIL: a user can insert threads.%', c;
+    end if;
+  end loop;
+  raise notice 'PASS: a user cannot insert any of the state the backend reads back';
+end
+$$;
+
+select pg_temp.want('a user cannot record an offered framework',
+  has_table_privilege('authenticated', 'public.thread_techniques_offered', 'INSERT'), false);
+
+select pg_temp.want('a user cannot write a response style',
+  has_table_privilege('authenticated', 'public.thread_response_styles', 'INSERT'), false);
+
+select pg_temp.want('the backend starts threads',
+  has_table_privilege('mani_service', 'public.threads', 'INSERT'), true);
+
+select pg_temp.want('the backend never deletes a thread outright',
+  has_table_privilege('mani_service', 'public.threads', 'DELETE'), false);
+
+select pg_temp.want('the backend records an offered framework',
+  has_table_privilege('mani_service', 'public.thread_techniques_offered', 'INSERT'), true);
+
+select pg_temp.want('the backend writes no response styles',
+  has_table_privilege('mani_service', 'public.thread_response_styles', 'INSERT'), false);
 
 select pg_temp.want('a signed-in user can read their messages',
   has_table_privilege('authenticated', 'public.messages', 'SELECT'), true);
@@ -104,6 +142,21 @@ select pg_temp.want('a user cannot write what Mani understands of them',
 
 select pg_temp.want('the backend can store what Mani understands',
   has_column_privilege('mani_service', 'public.threads', 'understanding', 'UPDATE'), true);
+
+-- Migration 032: the reading waiting for the app's request is sent to the model as it is stored, so a user who
+-- could write it could write the prompt.
+select pg_temp.want('a user cannot write the work waiting after a reply',
+  has_column_privilege('authenticated', 'public.threads', 'pending_follow_up', 'UPDATE'), false);
+
+select pg_temp.want('the backend can store the work waiting after a reply',
+  has_column_privilege('mani_service', 'public.threads', 'pending_follow_up', 'UPDATE'), true);
+
+-- Migration 033: a user who could write where the conversation stands on safety could close their own concern.
+select pg_temp.want('a user cannot settle their own safety concern',
+  has_column_privilege('authenticated', 'public.threads', 'safety', 'UPDATE'), false);
+
+select pg_temp.want('the backend can move the safety state',
+  has_column_privilege('mani_service', 'public.threads', 'safety', 'UPDATE'), true);
 
 -- Migration 023: the offer is made only on the turn right after Mani's check, so a user who
 -- could write when the check was made could open an offer for themselves.

@@ -1,17 +1,19 @@
 # ABOUTME: One user message from arrival to stored reply: context, one model call, writes.
-# ABOUTME: Everything it writes lands in the caller's transaction, or none of it does.
+# ABOUTME: Everything it writes lands in the caller's transaction, or none of it does; chat/runner.py runs it.
 
 from __future__ import annotations
 
 import dataclasses
+import datetime as dt
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import body as body_route, context, converse, picture, repairs, reply_checks, rewind, safety, understanding, walk
+from mani.chat import body as body_route, context, converse, crisis, picture, repairs, reply_checks, rewind, safety, understanding, walk
 from mani.chat.greeting import (
     COPIED_BACK,
     EXPLAIN_LABELS,
@@ -43,6 +45,10 @@ from mani.prompts import cache, composer
 
 logger = logging.getLogger(__name__)
 
+# The turn's one model call, with client.complete's signature. chat/runner.py supplies it, so that no
+# connection is held while the model thinks.
+Ask = Callable[..., Awaitable[client.Call]]
+
 # Title generation is asked for once the thread has a real exchange behind it. The
 # reference tested `message_count == 3` exactly, so a single crisis turn - which writes
 # one message rather than two - moved the count past 3 and the thread was never titled.
@@ -61,7 +67,7 @@ def _body_route(
     tapped: SmartPrompt | None,
     technique: TechniqueState | None,
     framework: Framework,
-) -> tuple[repairs.Repaired, body_route.Step | None]:
+) -> tuple[repairs.Repaired, body_route.Step | None, str | None]:
     """The body check-in's turn: the client's script for the answer at this step. A tapped button decides
     by itself; a typed answer is the value the reply read from it. Anywhere an answer does not fit, the
     reply stands as the model wrote it."""
@@ -72,13 +78,13 @@ def _body_route(
         # Keep Chatting, tapped or typed: the model's own continuation, with its possibilities under the question.
         fixed = dataclasses.replace(fixed, text=repairs.under(fixed.text, options))
     if value is None:
-        return fixed, None
+        return fixed, None, None
     step = body_route.step(
         at, value, framework.stages,
         physical_response=technique.physical_response if technique else None,
     )
     if step is None:
-        return dataclasses.replace(fixed, notes=fixed.notes + [f"ignored body {value} at {at}"]), None
+        return dataclasses.replace(fixed, notes=fixed.notes + [f"ignored body {value} at {at}"]), None, None
     text = fixed.text if step.text is None else step.text
     return dataclasses.replace(
         fixed,
@@ -86,7 +92,7 @@ def _body_route(
         prompts=_prompts(step.buttons),
         framework_id=framework.id if technique else None,
         phase=step.phase if technique else None,
-    ), step
+    ), step, value
 
 
 def _case_words(understood: dict[str, str]) -> str:
@@ -107,6 +113,7 @@ def _walked(
     feeling: str | None,
     seen_before: dict | None = None,
     seen_after: dict | None = None,
+    their_message: str = "",
 ) -> tuple[repairs.Repaired, walk.Walked]:
     """The walk's turn: what they said merged into the store, the stages already passed brought up to date with
     what the picture of them gained (`seen_before` to `seen_after`), the step taken, and the reply that opens the
@@ -114,10 +121,15 @@ def _walked(
     if start:
         walked = walk.start(framework, reply.stage_updates, reply.next_stage)
     else:
+        answer = walk.held_by_question(reply.stage_answer, their_message)
         walked = walk.advance(
-            framework, stored, reply.stage_updates, reply.stage_answer,
+            framework, stored, reply.stage_updates, answer,
             in_force=in_force, report=reply.next_stage,
         )
+        if answer != reply.stage_answer:
+            walked = dataclasses.replace(
+                walked, notes=walked.notes + [f"their message asks something: {reply.stage_answer} held as not_yet"],
+            )
         if not walk.new_view(framework, in_force):
             synced, sync_notes = walk.from_picture(
                 framework, walked.entries, seen_before, seen_after, in_force=in_force,
@@ -183,6 +195,28 @@ class ReadAfter:
     parameters: dict
     routing: dict | None
     their_messages: list[str]
+    # Mani's reply this reading follows: the app asks for it by that reply (follow_up).
+    message_id: uuid.UUID | None = None
+    # Whether the reading's picture is merged: a stage reply writes its own, so a stage turn's reading keeps only the
+    # reading and the map of what is explored.
+    picture: bool = True
+
+    def stored(self) -> dict:
+        """As threads.pending_follow_up holds it."""
+        return {
+            "thread_id": str(self.thread_id), "user_id": str(self.user_id), "message_id": str(self.message_id),
+            "messages": self.messages, "model": self.model, "parameters": self.parameters, "routing": self.routing,
+            "their_messages": self.their_messages, "picture": self.picture,
+        }
+
+    @classmethod
+    def from_stored(cls, row: dict) -> ReadAfter:
+        return cls(
+            thread_id=uuid.UUID(row["thread_id"]), user_id=uuid.UUID(row["user_id"]),
+            message_id=uuid.UUID(row["message_id"]), messages=row["messages"], model=row["model"],
+            parameters=row["parameters"] or {}, routing=row["routing"], their_messages=row["their_messages"],
+            picture=row.get("picture", True),
+        )
 
 
 def _trace(**fields) -> dict:
@@ -341,6 +375,7 @@ async def _converse(
     client_message_id: uuid.UUID | str | None,
     settings,
     updates: threads.ThreadUpdates,
+    ask: Ask,
     declined: Framework | None = None,
 ) -> Turn:
     """One turn of Mani's own conversation, when no framework, offer or check is open: the conversation
@@ -366,7 +401,7 @@ async def _converse(
         their_count=context.their_messages(ctx), latest=content,
         frameworks=composer.framework_index(config.registry) if allowed else None,
     )
-    call = await client.complete(
+    call = await ask(
         [{"role": "system", "content": system.text}]
         + _conversation(history)
         + [{"role": "user", "content": for_model}, {"role": "system", "content": note}],
@@ -382,11 +417,13 @@ async def _converse(
         prompt_version_id=None,
     )
     reply = call.value
-    # As on every other turn, the model's own crisis judgment does not lock the thread (the deterministic
-    # screen does); it holds the check and keeps what is understood as it was.
-    guarded = reply.crisis is not None
+    # The chat runs only while safety is clear. A sign in their message opens it (chat/safety.after), holds the check
+    # and keeps what is understood as it was; the next turn is the safety moment.
+    safety_after, signals = _safety_after(safety.State.CLEAR, reply.safety)
+    guarded = bool(signals)
     if guarded:
-        logger.info("model reported a safety concern on thread %s: %s", ctx.thread.id, reply.crisis.reason)
+        logger.info("thread %s safety signals: %s", ctx.thread.id, ", ".join(sorted(signals)))
+        updates.safety = safety_after.value
     # The reply moves to the set of questions; its offer is made below, and nothing waits for a check's answer.
     moving = not guarded and converse.checked(reply, allowed=allowed)
     their_messages = [m.content for m in history if m.role is MessageRole.USER] + [content]
@@ -394,6 +431,9 @@ async def _converse(
         ctx.thread.understanding if guarded
         else converse.replied(ctx.thread.understanding, reply, check_written=moving)
     )
+    if reply.prepared and understood.get(context.PREPARING):
+        # They have what they need for what they planned after the questions, or moved on from it.
+        understood = {key: value for key, value in understood.items() if key != context.PREPARING}
     logger.info(
         "thread %s conversation turn: shape %s, move %s, needs info %s, insight %s, asks %s, heart %s, check allowed %s, "
         "moves to the set %s, toward framework %s",
@@ -438,11 +478,11 @@ async def _converse(
         updates.understanding = understood
     # Counted, never fixed: a question asked again, or a reply that asks nothing before the offer.
     checks = reply_checks.misses(
-        Reply(text=reply.text),
+        Reply(text=reply.text, progress=reply.progress),
         offered=offering,
         offer_dropped=dropped,
-        # A reflect reply lets them go on without a question (the client's review, 2026-10-29).
-        needs_question=not guarded and offering is None and reply.shape != "reflect",
+        # A chat reply may support without asking (the client meeting, 2026-11-05: "mainly driven by questions").
+        needs_question=False,
         last_mani_text=next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None),
     )
     if not guarded and offering is None:
@@ -493,6 +533,7 @@ async def _converse(
     if fixed.title:
         updates.title = fixed.title
     await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
+    await _record_unsafe(conn, ctx, safety.State.CLEAR, safety_after, pair.user_message_id, signals)
 
     summarized = ctx.summary.summarized_message_count if ctx.summary else 0
     seen = understood.get(picture.KEY) or {}
@@ -500,6 +541,7 @@ async def _converse(
     trace = _trace(
         moment=Moment.CHATTING.value, style=conversation_style, message_count=ctx.thread.message_count,
         their_message=context.their_messages(ctx), latency_ms=call.latency_ms, guarded=guarded or None,
+        safety=_trace(after=safety_after.value, signals=sorted(signals)) if guarded else None,
         model=_trace(
             shape=reply.shape, move=reply.move, heart=reply.heart, needs_info=reply.needs_info,
             insight=bool(reply.insight) or None, link=bool(reply.link) or None, checking=reply.checking,
@@ -516,13 +558,24 @@ async def _converse(
         stepped_out_of=declined.id if declined else None, buttons=[p.label for p in prompts],
         notes=fixed.notes, checks=checks,
     )
+    # The same prompt and conversation as the reply, so its prefix is cached, then the reply as it went out. As on
+    # every other turn, the model's own crisis judgment keeps what is understood as it was. Run when the app asks for
+    # it once the reply is shown (send stores it, follow_up runs it).
+    read_after = None if guarded or pair.was_duplicate else ReadAfter(
+        thread_id=ctx.thread.id, user_id=ctx.thread.user_id, message_id=pair.mani_message_id,
+        messages=[{"role": "system", "content": system.text}] + _conversation(history) + [
+            {"role": "user", "content": for_model}, {"role": "assistant", "content": fixed.text},
+            {"role": "system", "content": converse.read_note(conversation_style, understood)},
+        ],
+        model=model, parameters=parameters, routing=routing, their_messages=their_messages,
+    )
     return Turn(
         message_id=pair.mani_message_id,
         content=fixed.text,
         created_at=pair.created_at,
         prompts=prompts,
         title=fixed.title or ctx.thread.title,
-        crisis_detected=False,
+        crisis_detected=safety_after is safety.State.UNSAFE,
         crisis_blocks_chat=settings.crisis_blocks_chat,
         was_duplicate=pair.was_duplicate,
         needs_summary=window.dropped > summarized,
@@ -536,16 +589,7 @@ async def _converse(
         ),
         trace=trace,
         raw_reply=_raw(reply, settings),
-        # The same prompt and conversation as the reply, so its prefix is cached, then the reply as it went out. As on
-        # every other turn, the model's own crisis judgment keeps what is understood as it was.
-        read_after=None if guarded else ReadAfter(
-            thread_id=ctx.thread.id, user_id=ctx.thread.user_id,
-            messages=[{"role": "system", "content": system.text}] + _conversation(history) + [
-                {"role": "user", "content": for_model}, {"role": "assistant", "content": fixed.text},
-                {"role": "system", "content": converse.read_note(conversation_style, understood)},
-            ],
-            model=model, parameters=parameters, routing=routing, their_messages=their_messages,
-        ),
+        read_after=read_after,
     )
 
 
@@ -576,13 +620,83 @@ async def read_understanding(claims: Claims, job: ReadAfter) -> dict | None:
             now = await threads.understanding_of(conn, job.thread_id, job.user_id)
             if now is None:
                 return None
-            after = converse.read(now, call.value, their_messages=job.their_messages)
+            after = converse.read(now, call.value, their_messages=job.their_messages, with_picture=job.picture)
             if after != now:
                 await threads.apply(conn, job.thread_id, job.user_id, threads.ThreadUpdates(understanding=after))
             return after
     except Exception:
         logger.exception("reading after the reply failed for thread %s", job.thread_id)
         return None
+
+
+def _follow_up(turn: Turn) -> dict | None:
+    """What a turn leaves for after its reply, as threads.pending_follow_up holds it: the reading of a chat turn and
+    whether the summary is due. None when there is nothing, which clears what an earlier reply left."""
+    if turn.message_id is None or not (turn.read_after or turn.needs_summary):
+        return None
+    return {
+        "message_id": str(turn.message_id),
+        "reading": turn.read_after.stored() if turn.read_after else None,
+        "summary": turn.needs_summary,
+    }
+
+
+@dataclass(frozen=True)
+class FollowedUp:
+    """What the work after a reply did: the record the reading stored, and whether the summary was brought up to date."""
+
+    understanding: dict | None = None
+    summarized: bool = False
+
+
+async def follow_up(claims: Claims, thread_id: uuid.UUID | str, message_id: uuid.UUID | str) -> FollowedUp | None:
+    """Run what the turn left for after Mani's reply `message_id`, when the app asks for it once the reply is shown:
+    the reading and the summary, side by side. None when nothing waits for that reply. A request of its own, not work
+    left running after the turn's response: Vercel stops an instance once a response is sent, and 15 of 49 readings
+    started that way were cut off (2026-11-05). Taken in a short transaction, so no connection is held while the model
+    works, and cleared as it is taken, so a repeated request pays nothing. Each part fails alone, logged."""
+    import asyncio
+
+    from mani import summarize
+    from mani.db import pool
+
+    async with pool.as_user(claims) as conn:
+        waiting = await threads.take_pending_follow_up(conn, thread_id, claims.user_id, message_id)
+    if waiting is None:
+        return None
+
+    async def read() -> dict | None:
+        reading = waiting.get("reading")
+        return await read_understanding(claims, ReadAfter.from_stored(reading)) if reading else None
+
+    async def summary() -> bool:
+        if not waiting.get("summary"):
+            return False
+        try:
+            return await summarize.update(claims, thread_id) is not None
+        except Exception:
+            logger.exception("summarization failed for thread %s", thread_id)
+            return False
+
+    understood, summarized = await asyncio.gather(read(), summary())
+    return FollowedUp(understanding=understood, summarized=summarized)
+
+
+async def _within_limits(conn: asyncpg.Connection, user_id: str, settings) -> None:
+    """Refuse a paid reply past the day's or the minute's limit, counted from the messages they sent."""
+    for limit, window, user_message in (
+        (settings.daily_message_limit, dt.timedelta(hours=24),
+         "You've reached today's message limit. Please come back tomorrow."),
+        (settings.minute_message_limit, dt.timedelta(minutes=1),
+         "You're sending messages faster than Mani can answer. Please wait a minute and try again."),
+    ):
+        if limit and await messages_db.count_from_user_since(conn, user_id, window) >= limit:
+            raise ServiceError(
+                f"user {user_id} reached the limit of {limit} per {window}",
+                ErrorCategory.RATE_LIMITED,
+                retryable=True,
+                user_message=user_message,
+            )
 
 
 async def _lock_thread(conn: asyncpg.Connection, thread_id: uuid.UUID | str) -> None:
@@ -606,8 +720,31 @@ async def send(
     thread_id: uuid.UUID | str,
     content: str,
     client_message_id: uuid.UUID | str | None = None,
+    *,
+    ask: Ask,
+    config: cache.Config,
 ) -> Turn:
-    """Run one turn. The connection is already scoped to the caller and in a transaction."""
+    """Run one turn. The connection is already scoped to the caller and in a transaction. `ask` is the model:
+    chat/runner.py runs this twice, once to learn what to ask and once to write the reply. `config` is the
+    prompts and frameworks, read before the connection was taken. What the turn leaves for after its reply is
+    stored with it, for the app to ask for (follow_up); what an earlier reply left and nobody asked for is cleared."""
+    turn = await _turn(conn, claims, thread_id, content, client_message_id, ask=ask, config=config)
+    if not turn.was_duplicate:
+        await threads.set_pending_follow_up(conn, thread_id, claims.user_id, _follow_up(turn))
+    return turn
+
+
+async def _turn(
+    conn: asyncpg.Connection,
+    claims: Claims,
+    thread_id: uuid.UUID | str,
+    content: str,
+    client_message_id: uuid.UUID | str | None,
+    *,
+    ask: Ask,
+    config: cache.Config,
+) -> Turn:
+    """One turn's steps; see send."""
     settings = get_settings()
     user_id = claims.user_id
 
@@ -651,10 +788,11 @@ async def send(
                 was_duplicate=True,
             )
 
-    # One turn at a time per conversation, held until this turn's transaction ends. A second
-    # message sent while the first is still waiting on the model (a person re-sending after a
-    # long wait, a double tap) waits here and then reads the first reply. Without it both turns
-    # read the same history and asked the same question twice (2026-10-09).
+    # One writer at a time per conversation, held until this pass's transaction ends. The model is
+    # called with no transaction open (chat/runner.py), so a second message sent while the first is
+    # still waiting on it (a re-send after a long wait, a double tap) is refused at the write, when
+    # the thread is no longer as it was read; without that both turns answered the same history and
+    # asked the same question twice (2026-10-09).
     await _lock_thread(conn, thread_id)
 
     ctx = await threads.load_turn_context(conn, thread_id, user_id)
@@ -674,7 +812,6 @@ async def send(
 
     await rewind.save(conn, ctx, user_id)
 
-    config = await cache.load()
     # The whole thread within the budget: the model sees what they said earlier, instead of a store
     # guessing it ahead of time (2026-10-13).
     window = await messages_db.for_context(
@@ -726,20 +863,15 @@ async def send(
     # model's offer_answer, so the decision waits for the reply.
     deferred = offer is not None and tapped is None and outcome is TechniqueOutcome.OFFERED
 
-    # The deterministic screen runs on every turn, before the model is asked anything. It
-    # costs nothing and cannot be skipped for budget reasons. Crisis short-circuits the model
-    # call entirely; concern only holds the framework and any offer, so the model still answers.
+    # Where the conversation stands on safety as this message arrives: the thread's state, raised by the free screen
+    # that runs on every turn. Nothing locks (muhammad, 2026-11-06): while it is not clear this turn is the safety
+    # moment, whatever else is open, the model reads the message for safety first, and the state moves after it.
     assessment = safety.screen(content)
-    if assessment.level is safety.Level.CRISIS:
-        return await _handle_crisis(
-            conn, ctx, content,
-            reason=f"safety screen: {assessment.category.value if assessment.category else 'unspecified'}",
-            reply_text=safety.protocol_for(assessment.category),
-            tapped=tapped, client_message_id=client_message_id, settings=settings,
-            updates=updates,
-        )
+    safety_before = safety.State(ctx.thread.safety)
+    safety_now = safety.higher(safety_before, safety.opened_by(assessment.level))
+    holding = safety_now is not safety.State.CLEAR
 
-    if tapped is None and context.copies_last_reply(content, history):
+    if tapped is None and not holding and context.copies_last_reply(content, history):
         return await _copied_back(conn, ctx, content, client_message_id)
 
     # Which framework fits is the model's call, from the Framework Index; code owns only when an
@@ -759,7 +891,6 @@ async def send(
         config, ctx.profile, should_generate_title=wants_title, offered=offered_now,
         summary=ctx.summary if window.dropped else None, memory=ctx.memory,
     )
-    model, parameters, routing = composer.model_settings(config)
 
     # The framework this turn starts, when that is known before the reply: a Try it tap, or a yes
     # whose turn was guarded, which left the row accepted at the offer. A typed yes sets it below.
@@ -773,9 +904,14 @@ async def send(
         and ctx.technique.outcome is TechniqueOutcome.DECLINED
     )
     active_framework = config.registry.get(technique.framework_id) if technique else None
+    # Where the questions ended, for the turn that answers the closing choices.
+    ended_on = (
+        walk.landed_on(finished, ctx.technique.stages_known.get(retiring_framework_id) or {})
+        if retiring_framework_id and (finished := config.registry.get(retiring_framework_id)) else None
+    )
     prefix = context.build(
         ctx, framework=active_framework,
-        history=history, safety_concern=assessment.blocks_framework, offer_waiting=deferred,
+        history=history, safety=safety_now.value, offer_waiting=deferred,
         starting=starting is not None,
         # A typed yes to the open offer, or asking for the set they declined, starts it.
         yes_framework=(
@@ -783,11 +919,7 @@ async def send(
             else config.registry.get(ctx.technique.framework_id) if declined_row
             else None
         ),
-        # Where the questions ended, for the turn that answers the closing choices.
-        landed_on=(
-            walk.landed_on(finished, ctx.technique.stages_known.get(retiring_framework_id) or {})
-            if retiring_framework_id and (finished := config.registry.get(retiring_framework_id)) else None
-        ),
+        landed_on=ended_on,
     )
     for_model = (
         f'User tapped the button: "{tapped.label}".'
@@ -795,24 +927,17 @@ async def send(
         else context.disarm(content)
     )
 
-    # Checked here, right before the only paid step, so the safety screen and the free style
-    # opener come first and are never refused.
-    if settings.daily_message_limit:
-        sent = await messages_db.count_from_user_since(conn, user_id, hours=24)
-        if sent >= settings.daily_message_limit:
-            raise ServiceError(
-                f"user {user_id} reached the daily limit of {settings.daily_message_limit}",
-                ErrorCategory.RATE_LIMITED,
-                retryable=True,
-                user_message="You've reached today's message limit. Please come back tomorrow.",
-            )
+    # Checked here, right before the only paid step, so the free style opener comes first, and never while safety is
+    # open: someone who may not be safe is always answered.
+    if not holding:
+        await _within_limits(conn, user_id, settings)
 
     # The reply's shape is chosen from the database: the offer field exists only on the answer to
     # Mani's check, so the model cannot offer before they confirm its understanding, and an answer
     # to an offer exists only while one is open or was declined (spec 0006).
     moment = context.moment(
         technique, outcome, retiring_framework_id,
-        concern=assessment.blocks_framework, check_open=context.check_open(ctx),
+        concern=holding, check_open=context.check_open(ctx),
     )
     if moment is Moment.CHATTING:
         # No framework, offer or check is open: Mani's own conversation, in the client's cadence. After they
@@ -820,9 +945,10 @@ async def send(
         return await _converse(
             conn, ctx, for_model=for_model, content=content, tapped=tapped, history=history, window=window,
             config=config, conversation_style=conversation_style, wants_title=wants_title,
-            client_message_id=client_message_id, settings=settings, updates=updates,
+            client_message_id=client_message_id, settings=settings, updates=updates, ask=ask,
             declined=config.registry.get(ctx.technique.framework_id) if declined_row else None,
         )
+    model, parameters, routing = composer.model_settings(config, moment=moment)
     if moment is Moment.IN_STAGES:
         # A turn on a framework's stages speaks in the same voice as the chat; the stage arrives in [ctx].
         system = composer.compose_framework(
@@ -837,7 +963,7 @@ async def send(
             technique.framework_id if moment is Moment.OFFER_OPEN else None,
         ),
     )
-    call = await client.complete(
+    call = await ask(
         [{"role": "system", "content": system.text}]
         + _conversation(history)
         + [{"role": "user", "content": prefix + for_model}],
@@ -851,13 +977,15 @@ async def send(
         user_id=user_id,
         thread_id=ctx.thread.id,
         prompt_version_id=None,
+        # A safety turn is never left without a reply: if the model fails, these words go out instead.
+        fallback=crisis.CRISIS_REPLY if holding else None,
     )
     reply = schema.as_reply(call.value)
     framework_going = ctx.technique is not None and ctx.technique.outcome is TechniqueOutcome.ACCEPTED
     # Every reply before an offer asks one question, so the conversation keeps moving. Not while
     # the questions run (each stage asks its own), not on a safety concern, and not when the draft
     # itself chose a shape that asks nothing, which is how it answers someone who only wants to be heard.
-    needs_question = not framework_going and not assessment.blocks_framework
+    needs_question = not framework_going and not holding
     last_mani_text = next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None)
     if reply.heading_toward:
         # Read by the steering evals and by anyone asking why a question went where it did:
@@ -872,21 +1000,18 @@ async def send(
     if reply.next_stage:
         logger.info("thread %s next stage judged %s", ctx.thread.id, reply.next_stage.status)
 
-    # The model's own crisis judgment no longer locks the thread: a small model over-fires it
-    # on ordinary distress, pain or injury. Only the deterministic screen (safety.screen, above)
-    # locks. A model-reported crisis is kept as a non-locking concern - logged, and the framework
-    # held off this turn - so a genuine novel phrasing still gets careful handling without
-    # cutting off the conversation the person came for.
-    model_concern = reply.crisis is not None
-    if model_concern:
-        logger.info(
-            "model reported a safety concern on thread %s: %s",
-            ctx.thread.id, reply.crisis.reason,
-        )
+    # The model's reading moves the state: a sign opens or raises it, a safe answer settles it, a refusal or a change
+    # of subject leaves it where it is (chat/safety.after). Nothing it reports locks the conversation.
+    safety_after, signals = _safety_after(safety_now, reply.safety)
+    if signals:
+        logger.info("thread %s safety signals: %s", ctx.thread.id, ", ".join(sorted(signals)))
+    if safety_after is not safety_before:
+        updates.safety = safety_after.value
+    model_concern = bool(signals)
 
-    # A concern, from the screen or the model, comes before anything a reply field could do: no
-    # client text is rendered from them and no row changes because of them (AC-12).
-    guarded = assessment.blocks_framework or model_concern
+    # A concern, open on the thread or new in this message, comes before anything a reply field could do: no client
+    # text is rendered from them and no row changes because of them (AC-12).
+    guarded = holding or model_concern
     answer = _offer_answer(moment, tapped, reply, guarded=guarded)
     if (
         reply.stage_answer == "stop" and not guarded and starting is None
@@ -940,7 +1065,13 @@ async def send(
             # The core deepened before the new view forms: the case the later stages work on follows it.
             logger.info("thread %s core deepened inside the questions: the case follows it", ctx.thread.id)
             understood = understanding.merge_check(understood, said)
-    if moment is Moment.OFFER_OPEN and not guarded and answer == "corrected":
+        if moment is Moment.IN_STAGES:
+            # Insights and progress inside the questions count with the chat's, so none is given twice and every reply
+            # moves something forward (muhammad, 2026-11-06).
+            understood = context.with_insight(understood, reply.insight)
+            if reply.progress is not None:
+                understood = context.with_progress(understood, reply.progress.kinds, reply.progress.adds)
+    if moment is Moment.OFFER_OPEN and not guarded and answer in ("corrected", "wants_other"):
         # They corrected what the offer said back (the client meeting, 2026-11-03): the reply says the corrected
         # reading back, the case they had not confirmed is dropped, and the next offer may come once they confirm it.
         understood = understanding.corrected(understood)
@@ -1003,6 +1134,7 @@ async def send(
             style=conversation_style, thread_id=ctx.thread.id,
             feeling=understood.get("feeling"),
             seen_before=ctx.thread.understanding.get(picture.KEY), seen_after=understood.get(picture.KEY),
+            their_message=content,
         )
         if not starting:
             # Whether the questions are still helping: stalls counted when nothing new came, and an offer to step
@@ -1017,15 +1149,22 @@ async def send(
             ))
         if walked.phase not in body_route.STAGES:
             # The check-in is code's, sent when the questions end; a reply offering one before then is dropped (the
-            # career chat, 2026-11-03). A stage that stays always asks: a reply that stays with no question, such as
-            # a close written while the stage still waits, gets the stage's own (the friend chat, 2026-11-04).
+            # career chat, 2026-11-03). The last stage, while it waits, always asks: a close written there would end
+            # the conversation with nothing to answer (the friend chat, 2026-11-04). Earlier stages may stay with
+            # them without a question (the client meeting, 2026-11-05: no questionnaire).
             kept = repairs.without_body_offer(fixed.text)
             notes = fixed.notes + (["body offer dropped"] if kept != fixed.text else [])
-            if walked.reached is None and walked.phase in walk.content_stages(walking) and "?" not in kept:
+            if walked.reached is None and walked.phase == walk.content_stages(walking)[-1] and "?" not in kept:
                 if question := walk.stay_question(walking, walked.entries, walked.phase, conversation_style):
                     kept = f"{kept}\n\n{question}".strip()
                     notes.append("stage question added to a reply that asked nothing")
             fixed = dataclasses.replace(fixed, text=kept, notes=notes)
+        # The parts of the stage this reply opened are kept, so none is asked again (muhammad, 2026-11-06).
+        opened_at = walked.reached or walked.phase
+        if opened_at in walk.content_stages(walking):
+            walked = dataclasses.replace(
+                walked, entries=walk.covered(walking, walked.entries, opened_at, reply.explored_now),
+            )
         if walked.entries != (stored_all.get(walking.id) or {}):
             updates.stages_known = {**stored_all, walking.id: walked.entries}
         if walked.phase == body_route.ASK:
@@ -1033,12 +1172,30 @@ async def send(
             # (muhammad, 2026-10-27).
             text, buttons = body_route.ask(fixed.text, walking.stages)
             fixed = dataclasses.replace(fixed, text=text, prompts=_prompts(buttons), phase=body_route.ASK)
+        elif walked.phase == body_route.CLOSING:
+            # The body check-in is paused (muhammad, 2026-11-05): the questions end on Mani's close and the three
+            # closing choices, and the next turn answers them as it did after the check-in.
+            # Something practical still ahead of them puts Plan Next Step first (muhammad, 2026-11-06), and the record
+            # keeps what it is for the turn that answers the choices.
+            ahead = reply.follow_through if reply.follow_through in ("conversation", "action", "decision") else None
+            text, buttons = body_route.close(fixed.text, walking.stages, plan=ahead is not None)
+            fixed = dataclasses.replace(fixed, text=text, prompts=_prompts(buttons), phase=body_route.CLOSING)
+            if ahead:
+                understood = {**understood, context.FOLLOW_THROUGH: ahead}
+                updates.understanding = understood
     if moment is Moment.BODY and not guarded:
         route = config.registry.get(technique.framework_id if technique else retiring_framework_id)
-        fixed, step = _body_route(fixed, reply.body, reply.options, tapped, technique, route)
+        fixed, step, chosen = _body_route(fixed, reply.body, reply.options, tapped, technique, route)
         if step is not None:
             updates.physical_response = step.physical_response
             updates.conversation_effect = step.conversation_effect
+        if technique is None and (ahead := understood.get(context.FOLLOW_THROUGH)):
+            # The answer to the closing choices: Plan Next Step starts helping them prepare, in the chat that follows,
+            # until they have it; any other choice lets it go.
+            understood = {key: value for key, value in understood.items() if key != context.FOLLOW_THROUGH}
+            if chosen == body_route.PLAN:
+                understood[context.PREPARING] = {"kind": ahead, "for": ended_on or ""}
+            updates.understanding = understood
     if fixed.notes:
         logger.info("repaired reply on thread %s: %s", ctx.thread.id, "; ".join(fixed.notes))
 
@@ -1083,6 +1240,10 @@ async def send(
         prompt_options=[p.model_dump(mode="json", exclude_none=True) for p in fixed.prompts]
         or None,
         client_message_id=client_message_id,
+    )
+    await _record_unsafe(
+        conn, ctx, safety_before, safety_after, pair.user_message_id,
+        signals or ({f"screen {assessment.category.value}"} if assessment.category else set()),
     )
 
     count_after = ctx.thread.message_count + 2
@@ -1138,7 +1299,10 @@ async def send(
         phase_before=ctx.technique.phase if ctx.technique else None,
         phase_after=updates.technique.phase if updates.technique else None,
         tapped=tapped.label if tapped else None,
-        safety=assessment.level.value if assessment.blocks_framework else None,
+        safety=_trace(
+            before=safety_before.value, screen=assessment.level.value, after=safety_after.value,
+            signals=sorted(signals), answer=reply.safety.answer if reply.safety else None,
+        ) if holding or safety_after is not safety.State.CLEAR else None,
         model_concern=model_concern or None, guarded=guarded or None,
         model=_trace(
             **_stage_reports(reply), offer_answer=reply.offer_answer, check_answer=reply.check_answer,
@@ -1159,7 +1323,7 @@ async def send(
         created_at=pair.created_at,
         prompts=fixed.prompts,
         title=fixed.title or ctx.thread.title,
-        crisis_detected=False,
+        crisis_detected=safety_after is safety.State.UNSAFE,
         crisis_blocks_chat=settings.crisis_blocks_chat,
         was_duplicate=pair.was_duplicate,
         # A summary is needed only for messages that have left the model's view and that no summary
@@ -1178,6 +1342,19 @@ async def send(
         stage_trace=stage_rows,
         trace=trace,
         raw_reply=_raw(reply, settings),
+        # Inside the questions too, Mani reads after the reply what has been explored, what is worth exploring next and
+        # what it can infer (muhammad, 2026-11-06). The stage reply already wrote the picture, so the reading keeps
+        # only the map (converse.read).
+        read_after=ReadAfter(
+            thread_id=ctx.thread.id, user_id=ctx.thread.user_id, message_id=pair.mani_message_id,
+            messages=[{"role": "system", "content": system.text}] + _conversation(history) + [
+                {"role": "user", "content": prefix + for_model}, {"role": "assistant", "content": fixed.text},
+                {"role": "system", "content": converse.read_note(conversation_style, understood)},
+            ],
+            model=model, parameters=parameters, routing=routing,
+            their_messages=[m.content for m in history if m.role is MessageRole.USER] + [content],
+            picture=False,
+        ) if moment is Moment.IN_STAGES and walked is not None and not guarded and not pair.was_duplicate else None,
     )
 
 
@@ -1290,58 +1467,22 @@ async def _copied_back(
     )
 
 
-async def _handle_crisis(
-    conn: asyncpg.Connection,
-    ctx: threads.TurnContext,
-    content: str,
-    *,
-    reason: str,
-    reply_text: str,
-    tapped: SmartPrompt | None,
-    client_message_id: uuid.UUID | str | None,
-    settings,
-    updates: threads.ThreadUpdates,
-    llm_call_id: uuid.UUID | None = None,
-) -> Turn:
-    """Store the turn, flag the thread, and answer with something a person can read.
+def _safety_after(now: safety.State, read: schema.SafetyRead | None) -> tuple[safety.State, set[str]]:
+    """The safety state once the reply's reading of their message is in, and the signs it reported."""
+    signals = set(read.signals) if read else set()
+    return safety.after(now, signals, read.answer if read else None), signals
 
-    The reference stored only the user's message and returned an empty string, so the
-    screen went blank at the one moment it mattered most. Called from two places: the
-    deterministic safety screen, before any model call, and the model's own judgment,
-    reported through the reply schema - either way the thread locks the same way.
 
-    No exercise is handed over here. The thread is about to lock one way, so an exercise
-    would reach someone who cannot ask a single question about it.
-    """
-    logger.warning("crisis signal on thread %s", ctx.thread.id)
-
-    pair = await messages_db.create_pair(
-        conn,
-        ctx.thread.id,
-        content,
-        reply_text,
-        selected_prompt=tapped.label if tapped else None,
-        client_message_id=client_message_id,
-    )
-    await threads.mark_crisis(conn, ctx.thread.id, reason, pair.user_message_id)
-    # A crisis turn is still a turn: whatever it already decided has to land. Today that is
-    # a framework that completed on this very turn - without this the row keeps its phase
-    # with outcome 'accepted', so the database claims a technique is still mid-flight on a
-    # thread nobody can return to.
-    await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
-
-    return Turn(
-        message_id=pair.mani_message_id,
-        content=reply_text,
-        created_at=pair.created_at,
-        prompts=[],
-        title=ctx.thread.title,
-        crisis_detected=True,
-        crisis_blocks_chat=settings.crisis_blocks_chat,
-        llm_call_id=llm_call_id,
-        # The screen's category only, never the words that tripped it.
-        trace=_trace(moment="crisis", reason=reason.split(":")[0], message_count=ctx.thread.message_count),
-    )
+async def _record_unsafe(
+    conn: asyncpg.Connection, ctx: threads.TurnContext, before: safety.State, after: safety.State,
+    user_message_id: uuid.UUID, why: set[str],
+) -> None:
+    """The turn that finds them unsafe is recorded once, for review (admin.crisis_events), with the signs and never
+    their words. The thread is flagged; it locks only where CRISIS_BLOCKS_CHAT is on (off by default since
+    2026-11-06)."""
+    if after is safety.State.UNSAFE and before is not safety.State.UNSAFE:
+        logger.warning("thread %s is unsafe", ctx.thread.id)
+        await threads.mark_crisis(conn, ctx.thread.id, "safety: " + ", ".join(sorted(why)), user_message_id)
 
 
 async def start_thread(

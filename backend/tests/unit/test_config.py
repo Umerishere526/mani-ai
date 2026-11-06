@@ -31,7 +31,8 @@ def build(**overrides) -> Settings:
 
 def test_defaults_are_the_safe_choice():
     settings = build()
-    assert settings.crisis_blocks_chat is True
+    # A lock cut off the one channel someone at risk was using, and fired on "I'm safe" (muhammad, 2026-11-06).
+    assert settings.crisis_blocks_chat is False
     assert settings.ai_debug_mode is False
     assert settings.openrouter_data_collection == "deny"
 
@@ -128,11 +129,23 @@ def test_routing_sends_a_turn_only_to_openai_fastest_first():
     # Unrestricted, OpenRouter may send a conversation to any provider serving the model.
     # Azure's content filter stopped replies to ordinary conversations (2026-10-26).
     # A pinned order waited out whichever endpoint it named, however slow it was at the time.
-    routing = build().routing()
-    assert routing["only"] == ["openai"]
-    assert routing["sort"] == "latency"
-    assert "order" not in routing
-    assert routing["data_collection"] == "deny"
+    # The chat reply may also use OpenAI's priority endpoint (2026-11-05), named beside the standard one so it
+    # falls back there; still OpenAI alone, never flex, never an order, which turns off sticky routing.
+    for routing, only in ((build().routing(), ["openai"]),
+                          (build().routing(priority=True), ["openai", "openai/priority"])):
+        assert routing["only"] == only
+        assert routing["sort"] == "latency"
+        assert "order" not in routing
+        assert routing["allow_fallbacks"] is True
+        assert routing["data_collection"] == "deny"
+    assert build().openrouter_chat_service_tier == "priority"
+
+
+def test_a_chat_reply_may_take_45_seconds_and_its_first_token_15():
+    """2026-11-05: three messages were lost at exactly 30.0 s while the slowest reply that made it took 29.2 s.
+    The first-token cut never fired in that window, so it stays."""
+    assert build().chat_deadline_seconds == 45.0
+    assert build().chat_first_token_seconds == 15.0
 
 
 def test_a_fallback_never_loosens_the_data_policy():

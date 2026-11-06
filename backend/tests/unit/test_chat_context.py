@@ -509,8 +509,8 @@ def _every_kind_of_block() -> list[str]:
         ),
         context.build(TurnContext(thread=thread(message_count=10), profile=None,
                                   technique=declined, techniques_offered=["abcde"])),
-        context.build(TurnContext(thread=thread(), profile=None, technique=None),
-                      safety_concern=True),
+        context.build(TurnContext(thread=thread(), profile=None, technique=None), safety="open"),
+        context.build(TurnContext(thread=thread(), profile=None, technique=None), safety="unsafe"),
         context.build(TurnContext(thread=thread(), profile=None, technique=starting),
                       framework=framework(), starting=True),
         context.build(TurnContext(thread=thread(), profile=None, technique=starting),
@@ -688,27 +688,28 @@ def test_ctx_says_when_the_questions_stopped_helping_and_when_stepping_out_was_o
     assert "exit_offered: yes" in offered and "not_helping" not in offered
 
 
-def test_ctx_asks_to_tie_it_together_after_two_turns_exploring_what_they_added():
-    """The client meeting, 2026-11-03: what they add to a stage said back is explored, then the walk moves on. After
-    two turns of it, the note asks Mani to tie it together and answer agreed; a known stage is said back as an
-    invitation to add, never just a yes or no."""
+def test_ctx_shows_the_parts_of_the_stage_and_those_already_opened_with_no_cap_on_exploring():
+    """muhammad, 2026-11-06: a stage stays while a part not yet explored would help; the parts it opened are shown so
+    none is asked again. A known stage is still said back as an invitation to add, never just a yes or no."""
     from mani.chat import walk
     from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
     parsed = parse_framework(FRAMEWORKS_DIR / "abcde.md")
     abcde = Framework(id="abcde", name="ABCDE", summary="s", body="b", phases=parsed["phases"], stages=parsed["stages"])
 
-    def at_activate(entry: dict) -> str:
-        ctx = _running_at("activate")
+    def at_consequence(entry: dict) -> str:
+        ctx = _running_at("consequence")
         ctx = dataclasses.replace(
-            ctx, technique=ctx.technique.model_copy(update={"stages_known": {"abcde": {"activate": entry}}}),
+            ctx, technique=ctx.technique.model_copy(update={"stages_known": {"abcde": {"consequence": entry}}}),
         )
         return context.build(ctx, framework=abcde)
 
-    once = at_activate({"status": "known", "said": "x", walk.EXPLORED: 1})
-    assert "explored: enough" not in once and "If explore, the walk stays" in once
-    twice = at_activate({"status": "known", "said": "x", walk.EXPLORED: walk.EXPLORE_TURNS})
-    assert "explored: enough" in twice and "answer agreed, so the walk moves on" in twice
+    fresh = at_consequence({"status": "known", "said": "x"})
+    assert "stage_explore: feelings: what they feel when they believe it | actions:" in fresh
+    assert "\nstage_explored:" not in fresh and "explored: enough" not in fresh
+    opened = at_consequence({"status": "known", "said": "x", walk.EXPLORED: 5, walk.COVERED: ["feelings", "actions"]})
+    assert "stage_explored: feelings, actions" in opened and "never ask about them again" in opened
+    assert "explored: enough" not in opened, "no cap on exploring"
     assert "Is that it, or is there more to it?" in walk.CONFIRM_ASK
 
 

@@ -19,6 +19,8 @@ message that changed it. Rules for this folder are in [README.md](README.md).
 | Thursday, same time as the meeting (no date given) | The next call | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
 | 2026-11-04 | A call to bug-bash everything | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
 | 2026-11-08 | Final test | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
+| 2026-11-05, 7:30 PM | Somatic-only call with Michaela; straight to the body check-in | [meeting 2026-11-05](messages/2026-11-05-meeting-stay-with-them-and-safety.md) |
+| 2026-11-09 (Mon), 3 PM ET | Investor tries the chat only | [meeting 2026-11-05](messages/2026-11-05-meeting-stay-with-them-and-safety.md) |
 | 2026-11-09 | Investors | [meeting 2026-10-29](messages/2026-10-29-meeting-cadence-and-role-plays.md) |
 
 ## Requirements
@@ -93,6 +95,12 @@ R1 to R55 were superseded on 2026-11-03 by muhammad ([friendship review](message
 | R70 | What they decide at the last stage never replaces what they want or long for. | [friend chat](messages/2026-11-04-friend-chat-review.md) | in-progress | 2026-11-04: at the last stage and in the body check-in a reported want or desire is ignored and logged, as the core already was; `framework.md` says the step is never a want (muhammad: protect both). |
 | R71 | A stage that stays always asks something, so a conversation never ends on a close while the stage still waits. | [friend chat](messages/2026-11-04-friend-chat-review.md) | in-progress | 2026-11-04: reproduced in a test (a close written while E waited went out with no question and no body check-in); a reply that stays and asks nothing gets the stage's question. |
 | R72 | After a yes to the body check-in, the buttons come straight away: the client's Step 1 with Chest, Stomach, Head, Somewhere Else and No Tension. The chat and the framework stay as they are. | muhammad, 2026-11-04 (in conversation, with a screenshot) | in-progress | 2026-11-04: the feeling question before Step 1 (`somatic_check`) removed; migration 030 moves waiting threads to Step 1. |
+| R73 | MANI stays with the person. A long first message is the first layer: MANI gives room ("is there more?") and makes no insight, summary or framework from it; even after an insight it keeps going until the person indicates they have said what they wanted. Fluid, never a count of exchanges. | [meeting 2026-11-05](messages/2026-11-05-meeting-stay-with-them-and-safety.md) | open | |
+| R74 | Every chat is as good as the best one: consistency, so no tester ever gets the "disgusting" version. | [meeting 2026-11-05](messages/2026-11-05-meeting-stay-with-them-and-safety.md) | open | Monday's investor tries the chat only. |
+| R75 | MANI never placates: it does not tell someone a worrying or harmful pattern of thought is not irrational or is fine. It names what the pattern does for them, without labelling it ("Maybe you've set this up so you can guard yourself. How do you think that helps you?"). It keeps asking plainly when words may mean self-harm, and keeps sending medical decisions to the prescriber. | [meeting 2026-11-05](messages/2026-11-05-meeting-stay-with-them-and-safety.md) | open | Worry-during-good-times chat: "That doesn't sound irrational so much as shaped by the times..." |
+| R76 | Inside a framework, a question they ask is answered first, in the conversation, before any stage; the stage waits. | [meeting 2026-11-05](messages/2026-11-05-meeting-stay-with-them-and-safety.md) | open | Going-through-the-motions chat: the answer to "does one affect the other?" opened with Step 2. |
+| R77 | The framework works on the branch the person wants to understand (the numbness), not the first belief they mentioned in passing ("I should be happy"). | [meeting 2026-11-05](messages/2026-11-05-meeting-stay-with-them-and-safety.md) | open | Thought Reframe, Reflective. |
+| R78 | The chat supports, not only asks: beyond reading their words back, it gives something each turn. | [meeting 2026-11-05](messages/2026-11-05-meeting-stay-with-them-and-safety.md) | open | manasa: "mainly driven by asking questions". |
 
 ## Open questions for the client
 

@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-21
 tags: [journal, latency, streaming, reasoning, lessons]
 ---
+> Superseded 2026-11-05 (the 30 s deadline, now 45 s) - see [[latency-where-the-wait-goes-2026-11-05]]
 
 # `504 llm_timeout` again: the tail is thinking time, so the call is streamed and cut (2026-10-21)
 

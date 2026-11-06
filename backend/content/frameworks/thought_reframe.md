@@ -126,6 +126,10 @@ stages:
     # The part of Mani's picture that feeds this stage once it has passed: a new thought replaces its words.
     picture: thought
     purpose: "Establish the situation, in one plain sentence, and the specific thought about it that they want to examine. The situation may be an ongoing pattern; it is the one the confirmed core is about, never simply the latest or most vivid event."
+    # The parts of the experience this stage can open, each only when it adds something (muhammad, 2026-11-06).
+    explore:
+      - {id: situation, about: "the situation, in one plain sentence"}
+      - {id: thought, about: "the thought about it they want to look at"}
     reach: "If their_case already gives the core they confirmed, report thought as known with the core belief, in their words, not the first thought on the way to it. Your text says back the situation in a few words, then the thought, as two separate things (what happens, and what they take it to mean), then asks whether that's what they want to look at. The feeling belongs to Step 2. Never ask for it again. The thought is what they tell themselves, in their words, never a reading of it. If their_case has no clear thought, report thought as missing and ask what keeps coming back to their mind."
     listen_for: "The situation, whether an actual event or the memory of one, kept separate from the thought about it. Listen for a specific thought about themselves, another person, or the situation, in their words. Specific thoughts are easier to work with than broad ones: 'I'll freeze when she asks about the budget' rather than 'something bad will happen'."
     ready_when: >-
@@ -168,6 +172,11 @@ stages:
     # The part of Mani's picture that feeds this stage once it has passed: a new feeling is added to its words.
     picture: feelings
     purpose: "Understand the strongest feeling the thought brings up and what makes it hurt, in their words, without labelling their experience."
+    # The parts of the experience this stage can open, each only when it adds something (muhammad, 2026-11-06).
+    explore:
+      - {id: feeling, about: "the strongest feeling it brings up"}
+      - {id: why_it_hurts, about: "what makes it hurt"}
+      - {id: meaning, about: "what it says to them about themselves"}
     reach: "If their_case or the chat before the framework already gives the feeling underneath and what makes the thought hurt, report painful as known, in their words, so your text says it back and asks whether that's what makes it hard. Never ask for it again."
     listen_for: "The strongest feeling, which usually falls into one of four groups: fear or anxiety, sadness or low mood, guilt or shame, or anger. Also listen for what they believe the thought says about themselves, another person or the future. If they name more than one strong feeling, the work stays with the strongest one."
     ready_when: "What makes the thought painful is clear, in their words, along with the feeling it brings up most strongly. MANI doesn't assign the meaning or the feeling. No intensity rating is needed."
@@ -194,6 +203,11 @@ stages:
     carries_case: true
     intro: "Step 3 is Explore What Makes the Thought Feel True."
     purpose: "Understand why the thought feels convincing, whether anything complicates it, and help them tell facts apart from feelings or fears."
+    # The parts of the experience this stage can open, each only when it adds something (muhammad, 2026-11-06).
+    explore:
+      - {id: evidence, about: "what makes it feel true"}
+      - {id: complications, about: "anything that complicates it"}
+      - {id: facts_vs_feelings, about: "what is fact and what is feeling or fear"}
     reach: "What they said in the chat before the framework counts: when it already holds what makes the thought convincing, report feels_true as partial with the gap 'complicates' from the start. If nothing has been said for it yet, report feels_true as missing, so your text asks only what makes the thought convincing. If they've said what makes it convincing but haven't been asked whether anything complicates it, report it as partial, with that in their words and the gap 'complicates', so your text asks only whether anything complicates it."
     listen_for: "The experience, feedback, evidence or pattern that makes the thought convincing, and anything that complicates it. Notice for yourself whether each piece is something that happened (an observation or fact) or something that comes from how it felt (fear, a hunch, 'I just know'). Feelings are real but are weaker evidence than facts."
     ready_when: "They've said what makes the thought convincing and have been asked whether anything complicates it. 'Nothing complicates it' is a valid answer; they don't have to disprove the thought."
@@ -227,6 +241,11 @@ stages:
     carries_case: true
     intro: "Step 4 is Consider Another Interpretation."
     purpose: "Consider whether another explanation could also fit the known facts."
+    # The parts of the experience this stage can open, each only when it adds something (muhammad, 2026-11-06).
+    explore:
+      - {id: other_explanation, about: "another explanation that could fit the facts"}
+      - {id: other_view, about: "how someone who cares about them might see it"}
+      - {id: what_fits, about: "which explanation fits what they know best"}
     listen_for: "A credible possibility that doesn't deny what's known, or an acknowledgement that there isn't enough information to know."
     ready_when: >-
       They've named a credible alternative, or said there isn't enough information to know, or
@@ -268,6 +287,11 @@ stages:
     carries_case: true
     intro: "Step 5 is Create a Believable Replacement Thought."
     purpose: "Help them decide, from what they've looked at, whether the thought holds up. If it doesn't, help them put into words a more balanced thought they can believe. If it does, and it points to a real problem, help them name one practical step to address it. Sometimes both are needed."
+    # The parts of the experience this stage can open, each only when it adds something (muhammad, 2026-11-06).
+    explore:
+      - {id: holds_up, about: "whether the thought holds up"}
+      - {id: new_thought, about: "a more balanced thought they can believe"}
+      - {id: step, about: "one gentle step from here"}
     reach: "Report replacement as known only where they've given a thought that fits what they know, said they believe it and named one thing they would like to do with it, or concluded the thought is accurate and named one step they'll take. A permission or intention they give themselves, such as 'trust them more', is part of the thought, never the step. If they believe their thought and have named nothing to do with it yet, it's partial with the gap 'step', once. A step that is more of what they said the thought makes them do, such as pulling back, waiting or holding back, is not the step yet: it's partial with the gap 'step', once, so your text asks gently about the person or situation it is about. If they offered a thought without saying they believe it, it's partial, with their words and the gap 'believe', so your text asks whether it feels true to them. Another interpretation from Step 4 is the material, never the replacement thought: until they have put a thought into their own words, it's partial with the gap 'thought'. If they concluded the thought is accurate and named no step yet, it's partial with the gap 'step'."
     listen_for: "A balanced thought, in their own words, that fits what's known and that they find believable. It may be cautious, partial or uncertain, and often keeps the feeling while putting it in proportion ('Even though I feel anxious, it's unlikely that...'). Also listen for whether they've concluded the thought is accurate, which means the upset is pointing to a real problem."
     ready_when: >-
@@ -390,8 +414,8 @@ person is at fault, or that the thought must be replaced by a positive one.
 
 When Thought Reframe reaches a meaningful conclusion, MANI acknowledges the person's own
 understanding, or the step they chose, in one short sentence. It doesn't overexplain or reopen
-completed steps. The shared body check-in follows, introduced naturally, never implying it's
-mandatory and never overriding a request to stop or change topic.
+completed steps. Keep Chatting, Go to Library and Finish for Now follow (the body check-in is paused), never
+overriding a request to stop or change topic.
 
 Thought Reframe must not be used to question an accurate experience of abuse, threats, coercion,
 harassment, discrimination, exploitation, or medical, financial or legal danger. Some painful

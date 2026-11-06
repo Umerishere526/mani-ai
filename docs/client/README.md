@@ -48,3 +48,5 @@ conflict under "Conflicts" in [requirements.md](requirements.md) and update the 
 | 2026-11-03 | muhammad (review pasted by him) | [Review of the friendship chat, and the earlier requirements set aside](messages/2026-11-03-friendship-review-and-requirements-reset.md) |
 | 2026-11-04 | muhammad | [Plain talk, stage endings, and an E question people understand](messages/2026-11-04-plain-talk-stage-endings-and-e.md) |
 | 2026-11-04 | muhammad | [Review of the Reflective friend chat](messages/2026-11-04-friend-chat-review.md) |
+| 2026-11-05 | Lolly, manasa, muhammad (meeting) | [Stay with them, don't placate, the framework still breaks, and Monday](messages/2026-11-05-meeting-stay-with-them-and-safety.md) |
+| 2026-11-06 | manasa | [Four Reflective test chats: repetitive, no help preparing, and safety that gives way](messages/2026-11-06-four-reflective-tests.md) |
