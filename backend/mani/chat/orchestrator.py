@@ -1150,6 +1150,11 @@ async def _turn(
             # (muhammad, 2026-10-27).
             text, buttons = body_route.ask(fixed.text, walking.stages)
             fixed = dataclasses.replace(fixed, text=text, prompts=_prompts(buttons), phase=body_route.ASK)
+        elif walked.phase == body_route.CLOSING:
+            # The body check-in is paused (muhammad, 2026-11-05): the questions end on Mani's close and the three
+            # closing choices, and the next turn answers them as it did after the check-in.
+            text, buttons = body_route.close(fixed.text, walking.stages)
+            fixed = dataclasses.replace(fixed, text=text, prompts=_prompts(buttons), phase=body_route.CLOSING)
     if moment is Moment.BODY and not guarded:
         route = config.registry.get(technique.framework_id if technique else retiring_framework_id)
         fixed, step = _body_route(fixed, reply.body, reply.options, tapped, technique, route)

@@ -636,3 +636,14 @@ def test_a_message_that_asks_something_never_moves_the_stage():
     assert walk.held_by_question("stop", "can we stop?") == "stop", "a wish to stop is still theirs"
     assert walk.held_by_question("answered", "the past 7 or 8 weeks") == "answered"
     assert walk.held_by_question("answered", "I think it's being blindsided again.") == "answered"
+
+
+def test_the_last_stage_tells_the_reply_the_closing_choices_follow_while_the_body_check_in_is_paused():
+    """muhammad, 2026-11-05: the model is told what code sends after its close, so it never promises a check-in."""
+    from mani.models.rows import Framework
+
+    paused = Framework(id="f", name="F", summary="s", body="b", phases=["offering", "a", "e", "somatic_closing"])
+    full = paused.model_copy(update={"phases": ["offering", "a", "e", "somatic_ask", "somatic_closing"]})
+
+    assert "Keep Chatting, Go to Library and Finish for Now after your text" in walk.next_line(paused, "e")
+    assert "the body check-in after your text" in walk.next_line(full, "e")

@@ -37,15 +37,26 @@ SOMATIC_FILE = PROMPTS_DIR / "somatic.md"
 _FENCED_YAML = re.compile(r"```yaml\n(.*?)\n```", re.DOTALL)
 
 
-def load_somatic_stages() -> dict:
-    """The shared somatic route's stage defs, from the fenced yaml block in somatic.md."""
+def _somatic_block() -> dict:
     match = _FENCED_YAML.search(SOMATIC_FILE.read_text())
     if not match:
         raise ValueError(f"{SOMATIC_FILE.name} has no fenced yaml stages block")
-    stages = (yaml.safe_load(match.group(1)) or {}).get("stages")
+    return yaml.safe_load(match.group(1)) or {}
+
+
+def load_somatic_stages() -> dict:
+    """The shared somatic route's stage defs, from the fenced yaml block in somatic.md."""
+    stages = _somatic_block().get("stages")
     if not stages:
         raise ValueError(f"{SOMATIC_FILE.name} yaml block has no stages")
     return stages
+
+
+def somatic_phases() -> list[str]:
+    """The somatic stages appended to every framework's phases: all of them but the ones somatic.md pauses, so a
+    paused body check-in ends the questions on the closing choices (muhammad, 2026-11-05)."""
+    paused = set(_somatic_block().get("paused") or [])
+    return [stage for stage in load_somatic_stages() if stage not in paused]
 
 
 def parse_prompt(path: pathlib.Path) -> dict:
@@ -134,7 +145,7 @@ async def seed() -> None:
                 raise SystemExit(f"no framework files in {FRAMEWORKS_DIR}")
 
             somatic_stages = load_somatic_stages()
-            somatic_phases = list(somatic_stages)
+            appended = somatic_phases()
 
             for path in framework_files:
                 framework = parse_framework(path)
@@ -144,7 +155,7 @@ async def seed() -> None:
                 # Append the shared somatic route after each framework's own phases. The files
                 # end at `closing`, and this is rebuilt from the file every run, so appending is
                 # idempotent - there is nothing to dedupe.
-                framework["phases"] = framework["phases"] + somatic_phases
+                framework["phases"] = framework["phases"] + appended
                 framework["stages"] = {**framework["stages"], **somatic_stages}
                 await conn.execute(
                     """

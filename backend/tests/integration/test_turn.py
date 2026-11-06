@@ -127,6 +127,29 @@ def model(monkeypatch):
     return install
 
 
+@pytest.fixture
+def body_check_in(monkeypatch):
+    """The body check-in as it runs when somatic.md pauses none of it: its stages back in every framework's phases.
+    Paused since 2026-11-05 (muhammad); its route is kept and tested so it can come back with one reseed."""
+    from mani.chat import body as body_route
+    from mani.chat.techniques import Registry
+    from mani.prompts import cache
+
+    real = cache.load
+
+    async def load():
+        config = await real()
+        whole = [
+            framework.model_copy(update={
+                "phases": [p for p in framework.phases if p not in body_route.STAGES] + list(body_route.STAGES),
+            })
+            for framework in (config.registry.get(i) for i in config.registry.ids)
+        ]
+        return dataclasses.replace(config, registry=Registry(whole))
+
+    monkeypatch.setattr(cache, "load", load)
+
+
 async def start(claims: Claims):
     from mani.db import pool
 
@@ -1612,8 +1635,8 @@ async def _store(alice, thread_id) -> dict:
 
 async def test_a_walk_with_nothing_known_names_each_letter_and_asks_one_stage_per_reply(alice, model):
     """AC-1, AC-2, AC-6, AC-11: each stage opens with its letter line and Mani's own question about
-    their situation, one stage per reply and one call per turn, then the body check-in follows E, after
-    one short sentence with no question."""
+    their situation, one stage per reply and one call per turn, then E ends on Mani's close with no question and
+    the three closing choices (the body check-in is paused, muhammad, 2026-11-05)."""
     scripted = model(
         _offer(), Reply(text=_OWN_QUESTIONS["activate"], next_stage=_MISSING),
         _answered("activate", "left out of meetings", _OWN_QUESTIONS["belief"]),
@@ -1621,7 +1644,6 @@ async def test_a_walk_with_nothing_known_names_each_letter_and_asks_one_stage_pe
         _answered("consequence", "I stopped speaking up", _OWN_QUESTIONS["dispute"]),
         _answered("dispute", "they never said why", _OWN_QUESTIONS["effective"]),
         _answered("effective", "I don't know why yet", "Thank you."),
-        Reply(text="ignored", body="yes"),
     )
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "I keep getting left out at work")
@@ -1633,12 +1655,10 @@ async def test_a_walk_with_nothing_known_names_each_letter_and_asks_one_stage_pe
     assert [turn.content for turn in replies[:5]] == [
         _opens(stage, _OWN_QUESTIONS[stage]) for stage in ("activate", "belief", "consequence", "dispute", "effective")
     ]
-    assert replies[5].content == "Thank you.\n\n" + "Before we finish, would you like to take a moment to check in with your body and notice what you're feeling physically?"
-    assert (await _offered_row(alice, thread.id)).phase == "somatic_ask"
-    opened = await send(alice, thread.id, "Yes")
-    assert opened.content.endswith("Where are you noticing any tension or discomfort right now?")
-    assert scripted.calls == 8
-    assert (await _offered_row(alice, thread.id)).phase == "somatic_body"
+    assert replies[5].content == "Thank you."
+    assert [p.label for p in replies[5].prompts] == ["Keep Chatting", "Go to Library", "Finish for Now"]
+    assert scripted.calls == 7
+    assert (await _offered_row(alice, thread.id)).phase == "somatic_closing"
     store = await _store(alice, thread.id)
     assert {stage: entry["status"] for stage, entry in store.items()} == dict.fromkeys(
         ("activate", "belief", "consequence", "dispute", "effective"), "done")
@@ -2093,6 +2113,36 @@ async def _outcomes(alice, thread_id) -> tuple[str | None, str | None]:
     return row.physical_response, row.conversation_effect
 
 
+async def test_while_the_body_check_in_is_paused_the_last_stage_ends_on_the_three_closing_choices(alice, model):
+    """muhammad, 2026-11-05: chat, then the framework, not somatic; at the end Keep Chatting, Go to Library and
+    Finish for Now, as they came after the check-in. Mani's close stays, its question and any body offer do not,
+    and Keep Chatting goes on from where they ended up."""
+    model(
+        Reply(
+            text="You'll ask your manager for one clear example. Would you like to do a brief body check-in now?",
+            stage_answer="answered",
+            stage_updates=[StageUpdate(stage="effective", said="ask my manager for an example", status="known")],
+        ),
+        Reply(text="What feels most open now?", body="keep_chatting", options="the meeting, or how you felt"),
+    )
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "effective")
+
+    closed = await send(alice, thread.id, "I'll ask her for one clear example")
+
+    assert closed.content == "You'll ask your manager for one clear example."
+    assert [(p.label, p.library) for p in closed.prompts] == [
+        ("Keep Chatting", None), ("Go to Library", "home"), ("Finish for Now", None),
+    ]
+    assert (await _offered_row(alice, thread.id)).phase == "somatic_closing"
+
+    kept = await send(alice, thread.id, "Keep Chatting")
+
+    assert kept.content.startswith("What feels most open now?")
+    assert kept.prompts == []
+
+
+@pytest.mark.usefixtures("body_check_in")
 async def test_answering_the_last_stage_asks_before_the_body_check_in_and_yes_opens_step_one(alice, model):
     """muhammad, 2026-10-27: ask permission before the body check-in (this replaces 2026-10-22's "no question
     before Step 1"). Yes opens the client's Step 1 with its five buttons."""
@@ -2253,6 +2303,7 @@ def _last_stage_answered() -> Reply:
     )
 
 
+@pytest.mark.usefixtures("body_check_in")
 async def test_a_yes_to_the_check_in_gets_the_clients_step_one_with_its_five_buttons(alice, model):
     """muhammad, 2026-11-04: a feeling named before the framework was asked about first, with no buttons, and the
     buttons never came. A yes always gets the client's Step 1, whatever they named."""

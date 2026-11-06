@@ -629,7 +629,9 @@ def test_mani_settles_them_first_reads_like_a_therapist_and_moves_every_reply_fo
     their own job, with feeling better in the chat not the end."""
     voice = parse_prompt(PROMPTS / "voice.md")["content"]
     for rule in ("Think the way an experienced therapist would", "No therapy language, no labels, no diagnosis",
-                 "**The body check-in** after it helps them notice how they feel in their body now.",
+                 # The body check-in is paused (muhammad, 2026-11-05): two parts, then the closing choices.
+                 "A conversation with you has two parts",
+                 "After that they can keep chatting, go to the library, or finish for now.",
                  "Feeling better in the chat is not the end",
                  "Talk about the person, never about a feeling as if it acts on its own.",
                  "**Every reply adds something new.**",

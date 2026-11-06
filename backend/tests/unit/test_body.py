@@ -22,6 +22,28 @@ def labels(step: body.Step) -> list[str]:
     return [b.label for b in step.buttons]
 
 
+def test_while_the_body_check_in_is_paused_the_questions_end_on_the_closing_choices():
+    """muhammad, 2026-11-05: "chat, then the framework, not somatic", and at the end Keep Chatting, Go to Library
+    and Finish for Now as they come today. The body stages stay seeded; only the closing is a phase."""
+    from scripts.seed import somatic_phases
+
+    assert somatic_phases() == [body.CLOSING]
+    assert set(load_somatic_stages()) == set(body.STAGES)
+
+
+def test_the_close_keeps_manis_words_without_a_question_or_a_body_offer_and_adds_the_three_choices(stages):
+    text, buttons = body.close(
+        "You'll ask your manager for one clear example. Would you like to do a brief body check-in now?", stages
+    )
+    assert text == "You'll ask your manager for one clear example."
+    assert [(b.label, b.library) for b in buttons] == [
+        ("Keep Chatting", False), ("Go to Library", True), ("Finish for Now", False),
+    ]
+    assert body.close("You'll ask your manager for one clear example.", stages)[0] == (
+        "You'll ask your manager for one clear example."
+    )
+
+
 def test_after_the_last_stage_mani_asks_before_the_body_check_in(stages):
     """muhammad, 2026-10-27: ask permission first. The question is ours, not the client's document."""
     text, buttons = body.ask("You'll work on clarifying expectations. Does that feel right?", stages)

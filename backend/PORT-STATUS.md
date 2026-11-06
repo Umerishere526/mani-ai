@@ -140,6 +140,16 @@ the same change as the work.**
 
 ## Decisions in force
 
+- **The body check-in is paused: chat, then the framework, then the closing choices** (muhammad, 2026-11-05: "chat ->
+  framework (not somatic)", and at the end Keep Chatting, Go to Library and Finish for Now as they come today). `paused`
+  in `content/prompts/somatic.md` leaves `somatic_ask` to `somatic_effect` out of every framework's phases
+  (`seed.somatic_phases`); their scripts stay seeded. The last stage moves straight to `somatic_closing`: Mani's close,
+  without its question or any body offer (`body.close`), and the three buttons; the next turn answers them as it did
+  after the check-in. `walk.next_line` tells the reply the closing choices follow; `voice.md` names two parts, and the
+  ABCDE and Thought Reframe files name the closing instead of the check-in. No "did our conversation help" question
+  (muhammad: straight to the three buttons). To bring it back: empty `paused`, restore those three prompt lines, and
+  reseed. The body route's tests run with it unpaused (`body_check_in` fixture).
+
 - **A turn reads, thinks, then writes: no database connection is held while the model thinks** (muhammad,
   2026-11-05). Because a turn held its transaction across the model call (6 to 30 s) and `client._record` took a
   second connection inside it, so ten turns in flight on one instance emptied its pool of 10, and with no acquire

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from mani.chat.repairs import with_the_check_in
+from mani.chat.repairs import with_the_check_in, without_body_offer, without_last_question
 
 ASK, BODY, PRACTICE, EFFECT, CLOSING = (
     "somatic_ask", "somatic_body", "somatic_practice", "somatic_effect", "somatic_closing",
@@ -73,6 +73,12 @@ def ask(text: str, stages: dict) -> tuple[str, list[Button]]:
     question whether they would like to check in with their body at all, with Yes and Not right now."""
     script = _script(stages, ASK)
     return with_the_check_in(text, script["text"]), _buttons(script["buttons"])
+
+
+def close(text: str, stages: dict) -> tuple[str, list[Button]]:
+    """What follows the framework's last stage while the body check-in is paused (muhammad, 2026-11-05): Mani's own
+    close, without a body offer or a question of its own, and the three closing choices."""
+    return without_last_question(without_body_offer(text)), _buttons(_script(stages, CLOSING)["buttons"])
 
 
 def _opening(stages: dict) -> Step:

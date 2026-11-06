@@ -497,8 +497,9 @@ def next_line(framework: Framework, phase: str) -> str:
     """What the reply's text is for, in each way their message can answer the stage in force."""
     following = framework.phases[framework.phase_index(phase) + 1]
     if following in ENDING_STAGES:
+        after = "the body check-in" if following != "somatic_closing" else "Keep Chatting, Go to Library and Finish for Now"
         moved = (
-            "the questions end, and code sends the body check-in after your text: write the close the stage asks for, a "
+            f"the questions end, and code sends {after} after your text: write the close the stage asks for, a "
             "few warm sentences at most, with no question and no mention of the body or a check-in. Never repeat what "
             "your last reply said back. Carry forward the one thing they said they would do, in their words, and never put "
             "what they want off to another time."

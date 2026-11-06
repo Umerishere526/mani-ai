@@ -181,6 +181,13 @@ def with_the_check_in(text: str, script: str) -> str:
     return f"{reflection}\n\n{script}" if reflection else script
 
 
+def without_last_question(text: str) -> str:
+    """The text without the question it ends on, when something comes before it; otherwise the text as it is."""
+    match = _LAST_QUESTION.search(text)
+    kept = text[: match.start(1)].rstrip() if match else text.rstrip()
+    return kept or text.rstrip()
+
+
 def under(text: str, options: str | None) -> str:
     """The model's own question with its possibilities on the line under it, as a question that ends in ?.
     Text that asks nothing is left as it is."""
