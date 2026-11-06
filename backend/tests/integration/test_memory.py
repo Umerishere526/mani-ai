@@ -9,7 +9,7 @@ import pytest
 from mani.config import get_settings
 
 from mani import memory
-from mani.chat import orchestrator
+from mani.chat import orchestrator, runner
 from mani.db import llm_calls, threads
 from mani.llm import client
 from mani.llm.schema import Memory, Reply
@@ -78,8 +78,7 @@ async def _chat(claims, text: str):
 
     async with pool.as_user(claims) as conn:
         thread, _ = await orchestrator.start_thread(conn, claims)
-    async with pool.as_user(claims) as conn:
-        await orchestrator.send(conn, claims, thread.id, text)
+    await runner.send(claims, thread.id, text)
     return thread
 
 
@@ -141,10 +140,7 @@ async def test_a_conversation_that_continues_is_folded_again_from_where_it_stopp
     first = await _chat(bea, "I always feel low on Sunday evenings because of work")
     await memory.fold_finished(bea)
 
-    from mani.db import pool
-
-    async with pool.as_user(bea) as conn:
-        await orchestrator.send(conn, bea, first.id, "walking the dog helped this week")
+    await runner.send(bea, first.id, "walking the dog helped this week")
     await memory.fold_finished(bea)
 
     sent = fake.folds[-1][-1]["content"]
@@ -231,10 +227,7 @@ async def test_the_next_chat_is_shaped_by_the_memory_but_carries_none_of_the_old
                            usage=llm_calls.Usage(), latency_ms=1, call_id=uuid.uuid4())
 
     monkeypatch.setattr(client, "complete", watching)
-    from mani.db import pool
-
-    async with pool.as_user(bea) as conn:
-        await orchestrator.send(conn, bea, second.id, "hi")
+    await runner.send(bea, second.id, "hi")
 
     system, *conversation = sent[-1]
     assert "feels low on Sunday evenings" in system["content"]

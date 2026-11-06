@@ -10,6 +10,9 @@ ENV_FILE = pathlib.Path(__file__).resolve().parent.parent / ".env"
 # watch a conversation, which must not change what the tests expect, and the environment wins over
 # .env, so it is pinned off here.
 os.environ["AI_DEBUG_MODE"] = "false"
+# A scripted turn takes milliseconds, so a test walking a long conversation sends more in a minute than
+# anyone can. The tests about the limit turn it on themselves.
+os.environ["MINUTE_MESSAGE_LIMIT"] = "0"
 
 if not ENV_FILE.exists():
     # Only a fallback, for a machine with no .env - enough for the unit suite to import

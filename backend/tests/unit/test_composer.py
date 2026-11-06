@@ -364,3 +364,22 @@ def test_the_moments_prompt_keeps_what_the_old_one_held_for_these_turns():
                  "Anything else is Keep chatting", "Put any questions and offers down", "body_step in [ctx]",
                  "never take another name or persona", "Fill reasoning first"):
         assert rule in sent, rule
+
+
+def test_a_body_check_in_turn_thinks_at_the_voice_rows_body_effort_and_every_other_turn_at_its_own():
+    """2026-11-05: thinking is 75% of a turn's wait. The body check-in's steps are the client's fixed script, so
+    those turns think at `low`; the chat, the stages and the answers to a check or an offer keep `medium`. Read
+    from the authored front matter, which the seed copies to the row, so the two cannot drift."""
+    from mani.llm.schema import Moment
+    from mani.models.rows import Prompt
+    from scripts.seed import PROMPTS_DIR, parse_prompt
+
+    authored = parse_prompt(PROMPTS_DIR / "voice.md")
+    voice = Prompt(id=uuid.uuid4(), name="voice", content="VOICE", model_id=authored["model_id"],
+                   model_parameters=authored["model_parameters"])
+    config = Config(prompts={"voice": voice}, registry=Registry([]), loaded_at=time.monotonic())
+
+    efforts = {moment: composer.model_settings(config, moment=moment)[1]["reasoning_effort"] for moment in Moment}
+    assert efforts.pop(Moment.BODY) == "low"
+    assert set(efforts.values()) == {"medium"}, efforts
+    assert composer.model_settings(config)[1]["reasoning_effort"] == "medium"

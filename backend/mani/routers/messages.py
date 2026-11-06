@@ -1,5 +1,5 @@
 # ABOUTME: The chat endpoints - read a thread's history, and send one turn.
-# ABOUTME: Sending runs the orchestrator inside this request's single transaction.
+# ABOUTME: Sending holds no connection while the model thinks: chat/runner.py reads, calls, then writes.
 
 import datetime as dt
 import uuid
@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 from mani.auth.deps import CurrentUser, Participant
 from mani.auth.jwt import Claims
 from mani.background import fire_and_forget
-from mani.chat import orchestrator, rewind
+from mani.chat import orchestrator, runner
 from mani.config import get_settings
 from mani.db import messages as messages_db
 from mani.db.deps import UserConn
@@ -38,7 +38,6 @@ async def list_messages(
 @router.post("", response_model=TurnOut, status_code=201)
 async def send(
     user: Participant,
-    conn: UserConn,
     thread_id: uuid.UUID,
     body: SendMessageIn,
 ) -> TurnOut:
@@ -48,31 +47,27 @@ async def send(
     answered with a regeneration - up to six of them - are deterministic corrections in
     `chat/repairs.py`. A chat turn's reading of them is a second call, after the reply.
     """
-    turn = await orchestrator.send(
-        conn, user, thread_id, body.content, body.client_message_id
-    )
+    turn = await runner.send(user, thread_id, body.content, body.client_message_id)
     return _turn_out(user, thread_id, turn)
 
 
 @router.post("/{message_id}/edit", response_model=TurnOut, status_code=201)
 async def edit(
     user: Participant,
-    conn: UserConn,
     thread_id: uuid.UUID,
     message_id: uuid.UUID,
     body: EditMessageIn,
 ) -> TurnOut:
     """Replace the person's last message: it and Mani's reply are removed, the thread state returns to what it
-    was before that turn, and the new text runs as a fresh turn. All in this request's one transaction, so a
-    failed turn leaves the original exchange in place."""
-    await rewind.undo_last_turn(conn, user.user_id, thread_id, message_id)
-    turn = await orchestrator.send(conn, user, thread_id, body.content)
+    was before that turn, and the new text runs as a fresh turn. The write takes it back and runs the new text in
+    one transaction, so a failed turn leaves the original exchange in place."""
+    turn = await runner.edit(user, thread_id, message_id, body.content)
     return _turn_out(user, thread_id, turn)
 
 
 def _turn_out(user: Claims, thread_id: uuid.UUID, turn: orchestrator.Turn) -> TurnOut:
     # Not FastAPI's BackgroundTasks: both of these read or reference what this turn just
-    # wrote, on a separate connection, and BackgroundTasks run before UserConn's
+    # wrote, on a separate connection, and BackgroundTasks run before a UserConn
     # transaction commits - see mani/background.py for how that was confirmed.
     if turn.llm_call_id and turn.message_id:
         fire_and_forget(

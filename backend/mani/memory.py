@@ -6,8 +6,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import uuid
-
-import asyncpg
+from enum import StrEnum
 
 from mani.auth.jwt import Claims
 from mani.chat import context
@@ -15,7 +14,8 @@ from mani.config import get_settings
 from mani.db import llm_calls, memory as memory_db
 from mani.llm import client
 from mani.llm.schema import Memory
-from mani.models.rows import Message, MessageRole
+from mani.models.rows import Message, MessageRole, Prompt
+from mani.one_at_a_time import one_at_a_time
 from mani.prompts import cache
 
 logger = logging.getLogger(__name__)
@@ -53,30 +53,35 @@ def _transcript(messages: list[Message]) -> str:
     )
 
 
+class Fold(StrEnum):
+    FOLDED = "folded"
+    NOTHING_WAITING = "nothing_waiting"
+    # Their memory or the thread moved while the model read: nothing written, the next run folds it.
+    MOVED = "moved"
+
+
 async def fold_one(
-    conn: asyncpg.Connection,
-    user_id: uuid.UUID | str,
+    claims: Claims,
+    prompt: Prompt,
     *,
     keep: uuid.UUID | str | None = None,
     idle_before: dt.datetime | None = None,
-) -> bool:
-    """Fold one finished thread into the person's memory. False when none was waiting.
+) -> Fold:
+    """Fold one finished thread into the person's memory.
 
-    Claim, read, merge and write share the caller's transaction: if the model call fails,
-    the claim is released and the thread is picked up again next time.
+    Read, then the model with no connection held, then write only onto what was read. Nothing is
+    claimed ahead, so a fold that fails or never returns leaves the thread waiting as it was.
     """
-    claimed = await memory_db.claim_thread(conn, user_id, keep=keep, idle_before=idle_before)
-    if claimed is None:
-        return False
-    thread_id, since = claimed
+    from mani.db import pool
 
-    new_messages = await memory_db.messages_since(conn, thread_id, user_id, since)
-    existing = await memory_db.lock(conn, user_id)
-
-    config = await cache.load()
-    prompt = config.prompt("memory_fold")
-    if prompt is None:
-        raise RuntimeError("no memory_fold prompt configured")
+    user_id = claims.user_id
+    async with pool.as_user(claims) as conn:
+        waiting = await memory_db.next_to_fold(conn, user_id, keep=keep, idle_before=idle_before)
+        if waiting is None:
+            return Fold.NOTHING_WAITING
+        thread_id, since = waiting
+        new_messages = await memory_db.messages_since(conn, thread_id, user_id, since)
+        existing = await memory_db.get(conn, user_id) or Memory()
 
     call = await client.complete(
         [
@@ -99,30 +104,39 @@ async def fold_one(
         user_id=user_id,
         thread_id=thread_id,
     )
-    await memory_db.save(conn, user_id, bounded(call.value))
-    await memory_db.mark_folded_through(conn, thread_id, new_messages[-1].created_at)
-    return True
+
+    async with pool.as_user(claims) as conn:
+        # The merge started from `existing`: a fold of another of their threads written meanwhile would be
+        # lost under this one, and a fold of this thread would be counted twice.
+        if await memory_db.lock(conn, user_id) != existing:
+            return Fold.MOVED
+        if not await memory_db.mark_folded_through(conn, thread_id, new_messages[-1].created_at, was=since):
+            return Fold.MOVED
+        await memory_db.save(conn, user_id, bounded(call.value))
+    return Fold.FOLDED
 
 
 async def fold_finished(
     claims: Claims, *, keep: uuid.UUID | str | None = None, idle_before: dt.datetime | None = None
 ) -> int:
-    """Fold every finished thread this person has waiting, each in its own transaction.
+    """Fold every finished thread this person has waiting, one at a time.
 
-    One per transaction so a failure costs only that thread, which stays unclaimed. Stops at
-    the first failure rather than retrying the same thread in a loop. Failures are logged,
-    never raised: a missing memory costs Mani some context, and must never fail the chat
-    that triggered it. Transcript content is never logged.
+    Each fold writes on its own, so a failure costs only that thread, which stays waiting. Stops
+    at the first failure, or a fold that found its thread moved, rather than paying for the same
+    thread in a loop. Failures are logged, never raised: a missing memory costs Mani some context,
+    and must never fail the chat that triggered it. Transcript content is never logged.
     """
-    from mani.db import pool
-
     folded = 0
     try:
-        while folded < MAX_FOLDS_PER_RUN:
-            async with pool.as_user(claims) as conn:
-                if not await fold_one(conn, claims.user_id, keep=keep, idle_before=idle_before):
+        # A new chat and the idle job can both start one; in this process the second waits.
+        async with one_at_a_time(("memory", claims.user_id)):
+            prompt = (await cache.load()).prompt("memory_fold")
+            if prompt is None:
+                raise RuntimeError("no memory_fold prompt configured")
+            while folded < MAX_FOLDS_PER_RUN:
+                if await fold_one(claims, prompt, keep=keep, idle_before=idle_before) is not Fold.FOLDED:
                     return folded
-            folded += 1
+                folded += 1
         logger.warning("memory fold stopped at %d threads for user %s", folded, claims.user_id)
         return folded
     except Exception:

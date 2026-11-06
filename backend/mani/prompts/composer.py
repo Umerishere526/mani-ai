@@ -7,9 +7,12 @@ from dataclasses import dataclass, field
 
 from mani.chat.techniques import Registry
 from mani.config import get_settings
-from mani.llm.schema import Memory
+from mani.llm.schema import Memory, Moment
 from mani.models.rows import Profile, ThreadSummary
 from mani.prompts.cache import Config
+
+# The key on the voice row's model_parameters that names the effort of a body check-in turn.
+BODY_EFFORT = "body_reasoning_effort"
 
 DEBUG_LAYER = (
     "# Debug\n"
@@ -269,16 +272,21 @@ def compose_moment(
     )
 
 
-def model_settings(config: Config, name: str = "voice") -> tuple[str, dict, dict]:
+def model_settings(config: Config, name: str = "voice", moment: Moment | None = None) -> tuple[str, dict, dict]:
     """The model id, parameters and routing for a chat turn, from the prompt row `name`.
 
     Taken from a prompt row, so the model is editable as configuration while the key it
-    authenticates with stays in the environment.
+    authenticates with stays in the environment. A body check-in turn thinks at the row's
+    `body_reasoning_effort` when it names one: its steps are the client's fixed script and its
+    reply is short, and the effort of a turn is most of its wait (2026-11-05).
     """
     prompt = config.require(name)
     settings = get_settings()
+    parameters = prompt.model_parameters
+    if moment is Moment.BODY and (body_effort := parameters.get(BODY_EFFORT)):
+        parameters = parameters | {"reasoning_effort": body_effort}
     return (
         prompt.model_id or settings.default_chat_model,
-        prompt.model_parameters,
+        parameters,
         prompt.routing,
     )

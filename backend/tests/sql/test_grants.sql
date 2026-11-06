@@ -54,8 +54,46 @@ $$;
 select pg_temp.want('a signed-in user can read their threads',
   has_table_privilege('authenticated', 'public.threads', 'SELECT'), true);
 
-select pg_temp.want('a signed-in user can start a thread',
-  has_table_privilege('authenticated', 'public.threads', 'INSERT'), true);
+-- A thread is started by the backend (migration 031): a user's own token writing one could set every column
+-- the backend later reads back as its own state.
+select pg_temp.want('a user cannot start a thread directly',
+  has_table_privilege('authenticated', 'public.threads', 'INSERT'), false);
+
+select pg_temp.want('a user cannot delete a thread outright',
+  has_table_privilege('authenticated', 'public.threads', 'DELETE'), false);
+
+do $$
+declare
+  c text;
+begin
+  foreach c in array array['understanding', 'rewind_snapshot', 'check_at_message_count',
+                           'memory_folded_at', 'message_count']
+  loop
+    if has_column_privilege('authenticated', 'public.threads', c, 'INSERT') then
+      raise exception 'FAIL: a user can insert threads.%', c;
+    end if;
+  end loop;
+  raise notice 'PASS: a user cannot insert any of the state the backend reads back';
+end
+$$;
+
+select pg_temp.want('a user cannot record an offered framework',
+  has_table_privilege('authenticated', 'public.thread_techniques_offered', 'INSERT'), false);
+
+select pg_temp.want('a user cannot write a response style',
+  has_table_privilege('authenticated', 'public.thread_response_styles', 'INSERT'), false);
+
+select pg_temp.want('the backend starts threads',
+  has_table_privilege('mani_service', 'public.threads', 'INSERT'), true);
+
+select pg_temp.want('the backend never deletes a thread outright',
+  has_table_privilege('mani_service', 'public.threads', 'DELETE'), false);
+
+select pg_temp.want('the backend records an offered framework',
+  has_table_privilege('mani_service', 'public.thread_techniques_offered', 'INSERT'), true);
+
+select pg_temp.want('the backend writes no response styles',
+  has_table_privilege('mani_service', 'public.thread_response_styles', 'INSERT'), false);
 
 select pg_temp.want('a signed-in user can read their messages',
   has_table_privilege('authenticated', 'public.messages', 'SELECT'), true);

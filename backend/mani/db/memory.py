@@ -1,4 +1,4 @@
-# ABOUTME: Reads and writes the per-person memory, and claims finished threads to fold into it.
+# ABOUTME: Reads and writes the per-person memory, and finds the finished threads to fold into it.
 # ABOUTME: Every write runs as mani_service; RLS scopes it to the caller's own row.
 
 from __future__ import annotations
@@ -61,41 +61,27 @@ async def save(conn: asyncpg.Connection, user_id: uuid.UUID | str, memory: Memor
     )
 
 
-async def claim_thread(
+async def next_to_fold(
     conn: asyncpg.Connection,
     user_id: uuid.UUID | str,
     *,
     keep: uuid.UUID | str | None = None,
     idle_before: dt.datetime | None = None,
 ) -> tuple[uuid.UUID, dt.datetime | None] | None:
-    """Claim one of this person's threads that needs folding, and mark it folded.
-
-    Returns the thread and when it was last folded, or None when there is nothing to do.
-    `skip locked` means a second caller passes over a thread already being folded, and the
-    mark is part of the caller's transaction, so a fold that fails releases it again.
-    `keep` is the conversation the person is in now; `idle_before` limits it to threads
-    that have gone quiet.
+    """One of this person's threads that needs folding, and when it was last folded; None when there is
+    nothing to do. Nothing is claimed: the fold writes only if the thread is still as read
+    (`mark_folded_through`). `keep` is the conversation the person is in now; `idle_before` limits it to
+    threads that have gone quiet.
     """
     row = await conn.fetchrow(
         f"""
-        with claimed as (
-          select t.id, t.memory_folded_at as since
-            from public.threads t
-           where t.user_id = $1 and {_NEEDS_FOLD}
-             and ($2::uuid is null or t.id <> $2)
-             and ($3::timestamptz is null or t.last_message_at < $3)
-           order by t.last_message_at
-           limit 1
-             -- NO KEY UPDATE, not UPDATE: still exclusive between two claimers, but it
-             -- does not block the key-share lock a foreign key takes. The fold's own cost
-             -- row references this thread and is written on another connection while this
-             -- transaction is open; FOR UPDATE deadlocked the two through the application.
-             for no key update skip locked
-        )
-        update public.threads t set memory_folded_at = now()
-          from claimed
-         where t.id = claimed.id
-        returning t.id, claimed.since
+        select t.id, t.memory_folded_at as since
+          from public.threads t
+         where t.user_id = $1 and {_NEEDS_FOLD}
+           and ($2::uuid is null or t.id <> $2)
+           and ($3::timestamptz is null or t.last_message_at < $3)
+         order by t.last_message_at
+         limit 1
         """,
         user_id, keep, idle_before,
     )
@@ -122,17 +108,21 @@ async def messages_since(
 
 
 async def mark_folded_through(
-    conn: asyncpg.Connection, thread_id: uuid.UUID | str, through: dt.datetime
-) -> None:
+    conn: asyncpg.Connection, thread_id: uuid.UUID | str, through: dt.datetime, *, was: dt.datetime | None
+) -> bool:
     """Record the last message the fold actually read, not the time it ran.
 
     A fold reads at most FOLD_BATCH messages; marking the thread folded as of now() would
     silently skip whatever lay beyond that. Marking it at the last message read means the
-    rest is picked up by the next fold.
+    rest is picked up by the next fold. Only from `was`, the mark the fold read: False, with
+    nothing changed, when a fold written meanwhile moved it.
     """
-    await conn.execute(
-        "update public.threads set memory_folded_at = $2 where id = $1", thread_id, through
+    status = await conn.execute(
+        "update public.threads set memory_folded_at = $2 "
+        "where id = $1 and memory_folded_at is not distinct from $3",
+        thread_id, through, was,
     )
+    return status == "UPDATE 1"
 
 
 async def users_with_idle_threads(

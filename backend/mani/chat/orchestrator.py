@@ -1,11 +1,13 @@
 # ABOUTME: One user message from arrival to stored reply: context, one model call, writes.
-# ABOUTME: Everything it writes lands in the caller's transaction, or none of it does.
+# ABOUTME: Everything it writes lands in the caller's transaction, or none of it does; chat/runner.py runs it.
 
 from __future__ import annotations
 
 import dataclasses
+import datetime as dt
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 import asyncpg
@@ -42,6 +44,10 @@ from mani.models.rows import (
 from mani.prompts import cache, composer
 
 logger = logging.getLogger(__name__)
+
+# The turn's one model call, with client.complete's signature. chat/runner.py supplies it, so that no
+# connection is held while the model thinks.
+Ask = Callable[..., Awaitable[client.Call]]
 
 # Title generation is asked for once the thread has a real exchange behind it. The
 # reference tested `message_count == 3` exactly, so a single crisis turn - which writes
@@ -347,6 +353,7 @@ async def _converse(
     client_message_id: uuid.UUID | str | None,
     settings,
     updates: threads.ThreadUpdates,
+    ask: Ask,
     declined: Framework | None = None,
 ) -> Turn:
     """One turn of Mani's own conversation, when no framework, offer or check is open: the conversation
@@ -372,7 +379,7 @@ async def _converse(
         their_count=context.their_messages(ctx), latest=content,
         frameworks=composer.framework_index(config.registry) if allowed else None,
     )
-    call = await client.complete(
+    call = await ask(
         [{"role": "system", "content": system.text}]
         + _conversation(history)
         + [{"role": "user", "content": for_model}, {"role": "system", "content": note}],
@@ -392,7 +399,7 @@ async def _converse(
     # screen does); it holds the check and keeps what is understood as it was.
     guarded = reply.crisis is not None
     if guarded:
-        logger.info("model reported a safety concern on thread %s: %s", ctx.thread.id, reply.crisis.reason)
+        logger.info("model reported a safety concern on thread %s", ctx.thread.id)
     # The reply moves to the set of questions; its offer is made below, and nothing waits for a check's answer.
     moving = not guarded and converse.checked(reply, allowed=allowed)
     their_messages = [m.content for m in history if m.role is MessageRole.USER] + [content]
@@ -591,6 +598,23 @@ async def read_understanding(claims: Claims, job: ReadAfter) -> dict | None:
         return None
 
 
+async def _within_limits(conn: asyncpg.Connection, user_id: str, settings) -> None:
+    """Refuse a paid reply past the day's or the minute's limit, counted from the messages they sent."""
+    for limit, window, user_message in (
+        (settings.daily_message_limit, dt.timedelta(hours=24),
+         "You've reached today's message limit. Please come back tomorrow."),
+        (settings.minute_message_limit, dt.timedelta(minutes=1),
+         "You're sending messages faster than Mani can answer. Please wait a minute and try again."),
+    ):
+        if limit and await messages_db.count_from_user_since(conn, user_id, window) >= limit:
+            raise ServiceError(
+                f"user {user_id} reached the limit of {limit} per {window}",
+                ErrorCategory.RATE_LIMITED,
+                retryable=True,
+                user_message=user_message,
+            )
+
+
 async def _lock_thread(conn: asyncpg.Connection, thread_id: uuid.UUID | str) -> None:
     """One writer at a time per conversation, held until the transaction ends: a turn, or the reading after one."""
     await conn.execute("select pg_advisory_xact_lock(hashtextextended($1, 1))", f"thread:{thread_id}")
@@ -612,8 +636,13 @@ async def send(
     thread_id: uuid.UUID | str,
     content: str,
     client_message_id: uuid.UUID | str | None = None,
+    *,
+    ask: Ask,
+    config: cache.Config,
 ) -> Turn:
-    """Run one turn. The connection is already scoped to the caller and in a transaction."""
+    """Run one turn. The connection is already scoped to the caller and in a transaction. `ask` is the model:
+    chat/runner.py runs this twice, once to learn what to ask and once to write the reply. `config` is the
+    prompts and frameworks, read before the connection was taken."""
     settings = get_settings()
     user_id = claims.user_id
 
@@ -657,10 +686,11 @@ async def send(
                 was_duplicate=True,
             )
 
-    # One turn at a time per conversation, held until this turn's transaction ends. A second
-    # message sent while the first is still waiting on the model (a person re-sending after a
-    # long wait, a double tap) waits here and then reads the first reply. Without it both turns
-    # read the same history and asked the same question twice (2026-10-09).
+    # One writer at a time per conversation, held until this pass's transaction ends. The model is
+    # called with no transaction open (chat/runner.py), so a second message sent while the first is
+    # still waiting on it (a re-send after a long wait, a double tap) is refused at the write, when
+    # the thread is no longer as it was read; without that both turns answered the same history and
+    # asked the same question twice (2026-10-09).
     await _lock_thread(conn, thread_id)
 
     ctx = await threads.load_turn_context(conn, thread_id, user_id)
@@ -680,7 +710,6 @@ async def send(
 
     await rewind.save(conn, ctx, user_id)
 
-    config = await cache.load()
     # The whole thread within the budget: the model sees what they said earlier, instead of a store
     # guessing it ahead of time (2026-10-13).
     window = await messages_db.for_context(
@@ -765,7 +794,6 @@ async def send(
         config, ctx.profile, should_generate_title=wants_title, offered=offered_now,
         summary=ctx.summary if window.dropped else None, memory=ctx.memory,
     )
-    model, parameters, routing = composer.model_settings(config)
 
     # The framework this turn starts, when that is known before the reply: a Try it tap, or a yes
     # whose turn was guarded, which left the row accepted at the offer. A typed yes sets it below.
@@ -803,15 +831,7 @@ async def send(
 
     # Checked here, right before the only paid step, so the safety screen and the free style
     # opener come first and are never refused.
-    if settings.daily_message_limit:
-        sent = await messages_db.count_from_user_since(conn, user_id, hours=24)
-        if sent >= settings.daily_message_limit:
-            raise ServiceError(
-                f"user {user_id} reached the daily limit of {settings.daily_message_limit}",
-                ErrorCategory.RATE_LIMITED,
-                retryable=True,
-                user_message="You've reached today's message limit. Please come back tomorrow.",
-            )
+    await _within_limits(conn, user_id, settings)
 
     # The reply's shape is chosen from the database: the offer field exists only on the answer to
     # Mani's check, so the model cannot offer before they confirm its understanding, and an answer
@@ -826,9 +846,10 @@ async def send(
         return await _converse(
             conn, ctx, for_model=for_model, content=content, tapped=tapped, history=history, window=window,
             config=config, conversation_style=conversation_style, wants_title=wants_title,
-            client_message_id=client_message_id, settings=settings, updates=updates,
+            client_message_id=client_message_id, settings=settings, updates=updates, ask=ask,
             declined=config.registry.get(ctx.technique.framework_id) if declined_row else None,
         )
+    model, parameters, routing = composer.model_settings(config, moment=moment)
     if moment is Moment.IN_STAGES:
         # A turn on a framework's stages speaks in the same voice as the chat; the stage arrives in [ctx].
         system = composer.compose_framework(
@@ -843,7 +864,7 @@ async def send(
             technique.framework_id if moment is Moment.OFFER_OPEN else None,
         ),
     )
-    call = await client.complete(
+    call = await ask(
         [{"role": "system", "content": system.text}]
         + _conversation(history)
         + [{"role": "user", "content": prefix + for_model}],
@@ -885,10 +906,7 @@ async def send(
     # cutting off the conversation the person came for.
     model_concern = reply.crisis is not None
     if model_concern:
-        logger.info(
-            "model reported a safety concern on thread %s: %s",
-            ctx.thread.id, reply.crisis.reason,
-        )
+        logger.info("model reported a safety concern on thread %s", ctx.thread.id)
 
     # A concern, from the screen or the model, comes before anything a reply field could do: no
     # client text is rendered from them and no row changes because of them (AC-12).

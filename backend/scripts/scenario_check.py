@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani.auth.jwt import Claims  # noqa: E402
-from mani.chat import orchestrator  # noqa: E402
+from mani.chat import orchestrator, runner  # noqa: E402
 from mani.chat import context, repairs, reply_checks, walk  # noqa: E402
 from mani.chat.greeting import KEEP_CHATTING_LABEL, TELL_ME_MORE_LABEL, TRY_IT_LABEL  # noqa: E402
 from mani.db import pool  # noqa: E402
@@ -58,8 +58,7 @@ ASKS_WHAT_THEY_SAID = 0.8
 # What a turn is held to (R2, muhammad 2026-10-12). Reported, never a failure: one run is noise.
 MEDIAN_TURN_SECONDS = 4.0
 SLOWEST_TURN_SECONDS = 10.0
-# Conversations run at once. A turn holds a pool connection while client.complete records its cost
-# row on a second, so more than half of MAX_POOL_SIZE at once can leave every turn waiting forever.
+# Conversations run at once.
 AT_ONCE = 4
 
 
@@ -462,8 +461,7 @@ async def _cost(thread_id, seconds: float, billed: list[int]) -> Cost:
 
 
 async def _send(claims: Claims, thread_id, text: str):
-    async with pool.as_user(claims) as conn:
-        return await orchestrator.send(conn, claims, thread_id, text)
+    return await runner.send(claims, thread_id, text)
 
 
 def _report(name: str, runs: dict[str, list[Exchange]], *, full: bool = False) -> int:

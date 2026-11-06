@@ -56,9 +56,11 @@ def _unauthorized(message: str) -> ServiceError:
 
 
 @lru_cache
-def _jwks_client(url: str) -> PyJWKClient:
-    # Caches fetched keys, so verification costs no network call per request.
-    return PyJWKClient(url, cache_keys=True)
+def _jwks_client(url: str, timeout: float) -> PyJWKClient:
+    # Caches fetched keys, so verification costs no network call per request. A cache miss fetches
+    # with a blocking HTTP call, which stays off the event loop because verify_token is only called
+    # from auth/deps.current_user, a plain `def` dependency that FastAPI runs in its threadpool.
+    return PyJWKClient(url, cache_keys=True, timeout=timeout)
 
 
 def verify_token(token: str, settings: Settings | None = None) -> Claims:
@@ -78,7 +80,7 @@ def verify_token(token: str, settings: Settings | None = None) -> Claims:
                 options={"require": ["exp", "sub"]},
             )
         else:
-            signing_key = _jwks_client(settings.jwks_url).get_signing_key_from_jwt(token)
+            signing_key = _jwks_client(settings.jwks_url, settings.jwks_timeout_seconds).get_signing_key_from_jwt(token)
             payload = jwt.decode(
                 token,
                 signing_key.key,

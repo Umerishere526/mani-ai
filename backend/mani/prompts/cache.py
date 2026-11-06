@@ -112,6 +112,8 @@ async def load() -> Config:
     the one after it.
     """
     global _config
+    # Even when fresh: a caller holding a connection reloads on a second one once the snapshot goes stale.
+    pool.refuse_while_holding("the prompt cache was read")
     if _config is not None and not _stale(_config):
         return _config
 

@@ -181,6 +181,7 @@ def test_every_prompt_on_a_reasoning_model_says_how_hard_to_think():
     authored prompt that names a reasoning model carries one the configuration accepts."""
     import typing
 
+    from mani.prompts.composer import BODY_EFFORT
     from scripts.seed import PROMPTS_DIR, SOMATIC_FILE, parse_prompt
 
     allowed = set(typing.get_args(Settings.model_fields["reasoning_effort"].annotation))
@@ -191,6 +192,8 @@ def test_every_prompt_on_a_reasoning_model_says_how_hard_to_think():
         if prompt["model_id"] and chain.is_reasoning_model(prompt["model_id"]):
             effort = prompt["model_parameters"].get("reasoning_effort")
             assert effort in allowed, f"{path.name} sets reasoning_effort {effort!r}"
+            body_effort = prompt["model_parameters"].get(BODY_EFFORT)
+            assert body_effort is None or body_effort in allowed, f"{path.name} sets {BODY_EFFORT} {body_effort!r}"
 
 
 def test_thinking_never_eats_the_budget_the_reply_was_given():
