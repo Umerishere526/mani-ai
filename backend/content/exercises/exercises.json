@@ -1,42 +1,6 @@
 {
   "exercises": [
     {
-      "id": "4847c6ce-b2cd-46c4-a918-dd2c185237e0",
-      "filename": "home-ground.mp3",
-      "title": "Ground Yourself",
-      "subtitle": "Connect to the Present",
-      "description": "This breathing exercise clears away mental overwhelm so you feel anchored in your body. It helps you release stress and reconnect with the present moment.",
-      "type": "Breathing",
-      "category": "home",
-      "displayOrder": 0,
-      "showOnHomeScreen": true,
-      "durationMinutes": 2.64
-    },
-    {
-      "id": "9842c699-3126-4d5c-b248-d179be1aef04",
-      "filename": "home-rest.mp3",
-      "title": "Reset Your Mind",
-      "subtitle": "Find Your Calm",
-      "description": "This visualization creates a private escape from daily pressures to rest your mind. It releases tension so you can find your calm.",
-      "type": "Meditation",
-      "category": "home",
-      "displayOrder": 1,
-      "showOnHomeScreen": true,
-      "durationMinutes": 4.08
-    },
-    {
-      "id": "8b313688-439b-4476-81b5-75a91035414d",
-      "filename": "home-break.mp3",
-      "title": "Break The Pattern",
-      "subtitle": "Stop Spiraling Thoughts",
-      "description": "This meditation helps you break the pattern of spiraling thoughts. It interrupts the constant mental loop so you can return to a quiet and calm mind.",
-      "type": "Visualization",
-      "category": "home",
-      "displayOrder": 2,
-      "showOnHomeScreen": true,
-      "durationMinutes": 4.38
-    },
-    {
       "id": "0c10b2a9-46e2-4626-8d2d-0b417adffeb4",
       "filename": "anxiety-bee-breathing.mp3",
       "title": "Bee Breathing",
@@ -179,30 +143,6 @@
       "displayOrder": 2,
       "showOnHomeScreen": false,
       "durationMinutes": 15.37
-    },
-    {
-      "id": "d35bb6c3-348c-4e15-963d-f6954a1ff50d",
-      "filename": "burnout-monkey-anchor-breathing.mp3",
-      "title": "Monkey Anchor",
-      "subtitle": null,
-      "description": "Monkey Anchor (Hand-on-Heart Breathing) exercise helps you reset your body and quiet your mind when you feel scattered. You finish feeling more present and better able to focus on what matters.",
-      "type": "Breathing",
-      "category": "Burnout",
-      "displayOrder": 0,
-      "showOnHomeScreen": false,
-      "durationMinutes": 4.43
-    },
-    {
-      "id": "156c835f-5d4d-485a-8b56-d3d7621f896e",
-      "filename": "burnout-sorting-table.mp3",
-      "title": "The Sorting Table",
-      "subtitle": null,
-      "description": "The Sorting Table visualization helps you slow down when you feel burned out and everything feels urgent. This exercise helps you sort through the noise so you can focus on what you can actually control.",
-      "type": "Visualization",
-      "category": "Burnout",
-      "displayOrder": 2,
-      "showOnHomeScreen": false,
-      "durationMinutes": 7.66
     }
   ]
 }
