@@ -7,14 +7,16 @@ import streamlit as st
 
 import client as mani
 
-# The order and names the mani app shows its sections in. "home" is the start-here set.
+# The order and names the mani app shows its sections in.
 SECTIONS = {
-    "home": "Start here",
     "Anxiety": "Anxiety",
     "Boundaries": "Boundaries",
     "BuildingHabits": "Building Habits",
     "Burnout": "Burnout",
     "EmotionalIntelligence": "Emotional Intelligence",
+    "LoveRelationships": "Love and Relationships",
+    "ManagingWorry": "Managing Worry",
+    "Sleep": "Sleep",
 }
 
 
