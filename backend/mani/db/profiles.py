@@ -7,7 +7,7 @@ import asyncpg
 
 from mani.models.rows import Profile
 
-COLUMNS = "user_id, nickname, topics, support_style, age_bracket"
+COLUMNS = "user_id, nickname, topics, support_style, age_bracket, remember_progress"
 
 
 async def get(conn: asyncpg.Connection, user_id: uuid.UUID | str) -> Profile | None:
@@ -25,6 +25,7 @@ async def upsert(
     topics: list[str] | None = None,
     support_style: str | None = None,
     age_bracket: str | None = None,
+    remember_progress: bool | None = None,
 ) -> Profile:
     """Create or update a profile, leaving unspecified fields untouched.
 
@@ -33,15 +34,16 @@ async def upsert(
     """
     row = await conn.fetchrow(
         f"""
-        insert into public.profiles (user_id, nickname, topics, support_style, age_bracket)
-        values ($1, $2, coalesce($3::text[], '{{}}'), $4, $5)
+        insert into public.profiles (user_id, nickname, topics, support_style, age_bracket, remember_progress)
+        values ($1, $2, coalesce($3::text[], '{{}}'), $4, $5, coalesce($6, true))
         on conflict (user_id) do update set
-            nickname      = coalesce(excluded.nickname, public.profiles.nickname),
-            topics        = coalesce($3::text[], public.profiles.topics),
-            support_style = coalesce(excluded.support_style, public.profiles.support_style),
-            age_bracket   = coalesce(excluded.age_bracket, public.profiles.age_bracket)
+            nickname          = coalesce(excluded.nickname, public.profiles.nickname),
+            topics            = coalesce($3::text[], public.profiles.topics),
+            support_style     = coalesce(excluded.support_style, public.profiles.support_style),
+            age_bracket       = coalesce(excluded.age_bracket, public.profiles.age_bracket),
+            remember_progress = coalesce($6, public.profiles.remember_progress)
         returning {COLUMNS}
         """,
-        user_id, nickname, topics, support_style, age_bracket,
+        user_id, nickname, topics, support_style, age_bracket, remember_progress,
     )
     return Profile.model_validate(dict(row))

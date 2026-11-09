@@ -12,7 +12,7 @@ from mani import memory
 from mani.chat import orchestrator, runner
 from mani.db import llm_calls, threads
 from mani.llm import client
-from mani.llm.schema import Memory, Reply
+from mani.llm.schema import Memory, ProgressMemory, Reply
 from tests.integration.test_turn import claims_for, reachable
 from tests.integration.cleanup import remove_test_users
 
@@ -284,3 +284,67 @@ async def test_a_fold_can_record_its_own_cost_while_it_holds_the_thread(
 
     assert await asyncio.wait_for(memory.fold_finished(bea), timeout=15) == 1
     assert recorded[-1] is not None  # the cost row was written, not timed out and dropped
+
+
+# Progress memory (muhammad, 2026-11-06): what they worked through is carried into later conversations, as a layer of
+# its own, in their words, and theirs to read, correct, delete or switch off.
+WORKED_THROUGH = Memory(
+    low_times=["feels guilty after saying no to family"],
+    progress=ProgressMemory(
+        realised=["I can appreciate my family without being available every time"],
+        trying=["be honest when I need rest instead of automatically agreeing to help"],
+        working_on=["sometimes I want to take back my no to make the guilt go away"],
+    ),
+)
+
+
+async def test_what_they_worked_through_is_carried_forward_apart_from_the_patterns(bea, scripted):
+    from mani.prompts import composer
+
+    scripted(remembered=WORKED_THROUGH)
+    await _chat(bea, "I feel guilty saying no to my family")
+    second = await _new_chat(bea)
+    await memory.fold_finished(bea, keep=second.id)
+
+    stored = await _stored(bea)
+    assert stored.progress == WORKED_THROUGH.progress
+    rendered = composer.user_memory(stored)
+    patterns, progress = rendered.split("## What they have worked through before")
+    assert "feels guilty after saying no" in patterns and "I can appreciate my family" not in patterns
+    assert "What they planned to try:** be honest when I need rest" in progress
+    assert "What they say now wins" in progress
+
+
+async def test_with_remember_progress_off_the_fold_never_sees_progress_and_keeps_none(bea, scripted):
+    from mani.db import pool, profiles
+
+    async with pool.as_user(bea) as conn:
+        await profiles.upsert(conn, bea.user_id, remember_progress=False)
+    fake = scripted(remembered=WORKED_THROUGH)
+    await _chat(bea, "I feel guilty saying no to my family")
+    second = await _new_chat(bea)
+    await memory.fold_finished(bea, keep=second.id)
+
+    stored = await _stored(bea)
+    assert stored.progress == ProgressMemory(), "nothing carried while it is off"
+    assert stored.low_times == WORKED_THROUGH.low_times, "the patterns stay"
+    assert '"realised": []' in fake.folds[-1][1]["content"], "the fold is shown no progress"
+
+
+async def test_they_can_correct_and_delete_what_is_carried_and_switching_it_off_forgets_it(bea, scripted):
+    from mani.db import memory as memory_db, pool
+
+    scripted(remembered=WORKED_THROUGH)
+    await _chat(bea, "I feel guilty saying no to my family")
+    second = await _new_chat(bea)
+    await memory.fold_finished(bea, keep=second.id)
+
+    corrected = ProgressMemory(realised=["saying no doesn't mean I love them less"])
+    async with pool.as_user(bea) as conn:
+        await memory_db.save_progress(conn, bea.user_id, corrected)
+    stored = await _stored(bea)
+    assert stored.progress == corrected and stored.low_times == WORKED_THROUGH.low_times
+
+    async with pool.as_user(bea) as conn:
+        await memory_db.forget_progress(conn, bea.user_id)
+    assert (await _stored(bea)).progress == ProgressMemory()

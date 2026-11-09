@@ -1,5 +1,5 @@
 # ABOUTME: Checks Thought Reframe can be seeded and that both frameworks end on what muhammad asked for.
-# ABOUTME: ABCDE ends on one clear path, Thought Reframe on a believable thought; read from the files themselves.
+# ABOUTME: ABCDE's E on a new view, Thought Reframe on a believable thought, then the shared landing; read from the files.
 
 import pytest
 
@@ -16,16 +16,25 @@ def test_both_frameworks_have_everything_an_active_one_needs(frameworks):
         assert missing_for_activation(parsed) == [], name
 
 
-def test_abcde_stays_on_e_until_they_have_a_path(frameworks):
+def test_abcde_e_is_the_new_view_and_landing_holds_what_they_do_with_it(frameworks):
+    """muhammad, 2026-11-06: "E: what do I think differently now? Landing: what does this mean for me, and what might I
+    do with it?" E no longer waits for a path; landing, shared by both frameworks, never requires a step."""
+    from scripts.seed import load_landing_stage, with_landing
+
     effective = frameworks["abcde"]["stages"]["effective"]
-    assert "one clear path" in effective["ready_when"]
-    assert any(branch.get("id") == "path" for branch in effective["if_unclear"])
+    assert "path" not in effective["ready_when"] and [b["id"] for b in effective["if_unclear"]] == ["belief"]
     assert not any("must not supply the new belief" in rule for rule in effective["boundaries"])
+    landing = load_landing_stage()
+    assert "A step is never required." in landing["ready_when"]
+    assert landing["no_intro"] and landing["new_view"]
+    for name, parsed in frameworks.items():
+        landed = with_landing(parsed)
+        assert landed["phases"][-1] == "landing" and missing_for_activation(landed) == [], name
 
 
 def test_thought_reframe_stays_on_its_last_phase_until_they_believe_a_balanced_thought(frameworks):
     """The client's text: the replacement does not have to be positive, it has to be something the person can
-    genuinely believe. There is no sixth stage after it; code sends one acknowledging sentence, then the body."""
+    genuinely believe. Its own five steps; the shared landing follows it at seed (muhammad, 2026-11-06)."""
     parsed = frameworks["thought_reframe"]
     replacement = parsed["stages"]["replacement"]
     assert parsed["phases"] == ["offering", "thought", "painful", "feels_true", "alternative", "replacement"]
@@ -114,6 +123,6 @@ def test_d_asks_what_supports_the_belief_and_what_might_challenge_it_as_two_ques
     """muhammad, 2026-10-21: each question has one purpose, never says what it is for and never leads."""
     dispute = frameworks["abcde"]["stages"]["dispute"]
     assert "asks only what supports the belief" in dispute["reach"] and "gap 'challenge'" in dispute["reach"]
-    assert {branch["id"] for branch in dispute["if_unclear"]} == {"information", "challenge"}
+    assert {branch["id"] for branch in dispute["if_unclear"]} == {"helpful", "challenge"}
     assert any("never explains what it's for" in rule for rule in dispute["boundaries"])
     assert any("steer them to a conclusion" in rule for rule in dispute["boundaries"])

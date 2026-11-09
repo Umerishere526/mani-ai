@@ -209,4 +209,12 @@ def test_the_stages_keep_clinical_words_and_judgements_out_of_what_mani_says(abc
     assert any("must not call the belief irrational" in rule for rule in stages["belief"]["boundaries"])
     assert "must not judge the feeling or behaviour as wrong or unhealthy" in stages["consequence"]["boundaries"]
     assert "rather than as their interpretation of it" in stages["activate"]["ready_when"]
-    assert "commitment for next time counts as the path" in stages["effective"]["ready_when"]
+    # E is the new view; a plan or commitment is kept for landing (muhammad, 2026-11-06).
+    assert "A plan, an action or a commitment is never the belief" in stages["effective"]["ready_when"]
+
+
+def test_the_belief_asks_who_it_makes_them_and_the_consequence_asks_what_keeps_it_going(abcde):
+    """muhammad, 2026-11-06 (family-guilt review): identity at B, the function of the behaviour at C."""
+    explore = {name: [e["id"] for e in stage.get("explore", [])] for name, stage in abcde["stages"].items()}
+    assert "identity" in explore["belief"]
+    assert "keeps_it_going" in explore["consequence"]

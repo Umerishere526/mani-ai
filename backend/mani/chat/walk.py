@@ -513,10 +513,8 @@ def next_line(framework: Framework, phase: str) -> str:
     if following in ENDING_STAGES:
         after = "the body check-in" if following != "somatic_closing" else "Keep Chatting, Go to Library and Finish for Now"
         moved = (
-            f"the questions end, and code sends {after} after your text: write the close the stage asks for, a "
-            "few warm sentences at most, with no question and no mention of the body or a check-in. Never repeat what "
-            "your last reply said back. Carry forward the one thing they said they would do, in their words, and never put "
-            "what they want off to another time."
+            f"the questions end, and code sends {after} after your text: write the close the stage asks for, short, "
+            "with no question and no mention of the body or a check-in. Never repeat what your last reply said back."
         )
     else:
         moved = f"the walk reaches {following}: {reach_line(following)}"

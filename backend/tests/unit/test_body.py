@@ -44,12 +44,12 @@ def test_the_close_keeps_manis_words_without_a_question_or_a_body_offer_and_adds
     )
 
 
-def test_something_practical_still_ahead_puts_plan_next_step_first(stages):
-    """muhammad, 2026-11-06, after manasa's tests: the questions ended and nothing helped her plan how to raise it."""
-    _, buttons = body.close("You'll raise it with your boss calmly.", stages, plan=True)
-    assert [b.label for b in buttons] == ["Plan Next Step", "Keep Chatting", "Go to Library", "Finish for Now"]
-    assert body.tapped_value(body.RETIRING, "Plan Next Step", stages) == body.PLAN
-    assert body.fits(body.PLAN, body.RETIRING)
+def test_the_close_offers_the_three_choices_and_preparing_happens_in_landing_before_it(stages):
+    """muhammad, 2026-11-06: Plan Next Step is gone; landing, the framework's last part, does what it was for."""
+    _, buttons = body.close("You'll raise it with your boss calmly.", stages)
+    assert [b.label for b in buttons] == ["Keep Chatting", "Go to Library", "Finish for Now"]
+    assert "plan_buttons" not in stages[body.CLOSING]["script"]
+    assert not body.fits("plan", body.RETIRING)
 
 
 def test_after_the_last_stage_mani_asks_before_the_body_check_in(stages):

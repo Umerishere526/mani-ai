@@ -177,14 +177,52 @@ the same change as the work.**
   to a set of questions keeps the five-message floor and the confirmed core, and now also needs the emotion, the belief
   or meaning, and the behaviour or need explored, from the map (`converse.still_to_explore`; with no map yet the
   heart decides alone).
-- **Plan Next Step: help preparing what they chose, when something practical is ahead** (muhammad, 2026-11-06, after
-  manasa's tests: nothing helped her work out how to raise it with her boss or her partner). The picture keeps what
-  they asked for help with (`asked_for`). The reply that closes the questions reports `follow_through`: conversation,
-  action, decision or none. Anything but none puts Plan Next Step first among the closing choices (`somatic.md`
-  `plan_buttons`, ours, not the client's). Choosing it, tapped or typed (`body: plan`), stores `preparing` on the
-  record, and the chat after it helps them prepare the way a therapist would for its kind (`context` meanings
-  `follow_through`: for a conversation, what they want understood, an opening in their words, what if the other person
-  gets defensive, and an offer to practise it), with no check or offer meanwhile, until the reply sets `prepared`.
+- **What keeps a pattern going, who they believe they are, joined insights, a step aimed at the pattern, and
+  progress carried between conversations** (muhammad, 2026-11-06, after the family-guilt chat). Prompt and content
+  only for the first four: `conversation.md` asks "What keeps it going?" (what a behaviour does for them in the moment
+  and what it costs after), treats words about who they are as beliefs worth exploring gently, and lets later insights
+  join earlier ones into one picture; the exploration map gains the areas `function` and `identity`; ABCDE's belief
+  explores `identity` and its consequence `keeps_it_going`; landing aims a step at the moment relief keeps the pattern
+  going. Progress memory is a third layer, apart from the conversation's own state and from the general patterns in
+  `admin.user_memory`: `Memory.progress` holds `realised`, `trying` and `working_on`, short lines in the person's own
+  words (`memory_fold.md` keeps discoveries apart from inferences, which stay out, and replaces stale lines rather than
+  adding to them), at most a few each (`memory.bounded`), never a transcript. The composer renders it as its own
+  section. The person controls it: `profiles.remember_progress` (migration 034, default **on**, a user may change it),
+  and `/v1/memory/progress` GET to review, PUT to correct, DELETE to forget. Turning the setting off forgets what was
+  kept at once, and the fold neither sees nor keeps progress while it is off. The apps still need the screen for this
+  (muhammad: not now; default stays on).
+- **The parents chat: what they conclude, not what is real; a close tied to what they found** (muhammad, 2026-11-06,
+  a Supportive test chat of unconfirmed origin; scenario group `parents_dismissed_2026_11_06`). All swaps, no new rules:
+  the core under a real situation, or under an accurate reading of it ("they don't listen to me"), is what they
+  conclude that keeps them stuck (`conversation.md`). D's `information` fallback ("do you have enough information?")
+  became `helpful`: when nothing challenges what they have seen, D asks whether the conclusion helps them, and its
+  ready_when follows. C reached from the chat asks one part not yet explored, never only "anything else?". E's offered
+  belief is built from D, the core and the need, never about a problem they didn't raise. Landing's ready_when holds a
+  general step, or one with someone unnamed, until asked once for a situation or who; its two close boundaries became
+  one: what hurt underneath, what they chose and how it might help with one thing from the stages, as a possibility,
+  never a promise about them or anyone else, keeping what they want alive and saying what a step can't give when
+  they said it falls short. `walk.next_line` no longer carries its own close wording. Why C ended on "nothing": C was
+  reached as known from the chat, and "nothing" to its confirmation is agreed, which moves the walk; no code keeps a
+  stage for its unexplored parts, and none was added (a gate needs muhammad's yes). `picture.explored` keeps one
+  entry per ground (`_same_ground`: one's meaning words all in the other, or 60% shared), in the fuller wording.
+- **The five long-failing `test_turn` tests were stale, not broken** (muhammad, 2026-11-06). They expected the flow
+  before P2 and landing: "asks no question" (now "no shape"), the old style line in the prompt, one exact
+  ConversationReply class on the turn that may move, a yes about a real situation turning to helping (reversed by the
+  client's test of 2026-10-29: a yes always brings the offer), and E handing over to the body check-in (now landing).
+  That last test also wrote a trace for a scripted call id with no `admin.llm_calls` row; it now clears the id.
+  Migration 035 adds the index on `admin.turn_traces(llm_call_id)` that `test_grants.sql` asked for.
+- **Framework Landing: the framework ends when they reach a useful point, not when the questions are answered**
+  (muhammad, 2026-11-06, after the work-mistake chat; supersedes Plan Next Step of the same day). `content/prompts/
+  landing.md` is a shared last stage that `seed.with_landing` appends to every framework after its own last stage and
+  before the closing: no letter (`no_intro`), the core fixed (`new_view`), a purpose that is Mani's reasoning, never a
+  checklist (what has shifted, whether the new view feels true, what it means for what it was costing them and for what
+  they asked for, and what would help: understanding, a small experiment, preparing a conversation with practice, a
+  decision, coping, or a warm close), parts to explore, and a ready_when where a step is never required and an open
+  practical need keeps it going. ABCDE's E is the new view only (its path, practice and close moved to landing);
+  Thought Reframe keeps its own last step and landing builds on it. The reply that ends the questions reports
+  `still_open`; the record keeps `after_questions` (what they took away, landing's words, and what is still open), shown
+  in the closing turn's [ctx] and the chat's note after it. Plan Next Step, `preparing`, `prepared` and `follow_through`
+  are gone. **The change to E needs the client's agreement** (their E asked for "one clear thing they'll focus on").
 
 - **Safety is a state the conversation holds, and nothing locks on a phrase** (muhammad, 2026-11-06, after manasa's
   safety test: the concern was gone after one reply, Mani agreed to drop the question each time she pushed back, nine
@@ -958,7 +996,8 @@ Ordered by what breaks first.
 - Panic with no action in sight: the overview sends it to DBT STOP, the STOP specification is written around an
   action about to be taken. The client's call.
 - Whether a crisis turn should hand off to an exercise. Left out on purpose; do not add it as a missing branch.
-- Whether a person should see or erase their memory short of deleting the account.
+- Whether a person should see or erase their general memory (the patterns) short of deleting the account. Progress
+  memory already can be seen, corrected and erased (2026-11-06).
 - The three styles still differ little in length and question rate. Schema field order was the lever that worked
   for openers; more prose rules did not.
 - Revisit the grief veto (Behavioral Activation after loss words) with real transcripts.

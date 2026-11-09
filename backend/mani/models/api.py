@@ -160,6 +160,8 @@ class ProfileIn(BaseModel):
     )
     support_style: SupportStyle | None = None
     age_bracket: str | None = None
+    # Whether Mani carries what they worked through into later conversations. Turning it off clears what was kept.
+    remember_progress: bool | None = None
 
 
 class ProfileOut(BaseModel):
@@ -167,6 +169,25 @@ class ProfileOut(BaseModel):
     topics: list[str] = Field(default_factory=list)
     support_style: SupportStyle | None = None
     age_bracket: str | None = None
+    remember_progress: bool = True
+
+
+class ProgressMemoryOut(BaseModel):
+    """What Mani carries into later conversations of what they worked through, for them to read, correct or delete."""
+
+    realised: list[str] = Field(default_factory=list)
+    trying: list[str] = Field(default_factory=list)
+    working_on: list[str] = Field(default_factory=list)
+
+
+class ProgressMemoryIn(BaseModel):
+    """Their correction: the lists as they want them kept, each entry in their words."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    realised: list[Annotated[str, Field(min_length=1, max_length=160)]] = Field(default_factory=list, max_length=6)
+    trying: list[Annotated[str, Field(min_length=1, max_length=160)]] = Field(default_factory=list, max_length=6)
+    working_on: list[Annotated[str, Field(min_length=1, max_length=160)]] = Field(default_factory=list, max_length=6)
 
 
 class ExerciseOut(BaseModel):

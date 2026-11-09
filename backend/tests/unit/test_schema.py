@@ -23,7 +23,7 @@ def test_each_moment_carries_only_the_fields_that_mean_something_in_it():
         "heart", "check_answer", "heading_toward", "offer", "offer_answer", *REACH}
     # A stage turn speaks in the chat's voice: no reasoning pass and no reply shape (muhammad, 2026-10-27).
     assert fields(Moment.IN_STAGES) == (CORE - {"reasoning"}) | REACH | {
-        "options", "framework_fit", "follow_through", "insight", "explored_now", "progress"}
+        "options", "framework_fit", "still_open", "insight", "explored_now", "progress"}
     assert fields(Moment.OFFER_OPEN) == CORE | {"offer_answer", "their_words", "options", *REACH}
     assert fields(Moment.BODY) == CORE | {"body", "options"}
 

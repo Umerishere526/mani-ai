@@ -61,12 +61,12 @@ def merge(stored: dict, update: PictureUpdate | None, heart: str | None) -> dict
     value keeps what is stored."""
     # The chat's plan and its last answers to its own three questions ride along on every other kind of turn.
     # Whether they corrected the reading an offer said back rides along too, until the next offer (converse.CORRECTED),
-    # and what is still ahead after the questions and what Mani is helping them prepare (context.FOLLOW_THROUGH).
+    # and what the finished questions left them with (context.AFTER).
     merged = {
         key: stored[key]
         for key in (
-            *KEYS, picture.KEY, "plan", "thinking", context.INSIGHTS, CORRECTED, context.FOLLOW_THROUGH,
-            context.PREPARING, context.PROGRESS, context.EXPLORATION,
+            *KEYS, picture.KEY, "plan", "thinking", context.INSIGHTS, CORRECTED, context.AFTER,
+            context.PROGRESS, context.EXPLORATION,
         )
         if stored.get(key)
     }

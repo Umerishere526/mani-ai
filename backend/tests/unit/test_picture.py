@@ -332,3 +332,29 @@ def test_two_wordings_of_one_fact_are_one_entry_and_the_fuller_is_kept():
         BeliefEntry(belief="I'm not good enough for him", kind="thought"),
     ]))["beliefs"]
     assert len(beliefs) == 2
+
+
+def test_one_ground_explored_in_many_wordings_is_counted_once_in_the_fuller_wording():
+    """The parents chat, 2026-11-06: "dismissing your choices" came back six times in eight, pushing the rest out."""
+    seen = {}
+    for said in (
+        "their parents not respecting their personal space",
+        "your parents dismissing your choices",
+        "parents repeatedly dismissing their choices",
+        "their parents dismissing the idea before hearing them out",
+        "their parents dismissing her choices before hearing her out",
+        "wanting their parents to listen and support them",
+    ):
+        seen = picture.explored(seen, said)
+    assert seen[picture.EXPLORED] == [
+        "their parents not respecting their personal space",
+        "their parents dismissing her choices before hearing her out",
+        "their parents dismissing the idea before hearing them out",
+        "wanting their parents to listen and support them",
+    ]
+
+
+def test_different_ground_about_the_same_people_stays_apart():
+    seen = picture.explored({}, "your manager's comments in the meeting")
+    seen = picture.explored(seen, "your manager's deadline")
+    assert len(seen[picture.EXPLORED]) == 2

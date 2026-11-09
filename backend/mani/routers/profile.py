@@ -4,7 +4,7 @@
 from fastapi import APIRouter
 
 from mani.auth.deps import CurrentUser
-from mani.db import profiles
+from mani.db import memory as memory_db, profiles
 from mani.db.deps import UserConn
 from mani.models.api import ProfileIn, ProfileOut
 from mani.routers.serializers import to_profile
@@ -27,5 +27,9 @@ async def put_profile(user: CurrentUser, conn: UserConn, body: ProfileIn) -> Pro
         topics=body.topics,
         support_style=body.support_style.value if body.support_style else None,
         age_bracket=body.age_bracket,
+        remember_progress=body.remember_progress,
     )
+    if body.remember_progress is False:
+        # Turning it off forgets what was kept, now, not at the next fold (muhammad, 2026-11-06: user control).
+        await memory_db.forget_progress(conn, user.user_id)
     return to_profile(profile)

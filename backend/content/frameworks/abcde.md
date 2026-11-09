@@ -148,6 +148,7 @@ stages:
     explore:
       - {id: thought, about: "what they told themselves about it"}
       - {id: about_self, about: "what it says to them about themselves"}
+      - {id: identity, about: "what they believe it makes them, such as a 'bad son or daughter', and what being good means to them"}
       - {id: about_future, about: "what they fear it means for what comes next"}
       - {id: rule, about: "the should or must behind it"}
     # Sent as next_stage_reach on the previous stage, where the reply assesses this stage for the walk.
@@ -188,8 +189,9 @@ stages:
       - {id: actions, about: "what they do, avoid or hold back from"}
       - {id: effects, about: "what it does to their work, health or the people close to them"}
       - {id: in_the_moment, about: "what goes through their mind in the moment it happens"}
+      - {id: keeps_it_going, about: "what giving in does for them in the moment, such as easing the guilt, and what it costs after"}
       - {id: cost, about: "what it is costing them"}
-    reach: "Report consequence as known where they've tied a feeling or an action to that belief. Where they described feelings or actions that may follow from it but never tied them to it, report it as partial, with those words, so your text says them back and asks whether that's how the belief has affected them. Where their_case already gives the feeling underneath, report consequence as known, in their words, so your text says it back and asks whether that's how the belief has affected them. Feelings and actions they described in the chat before the framework count: say them back together and ask only what else the belief affects, if anything, never for them again. Consequences are both what they feel and what they do: when only feelings are known, report it as partial and ask openly about the other side, such as 'how does it affect the way you are with them?', rather than asking them to confirm your reading. It is known only when both what they feel and what they do are known."
+    reach: "Report consequence as known where they've tied a feeling or an action to that belief. Where they described feelings or actions that may follow from it but never tied them to it, report it as partial, with those words, so your text says them back and asks whether that's how the belief has affected them. Where their_case already gives the feeling underneath, report consequence as known, in their words, so your text says it back and asks whether that's how the belief has affected them. Feelings and actions they described in the chat before the framework count: say them back together, never ask for them again, and ask about one part of C not yet explored that would help, such as what giving in does for them in the moment, never only whether there is anything else. Consequences are both what they feel and what they do: when only feelings are known, report it as partial and ask openly about the other side, such as 'how does it affect the way you are with them?', rather than asking them to confirm your reading. It is known only when both what they feel and what they do are known."
     listen_for: "Emotional consequences, such as anxiety, anger, low mood, guilt, shame, frustration or self-pity, and behavioural ones, such as withdrawing, avoiding, snapping at people, moping, drinking or giving up. Note whether the reaction is working for them or against them, but let them be the one to say so."
     ready_when: "They've named at least one feeling or behaviour themselves as following from the belief. Don't introduce a consequence they didn't name."
     # Optional follow-ups. One at a time.
@@ -228,7 +230,7 @@ stages:
       - {id: helpful, about: "whether holding it helps them or holds them back"}
     listen_for: "Keep three things apart: what happened (real, never questioned), their interpretation of it (understandable, never confirmed as fact), and what they assume without knowing. Then sort what they say into two piles and keep them apart. What supports the belief: something real they've noticed, such as a pattern in what they do (pulling back when things get serious is support, not a challenge). What challenges it: something that suggests it isn't completely true, such as having liked people and had chances. Also what they don't yet know, and whether holding the belief is helping them or holding them back."
     reach: "In said, keep the two piles apart: 'supports: <their words>; challenges: <their words>'. What they said in the chat before the framework counts for either pile: when the chat already holds what supports it, report dispute as partial with the gap 'challenge' from the start, so your text explores only the side not yet examined. If nothing has been said for it yet, report dispute as missing, so your text asks only what supports the belief: what makes it feel true. If they've said what supports it but nothing that challenges it, report it as partial with the gap 'challenge', so your text first acknowledges that what supports it is real, then asks only what makes them question whether it's completely true. Never count support as a challenge because it came as an explanation."
-    ready_when: "The belief has been looked at properly. They've said what supports it and, separately, what might challenge it, or considered whether they have enough information to know it's true. Saying the belief comes from fear, worry or the pressure they are under, rather than from something they know or were told, is what challenges it, and answers D once they have been asked once for a concrete moment that challenges it. When their own words already hold both what supports it and what challenges it, D is answered too. They don't have to disprove it. Reflecting on whether the belief helps them is welcome but not required."
+    ready_when: "The belief has been looked at properly. They've said what supports it and, separately, what might challenge it, or, when nothing challenges what they have seen, looked at whether what they conclude from it helps them. Saying the belief comes from fear, worry or the pressure they are under, rather than from something they know or were told, is what challenges it, and answers D once they have been asked once for a concrete moment that challenges it. When their own words already hold both what supports it and what challenges it, D is answered too. They don't have to disprove it. Reflecting on whether the belief helps them is welcome but not required."
     # Optional angles, one per turn, only when they fit and haven't been covered. The three steps run in order, each
     # only if their answers haven't covered it: what makes it feel true, what makes them question it, another way to
     # look at it (the client's review, 2026-10-29).
@@ -253,9 +255,9 @@ stages:
       - "each question asks about one thing, uses their belief and the feeling underneath it, and never explains what it's for"
       - "must not call the belief irrational or distorted, or say they are 'catastrophising', 'overgeneralising' and so on"
     if_unclear:
-      - id: information
-        when: "they were asked what might challenge the belief and nothing at all came to mind, so ask only whether they have enough information to know it's true. Never when they said it comes from fear, worry or pressure: that answered D"
-        reply: "Nothing comes to mind. Do you have enough information to know it is true?"
+      - id: helpful
+        when: "they were asked what might challenge the belief and nothing at all came to mind: what they have seen is real and is never questioned, so ask only whether what they conclude from it helps them. Never when they said it comes from fear, worry or pressure: that answered D"
+        reply: "What you've seen is real. How is holding on to that belief helping or getting in the way for you?"
       - id: challenge
         # The stage whose words fill the reply's slot.
         slot: belief
@@ -271,49 +273,42 @@ stages:
     # Where the new view forms (the career chat, 2026-11-03): the core stays the belief the questions looked at, and the
     # stages before are never rewritten from what is said here (walk.new_view).
     new_view: true
-    # Reached with only the path or a practice to ask, the new belief is asked first, in their words: what they said in
-    # D is never the new belief (walk._reach; the "can't say no" chat, 2026-11-03).
+    # What they said in D is never the new belief, so a partial E asks for the belief first, in their words (walk._reach;
+    # the "can't say no" chat, 2026-11-03).
     first_gap: belief
     carries_case: true
     intro: "E is for Effective New Belief."
-    purpose: "Help them reach a more realistic and helpful way of seeing it, based on what they've examined, plus one clear thing they'll focus on from here, both in their own words. Where it fits, help them plan to bring the new belief to mind the next time a similar event happens."
+    # E is the new way of seeing it; what it means in their life, and any step, is the landing after it (muhammad,
+    # 2026-11-06: "E: what do I think differently now? Landing: what does this mean for me, and what might I do with
+    # it?"). The client's E also asked for "one clear thing they'll focus on": that moved to landing, pending their
+    # agreement.
+    purpose: "Help them reach a more realistic and helpful way of seeing it, based on what they've examined, in their own words, that they believe."
     # The parts of the experience this stage can open, each only when it adds something (muhammad, 2026-11-06).
     explore:
       - {id: new_view, about: "a more balanced way to see it, in their words"}
-      - {id: path, about: "one thing they will do"}
-      - {id: practice, about: "one situation where they can try it"}
-    reach: "Report effective as known only where they've given, at this stage, both a more balanced way to see it and one path, such as raising it with someone. A permission or intention they give themselves, such as 'trust them more' or 'give myself permission', is part of the new view, never the path: the path is one thing they would do in their life. A path that is more of what they said at C, such as pulling back, waiting or holding back, is not the path yet: report partial with the gap 'path', once, so your text asks gently about the person or situation it is about, such as 'Is there something you'd want to say to that friend?'. What they said in D never counts as the new belief: a challenge to the old belief is not yet a new one. If only the new view has come, report it as partial with the gap 'path', so your text asks what one thing they could do. If only an action or intention has come, report it as partial with the gap 'belief', so your text asks for the balanced belief behind it. When the new belief has come and the path is general, such as 'say no when I'm exhausted', report it as partial with the gap 'practice', once, so your text asks for one situation where they could practise it; a specific path, or a practice question already asked, closes the stage. A balanced view already forming in the chat before the framework counts: help them refine it rather than start again."
-    listen_for: "A more realistic and helpful view that separates what they know from what they assumed, usually more flexible than the original belief ('I made a mistake' rather than 'I'm a failure'). Also listen for the one thing they'll focus on from here, any change in how they feel now, and how they might use the new belief next time."
-    ready_when: "They've said, in their own words, a more balanced way to see it, such as 'I don't have to give up my independence to let someone close', and one clear path they'll focus on, or picked one of Mani's suggestions as theirs. A plan, an action or a commitment for next time counts as the path, never as the belief."
-    # Optional follow-ups. One at a time, and only before they have a clear view and a path.
+      - {id: believable, about: "whether it feels true to them, or still only sounds right"}
+      - {id: feels_now, about: "how they feel, seeing it that way"}
+    reach: "Report effective as known where they've given, at this stage, a more balanced way to see it in their words that they believe. A permission or intention they give themselves, such as 'trust them more' or 'give myself permission', is part of the new view. What they said in D never counts as the new belief: a challenge to the old belief is not yet a new one. If only an action or intention has come, report it as partial with the gap 'belief', so your text asks for the balanced belief behind it; the action is kept for what comes after. A balanced view already forming in the chat before the framework counts: help them refine it rather than start again."
+    listen_for: "A more realistic and helpful view that separates what they know from what they assumed, usually more flexible than the original belief ('I made a mistake' rather than 'I'm a failure'), and whether it feels true to them or only sounds right. Any change in how they feel now."
+    ready_when: "They've said, in their own words, a more balanced way to see it that they believe, such as 'I don't have to give up my independence to let someone close'. A plan, an action or a commitment is never the belief: it is kept for what comes after E."
+    # Optional follow-ups. One at a time, and only before they have a view they believe.
     question_bank:
       - "Saying it that way, how do you feel now?"
-      - "Next time something like this happens, what would you like to remind yourself?"
+      - "Does that feel true to you, or does part of you still not quite believe it?"
     boundaries:
-      - "when they're unsure or ask what to do, may suggest two or three concrete, sensible things they could do in their situation, from what they told you, such as telling their manager what happened or asking someone they trust to be with the person who needs them, as ideas for them to choose from, never deciding for them"
-      - "each possibility is one plain thing a person would actually think or do, never a quoted belief joined to a plan"
       - "when asking for the new belief, say both sides back in their words and name the thought from B in their words, then ask plainly what they would tell themselves about it now, knowing both, such as 'He came to you when the company needed saving, and he still overlooks you now. Knowing both, what would you tell yourself about whether you'll ever be good enough for him?' Never say 'balanced', 'perspective' or 'realistic way' to them: say what you mean"
-      - "when they're stuck on the new belief, may offer one balanced belief built only from what they said in D, for them to adjust or reject, never as the answer"
-      - "once they have a new belief and a path, close in two or three warm sentences that carry their own new belief and their choice forward, in their words, such as 'You don't have to choose between independence and connection. You can keep the life you've built while letting someone into it. What matters is noticing when fear is making that decision for you.' Never a recap of the stages, never a new idea of your own"
+      - "when they're stuck on the new belief, may offer one balanced belief built only from what they said in D and the core and the need under it, in their words, for them to adjust or reject, never as the answer and never about a problem they didn't raise, such as trusting themselves when what they want is to be heard"
       - "the new belief must be realistic and believable to them, not forced positivity ('everything will be great')"
       - "the new belief keeps both sides: the real difference they experience, and that it doesn't prove what they feared; it never asks them to dismiss their experience"
-      - "the close carries forward the one thing they said they would do, in their words, and never puts what they want off to another time"
+      - "must not ask for an action, a plan or a step here: what the new view means in their life comes after E"
       - "must not offer reassurance they didn't ask for"
       - "must not reinterpret danger or mistreatment"
-      - "must stop questioning once they have a clear view and a path"
-      - "when asking for the path or a practice, acknowledge their new belief in a few words, never say it back in full: the close carries it"
       - "never word the new belief for them before they have tried: what they found in D is the material, and they put it into a belief that answers the core B looked at"
-      - "must not offer a body check-in: code sends it once the questions end"
+      - "must not offer a body check-in"
     if_unclear:
-      - id: path
-        when: "they've said a more balanced way to see it, and haven't been asked what one thing they'll focus on"
-        reply: "What would you like to do with that new way of seeing it?"
       - id: belief
         when: "they've said an action or intention but not yet a more balanced way to see it"
         reply: "Knowing both sides of it, what would you tell yourself now about that thought?"
-      - id: practice
-        when: "they've said a new belief and a general path, and haven't been asked where they could practise it"
-        reply: "What's one situation coming up where you could practise that?"
     ask:
       directive: "Knowing both of those things, what would you tell yourself now about that thought?"
       supportive: "Knowing both of those things, what could you tell yourself about that thought that feels true to you?"
@@ -357,7 +352,7 @@ guide Mani's own understanding but are never said to the user. Mani uses the per
 - Mani asks one question at a time.
 - The event itself is never questioned when it involves danger or mistreatment. Only what the
   person came to believe about themselves afterwards may be examined.
-- The session ends with Keep Chatting, Go to Library and Finish for Now (the body check-in is paused).
+- E is the new way of seeing it. The shared landing after it helps them carry it into their life: what has shifted, whether it feels true, what it means for what it was costing them, and anything they want to do with it. Then Keep Chatting, Go to Library and Finish for Now (the body check-in is paused).
 
 ## Worked example (for Mani's understanding; not a script)
 

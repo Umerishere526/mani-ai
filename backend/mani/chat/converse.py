@@ -221,11 +221,9 @@ def still_to_explore(understood: dict | None) -> list[str]:
 
 def check_allowed(ctx: TurnContext) -> bool:
     """Whether this reply may move to the set of questions: the floor and cooldowns of context.may_check, an earlier
-    reply that said the heart of it back and was not corrected, enough of their experience explored, and nothing being
-    prepared."""
+    reply that said the heart of it back and was not corrected, and enough of their experience explored."""
     return (
         context.may_check(ctx) and understanding.heart(ctx.thread.understanding) in NAMED
-        and not ctx.thread.understanding.get(context.PREPARING)
         and not still_to_explore(ctx.thread.understanding)
     )
 
@@ -272,14 +270,8 @@ def note(
     for key, value in context.journey(understood):
         if key != "insights_given":
             lines.append(f"{key.replace('_', ' ').capitalize()}: {value}. {context.meaning_of(key)}")
-    if preparing := (understood or {}).get(context.PREPARING):
-        # They chose Plan Next Step after the questions (muhammad, 2026-11-06): the chat helps them prepare it until
-        # they have it, and nothing moves toward a set of questions meanwhile.
-        lines.append(
-            f"You are helping them prepare what they chose after the questions: {preparing.get('for') or 'their next step'}. "
-            f"{context.follow_through_guide(preparing.get('kind', '')) or ''} Set prepared when they have what they "
-            "need for it, or want to talk about something else."
-        )
+    if after := context.after_line(understood):
+        lines.append(f"After the questions they finished: {after}. {context.meaning_of('after_questions')}")
     if plan := (understood or {}).get(PLAN):
         lines.append(f"Your plan from your last reply: {plan}. Keep it, or change it if their message does.")
     if not pressing and not seen.get("situations"):

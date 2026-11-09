@@ -34,6 +34,10 @@ FRAMEWORKS_DIR = CONTENT_DIR / "frameworks"
 # merged into each framework's phases and stages here, so the phase machine and [ctx] handle
 # them like any other stage. Skipped in the prompts loop below for the same reason.
 SOMATIC_FILE = PROMPTS_DIR / "somatic.md"
+# Framework Landing, the shared last stage of every framework (muhammad, 2026-11-06), merged the same way: after the
+# framework's own stages and before the closing.
+LANDING_FILE = PROMPTS_DIR / "landing.md"
+LANDING = "landing"
 _FENCED_YAML = re.compile(r"```yaml\n(.*?)\n```", re.DOTALL)
 
 
@@ -50,6 +54,24 @@ def load_somatic_stages() -> dict:
     if not stages:
         raise ValueError(f"{SOMATIC_FILE.name} yaml block has no stages")
     return stages
+
+
+def load_landing_stage() -> dict:
+    """The shared landing stage's def, from the fenced yaml block in landing.md."""
+    match = _FENCED_YAML.search(LANDING_FILE.read_text())
+    stage = ((yaml.safe_load(match.group(1)) or {}).get("stages") or {}).get(LANDING) if match else None
+    if not stage:
+        raise ValueError(f"{LANDING_FILE.name} has no {LANDING} stage")
+    return stage
+
+
+def with_landing(framework: dict) -> dict:
+    """The framework with the shared landing stage after its own last stage."""
+    return {
+        **framework,
+        "phases": [*framework["phases"], LANDING],
+        "stages": {**framework["stages"], LANDING: load_landing_stage()},
+    }
 
 
 def somatic_phases() -> list[str]:
@@ -128,7 +150,7 @@ def missing_for_activation(framework: dict) -> list[str]:
         if phase == OFFERING or phase in ENDING_STAGES:
             continue
         stage = stages.get(phase) or {}
-        if not stage.get("intro"):
+        if not stage.get("intro") and not stage.get("no_intro"):
             missing.append(f"stages.{phase}.intro")
         missing += [f"stages.{phase}.ask.{style.value}" for style in SupportStyle
                     if not (stage.get("ask") or {}).get(style.value)]
@@ -148,7 +170,7 @@ async def seed() -> None:
             appended = somatic_phases()
 
             for path in framework_files:
-                framework = parse_framework(path)
+                framework = with_landing(parse_framework(path))
                 missing = missing_for_activation(framework)
                 if missing:
                     raise SystemExit(f"{path.name} cannot be active, it lacks: {', '.join(missing)}")
@@ -198,7 +220,7 @@ async def seed() -> None:
             print(f"frameworks: {len(framework_files)}")
 
             # somatic.md is the merge source above, not a prompt row.
-            files = [p for p in sorted(PROMPTS_DIR.glob("*.md")) if p != SOMATIC_FILE]
+            files = [p for p in sorted(PROMPTS_DIR.glob("*.md")) if p not in (SOMATIC_FILE, LANDING_FILE)]
             if not files:
                 raise SystemExit(f"no prompt files in {PROMPTS_DIR}")
 

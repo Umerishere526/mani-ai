@@ -520,10 +520,8 @@ OfferAnswer = Literal["yes", "no", "asked", "moved_on", "corrected", "wants_othe
 CheckAnswer = Literal["yes", "no"]
 BodyBranch = Literal[
     "yes", "no", "chest", "stomach", "head", "jaw_face", "hands", "eyes", "feet", "toes", "arms", "other",
-    "nearest", "none", "pain", "better", "same", "worse", "helped", "somewhat", "not_really", "finish", "plan", "unclear",
+    "nearest", "none", "pain", "better", "same", "worse", "helped", "somewhat", "not_really", "finish", "unclear",
 ]
-# What is still ahead of them once the questions close (muhammad, 2026-11-06): what Plan Next Step helps them prepare.
-FollowThrough = Literal["conversation", "action", "decision", "none"]
 
 # What a reply moves forward (muhammad, 2026-11-06: "make every question earn its place"): every turn should make at
 # least one kind of progress, and code keeps what recent replies added so the next never adds the same.
@@ -532,6 +530,7 @@ ProgressKind = Literal["discover", "deepen", "belief", "connect", "need", "patte
 # worth exploring next, read after each reply.
 Area = Literal[
     "emotion", "belief", "behaviour", "external", "outcome", "need", "attempts", "pattern", "relationships", "meaning",
+    "function", "identity",
 ]
 
 
@@ -564,7 +563,7 @@ class Progress(BaseModel):
 class NextArea(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    area: str = Field(description="One of the areas: emotion, belief, behaviour, external, outcome, need, attempts, pattern, relationships, meaning.")
+    area: str = Field(description="One of the areas: emotion, belief, behaviour, external, outcome, need, attempts, pattern, relationships, meaning, function, identity.")
     why: str = Field(description="Why exploring it now would help them, in a short line.")
 
 
@@ -581,7 +580,9 @@ class Exploration(BaseModel):
             "they feel), belief (what they tell themselves), behaviour (what they do or avoid), external (what is "
             "happening around them, other people), outcome (what they want to happen), need (what they need "
             "underneath), attempts (what they have tried), pattern (whether it has happened before), relationships "
-            "(how it touches the people close to them), meaning (what it says to them about themselves)."
+            "(how it touches the people close to them), meaning (what it says to them about themselves), function (what "
+            "a behaviour does for them in the moment, such as relief, and so what keeps the pattern going), identity "
+            "(what they believe it makes them, such as a 'bad son or daughter', and what being good means to them)."
         ),
     )
     next: list[NextArea] = Field(
@@ -640,7 +641,6 @@ _CLOSED_SETS = {
     "shape": get_args(Shape),
     "move": get_args(Move),
     "framework_fit": get_args(FrameworkFit),
-    "follow_through": get_args(FollowThrough),
 }
 
 
@@ -673,7 +673,7 @@ class _ReplyBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     @field_validator(
-        "offer_answer", "check_answer", "heart", "body", "stage_answer", "framework_fit", "shape", "move", "follow_through",
+        "offer_answer", "check_answer", "heart", "body", "stage_answer", "framework_fit", "shape", "move",
         mode="before",
         check_fields=False,
     )
@@ -747,14 +747,12 @@ class Reply(_ReplyBase):
             "asked, or only part of what the stage needs, so the walk stays. stop: they clearly want to stop or leave the questions."
         ),
     )
-    follow_through: FollowThrough | None = Field(
+    still_open: list[str] | None = Field(
         default=None,
         description=(
-            "Only on the reply that closes the questions (next says the questions end): what is still ahead of them to "
-            "act on what they chose, read with asked_for in your picture, what they asked you for. conversation: what "
-            "they chose is to talk to someone, and how to do it is still open. action: something to do, not yet a "
-            "step they can take. decision: a choice still to make. none: nothing practical is left, or they already "
-            "know how. Null on every other reply."
+            "Only on the reply that ends the questions (next says the questions end): what they named that is still "
+            "open for them, a few words each, such as a cost of the old belief they have not addressed or what they "
+            "came for. Empty when nothing is. Null on every other reply."
         ),
     )
     framework_fit: FrameworkFit | None = Field(
@@ -884,7 +882,7 @@ def reply_for(
         # A stage turn speaks in the chat's voice (prompts/voice.md and framework.md): no reasoning pass, the
         # stage fields are its judgement.
         names = (names - {"reasoning"}) | {
-            *_STAGES, *_REACH, "options", "framework_fit", "follow_through", "insight", "explored_now", "progress",
+            *_STAGES, *_REACH, "options", "framework_fit", "still_open", "insight", "explored_now", "progress",
         }
     elif moment is Moment.OFFER_OPEN:
         names |= {"offer_answer", *_STAGES, *_REACH, "options"}
@@ -1090,13 +1088,6 @@ class ConversationReply(_ReplyBase):
         default=None,
         description="True only on the reply that moves to the set of questions, when the note allows it.",
     )
-    prepared: bool | None = Field(
-        default=None,
-        description=(
-            "Only while the note says you are helping them prepare: true when they have what they need for it, or "
-            "want to talk about something else. Null otherwise."
-        ),
-    )
     asked_for_help: bool | None = Field(
         default=None,
         description="True when their last message asks you for help, ideas, an exercise or what to do.",
@@ -1204,6 +1195,37 @@ class ExtractedTechnique(BaseModel):
     )
 
 
+class ProgressMemory(BaseModel):
+    """What they worked through, carried into later conversations (muhammad, 2026-11-06): a layer of its own beside the
+    patterns, so Mani builds on what they reached instead of starting from zero. Only what they said themselves, in
+    their words: never Mani's reading of them, never a label. The fold replaces it whole, so what has changed is
+    updated and what no longer holds is dropped."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    realised: list[str] = Field(
+        default_factory=list,
+        description=(
+            "A new way of seeing it they put into words themselves, such as \"I can appreciate my family without being "
+            "available every time\". Never your interpretation of what lies underneath."
+        ),
+    )
+    trying: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Something they said they would try, in their words, such as \"be honest when I need rest instead of "
+            "automatically agreeing to help\". Drop it once they say it is done or no longer theirs."
+        ),
+    )
+    working_on: list[str] = Field(
+        default_factory=list,
+        description=(
+            "What they said is still hard or unchanged, such as \"sometimes I want to take back my no to make the guilt "
+            "go away\". Update or drop it when they say it has changed."
+        ),
+    )
+
+
 class Memory(BaseModel):
     """What the memory fold asks for: patterns across conversations, in the person's words.
 
@@ -1246,4 +1268,8 @@ class Memory(BaseModel):
             "How they like the conversation to go, from how they responded: e.g. \"prefers "
             "short replies\", \"usually declines exercises\"."
         ),
+    )
+    progress: ProgressMemory = Field(
+        default_factory=ProgressMemory,
+        description="What they worked through: what they realised, what they plan to try, what they are still working on.",
     )

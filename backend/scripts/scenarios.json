@@ -963,5 +963,73 @@
         ]
       }
     }
+  },
+  "work_mistake_2026_11_06": {
+    "about": "muhammad's Directive chat of 2026-11-06, reviewed for Framework Landing: one mistake makes them feel not good enough; mistakes count as evidence and successes as luck; overchecking, avoiding bigger responsibilities, replaying mistakes after work. E reached a balanced belief and the framework ended. Watch: landing names the shift, checks it feels true, ties it to the overchecking, offers a small experiment without requiring one, and keeps what is still open.",
+    "conversations": {
+      "one_mistake_not_good_enough": {
+        "source": "muhammad, 2026-11-06, Directive",
+        "lines": [
+          "I've been putting a lot of effort into my work, but one small mistake makes me feel like I'm not good enough. I keep worrying that people will eventually realize I'm not as capable as they think.",
+          "I missed an important detail in a report yesterday, and my manager had to point it out. It was a small mistake, but I can't stop thinking about it.",
+          "Yeah, pretty often. Even when things go well, I tend to focus on the one thing I got wrong. I start questioning whether I'm actually good at my job or if I've just been lucky so far.",
+          "I don't really let myself feel proud. Even when I finish something well, I immediately think about what I could've done better. It makes it hard to enjoy my achievements or feel confident about the work I'm doing.",
+          "I definitely overcheck my work. Sometimes I spend way too long reviewing small details because I'm scared of making another mistake. It slows me down, and even after checking everything, I still don't feel completely confident.",
+          "Sometimes talking to a coworker helps. They remind me that everyone makes mistakes and that I've done plenty of good work too. But once I'm on my own again, I tend to fall back into the same pattern.",
+          "Yeah, I think that's exactly it. I seem to trust other people's judgment more than my own. Even when I know I've done good work, I struggle to believe it unless someone else acknowledges it.",
+          "Try it",
+          "Yes, that's what I want to look at. I want to understand why one small mistake can overshadow everything else I've done well and make me question my abilities.",
+          "Yes, I think that's at the heart of it. I worry that maybe I'm not as capable as people think I am, and eventually one mistake will expose that. I feel like I have to keep proving that I deserve to be in the position I'm in.",
+          "It makes me hesitant to take on bigger responsibilities because I'm afraid I won't be able to handle them. I also struggle to switch off after work because I keep replaying things I could've done better.",
+          "I guess my manager correcting me doesn't mean they think I'm incapable. They've also trusted me with important projects and given me positive feedback before. I think I'm treating one mistake as if it cancels out all the reasons they've trusted me in the first place.",
+          "I'd remind myself that being capable doesn't mean being perfect. One mistake doesn't suddenly make me unqualified, and the trust I've earned is based on more than one report. I can learn from what went wrong without letting it define how I see myself.",
+          "Yes. I think I could probably stop reviewing things so many times and trust myself a little more."
+        ]
+      }
+    }
+  },
+  "parents_dismissed_2026_11_06": {
+    "about": "A Supportive test chat of 2026-11-06 (origin unconfirmed): parents dismiss their choices before hearing them, guilt trips, giving in, then staying quiet; it is not about studying abroad but about being heard. Mani was corrected twice (study abroad; trusting their own judgment). Watch: the offer names what they conclude (speaking up is pointless, they will never let me), not the accurate reading that the parents don't listen; C asks what giving in does for them; D never disputes the repeated dismissals and looks at what they conclude; E offers nothing about self-trust; landing asks who they would talk to and the close ties the step to being heard, as a possibility, without promising the parents will change, and says another person can't replace their parents' support.",
+    "conversations": {
+      "parents_dismiss_their_choices": {
+        "source": "test chat, 2026-11-06, Supportive (origin unconfirmed)",
+        "lines": [
+          "i hate that i've with with my parents",
+          "they are a pain to live with, they won't respect my personal space and they would interject on every choice i make.",
+          "i do feel like they don't trust my decisions or my words and i feel like i'm living in a prison.",
+          "they start give me guilt trips",
+          "i usually end up giving in because they just don't listen.",
+          "both",
+          "yes recently, i was thinking of continuing my education but in another country but they didn't even with me a chance to explain and just dismissed my idea completely",
+          "that it would give me a lot of expogious and help me in my future",
+          "i felt neglected and disrespected",
+          "it closed",
+          "they usually respond the same to my choices or what i do.",
+          "i feel even more drawn to it because they reject this idea but i think i not just able my go abroad.",
+          "it not about me wanting to study abroad.",
+          "yes",
+          "i jsut stay quiet now because i have learned they will never let me do what i want",
+          "even if there is someone they can never provide the support i wanted my parent to provide.",
+          "both",
+          "i think at least they could have done is hear me and give me the chance to explain my idea",
+          "i would have been a good change for once",
+          "i don't know what i felt",
+          "sadness, frustration yes",
+          "yeah thats true",
+          "Try it",
+          "yeah that's the pattern i want to look at",
+          "i feel like that's my primary belief",
+          "nothing",
+          "even if i think about it nothing comes to mind",
+          "i think i have enough to know.",
+          "i'm trying to think about it but nothing is coming to mind.",
+          "it's now about if i can trust my judgement without their support it's more about me wanting them to respect my desicions and have open conversations with me",
+          "yes but that hurts",
+          "i'm still not sure",
+          "i still don't know what i'll do if they shut me down again",
+          "talk it though with someone before i decide looks like a good option."
+        ]
+      }
+    }
   }
 }

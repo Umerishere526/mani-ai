@@ -143,14 +143,38 @@ def user_memory(memory: Memory | None) -> str | None:
         for field, heading in _MEMORY_HEADINGS
         if getattr(memory, field)
     ]
-    if not parts:
-        return None
-    return (
+    patterns = (
         "## What you know about them from earlier conversations\n"
         "Patterns they have described, in their words. Use them to choose how you respond: "
         "what to ask about, what to offer, what to avoid. Never quote them, never say you "
         "remember, and never mention an earlier conversation. If they bring something up, "
         "respond to what they say now.\n\n" + "\n".join(parts)
+    ) if parts else None
+    return "\n\n".join(p for p in (patterns, _progress(memory)) if p) or None
+
+
+# What they worked through, a layer apart from the patterns (muhammad, 2026-11-06).
+_PROGRESS_HEADINGS = (
+    ("realised", "What they realised"),
+    ("trying", "What they planned to try"),
+    ("working_on", "What they said they are still working on"),
+)
+
+
+def _progress(memory: Memory) -> str | None:
+    """What they reached in earlier conversations, so Mani builds on it instead of starting from zero."""
+    parts = [
+        f"- **{heading}:** " + "; ".join(getattr(memory.progress, field))
+        for field, heading in _PROGRESS_HEADINGS
+        if getattr(memory.progress, field)
+    ]
+    if not parts:
+        return None
+    return (
+        "## What they have worked through before\n"
+        "In their words. Build on it rather than start again: when what they bring touches it, you may ask gently how "
+        "it has been going, never as a check-up and never as a list. What they say now wins: if something has changed, "
+        "it has changed. Never quote it.\n\n" + "\n".join(parts)
     )
 
 

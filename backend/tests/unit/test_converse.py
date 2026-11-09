@@ -486,8 +486,10 @@ def test_the_check_asks_only_whether_it_captures_it_and_abcde_keeps_support_apar
     for rule in ("'supports: <their words>; challenges: <their words>'",
                  "must not treat what they say in support of the belief as evidence against it",
                  "What they said in D never counts as the new belief",
-                 "id: belief", "close in two or three warm sentences"):
+                 "id: belief"):
         assert rule in abcde, rule
+    # The close moved to landing, the shared last part of every framework (muhammad, 2026-11-06).
+    assert "never a promise about them or anyone else" in (PROMPTS / "landing.md").read_text()
     framework = parse_prompt(PROMPTS / "framework.md")["content"]
     assert "close as a person would" in framework and "stays a wondering" in framework
 
@@ -534,9 +536,10 @@ def test_abcde_inherits_the_chat_and_a_is_the_event_alone():
                  "asks whether that's the belief underneath it",
                  "Feelings and actions they described in the chat before the framework count",
                  "report dispute as partial with the gap 'challenge' from the start",
-                 "must not say the belief is true or that you can see why it is true",
-                 "id: practice"):
+                 "must not say the belief is true or that you can see why it is true"):
         assert rule in abcde, rule
+    # A general step is tied to practice in landing now (muhammad, 2026-11-06).
+    assert "id: practice" in (PROMPTS / "landing.md").read_text()
     assert "# The framework carries on from the chat" in parse_prompt(PROMPTS / "framework.md")["content"]
 
 
@@ -585,10 +588,10 @@ def test_the_need_stays_apart_from_how_they_want_it_met_and_the_close_names_what
     framework = parse_prompt(PROMPTS / "framework.md")["content"]
     assert "Finishing the questions does not mean the whole problem is solved." in framework
     for name in ("abcde", "thought_reframe"):
-        text = (PROMPTS.parent / "frameworks" / f"{name}.md").read_text()
+        text = (PROMPTS.parent / "frameworks" / f"{name}.md").read_text() + (PROMPTS / "landing.md").read_text()
         assert "say plainly in one short clause that what they've seen is real" in text, name
         assert "keeps both sides: the real difference they experience" in text, name
-        assert "never puts what they want off to another time" in text, name
+        assert "off to another time" in text, name
         assert "looked at another time, without pushing a plan" not in text, name
         assert "When their yes added something new" in text, name
 
@@ -759,10 +762,11 @@ def test_the_last_stage_asks_what_they_would_like_to_do_and_the_close_never_defe
     """The friendship and daughter chats, 2026-11-03: E closed on "give myself permission" with nothing to act on,
     then the close put what she wanted off to "another time". In both sets an intention is part of the new view, the
     last stage asks once what they would like to do with it, and the close carries it forward."""
-    for name, stage in (("abcde", "effective"), ("thought_reframe", "replacement")):
-        text = (PROMPTS.parent / "frameworks" / f"{name}.md").read_text()
+    # ABCDE's step and close are landing's since 2026-11-06 (muhammad); Thought Reframe keeps its own step.
+    landing = (PROMPTS / "landing.md").read_text()
+    for name, text in (("abcde", landing), ("thought_reframe", (PROMPTS.parent / "frameworks" / "thought_reframe.md").read_text())):
         assert "is part of the" in text and "'trust them more'" in text, name
-        assert "never puts what they want off to another time" in text, name
+        assert "off to another time" in text, name
     reframe = (PROMPTS.parent / "frameworks" / "thought_reframe.md").read_text()
     assert "If they believe their thought and have named nothing to do with it yet, it's partial with the gap 'step', once." in reframe
     framework = parse_prompt(PROMPTS / "framework.md")["content"]
@@ -800,8 +804,9 @@ def test_mani_talks_plainly_and_a_phrase_from_a_book_is_counted():
 def test_a_step_that_is_more_of_the_pattern_is_asked_about_once():
     """The friend chat, 2026-11-04: "give people space, focus on my own life" was close to the waiting and pulling back
     she named at C, and the friend she missed never came up again."""
-    abcde = (PROMPTS.parent / "frameworks" / "abcde.md").read_text()
-    assert "A path that is more of what they said at C, such as pulling back, waiting or holding back, is not the path yet" in abcde
+    # In landing since 2026-11-06 (muhammad): E is the new view, and the step comes after it.
+    landing = (PROMPTS / "landing.md").read_text()
+    assert "a step that is more of what they described at C, such as pulling back, waiting or holding back, is not a step yet" in landing
     reframe = (PROMPTS.parent / "frameworks" / "thought_reframe.md").read_text()
     assert "A step that is more of what they said the thought makes them do" in reframe
     framework = parse_prompt(PROMPTS / "framework.md")["content"]
@@ -851,16 +856,15 @@ def test_inside_the_questions_a_question_or_push_back_is_answered_and_the_stage_
     assert "set offer_answer to wants_other. The set does not start." in moments
 
 
-def test_while_they_prepare_what_they_planned_the_note_says_how_and_nothing_moves_to_a_set():
-    """muhammad, 2026-11-06: after Plan Next Step the chat helps them prepare it, the way a therapist would for its
-    kind, until they have it."""
-    from mani.chat import context, converse
-
-    preparing = {"heart": "core_named", context.PREPARING: {"kind": "conversation", "for": "raise it with my boss"}}
-    note = converse.note("reflective", allowed=False, due=False, wants_title=False, understood=preparing)
-    assert "helping them prepare what they chose after the questions: raise it with my boss" in note
-    assert "with you as the other person" in note and "Set prepared when" in note
-    assert context.follow_through_guide("action").startswith("help them turn what they chose into one small step")
+def test_after_the_questions_what_they_took_away_and_what_is_still_open_carry_into_the_chat():
+    """muhammad, 2026-11-06: finishing the questions is not solving the problem. What they took away and what is still
+    open are kept, and the chat after the questions continues from what is open."""
+    after = {context.AFTER: {"took_away": "being capable doesn't mean being perfect",
+                             "still_open": ["checking work over and over", "bigger responsibilities"]}}
+    note = converse.note("directive", allowed=False, due=False, wants_title=False, understood=after)
+    assert "After the questions they finished: took away: being capable doesn't mean being perfect; still open: " \
+        "checking work over and over | bigger responsibilities." in note
+    assert "never treat the questions as having solved it" in note
 
 
 def test_the_reading_after_a_reply_keeps_what_is_explored_and_the_note_offers_it_to_the_next():
@@ -911,3 +915,41 @@ def test_a_stage_reading_brings_only_the_map_and_never_moves_the_core_or_the_hea
     after = converse.read(stored, seen, their_messages=["x"], with_picture=False)
     assert after["picture"] == stored["picture"] and after["heart"] == "ready"
     assert after[context.EXPLORATION]["explored"] == ["belief"]
+
+
+def test_the_family_guilt_review_reaches_the_prompts_function_identity_and_joined_insights():
+    """muhammad, 2026-11-06: the family-guilt review's first three improvements live in the prompt, not in code."""
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    assert "**What keeps it going?**" in chat
+    assert "**Words about who they are**" in chat and "never as a label" in chat
+    assert "Later insights can join earlier ones into one picture" in chat
+
+
+def test_the_exploration_map_can_name_what_a_behaviour_does_and_who_they_believe_they_are():
+    from mani.llm.schema import Exploration, NextArea
+
+    seen = Exploration(explored=["function", "identity"], next=[NextArea(area="identity", why="x")])
+    assert seen.explored == ["function", "identity"] and seen.next[0].area == "identity"
+
+
+def test_landing_aims_a_step_at_the_moment_relief_keeps_the_pattern_going():
+    landing = (PROMPTS / "landing.md").read_text()
+    assert "when relief keeps a pattern going" in landing
+    assert "they don't have to get rid of the feeling before they act differently" in landing
+
+
+def test_the_parents_chat_review_ties_the_close_to_the_stages_and_never_disputes_what_is_real():
+    """muhammad, 2026-11-06 (the parents chat): the close tied to what they found, as a possibility; a step with someone
+    asks who; the core is what they conclude, not an accurate reading; D on a real pattern looks at what they conclude;
+    C asks a part not yet explored; E never offers a problem they didn't raise."""
+    landing = (PROMPTS / "landing.md").read_text()
+    assert "how it might help with one thing from the stages" in landing
+    assert "say what it can and cannot give" in landing
+    assert "or involves someone they haven't named, until asked once for one situation or who it would be" in landing
+    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
+    assert "what they conclude from it that keeps them stuck" in chat
+    abcde = (PROMPTS.parent / "frameworks" / "abcde.md").read_text()
+    assert "what they have seen is real and is never questioned" in abcde
+    assert "Do you have enough information to know it is true?\"" not in abcde
+    assert "never only whether there is anything else" in abcde
+    assert "never about a problem they didn't raise" in abcde

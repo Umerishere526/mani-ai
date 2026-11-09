@@ -24,6 +24,7 @@ from mani.routers import (
     crisis,
     exercises,
     health,
+    memory,
     messages,
     profile,
     threads,
@@ -149,6 +150,7 @@ def create_app() -> FastAPI:
     for router in (
         health.router,
         profile.router,
+        memory.router,
         account.router,
         threads.router,
         messages.router,

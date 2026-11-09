@@ -311,25 +311,13 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "real_not_belief."
         ),
     },
-    # What Plan Next Step helps them prepare, the way a therapist would for each (muhammad, 2026-11-06, after manasa's
-    # tests: the questions ended and nothing helped her plan how to raise it with her boss or her partner).
-    "follow_through": {
-        "conversation": (
-            "help them prepare the conversation they chose, one part at a time, in their words: what they want the "
-            "other person to understand or change; how they would open it, drafted together from what they said (offer "
-            "a line they can change, never a script to recite); and what they would do if the other person gets "
-            "defensive or dismissive. Once they have an opening, offer to practise it, with you as the other person. "
-            "Never tell them what they must say."
-        ),
-        "action": (
-            "help them turn what they chose into one small step: what exactly, when and where, what might get in the "
-            "way and what they would do then. Their words; your ideas only as options they choose from."
-        ),
-        "decision": (
-            "help them weigh the choice: what matters most to them in it, and how each option sits with that. Never "
-            "decide for them."
-        ),
-    },
+    # What the questions left them with, kept after they end (muhammad, 2026-11-06: finishing the questions is not
+    # solving the problem): what they took away and what is still open, carried into the chat that follows.
+    "after_questions": (
+        "what they took away from the questions they finished, and what is still open for them. Continue from what is "
+        "still open when it matters to them; never treat the questions as having solved it, and never ask again for "
+        "what they took away."
+    ),
     # What the conversation has explored and given so far (muhammad, 2026-11-06: every question earns its place, and
     # several aha moments rather than one): read after each reply and carried into the next.
     "insights_given": (
@@ -386,9 +374,7 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "their_case and landed_on in the same shape as before the questions: a mirror of where they ended up, one "
             "open question, and possibilities in options. Never ask what they would like to talk about, and never ask "
             "again for anything their_case already holds. What they chose to do in landed_on is settled: never ask "
-            "them to pick, name or narrow it again (the father chat, 2026-11-04); go on from what is still open. If they "
-            "want to plan the next step (Plan Next Step, or in their words), report plan and begin it as "
-            "follow_through says."
+            "them to pick, name or narrow it again (the father chat, 2026-11-04); go on from what is still open (after_questions)."
         ),
     },
 }
@@ -402,16 +388,26 @@ CARRIES_CASE = (
 )
 
 
-# On the understanding record: what is still ahead once the questions close (set on the reply that closes them), and
-# what Mani is helping them prepare once they chose Plan Next Step, until they have it.
-FOLLOW_THROUGH = "follow_through"
-PREPARING = "preparing"
+# On the understanding record: what the finished questions left them with, what they took away (landing's words) and
+# what is still open, set on the reply that ends them (muhammad, 2026-11-06).
+AFTER = "after_questions"
 # What recent replies added, newest last, and the after-reply reading's map of what is explored and what can be inferred.
 PROGRESS = "progress"
 PROGRESS_KEPT = 4
 EXPLORATION = "exploration"
 INSIGHTS = "insights"
 INSIGHTS_KEPT = 4
+
+
+def after_line(understood: dict | None) -> str | None:
+    """What the finished questions left them with, as one line, or None."""
+    after = (understood or {}).get(AFTER) or {}
+    parts = []
+    if after.get("took_away"):
+        parts.append(f"took away: {disarm(after['took_away'])}")
+    if after.get("still_open"):
+        parts.append("still open: " + " | ".join(disarm(o) for o in after["still_open"]))
+    return "; ".join(parts) or None
 
 
 def meaning_of(key: str) -> str:
@@ -452,11 +448,6 @@ def with_insight(stored: dict, insight: str | None) -> dict:
     if not said:
         return stored
     return {**stored, INSIGHTS: [*(stored.get(INSIGHTS) or []), said][-INSIGHTS_KEPT:]}
-
-
-def follow_through_guide(kind: str) -> str | None:
-    """How Mani helps with what is still ahead of them, for `kind`."""
-    return (_MEANING.get("follow_through") or {}).get(kind)
 
 
 def _meaning(key: str, value: object) -> list[str]:
@@ -538,8 +529,8 @@ def build(
         lines += _line("body_step", "closing")
         if landed_on:
             lines += _line("landed_on", disarm(landed_on))
-        if kind := (ctx.thread.understanding or {}).get(FOLLOW_THROUGH):
-            lines += _line("follow_through", kind)
+        if after := after_line(ctx.thread.understanding):
+            lines += _line("after_questions", after)
 
     # An offer only on the answer to Mani's check (spec 0006). The check itself is made in Mani's own conversation.
     if not safety_concern and check_open(ctx):

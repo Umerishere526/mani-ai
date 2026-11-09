@@ -53,6 +53,8 @@ class Profile(Row):
     topics: list[str] = Field(default_factory=list)
     support_style: SupportStyle | None = None
     age_bracket: str | None = None
+    # Whether what they worked through is carried into later conversations (migration 034).
+    remember_progress: bool = True
 
 
 class Thread(Row):

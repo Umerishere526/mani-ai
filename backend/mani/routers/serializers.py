@@ -76,6 +76,7 @@ def to_profile(profile: Profile | None) -> ProfileOut:
         topics=profile.topics,
         support_style=profile.support_style,
         age_bracket=profile.age_bracket,
+        remember_progress=profile.remember_progress,
     )
 
 

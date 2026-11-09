@@ -300,14 +300,42 @@ def apply_reading(stored: dict | None, reading: Reading | None) -> dict:
     return reconcile(picture)
 
 
+# What was explored is written fresh each turn, so one thing comes back as "your parents dismissing your choices" and
+# "parents repeatedly dismissing their choices" (the parents chat, 2026-11-06: one ground six times of eight, pushing
+# the rest out). Compared on the words that carry the meaning: whose it is, and how often, change nothing.
+_GROUND_SKIP = frozenset(
+    "a an the and or to of for in on at with by about from their your her his my our them they you she he i me him us "
+    "it its this that those these when before after repeatedly always often usually".split()
+)
+GROUND_SHARE = 0.6
+
+
+def _ground(text: str) -> set[str]:
+    return {w for w in _words(text) if w not in _GROUND_SKIP}
+
+
+def _same_ground(a: str, b: str) -> bool:
+    """Whether two explored entries cover the same ground: the words of one all in the other, or most of both shared."""
+    x, y = _ground(a), _ground(b)
+    if not x or not y:
+        return _same(a, b)
+    shared = len(x & y)
+    return (shared == min(len(x), len(y)) and shared >= 2) or shared / len(x | y) >= GROUND_SHARE
+
+
 def explored(picture: dict | None, closest: str | None) -> dict:
-    """The picture with what the reply's window landed on counted as explored."""
+    """The picture with what the reply's window landed on counted as explored. Ground already counted keeps one
+    entry, in the fuller of the two wordings."""
     picture = copy.deepcopy(picture or {})
     if not (closest := _clean(closest)):
         return picture
-    done = picture.get(EXPLORED) or []
-    if not any(_same(e, closest) for e in done):
+    done = list(picture.get(EXPLORED) or [])
+    at = next((i for i, e in enumerate(done) if _same_ground(e, closest)), None)
+    if at is None:
         picture[EXPLORED] = _capped([*done, closest])
+    elif len(_ground(closest)) > len(_ground(done[at])):
+        done[at] = closest
+        picture[EXPLORED] = done
     return picture
 
 

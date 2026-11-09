@@ -11,9 +11,9 @@ from enum import StrEnum
 from mani.auth.jwt import Claims
 from mani.chat import context
 from mani.config import get_settings
-from mani.db import llm_calls, memory as memory_db
+from mani.db import llm_calls, memory as memory_db, profiles
 from mani.llm import client
-from mani.llm.schema import Memory
+from mani.llm.schema import Memory, ProgressMemory
 from mani.models.rows import Message, MessageRole, Prompt
 from mani.one_at_a_time import one_at_a_time
 from mani.prompts import cache
@@ -34,15 +34,18 @@ IDLE_AFTER = dt.timedelta(hours=24)
 MAX_FOLDS_PER_RUN = 20
 
 
-def bounded(memory: Memory) -> Memory:
-    return Memory.model_validate(
-        {
-            field: [entry.strip()[:MAX_ENTRY_CHARS] for entry in entries if entry.strip()][
-                :MAX_ENTRIES
-            ]
-            for field, entries in memory.model_dump().items()
-        }
-    )
+def _bounded_lists(lists: dict) -> dict:
+    return {
+        field: [entry.strip()[:MAX_ENTRY_CHARS] for entry in entries if entry.strip()][:MAX_ENTRIES]
+        for field, entries in lists.items()
+    }
+
+
+def bounded(memory: Memory, *, keep_progress: bool = True) -> Memory:
+    """The memory cut to its limits. Progress is kept only when they let Mani carry it (profiles.remember_progress)."""
+    dumped = memory.model_dump()
+    progress = dumped.pop("progress", {}) if keep_progress else {}
+    return Memory.model_validate({**_bounded_lists(dumped), "progress": _bounded_lists(progress)})
 
 
 def _transcript(messages: list[Message]) -> str:
@@ -82,6 +85,10 @@ async def fold_one(
         thread_id, since = waiting
         new_messages = await memory_db.messages_since(conn, thread_id, user_id, since)
         existing = await memory_db.get(conn, user_id) or Memory()
+        profile = await profiles.get(conn, user_id)
+    # Progress is carried only when they let it be (migration 034): otherwise the fold never sees it and keeps none.
+    keep_progress = profile is None or profile.remember_progress
+    shown = existing if keep_progress else existing.model_copy(update={"progress": ProgressMemory()})
 
     call = await client.complete(
         [
@@ -89,7 +96,7 @@ async def fold_one(
             {
                 "role": "user",
                 "content": (
-                    f"## Known so far\n{existing.model_dump_json(indent=1)}\n\n"
+                    f"## Known so far\n{shown.model_dump_json(indent=1)}\n\n"
                     f"## The conversation that just finished\n{_transcript(new_messages)}"
                 ),
             },
@@ -112,7 +119,7 @@ async def fold_one(
             return Fold.MOVED
         if not await memory_db.mark_folded_through(conn, thread_id, new_messages[-1].created_at, was=since):
             return Fold.MOVED
-        await memory_db.save(conn, user_id, bounded(call.value))
+        await memory_db.save(conn, user_id, bounded(call.value, keep_progress=keep_progress))
     return Fold.FOLDED
 
 

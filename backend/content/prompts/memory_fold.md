@@ -6,7 +6,7 @@ description: Fold a finished conversation into what Mani knows about the person 
 provider: openrouter
 model_id: openai/gpt-6-luna
 model_parameters:
-  maxTokens: 800
+  maxTokens: 1000
   reasoning_effort: high
 ---
 
@@ -29,6 +29,16 @@ spoken to. It is never read to them and never quoted.
 - **what_helps** — ways of coping they said helped, including any framework they tried.
 - **what_doesnt** — what they said did not help, asked not to do, or a question they skipped or found uncomfortable.
 - **how_they_talk** — how they like the conversation to go, from how they responded.
+
+And, apart from the patterns, what they worked through (`progress`), so a later conversation builds on it:
+
+- **progress.realised** — a new way of seeing it they put into words themselves.
+- **progress.trying** — something they said they would try.
+- **progress.working_on** — what they said is still hard or unchanged.
+
+Only what they said themselves, in their words: a belief they identified, never what you think lies underneath it,
+and never a label such as "people-pleasing" or "poor boundaries". Keep it current: when this conversation shows
+something they were trying is done, or something they were working on has changed, update or drop it.
 
 Keep each entry to one short line. At most six entries per list; when a list is full, keep
 the ones that recur and drop the ones mentioned once.

@@ -67,7 +67,7 @@ def _body_route(
     tapped: SmartPrompt | None,
     technique: TechniqueState | None,
     framework: Framework,
-) -> tuple[repairs.Repaired, body_route.Step | None, str | None]:
+) -> tuple[repairs.Repaired, body_route.Step | None]:
     """The body check-in's turn: the client's script for the answer at this step. A tapped button decides
     by itself; a typed answer is the value the reply read from it. Anywhere an answer does not fit, the
     reply stands as the model wrote it."""
@@ -78,13 +78,13 @@ def _body_route(
         # Keep Chatting, tapped or typed: the model's own continuation, with its possibilities under the question.
         fixed = dataclasses.replace(fixed, text=repairs.under(fixed.text, options))
     if value is None:
-        return fixed, None, None
+        return fixed, None
     step = body_route.step(
         at, value, framework.stages,
         physical_response=technique.physical_response if technique else None,
     )
     if step is None:
-        return dataclasses.replace(fixed, notes=fixed.notes + [f"ignored body {value} at {at}"]), None, None
+        return dataclasses.replace(fixed, notes=fixed.notes + [f"ignored body {value} at {at}"]), None
     text = fixed.text if step.text is None else step.text
     return dataclasses.replace(
         fixed,
@@ -92,7 +92,7 @@ def _body_route(
         prompts=_prompts(step.buttons),
         framework_id=framework.id if technique else None,
         phase=step.phase if technique else None,
-    ), step, value
+    ), step
 
 
 def _case_words(understood: dict[str, str]) -> str:
@@ -431,9 +431,6 @@ async def _converse(
         ctx.thread.understanding if guarded
         else converse.replied(ctx.thread.understanding, reply, check_written=moving)
     )
-    if reply.prepared and understood.get(context.PREPARING):
-        # They have what they need for what they planned after the questions, or moved on from it.
-        understood = {key: value for key, value in understood.items() if key != context.PREPARING}
     logger.info(
         "thread %s conversation turn: shape %s, move %s, needs info %s, insight %s, asks %s, heart %s, check allowed %s, "
         "moves to the set %s, toward framework %s",
@@ -1174,28 +1171,23 @@ async def _turn(
             fixed = dataclasses.replace(fixed, text=text, prompts=_prompts(buttons), phase=body_route.ASK)
         elif walked.phase == body_route.CLOSING:
             # The body check-in is paused (muhammad, 2026-11-05): the questions end on Mani's close and the three
-            # closing choices, and the next turn answers them as it did after the check-in.
-            # Something practical still ahead of them puts Plan Next Step first (muhammad, 2026-11-06), and the record
-            # keeps what it is for the turn that answers the choices.
-            ahead = reply.follow_through if reply.follow_through in ("conversation", "action", "decision") else None
-            text, buttons = body_route.close(fixed.text, walking.stages, plan=ahead is not None)
+            # closing choices, and the next turn answers them as it did after the check-in. What the questions left
+            # them with is kept for the chat that follows: finishing them is not solving it (muhammad, 2026-11-06).
+            text, buttons = body_route.close(fixed.text, walking.stages)
             fixed = dataclasses.replace(fixed, text=text, prompts=_prompts(buttons), phase=body_route.CLOSING)
-            if ahead:
-                understood = {**understood, context.FOLLOW_THROUGH: ahead}
+            took_away = walk.landed_on(walking, walked.entries)
+            still_open = [" ".join(o.split()) for o in reply.still_open or [] if o.strip()][:4]
+            if took_away or still_open:
+                understood = {**understood, context.AFTER: {
+                    **({"took_away": took_away} if took_away else {}), **({"still_open": still_open} if still_open else {}),
+                }}
                 updates.understanding = understood
     if moment is Moment.BODY and not guarded:
         route = config.registry.get(technique.framework_id if technique else retiring_framework_id)
-        fixed, step, chosen = _body_route(fixed, reply.body, reply.options, tapped, technique, route)
+        fixed, step = _body_route(fixed, reply.body, reply.options, tapped, technique, route)
         if step is not None:
             updates.physical_response = step.physical_response
             updates.conversation_effect = step.conversation_effect
-        if technique is None and (ahead := understood.get(context.FOLLOW_THROUGH)):
-            # The answer to the closing choices: Plan Next Step starts helping them prepare, in the chat that follows,
-            # until they have it; any other choice lets it go.
-            understood = {key: value for key, value in understood.items() if key != context.FOLLOW_THROUGH}
-            if chosen == body_route.PLAN:
-                understood[context.PREPARING] = {"kind": ahead, "for": ended_on or ""}
-            updates.understanding = understood
     if fixed.notes:
         logger.info("repaired reply on thread %s: %s", ctx.thread.id, "; ".join(fixed.notes))
 

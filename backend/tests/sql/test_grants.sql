@@ -172,6 +172,11 @@ select pg_temp.want('a user can change their own nickname',
 select pg_temp.want('a user cannot reassign their profile to another account',
   has_column_privilege('authenticated', 'public.profiles', 'user_id', 'UPDATE'), false);
 
+-- Migration 034 (muhammad, 2026-11-06): whether what they worked through is carried into their next conversation
+-- is the person's own choice.
+select pg_temp.want('a user can choose whether their progress is carried forward',
+  has_column_privilege('authenticated', 'public.profiles', 'remember_progress', 'UPDATE'), true);
+
 -- A nickname is interpolated into the system prompt, so its length is a security
 -- property, not cosmetics: unbounded, it is somewhere to paste instructions.
 do $$

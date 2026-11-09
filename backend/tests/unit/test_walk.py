@@ -369,7 +369,7 @@ def test_the_part_still_to_ask_is_kept_while_the_stage_is_partial_and_dropped_wh
         return walk.merge({"dispute": partial}, [update], abcde, in_force="dispute").entries["dispute"]
 
     assert merged(update("partial"))["gap"] == "challenge"
-    assert merged(update("partial", "information"))["gap"] == "information"
+    assert merged(update("partial", "helpful"))["gap"] == "helpful"
     assert merged(update("partial", "no such line"))["gap"] == "challenge"
     assert "gap" not in merged(update("known"))
 
@@ -561,8 +561,13 @@ def test_where_the_new_view_forms_is_flagged_in_both_frameworks(abcde):
 
 
 def test_a_stage_that_stays_asks_its_own_question_in_place_of_a_dropped_one(abcde):
-    entries = {"effective": {"said": "x", "status": "partial", "gap": "path"}}
-    assert walk.stay_question(abcde, entries, "effective", "directive") == "What would you like to do with that new way of seeing it?"
+    from scripts.seed import load_landing_stage
+
+    landed = abcde.model_copy(update={
+        "phases": [*abcde.phases, "landing"], "stages": {**abcde.stages, "landing": load_landing_stage()},
+    })
+    entries = {"landing": {"said": "x", "status": "partial", "gap": "practice"}}
+    assert walk.stay_question(landed, entries, "landing", "directive") == "What's one situation coming up where you could try that?"
 
 
 def test_e_reached_with_only_the_path_or_a_practice_to_ask_asks_the_new_belief_first(abcde):

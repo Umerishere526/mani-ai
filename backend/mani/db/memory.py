@@ -9,7 +9,7 @@ import uuid
 import asyncpg
 
 from mani.db import messages as messages_db
-from mani.llm.schema import Memory
+from mani.llm.schema import Memory, ProgressMemory
 from mani.models.rows import Message
 
 # How much of one finished conversation a single fold reads.
@@ -59,6 +59,19 @@ async def save(conn: asyncpg.Connection, user_id: uuid.UUID | str, memory: Memor
         "where user_id = $1",
         user_id, memory.model_dump(),
     )
+
+
+async def save_progress(conn: asyncpg.Connection, user_id: uuid.UUID | str, progress: ProgressMemory) -> Memory:
+    """Their own correction of what is carried forward, written onto the memory under its row lock, so a fold landing
+    meanwhile neither loses it nor is lost (muhammad, 2026-11-06: they can read, correct and delete it)."""
+    memory = (await lock(conn, user_id)).model_copy(update={"progress": progress})
+    await save(conn, user_id, memory)
+    return memory
+
+
+async def forget_progress(conn: asyncpg.Connection, user_id: uuid.UUID | str) -> None:
+    """Delete what is carried forward of what they worked through; the patterns stay."""
+    await save_progress(conn, user_id, ProgressMemory())
 
 
 async def next_to_fold(
