@@ -24,6 +24,9 @@ class LibrarySection(StrEnum):
     BOUNDARIES = "Boundaries"
     ANXIETY = "Anxiety"
     BURNOUT = "Burnout"
+    LOVE_RELATIONSHIPS = "LoveRelationships"
+    MANAGING_WORRY = "ManagingWorry"
+    SLEEP = "Sleep"
 
 
 def _listed(values) -> str:

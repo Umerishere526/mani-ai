@@ -14,7 +14,7 @@ SECTIONS = {
     "BuildingHabits": "Building Habits",
     "Burnout": "Burnout",
     "EmotionalIntelligence": "Emotional Intelligence",
-    "LoveRelationships": "Love and Relationships",
+    "LoveRelationships": "Love & Relationships",
     "ManagingWorry": "Managing Worry",
     "Sleep": "Sleep",
 }

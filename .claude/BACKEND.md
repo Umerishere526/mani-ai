@@ -13,7 +13,7 @@ supabase start             # local Supabase (Docker must be running); see the po
 supabase db reset          # recreate and re-apply migrations
 python scripts/seed.py     # loads content/ into admin.frameworks and admin.prompts (re-run after ANY edit in content/)
 python scripts/grant_admin.py you@example.com [--revoke]  # an existing account reads every conversation read-only, and chats in none
-python scripts/seed_exercises.py  # uploads content/exercises/ audio to the private `exercises` bucket and upserts admin.exercises
+python scripts/seed_exercises.py "<LIBRARY AUDIOS folder>"  # encodes the client's WAVs to the private `exercises` bucket, upserts admin.exercises, deletes unlisted files
 fastapi dev main.py        # dev server with reload on :8000
 fastapi run main.py        # production mode
 pytest                     # the whole suite: unit and integration (integration skips without a database)
@@ -41,7 +41,7 @@ Without activating, call the venv binaries directly — `./.venv/bin/python`, `.
 - `content/` — authored markdown, seeded into the `admin` schema by `scripts/seed.py` and never read at runtime. `content/prompts/*.md` become `admin.prompts` (except `somatic.md`, which `seed.py` merges into every framework as the last stages); `content/frameworks/*.md` (ABCDE and Thought Reframe; the rest are in `paused/`) become `admin.frameworks`, carrying each framework's per-stage content and its activation data (`central_indication`, `signals`, `contraindications`; `to_find_out`, `appropriate_when` and `not_when` are read by nothing). Editing one of these changes nothing until it is re-seeded. Kept outside `mani/` because it is input to the database, not code — the same relationship a migration has to the schema.
 - `supabase/migrations/` — the schema. `test_harness.sql` stubs what Supabase adds (`auth.users`, `auth.uid()`, the three roles) so the schema can be tested on plain Postgres.
 - `tests/unit/` — deterministic logic. `tests/integration/` — whole turns against a live database with a scripted model. `tests/sql/` — schema, RLS and privilege assertions run by `scripts/test_db.sh`.
-- `scripts/` — `seed.py`, `seed_exercises.py` (the library: `content/exercises/exercises.json` plus its MP3s, compressed to 64 kbps mono), `scenario_check.py` with `scenarios.json`, `fold_idle_threads.py` (memory folding of quiet chats, `memory.fold_idle`, also run by `GET /internal/cron/catch-up` behind `CRON_SECRET`), `test_db.sh`.
+- `scripts/` — `seed.py`, `seed_exercises.py` (the library: `content/exercises/exercises.json` naming the client's WAVs, encoded to 192 kbps stereo MP3; needs `ffmpeg`), `scenario_check.py` with `scenarios.json`, `fold_idle_threads.py` (memory folding of quiet chats, `memory.fold_idle`, also run by `GET /internal/cron/catch-up` behind `CRON_SECRET`), `test_db.sh`.
 - `docs/` — `specs/` holds the client's specifications, one per framework, as the source the content is checked against; `database-schema-reference.md`; `ai-layer-audit.md` (a dated snapshot, read its banner).
 - `PORT-STATUS.md` — what the service does, what changed from the implementation it replaces, and what is still open. **Update it in the same change as the work.**
 - `requirements.txt` — runtime dependencies only, pinned, hand-maintained. `requirements-dev.txt` adds pytest and `fastapi-cli` on top. **Add a new dependency to whichever file it belongs in** — do not `pip freeze` over them, which buries the packages that matter under their transitive closure and puts a test runner in the deployed image.

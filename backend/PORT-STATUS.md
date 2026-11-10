@@ -10,8 +10,9 @@ the same change as the work.**
 - Tests: `pytest` runs 451 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
   JWKS-configured project).
 - Database: 28 migrations (000 to 010 and 018 to 034), 16 tables (8 `public`, 8 `admin`), 2 frameworks and 7 prompts seeded.
-  `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
-  private `exercises` bucket (`scripts/seed_exercises.py`). Two hosted projects hold every migration and the same
+  `admin.exercises` holds the 30 library exercises in `content/exercises/exercises.json`, in eight sections, every one
+  the client's studio recording (2026-11-09), with no descriptions until her replacement copy arrives. The audio is in the
+  private `exercises` bucket only (`scripts/seed_exercises.py`, see Decisions in force). Two hosted projects hold every migration and the same
   data (2026-11-06): `heqenombgkihfeggrxqc` (muhammad's org, ca-central-1, the Hobby deployment's database) and
   `aipgficduzufstilndbw` "mani-app" (the Mani org, us-east-1, for the Vercel Pro deployment).
 - Models: `openai/gpt-6-luna` for chat and for summaries (`mani/config.py`), routed only to OpenAI,
@@ -161,6 +162,13 @@ the same change as the work.**
   account's password and read that person's conversations, and create accounts that spend model calls. Accepted for
   test accounts only; before any real person signs up, remove the Forgot password tab and the secret key from the
   hosted copy (sign-up works with the publishable key alone, since mani-app auto-confirms) and make the app private.
+- **The exercise audio lives only in the `exercises` bucket, encoded from the client's delivery at seed time**
+  (muhammad, 2026-11-09). Because her studio WAVs are 4 GB and about forty more are coming, too much for git, and the
+  64 kbps mono copies lost her stereo music beds. `content/exercises/exercises.json` names each recording's `source`
+  in her `LIBRARY AUDIOS` folder; `python scripts/seed_exercises.py "<that folder>"` encodes each to a 192 kbps
+  stereo MP3, uploads it, upserts the rows, and deletes every bucket file the manifest does not name. A re-recorded
+  exercise gets a new `filename`, since the storage CDN can keep serving an overwritten path. Needs `ffmpeg`. Test:
+  `test_seed_exercises.py`.
 - **The migrations alone make a project safe; nothing depends on a hand-run revoke** (2026-11-06). Because a new
   Supabase project grants anon, authenticated and service_role everything on each table, sequence and function
   `postgres` creates in `public`, and the hosted project was safe only because someone had removed those defaults by
@@ -1034,7 +1042,7 @@ Ordered by what breaks first.
   unreviewed by their clinician. Keep Chatting continues from their case and where they ended up (`landed_on`), in the
   same mirror, question and possibilities shape, never "what would you like to talk about".
 - **Generated TypeScript types** for `web/` and `mobile/` from the OpenAPI schema, with a CI gate. No CI exists.
-- **Admin audio upload.** The 17 seeded exercises come from `content/exercises/` through
+- **Admin audio upload.** The 30 seeded exercises come from the client's recordings through
   `scripts/seed_exercises.py`; there is no upload route, and the admin exercise CRUD takes an existing
   `audio_path`. The exercise card is also not kept on the message, so it is gone once a thread reloads.
 - **A worker process** for summaries and the memory fold, for when there is more than one instance.
