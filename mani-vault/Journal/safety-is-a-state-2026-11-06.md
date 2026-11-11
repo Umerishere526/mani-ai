@@ -4,6 +4,8 @@ date: 2026-11-06
 tags: [journal, safety, state, client-test]
 ---
 
+> Superseded 2026-11-10 — see [[safety-keeps-the-signs-that-opened-it-2026-11-10]] (the unsafe rung and the single script for every danger; holding through a refusal stands)
+
 # Safety is a state the conversation holds (2026-11-06)
 
 manasa's safety test on `main` showed four separate failures that looked like one:

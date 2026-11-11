@@ -9,7 +9,7 @@ the same change as the work.**
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
 - Tests: `pytest` runs 451 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
   JWKS-configured project).
-- Database: 28 migrations (000 to 010 and 018 to 034), 16 tables (8 `public`, 8 `admin`), 2 frameworks and 7 prompts seeded.
+- Database: 30 migrations (000 to 010 and 018 to 036), 16 tables (8 `public`, 8 `admin`), 2 frameworks and 7 prompts seeded.
   `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
   private `exercises` bucket (`scripts/seed_exercises.py`). Two hosted projects hold every migration and the same
   data (2026-11-06): `heqenombgkihfeggrxqc` (muhammad's org, ca-central-1, the Hobby deployment's database) and
@@ -46,11 +46,11 @@ the same change as the work.**
   applies to real traffic. `as_admin()` is the named exception. A turn's writes share one transaction, and no
   transaction is open while the model thinks (`chat/runner.py`).
 - **A chat turn** (`mani/chat/orchestrator.py`), in order:
-  1. Safety comes first. The thread's safety state (`threads.safety`: clear, open, unsafe) is raised by the free
-     phrase screen (`safety.py`: an explicit statement to unsafe, an indirect or negated one to open); while it is not
-     clear the turn is the safety moment. The model reads every message for safety before it writes
-     (`SafetyRead`, the first field of every reply), and `safety.after` moves the state. Nothing locks unless
-     `CRISIS_BLOCKS_CHAT` is on (off by default since 2026-11-06).
+  1. Safety comes first. Every reply's first field judges from the whole conversation whether anyone is in danger
+     now (`SafetyRead`); the thread holds it as clear, unsure or danger (`threads.safety`), a refusal never settles it,
+     and the free phrase screen (`safety.py`) makes a turn unsure before the model is asked. While it is not clear the
+     turn is the safety moment. Nothing locks unless `CRISIS_BLOCKS_CHAT` is on (off by default since 2026-11-06),
+     except that someone in danger who says they will not get help is answered only with `crisis.HELP_REFUSED_REPLY`.
   2. Which framework fits, and whether one fits yet, is the model's call from the Framework Index. Code owns only when an offer may come (`context.may_check`; since the client meeting of 2026-11-03 the chat's reply that moves to the set is the offer itself, with no check before it, and `context.check_open` serves only checks stored before then) and the safety screen.
   3. `composer.py` builds the system prompt: `voice.md` and `conversation.md` for Mani's own conversation
      (`_converse`), `voice.md` and `framework.md` for a framework's stages, and `voice.md` and `moments.md` with
@@ -144,6 +144,41 @@ the same change as the work.**
 
 ## Decisions in force
 
+- **Every chat reply ends on one question, in its own field, on a line of its own** (muhammad, 2026-11-10: "a
+  question, always"). Because a reply that asked nothing ("We can stay with the shock for now", "Of course, you don't
+  have to make sense of it all tonight") left a conversation with nowhere to go, and muhammad's chats stalled before a
+  framework was ever offered; it replaces the 2026-11-05 decision that "a chat reply may support without asking"
+  (manasa: "mainly driven by questions"), knowingly. `ConversationReply.forward` follows `text`; the text gives first
+  (an acknowledgment, an observation, an insight: R78) and asks nothing itself. The field's pattern, a trailing
+  question mark, goes to the provider and not to pydantic, which holds the reply to it as it is generated (checked
+  2026-11-10) so no second call repairs a missing one, and a reply that still comes without one is counted
+  (`no_forward`, "asks no question") and never padded by code. `orchestrator._with_forward` joins it after the text with
+  a blank line: a deliberate exception to the 2026-10-26 "no line breaks added by code" rule, for this part only. The
+  reply that moves to the set of questions is joined the same way; the offer takes the question's place
+  (`repairs.transition_offer` drops the last question) and, when no offer can be made, the reply still ends on one.
+  Someone who wants to stop is asked whether they would like to leave it here for now. Traced: `no_forward`,
+  `text_asks` (a question in the text too), `forward_asks_many`. A safety reply and a reply that stays on a stage end
+  on one too (muhammad, 2026-11-11): `Reply.forward`, sent on those two shapes only, may be empty and is joined only
+  when the text asks nothing, so a stage's own question, a stage just reached and the client's lines are untouched
+  (`test_a_safety_reply_that_asks_nothing_ends_on_its_question_on_its_own_line`,
+  `test_a_reply_that_stays_on_an_earlier_stage_and_asks_nothing_ends_on_its_question`). Offers, the answer to a check
+  and the body check-in keep their own rules. The client has not been told.
+  Tests: `test_every_chat_reply_ends_on_its_question_on_a_line_of_its_own` and its neighbours in `test_turn.py`.
+- **What is explored stays explored, and a message's length decides nothing** (muhammad, 2026-11-10). Because the
+  after-reply reading re-judged the list of explored areas every turn and dropped ones it had counted (8, 6, 8, 6, 7, 9
+  in one chat), so "attempts or pattern" was still to explore on most turns and a chat of 21 turns never reached a set
+  of questions; and three messages of three words or fewer pressed toward the framework whatever they meant ("he
+  lied", "she left", "i quit"). `converse._explored_so_far` keeps areas until a new issue; `converse.toward` presses on
+  `quiet` (the reading's own judgment that two messages added nothing) only once a situation is known, and the
+  word-count rule, `SHORT_WORDS` and `SHORT_IN_A_ROW` are gone. The chat's note names what is still unexplored while
+  they are still telling it. With several concerns and no core, Mani weighs them itself and says which seems the main
+  one as a guess they can correct; with vague answers it offers two or three possibilities (`conversation.md`).
+- **A reading that never lands is visible** (2026-11-10). Because a timed-out reading leaves no `llm_calls` row and a
+  new turn replaces one nobody asked for. The next turn's trace carries `reading_before`: `dropped`, `failed:timeout`,
+  `failed:error` or `running` (`orchestrator._reading_before`). Counted, not recovered.
+- **The ledger of a framework is shown on every turn it is running, also while a concern is open** (muhammad,
+  2026-11-10). Because the ledger was built from the stage walk, which a safety turn skips on purpose
+  (`orchestrator._ledger_as_stored`).
 - **A scheduled catch-up finishes what the app never asked for** (muhammad, 2026-11-06). Because on Vercel the app
   triggers the work after a reply and a new chat, so a closed tab lost a reading and someone who never taps New chat
   was never remembered. `mani/catch_up.py`, every 5 minutes from `backend/vercel.json` (Vercel Pro): summaries behind,
@@ -213,8 +248,10 @@ the same change as the work.**
   the first two: Lolly's point kept without a count). The chat's reply kinds are chosen, not a formula: open_ask,
   window, insight, reflect, acknowledge, practical; no reply has to start with a mirror or end with a question. Moving
   to a set of questions keeps the five-message floor and the confirmed core, and now also needs the emotion, the belief
-  or meaning, and the behaviour or need explored, from the map (`converse.still_to_explore`; with no map yet the
-  heart decides alone).
+  or meaning, and the behaviour, need or outcome explored, from the map (`converse.still_to_explore`; with no map yet
+  the heart decides alone). Outcome, what they want to happen, joined that group 2026-11-11: the father chat's "I want
+  him to see what I did for them" was read as outcome, in no group, and held the offer for ten turns
+  (`test_what_they_want_to_happen_counts_with_what_it_does_to_them_or_what_they_need`).
 - **Plan Next Step: help preparing what they chose, when something practical is ahead** (muhammad, 2026-11-06, after
   manasa's tests: nothing helped her work out how to raise it with her boss or her partner). The picture keeps what
   they asked for help with (`asked_for`). The reply that closes the questions reports `follow_through`: conversation,
@@ -224,24 +261,65 @@ the same change as the work.**
   `follow_through`: for a conversation, what they want understood, an opening in their words, what if the other person
   gets defensive, and an offer to practise it), with no check or offer meanwhile, until the reply sets `prepared`.
 
-- **Safety is a state the conversation holds, and nothing locks on a phrase** (muhammad, 2026-11-06, after manasa's
-  safety test: the concern was gone after one reply, Mani agreed to drop the question each time she pushed back, nine
-  of her ten messages passed the screen, and "I'm safe. I'm not going to hurt myself" locked the chat as a crisis).
-  `threads.safety` (migration 033) is clear, open or unsafe. The screen raises it before the model is asked; the
-  model's `SafetyRead` (signs from the C-SSRS screener's ladder plus `possible`, and while it is open an answer: safe,
-  unsafe, declined, unclear) is the first field of every reply, so the reply is written knowing it; `safety.after`
-  moves it. Danger signs (intent, plan, acted, cannot stay safe, harm to others, a medical emergency), or the means
-  once a concern is open, make it unsafe. A refusal, a new subject or an unclear answer keep it where it is; a safe
-  answer closes open and only steps unsafe down to open. While it is not clear the turn is the safety moment
-  (`moments.md`, the `safety: open|unsafe` lines in [ctx]): no framework, offer or library, never the daily limit, and
-  if the model fails the person gets `crisis.CRISIS_REPLY` (`runner` fallback). The first unsafe turn is recorded in
-  `admin.crisis_events` with the signs, never their words. A negated crisis phrase is a concern, never a crisis; her
-  missed phrases are in the screen. `CRISIS_BLOCKS_CHAT` now defaults to off; the lock remains for anyone who turns it
-  on. An edit that takes back the message restores the state (`rewind`). Still the client's: the approved safety
-  wording and resources, and whether anything alerts a person. The recent_crisis proxy in `threads._TURN_CONTEXT_SQL`
-  reads the last message time, which with no lock is the latest activity, not the crisis. Tests: `test_safety.py`,
-  `test_manasas_safety_test_keeps_safety_open_through_refusals_and_a_change_of_subject` and its neighbours in
-  `test_turn.py`; scenario group `reflective_tests_2026_11_06`.
+- **Safety is the model's judgment of whether anyone is in danger now, held by the conversation, and nothing locks on
+  a phrase.** Because a concern must outlive the reply that raised it and must not give way on a refusal (manasa's
+  safety test, 2026-11-06), and because sign lists with a rule per kind of danger held concerns open against what the
+  model understood: "I mean my workplace", "my friend is with me and stops me", a symptom that has passed (muhammad's
+  and Lolly's chats, 2026-11-10). Spec: `docs/specs/0007-safety-follows-what-they-said/`.
+  - Every reply's first field, `SafetyRead`, judges from the whole conversation as it stands now whether anyone is in
+    danger: `danger` none, unsure or now; `about` themselves, someone_else, from_someone or body; a line of why that is
+    never stored; and `declined` when they push the question away.
+  - `threads.safety` is clear, unsure or danger (migration 036). Code applies the judgment with two rules of its own
+    (`safety.after`, `safety.screened`): a refusal never settles a concern, and a phrase the free screen catches makes
+    an untroubled turn unsure before the model is asked, never more.
+  - While it is not clear the turn is the safety moment: one instruction per state in [ctx] (`context._MEANING`,
+    `safety`), which names no kind of danger. Unsure is main's listening more than asking, with one open question about
+    what they meant and no direction to call anyone; danger says once what would make them or the other person safe
+    now, never a step already taken. It settles (muhammad, 2026-11-11) on a step they took (the means handed over,
+    someone with them, help called), or once Mani has asked and they go on about their situation with nothing pointing
+    at danger, also after plain words (asking twice made Mani ask in every reply, live). Brushing the question off is
+    `declined`, held like a refusal. Danger is now only with a plan, the means or now; "I want to kill myself" alone is
+    unsure, answered with warmth and one question. A symptom in the body is danger only when they said it is happening
+    now: the model reports `symptom_now` (yes, no, unsaid) and code holds anything else at unsure (`safety.danger_of`;
+    Lolly's chest chat, replayed 2026-11-11, read "a tightening in my chest" as now and gave the emergency number four
+    times). Once settled, only their newest message reopens it, said on every kind of turn (`context.SETTLED_LINE`); for a
+    symptom in the body, code holds a reading that is not `symptom_now: yes` at none instead of unsure once settled
+    (`safety.danger_of(reopening=...)`; the stroke chat, 2026-11-11, flipped back to danger on "I am afraid of losing
+    him" from the father's earlier symptoms; 4 of 4 replays stable, but one wife-chat replay read "either or both" as
+    the symptom happening: the model's yes is not checkable in code). The danger direction holds only what keeps them
+    safe, never what to say to someone close to them or how to feel, and the one check on it is only on that step
+    (muhammad's chest chat: "tell your wife you're worried" was chased). The chat never invents an exercise, activity
+    or distraction of its own: exercises are the library's (muhammad: "library only"; his chat got "a strange animal
+    fact" and "pick one thing you can see" from Mani's own plan and need).
+    Danger says it once: from the second danger turn [ctx] gives `danger_said` (code knows the previous reply was a
+    danger reply), which never repeats the direction and answers what they said first, a doubt like "could it be
+    stress?" included (muhammad, 2026-11-11: understand and discuss first). A symptom they push back about is never
+    `declined`; for a symptom Mani asks once whether it is now, says once what to do if it is, then follows them.
+    No framework, offer or library, never the message limits, and `crisis.CRISIS_REPLY` if the model fails. A
+    framework's stage waits (`paused_stage`) and resumes where it stood.
+  - When a concern that was open settles, `understanding.safety_settled` is kept and the chat note says so
+    (`converse.SETTLED_LINE`), so Mani does not raise it again from the history it reads every turn.
+  - The first turn judged danger now, or opened by an explicit phrase, is recorded in `admin.crisis_events` with whose
+    danger it is, never their words. `CRISIS_BLOCKS_CHAT` defaults to off. An edit restores the state (`rewind`).
+  - One thing blocks the conversation (muhammad, 2026-11-11: stay hard on a crisis; this changes "nothing locks" of
+    2026-11-06): they are in danger, Mani already said what would keep them safe, and they say plainly they will not
+    get help (`SafetyRead.refused_help`, judged by the model; `understanding.help_refused`). That reply and every one
+    after it is `crisis.HELP_REFUSED_REPLY`, with no model call. A first message, an unsure concern and a refusal to
+    answer a question never block (`test_the_chat_blocks_only_when_they_are_in_danger_and_say_they_will_not_get_help`
+    and the two after it). Live, 2026-11-11: it fired only in the refusal chat, 4 of 4, and in none of 24 other chats.
+    Cost, known: without the block the same scripted person agreed to ring his brother at his ninth message.
+    `CRISIS_BLOCKS_CHAT` (lock on any danger) is still there and off: two lock paths, to settle with muhammad.
+  - After a framework's last stage, a conversation a crisis was recorded in asks about safety once, as a reply of its
+    own (`crisis.END_CHECK`), before the closing choices; their answer is a safety turn, and the reply that settles it
+    carries the close and the choices (muhammad, 2026-11-11; `understanding.safety_end_check`;
+    `test_after_the_last_stage_a_chat_that_held_a_concern_asks_about_safety_before_the_closing_choices`). A false alarm
+    that never reached danger ends as usual; pushing the question away holds the close, like any refusal.
+  - Pain in the body is asked about first, whether it is happening now, in `voice.md`.
+  - Still the client's: the approved safety wording and resources, and whether anything alerts a person.
+  - Tests: `test_safety.py`, the safety blocks in `test_chat_context.py`, and the safety conversations in
+    `test_turn.py` (manasa's test, the roof chat, harm to someone else handled, the chest chats, a strong first
+    message explained, a concern inside the questions). Scenario groups `reflective_tests_2026_11_06`,
+    `chest_tightness_2026_11_10` and `cases_2026_11_10`.
 
 - **The body check-in is paused: chat, then the framework, then the closing choices** (muhammad, 2026-11-05: "chat ->
   framework (not somatic)", and at the end Keep Chatting, Go to Library and Finish for Now as they come today). `paused`
@@ -348,14 +426,18 @@ the same change as the work.**
 - **The person can edit their last message: it and Mani's reply are replaced, and the thread state returns to what it
   was before that turn.** Because muhammad wants ChatGPT's edit for the chat-tester (2026-11-03): replace, last message
   only, also inside a framework, chat-tester only for now. Every turn saves the state it will overwrite (title,
-  understanding, check position, framework row, offered list) in `threads.rewind_snapshot` (migration 027);
+  understanding, check position, framework row, offered list) in `threads.rewind_snapshot` (migration 029);
   `POST /v1/threads/{id}/messages/{message_id}/edit` deletes the pair through `delete_last_message_pair`, restores the
-  snapshot and runs the new text in one transaction (`chat/rewind.py`). Refused: a crisis thread, a message sent by
-  tapping an option, the style tap, a message already inside the thread summary. The overnight memory fold is not
+  snapshot and runs the new text in one transaction (`chat/rewind.py`). Refused: a message sent by
+  tapping an option, the style tap, a message already inside the thread summary. A crisis thread is edited wherever a
+  message can still be sent: the edit has no crisis rule of its own, the send that runs the new text refuses under
+  `crisis_blocks_chat` and the whole edit rolls back (muhammad, 2026-11-10: a thread flagged once refused every edit
+  as "paused" while it still took messages). The crisis record in `admin.crisis_events` outlives an edited message. The overnight memory fold is not
   undone, so an edit after it leaves the old words in memory (accepted for the tester). Tests:
   `test_editing_the_message_that_answered_a_check_takes_back_the_offer_and_runs_the_new_text`,
   `test_editing_the_last_message_inside_a_framework_puts_the_walk_back_where_it_was`,
-  `test_a_message_that_cannot_be_taken_back_safely_is_refused_and_nothing_changes`.
+  `test_a_message_that_cannot_be_taken_back_safely_is_refused_and_nothing_changes`,
+  `test_a_message_in_a_crisis_thread_is_edited_wherever_one_can_still_be_sent`.
 - **A message is cleaned to its visible text before anything reads it, and an empty one is refused with what to do.**
   Because a zero-width character inside "kill myself" turned into a space in the safety screen and the phrase was no
   longer matched, and the same hid a typed `[ctx]` block from its guard (muhammad, 2026-11-04). `text.clean_message`
@@ -622,8 +704,20 @@ the same change as the work.**
 - **"Ready" is a confirmation, never a deepening** (the client meeting, 2026-11-05). Because a vulnerable disclosure
   ("I don't remember the last time I did something just because it made me happy") counted as deepening the core, so
   the reply judged it ready and moved to the offer on it. A deepening keeps it core_named and gets a reply of its own.
-  The chat's note no longer asks for a core from their second message, never asks a reply to ask because the last one
-  did not, and a chat reply with no question is no longer counted as a miss.
+  Once the move is allowed, it may come at core_named, not only at ready (muhammad, 2026-11-11): the father chat had
+  the move allowed for four turns and no offer, waiting on a confirmation no reply asked for; the offer says the core
+  back and they can correct it there, unless their message brings something new and painful (`converse.MOVE_MAY`,
+  `test_once_the_core_is_named_the_reply_may_move_without_waiting_for_a_confirmation`). The wording alone was not
+  enough (replayed: allowed three turns, no offer), so a move allowed and not made makes the next reply due
+  (`converse.due`, `held_back` in the reply's thinking): at most one reply of waiting.
+  Saying the core back is due too (muhammad, 2026-11-11): once every group is explored, a reading has landed and
+  nothing else holds the move, the note says the core now, not "hold it until they have said what they came to say"
+  (`converse.naming_due`, `test_naming_the_core_is_due_once_everything_is_explored_and_nothing_else_holds_it`). His
+  chest chats had every group explored from turn 9 and no core said back in twelve chat turns; replayed, the core is
+  named at turn 12-13 and the framework offered at 15.
+  The chat's note no longer asks for a core from their second message and never asks a reply to ask because the last
+  one did not. (A chat reply with no question was no longer counted as a miss; superseded 2026-11-10, see "Every chat
+  reply ends on a question".)
 - **A yes to the body check-in always gets the client's Step 1: its introduction, its general question and its five
   buttons, with no question of ours before them** (muhammad, 2026-11-04). Because the step that asked how a feeling
   they named was now (`somatic_check`, added 2026-11-03 after Manasa's comment, itself replacing the 2026-10-21
@@ -738,7 +832,7 @@ the same change as the work.**
   want off to another time (`framework.md` Ending, `walk.next_line`). E and Thought Reframe's last step ask for the new view in
   plain words, both sides and the thought in their words, never "a more balanced way", and a clarification is one plain
   question with no options (muhammad, 2026-11-04: the father chat's "I don't think I understand your question"; the
-  Tell me more list keeps Lolly's wording). The last stage, while it waits, always asks: a reply that stays there with no question gets the stage's own (earlier stages may stay with them without one, the client meeting of 2026-11-05),
+  Tell me more list keeps Lolly's wording). The last stage, while it waits, always asks: a reply that stays there with no question and no question of its own in `forward` gets the stage's own (every stage that stays ends on a question since 2026-11-11, reversing the client meeting of 2026-11-05),
   not only after a body offer is dropped (the friend chat, 2026-11-04: a close written while E waited ended the
   conversation with nothing to answer; `test_a_reply_that_stays_on_a_stage_and_asks_nothing_gets_the_stages_question`).
   Where the new view forms and in the body check-in, a reported want or desire is ignored like the core (R70). Mani's own

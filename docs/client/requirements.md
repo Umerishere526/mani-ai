@@ -104,6 +104,36 @@ R1 to R55 were superseded on 2026-11-03 by muhammad ([friendship review](message
 
 ## Open questions for the client
 
+- **To tell the client (muhammad's decisions of 2026-11-10, found in testing, not asked by her).** (1) Every chat
+  reply now ends on one question, after a text that gives first. Her 2026-11-05 feedback was "mainly driven by asking
+  questions" (R78); muhammad chose it knowingly after his own chat stalled with replies that asked nothing, and the
+  text still gives something each turn. (2) Safety is raised only when the person's own words speak of it (dying,
+  not being here, hurting themselves or someone, being hurt, not being safe), never on a hunch: "I can't spend another
+  day under this roof" or "I'm done with this job" are followed as conversation. R75 says Mani "keeps asking plainly
+  when words may mean self-harm"; the plain question stays for words that point there ("I don't want to be here
+  anymore"), but a vague hint like "I don't know how much more I can take" is now usually followed, not asked about.
+  (3) A concern settles when what was said shows no one is in danger now; a refusal never settles it. The approved
+  safety wording, helplines and whether anything alerts a person are still hers.
+  2026-11-11 additions: (4) a step they took settles it (the means handed over, someone with them, help called),
+  even with Mani's question unanswered. **Lolly to sign off**: after "I gave the pills to my sister" it settles
+  without asking whether any were swallowed; in live runs Mani asked that once in one of two runs. (5) Once Mani has
+  asked what they meant, going on about their situation with nothing pointing at danger settles it, also after plain
+  words like "I want to kill myself" (muhammad chose ask once; asking twice made Mani ask in every reply). Pushing the
+  question away ("I don't want to answer that", "can we talk about something else") never does. (6) The first reply
+  to "I want to kill myself" is warmth and one question; the emergency number comes only with a plan, the means or
+  now. (7) Safety replies, and replies that stay on a stage of the questions, also end on a question; this reverses
+  the client meeting of 2026-11-05 ("a stage may stay without a question"). The client's stage openings and offer
+  are unchanged. (8) What they want to happen now counts with what it does to them or what they need before the
+  framework is offered. (9) The offer may come once Mani has said the core back and they did not correct it, without
+  a separate "does that fit?": the client meeting of 2026-11-05 had the insight, a confirmation, then the offer; the
+  offer itself says the core back and can be corrected there; when it may come and Mani keeps asking, the next reply
+  makes it. (10) Chest tightness or another symptom is never treated as an emergency until they say it is happening
+  now; until then Mani asks. (11) In danger, what would make them safe is said once; after that Mani answers what they say
+  (a doubt like "could it be stress?" included) and never repeats it. (12) The chat blocks, answering only with a
+  contact-help message, when someone in danger says plainly they will not get help; the message's wording is ours
+  (`crisis.HELP_REFUSED_REPLY`) and needs hers. (13) After a framework's last stage, a chat a crisis came up in asks
+  about safety once before the closing choices; the question's wording is ours (`crisis.END_CHECK`) and needs hers.
+  (14) Mani never makes up an exercise, activity or distraction; exercises are only the library's.
 - Supportive overthinking asks "Would it help to work through what happened together so you don't
   have to sit with all those questions on your own?" before the offer. Is that line the offer
   itself, or a question before it? We treat it as a question before the offer and keep the offer's
@@ -153,3 +183,4 @@ or decision has been updated yet.
 | [ChatGPT conversations](messages/2026-10-26-chatgpt-boss-and-friendship.md) (R33), muhammad 2026-10-28 | R33 as built on 2026-10-26: the check pulled together the conflict, what they want and what is stopping them, and a framework began there. The check now says the core alone: the belief their other thoughts lead to and the feeling underneath. What they want and what is stopping them are still followed in the conversation but are no longer part of the check. | No: Lolly to confirm (muhammad chose the core alone after the weight-loss run). |
 | Lolly's role-played session (meeting, shared by muhammad 2026-10-29), muhammad 2026-10-29 | R34 as built on 2026-10-26: Lolly's two ChatGPT conversations were the conversations Mani talks like ("I wish mani sounded this way"). Mani now follows her role-played session as its example and keeps only her tone note from the ChatGPT chats, because the model copied their mirror-then-question shape. | No: Lolly to confirm (muhammad chose it on 2026-10-29). |
 | [four Directive chats](messages/2026-11-03-four-directive-chats.md) (R51), with R27 and R28 | The Decision in force "Every conversation turns from understanding to helping" (2026-10-27; in code `converse.TOWARD`, 2026-10-29), which counts `frustrated` as a reason to press toward the framework. Frustration with MANI is a sign to stop and repair (R27), and no offer comes while they are frustrated (R28). | Yes, 2026-11-03: frustration no longer counts, and the decision in `backend/PORT-STATUS.md` says so. |
+| [chest tightness](messages/2026-11-10-chest-tightness-safety.md), muhammad 2026-11-10 ("once, max twice was enough, as I plainly said I am safe"); Lolly asked to discuss it as a team | The Decision in force "Safety is a state the conversation holds, and nothing locks on a phrase" (2026-11-06) in two parts: a medical emergency is a danger sign that makes the thread unsafe, and a safe answer only steps unsafe down to open. Holding through a refusal on self-harm (manasa's test, R75) is not in question. | Yes, 2026-11-10, on the branch `feat/safety-follows-what-they-said` (not merged): the decision now reads "Safety is the model's judgment of whether anyone is in danger now, held by the conversation" ([spec 0007](../specs/0007-safety-follows-what-they-said/index.md)). The settling rule is ours and the client has not been shown it yet. |

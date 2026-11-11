@@ -8,6 +8,7 @@ import uuid
 import asyncpg
 
 from mani.chat.context import OPENING_MESSAGES
+from mani.db import threads
 from mani.db.threads import TurnContext, load_turn_context
 from mani.errors import ErrorCategory, ServiceError
 from mani.models.rows import TechniqueState
@@ -52,8 +53,6 @@ async def undo_last_turn(
     if ctx is None:
         raise _refuse(ErrorCategory.NOT_FOUND, "That conversation is not available.")
     thread = ctx.thread
-    if thread.crisis_detected:
-        raise _refuse(ErrorCategory.FORBIDDEN, "This conversation is paused, so its messages cannot be edited.")
     if thread.message_count <= OPENING_MESSAGES:
         raise _refuse(ErrorCategory.CONFLICT, "The style you chose cannot be edited.")
     if ctx.summary and ctx.summary.summarized_message_count >= thread.message_count - 1:
@@ -82,11 +81,7 @@ async def _restore(conn: asyncpg.Connection, user_id, thread_id, snapshot: dict)
         "where id = $3 and user_id = $4",
         snapshot["understanding"], snapshot["check_at_message_count"], thread_id, user_id,
     )
-    # A snapshot from before migration 033 has no safety; the state the turn found then was clear.
-    await conn.execute(
-        "update public.threads set safety = $1 where id = $2 and user_id = $3",
-        snapshot.get("safety") or "clear", thread_id, user_id,
-    )
+    await threads.set_safety(conn, thread_id, user_id, snapshot.get("safety") or "clear")
     if snapshot["technique"] is None:
         await conn.execute("delete from public.thread_technique_state where thread_id = $1", thread_id)
     else:

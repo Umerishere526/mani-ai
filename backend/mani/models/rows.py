@@ -74,7 +74,8 @@ class Thread(Row):
     # The message_count after the turn whose reply was Mani's latest check of its understanding
     # (spec 0006). Loaded only for a turn, never in a thread list.
     check_at_message_count: int | None = None
-    # Where the conversation stands on safety: clear, open or unsafe (chat/safety.State). Loaded only for a turn.
+    # Where the conversation stands on safety: clear, unsure or danger (chat/safety.State).
+    # Loaded only for a turn.
     safety: str = "clear"
 
 

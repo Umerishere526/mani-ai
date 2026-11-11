@@ -53,7 +53,9 @@ else
 
   printf 'waiting for postgres'
   for _ in $(seq 1 120); do
-    if docker exec "$CONTAINER" psql -U postgres -c 'select 1' >/dev/null 2>&1; then
+    # Over TCP: the image's first start runs a temporary server on the socket only, then restarts, and a check on
+    # the socket could catch that one and lose the harness to the restart.
+    if docker exec "$CONTAINER" psql -U postgres -h 127.0.0.1 -c 'select 1' >/dev/null 2>&1; then
       echo " ready"
       break
     fi
@@ -75,9 +77,20 @@ if [ "$TARGET" = "throwaway" ]; then
   # the moment 002 landed the suites were asserting against a schema the project no longer
   # had - passing on columns and policies that production did not match. Globbing keeps a
   # new migration covered without anyone remembering to add it here.
+  # A migration that moves data is tested with data: tests/sql/migrations/before_NNN.sql plants rows as the schema
+  # before it held them, and after_NNN.sql asserts where the migration put them (2026-11-10: 036 passed on every
+  # empty database and failed on the first one with rows to move).
   for migration in "$HERE"/supabase/migrations/*.sql; do
+    number="$(basename "$migration" | cut -c1-3)"
+    if [ -f "$HERE/tests/sql/migrations/before_$number.sql" ]; then
+      echo "planting rows for $number"
+      run_sql "$HERE/tests/sql/migrations/before_$number.sql"
+    fi
     echo "applying $(basename "$migration")"
     run_sql "$migration"
+    if [ -f "$HERE/tests/sql/migrations/after_$number.sql" ]; then
+      run_sql "$HERE/tests/sql/migrations/after_$number.sql"
+    fi
   done
 fi
 

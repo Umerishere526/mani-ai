@@ -68,59 +68,95 @@ class SmartPrompt(Button):
     )
 
 
-SafetySignal = Literal[
-    "possible", "wish_to_be_dead", "suicidal_thoughts", "self_harm", "means", "intent", "plan", "acted",
-    "cannot_stay_safe", "harm_to_others", "abuse", "medical_emergency",
-]
-SafetyAnswer = Literal["safe", "unsafe", "declined", "unclear"]
+SafetyDanger = Literal["none", "unsure", "now"]
+SafetyAbout = Literal["themselves", "someone_else", "from_someone", "body"]
+SymptomNow = Literal["yes", "no", "unsaid"]
 
 
 class SafetyRead(BaseModel):
-    """Mani's reading of their message for safety, made before the reply is written (muhammad, 2026-11-06). Code owns
-    what it moves (chat/safety.after); the model only reads."""
+    """Your judgment of whether anyone is in danger right now, from the whole conversation as it stands. Code owns only
+    what it moves (chat/safety.after): a refusal never settles a concern."""
 
     model_config = ConfigDict(extra="ignore")
 
-    signals: list[SafetySignal] = Field(
-        default_factory=list,
-        description=(
-            "Every sign in their message, read with the whole conversation, that they may not be safe. possible: words "
-            "that may mean it and may not, such as \"I'm done\" or \"I don't know how much more I can take\". "
-            "wish_to_be_dead: wishing to disappear, not to wake up, that others would be better off without them. "
-            "suicidal_thoughts: thinking about ending their life, or how much easier it would be not to be alive. "
-            "self_harm: thoughts of hurting themselves. means: something near them they could use. intent: they mean "
-            "to act, or are scared of what they might do. plan: how or when. acted: they have already hurt themselves "
-            "or taken something. cannot_stay_safe: they say they cannot keep themselves safe. harm_to_others, abuse: "
-            "someone in danger from them, or them from someone. medical_emergency. A negated or past-tense mention "
-            "(\"I'm not going to hurt myself\") is not the sign itself; ordinary sadness, frustration or physical pain "
-            "is none of these. Empty when there is none."
-        ),
-    )
-    answer: SafetyAnswer | None = Field(
+    danger: SafetyDanger | None = Field(
         default=None,
         description=(
-            "Only while safety in [ctx] is open or unsafe: how their message stands on their safety. safe: what they "
-            "say, read with everything before it, shows they are not in danger now; a bare reassurance right after a "
-            "plan, the means or fear of acting is unclear, not safe. unsafe: they are in danger now. declined: they "
-            "refuse or push the question away. unclear: anything else, including talking about something else."
+            "Judged from the whole conversation as it stands now: is anyone in real physical danger right now? Of "
+            "ending or hurting their own life, of hurting someone else, from someone else, or from a symptom "
+            "happening now in their body. now: they are, today: they speak of a plan, of the means at hand, of "
+            "doing it now, or a symptom is happening now. unsure: their own words speak of it (of dying or not being "
+            "alive or here, of wanting to kill or hurt themselves or someone, of someone hurting them, of not being "
+            "safe) and nothing they have said tells you of a plan, the means or a when, or whether they mean it. "
+            "Never a hunch: distress or an unbearable "
+            "situation with no such words is none. none: no one is: ordinary sadness, stress or low mood, frustration with "
+            "a job, a place or a person, a figure of speech, a symptom that comes and goes and is not happening now, "
+            "or a concern from earlier that they have explained or that is handled now (they are away from the "
+            "person, someone is with them, help is on its way, the symptom has passed, they told you they are safe and nothing they said before contradicts it). "
+            "A step they took is none (they handed over the means, someone is with them, they called for help), "
+            "whether or not they answered a question of yours. Judge what they said, never a question of yours: "
+            "once they explain their words were about something else, it is none; once you have asked what they "
+            "meant and they go on talking about their situation with nothing in it pointing at danger, it is none. Once a "
+            "concern has settled, only their newest message can open it again."
+        ),
+    )
+    about: SafetyAbout | None = Field(
+        default=None,
+        description="Whose danger, when there is any: themselves, someone_else (from them), from_someone, body.",
+    )
+    symptom_now: SymptomNow | None = Field(
+        default=None,
+        description=(
+            "Only when about is body: yes when they said the symptom is happening right now, as they write; no when "
+            "they said it is not; unsaid when they have not said either. Where it is, what it feels like or how bad it "
+            "is says nothing about now. Once a concern has settled, yes only when their newest message itself says the symptom is "
+            "happening, back or worse: a symptom they described earlier says nothing about now."
+        ),
+    )
+    why: str | None = Field(
+        default=None,
+        description="One line: what in the conversation your judgment rests on.",
+    )
+    declined: bool = Field(
+        default=False,
+        description=(
+            "In this message they pushed the question about their safety away rather than answering it: refused "
+            "it (\"I don't want to answer that\", \"stop asking\") or brushed it off to get away from it "
+            "(\"anyway\", \"doesn't matter\", \"can we talk about something else\"). Going on about their "
+            "situation is not pushing it away. Never about a symptom in their body: pushing back there is not declined."
         ),
     )
 
-    @field_validator("signals", mode="before")
-    @classmethod
-    def _known_signals(cls, value: object) -> object:
-        allowed = set(get_args(SafetySignal))
-        return [v for v in value if v in allowed] if isinstance(value, list) else []
+    refused_help: bool = Field(
+        default=False,
+        description=(
+            "In this message they said plainly that they will not do what would keep them safe: they will not call, "
+            "will not get help, will not let anyone come or know. Only a clear no to getting help: never a refusal "
+            "to answer a question of yours, wanting you to stop asking, or doubt or fear about getting help."
+        ),
+    )
 
-    @field_validator("answer", mode="before")
+    @field_validator("danger", mode="before")
     @classmethod
-    def _known_answer(cls, value: object) -> object:
-        return value if value in get_args(SafetyAnswer) else None
+    def _known_danger(cls, value: object) -> object:
+        """A judgment code does not know is no judgment: it never clears a concern."""
+        lowered = value.strip().lower() if isinstance(value, str) else value
+        return lowered if lowered in get_args(SafetyDanger) else None
+
+    @field_validator("about", mode="before")
+    @classmethod
+    def _known_about(cls, value: object) -> object:
+        return value if value in get_args(SafetyAbout) else None
+
+    @field_validator("symptom_now", mode="before")
+    @classmethod
+    def _known_symptom_now(cls, value: object) -> object:
+        return value if value in get_args(SymptomNow) else None
 
 
 _SAFETY_DESCRIPTION = (
-    "Read their message for safety before anything else, and fill this first: it decides what your text is for. Null "
-    "only when there is no sign at all and safety in [ctx] is not open."
+    "Judge their safety from the whole conversation before anything else, and fill this first: it decides what your "
+    "text is for."
 )
 
 
@@ -580,7 +616,7 @@ class Exploration(BaseModel):
             "The areas of their experience the conversation has really explored, not just touched: emotion (what "
             "they feel), belief (what they tell themselves), behaviour (what they do or avoid), external (what is "
             "happening around them, other people), outcome (what they want to happen), need (what they need "
-            "underneath), attempts (what they have tried), pattern (whether it has happened before), relationships "
+            "underneath), attempts (what they have tried), pattern (whether it has happened before; \"it's the first time\" explores it), relationships "
             "(how it touches the people close to them), meaning (what it says to them about themselves)."
         ),
     )
@@ -799,6 +835,17 @@ class Reply(_ReplyBase):
     text: str = Field(
         description="What Mani says to them, in the style they chose. Required."
     )
+    # Sent on a safety reply and a stage reply only (reply_for); joined only when the text asks nothing, so a stage's
+    # own question and the client's lines are untouched (muhammad, 2026-11-11). Empty is allowed for that reason; the
+    # pattern goes to the provider only, for the reason on ConversationReply.forward.
+    forward: str = Field(
+        default="",
+        json_schema_extra={"pattern": r"^$|\?\s*$"},
+        description=(
+            "Only when your text asks no question: the one question that ends your reply, in your own words, from "
+            "what they just told you, ending in a question mark. Empty when your text already asks one."
+        ),
+    )
     options: str | None = Field(
         default=None,
         description=(
@@ -880,11 +927,14 @@ def reply_for(
     overrides: dict[str, tuple] = {}
     if moment is Moment.BODY:
         names |= {"body", "options"}
+    elif moment is Moment.CONCERN:
+        names.add("forward")
     elif moment is Moment.IN_STAGES:
         # A stage turn speaks in the chat's voice (prompts/voice.md and framework.md): no reasoning pass, the
         # stage fields are its judgement.
         names = (names - {"reasoning"}) | {
             *_STAGES, *_REACH, "options", "framework_fit", "follow_through", "insight", "explored_now", "progress",
+            "forward",
         }
     elif moment is Moment.OFFER_OPEN:
         names |= {"offer_answer", *_STAGES, *_REACH, "options"}
@@ -1032,11 +1082,11 @@ class ConversationReply(_ReplyBase):
         description=(
             "What kind of reply this turn needs, chosen from your reasoning, never by habit. open_ask: something you "
             "do not know and cannot infer would really change your understanding; one open question about a part not "
-            "yet explored. window: a feeling is tied to something outside or inside them; ask about the feeling with "
-            "what it is tied to. insight: there is a new connection to make, earned by what they said; never on your "
-            "first reply; give it as your reading, with or without a question. reflect: something meaningful was said; "
-            "an observation that lets them go on, with no question; never two in a row. acknowledge: something hard "
-            "just came up; stay with it, with no question. practical: they asked for help or what to do; one small "
+            "yet explored, asked in forward. window: a feeling is tied to something outside or inside them; ask "
+            "about the feeling with what it is tied to, in forward. insight: there is a new connection to make, earned by what they said; never on your "
+            "first reply; give it as your reading in the text, and let forward build on it. reflect: something meaningful "
+            "was said; an observation that lets them go on; never two in a row. acknowledge: something hard just came "
+            "up; stay with it in the text, and let forward be a gentle question. practical: they asked for help or what to do; one small "
             "idea, then an offer to work it through together."
         ),
     )
@@ -1066,7 +1116,7 @@ class ConversationReply(_ReplyBase):
         default=None,
         description=(
             "What the reply offers besides its question, if anything. none. clarifying_options: two or three readings "
-            "to choose from, such as \"is it more the time, or that it feels one-sided?\". step: a step in the "
+            "to choose from, such as \"is it more the time, or that it feels one-sided?\", as the forward question. step: a step in the "
             "conversation, such as staying with one situation first. possibilities: what it could be, when they are "
             "unsure. small_idea: one small idea, only when they asked what to do, before offering to work it through. "
             "Never a fix for their situation: that is the framework's work."
@@ -1077,7 +1127,29 @@ class ConversationReply(_ReplyBase):
         default=None,
         description="Where this conversation is heading, one line: what you know, and what comes next toward the framework.",
     )
-    text: str = Field(description="What Mani says to them, following from the fields above. Required.")
+    text: str = Field(
+        description=(
+            "What Mani says to them, following from the fields above. Required. It gives them something first: an "
+            "acknowledgment, an observation, an insight. It asks no question of its own: the question that ends your "
+            "reply is forward."
+        ),
+    )
+    # The question that ends every chat reply (muhammad, 2026-11-10: "a question, always"), after the text so it
+    # follows from what the text gave. The pattern goes to the provider, which holds the reply to it as it is
+    # generated (checked 2026-11-10: told to write no question mark, the model still ended on one), so a question left
+    # out is not repaired with a second call. Pydantic does not check it, for the reason under CLOSED SETS: a
+    # ValidationError costs a second call and can lose the message. A reply that still comes without one is counted
+    # (orchestrator._converse). The provider is sent every field as required.
+    forward: str = Field(
+        default="",
+        json_schema_extra={"pattern": r"\?\s*$"},
+        description=(
+            "The question that ends your reply, in your own words and new each turn: where they could go from here, "
+            "from what they told you, never asking for what they already said. One question, ending in a question "
+            "mark. When your text said your reading of the core and they have not confirmed it, ask whether it fits. "
+            "When a move offers readings or possibilities to choose from, they are this question."
+        ),
+    )
     core: str | None = Field(
         default=None,
         description=(
@@ -1132,7 +1204,7 @@ def conversation_reply_for(*, may_move: bool, slots: Slots = Slots()) -> type[Ba
     lead = (
         "Your text is not sent when the offer is: its first line, in your words, takes its place."
         if slots.lead_line
-        else "Your text goes before the offer, without its question: keep it to a short acknowledgment of their message."
+        else "Your text goes before the offer, and forward is dropped: keep the text to a short acknowledgment of their message."
     )
     overrides = {
         "checking": (

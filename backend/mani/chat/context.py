@@ -249,25 +249,43 @@ _MEANING: dict[str, str | dict[str, str]] = {
     ),
     "history": "what was tried earlier in this conversation, and whether it helped.",
     "current_phase": "the stage the questions are on, as last recorded.",
-    # manasa's safety test, 2026-11-06: "stay with what they said... leave room for more" was all this said, and each
-    # time she pushed back Mani agreed to drop it and went back to ordinary conversation.
+    # What Mani is told while a concern is open, by where it stands (muhammad, 2026-11-10). One text each, not a
+    # sentence per kind of danger: the model reads the conversation and knows whose danger it is and what has been
+    # done. Listening more than asking, and asking only when the last reply did not, keep a safety question out of
+    # every reply; the refusal line is manasa's safety test, 2026-11-06.
     "safety": {
-        "open": (
-            "something said in this conversation may mean they are not safe, and it is not settled. Stay with them and "
-            "what they are going through, warmly and plainly, listening more than asking. Come back to their safety "
-            "gently in your own words, in this reply unless your last one asked and they have not answered yet; then "
-            "stay with what they said and come back to it next time. A refusal, a change of subject or frustration "
-            "with the question changes how you ask, never whether it stays open: never say you will stop asking or "
-            "drop it, and never steer to everyday topics or offer a choice of them. No set of questions, no offer, no "
-            "library. Report safety.answer."
+        "unsure": (
+            "something said in this conversation could mean someone is not safe, and you do not know yet. Stay with "
+            "them and what they are going through, warmly and plainly, listening more than asking, and follow what "
+            "they talk about. If you have not asked what they meant, ask once, openly and in your own words, as your "
+            "one question; never tell them to call anyone while you do not know. Say a worry once, never again. "
+            "Once you have asked, what they say next settles it or not: going on about their situation with nothing "
+            "pointing at danger settles it; a refusal, brushing the question off or frustration with it changes how "
+            "you ask, never whether it is settled: never say you will stop asking or drop it. For a symptom in their "
+            "body, ask once whether it is happening now; if they do not say, say once that if it is happening now they "
+            "should call their local emergency number, then follow them: going on or pushing back settles it. No set of questions, "
+            "no offer, no library. Fill safety from the whole conversation."
         ),
-        "unsafe": (
-            "they may be in danger now: a plan, the means near them, fear of what they might do, or having acted. "
-            "Stay with them and do not let the conversation move on. In every reply, in plain words and briefly, ask "
-            "them to reach a person now, someone they trust or their local emergency number, and to put distance "
-            "between themselves and anything they could use; a text is enough if speaking is too hard. Never repeat a "
-            "sentence you already used, never lecture, never end the conversation. If they say they are safe, ask "
-            "gently what has changed. Report safety.answer."
+        "danger_said": (
+            "someone may be in real danger now, and you already told them what would make them safe, in your last reply. "
+            "Never say it again, in any words. Answer what they just said first, honestly: a question (\"could it be "
+            "stress?\"), a doubt, frustration or something about their situation. When they doubt it and never said "
+            "it is happening now, ask once whether it is. You may ask once whether they have done the step that keeps "
+            "them safe, only if they have not said, never whether they have told someone how they feel or done "
+            "anything else you suggested. Then stay with them and what they are going through, and follow it. Never "
+            "end the conversation. No set of questions, no offer, no library. Fill safety from the whole "
+            "conversation."
+        ),
+        "danger": (
+            "someone may be in real danger now: them, someone else, or from a symptom happening now. Say once, "
+            "plainly and briefly, what would make them or the other person safe now, only what fits what they told "
+            "you and never something they have already done (a step they took settles it): their local emergency number, a person with them, "
+            "distance from the other person or from what they could use, not driving themselves. Only what keeps them "
+            "safe goes in it, never what to say to someone close to them or how to feel. When help is already called and "
+            "someone is with them, there is nothing to say about it: follow what they say. Then stay with them "
+            "and what they are going through; a text is enough if speaking is too hard. Never lecture, never repeat "
+            "a sentence you already used, never end the conversation, never say you will stop asking. No set of "
+            "questions, no offer, no library. Fill safety from the whole conversation."
         ),
     },
     "recent_crisis": {
@@ -412,6 +430,22 @@ PROGRESS_KEPT = 4
 EXPLORATION = "exploration"
 INSIGHTS = "insights"
 INSIGHTS_KEPT = 4
+# That a safety concern came up in this conversation and was settled. Mani reads the whole conversation again every
+# turn, and with nothing saying a concern was settled it raised it again in its replies (muhammad's chats and the
+# scenario runs, 2026-11-10).
+SAFETY_SETTLED = "safety_settled"
+# Where the question about safety after a framework's last stage stands: "asked" while the closing choices wait for
+# their answer, "done" once it is answered (muhammad, 2026-11-11).
+SAFETY_END_CHECK = "safety_end_check"
+# They are in danger and said they will not get help: the conversation answers only with crisis.HELP_REFUSED_REPLY
+# (muhammad, 2026-11-11).
+HELP_REFUSED = "help_refused"
+# Said on every kind of turn once it settled, the chat's and the questions' alike: the bullying chat, replayed
+# 2026-11-11, raised it again on the answer to the offer from what was said before it settled.
+SETTLED_LINE = (
+    "Their safety came up earlier in this conversation and is settled. Reopen it only when their newest message itself "
+    "speaks of danger, never from what was said before it settled; in what you say, leave it there."
+)
 
 
 def meaning_of(key: str) -> str:
@@ -478,6 +512,7 @@ def build(
     framework: Framework | None = None,
     history: list[Message] | None = None,
     safety: str = "clear",
+    danger_said: bool = False,
     offer_waiting: bool = False,
     starting: bool = False,
     yes_framework: Framework | None = None,
@@ -499,11 +534,22 @@ def build(
     technique = ctx.technique
     # Named first because every stage_ask and offer_ask below is resolved from it.
     lines: list[str] = _line("conversation_style", resolve_style(ctx))
-    # Where the conversation stands on safety, from the thread and this message's screen (chat/safety.State). While it
-    # is not clear the framework waits: no stage question to relay, no offer to make.
+    # Where the conversation stands on safety, from the thread and this message's screen (chat/safety.State). While
+    # it is not clear the framework waits: no stage question to relay, no offer to make; the stage it waits on is
+    # named, so the reply that settles the concern goes back to it.
     safety_concern = safety != "clear"
+    if not safety_concern and ctx.thread.understanding.get(SAFETY_SETTLED):
+        lines.append(SETTLED_LINE)
     if safety_concern:
-        lines += _line("safety", safety)
+        # The reply before this one was already a danger reply: what would make them safe was said, and is not said
+        # again (Lolly's chest chat and manasa's test, replayed 2026-11-11).
+        lines += _line("safety", "danger_said" if safety == "danger" and danger_said else safety)
+        if framework is not None and technique is not None and technique.phase in walk.content_stages(framework):
+            ask = ((framework.stages.get(technique.phase) or {}).get("ask") or {}).get(resolve_style(ctx))
+            lines += [
+                f"paused_stage: {technique.phase}",
+                "  means: the set of questions waits on this stage" + (f"; its question: {ask}" if ask else "."),
+            ]
     if ctx.recent_crisis:
         lines += _line("recent_crisis", "yes")
 

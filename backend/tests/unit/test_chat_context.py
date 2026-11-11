@@ -6,7 +6,7 @@ import datetime as dt
 import uuid
 
 
-from mani.chat import context
+from mani.chat import context, converse
 from mani.chat.orchestrator import find_tapped_prompt, pending_offer
 from mani.db.threads import TurnContext
 from mani.models.rows import (
@@ -509,8 +509,8 @@ def _every_kind_of_block() -> list[str]:
         ),
         context.build(TurnContext(thread=thread(message_count=10), profile=None,
                                   technique=declined, techniques_offered=["abcde"])),
-        context.build(TurnContext(thread=thread(), profile=None, technique=None), safety="open"),
-        context.build(TurnContext(thread=thread(), profile=None, technique=None), safety="unsafe"),
+        context.build(TurnContext(thread=thread(), profile=None, technique=None), safety="unsure"),
+        context.build(TurnContext(thread=thread(), profile=None, technique=None), safety="danger"),
         context.build(TurnContext(thread=thread(), profile=None, technique=starting),
                       framework=framework(), starting=True),
         context.build(TurnContext(thread=thread(), profile=None, technique=starting),
@@ -780,3 +780,100 @@ def test_their_message_is_caught_as_manis_last_reply_sent_back_only_when_it_is_o
     assert not context.copies_last_reply("yes", history)
     assert not context.copies_last_reply("I'm waiting for them to show they still want the closeness, yes.", history)
     assert not context.copies_last_reply(said, [user(said)]), "only Mani's own reply"
+
+
+def _safety_block(state: str, *, ctx: TurnContext | None = None, **kwargs) -> str:
+    ctx = ctx or TurnContext(thread=thread(), profile=None, technique=None)
+    return context.build(ctx, safety=state, **kwargs)
+
+
+def test_an_unsure_concern_is_mostly_listening_and_asked_about_once_openly():
+    """muhammad, 2026-11-10: a safety question went into every reply while a concern was open (5 of 5 in the roof
+    chat), also for someone only talking about feeling low. Unsure is main's listening more than asking, and one
+    open question about what they meant."""
+    block = _safety_block("unsure")
+    assert "listening more than asking" in block
+    assert "ask once, openly" in block
+    assert "never tell them to call anyone while you do not know" in block
+    assert "Say a worry once, never again" in block
+
+
+def test_an_unsure_concern_settles_when_they_carry_on_but_never_on_a_refusal():
+    """muhammad, 2026-11-11: someone who never answered the safety question stayed in it for good (five turns of
+    "I want to understand what you meant"). Going on about their situation after one ask settles it; manasa's
+    refusal test of 2026-11-06 still holds it."""
+    block = _safety_block("unsure")
+    assert "going on about their situation with nothing pointing at danger settles it" in block
+    assert "a refusal, brushing the question off or frustration with it changes how you ask, never whether it is settled" in block
+
+    # Lolly's chest chat, replayed 2026-11-11: "is it happening right now?" in four replies (muhammad: ask once, say once).
+    assert "For a symptom in their body, ask once whether it is happening now" in block
+    assert "say once that if it is happening now they should call their local emergency number" in block
+
+
+def test_danger_is_said_once_plainly_and_never_repeats_what_they_have_done():
+    """The bullying chat, 2026-11-10: the same step asked for three times after his friend was already with him."""
+    block = _safety_block("danger")
+    assert "Say once, plainly and briefly" in block
+    assert "never something they have already done" in block
+
+
+def test_once_the_danger_reply_has_been_given_it_is_never_given_again_and_their_words_come_first():
+    """Lolly's chest chat and manasa's test, replayed 2026-11-11: "call your local emergency number" in every reply,
+    through "you already said this a few times" and "could it be stress" (muhammad: understand and discuss first)."""
+    said = _safety_block("danger", danger_said=True)
+    assert "you already told them what would make them safe" in said
+    assert "Answer what they just said first" in said
+    assert "Say once, plainly and briefly" not in said
+    assert "Say once, plainly and briefly" in _safety_block("danger"), "the first danger reply still says it"
+
+
+def test_no_safety_text_names_a_kind_of_danger_they_did_not_raise():
+    """The chest-tightness and bullying chats, 2026-11-10: words about hurting themselves went to people who had only
+    spoken of their chest, or of hurting someone else. Neither instruction assumes whose danger it is."""
+    for state in ("unsure", "danger"):
+        block = _safety_block(state)
+        assert "hurting themselves" not in block and "not being alive" not in block and "end their life" not in block
+
+
+def test_pushing_back_never_closes_an_open_concern():
+    """manasa's safety test, 2026-11-06."""
+    for state in ("unsure", "danger"):
+        assert "never say you will stop asking" in _safety_block(state)
+
+
+def test_a_settled_concern_is_named_in_the_chat_note_and_only_then():
+    """2026-11-10: Mani reads the whole conversation again every turn and raised a settled concern again."""
+    note = lambda understood: converse.note("supportive", allowed=False, due=False, wants_title=False,
+                                            understood=understood)
+    assert converse.SETTLED_LINE in note({context.SAFETY_SETTLED: True})
+    assert converse.SETTLED_LINE not in note({})
+
+
+def test_a_settled_concern_reopens_only_on_their_newest_words_on_every_kind_of_turn():
+    """The bullying chat, replayed 2026-11-11: settled by "someone I trust is with me", then raised again in the chat and
+    on the answer to the offer from what was said before it settled."""
+    assert "only when their newest message itself speaks of danger" in context.SETTLED_LINE
+    settled = TurnContext(thread=thread().model_copy(update={"understanding": {context.SAFETY_SETTLED: True}}), profile=None, technique=None)
+    assert context.SETTLED_LINE in _safety_block("clear", ctx=settled)
+    assert context.SETTLED_LINE not in _safety_block("clear")
+
+
+def test_the_stage_a_concern_interrupted_is_named_so_the_reply_goes_back_to_it():
+    block = _safety_block("unsure", ctx=_running_at("belief"), framework=framework())
+    assert "paused_stage: belief" in block and "its question:" in block
+    assert "stage_ask:" not in block, "the stage itself waits"
+
+
+def test_the_safety_step_and_the_check_on_it_are_only_what_keeps_them_safe():
+    """muhammad's chest chat, 2026-11-11: the direction carried "let them know you're worried about your wife being
+    alone", the next reply asked whether they had told her, and he pushed back: his worry for her was a feeling, not
+    a safety step."""
+    first = _safety_block("danger")
+    assert "Only what keeps them safe goes in it" in first
+    assert "never what to say to someone close to them or how to feel" in first
+    assert "When help is already called and someone is with them, there is nothing to say about it" in first
+    again = _safety_block("danger", danger_said=True)
+    assert "whether they have done the step that keeps them safe" in again
+    assert "never whether they have told someone how they feel" in again
+    assert "whether they have done what you said" not in again

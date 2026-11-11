@@ -18,8 +18,9 @@ from mani.text import clean_message
 #    as 'depressed,' 'hopeless,' 'panicked,' 'furious,' or 'I cannot do this' require attention
 #    and context. They should not automatically produce a crisis response."
 #
-# Neither level locks the conversation any more (muhammad, 2026-11-06): both open the safety state below, CRISIS at
-# unsafe. The model reads every message for safety first (schema.SafetyRead); this screen is the free backstop under it.
+# Neither level locks the conversation (muhammad, 2026-11-06): either makes the turn unsure (State below) and the
+# model judges what the words mean (schema.SafetyRead); this screen is the free backstop under it. A physical symptom
+# is never a phrase here: whether it is happening now is the model's judgment.
 
 
 class Level(StrEnum):
@@ -35,7 +36,6 @@ class Category(StrEnum):
     CANNOT_STAY_SAFE = "cannot_stay_safe"
     ABUSE_OR_VIOLENCE = "abuse_or_violence"
     OVERDOSE = "overdose"
-    MEDICAL_EMERGENCY = "medical_emergency"
     LOSS_OF_CONTACT = "loss_of_contact_with_reality"
 
 
@@ -134,9 +134,6 @@ _CONCERN: list[tuple[Category, str]] = [
     (Category.ABUSE_OR_VIOLENCE, "afraid of him"),
     (Category.ABUSE_OR_VIOLENCE, "afraid of her"),
     (Category.ABUSE_OR_VIOLENCE, "not safe at home"),
-    (Category.MEDICAL_EMERGENCY, "cannot breathe"),
-    (Category.MEDICAL_EMERGENCY, "chest pain"),
-    (Category.MEDICAL_EMERGENCY, "bleeding badly"),
     (Category.LOSS_OF_CONTACT, "hearing voices"),
     (Category.LOSS_OF_CONTACT, "they are watching me"),
 ]
@@ -207,44 +204,52 @@ def screen(text: str) -> Assessment:
 
 
 # ---------------------------------------------------------------------------
-# The conversation's safety state (muhammad, 2026-11-06)
+# The conversation's safety state (muhammad, 2026-11-06 and 2026-11-10)
 # ---------------------------------------------------------------------------
 #
 # Held on the thread (threads.safety), so a concern outlives the reply that raised it: in manasa's test it was gone
-# after one reply, and Mani went back to ordinary conversation each time she pushed back. Code owns it; the screen and
-# the model's reading move it. Nothing here locks the conversation.
+# after one reply. Each turn the model judges, from the whole conversation, whether anyone is in danger now
+# (schema.SafetyRead), and code applies that judgment with two rules of its own: a refusal never settles a concern,
+# and the screen above puts a turn at unsure before the model is asked. Nothing here locks the conversation.
 
 
 class State(StrEnum):
     CLEAR = "clear"
-    OPEN = "open"
-    UNSAFE = "unsafe"
+    UNSURE = "unsure"
+    DANGER = "danger"
 
 
-_RANK = {State.CLEAR: 0, State.OPEN: 1, State.UNSAFE: 2}
-
-# Signs that mean danger now, on their own.
-DANGER = frozenset({"intent", "plan", "acted", "cannot_stay_safe", "harm_to_others", "medical_emergency"})
+_JUDGED = {"none": State.CLEAR, "unsure": State.UNSURE, "now": State.DANGER}
+_RANK = {State.CLEAR: 0, State.UNSURE: 1, State.DANGER: 2}
 
 
-def higher(a: State, b: State) -> State:
-    return a if _RANK[a] >= _RANK[b] else b
+def screened(state: State, assessment: Assessment) -> State:
+    """Where the conversation stands as their message arrives: a phrase the screen catches makes an untroubled turn
+    unsure, so it is answered as a safety turn (and gets the fallback reply if the model fails) while the model
+    judges it. Never more than unsure: the screen cannot read what the words mean."""
+    return State.UNSURE if state is State.CLEAR and assessment.level is not Level.NONE else state
 
 
-def opened_by(level: Level) -> State:
-    """Where the screen alone puts the conversation."""
-    return {Level.NONE: State.CLEAR, Level.CONCERN: State.OPEN, Level.CRISIS: State.UNSAFE}[level]
+def danger_of(danger: str | None, about: str | None, symptom_now: str | None, *, reopening: bool = False) -> str | None:
+    """The model's judgment, except for a symptom in the body: it is danger now only when they said it is happening
+    now; until they say so it is unsure, which asks (Lolly's chest chat, replayed 2026-11-11: a tightening in the chest
+    was read as now and the emergency number went into four replies). A concern that already settled is reopened only by
+    their newest message saying so: the stroke chat, replayed 2026-11-11, flipped back to danger on "I am afraid of
+    losing him", read from the father's symptoms earlier."""
+    if about == "body" and danger in ("now", "unsure") and symptom_now != "yes" and reopening:
+        return "none"
+    if danger == "now" and about == "body" and symptom_now != "yes":
+        return "unsure"
+    return danger
 
 
-def after(state: State, signals: set[str], answer: str | None) -> State:
-    """The state once the model has read this message: `signals` are the signs in it, `answer` how it stands on a
-    safety question while one is open. Leaving is slow on purpose: a safe answer closes an open concern, and only
-    steps an unsafe one down to open, so "I'm safe" right after plans or means is asked about once more. A refusal,
-    a change of subject or an unclear answer keeps it where it is."""
-    if answer == "unsafe" or signals & DANGER or (state is not State.CLEAR and "means" in signals):
-        return State.UNSAFE
-    if signals:
-        return higher(state, State.OPEN)
-    if answer == "safe":
-        return State.OPEN if state is State.UNSAFE else State.CLEAR
-    return state
+def after(state: State, danger: str | None, declined: bool) -> State:
+    """The state once the model has judged their message: its judgment, except that a refusal never lowers a concern
+    (manasa's test, 2026-11-06: Mani agreed to drop the question each time she pushed back), not to unsure from
+    danger either. No judgment, or one code does not know, leaves it where it is."""
+    judged = _JUDGED.get(danger or "")
+    if judged is None:
+        return state
+    if declined and _RANK[judged] < _RANK[state]:
+        return state
+    return judged
