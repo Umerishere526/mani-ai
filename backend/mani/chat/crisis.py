@@ -16,6 +16,20 @@ CRISIS_REPLY = (
     "I'm not going anywhere."
 )
 
+# What Mani asks after a framework's last stage when a safety concern came up at any point in the conversation, as a
+# reply of its own before the closing choices (muhammad, 2026-11-11). Wording is ours until the client supplies hers.
+END_CHECK = (
+    "Thank you for going through that with me. Before we finish, I want to come back to the worry about safety that "
+    "came up earlier. How are things with that right now?"
+)
+# Every reply once someone in danger has said they will not get help (muhammad, 2026-11-11: stay hard on a crisis,
+# even block the chat). Wording is ours until the client supplies hers.
+HELP_REFUSED_REPLY = (
+    "I care about what happens to you, and I can't keep talking as though you were safe. Please contact your local "
+    "emergency number now, or ask someone near you to.\n\n"
+    "Once someone is with you or help is on its way, you can start a new conversation with me."
+)
+
 
 class Resource(BaseModel):
     """One crisis service a person can actually reach."""

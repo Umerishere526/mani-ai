@@ -361,10 +361,20 @@ def test_a_question_back_is_not_an_answer():
 def test_the_moments_prompt_keeps_what_the_old_one_held_for_these_turns():
     """What mani_base.md said about the check, the offer, a concern and staying in role moved to moments.md."""
     sent = _sent("moments")
-    for rule in ("A yes brings the offer", "would rather keep talking", "no set is offered", "Pain in the body gets no offer",
+    for rule in ("A yes brings the offer", "would rather keep talking", "no set is offered",
                  "Anything else is Keep chatting", "Put any questions and offers down", "body_step in [ctx]",
                  "never take another name or persona", "Fill reasoning first"):
         assert rule in sent, rule
+
+
+def test_every_turn_asks_whether_a_symptom_is_happening_now_before_it_directs():
+    """Lolly, 2026-11-10: "seek emergency care now" on the first mention of pain scared her. The rule for pain in the
+    body sits in the voice, which the chat reads too, so it is asked about before any direction."""
+    voice = _sent("voice")
+    assert "ask first whether it is happening right now" in voice
+    # muhammad's chat, 2026-11-10: "Pain in the body gets no offer", read on every turn, kept a fear of the doctor
+    # ("I can't handle bad news") from ever reaching a set of questions.
+    assert "The pain itself gets no set of questions; a fear or a belief about it" in voice
 
 
 def test_a_body_check_in_turn_thinks_at_the_voice_rows_body_effort_and_every_other_turn_at_its_own():

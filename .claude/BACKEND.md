@@ -129,7 +129,7 @@ Read `mani-vault/Journal/failure-classes-from-later-branches-2026-10-21.md`, the
 1. State the root cause in one sentence before the fix. A second fix to the same class goes to the `architecture-reviewer` agent.
 2. No new gate, window, deadline or cooldown, in code or prompt. If one seems needed, stop and run `/architect`.
 3. Cut or swap prompt text; do not add. Every turn speaks from `voice.md`, where the three styles live, with `conversation.md`, `framework.md` or `moments.md` after it. There is no per-style prompt file and no reply-shape table; do not bring them back.
-4. Mani's text goes out with the model's own line breaks and none added by code (muhammad, 2026-10-26); never add a layout rule to a prompt.
+4. Mani's text goes out with the model's own line breaks and none added by code (muhammad, 2026-10-26), except that a chat reply's question follows its text on a line of its own (2026-11-10); never add a layout rule to a prompt.
 5. Free tests first (`pytest tests/unit tests/integration`); a live run costs the client's tokens, so ask muhammad.
 6. Reseed (`python scripts/seed.py`) after content edits, and read the chat against the client's requirements.
 

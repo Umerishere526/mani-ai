@@ -79,10 +79,18 @@ async def understanding_of(
 
 async def set_pending_follow_up(
     conn: asyncpg.Connection, thread_id: uuid.UUID | str, user_id: uuid.UUID | str, follow_up: dict | None
-) -> None:
-    """Store what is left to do after this turn's reply, for the app to ask for, or clear the last with None."""
-    await conn.execute(
-        "update public.threads set pending_follow_up = $1::jsonb where id = $2 and user_id = $3",
+) -> dict | None:
+    """Store what is left to do after this turn's reply, for the app to ask for, or clear the last with None. Returns
+    what was waiting before, which this replaces."""
+    return await conn.fetchval(
+        """
+        with before as (
+            select pending_follow_up from public.threads where id = $2 and user_id = $3 for update
+        )
+        update public.threads t set pending_follow_up = $1::jsonb
+          from before where t.id = $2 and t.user_id = $3
+        returning before.pending_follow_up
+        """,
         follow_up, thread_id, user_id,
     )
 
@@ -433,9 +441,7 @@ async def apply(
         )
 
     if updates.safety is not None:
-        await conn.execute(
-            "update public.threads set safety = $1 where id = $2 and user_id = $3", updates.safety, thread_id, user_id,
-        )
+        await set_safety(conn, thread_id, user_id, updates.safety)
     if updates.understanding is not None:
         # Its own column grant, to mani_service only (migration 022).
         await conn.execute(
@@ -462,6 +468,15 @@ async def apply(
             [(thread_id, fid, user_id) for fid in updates.offer_frameworks],
         )
 
+
+
+async def set_safety(
+    conn: asyncpg.Connection, thread_id: uuid.UUID | str, user_id: uuid.UUID | str, state: str
+) -> None:
+    """Where the conversation stands on safety: clear, unsure or danger (chat/safety.State)."""
+    await conn.execute(
+        "update public.threads set safety = $1 where id = $2 and user_id = $3", state, thread_id, user_id,
+    )
 
 
 async def mark_crisis(

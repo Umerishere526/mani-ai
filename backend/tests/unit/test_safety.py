@@ -3,7 +3,7 @@
 
 import pytest
 
-from mani.chat.safety import Assessment, Category, Level, State, after, screen
+from mani.chat.safety import Assessment, Category, Level, State, after, danger_of, screen, screened
 
 
 @pytest.mark.parametrize(
@@ -137,26 +137,44 @@ def test_what_passed_the_screen_in_the_safety_test_now_asks(text):
     assert screen(text).level is Level.CONCERN
 
 
-def test_a_sign_opens_the_state_and_danger_makes_it_unsafe():
-    assert after(State.CLEAR, {"possible"}, None) is State.OPEN
-    assert after(State.CLEAR, {"intent"}, None) is State.UNSAFE
-    assert after(State.CLEAR, {"means"}, None) is State.OPEN, "means alone, with nothing open, asks first"
-    assert after(State.OPEN, {"means"}, None) is State.UNSAFE, "means once a concern is open is danger"
+@pytest.mark.parametrize("text", [
+    "the pain is in my chest a tightening feeling",
+    "I get chest pain when I am stressed",
+    "sometimes I feel like I cannot breathe in meetings",
+])
+def test_a_physical_symptom_never_opens_a_concern_from_the_screen(text):
+    """Lolly's and muhammad's chest-tightness chats, 2026-11-10: only a symptom happening now is a sign, and whether
+    it is happening now is the model's reading, never a phrase."""
+    assert screen(text).level is Level.NONE
 
 
-def test_refusing_changing_the_subject_or_an_unclear_answer_never_settles_it():
-    """manasa's safety test: each time she pushed back, Mani agreed to drop the question and went back to chatting."""
-    for answer in ("declined", "unclear", None):
-        assert after(State.OPEN, set(), answer) is State.OPEN
-        assert after(State.UNSAFE, set(), answer) is State.UNSAFE
+def test_the_screen_makes_an_untroubled_turn_unsure_and_never_more():
+    """A phrase it catches is answered as a safety turn while the model judges what it means; the screen cannot read
+    meaning, so it never says danger."""
+    caught = screen("I am going to kill myself tonight")
+    assert screened(State.CLEAR, caught) is State.UNSURE
+    assert screened(State.DANGER, caught) is State.DANGER
+    assert screened(State.CLEAR, screen("I had a long day")) is State.CLEAR
 
 
-def test_a_safe_answer_closes_an_open_concern_but_only_steps_unsafe_down():
-    """"I'm safe" straight after plans, means or fear of acting is asked about once more before it closes."""
-    assert after(State.OPEN, set(), "safe") is State.CLEAR
-    assert after(State.UNSAFE, set(), "safe") is State.OPEN
-    assert after(State.OPEN, {"wish_to_be_dead"}, "safe") is State.OPEN, "a safe answer with a new sign settles nothing"
-    assert after(State.OPEN, set(), "unsafe") is State.UNSAFE
+def test_the_models_judgment_moves_the_state():
+    """muhammad, 2026-11-10: the model reads the whole conversation and judges whether anyone is in danger now. "I mean
+    my workplace" and "my friend is with me and stops me" settle a concern because they show no one is."""
+    assert after(State.CLEAR, "now", False) is State.DANGER
+    assert after(State.CLEAR, "unsure", False) is State.UNSURE
+    assert after(State.UNSURE, "none", False) is State.CLEAR
+    assert after(State.DANGER, "none", False) is State.CLEAR, "handled now: away from him, a friend with him"
+    assert after(State.DANGER, "unsure", False) is State.UNSURE
+    assert after(State.UNSURE, None, False) is State.UNSURE, "a reply that judged nothing leaves it as it was"
+
+
+def test_a_refusal_never_settles_a_concern():
+    """manasa's safety test, 2026-11-06: each time she pushed back, Mani agreed to drop the question and went back to
+    chatting."""
+    assert after(State.UNSURE, "none", True) is State.UNSURE
+    assert after(State.DANGER, "none", True) is State.DANGER
+    assert after(State.DANGER, "now", True) is State.DANGER
+    assert after(State.CLEAR, "none", True) is State.CLEAR, "nothing was open to keep"
 
 
 @pytest.mark.parametrize(
@@ -193,3 +211,46 @@ def test_not_wanting_to_keep_living_like_this_asks_and_locks_nothing():
     """manasa's chat, 2026-11-05: it passed the screen, so the stage moved and the safety question came after a step."""
     for said in ("I don't want to keep living like this.", "I can't keep living like this", "I don't want to go on"):
         assert screen(said).level is Level.CONCERN, said
+
+
+def test_a_refusal_never_lowers_a_concern_not_even_from_danger_to_unsure():
+    """The review of 2026-11-10: someone in danger who said "stop asking" lost the danger instruction, because a
+    refusal only blocked clearing. A refusal holds the concern where it stands, whatever the model judges."""
+    assert after(State.DANGER, "unsure", True) is State.DANGER
+    assert after(State.DANGER, "none", True) is State.DANGER
+    assert after(State.UNSURE, "unsure", True) is State.UNSURE
+    assert after(State.UNSURE, "now", True) is State.DANGER, "a refusal never holds back a rise"
+    assert after(State.DANGER, "unsure", False) is State.UNSURE, "answered, then lowered by the judgment"
+
+
+def test_a_judgment_code_does_not_know_never_clears_a_concern():
+    """A reply that judged nothing, or one in words outside the closed set, changes nothing."""
+    from mani.llm.schema import SafetyRead
+
+    assert SafetyRead.model_validate({}).danger is None
+    assert SafetyRead.model_validate({"danger": "Now"}).danger == "now", "case does not matter"
+    for unknown in ("danger", "", "safe", 3):
+        assert SafetyRead.model_validate({"danger": unknown}).danger is None
+    assert after(State.UNSURE, None, False) is State.UNSURE
+    assert after(State.DANGER, "mostly fine", False) is State.DANGER
+
+
+def test_a_symptom_in_the_body_is_danger_only_when_they_said_it_is_happening_now():
+    """Lolly's chest chat, replayed 2026-11-11: "the pain is in my chest a tightening feeling" was read as happening now,
+    and Mani told her to call the emergency number four times. Not said is unsure, which asks."""
+    assert danger_of("now", "body", "yes") == "now"
+    assert danger_of("now", "body", "unsaid") == "unsure"
+    assert danger_of("now", "body", None) == "unsure"
+    assert danger_of("now", "body", "no") == "unsure"
+    assert danger_of("now", "themselves", None) == "now", "only a symptom in the body waits for their word"
+    assert danger_of("none", "body", None) == "none"
+
+
+def test_a_settled_symptom_reopens_only_when_their_newest_message_says_it_is_happening():
+    """The stroke chat, baseline of 2026-11-11: help was called and it settled; "I am afraid of losing him" was read as
+    danger now from the father's symptoms earlier in the conversation, and safety flipped back with nothing new said."""
+    assert danger_of("now", "body", "yes", reopening=True) == "now"
+    assert danger_of("now", "body", "unsaid", reopening=True) == "none"
+    assert danger_of("unsure", "body", None, reopening=True) == "none"
+    assert danger_of("now", "themselves", None, reopening=True) == "now", "only a symptom in the body waits for their word"
+    assert danger_of("now", "body", "unsaid") == "unsure", "a concern that never settled still asks"

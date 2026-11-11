@@ -20,7 +20,7 @@ REPLY = uuid.uuid4()
 def _turn(read_after: bool = False, needs_summary: bool = False, was_duplicate: bool = False) -> orchestrator.Turn:
     job = orchestrator.ReadAfter(
         thread_id=THREAD, user_id=uuid.UUID(USER), message_id=REPLY, messages=[], model="test/model",
-        parameters={}, routing=None, their_messages=[],
+        parameters={}, routing=None,
     )
     return orchestrator.Turn(
         message_id=REPLY, content="What happened?", created_at=dt.datetime.now(dt.UTC), llm_call_id=uuid.uuid4(),

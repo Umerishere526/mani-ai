@@ -21,10 +21,6 @@ NAMED = (understanding.CORE_NAMED, understanding.READY)
 # in the chat (the client's test, 2026-10-29): the framework is the solution, and the chat listens; before it Mani
 # offers at most one small idea, never a fix.
 TOWARD = "toward_framework"
-# Messages this short, SHORT_IN_A_ROW of them, are someone disengaging, whatever the model judged. Two were too
-# few: "yes" then "I don't know" are often plain answers to Mani's questions.
-SHORT_WORDS = 3
-SHORT_IN_A_ROW = 3
 # Messages in a row that added nothing and answered nothing before Mani presses toward the framework. One was too few: "both",
 # a plain answer to Mani's either-or question, turned a chat to job-hunting before the core was named (muhammad,
 # 2026-10-29). A short answer to Mani's question is now `answered`, which never counts.
@@ -52,11 +48,27 @@ MOVE_NOW = (
     "heading_toward and offer. No summary before it and no \"does that capture it\": the offer says the core back, "
     "and they can correct it there."
 )
+# At core_named, not only ready: waiting for a confirmation no reply asked for kept the father chat from an offer with
+# the move allowed (muhammad, 2026-11-11). The offer says the core back, and they can correct it there.
 MOVE_MAY = (
-    "You may move to the set of questions this turn, only if heart is ready after their message: then set checking, "
-    "fill core, heading_toward and offer."
+    "You may move to the set of questions this turn once heart is core_named or ready after their message, unless "
+    "their message brings out something new and painful, which gets this reply of its own: then set checking, fill "
+    "core, heading_toward and offer."
 )
 MOVE_NOT = "Do not move to the set of questions this turn. Keep following their story."
+# Everything is explored and the heart of it is still not said back (muhammad's chest chats, 2026-11-11: twelve chat
+# turns held on it). Saying it is this reply's step; the move to the set of questions follows on the next.
+NAME_NOW = (
+    "They have told you enough: how they feel, what they tell themselves, what it does to them or what they need, and "
+    "what they have tried. Say the core back to them now{core}, as your reading in everyday words, and let them "
+    "correct it (heart is then core_named), unless their message brings out something new and painful, which gets "
+    "this reply of its own first."
+)
+MOVE_NOT_YET = "Do not move to the set of questions this turn: saying the core back is this reply's step."
+# A safety concern earlier in this conversation that has settled. The chat runs only while safety is clear, and Mani
+# reads the whole conversation again every turn: with nothing saying it was settled it raised it again in its replies
+# (muhammad's chats and the scenario runs, 2026-11-10). It still judges every message for safety.
+SETTLED_LINE = context.SETTLED_LINE
 AFTER_CORRECTION = (
     "When you offered the set of questions, they corrected what you understood. Your reading follows their "
     "correction now; once their message confirms it, move to the set again."
@@ -106,7 +118,7 @@ def agreed(latest: str | None, *, last_shape: str | None, last_question: str | N
 
 def gaps(
     seen: dict, *, heart: str | None, their_count: int, latest: str | None, last_shape: str | None = None,
-    last_question: str | None = None,
+    last_question: str | None = None, naming_due: bool = False,
 ) -> list[str]:
     """Lines for the note about what Mani's picture lacks or already holds, so the reply fills the one and never asks
     for the other, and, when they just agreed with its reading, that it is understood."""
@@ -120,7 +132,9 @@ def gaps(
         )
     thoughts = [b["belief"] for b in seen.get("beliefs") or [] if b.get("kind") == "thought"]
     core_now = picture.core(seen).get("belief")
-    if their_count >= GAPS_FROM and thoughts and not core_now:
+    if naming_due:
+        pass  # the note says the core now; holding it would contradict that
+    elif their_count >= GAPS_FROM and thoughts and not core_now:
         lines.append(
             "Your picture holds what they tell themselves (" + " | ".join(thoughts) + ") but no core yet. Never give one "
             "while they are still telling it: a long message is the first layer. Stay with them and give room (\"Is "
@@ -181,30 +195,27 @@ def risk_first(picture_now: dict | None) -> str | None:
     return RISK_FIRST.format(who=others[-1]) if others else None
 
 
-def toward(
-    stored: dict, asked_for_help: bool, after: dict, their_messages: list[str],
-) -> bool:
-    """Whether the conversation presses toward the framework after this turn: it already did, or they
-    asked for help, or QUIET_TO_HELP messages in a row added nothing new and answered nothing Mani asked, or their last
-    SHORT_IN_A_ROW messages were a few words each. Frustration with Mani never does. A new issue starts understanding
-    again."""
+def toward(stored: dict, asked_for_help: bool, after: dict) -> bool:
+    """Whether the conversation presses toward the framework after this turn: it already did, or they asked for
+    help, or QUIET_TO_HELP messages in a row added nothing new and answered nothing Mani asked while something that
+    happened is already known. What a message means decides, never how long it is: "he lied" adds a great deal, and
+    with nothing specific known yet someone who says little is offered possibilities, not pressed toward a core
+    (muhammad, 2026-11-10). Frustration with Mani never does. A new issue starts understanding again."""
     seen = after.get(picture.KEY) or {}
     if seen.get("shift") == "new_issue":
         return False
     if stored.get(TOWARD) or asked_for_help:
         return True
-    if seen.get("quiet", 0) >= QUIET_TO_HELP:
-        return True
-    latest = their_messages[-SHORT_IN_A_ROW:]
-    return len(latest) == SHORT_IN_A_ROW and all(len(m.split()) <= SHORT_WORDS for m in latest)
+    return seen.get("quiet", 0) >= QUIET_TO_HELP and bool(seen.get("situations"))
 
 
 # What the conversation has explored before it moves to a set of questions (muhammad, 2026-11-06: the cadence moves on
-# understanding, not counts): how they feel, what they tell themselves or what it means to them, what it does to them or
-# what they need, and what they have tried or whether it has happened before (Lolly's steps 4 and 5, folded in from
-# conversation.md). Each group needs one area from the after-reply reading's map.
+# understanding, not counts): how they feel, what they tell themselves or what it means to them, what it does to them,
+# what they need or what they want to happen (the father chat, 2026-11-11), and what they have tried or whether it has
+# happened before (Lolly's steps 4 and 5, folded in from conversation.md). Each group needs one area from the
+# after-reply reading's map.
 EXPLORED_BEFORE_MOVING = (
-    frozenset({"emotion"}), frozenset({"belief", "meaning"}), frozenset({"behaviour", "need"}),
+    frozenset({"emotion"}), frozenset({"belief", "meaning"}), frozenset({"behaviour", "need", "outcome"}),
     frozenset({"attempts", "pattern"}),
 )
 
@@ -216,18 +227,43 @@ def still_to_explore(understood: dict | None) -> list[str]:
     if not seen:
         return []
     areas = set(seen.get("explored") or [])
-    return [" or ".join(sorted(group)) for group in EXPLORED_BEFORE_MOVING if not areas & group]
+    return [_either(sorted(group)) for group in EXPLORED_BEFORE_MOVING if not areas & group]
+
+
+def _either(areas: list[str]) -> str:
+    """"belief or meaning", "behaviour, need or outcome"."""
+    return f"{', '.join(areas[:-1])} or {areas[-1]}" if len(areas) > 1 else areas[0]
+
+
+def move_held_by(ctx: TurnContext) -> str | None:
+    """What keeps this reply from moving to the set of questions, for the turn's trace; None when it may move. In
+    order: the floor and cooldowns of context.may_check, an earlier reply that said the heart of it back and was not
+    corrected, something being prepared, and enough of their experience explored."""
+    if not context.may_check(ctx):
+        return "too early, a set already open, or a cooldown"
+    if (heart := understanding.heart(ctx.thread.understanding)) not in NAMED:
+        return f"the heart of it is not named yet ({heart or 'nothing stored'})"
+    if ctx.thread.understanding.get(context.PREPARING):
+        return "something is being prepared"
+    if left := still_to_explore(ctx.thread.understanding):
+        return "still to explore: " + "; ".join(left)
+    return None
+
+
+def naming_due(ctx: TurnContext) -> bool:
+    """Whether this reply is the one that says the core back: everything the cadence waits on is explored and nothing
+    else holds the move, yet the heart of it was never said back. Judged on what is understood, not on a count."""
+    understood = ctx.thread.understanding or {}
+    return (
+        context.may_check(ctx) and understanding.heart(understood) not in NAMED
+        and not understood.get(context.PREPARING) and bool(understood.get(context.EXPLORATION))
+        and not still_to_explore(understood)
+    )
 
 
 def check_allowed(ctx: TurnContext) -> bool:
-    """Whether this reply may move to the set of questions: the floor and cooldowns of context.may_check, an earlier
-    reply that said the heart of it back and was not corrected, enough of their experience explored, and nothing being
-    prepared."""
-    return (
-        context.may_check(ctx) and understanding.heart(ctx.thread.understanding) in NAMED
-        and not ctx.thread.understanding.get(context.PREPARING)
-        and not still_to_explore(ctx.thread.understanding)
-    )
+    """Whether this reply may move to the set of questions."""
+    return move_held_by(ctx) is None
 
 
 def note(
@@ -236,6 +272,7 @@ def note(
     allowed: bool,
     due: bool,
     wants_title: bool,
+    naming_due: bool = False,
     understood: dict[str, str] | None = None,
     recent_crisis: bool = False,
     stepped_out_of: str | None = None,
@@ -253,6 +290,8 @@ def note(
             "Another conversation of theirs was flagged recently. You know only that. Go gently, and never "
             "mention it unless they do."
         )
+    if (understood or {}).get(context.SAFETY_SETTLED):
+        lines.append(SETTLED_LINE)
     if seen := understanding.picture_line(understood or {}):
         lines.append(f"Your picture of them before their message: {seen}.")
     if so_far := understanding.render(understood or {}):
@@ -263,7 +302,7 @@ def note(
         lines.append(f"Questions you already asked ({context.SAME_QUESTION}): " + " | ".join(asked))
     last_shape = ((understood or {}).get(THINKING) or {}).get("shape")
     lines += gaps(seen, heart=understanding.heart(understood or {}), their_count=their_count, latest=latest,
-                  last_shape=last_shape, last_question=last_question)
+                  last_shape=last_shape, last_question=last_question, naming_due=naming_due)
     if given := (understood or {}).get(INSIGHTS):
         lines.append(
             "Insights you already gave: " + " | ".join(given) + ". Never give another on the same theme from a new "
@@ -294,16 +333,20 @@ def note(
         lines.append(TOWARD_LINE)
     if (understood or {}).get(CORRECTED):
         lines.append(AFTER_CORRECTION)
-    if not allowed and understanding.heart(understood or {}) in NAMED and (left := still_to_explore(understood)):
+    if not allowed and (left := still_to_explore(understood)):
         lines.append(
-            "Before any set of questions, explore with them what is still unexplored: " + "; ".join(left) + "."
+            "Before any set of questions, the question after your text opens what is still unexplored: "
+            + "; ".join(left) + ", in a way that follows from what they just said, never asking for what they have told you."
         )
+    if naming_due and not allowed:
+        said = f" ({core})" if (core := picture.core(seen).get("belief")) else ""
+        lines.append(NAME_NOW.format(core=said))
     if allowed and (due or pressing):
         lines.append(MOVE_NOW)
     elif allowed:
         lines.append(MOVE_MAY)
     else:
-        lines.append(MOVE_NOT)
+        lines.append(MOVE_NOT_YET if naming_due else MOVE_NOT)
     if allowed and frameworks:
         lines.append(frameworks)
     if stepped_out_of:
@@ -342,11 +385,11 @@ def case(reply: ConversationReply, picture_now: dict | None = None) -> str:
     return said
 
 
-def replied(stored: dict, reply: ConversationReply, *, check_written: bool) -> dict:
+def replied(stored: dict, reply: ConversationReply, *, check_written: bool, allowed: bool = False) -> dict:
     """The record once the reply is written, before Mani reads what their message adds (read, after the reply is
     sent): where the reply judged the heart of it, what its window landed on, on a move to the set its case, its plan
     and what it asked itself, and that asking for help presses toward the framework. A move to the set is always
-    ready."""
+    ready. A move allowed and not made is kept, so the next reply is due to make it (due)."""
     heart = understanding.READY if check_written else reply.heart
     merged = understanding.merge(stored, None, heart)
     if reply.window is not None and reply.shape in ("window", "insight"):
@@ -362,6 +405,7 @@ def replied(stored: dict, reply: ConversationReply, *, check_written: bool) -> d
             ("shape", reply.shape), ("window", reply.window.model_dump() if reply.window else None),
             ("insight", reply.insight), ("from", reply.insight_from), ("link", reply.link), ("move", reply.move),
             ("asked_for_help", reply.asked_for_help or None), ("heart", heart),
+            ("held_back", (allowed and not check_written) or None),
         ) if value not in (None, "")
     }
     merged = context.with_insight(merged, reply.insight)
@@ -379,8 +423,29 @@ def replied(stored: dict, reply: ConversationReply, *, check_written: bool) -> d
     return merged
 
 
+def due(understood: dict | None) -> bool:
+    """Whether this reply should move to the set of questions, when it may: the heart of it was confirmed, or the last
+    reply was allowed to move and did not (the father chat, replayed 2026-11-11: allowed for three turns, the model
+    kept asking, and no offer came). One reply of waiting, never more."""
+    understood = understood or {}
+    return understanding.ready(understood) or bool((understood.get(THINKING) or {}).get("held_back"))
+
+
+def _explored_so_far(stored: dict, seen: ConversationUnderstanding) -> dict:
+    """The reading's map, with the areas already explored kept: what is worth exploring next and what can be inferred
+    are this reading's, but an area once explored stays explored, because the reading re-judges the whole list every
+    turn and the move to a set of questions would be allowed one turn and held the next. A new issue starts the map
+    again."""
+    now = seen.exploration.model_dump()
+    if ((seen.picture.shift if seen.picture else None) or "").strip().lower() == "new_issue":
+        return now
+    before = (stored.get(context.EXPLORATION) or {}).get("explored") or []
+    now["explored"] = [*before, *(area for area in now["explored"] if area not in before)]
+    return now
+
+
 def read(
-    stored: dict, seen: ConversationUnderstanding, *, their_messages: list[str], with_picture: bool = True,
+    stored: dict, seen: ConversationUnderstanding, *, with_picture: bool = True,
 ) -> dict:
     """The record with what Mani read after its reply: the picture with what their message adds or changes, the whole
     reading laid over it, and whether the conversation presses toward the framework. `stored` is the record as it is
@@ -392,17 +457,16 @@ def read(
         # look at (the career chat, 2026-11-03).
         merged = understanding.merge(stored, None, None)
         if seen.exploration is not None:
-            merged[context.EXPLORATION] = seen.exploration.model_dump()
+            merged[context.EXPLORATION] = _explored_so_far(stored, seen)
         return merged
     merged = understanding.merge(stored, seen.picture, (stored.get(THINKING) or {}).get("heart"))
     # The reading is Mani's whole understanding, re-read every turn, laid over the facts the message added.
     if reading := picture.apply_reading(merged.get(picture.KEY), seen.reading):
         merged[picture.KEY] = reading
     if seen.exploration is not None:
-        # What has been explored, what is worth exploring next and what can be inferred, replaced whole each reading.
-        merged[context.EXPLORATION] = seen.exploration.model_dump()
+        merged[context.EXPLORATION] = _explored_so_far(stored, seen)
     asked = bool((stored.get(THINKING) or {}).get("asked_for_help"))
-    if toward(stored, asked, merged, their_messages):
+    if toward(stored, asked, merged):
         merged[TOWARD] = True
     else:
         merged.pop(TOWARD, None)

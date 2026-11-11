@@ -103,6 +103,7 @@ async def test_the_next_turn_replaces_what_the_app_never_asked_for(alice, model)
     assert (await _waiting(thread.id))["message_id"] == str(second.message_id)
     assert await orchestrator.follow_up(alice, thread.id, first.message_id) is None
     assert scripted.reads == []
+    assert second.trace["reading_before"] == "dropped", "a reading nobody asked for is lost, and the trace says so"
 
 
 async def test_a_reading_asked_for_after_the_next_turn_began_adds_to_it_and_overwrites_nothing(alice, model):
@@ -330,3 +331,30 @@ async def test_another_person_cannot_run_what_waits(alice, model):
     assert await orchestrator.follow_up(claims_for(uuid.uuid4()), thread.id, turn.message_id) is None
     assert scripted.reads == []
     assert await _waiting(thread.id) is not None
+
+
+async def test_the_next_turn_traces_a_reading_that_failed_or_was_still_running(alice, model, monkeypatch):
+    """2026-11-10: a reading that failed or ran out of time was lost without a trace (a timed-out one leaves no
+    llm_calls row), so how often the picture falls behind could not be counted."""
+    scripted = model(
+        Reply(text="That sounds lonely. What happened?", picture=felt("lonely")),
+        Reply(text="What did you hope he would say?"),
+        Reply(text="How did that feel?"),
+        Reply(text="What would help?"),
+    )
+    thread = await start(alice)
+    first = await runner.send(alice, thread.id, "my brother never calls")
+    _failing_reads(monkeypatch, scripted)
+    await orchestrator.follow_up(alice, thread.id, first.message_id)
+
+    second = await runner.send(alice, thread.id, "he only calls when he needs something")
+    assert second.trace["reading_before"] == "failed:timeout"
+
+    async with pool.as_user(alice) as conn:
+        await threads.claim_pending_follow_up(conn, thread.id, alice.user_id, second.message_id)
+    third = await runner.send(alice, thread.id, "last time was my birthday")
+    assert third.trace["reading_before"] == "running", "still running when the next turn began; it may still land"
+
+    await orchestrator.follow_up(alice, thread.id, third.message_id)
+    fourth = await runner.send(alice, thread.id, "i just want him to ask how i am")
+    assert "reading_before" not in fourth.trace, "a reading that landed is not mentioned"

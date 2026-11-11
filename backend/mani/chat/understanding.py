@@ -66,7 +66,8 @@ def merge(stored: dict, update: PictureUpdate | None, heart: str | None) -> dict
         key: stored[key]
         for key in (
             *KEYS, picture.KEY, "plan", "thinking", context.INSIGHTS, CORRECTED, context.FOLLOW_THROUGH,
-            context.PREPARING, context.PROGRESS, context.EXPLORATION,
+            context.PREPARING, context.PROGRESS, context.EXPLORATION, context.SAFETY_SETTLED,
+            context.SAFETY_END_CHECK, context.HELP_REFUSED,
         )
         if stored.get(key)
     }

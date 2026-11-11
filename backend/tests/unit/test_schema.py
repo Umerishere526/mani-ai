@@ -16,14 +16,15 @@ def fields(moment: Moment, **flags) -> set[str]:
 
 
 def test_each_moment_carries_only_the_fields_that_mean_something_in_it():
-    assert fields(Moment.CONCERN) == CORE
+    # A safety reply and a stage reply end on a question when their text asks none (muhammad, 2026-11-11).
+    assert fields(Moment.CONCERN) == CORE | {"forward"}
     # Mani's own conversation (CHATTING) has a reply shape of its own, ConversationReply; its check is made there.
     assert fields(Moment.CHECK_OPEN) == CORE | {"heart", "check_answer", "heading_toward", "offer"}
     assert fields(Moment.CHECK_OPEN, declined_row=True) == CORE | {
         "heart", "check_answer", "heading_toward", "offer", "offer_answer", *REACH}
     # A stage turn speaks in the chat's voice: no reasoning pass and no reply shape (muhammad, 2026-10-27).
     assert fields(Moment.IN_STAGES) == (CORE - {"reasoning"}) | REACH | {
-        "options", "framework_fit", "follow_through", "insight", "explored_now", "progress"}
+        "options", "framework_fit", "follow_through", "insight", "explored_now", "progress", "forward"}
     assert fields(Moment.OFFER_OPEN) == CORE | {"offer_answer", "their_words", "options", *REACH}
     assert fields(Moment.BODY) == CORE | {"body", "options"}
 
@@ -82,3 +83,52 @@ def test_no_stage_field_reads_a_yes_to_a_check_as_the_start_turn():
         described = json.dumps({name: properties[name]["description"] for name in STAGE})
         assert "they say yes" not in described, moment
         assert "Null on" not in properties["stage_answer"]["description"], moment
+
+
+def test_safety_is_judged_from_what_they_said_never_from_a_question_left_unanswered():
+    """muhammad's chat, 2026-11-10: "i dont mean my house, i mean my workplace" and the model stayed unsure for two
+    more turns, its reason "they have not answered whether they might hurt themselves": the description of unsure
+    counted Mani's own unanswered question as a sign."""
+    from mani.llm.schema import SafetyRead
+
+    described = SafetyRead.model_fields["danger"].description
+    assert "have not answered when you asked" not in described
+    assert "Judge what they said, never a question of yours" in described
+
+
+def test_a_concern_is_raised_on_their_words_never_on_a_hunch():
+    """muhammad, 2026-11-10: "i can't spend another day under this roof" was answered with "are you thinking about
+    hurting yourself?". Safety is raised when their own words speak of it; an unbearable job or place is the
+    conversation, followed as it is going."""
+    from mani.llm.schema import SafetyRead
+    from scripts.seed import PROMPTS_DIR, parse_prompt
+
+    assert "Never a hunch" in SafetyRead.model_fields["danger"].description
+    voice = parse_prompt(PROMPTS_DIR / "voice.md")["content"]
+    assert "Raise their safety only when their own words speak of it" in voice and "Never on a hunch" in voice
+
+
+def test_a_safety_or_stage_question_may_be_left_empty_when_the_text_already_asks():
+    """The provider holds forward to its pattern as it writes: empty, or one question."""
+    import re
+
+    for moment in (Moment.CONCERN, Moment.IN_STAGES):
+        pattern = reply_for(moment, slots=SLOTS).model_json_schema()["properties"]["forward"]["pattern"]
+        assert re.search(pattern, "")
+        assert re.search(pattern, "What has tonight been like?")
+        assert not re.search(pattern, "Stay with it.")
+
+
+def test_saying_it_is_the_first_time_explores_the_pattern():
+    """The father chat, replayed 2026-11-11: "no this is first time" was not counted, and the offer was held to the end."""
+    from mani.llm.schema import Exploration
+
+    assert "\"it's the first time\" explores it" in Exploration.model_fields["explored"].description
+
+
+def test_pushing_back_about_a_symptom_is_never_a_refusal_that_holds_it():
+    """Lolly's chest chat, replayed 2026-11-11: "you already said this a few times" kept "is it happening now?" in four
+    replies. A refusal holds a concern about dying or hurting, never a symptom (muhammad)."""
+    from mani.llm.schema import SafetyRead
+
+    assert "Never about a symptom in their body" in SafetyRead.model_fields["declined"].description
