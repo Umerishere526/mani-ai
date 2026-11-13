@@ -6,6 +6,7 @@ import json
 import pathlib
 import sys
 import uuid
+from enum import StrEnum
 
 import asyncpg
 import httpx
@@ -13,14 +14,30 @@ from pydantic import BaseModel, ConfigDict, Field
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from mani.config import get_settings  # noqa: E402
-from mani.llm.schema import LibrarySection  # noqa: E402
-from mani.storage import BUCKET  # noqa: E402
+from mani.config import get_settings
+from mani.storage import BUCKET
 
 # Authored content, like content/frameworks: the audio and its manifest are input this script
 # loads into storage and the database. Nothing in the running service opens these files.
 EXERCISES_DIR = pathlib.Path(__file__).resolve().parent.parent / "content" / "exercises"
 MANIFEST = EXERCISES_DIR / "exercises.json"
+
+
+class ExerciseCategory(StrEnum):
+    """The library sections an exercise can sit in, so a typo never becomes a section of its own.
+
+    Separate from LibrarySection, the places a chat button can open, which the model reads in its
+    reply schema; adding a category here leaves what the model sees untouched.
+    """
+
+    ANXIETY = "Anxiety"
+    BOUNDARIES = "Boundaries"
+    BUILDING_HABITS = "BuildingHabits"
+    BURNOUT = "Burnout"
+    EMOTIONAL_INTELLIGENCE = "EmotionalIntelligence"
+    LOVE_RELATIONSHIPS = "LoveRelationships"
+    MANAGING_WORRY = "ManagingWorry"
+    SLEEP = "Sleep"
 
 
 class ManifestEntry(BaseModel):
@@ -32,7 +49,7 @@ class ManifestEntry(BaseModel):
     subtitle: str | None = None
     description: str
     type: str
-    category: LibrarySection
+    category: ExerciseCategory
     display_order: int = Field(alias="displayOrder")
     show_on_home_screen: bool = Field(alias="showOnHomeScreen")
     duration_minutes: float = Field(alias="durationMinutes")
@@ -91,6 +108,13 @@ async def _upsert_rows(entries: list[ManifestEntry]) -> None:
 
 def main() -> None:
     entries = load_manifest()
+    missing = [e.filename for e in entries if not (EXERCISES_DIR / e.filename).is_file()]
+    if missing:
+        # The audio is client content and stays off GitHub, so a fresh clone has none of it.
+        sys.exit(
+            f"missing audio in {EXERCISES_DIR}: {', '.join(missing)}. The files are not in git; copy them from "
+            "the production `exercises` bucket first."
+        )
     settings = get_settings()
     key = settings.supabase_service_role_key
     with httpx.Client(

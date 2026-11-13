@@ -1,0 +1,84 @@
+/* ABOUTME: The look of the exercise audio player in audio_player.py: a thin seek bar over one row of controls.
+   ABOUTME: The accent is .streamlit/config.toml's primaryColor; the rest is mixed from the text colour, for both themes. */
+
+.mani-player {
+  --accent: #1F7A5A;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  border-radius: 12px;
+  padding: 8px 8px 4px;
+}
+
+/* 16px tall to be easy to grab, painted 4px thin. */
+.mani-player .mani-seek {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: calc(100% - 12px);
+  height: 16px;
+  margin: 0 6px 2px;
+  cursor: pointer;
+  background: linear-gradient(to right, var(--accent) var(--p, 0%),
+    color-mix(in srgb, var(--accent) 24%, transparent) var(--p, 0%)) center / 100% 4px no-repeat;
+}
+.mani-player .mani-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.mani-player .mani-seek::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.mani-player .mani-row { display: flex; align-items: center; gap: 2px; }
+.mani-player .mani-btn,
+.mani-player .mani-speed { border: 0; border-radius: 8px; background: none; color: inherit; cursor: pointer; }
+.mani-player .mani-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+}
+.mani-player .mani-btn:hover,
+.mani-player .mani-speed:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+.mani-player :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.mani-player .mani-icon {
+  width: 22px;
+  height: 22px;
+  background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+.mani-player [data-icon=back] { --icon: var(--icon-back); }
+.mani-player [data-icon=forward] { --icon: var(--icon-forward); }
+.mani-player [data-icon=play] { --icon: var(--icon-play); }
+.mani-player.is-playing [data-icon=play] { --icon: var(--icon-pause); }
+.mani-player [data-icon=sound] { --icon: var(--icon-sound); }
+.mani-player.is-muted [data-icon=sound] { --icon: var(--icon-muted); }
+
+.mani-player .mani-time { margin-left: 8px; font-size: 13px; font-variant-numeric: tabular-nums; opacity: .75; }
+.mani-player .mani-speed {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-left: auto;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+.mani-player .mani-speed option { color: #1C2621; background: #fff; }
+
+.mani-player.is-broken .mani-seek,
+.mani-player.is-broken .mani-btn,
+.mani-player.is-broken .mani-speed { opacity: .4; pointer-events: none; }

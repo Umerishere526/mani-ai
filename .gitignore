@@ -24,3 +24,7 @@ backend/.eval/
 
 # macOS
 .DS_Store
+
+# Exercise audio is client content and stays off GitHub; production's own bucket holds it, and scripts/seed_exercises.py
+# reads local copies from here.
+backend/content/exercises/*.mp3
