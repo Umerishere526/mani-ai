@@ -6,6 +6,7 @@ from __future__ import annotations
 import streamlit as st
 
 import client as mani
+from audio_player import audio_player
 
 # The order and names the mani app shows its sections in.
 SECTIONS = {
@@ -18,6 +19,9 @@ SECTIONS = {
     "ManagingWorry": "Managing Worry",
     "Sleep": "Sleep",
 }
+
+# Every exercise plays in the same player; only stories get its speed choice.
+STORY = "Story"
 
 
 def _duration(minutes: float | None) -> str:
@@ -52,6 +56,6 @@ def render_library(client: mani.ManiClient) -> None:
                 st.markdown(f"**{exercise['title']}**" + (f"  \n{meta}" if meta else ""))
                 st.caption(exercise.get("subtitle") or exercise.get("description") or "")
                 if exercise.get("audio_url"):
-                    st.audio(exercise["audio_url"])
+                    audio_player(exercise["audio_url"], speed_choice=exercise.get("type") == STORY)
                 else:
                     st.caption("Audio unavailable right now.")

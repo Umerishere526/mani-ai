@@ -196,6 +196,14 @@ the same change as the work.**
   account's password and read that person's conversations, and create accounts that spend model calls. Accepted for
   test accounts only; before any real person signs up, remove the Forgot password tab and the secret key from the
   hosted copy (sign-up works with the publishable key alone, since mani-app auto-confirms) and make the app private.
+- **In the chat-tester's library, every exercise plays in one player of our own, run by the browser: seek bar, 10 s
+  back and forward, play, mute and time. Only stories (`type` "Story") also get a 0.5x, 1x, 1.5x or 2x speed menu**
+  (muhammad, 2026-11-13). Because `st.audio` has no speed setting in Streamlit 1.64, a speed item in the
+  browser's own player menu is unconfirmed on any browser, muhammad asked for the look of his reference player, and
+  he wants the speed feature on stories only; the speed menu was chosen over four buttons per exercise. No backend or
+  database change: the signed link plays straight from Storage, which answered a range request with 206 (local
+  Storage only). Exercises still play only in the library, never in the chat. `chat-tester/audio_player.py` (with
+  its `.css` and `.js`), `library.py` (`STORY`), `test_audio_player.py`, `test_library.py`.
 - **The migrations alone make a project safe; nothing depends on a hand-run revoke** (2026-11-06). Because a new
   Supabase project grants anon, authenticated and service_role everything on each table, sequence and function
   `postgres` creates in `public`, and the hosted project was safe only because someone had removed those defaults by
