@@ -10,7 +10,8 @@ the same change as the work.**
 - Tests: `pytest` runs 451 passed, 4 skipped (the four symmetric-token auth tests, which skip on a
   JWKS-configured project).
 - Database: 30 migrations (000 to 010 and 018 to 036), 16 tables (8 `public`, 8 `admin`), 2 frameworks and 7 prompts seeded.
-  `admin.exercises` holds the 17 library exercises from `content/exercises/`, with their audio in the
+  `admin.exercises` holds the 30 library exercises from `content/exercises/` (as "mani-app" holds them on 2026-11-13;
+  the other hosted project was not compared), with their audio in the
   private `exercises` bucket (`scripts/seed_exercises.py`). Two hosted projects hold every migration and the same
   data (2026-11-06): `heqenombgkihfeggrxqc` (muhammad's org, ca-central-1, the Hobby deployment's database) and
   `aipgficduzufstilndbw` "mani-app" (the Mani org, us-east-1, for the Vercel Pro deployment).
@@ -196,6 +197,18 @@ the same change as the work.**
   account's password and read that person's conversations, and create accounts that spend model calls. Accepted for
   test accounts only; before any real person signs up, remove the Forgot password tab and the secret key from the
   hosted copy (sign-up works with the publishable key alone, since mani-app auto-confirms) and make the app private.
+- **`content/exercises/exercises.json` is production's library, its 30 rows; the audio stays off GitHub, and
+  `seed_exercises.py` checks categories against its own `ExerciseCategory`, not `LibrarySection`** (muhammad,
+  2026-11-13). Because a local setup could not play the library, the recordings are client content that should not
+  be in a public repo (and Vercel builds from the repo root, where `backend/.vercelignore` does not apply, so committed
+  audio rode in every function bundle), and three of production's categories (LoveRelationships, ManagingWorry,
+  Sleep) are not places a chat button opens; adding them to `LibrarySection` would change the reply schema the model
+  reads. The MP3s are gitignored: local copies at 64 kbps mono sit in `content/exercises/`, copied from production's
+  bucket, and the seed stops and names any that are missing. The 12 older recordings the repo held were replaced by
+  production's re-recordings of 2026-11-09 (same ids, new files, lengths and three titles) and removed from git; they
+  remain in `main`'s history. The seed uploads with `x-upsert`, so running it against production would replace
+  production's 192 kbps files with the 64 kbps copies; production was only read from.
+  `tests/unit/test_seed_exercises.py`.
 - **In the chat-tester's library, every exercise plays in one player of our own, run by the browser: seek bar, 10 s
   back and forward, play, mute and time. Only stories (`type` "Story") also get a 0.5x, 1x, 1.5x or 2x speed menu**
   (muhammad, 2026-11-13). Because `st.audio` has no speed setting in Streamlit 1.64, a speed item in the
@@ -1136,9 +1149,9 @@ Ordered by what breaks first.
   unreviewed by their clinician. Keep Chatting continues from their case and where they ended up (`landed_on`), in the
   same mirror, question and possibilities shape, never "what would you like to talk about".
 - **Generated TypeScript types** for `web/` and `mobile/` from the OpenAPI schema, with a CI gate. No CI exists.
-- **Admin audio upload.** The 17 seeded exercises come from `content/exercises/` through
+- **Admin audio upload.** The 30 seeded exercises come from `content/exercises/` through
   `scripts/seed_exercises.py`; there is no upload route, and the admin exercise CRUD takes an existing
-  `audio_path`. The exercise card is also not kept on the message, so it is gone once a thread reloads.
+  `audio_path`.
 - **A worker process** for summaries and the memory fold, for when there is more than one instance.
 - **Model-call capacity at 500 people.** One instance's 100 slots run out (Latest measurements). Either more
   instances (Vercel adds them on its own; each has its own 100), a higher `MODEL_CALLS_IN_FLIGHT` once OpenRouter's
