@@ -23,7 +23,7 @@ SECTIONS = {
 def _duration(minutes: float | None) -> str:
     if minutes is None:
         return ""
-    seconds = round(minutes * 60)
+    seconds = 5 * round(minutes * 12)  # to the nearest 5 seconds
     return f"{seconds // 60}:{seconds % 60:02d}"
 
 
