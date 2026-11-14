@@ -4,6 +4,7 @@ date: 2026-11-13
 apps: [backend]
 tags: [journal, safety, crisis, pause, lessons]
 ---
+> Superseded 2026-11-14 — see [[pause-needs-no-refusal-for-suicide-2026-11-14]] (the refusal as a gate for every kind of danger; it stays for the body)
 
 # The crisis pause fires on a refusal, not on a missing "help in place" (2026-11-13)
 

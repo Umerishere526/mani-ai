@@ -426,8 +426,8 @@ async def _converse(
     guarded = state_after is not safety.State.CLEAR
     if guarded:
         updates.safety = state_after.value
-    # The answer to the return check comes here when the question left the conversation clear: danger in it that they
-    # refuse help for or stay set on, with nothing in place, pauses the chat.
+    # The answer to the return check comes here when the question left the conversation clear: danger in it with
+    # nothing in place pauses the chat, as pause.pauses_now rules (a symptom in the body only on a refusal of the help).
     answered = pause.answering(ctx)
     judged = _judgment(reply.safety)
     about = _danger_about(ctx, judged)
@@ -1088,8 +1088,8 @@ async def _turn(
 
     # The model's judgment moves the state; a refusal to answer never settles it (chat/safety.after).
     state_after = _judged(state_now, reply.safety, ctx.thread.id, settled=_settled(ctx))
-    # Danger that goes on pauses the chat when they refuse help or stay set on it with nothing in place, as does such
-    # danger left in the answer to the return check; the turn that asks it never pauses.
+    # Danger that goes on with nothing in place pauses the chat (a symptom in the body only on a refusal of the help),
+    # as does such danger left in the answer to the return check; the turn that asks it never pauses.
     judged = _judgment(reply.safety)
     about = _danger_about(ctx, judged)
     pausing = judged is not None and pause.pauses_now(

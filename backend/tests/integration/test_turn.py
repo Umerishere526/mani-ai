@@ -1320,7 +1320,8 @@ async def test_help_being_called_never_pauses_even_when_the_read_misses_it(alice
     assert await _pauses(thread.id) == []
 
 
-async def test_saying_again_they_will_do_it_after_the_direction_pauses_the_chat(alice, model):
+@pytest.mark.parametrize("line", ["yes , that asshole dies by my hand today", "no i dont want to"])
+async def test_saying_again_they_will_do_it_after_the_direction_pauses_the_chat(alice, model, line):
     """The owner's chat, 2026-11-13: "yes , that asshole dies by my hand today" after Mani told them to move away."""
     model(
         Reply(text="Move away from him and call your local emergency number.",
@@ -1330,10 +1331,50 @@ async def test_saying_again_they_will_do_it_after_the_direction_pauses_the_chat(
     )
     thread = await start(alice)
     await send(alice, thread.id, "i want to kill my boss")
-    turn = await send(alice, thread.id, "yes , that asshole dies by my hand today")
+    turn = await send(alice, thread.id, line)
 
     assert turn.paused_until is not None and turn.content == crisis.pause_reply("someone_else", 15)
     assert [r["reason"] for r in await _pauses(thread.id)] == ["will kill their boss today"]
+
+
+def _production_chat(*, help_in_place: bool) -> tuple[Reply, ...]:
+    """The production chat of 2026-11-14: unsure on wanting to die, danger and the direction once they are about to act,
+    then honest answers with no refusal; `help_in_place` is how the model reads the answer after the direction."""
+    return (
+        Reply(text="I'm so sorry it hurts this much. Are you thinking of ending your life?",
+              safety=SafetyRead(danger="unsure", about="themselves")),
+        Reply(text="Please call or text 988 now, or your local emergency number. Is anyone with you?",
+              safety=SafetyRead(danger="now", about="themselves", why="about to act now")),
+        Reply(text="I'm here with you. Have you been able to call anyone?",
+              safety=SafetyRead(danger="now", about="themselves", help_in_place=help_in_place,
+                                why="about to act, alone, no help called")),
+    )
+
+
+async def test_danger_that_goes_on_after_the_direction_with_no_one_there_pauses_without_a_refusal(alice, model):
+    """The production chat of 2026-11-14 never paused in 11 turns: they were about to act, alone, had called no one, and
+    answered every question honestly, so no read was declined. Danger to themselves that continues after the direction
+    with nothing in place pauses on the first answer after it (muhammad, 2026-11-14)."""
+    model(*_production_chat(help_in_place=False))
+    thread = await start(alice)
+    await send(alice, thread.id, "i want to kill myself and be free from this world")
+    direction = await send(alice, thread.id, "yes")
+    assert direction.paused_until is None, "the turn that gives the direction never pauses"
+    turn = await send(alice, thread.id, "no")
+
+    assert turn.paused_until is not None and turn.content == crisis.pause_reply("themselves", 15)
+    assert [r["reason"] for r in await _pauses(thread.id)] == ["about to act, alone, no help called"]
+
+
+async def test_danger_that_goes_on_with_someone_there_never_pauses(alice, model):
+    model(*_production_chat(help_in_place=True))
+    thread = await start(alice)
+    await send(alice, thread.id, "i want to kill myself and be free from this world")
+    await send(alice, thread.id, "yes")
+    turn = await send(alice, thread.id, "someone is with me")
+
+    assert turn.paused_until is None and turn.content == "I'm here with you. Have you been able to call anyone?"
+    assert await _pauses(thread.id) == [] and await _safety(thread.id) == "danger"
 
 
 # Danger now, then danger again with nothing in place: the second message pauses the chat.
@@ -1426,8 +1467,8 @@ async def test_danger_in_the_answer_pauses_again(alice, model):
     assert rows[0]["checked_at"] is None
 
 
-async def test_danger_in_the_answer_with_no_refusal_never_pauses(alice, model):
-    """The answer still shows danger, but they neither refuse help nor say again they will do it: no pause."""
+async def test_danger_in_the_answer_with_nothing_in_place_pauses_without_a_refusal(alice, model):
+    """The answer still shows danger to themselves with nothing in place: it pauses again though they refuse nothing."""
     model(
         *_PAUSING,
         Reply(text="Are you all right now?", safety=SafetyRead(danger="unsure", about="themselves")),
@@ -1435,10 +1476,10 @@ async def test_danger_in_the_answer_with_no_refusal_never_pauses(alice, model):
     )
     thread = await _paused_and_over(alice)
     await send(alice, thread.id, "hi")
-    answer = await send(alice, thread.id, "I still have them but my brother is on his way")
+    answer = await send(alice, thread.id, "I still have them")
 
-    assert answer.paused_until is None and answer.content == "I'm here with you."
-    assert len(await _pauses(thread.id)) == 1 and await _safety(thread.id) == "danger"
+    assert answer.paused_until is not None and answer.content == crisis.pause_reply("themselves", 15)
+    assert len(await _pauses(thread.id)) == 2
 
 
 async def test_a_second_pause_asks_again(alice, model):

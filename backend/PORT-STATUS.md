@@ -302,7 +302,7 @@ the same change as the work.**
   gets defensive, and an offer to practise it), with no check or offer meanwhile, until the reply sets `prepared`.
 
 - **Safety is the model's judgment of whether anyone is in danger now, held by the conversation; a phrase never locks,
-  and danger that continues pauses the chat when they refuse help or stay set on it with nothing in place.** Because a concern must outlive the reply that
+  and danger that continues with nothing in place pauses the chat (a symptom in the body only on a refusal of the help).** Because a concern must outlive the reply that
   raised it and must not give way on a refusal (manasa's safety test, 2026-11-06), and because sign lists with a
   rule per kind of danger held concerns open against what the
   model understood: "I mean my workplace", "my friend is with me and stops me", a symptom that has passed (muhammad's
@@ -357,17 +357,20 @@ the same change as the work.**
     danger it is, never their words. `threads.crisis_at` (migration 037) keeps when it was last flagged, and
     `recent_crisis` counts its 30 days from it (`test_recent_crisis_counts_from_the_crisis_not_the_last_message`). An
     edit restores the state (`rewind`).
-  - **When danger continues and they refuse help or stay set on it with nothing in place, the chat pauses for
-    `CRISIS_PAUSE_MINUTES` (default 15); nobody is signed out, every conversation is closed, the Library stays open, and
-    the backend is the whole lock** (muhammad, 2026-11-13; this replaces "nothing locks" of 2026-11-06 and "help refused
-    is the only block" of 2026-11-11). Because once a crisis is certain Mani must stop rather than go round a loop of
-    "please get help", and the live replays of 2026-11-13 paused on a doubt ("could it be stress?", 5 of 6 body chats)
-    and while help was being called (the chest-and-wife chat, both runs: one `help_in_place` read flipped to false on a
-    short line), so `help_in_place` alone was the wrong gate (2026-11-13).
+  - **When danger continues with nothing in place after the direction, the chat pauses for `CRISIS_PAUSE_MINUTES`
+    (default 15); a refusal is required only for a symptom in the body; nobody is signed out, every conversation is
+    closed, the Library stays open, and the backend is the whole lock** (muhammad, 2026-11-13, and 2026-11-14 for the
+    refusal; this replaces "nothing locks" of 2026-11-06 and "help refused is the only block" of 2026-11-11). Because
+    once a crisis is certain Mani must stop rather than go round a loop of "please get help", and the production chat of
+    2026-11-14 never paused in 11 turns: "i want to kill myself", about to act right now, nobody with them, nobody
+    called, every question answered honestly and so never `declined` (2026-11-14).
     The rule is `pause.pauses_now`: the state before the turn was danger (so Mani's last reply already gave the
-    direction), the state after is danger, the read is `declined` (they refused the help, said again they will do it, or
-    pushed the question away), and `help_in_place` is false, a second guard; or it is the answer to a return check that
-    leaves such danger. `declined` is the model's one closed judgment, never words matched in code.
+    direction), the state after is danger, and `help_in_place` is false; or it is the answer to a return check that
+    leaves such danger. For danger to themselves, to someone else or from someone nothing more is needed. A read whose
+    danger has no kind (no `about` in the read and none stored) needs `declined` too, so it cannot pause a body chat by
+    accident. Accepted with it: a `help_in_place` misread can now pause someone who has help (2026-11-14);
+    `test_danger_that_goes_on_after_the_direction_with_no_one_there_pauses_without_a_refusal`,
+    `test_danger_that_goes_on_with_someone_there_never_pauses`.
     **A danger about the body pauses only on an outright refusal of the help for a symptom happening now**: the turn's
     own read is `declined` with `danger` now and `symptom_now` yes ("I'm not calling an ambulance"); a read with only
     `declined`, a doubt or pushback never pauses it (the controller's ruling, 2026-11-13). Because a doubt paused 5 of 6
@@ -376,7 +379,7 @@ the same change as the work.**
     the read, else whose the conversation last reached (`understanding.danger_about`);
     `test_refusing_the_ambulance_for_a_symptom_happening_now_pauses_with_the_body_text`,
     `test_pushback_about_a_symptom_read_as_declined_never_pauses`. The first danger message, an unsure concern, a
-    doubt or a question, a reply that reads no safety (no danger value and no `declined`, `orchestrator._judgment`),
+    doubt or a question about a symptom in the body, a reply that reads no safety (no danger value and no `declined`, `orchestrator._judgment`),
     help on its way and the return check itself never do. On the pausing turn a `chat_pauses` row (migration 037: thread,
     `started_at`, `ends_at`, `reason` from the judgment's why, `checked_at`) is written in the turn's transaction, the reply is `crisis.pause_reply(about)` (whom Mani worries for and the
     help that fits whose danger it is: "your safety", 911 and 988 for themselves or an unknown kind; "everyone's
@@ -402,7 +405,7 @@ the same change as the work.**
     pause's reason (`[ctx]` `safety: returning`); every other conversation asks with no details (`returning_new`,
     trace `other_thread`) until the pause is checked. Each conversation asks once per pause (`understanding.return_check`).
     A settled answer (a danger value judged none) clears that conversation and marks the pause checked, after which the
-    other conversations stop asking (a paused one still asks); danger they refuse help for or stay set on pauses again;
+    other conversations stop asking (a paused one still asks); danger with nothing in place pauses again, as above;
     an unsure answer is not asked again. Only the fact that a pause ran crosses conversations, never its reason or words. The chat-tester shows
     a centred "Let's make sure everyone is safe" pop-up drawn from the resources by `kind` (call and text 988, emergency
     911, the helpline directory) with a countdown that ticks every second and a bar of how much of the pause has run
@@ -416,7 +419,7 @@ the same change as the work.**
     `test_a_later_pause_in_another_conversation_never_hides_the_paused_ones_question`,
     `test_help_being_called_never_pauses_even_when_the_read_misses_it`,
     `test_saying_again_they_will_do_it_after_the_direction_pauses_the_chat`,
-    `test_danger_in_the_answer_with_no_refusal_never_pauses`, `test_an_older_conversation_asks_after_a_pause_without_details`,
+    `test_danger_in_the_answer_with_nothing_in_place_pauses_without_a_refusal`, `test_an_older_conversation_asks_after_a_pause_without_details`,
     `test_a_conversation_that_answered_its_own_pause_asks_again_after_a_later_one_elsewhere`,
     `test_pushback_about_a_symptom_read_as_declined_never_pauses`; in `test_threads_api.py`
     `test_every_chat_route_refuses_while_paused`, `test_the_library_and_profile_stay_open_while_paused`.

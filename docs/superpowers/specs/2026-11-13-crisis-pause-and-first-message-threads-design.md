@@ -171,15 +171,22 @@ where danger continues and nothing is in place.
 **The rule** (one pure function, `chat/pause.pauses_now`, unit-tested on its own): the chat pauses on a turn when
 - the state before the turn was danger (so Mani's previous reply was a danger reply), and
 - the state after the turn is danger, and
-- the read is `declined`: they refused the help, said again they will do it, or pushed the question away, and
-- `help_in_place` is false (a second guard).
+- `help_in_place` is false, and
+- for a symptom in the body only, the read is `declined` with danger now and `symptom_now` yes; a read whose danger has
+  no kind (no `about`, none stored) needs `declined` too.
 
 Changed 2026-11-13 by muhammad after the live replays: the rule without `declined` paused on a doubt ("could it be
 stress?", 5 of 6 body chats) and while the wife was making the call (`help_in_place` read false on a short line).
 `declined` is broadened to refusing help and restating the intent; a doubt, a question or a step under way is never
 declined, nor pushback about a symptom in the body. A danger about the body pauses only when the turn's own read has the
 symptom happening now and they refuse the help for it outright ("I'm not calling an ambulance"). `declined` keeps its role in an unsure concern, where a refusal
-never settles it and never pauses. Nothing else pauses: not an unsure concern, not the first danger message, and not
+never settles it and never pauses.
+
+Changed 2026-11-14 by muhammad after a production chat: "i want to kill myself", about to act right now, nobody with
+them, nobody called, never paused in 11 turns, because they answered every question honestly and so were never
+`declined`. The refusal is required only for a symptom in the body: danger to themselves, to someone else or from
+someone that continues after the direction with nothing in place pauses. Accepted with it: a `help_in_place` misread
+can pause someone who has help. Nothing else pauses: not an unsure concern, not the first danger message, and not
 the first message back after a pause (the return check below).
 
 **The first danger reply.** Whatever instruction a turn is sent with, a reply that judges danger now says once,
@@ -233,7 +240,7 @@ own list.
   model's reply under a dedicated instruction, so it can also acknowledge what they wrote; it asks even when that
   message already sounds fine. That the check was asked is kept on the conversation (`threads.understanding`). Their
   answer is judged like any safety turn: settled (none) clears this conversation's safety and the chat carries on;
-  danger they refuse help for or stay set on pauses again; unsure is not asked again and follows today's unsure rules.
+  danger with nothing in place pauses again, under the rule above; unsure is not asked again and follows today's unsure rules.
 - **In every other conversation, new or older** (2026-11-13, muhammad: one created before the pause asked nothing
   at first, which let a person bypass the check). It carries nothing from the paused one: no reason, no picture, no
   mention of it. Its first reply asks whether they are all right right now, with no details, under the same kind of
@@ -288,12 +295,12 @@ own list.
   with its reason and never pauses, even when it reads as danger; every other conversation's first reply, new or older,
   asks with no details, and its prompt contains nothing from the paused one; a settled answer in any conversation stops
   the other ones asking but not the paused one; a pause that ended more than 30 days ago asks nothing; danger again
-  pauses again only with a refusal or the intent said again; an unsure answer is not asked again; pushing the question
-  away while in danger pauses; a doubt never pauses; a chest chat with help on its way never pauses, and one that refuses
+  with nothing in place pauses again; an unsure answer is not asked again; pushing the question
+  away while in danger pauses; a doubt about a symptom never pauses; a chest chat with help on its way never pauses, and one that refuses
   the ambulance for a symptom happening now pauses with the body text; nobody is signed out.
 - Live replays on muhammad's key, twice each: manasa's refusal test (Topic 3), muhammad's chest chat with his wife, the
-  ten unseen chats of 2026-11-11. Expected: a pause only where danger continued and they refused or stayed set on it
-  with nothing in place; none in the
+  ten unseen chats of 2026-11-11. Expected: a pause only where danger continued with nothing in place (for a symptom
+  in the body, only on a refusal of the help); none in the
   chest chat after the ambulance was called; no false pause in the control chats.
 - The chat-tester suite, with the pop-up, its close button and the Library left open.
 

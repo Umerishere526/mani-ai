@@ -11,18 +11,22 @@ from mani.db.threads import TurnContext
 from mani.models.rows import Pause, Thread
 
 
-def test_the_chat_pauses_only_when_danger_continues_and_they_refuse_or_stay_set_on_it():
-    """muhammad, 2026-11-13: the live replays paused on a doubt ("could it be stress?") and while the wife was making
-    the call. Danger that goes on pauses only with a refusal, the intent said again, or the question pushed away
-    (declined), and never with help in place."""
+def test_the_chat_pauses_when_danger_continues_with_nothing_in_place_and_a_body_danger_only_on_a_refusal():
+    """muhammad, 2026-11-14: a production chat said "i want to kill myself", was about to act, was alone and had called
+    no one, and never paused in 11 turns because it never refused. Danger to themselves, to someone else or from
+    someone that goes on after the direction with nothing in place pauses. A symptom in the body pauses only on an
+    outright refusal of the help for a symptom happening now (2026-11-13), and a read whose danger has no kind needs a
+    refusal too, so it cannot pause a body chat by accident."""
     for before, after, in_place, declined, after_check, is_check, about, danger, symptom_now in product(
         State, State, (True, False), (True, False), (True, False), (True, False),
         ("themselves", "someone_else", "from_someone", "body", None), ("now", "none", None), ("yes", "unsaid", None),
     ):
-        refused_now = danger == "now" and symptom_now == "yes"
+        if about == "body":
+            settled_on_it = declined and danger == "now" and symptom_now == "yes"
+        else:
+            settled_on_it = declined or about is not None
         expected = (
-            after is State.DANGER and declined and not in_place and not is_check
-            and (about != "body" or refused_now)
+            after is State.DANGER and settled_on_it and not in_place and not is_check
             and (before is State.DANGER or after_check)
         )
         got = pause.pauses_now(
@@ -32,10 +36,10 @@ def test_the_chat_pauses_only_when_danger_continues_and_they_refuse_or_stay_set_
         assert got is expected, (before, after, in_place, declined, after_check, is_check, about, danger, symptom_now)
 
 
-def test_the_cases_the_live_replays_got_wrong_and_right():
+def test_the_cases_the_live_replays_and_the_production_chat_got_wrong_and_right():
     def pauses(
-        *, declined: bool, in_place: bool = False, after_check: bool = False, is_check: bool = False,
-        about: str | None = "someone_else", danger: str | None = "now", symptom_now: str | None = None,
+        *, declined: bool = False, in_place: bool = False, after_check: bool = False, is_check: bool = False,
+        about: str | None = "themselves", danger: str | None = "now", symptom_now: str | None = None,
     ) -> bool:
         return pause.pauses_now(
             State.UNSURE if after_check or is_check else State.DANGER, State.DANGER, help_in_place=in_place,
@@ -43,19 +47,22 @@ def test_the_cases_the_live_replays_got_wrong_and_right():
             after_return_check=after_check, is_return_check=is_check,
         )
 
-    assert not pauses(declined=False), "a doubt after the direction (\"could it be stress?\")"
-    assert not pauses(declined=False), "\"my wife is calling\" read with help_in_place false"
-    assert pauses(declined=True), "\"no I don't want to\""
-    assert pauses(declined=True), "\"yes I'll kill him\" after the direction"
-    assert not pauses(declined=True, in_place=True), "help in place is a second guard"
-    assert pauses(declined=True, after_check=True), "the answer to the return check, still set on it"
-    assert not pauses(declined=False, after_check=True), "the answer to the return check, danger and no refusal"
+    assert pauses(), "\"no\" (nobody is with them) after the direction, about to act (production, 2026-11-14)"
+    assert pauses(about="someone_else"), "danger to someone else goes on with nothing in place"
+    assert pauses(about="from_someone"), "danger from someone goes on with nothing in place"
+    assert pauses(about="someone_else", declined=True), "\"yes I'll kill him\" after the direction"
+    assert not pauses(in_place=True), "\"someone is with me\""
+    assert not pauses(declined=True, in_place=True), "help in place guards a refusal too"
+    assert pauses(after_check=True), "the answer to the return check, danger and nothing in place"
     assert not pauses(declined=True, is_check=True), "the return check itself"
+    assert not pauses(about=None), "a danger of no known kind needs a refusal"
+    assert pauses(about=None, declined=True), "\"leave me alone\", danger of no known kind"
+    assert not pauses(about="body", symptom_now="yes"), "a doubt about a symptom now (\"could it be stress?\")"
+    assert not pauses(about="body", symptom_now="yes"), "\"my wife is calling\" read with help_in_place false"
     assert pauses(declined=True, about="body", symptom_now="yes"), (
         "refusing the help for a symptom happening now (\"I'm not calling an ambulance\")")
     assert not pauses(declined=True, about="body", symptom_now="unsaid"), "a symptom not said to be happening now"
-    assert not pauses(declined=True, about="body", danger=None), "Lolly's read: declined only, on a body thread"
-    assert not pauses(declined=False, about="body", symptom_now="yes"), "a doubt about a symptom happening now"
+    assert not pauses(declined=True, about="body", danger="none"), "Lolly's read: declined only, on a body thread"
 
 
 USER = uuid.UUID("a0000000-0000-4000-8000-0000000000e1")
