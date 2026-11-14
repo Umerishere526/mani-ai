@@ -1,17 +1,17 @@
 # ABOUTME: Checks the safety screen fires on real risk and stays quiet on ordinary distress.
-# ABOUTME: The precision test is the important one - over-firing locks someone out of the app.
+# ABOUTME: The precision test is the important one - over-firing turns ordinary distress into a crisis.
 
 import pytest
 
-from mani.chat.safety import Assessment, Category, Level, State, after, danger_of, screen, screened
+from mani.chat.safety import Category, Level, State, after, danger_of, screen, screened
 
 
 @pytest.mark.parametrize(
     ("text", "category"),
     [
         ("I am going to kill myself tonight", Category.SUICIDE),
-        # A clear wish to die locks, on muhammad's decision (2026-09-29): the deterministic
-        # screen is the sole locking authority, so this cannot depend on the model catching it.
+        # A clear wish to die is a crisis on the screen alone, on muhammad's decision (2026-09-29),
+        # so it cannot depend on the model catching it.
         ("I want to die", Category.SUICIDE),
         ("i have already taken the pills", Category.OVERDOSE),
         ("I am afraid I am going to hurt him", Category.HARM_TO_OTHER),
@@ -41,11 +41,11 @@ def test_an_explicit_statement_is_a_crisis(text, category):
         "I have the pills in my hand",
     ],
 )
-def test_an_indirect_statement_asks_rather_than_locks(text):
-    """The specification lists these verbatim and asks for clarification, not a lock.
+def test_an_indirect_statement_is_a_concern_not_a_crisis(text):
+    """The specification lists these verbatim and asks for clarification, not a crisis response.
 
-    Locking here would take the conversation away from someone who may only have been
-    describing how heavy the week felt."""
+    A crisis here would treat someone who may only have been describing how heavy the week
+    felt as in danger."""
     result = screen(text)
     assert result.level is Level.CONCERN
     assert result.level is not Level.CRISIS
@@ -103,12 +103,6 @@ def test_crisis_wins_when_both_levels_match():
     text = "Everyone would be better off without me. I am going to kill myself."
     result = screen(text)
     assert result.level is Level.CRISIS
-
-
-def test_both_levels_stop_a_framework_and_none_does_not():
-    assert Assessment(Level.CRISIS, Category.SUICIDE).blocks_framework
-    assert Assessment(Level.CONCERN, Category.SUICIDE).blocks_framework
-    assert not Assessment(Level.NONE).blocks_framework
 
 
 @pytest.mark.parametrize("text", [

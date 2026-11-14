@@ -1,7 +1,7 @@
 # ABOUTME: Checks the reply shape sent each turn is chosen by the moment, and that a loose value
 # ABOUTME: is read as null rather than failing the turn, which would cost a call and the message.
 
-from mani.llm.schema import Moment, Reply, Slots, as_reply, reply_for
+from mani.llm.schema import Moment, Reply, SafetyRead, Slots, as_reply, reply_for
 
 SLOTS = Slots(going_through="what they are going through", lead_line="a warm line", their_words="their words")
 CORE = {"safety", "reasoning", "picture", "text", "title"}
@@ -128,7 +128,23 @@ def test_saying_it_is_the_first_time_explores_the_pattern():
 
 def test_pushing_back_about_a_symptom_is_never_a_refusal_that_holds_it():
     """Lolly's chest chat, replayed 2026-11-11: "you already said this a few times" kept "is it happening now?" in four
-    replies. A refusal holds a concern about dying or hurting, never a symptom (muhammad)."""
+    replies. Pushing back about a symptom is never a refusal (muhammad); since 2026-11-13 refusing the help for it
+    outright is."""
     from mani.llm.schema import SafetyRead
 
-    assert "Never about a symptom in their body" in SafetyRead.model_fields["declined"].description
+    said = SafetyRead.model_fields["declined"].description
+    assert "pushing back or doubting it is never declined" in said
+    assert "only one thing is declined: refusing the help for it outright" in said
+
+
+def test_declined_is_refusing_help_saying_again_they_will_do_it_or_pushing_the_question_away():
+    """muhammad, 2026-11-13: the chat pauses on a refusal or on staying set on it, never on a doubt; the one closed
+    judgment the pause rests on is declined."""
+    said = SafetyRead.model_fields["declined"].description
+    assert "refused the help" in said and "said again they will do it" in said and "pushed the question" in said
+    assert "A doubt or a question" in said and "is never declined" in said
+
+
+def test_safety_read_reports_whether_help_is_in_place():
+    assert SafetyRead().help_in_place is False
+    assert SafetyRead(help_in_place=True).help_in_place is True

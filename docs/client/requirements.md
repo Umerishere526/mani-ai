@@ -129,11 +129,55 @@ R1 to R55 were superseded on 2026-11-03 by muhammad ([friendship review](message
   offer itself says the core back and can be corrected there; when it may come and Mani keeps asking, the next reply
   makes it. (10) Chest tightness or another symptom is never treated as an emergency until they say it is happening
   now; until then Mani asks. (11) In danger, what would make them safe is said once; after that Mani answers what they say
-  (a doubt like "could it be stress?" included) and never repeats it. (12) The chat blocks, answering only with a
-  contact-help message, when someone in danger says plainly they will not get help; the message's wording is ours
-  (`crisis.HELP_REFUSED_REPLY`) and needs hers. (13) After a framework's last stage, a chat a crisis came up in asks
-  about safety once before the closing choices; the question's wording is ours (`crisis.END_CHECK`) and needs hers.
+  (a doubt like "could it be stress?" included) and never repeats it, unless the chat pauses (15). (12) Superseded
+  2026-11-13 by the pause (15): the block that answered only with a contact-help message when someone in danger said
+  plainly they would not get help is gone, with its message. (13) After a framework's last stage, a chat in which
+  danger was reached asks about safety once before the closing choices (2026-11-13: not a chat only flagged on words
+  Mani then judged unsure); the question's wording is ours (`crisis.END_CHECK`) and needs hers.
   (14) Mani never makes up an exercise, activity or distraction; exercises are only the library's.
+  2026-11-13 additions (muhammad's decisions; manasa's tests of 2026-11-11 asked that a new conversation never get
+  round a crisis pause, R87 on the branch `feat/reply-gates-and-agents-map`): (15) Mani says once what would make them
+  safe; if their next message still shows danger now, they refuse the help ("no I don't want to"), say again they will
+  do it ("yes I'll kill him") or push the question away ("stop asking"), and nothing protecting them is in place (help
+  called or on its way, someone with them, the means away from them, or moved away from the danger), the chat pauses
+  (changed 2026-11-13 after live replays paused on a doubt and while help was being called). Never at the first danger
+  message, never on an unsure concern, never on a doubt or a question ("could it be stress?"), never when help is in
+  place ("I told my wife to call"). For a symptom in the body, pushing back or doubting it is never a refusal: it
+  pauses only when they refuse the help outright for a symptom happening now ("I'm not calling an ambulance"). (16) The pause lasts 15
+  minutes (a setting). Nobody is signed out; every conversation is closed, a new one included, on every device; the
+  Library stays open. A pop-up in the middle of the screen, with a close button, gives the help numbers and counts
+  down, second by second, to when the chat resumes; closing it opens the Library (built in the chat-tester; the app's
+  is not built). (17) The message that pauses is answered with a
+  fixed text, our wording, by whose danger it is: for themselves (or a danger of unknown kind), "I'm worried about your
+  safety, so I'm pausing our chat for 15 minutes. If anyone might get hurt, call 911 now, or call or text 988 to talk
+  with someone right away. I'll be here when you come back."; for someone else, "I'm worried about everyone's safety,
+  so I'm pausing our chat for 15 minutes. If anyone might get hurt, call 911 now. I'll be here when you come back.";
+  from someone, the same with "your safety"; for a symptom in the body, "I'm worried about your health, so I'm pausing our chat for 15 minutes.
+  If this might be an emergency, call 911 now. I'll be here when you come back." Also ours: the pop-up's wording, its
+  title "Let's make sure everyone is safe", its text "It sounds like someone could be at risk. Whether you're thinking
+  about hurting yourself, worried you might hurt someone else, or you're in a dangerous situation right now, you can
+  reach a real person immediately.", "Someone in immediate danger? Call 911 or get to a safe place first.", "Chat is
+  paused while you reach out. Resumes in" with the time left, and its last line "I'm an AI and can't contact anyone
+  for you, but I'll be here when you come back."; and what a closed chat answers ("Your chat with Mani is
+  paused for now. Please reach out for support."). (18) The return check. In the paused conversation, the first message
+  back never pauses: Mani asks whether they are all right now and says why it paused. Every other conversation, new or
+  older (changed 2026-11-13: before, one created before the pause asked nothing), asks on its first reply whether they
+  are all right right now and carries nothing from the paused one; once they say they are, in any conversation, the
+  other conversations stop asking, and the paused one still asks its own. A pause that ended more than 30 days ago
+  asks nothing. A settled answer carries on as usual; danger
+  they refuse help for or stay set on pauses again; an unsure answer is not asked again. These replies are Mani's own
+  words written under our instructions, quoted: in the paused conversation, "their chat with you was paused earlier
+  because they were in danger: {reason}. Before anything else, ask once, plainly and warmly, whether they are all right
+  now, and say in one sentence that this is why you are asking. Answer what they just wrote in a line at most. Never
+  give what would keep them safe or any number again (they have them on screen), and never tell them what to say to
+  anyone. No set of questions, no offer, no library." ({reason} is the model's one line on why it judged danger when
+  the chat paused); in any other conversation, "before anything else, ask whether they are all right right now, once,
+  warmly and plainly in a sentence. Never mention another conversation or anything from one, and never tell them what
+  to say to anyone. No set of questions, no offer, no library.", followed by the safety direction every turn carries. (19) The help numbers are reference numbers, US only, until she sends hers: 911
+  for immediate danger; the 988 Suicide & Crisis Lifeline (call or text 988, or chat at 988lifeline.org); and, for anyone outside the US, the pop-up's link "Find a helpline in your country" to
+  Find A Helpline (findahelpline.com, free helplines in more than 175 countries). The pop-up shows 988 (call and
+  text), 911 and that link; Mani's pause message names 911, and 988 when the danger is theirs. Crisis Text Line (text
+  HOME to 741741) is named to the person nowhere; it stays in the API's resource list.
 - Supportive overthinking asks "Would it help to work through what happened together so you don't
   have to sit with all those questions on your own?" before the offer. Is that line the offer
   itself, or a question before it? We treat it as a question before the offer and keep the offer's
@@ -183,4 +227,4 @@ or decision has been updated yet.
 | [ChatGPT conversations](messages/2026-10-26-chatgpt-boss-and-friendship.md) (R33), muhammad 2026-10-28 | R33 as built on 2026-10-26: the check pulled together the conflict, what they want and what is stopping them, and a framework began there. The check now says the core alone: the belief their other thoughts lead to and the feeling underneath. What they want and what is stopping them are still followed in the conversation but are no longer part of the check. | No: Lolly to confirm (muhammad chose the core alone after the weight-loss run). |
 | Lolly's role-played session (meeting, shared by muhammad 2026-10-29), muhammad 2026-10-29 | R34 as built on 2026-10-26: Lolly's two ChatGPT conversations were the conversations Mani talks like ("I wish mani sounded this way"). Mani now follows her role-played session as its example and keeps only her tone note from the ChatGPT chats, because the model copied their mirror-then-question shape. | No: Lolly to confirm (muhammad chose it on 2026-10-29). |
 | [four Directive chats](messages/2026-11-03-four-directive-chats.md) (R51), with R27 and R28 | The Decision in force "Every conversation turns from understanding to helping" (2026-10-27; in code `converse.TOWARD`, 2026-10-29), which counts `frustrated` as a reason to press toward the framework. Frustration with MANI is a sign to stop and repair (R27), and no offer comes while they are frustrated (R28). | Yes, 2026-11-03: frustration no longer counts, and the decision in `backend/PORT-STATUS.md` says so. |
-| [chest tightness](messages/2026-11-10-chest-tightness-safety.md), muhammad 2026-11-10 ("once, max twice was enough, as I plainly said I am safe"); Lolly asked to discuss it as a team | The Decision in force "Safety is a state the conversation holds, and nothing locks on a phrase" (2026-11-06) in two parts: a medical emergency is a danger sign that makes the thread unsafe, and a safe answer only steps unsafe down to open. Holding through a refusal on self-harm (manasa's test, R75) is not in question. | Yes, 2026-11-10, on the branch `feat/safety-follows-what-they-said` (not merged): the decision now reads "Safety is the model's judgment of whether anyone is in danger now, held by the conversation" ([spec 0007](../specs/0007-safety-follows-what-they-said/index.md)). The settling rule is ours and the client has not been shown it yet. |
+| [chest tightness](messages/2026-11-10-chest-tightness-safety.md), muhammad 2026-11-10 ("once, max twice was enough, as I plainly said I am safe"); Lolly asked to discuss it as a team | The Decision in force "Safety is a state the conversation holds, and nothing locks on a phrase" (2026-11-06) in two parts: a medical emergency is a danger sign that makes the thread unsafe, and a safe answer only steps unsafe down to open. Holding through a refusal on self-harm (manasa's test, R75) is not in question. | Yes, 2026-11-10, on the branch `feat/safety-follows-what-they-said` (merged in #52, 2026-11-12): the decision now reads "Safety is the model's judgment of whether anyone is in danger now, held by the conversation" ([spec 0007](../specs/0007-safety-follows-what-they-said/index.md)). The settling rule is ours and the client has not been shown it yet. 2026-11-13: danger that continues pauses the chat when they refuse help or stay set on it with nothing in place; a doubt like "could it be stress?" never pauses, and a chest chat pauses only when they refuse the help outright for a symptom happening now; help on its way never pauses (Open questions, (15) to (19)). |

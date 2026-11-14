@@ -1,4 +1,4 @@
-# ABOUTME: Locust load test: synthetic people each start a chat and send a message every 30 to 60 seconds.
+# ABOUTME: Locust load test: synthetic people each start a chat with a first message and send a message every 30 to 60 seconds.
 # ABOUTME: Run against a local backend pointed at scripts/fake_openrouter.py; never against a real model.
 """
 Usage (from backend/, with the local Supabase, the fake and the backend running):
@@ -60,9 +60,10 @@ class Person(HttpUser):
         self.thread_id = None
         self.lines = itertools.cycle(random.sample(MESSAGES, len(MESSAGES)))
         with self.client.post(
-            "/v1/threads/current", json={}, name="start", timeout=CLIENT_TIMEOUT_SECONDS, catch_response=True
+            "/v1/threads", json={"content": next(self.lines), "client_message_id": str(uuid.uuid4())},
+            name="start", timeout=CLIENT_TIMEOUT_SECONDS, catch_response=True,
         ) as response:
-            if response.status_code in (200, 201):
+            if response.status_code == 201:
                 self.thread_id = response.json()["thread"]["id"]
             else:
                 response.failure(_failure(response))

@@ -49,4 +49,5 @@ must avoid**.
 The specs repeatedly reference **"MANI's approved safety protocol"** and **"the approved safety
 clarification"**. Neither text is included here, and neither is the helpline list. They define
 precisely *when* safety fires and what MANI must and must not do — not what MANI says.
-`mani/chat/crisis.py::RESOURCES` stays empty until those arrive.
+`mani/chat/crisis.py::RESOURCES` holds three US reference numbers and the Find A Helpline directory until those arrive (see
+`backend/PORT-STATUS.md`, "Before it takes real traffic").

@@ -4,7 +4,7 @@
 from fastapi import APIRouter
 
 from mani.auth.deps import CurrentUser
-from mani.db import profiles
+from mani.db import pauses, profiles
 from mani.db.deps import UserConn
 from mani.models.api import ProfileIn, ProfileOut
 from mani.routers.serializers import to_profile
@@ -14,7 +14,8 @@ router = APIRouter(prefix="/v1/profile", tags=["profile"])
 
 @router.get("", response_model=ProfileOut)
 async def get_profile(user: CurrentUser, conn: UserConn) -> ProfileOut:
-    return to_profile(await profiles.get(conn, user.user_id))
+    pause = await pauses.active(conn, user.user_id)
+    return to_profile(await profiles.get(conn, user.user_id), pause)
 
 
 @router.put("", response_model=ProfileOut)
@@ -28,4 +29,4 @@ async def put_profile(user: CurrentUser, conn: UserConn, body: ProfileIn) -> Pro
         support_style=body.support_style.value if body.support_style else None,
         age_bracket=body.age_bracket,
     )
-    return to_profile(profile)
+    return to_profile(profile, await pauses.active(conn, user.user_id))

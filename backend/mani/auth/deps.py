@@ -1,5 +1,5 @@
 # ABOUTME: FastAPI dependencies that turn an Authorization header into a verified caller.
-# ABOUTME: Endpoints take CurrentUser, Participant or AdminUser; they never read an id from the request.
+# ABOUTME: Endpoints take CurrentUser, Participant, ChatOpen or AdminUser; they never read an id from the request.
 
 from typing import Annotated
 
@@ -7,6 +7,8 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from mani.auth.jwt import Claims, verify_token
+from mani.chat.pause import paused_error
+from mani.db import pauses, pool
 from mani.errors import ErrorCategory, ServiceError
 
 # auto_error=False so a missing header raises our own error shape rather than FastAPI's.
@@ -49,3 +51,15 @@ def require_participant(user: Annotated[Claims, Depends(current_user)]) -> Claim
 CurrentUser = Annotated[Claims, Depends(current_user)]
 AdminUser = Annotated[Claims, Depends(require_admin)]
 Participant = Annotated[Claims, Depends(require_participant)]
+
+
+async def require_chat_open(user: Participant) -> Claims:
+    """A participant whose chat is not paused. The connection is short and closed before the turn begins."""
+    async with pool.as_user(user) as conn:
+        pause = await pauses.active(conn, user.user_id)
+    if pause is not None:
+        raise paused_error(pause)
+    return user
+
+
+ChatOpen = Annotated[Claims, Depends(require_chat_open)]

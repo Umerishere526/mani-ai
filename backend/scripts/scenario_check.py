@@ -23,6 +23,7 @@ from mani.chat import orchestrator, runner  # noqa: E402
 from mani.chat import context, repairs, reply_checks, walk  # noqa: E402
 from mani.chat.greeting import KEEP_CHATTING_LABEL, TELL_ME_MORE_LABEL, TRY_IT_LABEL  # noqa: E402
 from mani.db import pool  # noqa: E402
+from mani.errors import ErrorCategory, ServiceError  # noqa: E402
 from mani.prompts import cache  # noqa: E402
 
 SCENARIOS = pathlib.Path(__file__).with_name("scenarios.json")
@@ -94,6 +95,8 @@ class Exchange:
     checked: bool = False
     # The reply's reasoning, sent only with AI_DEBUG_MODE (orchestrator.Turn.reasoning).
     reasoning: str | None = None
+    # Whether this turn paused their chat (orchestrator.Turn.paused_until).
+    paused: bool = False
 
 
 def _words(text: str) -> set[str]:
@@ -339,7 +342,7 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
         )
     try:
         async with pool.as_user(claims) as conn:
-            thread, _ = await orchestrator.start_thread(conn, claims)
+            thread = await orchestrator.start_thread(conn, claims)
         await _send(claims, thread.id, style.capitalize())
         exchanges: list[Exchange] = []
         on_line: dict[int, Exchange] = {}
@@ -355,6 +358,9 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
             )
             exchange.checked = exchange.check_at is not None and exchange.check_at != (previous.check_at if previous else None)
             exchanges.append(exchange)
+            if exchange.paused:
+                # Their next message ends the pause and goes on (_send), so the run reaches the return check.
+                exchange.flags.append(f"paused at message {len(exchanges)}")
             return exchange
 
         shapes = conversation.get("shape_expect") or {}
@@ -436,6 +442,7 @@ async def _exchange(
         offered=next((p.technique for p in turn.prompts if p.technique), None),
         cost=await _cost(thread_id, seconds, billed), checks=turn.checks, trace=turn.stage_trace,
         understanding=turn.understanding, check_at=turn.check_at_message_count, reasoning=turn.reasoning,
+        paused=turn.paused_until is not None,
     )
     _check(exchange, registry, told_more, said, style, previous, framework_id)
     return exchange
@@ -461,6 +468,17 @@ async def _cost(thread_id, seconds: float, billed: list[int]) -> Cost:
 
 
 async def _send(claims: Claims, thread_id, text: str):
+    """One message through the real stack. A message the person's paused chat refuses (CHAT_PAUSED) ends their pause
+    as admin and goes again, as it would once the pause ran out, so the run goes on to the question Mani asks then."""
+    try:
+        return await runner.send(claims, thread_id, text)
+    except ServiceError as refused:
+        if refused.category is not ErrorCategory.CHAT_PAUSED:
+            raise
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "update public.chat_pauses set ends_at = now() where user_id = $1 and ends_at > now()", claims.user_id
+        )
     return await runner.send(claims, thread_id, text)
 
 

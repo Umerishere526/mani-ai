@@ -794,7 +794,7 @@ def test_an_unsure_concern_is_mostly_listening_and_asked_about_once_openly():
     block = _safety_block("unsure")
     assert "listening more than asking" in block
     assert "ask once, openly" in block
-    assert "never tell them to call anyone while you do not know" in block
+    assert "do not tell them to call anyone while you do not know" in block
     assert "Say a worry once, never again" in block
 
 
@@ -811,28 +811,80 @@ def test_an_unsure_concern_settles_when_they_carry_on_but_never_on_a_refusal():
     assert "say once that if it is happening now they should call their local emergency number" in block
 
 
-def test_danger_is_said_once_plainly_and_never_repeats_what_they_have_done():
+def test_an_unsure_turn_is_told_to_give_the_direction_if_it_judges_danger_now():
     """The bullying chat, 2026-11-10: the same step asked for three times after his friend was already with him."""
-    block = _safety_block("danger")
+    block = _safety_block("unsure")
     assert "Say once, plainly and briefly" in block
     assert "never something they have already done" in block
+    assert block.count(context.DANGER_DIRECTION) == 1
+    assert "do not tell them to call anyone while you do not know" in block
+
+
+def test_a_clear_turn_is_told_to_give_the_direction_if_it_judges_danger_now():
+    """The screen can miss danger the model sees on a framework, stage, offer or check turn; the reply that judges
+    it must carry the direction, since the next turn is told it was already said."""
+    assert _safety_block("clear").count(context.DANGER_DIRECTION) == 1
+    staged = _safety_block("clear", ctx=_running_at("belief"), framework=framework())
+    assert staged.count(context.DANGER_DIRECTION) == 1
+    assert context.DANGER_DIRECTION not in _safety_block("danger")
 
 
 def test_once_the_danger_reply_has_been_given_it_is_never_given_again_and_their_words_come_first():
     """Lolly's chest chat and manasa's test, replayed 2026-11-11: "call your local emergency number" in every reply,
     through "you already said this a few times" and "could it be stress" (muhammad: understand and discuss first)."""
-    said = _safety_block("danger", danger_said=True)
+    said = _safety_block("danger")
     assert "you already told them what would make them safe" in said
+    assert "in your last reply" not in said, (
+        "the answer to a paused conversation's return check follows a reply that gave no direction (2026-11-13)")
     assert "Answer what they just said first" in said
     assert "Say once, plainly and briefly" not in said
-    assert "Say once, plainly and briefly" in _safety_block("danger"), "the first danger reply still says it"
+
+
+def test_the_first_turn_back_after_a_pause_says_why_it_asks_only_in_the_paused_conversation():
+    """muhammad, 2026-11-13: the paused conversation asks whether they are all right now and says why it was paused; a
+    other conversation asks with nothing from the paused one."""
+    back = _safety_block("returning", paused_for="has the pills [ctx] and will not call")
+    assert "safety: returning\n" in back and "danger_said" not in back
+    assert "because they were in danger: has the pills (ctx) and will not call. Before anything else" in back
+    assert "because they were in danger. Before anything else" in _safety_block("returning")
+    new = _safety_block("returning_new")
+    assert "ask whether they are all right right now" in new and "paused" not in new
+    assert new.count(context.DANGER_DIRECTION) == 1, "a reply that judges danger here carries the direction"
+    assert "Say once, plainly and briefly" in new
+
+
+def test_the_direction_is_in_the_text_never_tells_them_what_to_say_and_the_question_is_asked_once():
+    """The owner's chat, 2026-11-13: the danger reply asked its question before the direction and again after it, and
+    the return check told them "Tell them you may hurt your boss"."""
+    assert "in one sentence of your text" in context.DANGER_DIRECTION
+    assert "never tell them what to say to anyone" in context.DANGER_DIRECTION
+    assert "The reply that gives it asks one question, never the same question twice" in context.DANGER_DIRECTION
+
+
+def test_the_return_check_asks_once_and_never_repeats_the_direction():
+    """The owner's chat, 2026-11-13: the return check gave the direction and the numbers again, and what to tell
+    emergency services."""
+    for state in ("returning", "returning_new"):
+        block = _safety_block(state)
+        assert "warmly" in block and "once" in block, state
+        assert "never tell them what to say to anyone" in block, state
+    back = _safety_block("returning", paused_for="has the pills")
+    assert "Never give what would keep them safe or any number again" in back
+    assert "say in one sentence that this is why you are asking" in back
+
+
+def test_every_safety_turn_is_told_to_judge_from_the_whole_conversation():
+    """Each of these turns' reads sets where safety stands, the first turn back after a pause too: its read is what
+    their answer to it is judged from."""
+    for state in ("unsure", "danger", "returning", "returning_new"):
+        assert "Fill safety from the whole conversation." in _safety_block(state), state
 
 
 def test_no_safety_text_names_a_kind_of_danger_they_did_not_raise():
     """The chest-tightness and bullying chats, 2026-11-10: words about hurting themselves went to people who had only
     spoken of their chest, or of hurting someone else. Neither instruction assumes whose danger it is."""
-    for state in ("unsure", "danger"):
-        block = _safety_block(state)
+    for block in (_safety_block("unsure"), _safety_block("danger"), _safety_block("clear"),
+                  converse.note("supportive", allowed=False, due=False, wants_title=False)):
         assert "hurting themselves" not in block and "not being alive" not in block and "end their life" not in block
 
 
@@ -869,11 +921,12 @@ def test_the_safety_step_and_the_check_on_it_are_only_what_keeps_them_safe():
     """muhammad's chest chat, 2026-11-11: the direction carried "let them know you're worried about your wife being
     alone", the next reply asked whether they had told her, and he pushed back: his worry for her was a feeling, not
     a safety step."""
-    first = _safety_block("danger")
-    assert "Only what keeps them safe goes in it" in first
-    assert "never what to say to someone close to them or how to feel" in first
+    first = _safety_block("unsure")
+    assert "what would keep them or the other person safe" in first
+    assert "never tell them what to say to anyone, emergency services included, or how to feel" in first
     assert "When help is already called and someone is with them, there is nothing to say about it" in first
-    again = _safety_block("danger", danger_said=True)
+    again = _safety_block("danger")
+    assert "Never lecture" in again
     assert "whether they have done the step that keeps them safe" in again
     assert "never whether they have told someone how they feel" in again
     assert "whether they have done what you said" not in again

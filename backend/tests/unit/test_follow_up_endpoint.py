@@ -43,8 +43,8 @@ def wired(monkeypatch, secret):  # noqa: F811
     async def record_trace(turn, thread_id):
         seen["traces"].append(turn.message_id)
 
-    async def fold_finished(user, *, keep=None, idle_before=None):
-        seen["folds"].append((user.user_id, keep))
+    async def fold_finished(user, *, idle_before=None):
+        seen["folds"].append((user.user_id, idle_before))
         return 2
 
     monkeypatch.setattr(orchestrator, "follow_up", follow_up)
@@ -96,18 +96,21 @@ def test_the_follow_up_endpoint_runs_what_waits_for_that_reply(wired):
     assert seen["follow_ups"] == [(USER, THREAD, REPLY)]
 
 
-def test_the_memory_fold_endpoint_folds_every_finished_chat_but_the_new_one(wired):
+def test_the_memory_fold_endpoint_folds_the_chats_finished_before_the_request(wired):
     seen, headers = wired
+    asked = dt.datetime.now(dt.UTC)
     with TestClient(create_app()) as client:
-        response = client.post(f"/v1/threads/{THREAD}/memory-fold", headers=headers)
+        response = client.post("/v1/threads/memory-fold", headers=headers)
 
     assert response.status_code == 200
     assert response.json() == {"folded": 2}
-    assert seen["folds"] == [(USER, THREAD)]
+    [(user, idle_before)] = seen["folds"]
+    assert user == USER
+    assert asked <= idle_before <= dt.datetime.now(dt.UTC)
 
 
 @pytest.mark.parametrize("path", [f"/v1/threads/{THREAD}/messages/{REPLY}/follow-up",
-                                  f"/v1/threads/{THREAD}/memory-fold"])
+                                  "/v1/threads/memory-fold"])
 def test_the_after_work_endpoints_need_a_token(wired, path):
     seen, _ = wired
     with TestClient(create_app()) as client:

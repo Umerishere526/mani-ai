@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-import uuid
 from enum import StrEnum
 
 from mani.auth.jwt import Claims
@@ -89,7 +88,6 @@ async def fold_one(
     claims: Claims,
     prompt: Prompt,
     *,
-    keep: uuid.UUID | str | None = None,
     idle_before: dt.datetime | None = None,
     quiet_since: dt.datetime | None = None,
 ) -> Fold:
@@ -103,7 +101,7 @@ async def fold_one(
     user_id = claims.user_id
     async with pool.as_user(claims) as conn:
         waiting = await memory_db.next_to_fold(
-            conn, user_id, keep=keep, idle_before=idle_before, quiet_since=quiet_since
+            conn, user_id, idle_before=idle_before, quiet_since=quiet_since
         )
         if waiting is None:
             return Fold.NOTHING_WAITING
@@ -147,7 +145,6 @@ async def fold_one(
 async def fold_finished(
     claims: Claims,
     *,
-    keep: uuid.UUID | str | None = None,
     idle_before: dt.datetime | None = None,
     quiet_since: dt.datetime | None = None,
     most: int | None = None,
@@ -169,7 +166,7 @@ async def fold_finished(
                 raise RuntimeError("no memory_fold prompt configured")
             while folded < (MAX_FOLDS_PER_RUN if most is None else most):
                 if await fold_one(
-                    claims, prompt, keep=keep, idle_before=idle_before, quiet_since=quiet_since
+                    claims, prompt, idle_before=idle_before, quiet_since=quiet_since
                 ) is not Fold.FOLDED:
                     return folded
                 folded += 1
