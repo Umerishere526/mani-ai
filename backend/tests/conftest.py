@@ -13,10 +13,10 @@ os.environ["AI_DEBUG_MODE"] = "false"
 # A scripted turn takes milliseconds, so a test walking a long conversation sends more in a minute than
 # anyone can. The tests about the limit turn it on themselves.
 os.environ["MINUTE_MESSAGE_LIMIT"] = "0"
-# A developer locks crisis threads or lowers the reasoning effort in .env to try the app; the tests assume the
-# defaults (nothing locks, effort high), and the tests about the lock turn it on themselves.
-os.environ["CRISIS_BLOCKS_CHAT"] = "false"
+# A developer lowers the reasoning effort in .env to try the app; the tests assume the default (effort high).
 os.environ["REASONING_EFFORT"] = "high"
+# The pause tests expect the default length, whatever a developer sets in .env.
+os.environ["CRISIS_PAUSE_MINUTES"] = "15"
 
 if not ENV_FILE.exists():
     # Only a fallback, for a machine with no .env - enough for the unit suite to import

@@ -13,6 +13,7 @@
 -- Cleared first so a run that aborted partway does not block the next one.
 -- ---------------------------------------------------------------------------
 
+delete from public.chat_pauses where user_id in (:alice, :bob);
 delete from admin.crisis_events where user_id in (:alice, :bob);
 delete from public.messages where user_id in (:alice, :bob);
 delete from public.threads where user_id in (:alice, :bob);
@@ -257,6 +258,9 @@ rollback;
 -- ---------------------------------------------------------------------------
 
 begin;
+-- A crisis flagged on the thread 40 days ago, so the one below is its second.
+update public.threads set crisis_detected = true, crisis_at = now() - interval '40 days'
+ where id = '11111111-0000-4000-8000-000000000001';
 set local role mani_service;
 set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-00000000000a"}';
 
@@ -264,15 +268,20 @@ do $$
 declare
   event_id uuid;
   flagged  boolean;
+  flagged_at timestamptz;
 begin
   event_id := public.mark_thread_crisis(
     '11111111-0000-4000-8000-000000000001', 'expressed suicidal ideation'
   );
 
-  select t.crisis_detected into flagged
+  select t.crisis_detected, t.crisis_at into flagged, flagged_at
     from public.threads t where t.id = '11111111-0000-4000-8000-000000000001';
   if not flagged then raise exception 'FAIL: the thread was not flagged'; end if;
   raise notice 'PASS: a crisis flags the thread and returns event %', event_id;
+  if flagged_at is distinct from now() then
+    raise exception 'FAIL: a second crisis left crisis_at at the first one (%)', flagged_at;
+  end if;
+  raise notice 'PASS: a second crisis on the thread moves crisis_at to it';
 
   begin
     perform public.mark_thread_crisis(
@@ -555,6 +564,8 @@ values ('44444444-0000-4000-8000-000000000001',
         '33333333-0000-4000-8000-000000000001', 'user', 'should cascade away too');
 insert into admin.user_memory (user_id, memory)
 values ('33333333-0000-4000-8000-000000000001', '{"themes": ["should cascade away"]}');
+insert into public.chat_pauses (user_id, thread_id, ends_at)
+values ('33333333-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000001', now() + interval '1 hour');
 
 do $$
 begin
@@ -583,6 +594,75 @@ begin
     raise exception 'FAIL: deleting the account left what was remembered about them';
   end if;
   raise notice 'PASS: deleting the account deletes their memory';
+
+  if exists (
+    select 1 from public.chat_pauses where user_id = '33333333-0000-4000-8000-000000000001'
+  ) then
+    raise exception 'FAIL: deleting the account left their pauses';
+  end if;
+  raise notice 'PASS: deleting the account deletes their pauses';
+end
+$$;
+rollback;
+
+-- ---------------------------------------------------------------------------
+-- Chat pauses: the person reads their own, the backend writes them as the person
+-- ---------------------------------------------------------------------------
+
+insert into public.chat_pauses (user_id, thread_id, ends_at) values
+  (:alice, :alice_thread, now() + interval '1 hour'),
+  (:bob, :bob_thread, now() + interval '1 hour');
+
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-00000000000a"}';
+
+do $$
+declare
+  n integer;
+begin
+  select count(*) into n from public.chat_pauses;
+  if n <> 1 then raise exception 'FAIL: Alice sees % pauses, expected her own 1', n; end if;
+  raise notice 'PASS: a user reads their own pause and not another''s';
+
+  begin
+    insert into public.chat_pauses (user_id, thread_id, ends_at)
+    values ('a0000000-0000-4000-8000-00000000000a', '11111111-0000-4000-8000-000000000001', now());
+    raise exception 'FAIL: a user started their own pause';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.chat_pauses set ends_at = now();
+    raise exception 'FAIL: a user shortened their own pause';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.chat_pauses;
+    raise exception 'FAIL: a user deleted their own pause';
+  exception when insufficient_privilege then null;
+  end;
+  raise notice 'PASS: a user cannot insert, update or delete a pause';
+end
+$$;
+rollback;
+
+begin;
+set local role mani_service;
+set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-00000000000a"}';
+
+do $$
+begin
+  insert into public.chat_pauses (user_id, thread_id, ends_at)
+  values ('a0000000-0000-4000-8000-00000000000a', '11111111-0000-4000-8000-000000000001', now());
+  raise notice 'PASS: the backend starts a pause for the user it acts as';
+
+  begin
+    insert into public.chat_pauses (user_id, thread_id, ends_at)
+    values ('a0000000-0000-4000-8000-00000000000b', '22222222-0000-4000-8000-000000000002', now());
+    raise exception 'FAIL: the backend started a pause for another user';
+  exception when insufficient_privilege then
+    raise notice 'PASS: the backend cannot start a pause for another user';
+  end;
 end
 $$;
 rollback;
@@ -595,6 +675,7 @@ rollback;
 -- where an unqualified delete would take real accounts and seeded config with it.
 -- The frameworks row is deleted by its own fixture id only, never a blanket delete, so a
 -- real seeded framework can never be caught by it.
+delete from public.chat_pauses where user_id in (:alice, :bob);
 delete from admin.crisis_events where user_id in (:alice, :bob);
 delete from public.messages where user_id in (:alice, :bob);
 delete from public.threads where user_id in (:alice, :bob);

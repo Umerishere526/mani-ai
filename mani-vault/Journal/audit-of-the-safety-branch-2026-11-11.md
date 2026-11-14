@@ -4,6 +4,8 @@ date: 2026-11-11
 tags: [journal, safety, cadence, testing, lessons]
 ---
 
+> Superseded 2026-11-13 — see [[crisis-pause-audit-findings-2026-11-13]] (the block on refused help, and the end check tied to `crisis_detected`)
+
 # Audit of the safety branch (2026-11-11)
 
 What the audit of `feat/safety-follows-what-they-said` found, and what the fixes taught.

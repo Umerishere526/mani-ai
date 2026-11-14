@@ -11,6 +11,7 @@ import asyncpg
 
 from mani.llm.schema import Memory
 from mani.models.rows import (
+    Pause,
     Profile,
     SupportStyle,
     TechniqueState,
@@ -24,6 +25,12 @@ COLUMNS = (
 )
 
 DEFAULT_PAGE = 20
+
+# A thread is listed once the person has written in it. Mani's greeting and a style button they tapped (stored with
+# `selected_prompt`) do not count. Refers to the thread as `t`.
+WRITTEN_IN = """exists (
+    select 1 from public.messages m
+     where m.thread_id = t.id and m.role = 'user' and m.selected_prompt is null)"""
 
 
 @dataclass(frozen=True)
@@ -40,9 +47,10 @@ async def list_for_user(
 ) -> Page:
     rows = await conn.fetch(
         f"""
-        select {COLUMNS} from public.threads
+        select {COLUMNS} from public.threads t
          where user_id = $1
            and deleted_at is null
+           and {WRITTEN_IN}
            and ($2::timestamptz is null or last_message_at < $2)
          order by last_message_at desc
          limit $3
@@ -167,53 +175,23 @@ async def most_recent(
     conn: asyncpg.Connection, user_id: uuid.UUID | str
 ) -> Thread | None:
     row = await conn.fetchrow(
-        f"select {COLUMNS} from public.threads "
-        "where user_id = $1 and deleted_at is null "
+        f"select {COLUMNS} from public.threads t "
+        f"where user_id = $1 and deleted_at is null and {WRITTEN_IN} "
         "order by last_message_at desc limit 1",
         user_id,
     )
     return Thread.from_record(row)
 
 
-async def create_or_reuse(
+async def create(
     conn: asyncpg.Connection, user_id: uuid.UUID | str, title: str | None = None
-) -> tuple[Thread, bool]:
-    """The caller's newest unused thread, or a fresh one. Returns (thread, created).
-
-    "New chat" is idempotent while nothing has been said: tapping it repeatedly returns
-    the same empty thread instead of leaving a trail of them. One statement, so the two
-    halves cannot disagree - the implementation this replaces counted, then decided, then
-    inserted, across three round trips.
-
-    A thread is unused when it holds no message from the person. Mani's greeting does not
-    count, or a thread would stop being reusable the moment it was opened.
-    """
+) -> Thread:
+    """A new conversation with nothing in it yet."""
     row = await conn.fetchrow(
-        f"""
-        with reusable as (
-            select {COLUMNS} from public.threads t
-             where t.user_id = $1
-               and t.deleted_at is null
-               and not exists (
-                 select 1 from public.messages m
-                  where m.thread_id = t.id and m.role = 'user'
-               )
-             order by t.last_message_at desc
-             limit 1
-        ), created as (
-            insert into public.threads (user_id, title)
-            select $1, $2
-             where not exists (select 1 from reusable)
-            returning {COLUMNS}
-        )
-        select {COLUMNS}, false as created from reusable
-        union all
-        select {COLUMNS}, true as created from created
-        """,
+        f"insert into public.threads (user_id, title) values ($1, $2) returning {COLUMNS}",
         user_id, title,
     )
-    values = dict(row)
-    return Thread.model_validate(values), values.pop("created")
+    return Thread.from_record(row)
 
 
 async def soft_delete(
@@ -256,9 +234,15 @@ class TurnContext:
     recent_crisis: bool = False
     # Patterns from this person's earlier conversations, folded in as each one finished.
     memory: Memory | None = None
+    # The pauses this turn may owe the question whether they are all right for (chat/pause.return_check), each the
+    # latest that has run out by the database's clock as the pause gate reads it, within RECENT_CRISIS_DAYS of its
+    # end (an older one owes nothing): this person's, and this conversation's own. A reason is loaded only for a pause that began in this conversation.
+    pause: Pause | None = None
+    own_pause: Pause | None = None
 
 
-# How long a crisis in one conversation keeps the next ones gentle.
+# How long a crisis in one conversation keeps the next ones gentle, and how long a pause that has run out owes the
+# question whether they are all right.
 RECENT_CRISIS_DAYS = 30
 
 _TURN_CONTEXT_SQL = f"""
@@ -273,15 +257,24 @@ select
     where o.thread_id = t.id), '[]'::jsonb)        as techniques_offered,
   (select to_jsonb(sm) from public.thread_summaries sm
     where sm.thread_id = t.id)                     as summary,
-  -- A flagged thread accepts no further turns, so its last message is when the crisis
-  -- happened. ponytail: that proxy fails if CRISIS_BLOCKS_CHAT is ever turned off; read
-  -- admin.crisis_events.detected_at through a definer function if it is.
   exists (select 1 from public.threads c
-           where c.user_id = t.user_id and c.id <> t.id and c.crisis_detected
-             and c.last_message_at > now() - interval '{RECENT_CRISIS_DAYS} days')
+           where c.user_id = t.user_id and c.id <> t.id
+             and c.crisis_at > now() - interval '{RECENT_CRISIS_DAYS} days')
                                                    as recent_crisis,
   (select um.memory from admin.user_memory um
-    where um.user_id = t.user_id)                  as memory
+    where um.user_id = t.user_id)                  as memory,
+  (select jsonb_build_object(
+            'id', cp.id, 'user_id', cp.user_id, 'thread_id', cp.thread_id, 'started_at', cp.started_at,
+            'ends_at', cp.ends_at, 'checked_at', cp.checked_at,
+            'reason', case when cp.thread_id = t.id then cp.reason end)
+     from public.chat_pauses cp
+    where cp.user_id = t.user_id and cp.ends_at <= now()
+      and cp.ends_at > now() - interval '{RECENT_CRISIS_DAYS} days'
+    order by cp.started_at desc limit 1)          as pause,
+  (select to_jsonb(cp) from public.chat_pauses cp
+    where cp.thread_id = t.id and cp.user_id = t.user_id and cp.ends_at <= now()
+      and cp.ends_at > now() - interval '{RECENT_CRISIS_DAYS} days'
+    order by cp.started_at desc limit 1)          as own_pause
 from (select {COLUMNS}, understanding, check_at_message_count, safety from public.threads
        where id = $1 and user_id = $2 and deleted_at is null) t
 """
@@ -303,6 +296,8 @@ async def load_turn_context(
         summary=ThreadSummary.model_validate(row["summary"]) if row["summary"] else None,
         recent_crisis=row["recent_crisis"],
         memory=Memory.model_validate(row["memory"]) if row["memory"] else None,
+        pause=Pause.model_validate(row["pause"]) if row["pause"] else None,
+        own_pause=Pause.model_validate(row["own_pause"]) if row["own_pause"] else None,
     )
 
 

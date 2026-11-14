@@ -15,15 +15,15 @@ from mani.models.rows import Message
 # How much of one finished conversation a single fold reads.
 FOLD_BATCH = 200
 
-# A thread needs folding when the person has said something in it since it was last folded.
-# Mani's greeting alone never counts, and a thread flagged for crisis is never folded: what
-# was said there is not carried into a memory read at the start of every later chat.
+# A thread needs folding when the person has written something in it since it was last folded.
+# Mani's greeting and a button they tapped (`selected_prompt`) never count, and a thread flagged for crisis is never
+# folded: what was said there is not carried into a memory read at the start of every later chat.
 _NEEDS_FOLD = """
     t.deleted_at is null
     and not t.crisis_detected
     and exists (
       select 1 from public.messages m
-       where m.thread_id = t.id and m.role = 'user'
+       where m.thread_id = t.id and m.role = 'user' and m.selected_prompt is null
          and m.created_at > coalesce(t.memory_folded_at, '-infinity'::timestamptz)
     )
 """
@@ -65,27 +65,25 @@ async def next_to_fold(
     conn: asyncpg.Connection,
     user_id: uuid.UUID | str,
     *,
-    keep: uuid.UUID | str | None = None,
     idle_before: dt.datetime | None = None,
     quiet_since: dt.datetime | None = None,
 ) -> tuple[uuid.UUID, dt.datetime | None] | None:
     """One of this person's threads that needs folding, and when it was last folded; None when there is
     nothing to do. Nothing is claimed: the fold writes only if the thread is still as read
-    (`mark_folded_through`). `keep` is the conversation the person is in now; `idle_before` limits it to
-    threads that have gone quiet, and `quiet_since` to those that went quiet after it.
+    (`mark_folded_through`). `idle_before` limits it to threads that have gone quiet, and `quiet_since` to those
+    that went quiet after it.
     """
     row = await conn.fetchrow(
         f"""
         select t.id, t.memory_folded_at as since
           from public.threads t
          where t.user_id = $1 and {_NEEDS_FOLD}
-           and ($2::uuid is null or t.id <> $2)
-           and ($3::timestamptz is null or t.last_message_at < $3)
-           and ($4::timestamptz is null or t.last_message_at >= $4)
+           and ($2::timestamptz is null or t.last_message_at < $2)
+           and ($3::timestamptz is null or t.last_message_at >= $3)
          order by t.last_message_at
          limit 1
         """,
-        user_id, keep, idle_before, quiet_since,
+        user_id, idle_before, quiet_since,
     )
     return (row["id"], row["since"]) if row else None
 

@@ -61,8 +61,12 @@ went back to ordinary chat. A refusal, a change of subject or frustration must s
 ## Non-goals
 
 - A separate script or exit path per kind of concern (muhammad chose one path where the model adapts).
-- Crisis resources, `CRISIS_REPLY` wording, `PROTOCOLS` or alerting a person. These are still the client's, unchanged.
-- The `CRISIS_BLOCKS_CHAT` lock. It stays as it is and off by default.
+- Crisis resources, `CRISIS_REPLY` wording, `PROTOCOLS` or alerting a person. These are still the client's, unchanged
+  (2026-11-13: `crisis.RESOURCES` holds three US reference numbers, 911, 988 and Crisis Text Line, and the Find A
+  Helpline directory, until hers arrive).
+- The `CRISIS_BLOCKS_CHAT` lock. It stays as it is and off by default. (Superseded 2026-11-13: the setting is deleted;
+  danger that continues with nothing in place pauses the chat, see the safety Decision in force in
+  `backend/PORT-STATUS.md`.)
 - Any change to frameworks, the body check-in or the chat's cadence beyond pausing while a concern is open, as today.
 
 ## Anti-goals (failure even if it technically works)

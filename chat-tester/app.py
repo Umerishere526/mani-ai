@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import uuid
 
 import requests
 import streamlit as st
@@ -13,6 +14,7 @@ import streamlit as st
 import client as mani
 from admin_view import render_admin
 from library import render_library
+import crisis_pause
 import session_store
 import trace_view
 from copy_button import copy_button
@@ -102,15 +104,38 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def reset_thread_state(thread: dict, messages: list[dict]) -> None:
+def reset_thread_state(thread: dict | None, messages: list[dict]) -> None:
+    # No thread is a draft: nothing is stored until the person's first message creates it.
     st.session_state.thread = thread
     st.session_state.messages = messages
-    st.session_state.style = thread.get("conversation_style")
-    st.session_state.locked = thread.get("crisis_detected") and thread.get("crisis_blocks_chat")
+    held = thread or {}
+    st.session_state.style = held.get("conversation_style")
+    st.session_state.draft_style = None
+    st.session_state.draft_attempt = None
     st.session_state.last_turn = None
     # A message still waiting to go belongs to the conversation it was typed in.
     st.session_state.pending = None
     st.session_state.editing = False
+
+
+def start_draft(opening: dict) -> None:
+    """A new conversation as it looks before anything is written: Mani's greeting with the style buttons."""
+    st.session_state.opening = opening
+    reset_thread_state(None, [
+        {"role": "mani", "content": opening["greeting"], "prompts": [{"label": o["label"]} for o in opening["style_options"]]},
+    ])
+
+
+def tap_style(label: str) -> None:
+    """A style button tapped in a draft: held here, with the tap and Mani's opener shown, until the first message."""
+    opening = st.session_state.opening
+    style = next(o["style"] for o in opening["style_options"] if o["label"] == label)
+    st.session_state.messages.extend([
+        {"role": "user", "content": label, "prompts": []},
+        {"role": "mani", "content": opening["openers"][style], "prompts": []},
+    ])
+    st.session_state.draft_style = style
+    st.session_state.style = style
 
 
 # ---------------------------------------------------------------------------
@@ -149,13 +174,15 @@ with st.sidebar:
     developer = DEV_MODE and st.toggle("Show developer details", key="developer")
 
     st.divider()
-    if st.button("🆕 New conversation", use_container_width=True):
+    paused = crisis_pause.active(st.session_state.client)
+    if st.button("🆕 New conversation", use_container_width=True, disabled=paused is not None):
         try:
-            started = st.session_state.client.start_new_thread()
+            opening = st.session_state.client.opening()
         except mani.ApiError as exc:
             st.error(str(exc))
             st.stop()
-        reset_thread_state(started["thread"], started["messages"])
+        start_draft(opening)
+        st.session_state.client.fold_memory()
         st.session_state.view = "chat"
         st.rerun()
     if st.button("📚 Library", use_container_width=True):
@@ -170,23 +197,32 @@ if st.session_state.get("view") == "library":
     render_library(client)
     st.stop()
 
+# While the pause runs the chat page is only the pop-up: no composer, no conversations, no new one.
+if paused is not None:
+    crisis_pause.render(client, paused)
+    st.stop()
+
 if "thread" not in st.session_state:
     try:
-        started = client.start_or_resume_thread()
+        current = client.current_thread()
+        if current["thread"]:
+            reset_thread_state(current["thread"], current["messages"])
+        else:
+            start_draft(client.opening())
     except mani.ApiError as exc:
         st.error(f"Could not reach the backend at {client.base_url}: {exc}")
         st.stop()
-    reset_thread_state(started["thread"], started["messages"])
 
 thread = st.session_state.thread
+thread_id = (thread or {}).get("id")
 
 st.title("🧠 Mani chat tester")
 if developer:
-    st.caption(f"user: {st.session_state.email}  ·  thread: {thread['id'][:8]}…")
+    st.caption(f"user: {st.session_state.email}  ·  thread: {thread_id[:8] + '…' if thread_id else 'not started'}")
 
 # The style is chosen the way a person chooses it in the apps: by tapping one of the
 # greeting's three buttons, which the backend turns into the style and its opener.
-framework_state = run(mani.framework_debug_state(thread["id"])) if developer else None
+framework_state = run(mani.framework_debug_state(thread_id)) if developer and thread_id else None
 caption = [f"style: {STYLES[st.session_state.style]}"] if st.session_state.style else []
 if framework_state and framework_state.get("phase"):
     caption.append(f"framework: {framework_state['framework_id']} · stage: {framework_state['phase']}")
@@ -206,14 +242,17 @@ def record_turn(content: str, turn: dict, *, replacing: bool = False) -> None:
         st.session_state.messages[-2:] = exchange
     else:
         st.session_state.messages.extend(exchange)
-    st.session_state.last_turn = turn
     style = next((key for key, label in STYLES.items() if label == content.strip()), None)
     if style:
         st.session_state.style = style
+    note_turn(turn)
+
+
+def note_turn(turn: dict) -> None:
+    st.session_state.last_turn = turn
     if turn.get("title"):
         st.session_state.thread["title"] = turn["title"]
-    if turn.get("crisis_detected") and turn.get("crisis_blocks_chat"):
-        st.session_state.locked = True
+    crisis_pause.note(turn)
 
 
 def refusal_text(exc: mani.ApiError) -> str:
@@ -235,10 +274,11 @@ def edit_last(content: str) -> None:
     # Replaces the last message and Mani's reply to it: the backend takes that turn back and runs the new text.
     # A refused edit leaves the editor open with what they typed, so nothing is lost.
     try:
-        message_id = client.last_user_message_id(thread["id"])
-        turn = client.edit_message(thread["id"], message_id, content)
+        message_id = client.last_user_message_id(thread_id)
+        turn = client.edit_message(thread_id, message_id, content)
     except mani.ApiError as exc:
-        notify(refusal_text(exc))
+        if not crisis_pause.note(exc.body):
+            notify(refusal_text(exc))
         return
     except requests.exceptions.RequestException:
         notify(
@@ -310,7 +350,6 @@ editable_at = (
     and len(messages) - 2 >= opening
     and (messages[-2]["role"], messages[-1]["role"]) == ("user", "mani")
     and not st.session_state.get("pending")
-    and not st.session_state.locked
     else None
 )
 for index, message in enumerate(messages):
@@ -372,15 +411,44 @@ def send(content: str) -> None:
     st.session_state.pending = content
 
 
+def show_started(content: str, started: dict) -> None:
+    # The first message created the thread, so it is read back as stored. If that read fails, the exchange is shown
+    # from what was just sent instead: asking again would make a second conversation.
+    try:
+        history = client.full_history(started["thread"]["id"])
+    except (mani.ApiError, requests.exceptions.RequestException):
+        reset_thread_state(started["thread"], st.session_state.messages)
+        record_turn(content, started["turn"])
+        return
+    reset_thread_state(started["thread"], history)
+    note_turn(started["turn"])
+
+
+def first_message_id(content: str) -> str:
+    # The id identifies one try at creating the conversation. A resend of the same message and style reuses it, so
+    # the backend answers with the conversation the first try made instead of creating a second.
+    attempt = st.session_state.draft_attempt
+    key = (content, st.session_state.draft_style)
+    if attempt is None or attempt[0] != key:
+        attempt = (key, str(uuid.uuid4()))
+        st.session_state.draft_attempt = attempt
+    return attempt[1]
+
+
 def deliver(content: str) -> None:
     # Cleared before the call, so a rerun that interrupts it cannot send the message twice.
     st.session_state.pending = None
     try:
-        turn = client.send_message(thread["id"], content)
+        if thread is None:
+            started = client.start_thread(content, st.session_state.draft_style, first_message_id(content))
+        else:
+            turn = client.send_message(thread_id, content)
     except mani.ApiError as exc:
-        # Kept in session state rather than shown here: the rerun that follows would wipe
-        # an st.error before anyone could read it, and a failed send would look like nothing.
-        (notify if exc.status == 422 else set_send_error)(refusal_text(exc))
+        # A pause is shown by the pop-up on the next run, so there is no error to queue for it.
+        if not crisis_pause.note(exc.body):
+            # Kept in session state rather than shown here: the rerun that follows would wipe
+            # an st.error before anyone could read it, and a failed send would look like nothing.
+            (notify if exc.status == 422 else set_send_error)(refusal_text(exc))
         # The message was not stored, so it goes back into the composer to send again rather than vanishing from
         # the chat (Lolly, 2026-11-03: "it deleted my answer").
         st.session_state.composer_draft = content
@@ -393,7 +461,10 @@ def deliver(content: str) -> None:
             "Reopen the chat to see whether the reply arrived before sending again."
         )
         return
-    record_turn(content, turn)
+    if thread is None:
+        show_started(content, started)
+    else:
+        record_turn(content, turn)
 
 
 # Text waiting to be put into the composer: a voice transcript, or a message whose send failed. The composer's own
@@ -402,73 +473,72 @@ def deliver(content: str) -> None:
 if "composer_draft" not in st.session_state:
     st.session_state.composer_draft = None
 
-if st.session_state.locked:
-    st.warning("This conversation is paused after a crisis flag. Start a new conversation to continue.")
-else:
-    send_error = st.session_state.pop("send_error", None)
-    if send_error:
-        st.error(send_error)
+send_error = st.session_state.pop("send_error", None)
+if send_error:
+    st.error(send_error)
 
-    # Mani's newest message is the only one whose buttons are live, exactly as in the apps.
-    # A tap sends the label as the person's message; the backend matches it to the button.
-    # A button carrying a library section opens the library instead, as the apps navigate
-    # there rather than sending anything.
-    # type="secondary" (the default) on purpose: a suggested reply is a shortcut, not the
-    # composer's Send action, and the two must not look like the same control.
-    latest = next((m for m in reversed(st.session_state.messages) if m["role"] == "mani"), None)
-    # Hidden while a message is on its way: they answer the reply before it.
-    buttons = (latest or {}).get("prompts") or []
-    if buttons and not pending:
-        cols = st.columns(len(buttons))
-        for index, (col, button) in enumerate(zip(cols, buttons)):
-            if col.button(button["label"], use_container_width=True, key=f"tap_{index}_{len(st.session_state.messages)}"):
-                if button.get("library"):
-                    st.session_state.view = "library"
-                else:
-                    send(button["label"])
-                st.rerun()
-
-    # -----------------------------------------------------------------------
-    # Composer: Streamlit's own chat input, pinned to the bottom of the page, with its
-    # built-in mic. Enter sends, Shift+Enter adds a line.
-    #
-    # Voice never reaches the backend on its own. A recording comes back here, goes to the
-    # transcription endpoint only, and the result lands in the field as editable text,
-    # same as if it had been typed. Only sending text calls send() - one trigger, same as a
-    # typed message, no parallel path.
-    # -----------------------------------------------------------------------
-    if st.session_state.composer_draft is not None:
-        st.session_state.composer = st.session_state.composer_draft
-        st.session_state.composer_draft = None
-
-    # Disabled while a message is on its way: a second submit would rerun the script and
-    # stop the one waiting on the reply.
-    submitted = st.chat_input(
-        "Type, or tap the mic and edit before sending…",
-        key="composer",
-        accept_audio=True,
-        disabled=bool(pending),
-    )
-
-    if submitted and submitted.audio:
-        with st.spinner("Transcribing…"):
-            try:
-                transcript = client.transcribe_audio(
-                    submitted.audio.getvalue(), submitted.audio.name or "recording.wav"
-                )
-            except mani.ApiError as exc:
-                st.error(str(exc))
-                transcript = None
-        # Only ever fills the field - nothing here calls send().
-        if transcript:
-            st.session_state.composer_draft = transcript
+# Mani's newest message is the only one whose buttons are live, exactly as in the apps.
+# A tap sends the label as the person's message; the backend matches it to the button.
+# A button carrying a library section opens the library instead, as the apps navigate
+# there rather than sending anything.
+# type="secondary" (the default) on purpose: a suggested reply is a shortcut, not the
+# composer's Send action, and the two must not look like the same control.
+latest = next((m for m in reversed(st.session_state.messages) if m["role"] == "mani"), None)
+# Hidden while a message is on its way: they answer the reply before it.
+buttons = (latest or {}).get("prompts") or []
+if buttons and not pending:
+    cols = st.columns(len(buttons))
+    for index, (col, button) in enumerate(zip(cols, buttons)):
+        if col.button(button["label"], use_container_width=True, key=f"tap_{index}_{len(st.session_state.messages)}"):
+            if button.get("library"):
+                st.session_state.view = "library"
+            elif thread is None:
+                tap_style(button["label"])
+            else:
+                send(button["label"])
             st.rerun()
-    elif submitted and submitted.text.strip():
-        send(submitted.text.strip())
+
+# -----------------------------------------------------------------------
+# Composer: Streamlit's own chat input, pinned to the bottom of the page, with its
+# built-in mic. Enter sends, Shift+Enter adds a line.
+#
+# Voice never reaches the backend on its own. A recording comes back here, goes to the
+# transcription endpoint only, and the result lands in the field as editable text,
+# same as if it had been typed. Only sending text calls send() - one trigger, same as a
+# typed message, no parallel path.
+# -----------------------------------------------------------------------
+if st.session_state.composer_draft is not None:
+    st.session_state.composer = st.session_state.composer_draft
+    st.session_state.composer_draft = None
+
+# Disabled while a message is on its way: a second submit would rerun the script and
+# stop the one waiting on the reply.
+submitted = st.chat_input(
+    "Type, or tap the mic and edit before sending…",
+    key="composer",
+    accept_audio=True,
+    disabled=bool(pending),
+)
+
+if submitted and submitted.audio:
+    with st.spinner("Transcribing…"):
+        try:
+            transcript = client.transcribe_audio(
+                submitted.audio.getvalue(), submitted.audio.name or "recording.wav"
+            )
+        except mani.ApiError as exc:
+            st.error(str(exc))
+            transcript = None
+    # Only ever fills the field - nothing here calls send().
+    if transcript:
+        st.session_state.composer_draft = transcript
         st.rerun()
-    elif submitted and submitted.text:
-        notify(EMPTY_NOTICE)
-        st.rerun()
+elif submitted and submitted.text.strip():
+    send(submitted.text.strip())
+    st.rerun()
+elif submitted and submitted.text:
+    notify(EMPTY_NOTICE)
+    st.rerun()
 
 # ---------------------------------------------------------------------------
 # Dev inspector - direct reads, not API calls. This is the point of the tool: seeing the
@@ -583,7 +653,7 @@ with st.sidebar:
         conversations = []
         st.caption(f"Could not list conversations: {exc}")
     for item in conversations:
-        is_open = item["id"] == thread["id"]
+        is_open = item["id"] == thread_id
         when = item["last_message_at"][:16].replace("T", " ")
         if st.button(
             ("▶ " if is_open else "") + (item.get("title") or "Untitled"),
@@ -621,7 +691,7 @@ with st.sidebar:
             st.json(framework_state or {"active": False})
 
         with st.expander("💰 Recent calls (direct DB read)"):
-            calls = run(mani.recent_call_costs(thread["id"]))
+            calls = run(mani.recent_call_costs(thread_id)) if thread_id else []
             for call in calls:
                 st.text(
                     f"{call['purpose']:<15} {call['outcome']:<10} "

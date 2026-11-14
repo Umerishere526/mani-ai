@@ -43,9 +43,9 @@ class EditScreenBackend(mani.ManiClient):
         super().__init__(session=mani.Session("user", token, "refresh"))
         self.edits: list[str] = []
 
-    def start_or_resume_thread(self):
+    def current_thread(self):
         thread = {"id": "T", "message_count": 4, "crisis_detected": False, "conversation_style": "supportive", "title": None}
-        return {"is_new": False, "thread": thread, "messages": [
+        return {"thread": thread, "messages": [
             {"id": "m0", "role": "mani", "content": "Hi", "prompts": []},
             {"id": "u1", "role": "user", "content": "first"},
             {"id": "m1", "role": "mani", "content": "reply", "prompts": []},
@@ -90,9 +90,9 @@ def test_the_edit_screen_tells_them_what_to_do_and_only_sends_a_real_change():
 
 
 class OpeningOnlyBackend(EditScreenBackend):
-    def start_or_resume_thread(self):
+    def current_thread(self):
         thread = {"id": "T", "message_count": 3, "crisis_detected": False, "conversation_style": "directive", "title": None}
-        return {"is_new": False, "thread": thread, "messages": [
+        return {"thread": thread, "messages": [
             {"id": "m0", "role": "mani", "content": "Hi there. How would you like me to speak with you today?", "prompts": []},
             {"id": "u1", "role": "user", "content": "Directive"},
             {"id": "m1", "role": "mani", "content": "How can I help you today?", "prompts": []},

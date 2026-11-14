@@ -19,8 +19,8 @@ def test_the_question_safety_and_reading_entries_each_get_a_labelled_line():
     assert "failed:timeout" in shown
 
 
-def test_a_blocked_chat_and_the_safety_check_at_the_end_each_get_a_labelled_line():
-    """2026-11-11: without these a blocked chat looks like a fault."""
-    shown = "\n".join(trace_view.lines({"help_refused": True, "end_check": "asked"}))
-    assert "**Blocked, refused help:** True" in shown
+def test_a_paused_chat_and_the_safety_check_at_the_end_each_get_a_labelled_line():
+    shown = "\n".join(trace_view.lines({"paused": True, "return_check": "paused_thread", "end_check": "asked"}))
+    assert "**Chat paused:** True" in shown
+    assert "**Return check:** paused_thread" in shown
     assert "**Safety check after the last stage:** asked" in shown

@@ -8,8 +8,9 @@ import asyncpg
 import pytest
 
 from mani.auth.jwt import Claims
+from mani.chat import orchestrator
 from mani.config import get_settings
-from mani.db import config_tables, llm_calls, messages, profiles, summaries, threads
+from mani.db import config_tables, llm_calls, messages, pauses, profiles, summaries, threads
 from mani.models.rows import (
     TechniqueOutcome,
     TechniqueState,
@@ -63,21 +64,64 @@ async def alice(users):
 
 
 async def test_a_thread_round_trips(alice):
-    thread, _ = await threads.create_or_reuse(alice, ALICE, title="First")
+    thread = await threads.create(alice, ALICE, title="First")
+    await messages.create_pair(alice, thread.id, "I had a hard day", "That sounds heavy.")
     assert await threads.get(alice, thread.id, ALICE) is not None
     page = await threads.list_for_user(alice, ALICE)
     assert [t.id for t in page.threads] == [thread.id]
 
 
+async def test_a_thread_with_only_a_greeting_or_a_style_tap_is_not_listed(alice):
+    """A conversation counts once they have written in it: Mani's opening line and a style button do not."""
+    thread = await orchestrator.start_thread(alice, claims_for(ALICE))
+    assert (await threads.list_for_user(alice, ALICE)).threads == []
+    assert await threads.most_recent(alice, ALICE) is None
+
+    await messages.create_pair(
+        alice, thread.id, "Reflective", "Okay. What is on your mind?", selected_prompt="Reflective")
+    assert (await threads.list_for_user(alice, ALICE)).threads == []
+    assert await threads.most_recent(alice, ALICE) is None
+
+    await messages.create_pair(alice, thread.id, "I had a hard day", "That sounds heavy.")
+    assert [t.id for t in (await threads.list_for_user(alice, ALICE)).threads] == [thread.id]
+    assert (await threads.most_recent(alice, ALICE)).id == thread.id
+
+
+async def test_the_admin_list_leaves_out_threads_nobody_has_written_in(users):
+    """The admin list is one connection here: a user-scoped fixture's open transaction is invisible to a second."""
+    from mani.db import admin_threads, pool
+
+    insert = (
+        "insert into public.messages (thread_id, user_id, role, content, selected_prompt) "
+        "values ($1, $2, 'user', $3, $4)"
+    )
+    async with pool.as_admin() as conn:
+        thread = await threads.create(conn, ALICE)
+        await conn.execute(insert, thread.id, ALICE, "Reflective", "Reflective")
+        assert (await admin_threads.list_all(conn, search=str(ALICE))).threads == []
+
+        await conn.execute(insert, thread.id, ALICE, "I had a hard day", None)
+        listed = await admin_threads.list_all(conn, search=str(ALICE))
+    assert [t.id for t in listed.threads] == [thread.id]
+
+
+async def test_start_thread_always_creates(alice):
+    first = await orchestrator.start_thread(alice, claims_for(ALICE))
+    second = await orchestrator.start_thread(alice, claims_for(ALICE))
+    assert first.id != second.id
+
+
 async def test_a_soft_deleted_thread_disappears_from_listings(alice):
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    thread = await threads.create(alice, ALICE)
+    await messages.create_pair(alice, thread.id, "I had a hard day", "That sounds heavy.")
+    assert [t.id for t in (await threads.list_for_user(alice, ALICE)).threads] == [thread.id]
     assert await threads.soft_delete(alice, thread.id, ALICE) is True
     assert await threads.get(alice, thread.id, ALICE) is None
     assert await threads.list_for_user(alice, ALICE) == threads.Page([], None)
 
 
 async def test_a_turn_writes_both_sides_and_is_idempotent(alice):
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    thread = await threads.create(alice, ALICE)
     client_id = uuid.uuid4()
 
     first = await messages.create_pair(
@@ -100,7 +144,7 @@ async def test_the_idempotency_lookup_is_user_scoped(alice, users):
     """A guessed client id must not surface someone else's message."""
     from mani.db import pool
 
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    thread = await threads.create(alice, ALICE)
     client_id = uuid.uuid4()
     await messages.create_pair(alice, thread.id, "private", "reply",
                                client_message_id=client_id)
@@ -113,7 +157,7 @@ async def test_listing_another_users_thread_returns_nothing(alice, users):
     """The previous system's live defect, from the query layer's side."""
     from mani.db import pool
 
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    thread = await threads.create(alice, ALICE)
     await messages.create_pair(alice, thread.id, "something private", "reply")
 
     async with pool.as_user(claims_for(BOB)) as bob:
@@ -122,7 +166,7 @@ async def test_listing_another_users_thread_returns_nothing(alice, users):
 
 
 async def test_a_greeting_cannot_be_used_to_forge_later_turns(alice):
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    thread = await threads.create(alice, ALICE)
     await messages.create_greeting(alice, thread.id, "Hi. It's Mani.")
 
     with pytest.raises(asyncpg.PostgresError):
@@ -130,7 +174,7 @@ async def test_a_greeting_cannot_be_used_to_forge_later_turns(alice):
 
 
 async def test_the_composed_read_returns_the_whole_turn(alice):
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    thread = await threads.create(alice, ALICE)
     await profiles.upsert(alice, ALICE, nickname="Al", topics=["anxiety"],
                           support_style="reflective")
     await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates(
@@ -161,7 +205,7 @@ async def test_a_conversation_style_survives_the_round_trip(alice):
     taking the whole turn's transaction with it, message pair included."""
     from mani.models.rows import SupportStyle
 
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    thread = await threads.create(alice, ALICE)
     assert thread.conversation_style is None
 
     await threads.apply(
@@ -179,14 +223,14 @@ async def test_a_conversation_style_survives_the_round_trip(alice):
 async def test_the_composed_read_refuses_another_users_thread(alice, users):
     from mani.db import pool
 
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    thread = await threads.create(alice, ALICE)
     async with pool.as_user(claims_for(BOB)) as bob:
         assert await threads.load_turn_context(bob, thread.id, BOB) is None
 
 
 async def test_offering_the_same_technique_twice_stores_it_once(alice):
     """A composite primary key, rather than merging an array in application code."""
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    thread = await threads.create(alice, ALICE)
     for _ in range(3):
         await threads.apply(alice, thread.id, ALICE,
                             threads.ThreadUpdates(offer_frameworks=["abcde"]))
@@ -199,7 +243,7 @@ async def test_a_turn_keeps_its_halves_in_order(alice):
     """now() is fixed per transaction, so both halves of a pair would share a timestamp
     and their order would be undefined. The previous project shipped that, hit it, and
     patched it by adding a millisecond to Mani's row."""
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    thread = await threads.create(alice, ALICE)
     for n in range(5):
         await messages.create_pair(alice, thread.id, f"user {n}", f"mani {n}")
 
@@ -210,14 +254,14 @@ async def test_a_turn_keeps_its_halves_in_order(alice):
 
 
 async def test_an_empty_update_touches_nothing(alice):
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    thread = await threads.create(alice, ALICE)
     await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates())
     ctx = await threads.load_turn_context(alice, thread.id, ALICE)
     assert ctx.technique is None and ctx.techniques_offered == []
 
 
 async def test_a_crisis_is_recorded_with_its_reason(alice):
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    thread = await threads.create(alice, ALICE)
     event_id = await threads.mark_crisis(alice, thread.id, "expressed suicidal ideation")
 
     refreshed = await threads.get(alice, thread.id, ALICE)
@@ -235,7 +279,7 @@ async def test_a_crisis_is_recorded_with_its_reason(alice):
 
 async def test_the_summary_checkpoint_must_be_a_real_message(alice):
     """A foreign key refuses the id-namespace confusion the previous version had."""
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    thread = await threads.create(alice, ALICE)
     with pytest.raises(asyncpg.PostgresError):
         await summaries.upsert(
             alice, thread.id, ALICE, summary="x", techniques_tried=[],
@@ -324,7 +368,7 @@ async def test_a_scenario_turn_is_billed_only_for_the_calls_it_made(users):
             )
 
     async with pool.as_admin() as conn:
-        thread, _ = await threads.create_or_reuse(conn, ALICE)
+        thread = await threads.create(conn, ALICE)
     billed = [0]
     await call(thread.id, 100, 60)
     await call(thread.id, 50, 10)
@@ -345,8 +389,8 @@ async def test_threads_needing_summary_lists_across_users(users):
     from mani.db import pool, summaries
 
     async with pool.as_admin() as conn:
-        thread_a, _ = await threads.create_or_reuse(conn, ALICE)
-        thread_b, _ = await threads.create_or_reuse(conn, BOB)
+        thread_a = await threads.create(conn, ALICE)
+        thread_b = await threads.create(conn, BOB)
         for thread, user in ((thread_a, ALICE), (thread_b, BOB)):
             await conn.execute(
                 "insert into public.messages (thread_id, user_id, role, content) values ($1, $2, 'user', $3)",
@@ -362,7 +406,7 @@ async def test_threads_needing_summary_lists_across_users(users):
             summarized_message_count=24,
         )
         # Lagging too, but quiet longer than the catch-up keeps trying: one that keeps failing is not paid for forever.
-        thread_c, _ = await threads.create_or_reuse(conn, BOB)
+        thread_c = await threads.create(conn, BOB)
         await conn.execute(
             "insert into public.messages (thread_id, user_id, role, content) values ($1, $2, 'user', $3)",
             thread_c.id, BOB, "a message longer than the budget",
@@ -389,7 +433,7 @@ async def test_the_model_sees_the_whole_thread_until_the_budget_then_loses_whole
     """2026-10-13: within the budget nothing is left out, so what they said early is still there when
     a later stage needs it; past it the oldest messages go a block at a time, so what is shown stays
     the same between drops."""
-    thread, _ = await threads.create_or_reuse(alice, ALICE)
+    thread = await threads.create(alice, ALICE)
     for n in range(30):
         await messages.create_pair(alice, thread.id, f"user {n:02d} " + "x" * 90, f"mani {n:02d} " + "y" * 90)
     whole = await messages.for_context(alice, thread.id, ALICE, budget_chars=1_000_000)
@@ -398,3 +442,39 @@ async def test_the_model_sees_the_whole_thread_until_the_budget_then_loses_whole
     assert tight.dropped % messages.CONTEXT_DROP_BLOCK == 0 and tight.dropped > 0
     assert sum(len(m.content) for m in tight.messages) <= 4_000
     assert len(tight.messages) + tight.dropped == len(whole.messages)
+
+
+async def test_a_pause_is_active_until_it_ends(alice):
+    thread = await threads.create(alice, ALICE)
+    assert await pauses.active(alice, ALICE) is None
+
+    # now() is fixed inside the fixture's transaction, so a pause of no minutes ends the moment it starts.
+    await pauses.start(alice, ALICE, thread.id, 0, "crisis")
+    assert await pauses.active(alice, ALICE) is None
+
+    started = await pauses.start(alice, ALICE, thread.id, 30, "crisis")
+    found = await pauses.active(alice, ALICE)
+    assert found is not None and found.id == started.id and found.checked_at is None
+
+    await pauses.mark_checked(alice, started.id)
+    assert (await pauses.active(alice, ALICE)).checked_at is not None
+
+
+async def test_the_active_pause_is_the_users_own_and_the_latest(alice):
+    thread = await threads.create(alice, ALICE)
+    older = await pauses.start(alice, ALICE, thread.id, 30, "first")
+    newer = await pauses.start(alice, ALICE, thread.id, 30, "second")
+    # now() is fixed inside the fixture's transaction, so set the order explicitly.
+    await alice.execute(
+        "update public.chat_pauses set started_at = now() - interval '10 minutes' where id = $1",
+        older.id)
+    assert (await pauses.active(alice, ALICE)).id == newer.id
+
+    # Another person's pause is invisible to the first, and the first has none of their own after theirs ends.
+    await alice.execute("reset role")
+    await alice.execute(
+        "insert into public.chat_pauses (user_id, thread_id, ends_at) "
+        "select $1, id, now() + interval '1 hour' from public.threads where user_id = $2 limit 1",
+        BOB, ALICE)
+    await alice.execute("delete from public.chat_pauses where user_id = $1", ALICE)
+    assert await pauses.active(alice, ALICE) is None

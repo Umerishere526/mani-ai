@@ -4,8 +4,14 @@
 from __future__ import annotations
 
 import json
+import uuid
+from contextlib import asynccontextmanager
 
+import pytest
+
+from mani.auth.jwt import Claims
 from mani.chat import context
+from mani.errors import ErrorCategory, ServiceError
 from scripts import scenario_check
 
 
@@ -140,3 +146,45 @@ def test_an_insight_before_their_third_message_is_flagged():
                                        understanding={"thinking": {"shape": "insight"}})
     assert "insight before message 3" in scenario_check.shape_flags(exchange, None, 2)
     assert "insight before message 3" not in scenario_check.shape_flags(exchange, None, 3)
+
+
+class _PausedChat:
+    """The stack as people whose chat is paused meet it, and the admin connection that ends their pauses."""
+
+    def __init__(self, *paused: str) -> None:
+        self.paused = set(paused)
+        self.answered: list[str] = []
+
+    async def send(self, claims, thread_id, text):
+        if claims.user_id in self.paused:
+            raise ServiceError(f"chat for user {claims.user_id} is paused", ErrorCategory.CHAT_PAUSED)
+        self.answered.append(text)
+        return f"reply to {text}"
+
+    async def execute(self, sql: str, user_id) -> None:
+        self.paused.discard(str(user_id))
+
+    @asynccontextmanager
+    async def as_admin(self):
+        yield self
+
+
+async def test_a_message_a_pause_refuses_ends_that_pause_and_is_sent_again(monkeypatch):
+    """A pause does not end the run: the message it refuses ends the person's own pause as admin and goes again, so
+    the run reaches the question Mani asks when they come back. Any other refusal still ends it."""
+    person, someone_else = Claims.acting_as(uuid.uuid4()), Claims.acting_as(uuid.uuid4())
+    chat = _PausedChat(person.user_id, someone_else.user_id)
+    monkeypatch.setattr(scenario_check, "runner", chat)
+    monkeypatch.setattr(scenario_check, "pool", chat)
+
+    assert await scenario_check._send(person, "thread", "I'm back") == "reply to I'm back"
+    assert chat.answered == ["I'm back"]
+    assert chat.paused == {someone_else.user_id}, "only the person's own pause ends"
+
+    class Limited(_PausedChat):
+        async def send(self, claims, thread_id, text):
+            raise ServiceError("too many messages", ErrorCategory.RATE_LIMITED)
+
+    monkeypatch.setattr(scenario_check, "runner", Limited())
+    with pytest.raises(ServiceError):
+        await scenario_check._send(person, "thread", "hello")

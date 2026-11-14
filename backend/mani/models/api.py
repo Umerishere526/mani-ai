@@ -19,7 +19,6 @@ class ThreadOut(BaseModel):
     title: str | None = None
     message_count: int = 0
     crisis_detected: bool = False
-    crisis_blocks_chat: bool = True
     created_at: dt.datetime
     last_message_at: dt.datetime
     # How Mani speaks in this conversation. Null means the profile's support_style
@@ -30,10 +29,6 @@ class ThreadOut(BaseModel):
 class ThreadListOut(BaseModel):
     threads: list[ThreadOut]
     next_cursor: str | None = None
-
-
-class ThreadCreateIn(BaseModel):
-    title: str | None = Field(default=None, max_length=200)
 
 
 class ThreadUpdateIn(BaseModel):
@@ -80,6 +75,13 @@ class SendMessageIn(BaseModel):
     client_message_id: uuid.UUID | None = None
 
 
+class ThreadStartIn(SendMessageIn):
+    """The person's first message, which creates the conversation it opens. `style` is the one they tapped on the
+    opening, if they did."""
+
+    style: SupportStyle | None = None
+
+
 class EditMessageIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -107,7 +109,9 @@ class TurnOut(BaseModel):
     prompts: list[SmartPrompt] = Field(default_factory=list)
     title: str | None = None
     crisis_detected: bool = False
-    crisis_blocks_chat: bool = True
+    # When the chat's pause began and until when it runs, set only on the turn that pauses it.
+    paused_from: dt.datetime | None = None
+    paused_until: dt.datetime | None = None
     was_duplicate: bool = False
     # Null unless AI_DEBUG_MODE is on.
     reasoning: str | None = None
@@ -140,15 +144,36 @@ class MemoryFoldOut(BaseModel):
     folded: int
 
 
-class StartOut(BaseModel):
-    """A thread and its opening line, for the chat screen's first load."""
+class StyleOption(BaseModel):
+    label: str
+    style: SupportStyle
+
+
+class OpeningOut(BaseModel):
+    """What a conversation opens with, read before anything is written: the greeting, the styles to choose from, and
+    what Mani says once each is chosen."""
+
+    greeting: str
+    style_options: list[StyleOption]
+    # Keyed by style.
+    openers: dict[str, str]
+    # When the pause running now began and ends; null when chat is open.
+    chat_paused_from: dt.datetime | None = None
+    chat_paused_until: dt.datetime | None = None
+
+
+class ThreadStartedOut(BaseModel):
+    """The conversation a first message created, and Mani's reply to it."""
 
     thread: ThreadOut
-    messages: list[MessageOut]
-    is_new: bool
-    # True when the app should post /v1/threads/{thread.id}/memory-fold next: a new chat is when the earlier ones
-    # count as finished.
-    memory_fold_pending: bool = False
+    turn: TurnOut
+
+
+class CurrentOut(BaseModel):
+    """The conversation to show on opening the app, with its latest messages; no thread when they have not written yet."""
+
+    thread: ThreadOut | None = None
+    messages: list[MessageOut] = Field(default_factory=list)
 
 
 class ProfileIn(BaseModel):
@@ -169,6 +194,9 @@ class ProfileOut(BaseModel):
     topics: list[str] = Field(default_factory=list)
     support_style: SupportStyle | None = None
     age_bracket: str | None = None
+    # When the pause running now began and ends; null when chat is open.
+    chat_paused_from: dt.datetime | None = None
+    chat_paused_until: dt.datetime | None = None
 
 
 class ExerciseOut(BaseModel):

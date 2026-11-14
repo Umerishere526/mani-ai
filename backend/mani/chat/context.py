@@ -191,6 +191,22 @@ def resolve_style(ctx: TurnContext) -> str:
     return DEFAULT_STYLE
 
 
+# Sent with every turn that can judge danger (the chat note, and the safety line of a clear turn, an unsure one and the
+# first turn of another conversation after a pause): the first danger reply is written on a turn that did not know
+# yet, so it must already hold the direction (the audit, 2026-11-13).
+DANGER_DIRECTION = (
+    "If you judge that someone is in real danger now, it may be them, someone else, or a symptom happening now. "
+    "Say once, plainly and briefly, in one sentence of your text, what would keep them or the other person safe "
+    "now, only what fits what they told you and never something they have already done (a step they took settles "
+    "it): their local emergency number, a person with them, distance from the other person or from what they could "
+    "use, not driving themselves. Say it warmly, as care rather than an order, and never tell them what to say to "
+    "anyone, emergency services included, or how to feel. When help is already called and someone is with them, "
+    "there is nothing to say about it: follow what they say. The reply that gives it asks one question, never the "
+    "same question twice. Then stay with them and what they are going through; a text is enough if speaking is too hard. "
+    "Never lecture, never repeat a sentence you already used, never end the conversation, never say you will stop "
+    "asking."
+)
+
 # What each line of the block means, sent under the line itself and only for the value it has
 # this turn: a vague reply carries the vague guidance and nothing about being heard. Keeping the
 # meaning beside the value is also what keeps the two from drifting apart, which they did while
@@ -249,43 +265,48 @@ _MEANING: dict[str, str | dict[str, str]] = {
     ),
     "history": "what was tried earlier in this conversation, and whether it helped.",
     "current_phase": "the stage the questions are on, as last recorded.",
-    # What Mani is told while a concern is open, by where it stands (muhammad, 2026-11-10). One text each, not a
+    # What Mani is told about safety, by where the conversation stands (muhammad, 2026-11-10). One text each, not a
     # sentence per kind of danger: the model reads the conversation and knows whose danger it is and what has been
     # done. Listening more than asking, and asking only when the last reply did not, keep a safety question out of
     # every reply; the refusal line is manasa's safety test, 2026-11-06.
     "safety": {
+        "clear": DANGER_DIRECTION,
         "unsure": (
             "something said in this conversation could mean someone is not safe, and you do not know yet. Stay with "
             "them and what they are going through, warmly and plainly, listening more than asking, and follow what "
             "they talk about. If you have not asked what they meant, ask once, openly and in your own words, as your "
-            "one question; never tell them to call anyone while you do not know. Say a worry once, never again. "
+            "one question; do not tell them to call anyone while you do not know. Say a worry once, never again. "
             "Once you have asked, what they say next settles it or not: going on about their situation with nothing "
             "pointing at danger settles it; a refusal, brushing the question off or frustration with it changes how "
             "you ask, never whether it is settled: never say you will stop asking or drop it. For a symptom in their "
             "body, ask once whether it is happening now; if they do not say, say once that if it is happening now they "
             "should call their local emergency number, then follow them: going on or pushing back settles it. No set of questions, "
-            "no offer, no library. Fill safety from the whole conversation."
+            "no offer, no library. Fill safety from the whole conversation. " + DANGER_DIRECTION
         ),
         "danger_said": (
-            "someone may be in real danger now, and you already told them what would make them safe, in your last reply. "
+            "someone may be in real danger now, and you already told them what would make them safe. "
             "Never say it again, in any words. Answer what they just said first, honestly: a question (\"could it be "
             "stress?\"), a doubt, frustration or something about their situation. When they doubt it and never said "
             "it is happening now, ask once whether it is. You may ask once whether they have done the step that keeps "
             "them safe, only if they have not said, never whether they have told someone how they feel or done "
-            "anything else you suggested. Then stay with them and what they are going through, and follow it. Never "
-            "end the conversation. No set of questions, no offer, no library. Fill safety from the whole "
-            "conversation."
+            "anything else you suggested. Then stay with them and what they are going through, and follow it. Never lecture, "
+            "never end the conversation, never say you will stop asking. No set of questions, no offer, no library. "
+            "Fill safety from the whole conversation."
         ),
-        "danger": (
-            "someone may be in real danger now: them, someone else, or from a symptom happening now. Say once, "
-            "plainly and briefly, what would make them or the other person safe now, only what fits what they told "
-            "you and never something they have already done (a step they took settles it): their local emergency number, a person with them, "
-            "distance from the other person or from what they could use, not driving themselves. Only what keeps them "
-            "safe goes in it, never what to say to someone close to them or how to feel. When help is already called and "
-            "someone is with them, there is nothing to say about it: follow what they say. Then stay with them "
-            "and what they are going through; a text is enough if speaking is too hard. Never lecture, never repeat "
-            "a sentence you already used, never end the conversation, never say you will stop asking. No set of "
+        # The first turn after a pause (chat/pause.return_check), in the conversation it paused, where {reason} is what
+        # the pausing turn's judgment rested on, and in every other conversation, which carries nothing from that one
+        # (muhammad, 2026-11-13).
+        "returning": (
+            "their chat with you was paused earlier because they were in danger: {reason}. Before anything else, ask "
+            "once, plainly and warmly, whether they are all right now, and say in one sentence that this is why you "
+            "are asking. Answer what they just wrote in a line at most. Never give what would keep them safe or any "
+            "number again (they have them on screen), and never tell them what to say to anyone. No set of "
             "questions, no offer, no library. Fill safety from the whole conversation."
+        ),
+        "returning_new": (
+            "before anything else, ask whether they are all right right now, once, warmly and plainly in a sentence. "
+            "Never mention another conversation or anything from one, and never tell them what to say to anyone. No "
+            "set of questions, no offer, no library. Fill safety from the whole conversation. " + DANGER_DIRECTION
         ),
     },
     "recent_crisis": {
@@ -437,9 +458,15 @@ SAFETY_SETTLED = "safety_settled"
 # Where the question about safety after a framework's last stage stands: "asked" while the closing choices wait for
 # their answer, "done" once it is answered (muhammad, 2026-11-11).
 SAFETY_END_CHECK = "safety_end_check"
-# They are in danger and said they will not get help: the conversation answers only with crisis.HELP_REFUSED_REPLY
-# (muhammad, 2026-11-11).
-HELP_REFUSED = "help_refused"
+# That a turn of this conversation ended in danger now: only then is safety asked about after a framework's last stage.
+# The crisis flag is not enough, since a phrase the model judged only unsure sets it too (the audit, 2026-11-13).
+DANGER_REACHED = "danger_reached"
+# Whose danger the latest turn that ended in danger judged (SafetyRead.about), for a later read that names none, such as
+# one that only pushes the question away: it decides whether the chat may pause and which pause reply fits.
+DANGER_ABOUT = "danger_about"
+# The question whether they are all right after a pause, tied to that pause (chat/pause.return_check): {"pause": its
+# id, "state": "asked"} on the turn that asks it, "answered" once their next message has answered it.
+RETURN_CHECK = "return_check"
 # Said on every kind of turn once it settled, the chat's and the questions' alike: the bullying chat, replayed
 # 2026-11-11, raised it again on the answer to the offer from what was said before it settled.
 SETTLED_LINE = (
@@ -506,17 +533,25 @@ def _line(key: str, value: object) -> list[str]:
     return [f"{key}: {value}", *_meaning(key, value)]
 
 
+def _returning(paused_for: str | None) -> list[str]:
+    """The safety line of the first turn back in a paused conversation, with what the pause rested on when the pausing
+    turn's judgment gave a reason."""
+    told = _MEANING["safety"]["returning"]
+    told = told.format(reason=disarm(paused_for)) if paused_for else told.replace(": {reason}", "")
+    return ["safety: returning", f"  means: {told}"]
+
+
 def build(
     ctx: TurnContext,
     *,
     framework: Framework | None = None,
     history: list[Message] | None = None,
     safety: str = "clear",
-    danger_said: bool = False,
     offer_waiting: bool = False,
     starting: bool = False,
     yes_framework: Framework | None = None,
     landed_on: str | None = None,
+    paused_for: str | None = None,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -524,6 +559,9 @@ def build(
     database holds rather than what an in-memory copy was mutated to mid-request. `framework` and
     `history` are what the framework content and the caller's own history add - both optional,
     so a turn with neither still formats exactly as before.
+
+    `safety` is clear, unsure or danger, or on the first turn after a pause returning (the conversation it paused, with
+    `paused_for`, what the pause rested on) or returning_new (any other conversation).
 
     `framework` is the one already active. `starting` is a turn that opens it, and `yes_framework`
     the set a yes in this message would open; both ask the reply to report what they already said.
@@ -540,10 +578,14 @@ def build(
     safety_concern = safety != "clear"
     if not safety_concern and ctx.thread.understanding.get(SAFETY_SETTLED):
         lines.append(SETTLED_LINE)
+    if not safety_concern:
+        lines += _line("safety", "clear")
     if safety_concern:
-        # The reply before this one was already a danger reply: what would make them safe was said, and is not said
-        # again (Lolly's chest chat and manasa's test, replayed 2026-11-11).
-        lines += _line("safety", "danger_said" if safety == "danger" and danger_said else safety)
+        # An earlier reply already gave what would make them safe: the last danger reply, or the pause message before a
+        # return check. It is not said again (Lolly's chest chat and manasa's test, replayed 2026-11-11).
+        lines += _returning(paused_for) if safety == "returning" else _line(
+            "safety", "danger_said" if safety == "danger" else safety,
+        )
         if framework is not None and technique is not None and technique.phase in walk.content_stages(framework):
             ask = ((framework.stages.get(technique.phase) or {}).get("ask") or {}).get(resolve_style(ctx))
             lines += [

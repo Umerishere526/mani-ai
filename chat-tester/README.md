@@ -7,12 +7,12 @@ exercise, before tuning any of that behaviour further in the LangChain prompts o
 **This is a fourth, independent thing in this repo, alongside `web/`, `mobile/` and
 `backend/` - not part of any of them.** It has its own dependencies and does not touch
 backend code. Every message it sends goes through the real `POST /v1/threads/{id}/messages`
-endpoint, the real LangChain call, the real router and safety screen - this is not a mock.
+endpoint (a conversation's first message through `POST /v1/threads`, which creates it), the real LangChain call, the real router and safety screen - this is not a mock.
 
 ## What it simulates versus what is real
 
 - **Real:** every chat turn, every capsule tap, style selection (tapping one of the greeting's
-  three style buttons), framework offers (including the nearest fit, shown as "Try the closest fit" beside "Keep chatting"), the body check-in (the client's six steps, with its two outcomes), crisis locking. All of it
+  three style buttons), framework offers (including the nearest fit, shown as "Try the closest fit" beside "Keep chatting"), the body check-in (the client's six steps, with its two outcomes), the crisis pause (a centred "Let's make sure everyone is safe" pop-up with the help numbers and a live countdown to when the chat resumes; the Library stays open). All of it
   goes over HTTP to the actual FastAPI app - nothing here calls `orchestrator.py` directly.
 - **Real, too:** the library page (sidebar **Library**, or any **Go to Library** button). It lists
   every exercise from `GET /v1/exercises` on one page, grouped by topic, each playable from its
@@ -104,7 +104,10 @@ on submit, sets that password and signs you in. Refreshing the browser tab keeps
 signed in - the session is remembered for seven days. The sidebar's **Nickname** field changes
 the name the greeting uses, from the next new conversation. Every message has a copy icon under it,
 in the chat and in the admin viewer. **Sign out** switches
-accounts, and **New conversation** starts a fresh thread for the signed-in user. Under it,
+accounts, and **New conversation** shows a fresh opening for the signed-in user: Mani's greeting and the three
+style buttons. Nothing is stored until the first message sent, which creates the conversation (with the style
+tapped, if any), so an opening nobody wrote in never appears in the list, and a reload opens the latest conversation
+instead of it. Under it,
 **Conversations** lists that user's threads, most recently active first (the latest 20, titled once a
 thread has had an exchange, "Untitled" before that). Tap one to open it and continue; the open one is
 marked ▶. Hover a title to see its message count and last activity. An opened thread, or a reloaded

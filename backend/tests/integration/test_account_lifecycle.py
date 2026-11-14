@@ -87,14 +87,12 @@ def _row_count(database_url: str, table: str, user_id: uuid.UUID) -> int:
     return asyncio.run(query())
 
 
-def _remember(database_url: str, user_id: uuid.UUID) -> None:
+def _plant(database_url: str, statement: str, *args) -> None:
+    """Writes a row the API gives no way to write, on a connection of its own."""
     async def insert() -> None:
         conn = await asyncpg.connect(database_url, timeout=5)
         try:
-            await conn.execute(
-                "insert into admin.user_memory (user_id, memory) values ($1, $2)",
-                user_id, '{"themes": ["should not survive the account"]}',
-            )
+            await conn.execute(statement, *args)
         finally:
             await conn.close()
 
@@ -157,21 +155,24 @@ def test_signup_through_deletion_is_one_working_system(gotrue, model):
         headers = {"Authorization": f"Bearer {token}"}
 
         with TestClient(create_app()) as client:
-            unauthenticated = client.post("/v1/threads", json={}, headers={})
+            first_message = {"content": "I don't know why I keep thinking about it"}
+            unauthenticated = client.post("/v1/threads", json=first_message, headers={})
             assert unauthenticated.status_code == 401
 
-            start = client.post("/v1/threads", json={}, headers=headers)
+            start = client.post("/v1/threads", json=first_message, headers=headers)
             assert start.status_code == 201
             thread_id = start.json()["thread"]["id"]
+            assert start.json()["turn"]["content"]
+            assert model["count"] == 1
 
             turn = client.post(
                 f"/v1/threads/{thread_id}/messages",
-                json={"content": "I don't know why I keep thinking about it"},
+                json={"content": "It keeps coming back at night"},
                 headers=headers,
             )
             assert turn.status_code == 201
             assert turn.json()["content"]
-            assert model["count"] == 1
+            assert model["count"] == 2
 
             refused = client.post(
                 f"/v1/threads/{thread_id}/messages",
@@ -180,14 +181,24 @@ def test_signup_through_deletion_is_one_working_system(gotrue, model):
             assert refused.status_code == 401
 
             # Real GoTrue deletes as supabase_auth_admin, which RLS applies to - the one path
-            # test_rls.sql cannot assume on real Supabase, so the memory is checked here.
-            _remember(database_url, uuid.UUID(user_id))
+            # test_rls.sql cannot assume on real Supabase, so the memory and a pause are checked here.
+            _plant(
+                database_url, "insert into admin.user_memory (user_id, memory) values ($1, $2)",
+                uuid.UUID(user_id), '{"themes": ["should not survive the account"]}',
+            )
+            _plant(
+                database_url,
+                "insert into public.chat_pauses (user_id, thread_id, ends_at, reason) "
+                "values ($1, $2, now() + interval '15 minutes', 'should not survive the account')",
+                uuid.UUID(user_id), uuid.UUID(thread_id),
+            )
 
             deletion = client.delete("/v1/account", headers=headers)
             assert deletion.status_code == 204
 
         for table in (
             "public.profiles", "public.threads", "public.messages", "admin.user_memory",
+            "public.chat_pauses",
         ):
             remaining = _row_count(database_url, table, uuid.UUID(user_id))
             assert remaining == 0, f"{table} still has rows after account deletion"

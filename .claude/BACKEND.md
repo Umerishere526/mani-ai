@@ -106,8 +106,9 @@ Things a reviewer will check for, and where they are.
   function names; uniqueness is asserted in `tests/unit/test_app.py`.
 - **`response_model=` on every route.** Without it the generated schema degrades to
   `Any` and the types become decorative.
-- **Every write is a POST/PATCH/DELETE.** `/v1/threads/current` creates a thread and a
-  greeting on first call, so it is POST — a GET must be safe, and prefetchers treat it so.
+- **Every write is a POST/PATCH/DELETE.** `GET /v1/threads/opening` and `GET /v1/threads/current`
+  write nothing: a conversation is created by `POST /v1/threads` with the person's first message.
+  A GET must be safe, and prefetchers treat it so.
 - **Cursors are `datetime`, not `str`.** Typed loosely, a malformed cursor reached
   Postgres as a cast and returned 500 rather than a refused request.
 - **Expiring state is not stored.** `prompts` come back only on Mani's newest message,

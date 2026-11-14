@@ -1,4 +1,4 @@
-# ABOUTME: Thread endpoints - list, start, fetch, delete.
+# ABOUTME: Thread endpoints - the read-only opening, start from a first message, list, current, fetch, delete.
 # ABOUTME: The thread id in the path is checked against the caller by RLS and by the query.
 
 import datetime as dt
@@ -7,21 +7,24 @@ import uuid
 from fastapi import APIRouter, Query
 
 from mani import memory
-from mani.auth.deps import CurrentUser
-from mani.chat import orchestrator
-from mani.db import messages as messages_db, threads
+from mani.auth.deps import ChatOpen, CurrentUser
+from mani.chat import greeting, orchestrator, runner
+from mani.db import messages as messages_db, pauses, threads
 from mani.db.deps import UserConn
 from mani.errors import ErrorCategory, ServiceError
 from mani.models.api import (
+    CurrentOut,
     MemoryFoldOut,
     MessageOut,
-    StartOut,
-    ThreadCreateIn,
+    OpeningOut,
     ThreadListOut,
     ThreadOut,
+    ThreadStartedOut,
+    ThreadStartIn,
     ThreadUpdateIn,
 )
 from mani.routers.serializers import to_messages, to_thread
+from mani.routers.turns import respond
 
 router = APIRouter(prefix="/v1/threads", tags=["threads"])
 
@@ -41,51 +44,46 @@ async def list_threads(
     )
 
 
-@router.post("", response_model=StartOut, status_code=201)
-async def start(user: CurrentUser, conn: UserConn, body: ThreadCreateIn) -> StartOut:
-    """Open a thread and write Mani's opening line.
-
-    The greeting is written here rather than generated, so the first screen costs nothing
-    and appears immediately.
-    """
-    thread, created = await orchestrator.start_thread(conn, user, body.title)
-    # Starting a new chat is when the previous one counts as finished, so its patterns are folded into the
-    # person's memory: the app asks for that next (fold_memory), as a request of its own.
-    return StartOut(
-        thread=to_thread(thread),
-        messages=await _history(conn, thread.id, user.user_id),
-        is_new=created,
-        memory_fold_pending=True,
+@router.get("/opening", response_model=OpeningOut)
+async def opening(user: CurrentUser, conn: UserConn) -> OpeningOut:
+    """What a new conversation opens with, for a client to show before the person has written anything. Writes
+    nothing: the conversation is created by their first message (`start`)."""
+    pause = await pauses.active(conn, user.user_id)
+    return OpeningOut(
+        chat_paused_from=pause.started_at if pause else None,
+        chat_paused_until=pause.ends_at if pause else None,
+        greeting=await orchestrator.opening_greeting(conn, user.user_id),
+        style_options=greeting.STYLE_OPTIONS,
+        openers=greeting.OPENERS,
     )
 
 
-@router.post("/{thread_id}/memory-fold", response_model=MemoryFoldOut)
-async def fold_memory(user: CurrentUser, thread_id: uuid.UUID) -> MemoryFoldOut:
-    """Fold the person's finished conversations into what Mani remembers of them, every one except `thread_id`, the
-    chat they just started: tapping New chat can hand back an untouched thread while another they returned to still
-    waits. Asked for by the app after starting a chat, not left running after that response: Vercel stops the instance
-    once a response is sent, and folds started that way never wrote a row (2026-11-05). Folds only what waits, so a
+@router.post("", response_model=ThreadStartedOut, status_code=201)
+async def start(user: ChatOpen, body: ThreadStartIn) -> ThreadStartedOut:
+    """The person's first message creates the conversation: Mani's greeting, the style they chose, then their message
+    as a turn. Mani's opening line is written here rather than generated, so it costs nothing."""
+    thread, turn = await runner.start(user, body.content, body.client_message_id, body.style)
+    return ThreadStartedOut(thread=to_thread(thread), turn=await respond(thread.id, turn))
+
+
+@router.post("/memory-fold", response_model=MemoryFoldOut)
+async def fold_memory(user: CurrentUser) -> MemoryFoldOut:
+    """Fold the person's finished conversations into what Mani remembers of them. Asked for by the app when they open
+    a new conversation, not left running after that response: Vercel stops the instance once a response is sent, and
+    folds started that way never wrote a row (2026-11-05). Only conversations last written before this request
+    arrived are folded, so the one their first message starts while it runs is left alone. Folds only what waits, so a
     repeated request costs nothing; a failure is logged and costs only that memory."""
-    return MemoryFoldOut(folded=await memory.fold_finished(user, keep=thread_id))
+    return MemoryFoldOut(folded=await memory.fold_finished(user, idle_before=dt.datetime.now(dt.UTC)))
 
 
-@router.post("/current", response_model=StartOut)
-async def current(user: CurrentUser, conn: UserConn) -> StartOut:
-    """The conversation to show on opening the app, starting one if there is none.
-
-    POST rather than GET because it writes: a first-time user gets a thread and a
-    greeting. A GET is required to be safe, and caches and prefetchers treat it that way.
-    """
+@router.get("/current", response_model=CurrentOut)
+async def current(user: CurrentUser, conn: UserConn) -> CurrentOut:
+    """The conversation to show on opening the app: the one they last wrote in, or none, when the app shows the
+    opening instead. Writes nothing."""
     thread = await threads.most_recent(conn, user.user_id)
-    created = False
     if thread is None:
-        thread, created = await orchestrator.start_thread(conn, user)
-
-    return StartOut(
-        thread=to_thread(thread),
-        messages=await _history(conn, thread.id, user.user_id),
-        is_new=created,
-    )
+        return CurrentOut()
+    return CurrentOut(thread=to_thread(thread), messages=await _history(conn, thread.id, user.user_id))
 
 
 # How many of a thread's newest messages the app is sent on opening it; older ones page in from
