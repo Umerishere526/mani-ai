@@ -138,8 +138,8 @@ def test_pushing_back_about_a_symptom_is_never_a_refusal_that_holds_it():
 
 
 def test_declined_is_refusing_help_saying_again_they_will_do_it_or_pushing_the_question_away():
-    """muhammad, 2026-11-13: the chat pauses on a refusal or on staying set on it, never on a doubt; the one closed
-    judgment the pause rests on is declined."""
+    """muhammad, 2026-11-13: a refusal, the intent said again or the question pushed away is declined, a doubt never
+    is. A symptom in the body pauses only on it; the other kinds of danger pause without it (muhammad, 2026-11-14)."""
     said = SafetyRead.model_fields["declined"].description
     assert "refused the help" in said and "said again they will do it" in said and "pushed the question" in said
     assert "A doubt or a question" in said and "is never declined" in said

@@ -1,5 +1,5 @@
-# ABOUTME: When a chat pauses on danger (it continues, they refuse or stay set on it, nothing in place), and when a turn
-# ABOUTME: after a pause asks whether they are all right. Pure: the turn asks them, with the model's read and context.
+# ABOUTME: When a chat pauses on danger (it continues with nothing in place; a symptom in the body needs a refusal), and
+# ABOUTME: when a turn after a pause asks whether they are all right. Pure: the turn asks with its read and context.
 
 from __future__ import annotations
 
@@ -18,15 +18,19 @@ def pauses_now(
     before: State, after: State, *, help_in_place: bool, declined: bool, about: str | None, danger: str | None,
     symptom_now: str | None, after_return_check: bool, is_return_check: bool,
 ) -> bool:
-    """Danger now pauses the chat when they refuse the help, say again they will do it, or push the safety question
-    away (`declined`), with nothing in place, and it was already danger before this reply or is what remains after a
-    return check. A doubt, a question or help on its way never pauses; the return check itself never does. A danger
-    `about` a symptom in the body pauses only when this turn's own read (`danger`, `symptom_now`) has the symptom
-    happening now and they refuse the help for it: pushing back or doubting there is never a refusal (2026-11-13)."""
-    refused_for_the_body = danger == "now" and symptom_now == "yes"
+    """Danger now pauses the chat when nothing is in place and it was already danger before this reply or is what
+    remains after a return check; the return check itself never does. Danger to themselves, to someone else or from
+    someone pauses without a refusal (2026-11-14: a person about to act, alone, who answered every question honestly
+    never paused). A danger `about` a symptom in the body pauses only when this turn's own read (`danger`,
+    `symptom_now`) has the symptom happening now and they refuse the help for it (`declined`): pushing back or doubting
+    there is never a refusal (2026-11-13). A danger of no known kind needs `declined` too, so a read without `about`
+    never pauses a body chat."""
+    if about == "body":
+        kind_pauses = declined and danger == "now" and symptom_now == "yes"
+    else:
+        kind_pauses = declined or about is not None
     return (
-        not is_return_check and after is State.DANGER and declined and not help_in_place
-        and (about != "body" or refused_for_the_body)
+        not is_return_check and after is State.DANGER and kind_pauses and not help_in_place
         and (before is State.DANGER or after_return_check)
     )
 
