@@ -34,7 +34,7 @@ declare
 begin
   foreach t in array array['threads', 'messages', 'thread_summaries',
                            'thread_technique_state', 'thread_techniques_offered',
-                           'thread_response_styles', 'exercise_completions']
+                           'thread_response_styles', 'exercise_completions', 'exercise_feedback']
   loop
     foreach p in array array['SELECT', 'INSERT', 'UPDATE', 'DELETE']
     loop
@@ -147,6 +147,18 @@ select pg_temp.want('a user cannot insert messages directly',
 
 select pg_temp.want('a user cannot edit a message after the fact',
   has_table_privilege('authenticated', 'public.messages', 'UPDATE'), false);
+
+-- A library rating goes through the backend, which cleans and bounds the reason and refuses an inactive exercise.
+select pg_temp.want('a user can read their library ratings',
+  has_table_privilege('authenticated', 'public.exercise_feedback', 'SELECT'), true);
+select pg_temp.want('a user cannot write a library rating directly',
+  has_table_privilege('authenticated', 'public.exercise_feedback', 'INSERT')
+  or has_table_privilege('authenticated', 'public.exercise_feedback', 'UPDATE')
+  or has_table_privilege('authenticated', 'public.exercise_feedback', 'DELETE'), false);
+select pg_temp.want('the backend can set and clear a library rating',
+  has_table_privilege('mani_service', 'public.exercise_feedback', 'INSERT')
+  and has_table_privilege('mani_service', 'public.exercise_feedback', 'UPDATE')
+  and has_table_privilege('mani_service', 'public.exercise_feedback', 'DELETE'), true);
 
 -- ---------------------------------------------------------------------------
 -- The threads UPDATE grant is column-scoped

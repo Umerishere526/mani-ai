@@ -130,6 +130,7 @@ the same change as the work.**
 | POST | `/v1/threads/{id}/memory-fold` | folds finished chats into memory, asked for after starting one (`memory_fold_pending`) |
 | GET | `/v1/exercises`, `/home`, `/{id}` | catalog with signed audio |
 | GET POST | `/v1/exercises/completions` | a user's completions |
+| PUT DELETE | `/v1/exercises/{id}/feedback` | the person's 👍/👎 on an exercise, with an optional reason; replaces any earlier one |
 | GET | `/v1/crisis/resources` | empty until real services exist |
 | DELETE | `/v1/account` | delete the account and its data |
 | GET POST | `/v1/admin/prompts` | portal |
@@ -140,6 +141,7 @@ the same change as the work.**
 | GET | `/v1/admin/crisis-events` | review queue |
 | GET | `/v1/admin/users/{id}/memory` | what is remembered about a person |
 | GET | `/v1/admin/threads` | every person's conversations, newest activity first; `search` by email or user id |
+| GET | `/v1/admin/exercise-feedback` | every person's library ratings, newest first; `search` by email or user id |
 | GET | `/v1/admin/threads/{id}` | one conversation in full, oldest first; logs the read |
 | GET | `/internal/cron/catch-up` | summaries behind, follow-ups the app never asked for, quiet chats folded into memory (`mani/catch_up.py`); bearer `CRON_SECRET`, no JWT |
 
@@ -209,6 +211,16 @@ the same change as the work.**
   remain in `main`'s history. The seed uploads with `x-upsert`, so running it against production would replace
   production's 192 kbps files with the 64 kbps copies; production was only read from.
   `tests/unit/test_seed_exercises.py`.
+- **A person rates a library exercise 👍 or 👎 with an optional reason, one rating per exercise that a new tap
+  replaces, and admins review every rating by email** (muhammad, 2026-11-14). Because muhammad wants the library's
+  feedback recorded as the replies' is (`feat/feedback-per-response`, not merged): the same `FeedbackIn`/`FeedbackOut`
+  shapes, a tap that saves at once and a reason that follows, and the reply's row as in his reference (thumbs, a
+  one-line "[Optional] Please provide an explanation" field, Submit). `public.exercise_feedback` (migration 038), RLS
+  so a person reads only their own, writes only through the backend (`mani_service`), and only on an active exercise.
+  `exercise_completions.helpful` is a different thing (a row per completion) and was not reused. In the tester the row
+  is a fragment, so a tap never reruns the page and a playing exercise keeps playing; the admin screen's Library
+  feedback view lists who rated what. `tests/integration/test_exercise_feedback.py`, `tests/unit/test_feedback_input.py`,
+  `chat-tester/test_library_feedback.py`.
 - **In the chat-tester's library, every exercise plays in one player of our own, run by the browser: seek bar, 10 s
   back and forward, play, mute and time. Only stories (`type` "Story") also get a 0.5x, 1x, 1.5x or 2x speed menu**
   (muhammad, 2026-11-13). Because `st.audio` has no speed setting in Streamlit 1.64, a speed item in the

@@ -40,6 +40,16 @@ MESSAGES = [
 ]
 
 
+RATINGS = [
+    {"user_id": "u2", "user_email": "other@test.dev", "exercise_id": "e2", "exercise_title": "The Night Drive",
+     "exercise_type": "Story", "category": "Anxiety", "rating": "down", "reason": "too long",
+     "updated_at": "2026-11-14T09:30:00Z"},
+    {"user_id": "u1", "user_email": "beta@test.dev", "exercise_id": "e1", "exercise_title": "Bee Breathing",
+     "exercise_type": "Breathing", "category": "Anxiety", "rating": "up", "reason": None,
+     "updated_at": "2026-11-14T09:00:00Z"},
+]
+
+
 class FakeBackend(mani.ManiClient):
     """Answers the admin endpoints from memory, and fails loudly on anything that would chat."""
 
@@ -48,6 +58,10 @@ class FakeBackend(mani.ManiClient):
 
     def admin_transcript(self, thread_id):
         return {"thread": THREAD, "messages": MESSAGES}
+
+    def admin_exercise_feedback(self, search=""):
+        self.searched = search
+        return [r for r in RATINGS if search.lower() in r["user_email"]]
 
     def _call(self, method, path, **kwargs):
         raise AssertionError(f"the admin view called {method} {path}")
@@ -110,3 +124,20 @@ def test_an_admin_accounts_password_is_never_reset(monkeypatch):
 
     with pytest.raises(RuntimeError, match="cannot be reset here"):
         mani.reset_password("admin@test.dev", "newpass1")
+
+
+def test_an_admin_reviews_who_rated_which_exercise_and_filters_by_email():
+    app = _app(ADMIN)
+    app.sidebar.radio(key="admin_screen").set_value("Library feedback").run()
+
+    assert not app.exception
+    assert app.title[0].value == "📚 Library feedback"
+    assert not app.sidebar.expander, "the conversation list gives way to the ratings"
+    rows = app.dataframe[0].value
+    assert list(rows["Person"]) == ["other@test.dev", "beta@test.dev"]
+    assert list(rows["Rating"]) == ["👎", "👍"] and list(rows["Reason"]) == ["too long", ""]
+
+    app.text_input(key="admin_library_search").set_value("beta").run()
+    assert app.session_state["client"].searched == "beta"
+    assert list(app.dataframe[0].value["Exercise"]) == ["Bee Breathing"]
+    assert app.caption[0].value.startswith("1 rating from 1 person")

@@ -63,6 +63,7 @@ Query: `select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid
 | `public` | `thread_response_styles` | No longer written or read (2026-10-27): the model reported a response shape per reply until the reply shapes were retired. Kept for the rows already in it. |
 | `public` | `thread_summaries` | The rolling summary of a thread too long for the model's budget, refreshed once messages have left its view (`CONTEXT_BUDGET_CHARS`). Written by the backend only (migration 007). |
 | `public` | `exercise_completions` | Whether a user found a completed exercise helpful. |
+| `public` | `exercise_feedback` | A person's 👍/👎 on a library exercise with an optional reason, one per exercise; written by the backend only (migration 038). |
 
 `admin.*` is **invisible to PostgREST** — `supabase/config.toml`'s `[api] schemas` lists
 only `public`/`graphql_public`. A request for an `admin` table returns 404, not 403, even
@@ -175,6 +176,16 @@ Append-only log of the model's self-reported style per reply. **Not written or r
 | 3 | `exercise_id` | uuid | FK→`admin.exercises` cascade | |
 | 4 | `helpful` | boolean | optional | User's own feedback. |
 | 5 | `completed_at` | timestamptz | default `now()` | |
+
+### `public.exercise_feedback`
+| # | Column | Type | Required | Purpose |
+|---|---|---|---|---|
+| 1 | `user_id` | uuid | **PK** with `exercise_id`, FK→`auth.users` cascade | |
+| 2 | `exercise_id` | uuid | **PK** with `user_id`, FK→`admin.exercises` cascade | |
+| 3 | `rating` | text | **required**, `up` or `down` | |
+| 4 | `reason` | text | optional, 1 to 1000 characters | Why, in the person's words. |
+| 5 | `created_at` | timestamptz | default `now()` | |
+| 6 | `updated_at` | timestamptz | default `now()`, set by each new rating | |
 
 ### `admin.frameworks`
 | # | Column | Type | Required | Purpose |

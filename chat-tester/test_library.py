@@ -19,9 +19,9 @@ def _library():
                 "audio_url": "https://x.supabase.co/storage/v1/object/sign/exercises/a.mp3?token=t",
             }
             return [
-                {**exercise, "title": "Bee Breathing", "type": "Breathing"},
-                {**exercise, "title": "The Night Drive", "type": "Story"},
-                {**exercise, "title": "Calm Your Mind", "type": "Meditation", "audio_url": None},
+                {**exercise, "id": "e1", "title": "Bee Breathing", "type": "Breathing"},
+                {**exercise, "id": "e2", "title": "The Night Drive", "type": "Story"},
+                {**exercise, "id": "e3", "title": "Calm Your Mind", "type": "Meditation", "audio_url": None},
             ]
 
     render_library(FakeClient())

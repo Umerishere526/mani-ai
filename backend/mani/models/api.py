@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -171,6 +171,34 @@ class ProfileOut(BaseModel):
     age_bracket: str | None = None
 
 
+FeedbackRating = Literal["up", "down"]
+
+
+class FeedbackOut(BaseModel):
+    """The person's 👍 or 👎, with the reason they gave, if any."""
+
+    rating: FeedbackRating
+    reason: str | None = None
+    updated_at: dt.datetime
+
+
+def _optional_text(value: Any) -> Any:
+    """What the person typed, cleaned as a message is; nothing left means they wrote nothing."""
+    if not isinstance(value, str):
+        return value
+    return clean_message(value) or None
+
+
+class FeedbackIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rating: FeedbackRating
+    # Measured after cleaning, so invisible padding does not count against it.
+    reason: str | None = Field(default=None, max_length=1000)
+
+    _visible = field_validator("reason", mode="before")(_optional_text)
+
+
 class ExerciseOut(BaseModel):
     """The catalog entry as a client sees it: a signed link, not a storage path."""
 
@@ -185,6 +213,8 @@ class ExerciseOut(BaseModel):
     show_on_home_screen: bool = False
     framework_id: str | None = None
     audio_url: str | None = None
+    # The caller's own rating of this exercise; null while they have not rated it.
+    feedback: FeedbackOut | None = None
 
 
 class CompletionIn(BaseModel):

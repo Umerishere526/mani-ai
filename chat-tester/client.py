@@ -329,8 +329,21 @@ class ManiClient:
         return self._call("GET", f"/v1/admin/threads/{thread_id}")
 
     def list_exercises(self) -> list[dict[str, Any]]:
-        """GET /v1/exercises - the whole library, each item with a signed audio link."""
+        """GET /v1/exercises - the whole library, each item with a signed audio link and the person's own rating."""
         return self._call("GET", "/v1/exercises")
+
+    def rate_exercise(self, exercise_id: str, rating: str, reason: str | None = None) -> dict[str, Any]:
+        """PUT /v1/exercises/{id}/feedback - a 👍 ("up") or 👎 ("down") on an exercise, replacing any earlier one."""
+        return self._call("PUT", f"/v1/exercises/{exercise_id}/feedback", json={"rating": rating, "reason": reason})
+
+    def clear_exercise_rating(self, exercise_id: str) -> None:
+        """DELETE /v1/exercises/{id}/feedback - the exercise goes back to unrated."""
+        self._call("DELETE", f"/v1/exercises/{exercise_id}/feedback")
+
+    def admin_exercise_feedback(self, search: str = "") -> list[dict[str, Any]]:
+        """GET /v1/admin/exercise-feedback - every person's library ratings, newest first. Admin only."""
+        params = {"search": search.strip()} if search.strip() else {}
+        return self._call("GET", "/v1/admin/exercise-feedback", params=params)
 
     def get_profile(self) -> dict[str, Any]:
         """GET /v1/profile - what onboarding collected, the nickname among it."""

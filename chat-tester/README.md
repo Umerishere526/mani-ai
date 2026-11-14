@@ -16,8 +16,10 @@ endpoint, the real LangChain call, the real router and safety screen - this is n
   goes over HTTP to the actual FastAPI app - nothing here calls `orchestrator.py` directly.
 - **Real, too:** the library page (sidebar **Library**, or any **Go to Library** button). It lists
   every exercise from `GET /v1/exercises` on one page, grouped by topic, each playable from its
-  signed link in one player with 10-second skips; stories also get 0.5x, 1x, 1.5x or 2x speed. Go
-  to Library opens it rather than sending a message, as the apps navigate there.
+  signed link in one player with 10-second skips; stories also get 0.5x, 1x, 1.5x or 2x speed. Under
+  each player 👍/👎 saves the person's rating at once, then an optional reason and Submit; an admin
+  reviews every rating under **Library feedback**, filtered by email. Go to Library opens it rather
+  than sending a message, as the apps navigate there.
 - **Real, too:** sign-in, sign-up and forgot-password, through Supabase Auth with an email and
   password. The backend verifies the token exactly as it will a phone's, and it is refreshed when
   it expires. Each account sees only its own conversations - the backend scopes every thread to
