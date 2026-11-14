@@ -1,4 +1,4 @@
-# ABOUTME: Portal endpoints - prompts and versions, the exercise catalog, crises, and conversations read-only.
+# ABOUTME: Portal endpoints - prompts and versions, the exercise catalog and its ratings, crises, read-only chats.
 # ABOUTME: Every route here requires an admin claim on the token and a service-role connection.
 
 import datetime as dt
@@ -8,9 +8,11 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from mani.auth.deps import AdminUser
-from mani.db import admin_threads, config_tables, exercises as exercises_db, turn_traces
+from mani.db import admin_threads, config_tables, exercise_feedback, turn_traces
+from mani.db import exercises as exercises_db
 from mani.db.admin_threads import AdminThread
 from mani.db.deps import AdminConn
+from mani.db.exercise_feedback import AdminExerciseFeedback
 from mani.db.exercises import AdminExercise, ExerciseInput
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm.schema import Memory
@@ -170,6 +172,16 @@ class UserMemoryOut(BaseModel):
     user_id: uuid.UUID
     memory: Memory
     updated_at: dt.datetime
+
+
+@router.get("/exercise-feedback", response_model=list[AdminExerciseFeedback])
+async def list_exercise_feedback(
+    conn: AdminConn,
+    search: str | None = Query(default=None, max_length=200),
+    limit: int = Query(default=exercise_feedback.DEFAULT_PAGE, ge=1, le=exercise_feedback.MAX_PAGE),
+) -> list[AdminExerciseFeedback]:
+    """Every person's 👍/👎 on library exercises, the most recently changed first, filtered by part of an email."""
+    return await exercise_feedback.list_all(conn, search, limit)
 
 
 @router.get("/users/{user_id}/memory", response_model=UserMemoryOut)

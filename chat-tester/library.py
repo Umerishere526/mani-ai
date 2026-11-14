@@ -1,5 +1,5 @@
 # ABOUTME: The library page: every exercise from the backend on one page, grouped by topic,
-# ABOUTME: each with a player. Reached from a Go to Library button or the sidebar.
+# ABOUTME: each with a player and a 👍/👎 row. Reached from a Go to Library button or the sidebar.
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import streamlit as st
 
 import client as mani
 from audio_player import audio_player
+from library_feedback import feedback_row
 
 # The order and names the mani app shows its sections in.
 SECTIONS = {
@@ -59,3 +60,4 @@ def render_library(client: mani.ManiClient) -> None:
                     audio_player(exercise["audio_url"], speed_choice=exercise.get("type") == STORY)
                 else:
                     st.caption("Audio unavailable right now.")
+                feedback_row(client, exercise)

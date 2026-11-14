@@ -13,6 +13,7 @@ from mani.llm.schema import SmartPrompt
 from mani.models.api import (
     CompletionOut,
     ExerciseOut,
+    FeedbackOut,
     MessageOut,
     ProfileOut,
     PromptOut,
@@ -119,8 +120,8 @@ def to_profile(profile: Profile | None, pause: Pause | None = None) -> ProfileOu
     )
 
 
-def to_exercise(exercise: Exercise, audio_url: str | None) -> ExerciseOut:
-    return ExerciseOut(**exercise.model_dump(exclude={"audio_path"}), audio_url=audio_url)
+def to_exercise(exercise: Exercise, audio_url: str | None, feedback: FeedbackOut | None) -> ExerciseOut:
+    return ExerciseOut(**exercise.model_dump(exclude={"audio_path"}), audio_url=audio_url, feedback=feedback)
 
 
 def to_completion(completion: Completion) -> CompletionOut:

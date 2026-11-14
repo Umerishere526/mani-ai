@@ -1,4 +1,4 @@
-# ABOUTME: The admin's screen: every person's conversations grouped under them, each readable in full with its timing.
+# ABOUTME: The admin's screen: every person's conversations, each readable in full with its timing, and library ratings.
 # ABOUTME: Read-only - there is no composer and no button that sends anything to a conversation.
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ import streamlit as st
 
 import client as mani
 import trace_view
+from admin_library_feedback import render_library_feedback
 from copy_button import copy_button
 from login import render_account
 
@@ -143,12 +144,20 @@ def _render_transcript(client: mani.ManiClient, thread_id: str) -> None:
     st.info("Read-only. Admin accounts can read conversations but cannot reply in them.")
 
 
+LIBRARY_FEEDBACK = "Library feedback"
+
+
 def render_admin(client: mani.ManiClient) -> None:
     with st.sidebar:
         render_account("admin, read-only")
         st.divider()
-        _render_list(client)
+        screen = st.radio("Review", ["Conversations", LIBRARY_FEEDBACK], horizontal=True, key="admin_screen")
+        if screen != LIBRARY_FEEDBACK:
+            _render_list(client)
 
+    if screen == LIBRARY_FEEDBACK:
+        render_library_feedback(client)
+        return
     thread_id = st.session_state.get("admin_thread")
     if thread_id:
         _render_transcript(client, thread_id)
