@@ -10,7 +10,7 @@ from enum import StrEnum
 from mani.text import clean_message
 
 # The specification asks for "a safety assessment before framework selection", and separates
-# two things the previous implementation collapsed into one. Explicit intent locks the thread.
+# two things the previous implementation collapsed into one. Explicit intent is a crisis; the rest a concern.
 # Everything else asks the approved safety clarification, because the specification is direct
 # about the cost of over-firing:
 #
@@ -18,7 +18,7 @@ from mani.text import clean_message
 #    as 'depressed,' 'hopeless,' 'panicked,' 'furious,' or 'I cannot do this' require attention
 #    and context. They should not automatically produce a crisis response."
 #
-# Neither level locks the conversation (muhammad, 2026-11-06): either makes the turn unsure (State below) and the
+# Either level makes the turn unsure (State below) and the
 # model judges what the words mean (schema.SafetyRead); this screen is the free backstop under it. A physical symptom
 # is never a phrase here: whether it is happening now is the model's judgment.
 
@@ -45,18 +45,8 @@ class Assessment:
     category: Category | None = None
     matched: list[str] = field(default_factory=list)
 
-    @property
-    def blocks_framework(self) -> bool:
-        """Whether a framework may be offered or continued on this turn.
 
-        The specification: "Avoid continuing the framework until the safety concern has been
-        addressed." That applies to a concern as much as to a crisis - the difference is
-        whether the thread locks, not whether Mani carries on as though nothing was said.
-        """
-        return self.level is not Level.NONE
-
-
-# Explicit intent or a completed act. These lock the thread.
+# Explicit intent or a completed act. These are a crisis.
 _CRISIS: list[tuple[Category, str]] = [
     (Category.SUICIDE, "kill myself"),
     (Category.SUICIDE, "killing myself"),
@@ -85,17 +75,17 @@ _CRISIS: list[tuple[Category, str]] = [
 ]
 
 # Indirect. The specification lists these verbatim as things a concern "may also be expressed"
-# as. They ask for clarification; they do not lock.
+# as. They ask for clarification.
 _CONCERN: list[tuple[Category, str]] = [
     (Category.SUICIDE, "better off without me"),
     # The specification's sentence is "I do not think I will be here tomorrow", where the
     # negation attaches to "think" rather than to being here. Matching the tail catches both
     # that and "I will not be here tomorrow", at the cost of also catching an ordinary question
-    # about tomorrow - which asks one clarifying question and locks nothing.
+    # about tomorrow - which asks one clarifying question.
     (Category.SUICIDE, "be here tomorrow"),
     (Category.SUICIDE, "no point in living"),
     # manasa's chat, 2026-11-05: "I don't want to keep living like this" passed the screen, so the stage moved and the
-    # model's safety question came after "D is for Dispute". Ambiguous on purpose: it asks, and locks nothing.
+    # model's safety question came after "D is for Dispute". Ambiguous on purpose: it asks.
     (Category.SUICIDE, "do not want to keep living"),
     (Category.SUICIDE, "cannot keep living"),
     (Category.SUICIDE, "do not want to go on"),
@@ -103,10 +93,10 @@ _CONCERN: list[tuple[Category, str]] = [
     (Category.SUICIDE, "do not want to wake up"),
     (Category.SUICIDE, "i have everything ready"),
     # The specification lists this as needing the safety protocol rather than STOP. Concern
-    # level: pills in a hand can be ordinary, and a false crisis locks someone out.
+    # level: pills in a hand can be ordinary, and a false crisis is costly.
     (Category.OVERDOSE, "pills in my hand"),
     # Passive ideation: a wish not to exist, with no plan or method. Concern, not crisis - it
-    # pauses any framework and keeps Mani close without locking the conversation. Whole
+    # pauses any framework and keeps Mani close. Whole
     # phrases, so "my keys keep disappearing" or "I did not exist on social media" pass.
     # Added on muhammad's decision (2026-09-23), pending the client's clinical wording.
     (Category.SUICIDE, "want to disappear"),
@@ -179,7 +169,7 @@ _FIGURATIVE_HIT = re.compile(r"\b(it|that|this|what) (really |just |suddenly )?h
 
 
 # A crisis phrase with a negation just before it ("I'm not going to hurt myself", "I would never kill myself") is not
-# the statement it contains: it asks, as a concern, and never counts as a crisis (manasa's test, 2026-11-06, locked on
+# the statement it contains: it asks, as a concern, and never counts as a crisis (manasa's test, 2026-11-06, flagged on
 # "I'm safe. I'm not going to hurt myself").
 _NEGATION = re.compile(r"\b(not|never|no)( \w+){0,2} $")
 
@@ -210,7 +200,7 @@ def screen(text: str) -> Assessment:
 # Held on the thread (threads.safety), so a concern outlives the reply that raised it: in manasa's test it was gone
 # after one reply. Each turn the model judges, from the whole conversation, whether anyone is in danger now
 # (schema.SafetyRead), and code applies that judgment with two rules of its own: a refusal never settles a concern,
-# and the screen above puts a turn at unsure before the model is asked. Nothing here locks the conversation.
+# and the screen above puts a turn at unsure before the model is asked.
 
 
 class State(StrEnum):

@@ -54,12 +54,22 @@ def test_a_reply_with_nothing_waiting_asks_for_nothing():
 
 
 def test_a_new_chat_asks_for_the_earlier_ones_to_be_folded_into_memory():
-    backend = Backend({"thread": {"id": "T2"}, "messages": [], "is_new": True, "memory_fold_pending": True})
+    backend = Backend({})
 
-    backend.start_new_thread()
+    backend.fold_memory()
 
     assert backend.after.wait(2)
-    assert ("POST", "/v1/threads/T2/memory-fold") in backend.calls
+    assert ("POST", "/v1/threads/memory-fold") in backend.calls
+
+
+def test_the_first_message_asks_for_its_follow_up_by_the_reply():
+    backend = Backend({"thread": {"id": "T"}, "turn": {"id": "m1", "content": "What happened?", "follow_up_pending": True}})
+
+    started = backend.start_thread("my brother never calls", "directive")
+
+    assert started["turn"]["content"] == "What happened?"
+    assert backend.after.wait(2)
+    assert ("POST", "/v1/threads/T/messages/m1/follow-up") in backend.calls
 
 
 def test_a_failed_follow_up_never_reaches_the_conversation():

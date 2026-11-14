@@ -227,27 +227,38 @@ class ManiClient:
             raise ApiError(response.status_code, body)
         return response.json() if response.content else {}
 
-    def start_or_resume_thread(self) -> dict[str, Any]:
-        """POST /v1/threads/current - what a real app calls on opening the app.
+    def opening(self) -> dict[str, Any]:
+        """GET /v1/threads/opening - what a new conversation shows before the person has written anything: Mani's
+        greeting, the style buttons and what Mani says once each is tapped. Nothing is stored by asking."""
+        return self._call("GET", "/v1/threads/opening")
+
+    def current_thread(self) -> dict[str, Any]:
+        """GET /v1/threads/current - what a real app calls on opening the app: the conversation they last wrote in,
+        or no thread when the app shows a new conversation's opening.
 
         The backend answers with only the thread's newest few messages; the rest is paged in
         so a reload shows the whole conversation.
         """
-        started = self._call("POST", "/v1/threads/current")
-        if not started["is_new"]:
-            started["messages"] = self.full_history(started["thread"]["id"])
+        current = self._call("GET", "/v1/threads/current")
+        if current["thread"]:
+            current["messages"] = self.full_history(current["thread"]["id"])
+        return current
+
+    def start_thread(self, content: str, style: str | None, client_message_id: str | None = None) -> dict[str, Any]:
+        """POST /v1/threads - the person's first message creates the conversation: the backend writes Mani's greeting,
+        the style they tapped (if any) with its opener, then runs the message as a turn. Returns the thread and the turn."""
+        started = self._call(
+            "POST", "/v1/threads",
+            json={"content": content, "client_message_id": client_message_id or str(uuid.uuid4()), "style": style},
+        )
+        self._ask_for_follow_up(started["thread"]["id"], started["turn"])
         return started
 
-    def start_new_thread(self) -> dict[str, Any]:
-        """POST /v1/threads - reuses an empty thread if the caller already has one,
-        exactly as the backend does for a real "new chat" tap."""
-        started = self._call("POST", "/v1/threads", json={})
-        if started.get("memory_fold_pending"):
-            # A new chat is when the earlier ones count as finished, so they are folded into Mani's memory.
-            self._in_background(
-                lambda: self._call("POST", f"/v1/threads/{started['thread']['id']}/memory-fold"), "memory fold"
-            )
-        return started
+    def fold_memory(self) -> None:
+        """POST /v1/threads/memory-fold - a new chat is when the earlier ones count as finished, so they are folded
+        into Mani's memory. The backend folds only the chats written before this request, so the conversation the
+        first message starts meanwhile is left alone."""
+        self._in_background(lambda: self._call("POST", "/v1/threads/memory-fold"), "memory fold")
 
     def send_message(self, thread_id: str, content: str, client_message_id: str | None = None) -> dict[str, Any]:
         turn = self._call(
@@ -345,6 +356,10 @@ class ManiClient:
         params = {"search": search.strip()} if search.strip() else {}
         return self._call("GET", "/v1/admin/exercise-feedback", params=params)
 
+    def crisis_resources(self) -> list[dict[str, Any]]:
+        """GET /v1/crisis/resources - the help numbers shown while the person's chat is paused."""
+        return self._call("GET", "/v1/crisis/resources")
+
     def get_profile(self) -> dict[str, Any]:
         """GET /v1/profile - what onboarding collected, the nickname among it."""
         return self._call("GET", "/v1/profile")
@@ -352,10 +367,6 @@ class ManiClient:
     def set_profile(self, nickname: str) -> dict[str, Any]:
         """PUT /v1/profile - what onboarding calls, so the greeting can use their name."""
         return self._call("PUT", "/v1/profile", json={"nickname": nickname})
-
-    def set_conversation_style(self, thread_id: str, style: str) -> dict[str, Any]:
-        """PATCH /v1/threads/{id} - the same endpoint a style-picker screen would call."""
-        return self._call("PATCH", f"/v1/threads/{thread_id}", json={"conversation_style": style})
 
     def transcribe_audio(self, audio_bytes: bytes, filename: str = "recording.wav") -> str:
         """POST /v1/audio/transcriptions - voice in, text out. Not JSON: a multipart

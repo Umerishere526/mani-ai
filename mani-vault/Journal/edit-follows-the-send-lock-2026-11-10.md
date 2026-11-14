@@ -4,6 +4,8 @@ date: 2026-11-10
 tags: [journal, backend, chat, edit, safety]
 ---
 
+> Superseded 2026-11-13 — see [[crisis-pause-audit-findings-2026-11-13]] (the lock the edit follows: `crisis_blocks_chat` is removed; the edit and the send both meet the pause gate, "same as sending" stands)
+
 # An edit is refused in a crisis thread only where a message is
 
 2026-11-10. muhammad: "why can't we edit the previous chat more than 3 times?" The tester showed

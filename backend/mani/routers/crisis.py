@@ -1,5 +1,5 @@
 # ABOUTME: The help resources shown when a conversation is flagged.
-# ABOUTME: Returns an empty list until real services are supplied - no invented numbers.
+# ABOUTME: Open to a paused person too; it is what the pause points them to.
 
 from fastapi import APIRouter
 
@@ -13,7 +13,6 @@ router = APIRouter(prefix="/v1/crisis", tags=["crisis"])
 def resources(_: CurrentUser, country: str | None = None) -> list[Resource]:
     """Crisis services, optionally for one country.
 
-    An empty list is the honest answer while the list is unwritten. A wrong number here
-    would be worse than none, so the client must handle empty rather than assume content.
+    A country with no entries of its own gets the helpline directory alone.
     """
     return resources_for(country)

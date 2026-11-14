@@ -16,7 +16,7 @@ _ORDER = (
     ("offer_dropped", "Offer unusable"), ("toward_framework", "Pressing toward the framework"),
     ("corrected_offer", "Corrected the offer"), ("core_fixed", "Core held fixed"), ("safety", "Safety screen"),
     ("model_concern", "Model concern"), ("guarded", "Guarded"), ("safety_settled", "Safety settled"),
-    ("help_refused", "Blocked, refused help"), ("end_check", "Safety check after the last stage"),
+    ("paused", "Chat paused"), ("return_check", "Return check"), ("end_check", "Safety check after the last stage"),
     ("stepped_out_of", "Stepped out of"), ("no_forward", "Reply asked no question"),
     ("text_asks", "Question in the text too"), ("forward_asks_many", "More than one question at the end"),
     ("reading_before", "Reading of the turn before"), ("latency_ms", "Model time (ms)"),

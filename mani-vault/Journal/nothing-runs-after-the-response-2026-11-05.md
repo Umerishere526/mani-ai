@@ -4,6 +4,8 @@ date: 2026-11-05
 tags: [journal, latency, vercel, understanding, memory, summary]
 ---
 
+> Superseded 2026-11-13 — see [[threads-only-from-the-first-message-2026-11-13]] (how the memory fold is asked for: `memory_fold_pending` and `/v1/threads/{id}/memory-fold` are replaced by `/v1/threads/memory-fold` on New conversation)
+
 # Nothing runs after the response any more (2026-11-05)
 
 Five jobs ran with `fire_and_forget` after a response: Mani's reading of each chat message, the conversation

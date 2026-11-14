@@ -34,7 +34,7 @@ declare
 begin
   foreach t in array array['threads', 'messages', 'thread_summaries',
                            'thread_technique_state', 'thread_techniques_offered',
-                           'thread_response_styles', 'exercise_completions', 'exercise_feedback']
+                           'thread_response_styles', 'exercise_completions', 'exercise_feedback', 'chat_pauses']
   loop
     foreach p in array array['SELECT', 'INSERT', 'UPDATE', 'DELETE']
     loop
@@ -508,3 +508,42 @@ begin
   end;
 end
 $$;
+
+-- A pause is the backend's to start and end; the person reads their own and nothing more.
+select pg_temp.want('a user cannot write their own pause',
+  has_table_privilege('authenticated', 'public.chat_pauses', 'INSERT')
+  or has_table_privilege('authenticated', 'public.chat_pauses', 'UPDATE')
+  or has_table_privilege('authenticated', 'public.chat_pauses', 'DELETE')
+  or has_any_column_privilege('authenticated', 'public.chat_pauses', 'INSERT')
+  or has_any_column_privilege('authenticated', 'public.chat_pauses', 'UPDATE'), false);
+
+select pg_temp.want('a user reads their own pauses',
+  has_column_privilege('authenticated', 'public.chat_pauses', 'id', 'SELECT')
+  and has_column_privilege('authenticated', 'public.chat_pauses', 'user_id', 'SELECT')
+  and has_column_privilege('authenticated', 'public.chat_pauses', 'thread_id', 'SELECT')
+  and has_column_privilege('authenticated', 'public.chat_pauses', 'started_at', 'SELECT')
+  and has_column_privilege('authenticated', 'public.chat_pauses', 'ends_at', 'SELECT')
+  and has_column_privilege('authenticated', 'public.chat_pauses', 'checked_at', 'SELECT'), true);
+
+-- Why a pause started is the model's line of why, which can carry their words: only the backend's role reads it.
+select pg_temp.want('a user cannot read why their pause started',
+  has_column_privilege('authenticated', 'public.chat_pauses', 'reason', 'SELECT'), false);
+
+select pg_temp.want('the backend reads why a pause started',
+  has_column_privilege('mani_service', 'public.chat_pauses', 'reason', 'SELECT'), true);
+
+select pg_temp.want('the backend starts and ends pauses',
+  has_table_privilege('mani_service', 'public.chat_pauses', 'INSERT')
+  and has_table_privilege('mani_service', 'public.chat_pauses', 'UPDATE'), true);
+
+-- When a crisis happened is the backend's record: only the backend's role reads it.
+select pg_temp.want('a user cannot read when their thread''s crisis happened',
+  has_column_privilege('authenticated', 'public.threads', 'crisis_at', 'SELECT'), false);
+
+select pg_temp.want('the backend reads when a thread''s crisis happened',
+  has_column_privilege('mani_service', 'public.threads', 'crisis_at', 'SELECT'), true);
+
+select pg_temp.want('account deletion can clear a person''s pauses',
+  has_table_privilege('supabase_auth_admin', 'public.chat_pauses', 'DELETE')
+  and exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'chat_pauses'
+                 and policyname = 'auth_admin_cascade_delete'), true);

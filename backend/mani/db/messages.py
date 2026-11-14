@@ -146,6 +146,16 @@ async def find_by_client_id(
     return Message.from_record(row)
 
 
+async def thread_of_client_message(
+    conn: asyncpg.Connection,
+    user_id: uuid.UUID | str,
+    client_message_id: uuid.UUID | str,
+) -> uuid.UUID | None:
+    """The conversation a message with this client id was already sent in, if it was."""
+    message = await find_by_client_id(conn, user_id, client_message_id)
+    return message.thread_id if message else None
+
+
 async def find_pair_by_client_id(
     conn: asyncpg.Connection,
     user_id: uuid.UUID | str,

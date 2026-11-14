@@ -33,9 +33,12 @@ from mani.routers import (
 logger = logging.getLogger(__name__)
 
 
-def error_body(category: ErrorCategory, message: str, retryable: bool) -> dict:
+def error_body(category: ErrorCategory, message: str, retryable: bool, details: dict | None = None) -> dict:
     """The single error shape every client branches on."""
-    return {"error": {"category": category, "message": message, "retryable": retryable}}
+    body = {"category": category, "message": message, "retryable": retryable}
+    if details is not None:
+        body["details"] = details
+    return {"error": body}
 
 
 def _what_to_fix(errors: list) -> str | None:
@@ -121,7 +124,7 @@ def create_app() -> FastAPI:
             logger.warning("%s: %s", exc.category, exc)
         return JSONResponse(
             status_code=exc.status_code,
-            content=error_body(exc.category, exc.user_message, exc.retryable),
+            content=error_body(exc.category, exc.user_message, exc.retryable, exc.details),
         )
 
     @app.exception_handler(RequestValidationError)

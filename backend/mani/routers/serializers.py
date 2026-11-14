@@ -1,7 +1,10 @@
 # ABOUTME: Turns database rows into the wire shapes, in one place.
 # ABOUTME: Row models stay internal; only what these return crosses the API boundary.
 
+from __future__ import annotations
+
 import uuid
+from typing import TYPE_CHECKING
 
 from mani.chat import context
 from mani.config import get_settings
@@ -16,8 +19,20 @@ from mani.models.api import (
     PromptOut,
     PromptVersionOut,
     ThreadOut,
+    TurnOut,
 )
-from mani.models.rows import Exercise, Message, MessageRole, Profile, Prompt, Thread
+from mani.models.rows import (
+    Exercise,
+    Message,
+    MessageRole,
+    Pause,
+    Profile,
+    Prompt,
+    Thread,
+)
+
+if TYPE_CHECKING:
+    from mani.chat.orchestrator import Turn
 
 
 def to_thread(thread: Thread) -> ThreadOut:
@@ -26,7 +41,6 @@ def to_thread(thread: Thread) -> ThreadOut:
         title=thread.title,
         message_count=thread.message_count,
         crisis_detected=thread.crisis_detected,
-        crisis_blocks_chat=get_settings().crisis_blocks_chat,
         created_at=thread.created_at,
         last_message_at=thread.last_message_at,
         conversation_style=thread.conversation_style,
@@ -69,10 +83,36 @@ def to_messages(
     return [to_message(m, prompts_live=m.id == live_prompt_id) for m in messages]
 
 
-def to_profile(profile: Profile | None) -> ProfileOut:
+def to_turn(turn: Turn) -> TurnOut:
+    debug = get_settings().ai_debug_mode
+    return TurnOut(
+        id=turn.message_id,
+        content=turn.content,
+        created_at=turn.created_at,
+        prompts=turn.prompts,
+        title=turn.title,
+        crisis_detected=turn.crisis_detected,
+        paused_from=turn.paused_from,
+        paused_until=turn.paused_until,
+        was_duplicate=turn.was_duplicate,
+        reasoning=turn.reasoning,
+        ledger=turn.ledger,
+        understanding=turn.understanding if debug else None,
+        check_at_message_count=turn.check_at_message_count if debug else None,
+        trace=turn.trace if debug else None,
+        follow_up_pending=bool(turn.read_after or turn.needs_summary) and not turn.was_duplicate,
+    )
+
+
+def to_profile(profile: Profile | None, pause: Pause | None = None) -> ProfileOut:
+    paused = {
+        "chat_paused_from": pause.started_at if pause else None,
+        "chat_paused_until": pause.ends_at if pause else None,
+    }
     if profile is None:
-        return ProfileOut()
+        return ProfileOut(**paused)
     return ProfileOut(
+        **paused,
         nickname=profile.nickname,
         topics=profile.topics,
         support_style=profile.support_style,

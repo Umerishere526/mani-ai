@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import body as body_route, context, converse, crisis, picture, repairs, reply_checks, rewind, safety, understanding, walk
+from mani.chat import body as body_route, context, converse, crisis, pause, picture, repairs, reply_checks, rewind, safety, understanding, walk
 from mani.chat.greeting import (
     COPIED_BACK,
     EXPLAIN_LABELS,
@@ -26,6 +26,7 @@ from mani.config import get_settings
 from mani.db import (
     llm_calls,
     messages as messages_db,
+    pauses,
     profiles,
     threads,
 )
@@ -36,6 +37,7 @@ from mani.models.rows import (
     Framework,
     Message,
     MessageRole,
+    Pause,
     SupportStyle,
     TechniqueOutcome,
     TechniqueState,
@@ -155,7 +157,9 @@ class Turn:
     prompts: list[SmartPrompt] = field(default_factory=list)
     title: str | None = None
     crisis_detected: bool = False
-    crisis_blocks_chat: bool = True
+    # When the pause this turn started began and ends; set only on the turn that pauses the chat.
+    paused_from: dt.datetime | None = None
+    paused_until: dt.datetime | None = None
     was_duplicate: bool = False
     needs_summary: bool = False
     llm_call_id: uuid.UUID | None = None
@@ -422,6 +426,16 @@ async def _converse(
     guarded = state_after is not safety.State.CLEAR
     if guarded:
         updates.safety = state_after.value
+    # The answer to the return check comes here when the question left the conversation clear: danger in it that they
+    # refuse help for or stay set on, with nothing in place, pauses the chat.
+    answered = pause.answering(ctx)
+    judged = _judgment(reply.safety)
+    about = _danger_about(ctx, judged)
+    pausing = judged is not None and pause.pauses_now(
+        safety.State.CLEAR, state_after, help_in_place=judged.help_in_place, declined=judged.declined, about=about,
+        danger=judged.danger, symptom_now=judged.symptom_now,
+        after_return_check=answered is not None, is_return_check=False,
+    )
     # The reply moves to the set of questions; its offer is made below, and nothing waits for a check's answer.
     moving = not guarded and converse.checked(reply, allowed=allowed)
     understood = (
@@ -476,6 +490,7 @@ async def _converse(
     if offering is not None:
         # Offered: a correction they made earlier is answered by this offer.
         understood = {key: value for key, value in understood.items() if key != converse.CORRECTED}
+    understood = _safety_record(understood, None, answered, state_after, about)
     if understood != ctx.thread.understanding:
         updates.understanding = understood
     # Counted, never fixed: a question asked again, or a reply that asks nothing before the offer.
@@ -497,6 +512,8 @@ async def _converse(
         )
     if checks:
         logger.info("thread %s reply checks: %s", ctx.thread.id, "; ".join(checks))
+    if pausing:
+        fixed = dataclasses.replace(fixed, text=crisis.pause_reply(about, settings.crisis_pause_minutes))
     # No dashes in what Mani says (the client, 2026-11-03); the draft's are still counted above as "em dash".
     fixed = dataclasses.replace(fixed, text=repairs.without_dashes(fixed.text))
     if not fixed.text.strip():
@@ -535,6 +552,10 @@ async def _converse(
         updates.title = fixed.title
     await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
     flagged = await _record_danger(conn, ctx, safety.State.CLEAR, state_after, reply.safety, pair.user_message_id)
+    paused = await _pause_writes(
+        conn, ctx, pausing=pausing, answered=answered, state_after=state_after, read=judged,
+        was_duplicate=pair.was_duplicate, minutes=settings.crisis_pause_minutes,
+    )
 
     summarized = ctx.summary.summarized_message_count if ctx.summary else 0
     seen = understood.get(picture.KEY) or {}
@@ -543,6 +564,7 @@ async def _converse(
         moment=Moment.CHATTING.value, style=conversation_style, message_count=ctx.thread.message_count,
         their_message=context.their_messages(ctx), latency_ms=call.latency_ms, guarded=guarded or None,
         safety=_trace(after=state_after.value, **_read_traced(reply.safety)) if guarded else None,
+        paused=pausing or None, return_check="answered" if answered else None,
         model=_trace(
             shape=reply.shape, move=reply.move, heart=reply.heart, needs_info=reply.needs_info,
             insight=bool(reply.insight) or None, link=bool(reply.link) or None, checking=reply.checking,
@@ -582,9 +604,11 @@ async def _converse(
         prompts=prompts,
         title=fixed.title or ctx.thread.title,
         crisis_detected=flagged or state_after is safety.State.DANGER,
-        crisis_blocks_chat=settings.crisis_blocks_chat,
+        paused_from=paused.started_at if paused else None,
+        paused_until=paused.ends_at if paused else None,
         was_duplicate=pair.was_duplicate,
-        needs_summary=window.dropped > summarized,
+        # As on the stage path: a pausing turn leaves nothing for the app to ask for while the chat is paused.
+        needs_summary=window.dropped > summarized and not pausing,
         llm_call_id=call.call_id,
         checks=checks,
         understanding=understood,
@@ -812,6 +836,13 @@ async def _turn(
             "select pg_advisory_xact_lock(hashtextextended($1, 0))",
             f"{user_id}:{client_message_id}",
         )
+    # Checked after that lock and before the duplicate lookup, so a retry of the message that paused the chat waits
+    # for the first request and is then refused too, and by the turn itself, so a pause started in another tab or a
+    # direct call cannot slip past the route's gate.
+    if (active := await pauses.active(conn, user_id)) is not None:
+        raise pause.paused_error(active)
+
+    if client_message_id is not None:
         existing = await messages_db.find_pair_by_client_id(
             conn, user_id, client_message_id
         )
@@ -839,7 +870,6 @@ async def _turn(
                 else [],
                 title=thread.title if thread else None,
                 crisis_detected=bool(thread and thread.crisis_detected),
-                crisis_blocks_chat=settings.crisis_blocks_chat,
                 was_duplicate=True,
             )
 
@@ -858,17 +888,7 @@ async def _turn(
             user_message="That conversation is not available.",
         )
 
-    if ctx.thread.crisis_detected and settings.crisis_blocks_chat:
-        raise ServiceError(
-            f"thread {thread_id} is locked by a crisis flag",
-            ErrorCategory.FORBIDDEN,
-            user_message="This conversation is paused. Please reach out for support.",
-        )
-
     await rewind.save(conn, ctx, user_id)
-
-    if ctx.thread.understanding.get(context.HELP_REFUSED):
-        return await _help_refused(conn, ctx, content, client_message_id)
 
     # The whole thread within the budget: the model sees what they said earlier, instead of a store
     # guessing it ahead of time (2026-10-13).
@@ -927,6 +947,12 @@ async def _turn(
     assessment = safety.screen(content)
     state_before = safety.State(ctx.thread.safety)
     state_now = safety.screened(state_before, assessment)
+    # The first message after a pause is asked whether they are all right now: a safety turn whatever the thread's
+    # state, which never pauses. Their next message answers it (chat/pause).
+    check = pause.return_check(ctx)
+    answered = None if check is not None else pause.answering(ctx)
+    if check is not None and state_now is safety.State.CLEAR:
+        state_now = safety.State.UNSURE
     holding = state_now is not safety.State.CLEAR
 
     if tapped is None and not holding and context.copies_last_reply(content, history):
@@ -969,7 +995,9 @@ async def _turn(
     )
     prefix = context.build(
         ctx, framework=active_framework,
-        history=history, safety=state_now.value, danger_said=state_before is safety.State.DANGER,
+        history=history,
+        safety=("returning" if check.kind == "paused_thread" else "returning_new") if check else state_now.value,
+        paused_for=check.reason if check else None,
         offer_waiting=deferred,
         starting=starting is not None,
         # A typed yes to the open offer, or asking for the set they declined, starts it.
@@ -1058,9 +1086,17 @@ async def _turn(
     if reply.next_stage:
         logger.info("thread %s next stage judged %s", ctx.thread.id, reply.next_stage.status)
 
-    # The model's judgment moves the state; a refusal to answer never settles it (chat/safety.after). Only someone in
-    # danger saying they will not get help blocks the conversation (help_refused below).
+    # The model's judgment moves the state; a refusal to answer never settles it (chat/safety.after).
     state_after = _judged(state_now, reply.safety, ctx.thread.id, settled=_settled(ctx))
+    # Danger that goes on pauses the chat when they refuse help or stay set on it with nothing in place, as does such
+    # danger left in the answer to the return check; the turn that asks it never pauses.
+    judged = _judgment(reply.safety)
+    about = _danger_about(ctx, judged)
+    pausing = judged is not None and pause.pauses_now(
+        state_before, state_after, help_in_place=judged.help_in_place, declined=judged.declined, about=about,
+        danger=judged.danger, symptom_now=judged.symptom_now,
+        after_return_check=answered is not None, is_return_check=check is not None,
+    )
     if state_after is not state_before:
         updates.safety = state_after.value
     model_concern = state_after is not safety.State.CLEAR
@@ -1151,16 +1187,7 @@ async def _turn(
         understood = {**understood, context.SAFETY_END_CHECK: "done"}
     elif settled_now and understood.get(context.SAFETY_END_CHECK) == "done":
         understood = {key: value for key, value in understood.items() if key != context.SAFETY_END_CHECK}
-    # Mani already said what would keep them safe, they are still in danger, and they said they will not get help: the
-    # chat blocks from this reply on (muhammad, 2026-11-11). A first message, an unsure concern or a refusal to answer
-    # never does.
-    help_refused = (
-        state_before is safety.State.DANGER and state_after is safety.State.DANGER
-        and bool(reply.safety and reply.safety.refused_help)
-    )
-    if help_refused:
-        logger.warning("thread %s: in danger and refused help, the chat is blocked", ctx.thread.id)
-        understood = {**understood, context.HELP_REFUSED: True}
+    understood = _safety_record(understood, check, answered, state_after, about)
     if understood != ctx.thread.understanding:
         updates.understanding = understood
     # A clear yes to the check is the only way to an offer (spec 0006, AC-1, AC-4). The framework is the solution
@@ -1212,8 +1239,8 @@ async def _turn(
             fixed = dataclasses.replace(
                 fixed, text=text, prompts=_prompts(buttons), framework_id=finished.id, phase=body_route.CLOSING,
             )
-        if help_refused:
-            fixed = dataclasses.replace(fixed, text=crisis.HELP_REFUSED_REPLY)
+    if pausing:
+        fixed = dataclasses.replace(fixed, text=crisis.pause_reply(about, settings.crisis_pause_minutes))
     # The walk runs on the turn a framework starts and on each of its stages, never on a guarded
     # turn: that leaves the store and the phase exactly as they were (AC-10).
     stored_all = ctx.technique.stages_known if ctx.technique else {}
@@ -1278,9 +1305,9 @@ async def _turn(
             if ahead:
                 understood = {**understood, context.FOLLOW_THROUGH: ahead}
                 updates.understanding = understood
-            if ctx.thread.crisis_detected and understood.get(context.SAFETY_END_CHECK) != "done":
-                # A crisis was recorded at some point in this conversation (never a false alarm that was asked about
-                # and explained): before the closing choices Mani asks about it
+            if understood.get(context.DANGER_REACHED) and understood.get(context.SAFETY_END_CHECK) != "done":
+                # A turn of this conversation reached danger (never a concern judged only unsure, nor a false alarm
+                # asked about and explained): before the closing choices Mani asks about it
                 # once, as a reply of its own, and their answer is read as a safety turn (muhammad, 2026-11-11). The
                 # framework waits on its last stage; the reply that settles it carries the close.
                 # ponytail: only the close is held; with the body check-in switched back on, hold its question too.
@@ -1356,6 +1383,10 @@ async def _turn(
         conn, ctx, state_before, state_after, reply.safety, pair.user_message_id,
         stated=assessment.category if assessment.level is safety.Level.CRISIS else None,
     )
+    paused = await _pause_writes(
+        conn, ctx, pausing=pausing, answered=answered, state_after=state_after, read=judged,
+        was_duplicate=pair.was_duplicate, minutes=settings.crisis_pause_minutes,
+    )
 
     count_after = ctx.thread.message_count + 2
     new_offer = next((p for p in fixed.prompts if p.technique), None)
@@ -1417,8 +1448,8 @@ async def _turn(
             before=state_before.value, screen=assessment.level.value, after=state_after.value,
             settled=settled_now or None, **_read_traced(reply.safety),
         ) if holding or model_concern else None,
-        model_concern=model_concern or None, guarded=guarded or None,
-        help_refused=help_refused or None,
+        model_concern=model_concern or None, guarded=guarded or None, paused=pausing or None,
+        return_check=check.kind if check else "answered" if answered else None,
         end_check="answered" if closing_after_check else understood.get(context.SAFETY_END_CHECK) if end_check_asked else None,
         model=_trace(
             **_stage_reports(reply), offer_answer=reply.offer_answer, check_answer=reply.check_answer,
@@ -1440,11 +1471,13 @@ async def _turn(
         prompts=fixed.prompts,
         title=fixed.title or ctx.thread.title,
         crisis_detected=flagged or state_after is safety.State.DANGER,
-        crisis_blocks_chat=settings.crisis_blocks_chat,
+        paused_from=paused.started_at if paused else None,
+        paused_until=paused.ends_at if paused else None,
         was_duplicate=pair.was_duplicate,
         # A summary is needed only for messages that have left the model's view and that no summary
-        # covers yet. Both sides are thread message counts.
-        needs_summary=window.dropped > summarized,
+        # covers yet. Both sides are thread message counts. A pausing turn leaves nothing for the app to ask for:
+        # the follow-up route refuses while the chat is paused, and the next turn finds the summary still due.
+        needs_summary=window.dropped > summarized and not pausing,
         llm_call_id=call.call_id,
         understanding=understood,
         check_at_message_count=(
@@ -1582,28 +1615,6 @@ async def _copied_back(
     )
 
 
-async def _help_refused(
-    conn: asyncpg.Connection,
-    ctx: threads.TurnContext,
-    content: str,
-    client_message_id: uuid.UUID | str | None,
-) -> Turn:
-    """Answer a conversation that is blocked because they are in danger and refused help: the same words every time,
-    with no model call, and nothing else changes. The pair is kept, so the conversation shows what happened."""
-    pair = await messages_db.create_pair(
-        conn, ctx.thread.id, content, crisis.HELP_REFUSED_REPLY, client_message_id=client_message_id,
-    )
-    return Turn(
-        message_id=pair.mani_message_id,
-        content=crisis.HELP_REFUSED_REPLY,
-        created_at=pair.created_at,
-        title=ctx.thread.title,
-        crisis_detected=True,
-        was_duplicate=pair.was_duplicate,
-        trace=_trace(moment="help_refused", message_count=ctx.thread.message_count),
-    )
-
-
 def _ledger_as_stored(
     config: cache.Config, technique: TechniqueState | None, stored_all: dict, starting: str | None,
 ) -> list[dict] | None:
@@ -1623,15 +1634,14 @@ def _plain(words: str) -> str:
 
 
 def _with_forward(text: str, forward: str | None) -> str:
-    """The reply's text and the question that ends it, the question on a line of its own. A text that already ends on
-    that same question gives it up, so it is said once: the model asked it in both places in the first live runs
-    (2026-11-10). A reply that came without a question goes out as its text (reply_checks counts it)."""
+    """The reply's text and the question that ends it, the question on a line of its own. The text gives up that same
+    question wherever it asks it, so it is said once: the model asked it in both places in the first live runs
+    (2026-11-10), and before the direction and again after it in the owner's chat (2026-11-13). A reply that came
+    without a question goes out as its text (reply_checks counts it)."""
     question = " ".join((forward or "").split())
     if not question:
         return text
-    kept = repairs.without_last_question(text)
-    if _plain(text[len(kept):]) == _plain(question):
-        text = kept
+    text = repairs.without_sentences(text, lambda sentence: _plain(sentence) == _plain(question))
     return f"{text.rstrip()}\n\n{question}" if text.strip() else question
 
 
@@ -1648,8 +1658,50 @@ def _judged(
     return after
 
 
+def _judgment(read: schema.SafetyRead | None) -> schema.SafetyRead | None:
+    """The model's safety read when it judged something: a danger value, or that they pushed the question away. A read
+    with neither judged nothing, as no read did, and neither pauses the chat nor answers a return check."""
+    return read if read is not None and (read.danger is not None or read.declined) else None
+
+
 def _settled(ctx: threads.TurnContext) -> bool:
     return bool((ctx.thread.understanding or {}).get(context.SAFETY_SETTLED))
+
+
+def _danger_about(ctx: threads.TurnContext, read: schema.SafetyRead | None) -> str | None:
+    """Whose danger this turn's read judged, else whose the conversation last reached."""
+    return (read.about if read else None) or (ctx.thread.understanding or {}).get(context.DANGER_ABOUT)
+
+
+def _safety_record(
+    understood: dict, check: pause.ReturnCheck | None, answered: str | None, state_after: safety.State,
+    about: str | None,
+) -> dict:
+    """The record with where the return check stands after this turn, asked or answered, and whether this conversation
+    has reached danger, and whose."""
+    if check is not None:
+        understood = {**understood, context.RETURN_CHECK: {"pause": str(check.pause_id), "state": "asked"}}
+    elif answered is not None:
+        understood = {**understood, context.RETURN_CHECK: {"pause": answered, "state": "answered"}}
+    if state_after is safety.State.DANGER:
+        understood = {**understood, context.DANGER_REACHED: True}
+        if about:
+            understood = {**understood, context.DANGER_ABOUT: about}
+    return understood
+
+
+async def _pause_writes(
+    conn: asyncpg.Connection, ctx: threads.TurnContext, *, pausing: bool, answered: str | None,
+    state_after: safety.State, read: schema.SafetyRead | None, was_duplicate: bool, minutes: int,
+) -> Pause | None:
+    """The turn's pause writes, in its transaction: an answer to the return check judged to settle it marks that pause
+    checked, so the other conversations stop asking; a pausing turn starts a pause with its judgment's reason. A
+    read with no danger value, a refusal of the question included, marks nothing."""
+    if was_duplicate:
+        return None
+    if answered is not None and read is not None and read.danger is not None and state_after is safety.State.CLEAR:
+        await pauses.mark_checked(conn, answered)
+    return await pauses.start(conn, ctx.thread.user_id, ctx.thread.id, minutes, read.why) if pausing else None
 
 
 def _read_traced(read: schema.SafetyRead | None) -> dict:
@@ -1659,7 +1711,7 @@ def _read_traced(read: schema.SafetyRead | None) -> dict:
         return {}
     return {
         "danger": read.danger, "about": read.about, "declined": read.declined or None, "symptom_now": read.symptom_now,
-        "refused_help": read.refused_help or None,
+        "help_in_place": read.help_in_place or None,
     }
 
 
@@ -1669,7 +1721,7 @@ async def _record_danger(
 ) -> bool:
     """The turn that first finds danger now, or that opens a concern with an explicit statement ("I want to die"), is
     recorded once, for review (admin.crisis_events), with whose danger it is and never their words. The thread is
-    flagged; it locks only where CRISIS_BLOCKS_CHAT is on (off by default since 2026-11-06). Whether it was flagged."""
+    flagged. Whether it was flagged."""
     new_danger = after is safety.State.DANGER and before is not safety.State.DANGER
     new_statement = stated is not None and before is safety.State.CLEAR and after is not safety.State.CLEAR
     if not (new_danger or new_statement):
@@ -1680,32 +1732,33 @@ async def _record_danger(
     return True
 
 
-async def start_thread(
-    conn: asyncpg.Connection, claims: Claims, title: str | None = None
-) -> tuple[Thread, bool]:
-    """Open a conversation, writing Mani's opening line only on a genuinely new one.
-
-    Returns (thread, created). A reused thread already has its greeting, and
-    create_greeting refuses a second one anyway.
-    """
-    thread, created = await threads.create_or_reuse(conn, claims.user_id, title)
-    if created:
-        profile = await profiles.get(conn, claims.user_id)
-        returning = await _has_earlier_thread(conn, claims.user_id, thread.id)
-        await messages_db.create_greeting(
-            conn, thread.id, greeting(profile.nickname if profile else None, returning),
-            prompt_options=STYLE_OPTIONS,
-        )
-    return thread, created
+async def start_thread(conn: asyncpg.Connection, claims: Claims) -> Thread:
+    """Open a conversation and write Mani's opening line."""
+    thread = await threads.create(conn, claims.user_id)
+    await messages_db.create_greeting(
+        conn, thread.id, await opening_greeting(conn, claims.user_id, thread.id),
+        prompt_options=STYLE_OPTIONS,
+    )
+    return thread
 
 
-async def _has_earlier_thread(
-    conn: asyncpg.Connection, user_id: str, exclude: uuid.UUID
+async def opening_greeting(
+    conn: asyncpg.Connection, user_id: str, exclude: uuid.UUID | None = None
+) -> str:
+    """The line a conversation opens with. One place makes it, so the opening a client shows before the person has
+    written is the one the conversation then holds."""
+    profile = await profiles.get(conn, user_id)
+    returning = await has_written_in_earlier_thread(conn, user_id, exclude)
+    return greeting(profile.nickname if profile else None, returning)
+
+
+async def has_written_in_earlier_thread(
+    conn: asyncpg.Connection, user_id: str, exclude: uuid.UUID | None = None
 ) -> bool:
     return bool(
         await conn.fetchval(
-            "select exists (select 1 from public.threads "
-            "where user_id = $1 and id <> $2)",
+            "select exists (select 1 from public.threads t "
+            f"where user_id = $1 and id is distinct from $2 and {threads.WRITTEN_IN})",
             user_id, exclude,
         )
     )

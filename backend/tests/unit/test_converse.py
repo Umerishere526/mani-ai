@@ -109,6 +109,10 @@ def test_once_the_core_is_named_the_reply_may_move_without_waiting_for_a_confirm
     assert "only if heart is ready" not in converse.MOVE_MAY
 
 
+def test_a_chat_turn_is_told_to_give_the_direction_if_it_judges_danger_now():
+    assert context.DANGER_DIRECTION in converse.note("supportive", allowed=False, due=False, wants_title=False)
+
+
 def test_the_note_says_whether_this_reply_may_move_to_the_framework_and_names_the_style():
     """The client meeting, 2026-11-03: the check of the summary was replaced by the move to the offer."""
     assert converse.MOVE_NOT in converse.note("supportive", allowed=False, due=False, wants_title=False)

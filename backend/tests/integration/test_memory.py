@@ -6,8 +6,6 @@ import uuid
 
 import pytest
 
-from mani.config import get_settings
-
 from mani import memory
 from mani.chat import orchestrator, runner
 from mani.db import llm_calls, threads
@@ -77,7 +75,7 @@ async def _chat(claims, text: str):
     from mani.db import pool
 
     async with pool.as_user(claims) as conn:
-        thread, _ = await orchestrator.start_thread(conn, claims)
+        thread = await orchestrator.start_thread(conn, claims)
     await runner.send(claims, thread.id, text)
     return thread
 
@@ -86,8 +84,7 @@ async def _new_chat(claims):
     from mani.db import pool
 
     async with pool.as_user(claims) as conn:
-        thread, created = await threads.create_or_reuse(conn, claims.user_id)
-    assert created
+        thread = await threads.create(conn, claims.user_id)
     return thread
 
 
@@ -107,32 +104,17 @@ async def _folded_at(thread_id):
         )
 
 
-async def test_starting_a_new_chat_folds_the_one_that_finished(bea, scripted):
+async def test_a_finished_chat_is_folded_into_the_memory_once(bea, scripted):
     fake = scripted()
     first = await _chat(bea, "I always feel low on Sunday evenings because of work")
-    second = await _new_chat(bea)
 
-    assert await memory.fold_finished(bea, keep=second.id) == 1
+    assert await memory.fold_finished(bea) == 1
     assert (await _stored(bea)).low_times == REMEMBERED.low_times
     assert await _folded_at(first.id) is not None
 
-    # Nothing new has been said, so a second new chat costs nothing.
-    assert await memory.fold_finished(bea, keep=second.id) == 0
+    # Nothing new has been said, so folding again costs nothing.
+    assert await memory.fold_finished(bea) == 0
     assert len(fake.folds) == 1
-
-
-async def test_the_new_chat_itself_is_never_folded_and_carries_no_old_messages(bea, scripted):
-    scripted()
-    await _chat(bea, "I always feel low on Sunday evenings because of work")
-    second = await _new_chat(bea)
-    await memory.fold_finished(bea, keep=second.id)
-
-    from mani.db import messages as messages_db, pool
-
-    async with pool.as_user(bea) as conn:
-        history = (await messages_db.for_context(conn, second.id, bea.user_id, budget_chars=get_settings().context_budget_chars)).messages
-    assert all("Sunday" not in m.content for m in history)
-    assert await _folded_at(second.id) is None
 
 
 async def test_a_conversation_that_continues_is_folded_again_from_where_it_stopped(bea, scripted):
@@ -154,6 +136,20 @@ async def test_the_idle_job_leaves_a_conversation_that_is_still_going(bea, scrip
 
     idle_before = dt.datetime.now(dt.UTC) - memory.IDLE_AFTER
     assert await memory.fold_finished(bea, idle_before=idle_before) == 0
+
+
+async def test_a_conversation_holding_only_a_style_tap_is_not_folded(bea, scripted):
+    from mani.db import pool
+
+    fake = scripted()
+    async with pool.as_user(bea) as conn:
+        tapped = await orchestrator.start_thread(conn, bea)
+    turn = await runner.send(bea, tapped.id, "Supportive")
+    assert turn.content == "How can I support you today?", "the greeting's style button, not a message"
+
+    assert await memory.fold_finished(bea) == 0
+    assert fake.folds == []
+    assert await _folded_at(tapped.id) is None
 
 
 async def test_a_crisis_conversation_is_never_folded(bea, scripted):
@@ -253,7 +249,7 @@ async def test_the_next_chat_is_shaped_by_the_memory_but_carries_none_of_the_old
     scripted()
     await _chat(bea, "I always feel low on Sunday evenings because of work")
     second = await _new_chat(bea)
-    await memory.fold_finished(bea, keep=second.id)
+    await memory.fold_finished(bea)
 
     sent: list[list[dict]] = []
 

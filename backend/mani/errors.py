@@ -22,6 +22,8 @@ class ErrorCategory(StrEnum):
     # a permission failure and logs the person out instead of renewing them.
     UNAUTHENTICATED = "unauthenticated"
     FORBIDDEN = "forbidden"
+    # The person's chat is held after a crisis; the library, profile and crisis resources stay open.
+    CHAT_PAUSED = "chat_paused"
     UNKNOWN = "unknown"
 
 
@@ -38,12 +40,13 @@ STATUS_BY_CATEGORY = {
     ErrorCategory.BUSY: 503,
     ErrorCategory.UNAUTHENTICATED: 401,
     ErrorCategory.FORBIDDEN: 403,
+    ErrorCategory.CHAT_PAUSED: 423,
     ErrorCategory.UNKNOWN: 500,
 }
 
 
 class ServiceError(Exception):
-    """Raised by services. `message` is for logs, `user_message` for the client."""
+    """Raised by services. `message` is for logs, `user_message` for the client, `details` for the facts a client branches on."""
 
     def __init__(
         self,
@@ -52,11 +55,13 @@ class ServiceError(Exception):
         *,
         retryable: bool = False,
         user_message: str = "Something went wrong. Please try again.",
+        details: dict | None = None,
     ) -> None:
         super().__init__(message)
         self.category = category
         self.retryable = retryable
         self.user_message = user_message
+        self.details = details
 
     @property
     def status_code(self) -> int:

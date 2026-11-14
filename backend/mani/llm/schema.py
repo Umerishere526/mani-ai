@@ -120,19 +120,23 @@ class SafetyRead(BaseModel):
     declined: bool = Field(
         default=False,
         description=(
-            "In this message they pushed the question about their safety away rather than answering it: refused "
-            "it (\"I don't want to answer that\", \"stop asking\") or brushed it off to get away from it "
-            "(\"anyway\", \"doesn't matter\", \"can we talk about something else\"). Going on about their "
-            "situation is not pushing it away. Never about a symptom in their body: pushing back there is not declined."
+            "In this message they are set against being safe: they refused the help or the step that keeps them or "
+            "the other person safe (\"no I don't want to\", \"I won't call\"), said again they will do it (\"yes "
+            "I'll kill him\", \"I'm still going to\"), or pushed the question about their safety away rather than "
+            "answering it (\"I don't want to answer that\", \"stop asking\", \"anyway\", \"can we talk about "
+            "something else\"). A doubt or a question (\"could it be stress?\"), going on about their situation, "
+            "or a step they took or someone is taking (\"my wife is calling\") is never declined. For a symptom in "
+            "their body only one thing is declined: refusing the help for it outright (\"I'm not calling an "
+            "ambulance\"); pushing back or doubting it is never declined."
         ),
     )
 
-    refused_help: bool = Field(
+    help_in_place: bool = Field(
         default=False,
         description=(
-            "In this message they said plainly that they will not do what would keep them safe: they will not call, "
-            "will not get help, will not let anyone come or know. Only a clear no to getting help: never a refusal "
-            "to answer a question of yours, wanting you to stop asking, or doubt or fear about getting help."
+            "Judged from the whole conversation as it stands: help has been called or is on its way, someone is with "
+            "them, the means are away from them, or they have moved away from the danger. The same for every kind of "
+            "danger."
         ),
     )
 
@@ -843,7 +847,8 @@ class Reply(_ReplyBase):
         json_schema_extra={"pattern": r"^$|\?\s*$"},
         description=(
             "Only when your text asks no question: the one question that ends your reply, in your own words, from "
-            "what they just told you, ending in a question mark. Empty when your text already asks one."
+            "what they just told you, ending in a question mark. Empty when your text already asks one: a question "
+            "is never asked twice."
         ),
     )
     options: str | None = Field(
@@ -1147,7 +1152,8 @@ class ConversationReply(_ReplyBase):
             "The question that ends your reply, in your own words and new each turn: where they could go from here, "
             "from what they told you, never asking for what they already said. One question, ending in a question "
             "mark. When your text said your reading of the core and they have not confirmed it, ask whether it fits. "
-            "When a move offers readings or possibilities to choose from, they are this question."
+            "When a move offers readings or possibilities to choose from, they are this question. Your text never "
+            "asks it too, not even before what you tell them."
         ),
     )
     core: str | None = Field(

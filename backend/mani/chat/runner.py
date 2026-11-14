@@ -13,9 +13,12 @@ import asyncpg
 
 from mani.auth.jwt import Claims
 from mani.chat import orchestrator, rewind
-from mani.db import llm_calls, pool
+from mani.chat.greeting import STYLE_OPTIONS
+from mani.db import llm_calls, pool, threads
+from mani.db import messages as messages_db
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
+from mani.models.rows import SupportStyle, Thread
 from mani.one_at_a_time import one_at_a_time
 from mani.prompts import cache
 
@@ -137,6 +140,56 @@ async def send(
     # once more; the write still stores one turn.
     async with one_at_a_time(("send", claims.user_id, str(client_message_id))):
         return await run(claims, thread_id, steps)
+
+
+async def start(
+    claims: Claims, content: str, client_message_id: uuid.UUID | str | None, style: SupportStyle | None
+) -> tuple[Thread, orchestrator.Turn]:
+    """A person's first message: the conversation it opens is created with it, holding Mani's greeting and, when they
+    tapped one, the style they chose, and then the message runs as the turn it is.
+
+    A retry with the same `client_message_id` goes to the conversation its first try made and gets that turn back.
+    A start that fails leaves no conversation behind: the one it created is deleted.
+    """
+    if client_message_id is None:
+        return await _start(claims, content, None, style)
+    # A retry arriving while the first try waits on the model would find no conversation yet and make a second, so
+    # it waits here for the first to finish, as a retried send does.
+    async with one_at_a_time(("start", claims.user_id, str(client_message_id))):
+        return await _start(claims, content, client_message_id, style)
+
+
+async def _start(
+    claims: Claims, content: str, client_message_id: uuid.UUID | str | None, style: SupportStyle | None
+) -> tuple[Thread, orchestrator.Turn]:
+    async with pool.as_user(claims) as conn:
+        thread_id = (
+            await messages_db.thread_of_client_message(conn, claims.user_id, client_message_id)
+            if client_message_id is not None
+            else None
+        )
+        created = thread_id is None
+        if created:
+            thread_id = (await orchestrator.start_thread(conn, claims)).id
+    try:
+        if created and style is not None:
+            tap = next(option["label"] for option in STYLE_OPTIONS if option["style"] == style.value)
+            await send(claims, thread_id, tap)
+        turn = await send(claims, thread_id, content, client_message_id)
+    except Exception:
+        if created:
+            async with pool.as_user(claims) as conn:
+                await threads.soft_delete(conn, thread_id, claims.user_id)
+        raise
+    async with pool.as_user(claims) as conn:
+        thread = await threads.get(conn, thread_id, claims.user_id)
+    if thread is None:
+        raise ServiceError(
+            f"thread {thread_id} not found for user {claims.user_id}",
+            ErrorCategory.NOT_FOUND,
+            user_message="That conversation is not available.",
+        )
+    return thread, turn
 
 
 async def edit(

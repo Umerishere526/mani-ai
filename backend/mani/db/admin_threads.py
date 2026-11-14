@@ -11,6 +11,7 @@ import asyncpg
 from pydantic import BaseModel
 
 from mani.db import messages as messages_db
+from mani.db.threads import WRITTEN_IN
 from mani.models.rows import Message, SupportStyle
 
 DEFAULT_PAGE = 50
@@ -58,14 +59,15 @@ async def list_all(
 ) -> Page:
     """Every person's conversations, most recently active first.
 
-    A thread the person deleted stays out of view, as it does for them. `search` matches part
-    of the owner's email, or their user id exactly.
+    A thread the person deleted, or has not yet written in, stays out of view, as it does for them.
+    `search` matches part of the owner's email, or their user id exactly.
     """
     term = (search or "").strip() or None
     rows = await conn.fetch(
         f"""
         {_SELECT}
          where t.deleted_at is null
+           and {WRITTEN_IN}
            and ($1::text is null
                 or u.email ilike '%' || $1 || '%'
                 or t.user_id::text = lower($1))

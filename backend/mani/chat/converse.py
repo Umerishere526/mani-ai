@@ -292,6 +292,7 @@ def note(
         )
     if (understood or {}).get(context.SAFETY_SETTLED):
         lines.append(SETTLED_LINE)
+    lines.append(context.DANGER_DIRECTION)
     if seen := understanding.picture_line(understood or {}):
         lines.append(f"Your picture of them before their message: {seen}.")
     if so_far := understanding.render(understood or {}):
