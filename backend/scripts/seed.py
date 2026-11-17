@@ -121,9 +121,8 @@ def missing_for_activation(framework: dict) -> list[str]:
         offer = (offering.get("offer") or {}).get(style.value)
         if not offer or template_slots(offer)[1] is None:
             missing.append(f"stages.offering.offer.{style.value} with a <going_through> slot")
-        for key in ("keep_chatting", "explain"):
-            if not (offering.get(key) or {}).get(style.value):
-                missing.append(f"stages.offering.{key}.{style.value}")
+        if not (offering.get("explain") or {}).get(style.value):
+            missing.append(f"stages.offering.explain.{style.value}")
     for phase in framework["phases"]:
         if phase == OFFERING or phase in ENDING_STAGES:
             continue

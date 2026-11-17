@@ -44,6 +44,16 @@ def test_the_close_keeps_manis_words_without_a_question_or_a_body_offer_and_adds
     )
 
 
+
+def test_a_close_that_is_only_a_question_is_kept_and_never_sent_empty(stages):
+    """The close loses the question it ends on only when something comes before it. A close that is nothing but a
+    question was cut to an empty text, which fails the turn as "empty after repair"."""
+    assert body.close("What would you like to carry forward from this?", stages)[0] == (
+        "What would you like to carry forward from this?")
+    assert body.close("You found a kinder way to see it. What would you like to do with it?", stages)[0] == (
+        "You found a kinder way to see it.")
+
+
 def test_something_practical_still_ahead_puts_plan_next_step_first(stages):
     """muhammad, 2026-11-06, after manasa's tests: the questions ended and nothing helped her plan how to raise it."""
     _, buttons = body.close("You'll raise it with your boss calmly.", stages, plan=True)

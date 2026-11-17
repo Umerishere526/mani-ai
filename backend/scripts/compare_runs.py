@@ -25,7 +25,7 @@ WORD = re.compile(r"[A-Za-z']+")
 FIRST_SENTENCE = re.compile(r"^.*?(?:[.!?](?=\s|$)|$)", re.S)
 # Flags about what a reply says rather than what the conversation did.
 LANGUAGE_FLAGS = ("em dash", "solution in chat", "explains people", "announces a question", "talks about them",
-                  "insight repeats", "reflect two in a row", "small idea", "shape ",
+                  "insight repeats", "acknowledge two in a row", "small idea", "shape ",
                   "window on what they ruled out")
 
 
@@ -72,7 +72,8 @@ def _rows(title: str, before: dict, after: dict, *, mark: bool) -> list[str]:
 def compare(baseline: dict, updated: dict) -> tuple[list[str], int]:
     lines: list[str] = []
     differences = 0
-    for name in sorted(set(baseline) | set(updated)):
+    # A key that starts with an underscore is about the run (scenario_check._save), not a conversation.
+    for name in sorted(n for n in set(baseline) | set(updated) if not n.startswith("_")):
         for style in sorted(set(baseline.get(name, {})) | set(updated.get(name, {}))):
             old, new = baseline.get(name, {}).get(style), updated.get(name, {}).get(style)
             lines.append(f"\n=== {name} / {style} ===")

@@ -10,9 +10,8 @@ from contextlib import asynccontextmanager
 import pytest
 
 from mani.auth.jwt import Claims
-from mani.chat import context
 from mani.errors import ErrorCategory, ServiceError
-from scripts import scenario_check
+from scripts import conversation_counts, scenario_check
 
 
 def test_a_check_before_the_conversation_says_how_it_is_is_flagged_on_that_message():
@@ -30,7 +29,7 @@ def test_a_missing_check_is_flagged_only_where_the_conversation_names_when_it_is
     assert scenario_check.timing_flags(None, 12, {"check_by": 10}) == {10: "no check by their message 10"}
     assert scenario_check.timing_flags(None, 8, {"check_by": 10}) == {}
     assert scenario_check.timing_flags(11, 12, {"check_by": 10}) == {11: "checked at their message 11, expected by 10"}
-    assert scenario_check.timing_flags(4, 12, {}) == {4: "checked at their message 4, expected from 5"}
+    assert scenario_check.timing_flags(2, 12, {}) == {}, "no count of messages holds a check back"
 
 
 def test_every_conversation_in_the_file_has_lines_and_expectations_that_can_be_met():
@@ -39,9 +38,9 @@ def test_every_conversation_in_the_file_has_lines_and_expectations_that_can_be_m
     assert len(every) == sum(len(g["conversations"]) for g in groups.values()), "a name is used twice"
     for name, conversation in every.items():
         expect = conversation["expect"]
-        earliest = expect.get("check_from", context.CHECK_FROM)
+        earliest = expect.get("check_from", 1)
         assert conversation["lines"], name
-        assert earliest >= context.CHECK_FROM, name
+        assert 1 <= earliest <= len(conversation["lines"]), name
         assert expect.get("check_by", earliest) >= earliest, name
 
 
@@ -81,6 +80,17 @@ def test_every_answer_after_an_offer_names_what_kind_of_answer_it_is():
     answered = [c for c in scenario_check.conversations(groups).values() if "after_offer" in c]
     assert {c["after_offer"]["answer"] for c in answered} == {"no", "moved_on", "yes"}
     assert all(c["after_offer"]["lines"] for c in answered)
+
+
+@pytest.mark.parametrize("path", [scenario_check.SCENARIOS, scenario_check.HELD_BACK], ids=["scenarios", "held back"])
+def test_every_move_a_conversation_names_is_one_the_counts_read_and_sits_on_a_line_that_exists(path):
+    """A tag the counts do not know, or one on a line that is never sent, would be a count that silently reads 0."""
+    for name, conversation in scenario_check.conversations(json.loads(path.read_text())).items():
+        assert conversation["lines"], name
+        for part in (conversation, conversation.get("after_offer") or {}):
+            for line, move in (part.get("moves") or {}).items():
+                assert move in conversation_counts.MOVES, (name, move)
+                assert 1 <= int(line) <= len(part["lines"]), (name, line)
 
 
 def test_a_stage_reached_without_its_letter_line_or_a_known_stage_asked_is_flagged():
@@ -188,3 +198,16 @@ async def test_a_message_a_pause_refuses_ends_that_pause_and_is_sent_again(monke
     monkeypatch.setattr(scenario_check, "runner", Limited())
     with pytest.raises(ServiceError):
         await scenario_check._send(person, "thread", "hello")
+
+
+def test_a_conversation_a_failed_model_call_stopped_is_named_and_the_rest_of_the_run_is_kept():
+    """The live run of 2026-11-16: one connection reset ended the whole run and every finished conversation was
+    lost with it. A stopped conversation is left out whole, so it is never counted half-way."""
+    finished = [scenario_check.Exchange(person="hi", reply="Hello. What is on your mind?", buttons=[], offered=None)]
+    jobs = [("short_answers", "directive"), ("took_tablets", "directive"), ("short_answers", "supportive")]
+    results = [finished, ServiceError("provider call failed", ErrorCategory.LLM_UNAVAILABLE), finished]
+
+    kept, stopped = scenario_check.settled(jobs, results)
+
+    assert kept == {"short_answers": {"directive": finished, "supportive": finished}}
+    assert stopped == ["took_tablets / directive: provider call failed"]

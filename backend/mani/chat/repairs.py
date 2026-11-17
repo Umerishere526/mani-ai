@@ -100,6 +100,11 @@ def without_dashes(text: str) -> str:
     return "".join(out) + rest
 
 
+def sentences(text: str) -> list[str]:
+    """The sentences of one paragraph of text."""
+    return [s for s in _SENTENCE_BREAK.split(text) if s.strip()]
+
+
 def without_sentences(text: str, drop: Callable[[str], bool]) -> str:
     """The text with every sentence `drop` picks removed, paragraph by paragraph. Unchanged,
     spacing included, when it picks none."""
@@ -181,13 +186,6 @@ def with_the_check_in(text: str, script: str) -> str:
     return f"{reflection}\n\n{script}" if reflection else script
 
 
-def without_last_question(text: str) -> str:
-    """The text without the question it ends on, when something comes before it; otherwise the text as it is."""
-    match = _LAST_QUESTION.search(text)
-    kept = text[: match.start(1)].rstrip() if match else text.rstrip()
-    return kept or text.rstrip()
-
-
 def under(text: str, options: str | None) -> str:
     """The model's own question with its possibilities on the line under it, as a question that ends in ?.
     Text that asks nothing is left as it is."""
@@ -259,19 +257,13 @@ def render_template(template: str, *, lead_line: str | None, slot: str | None) -
     return f"{head}\n{rest}" if head is not None else rest
 
 
-def slots_for(registry: Registry, style: str, offered_id: str | None) -> Slots:
-    """What the slots ask for in this style: an offer's from the first set with an offer template,
-    and Keep chatting's from the set on the open offer."""
+def slots_for(registry: Registry, style: str) -> Slots:
+    """What the offer's slots ask for in this style, from the first set with an offer template."""
     offer = next(
         (t for fid in registry.ids if (t := _offering(registry.get(fid), "offer", style))), None
     )
     lead_line, going_through = template_slots(offer) if offer else (None, None)
-    keep = _offering(registry.get(offered_id), "keep_chatting", style)
-    return Slots(
-        going_through=going_through,
-        lead_line=lead_line,
-        their_words=template_slots(keep)[1] if keep else None,
-    )
+    return Slots(going_through=going_through, lead_line=lead_line)
 
 
 def offer_framework(heading_toward: str | None, registry: Registry) -> str | None:
@@ -357,7 +349,8 @@ def without_body_offer(text: str) -> str:
 
 
 def without_last_question(text: str) -> str:
-    """The text without its closing question, or as it is when it ends on none."""
+    """The text without its closing question, or as it is when it ends on none. Empty when the question is all of
+    it: a caller that must send something keeps the text then."""
     match = _LAST_QUESTION.search(text)
     return text[: match.start(1)].rstrip() if match else text.rstrip()
 
@@ -389,12 +382,6 @@ def _sentence(value: str | None, end: str = ".") -> str:
     return cleaned if not cleaned or cleaned[-1] in ".!?,;" else cleaned + end
 
 
-def keep_chatting(framework: Framework | None, style: str, their_words: str | None) -> str | None:
-    """The client's Keep chatting question with their words in its slot, or None without them."""
-    template = _offering(framework, "keep_chatting", style)
-    return render_template(template, lead_line=None, slot=their_words) if template else None
-
-
 def explanation(framework: Framework, style: str) -> str:
     """The client's answer to Tell me more in this style, then the permission question."""
     explained = _offering(framework, "explain", style) or " ".join(framework.summary.split())
@@ -409,6 +396,19 @@ def offer_buttons(framework_id: str, *, explained: bool) -> list[SmartPrompt]:
         buttons.append(SmartPrompt(label=TELL_ME_MORE_LABEL))
     buttons.append(SmartPrompt(label=KEEP_CHATTING_LABEL, decline=True))
     return buttons
+
+
+def without_system_words(text: str) -> tuple[str, list[str]]:
+    """What the model wrote for them with the system's own words taken out: script metadata and any sentence that
+    carries an internal word. Every field of the model's that is sent to a person goes through it."""
+    notes: list[str] = []
+    text, leaked = strip_script_leakage(text.strip())
+    if leaked:
+        notes.append(f"stripped script metadata: {', '.join(leaked)}")
+    spoken = without_internal_words(text)
+    if spoken != text:
+        notes.append("dropped a sentence with internal words")
+    return spoken, notes
 
 
 def apply(
@@ -434,15 +434,7 @@ def apply(
     on text the model already produced, so they are corrections, not retries. `guarded` is a
     safety concern this turn: no client text is rendered from the reply's fields.
     """
-    notes: list[str] = []
-
-    text, leaked = strip_script_leakage(reply.text.strip())
-    if leaked:
-        notes.append(f"stripped script metadata: {', '.join(leaked)}")
-    spoken = without_internal_words(text)
-    if spoken != text:
-        notes.append("dropped a sentence with internal words")
-        text = spoken
+    text, notes = without_system_words(reply.text)
 
     if nickname:
         # Their name at most once in a conversation, never as the first word: observed in two

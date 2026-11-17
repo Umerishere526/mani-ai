@@ -17,12 +17,8 @@ PROBLEM_TYPES = ("belief", "situation", "both")
 BELIEF_KINDS = ("thought", "happening", "new")
 RISK_TO = ("self", "others")
 DEPENDENCY_KINDS = ("internal", "external")
-# The funnel (the client meeting, 2026-11-03): what a feeling may depend on, most relevant first, re-read every reply;
-# what Mani's window already landed on; and what they said it is not. A new issue starts all three again.
-TIED_TO = "tied_to"
-EXPLORED = "explored"
+# What they said their feeling is not about. A new issue starts it again.
 RULED_OUT = "ruled_out"
-SIDES = ("outside", "inside")
 CORE_ABOUT = ("self", "others", "situation")
 # Each list keeps its first entry, what they came with, and the latest ones up to this many.
 LIST_LIMIT = 8
@@ -199,17 +195,14 @@ def merge(stored: dict | None, update: PictureUpdate | None) -> dict:
     shift = (update.shift or "").strip().lower()
     shift = shift if shift in SHIFTS else None
     if shift == "new_issue":
-        # Another situation: what was explored and ruled out was about the last one.
-        for key in (TIED_TO, EXPLORED, RULED_OUT):
-            picture.pop(key, None)
+        # Another situation: what was ruled out was about the last one.
+        picture.pop(RULED_OUT, None)
     ruled_out = picture.get(RULED_OUT) or []
     for what in update.ruled_out or []:
         if (what := _clean(what)) and not any(_same(r, what) for r in ruled_out):
             ruled_out.append(what)
     if ruled_out:
         picture[RULED_OUT] = _capped(ruled_out)
-        if picture.get(TIED_TO):
-            picture[TIED_TO] = [t for t in picture[TIED_TO] if not any(_same(t["what"], r) for r in ruled_out)]
     if focus := _clean(update.focus):
         earlier = [e for e in picture.get("earlier") or [] if not _same(e, focus)]
         if picture.get("focus") and not _same(picture["focus"], focus) and shift in ("new_issue", "back"):
@@ -223,7 +216,6 @@ def merge(stored: dict | None, update: PictureUpdate | None) -> dict:
         picture["problem_type"] = problem
     if shift:
         picture["shift"] = shift
-        picture["quiet"] = picture.get("quiet", 0) + 1 if shift == "nothing_new" else 0
     return picture
 
 
@@ -278,19 +270,6 @@ def apply_reading(stored: dict | None, reading: Reading | None) -> dict:
     reactions = [r for r in (_known(x) for x in reading.reactions or []) if r]
     if reactions:
         picture["reactions"] = _capped(reactions)
-    # What it may depend on, most relevant first, replaced whole and never what they ruled out (the funnel,
-    # 2026-11-03). An empty ranking is a feeling with no clear cause yet: nothing is pointed at.
-    ruled_out = picture.get(RULED_OUT) or []
-    tied_to: list[dict] = []
-    for entry in reading.tied_to or []:
-        what, side = _known(entry.what), entry.side.strip().lower()
-        if (what and side in SIDES and not any(_same(r, what) for r in ruled_out)
-                and not any(_same(t["what"], what) for t in tied_to)):
-            tied_to.append({"what": _clean(what), "side": side})
-    if tied_to:
-        picture[TIED_TO] = tied_to[:LIST_LIMIT]
-    else:
-        picture.pop(TIED_TO, None)
     # What is still uncertain is replaced whole: the reading is re-read every turn.
     uncertain = [u for u in (_known(x) for x in reading.uncertain or []) if u]
     if uncertain:
@@ -298,34 +277,6 @@ def apply_reading(stored: dict | None, reading: Reading | None) -> dict:
     else:
         picture.pop("uncertain", None)
     return reconcile(picture)
-
-
-def explored(picture: dict | None, closest: str | None) -> dict:
-    """The picture with what the reply's window landed on counted as explored."""
-    picture = copy.deepcopy(picture or {})
-    if not (closest := _clean(closest)):
-        return picture
-    done = picture.get(EXPLORED) or []
-    if not any(_same(e, closest) for e in done):
-        picture[EXPLORED] = _capped([*done, closest])
-    return picture
-
-
-def _covered(what: str, among: list[str]) -> bool:
-    """Whether `what` is one of `among`, or one holds the other: "the deadline" and "the deadline on Friday"."""
-    a = " ".join(what.split()).casefold()
-    return any(a in (b := " ".join(x.split()).casefold()) or b in a for x in among if x.strip())
-
-
-def funnel(picture: dict | None) -> tuple[dict | None, list[str], list[str]]:
-    """What to explore next, the first in the ranking not yet explored or ruled out; what was explored; and what
-    was ruled out."""
-    picture = picture or {}
-    done, out = picture.get(EXPLORED) or [], picture.get(RULED_OUT) or []
-    following = next(
-        (t for t in picture.get(TIED_TO) or [] if not _covered(t["what"], done) and not _covered(t["what"], out)), None,
-    )
-    return following, list(done), list(out)
 
 
 def reconcile(picture: dict) -> dict:
@@ -379,6 +330,20 @@ def render(picture: dict | None) -> str | None:
     ]
     rendered = "; ".join(f"{name}: {value}" for name, value in parts if value)
     return rendered or None
+
+
+def brief(picture: dict | None) -> str | None:
+    """The picture as the chat's note carries it: the core, the feeling under it and what they want. The conversation
+    itself holds the rest, and the whole picture, sent back every turn, grew past 3,000 characters in one chat
+    (muhammad's local chat, 2026-11-16)."""
+    picture = picture or {}
+    parts = [
+        ("the core", (picture.get("core") or {}).get("belief")),
+        ("the feeling underneath, your reading", (picture.get("core") or {}).get("feeling")),
+        ("what they want, in their words", picture.get("wants")),
+        ("they said it is not about, never ask about it again", " | ".join(picture.get(RULED_OUT) or [])),
+    ]
+    return "; ".join(f"{name}: {value}" for name, value in parts if value) or None
 
 
 def core(picture: dict | None) -> dict:

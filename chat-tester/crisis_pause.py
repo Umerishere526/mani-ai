@@ -1,5 +1,5 @@
 # ABOUTME: The pause on a person's chat while their danger continues: reads when it began and ends from a turn, a
-# ABOUTME: profile or a refusal, and shows the centred pop-up with the help numbers and a live countdown.
+# ABOUTME: profile or a refusal, and shows the client's blocker pop-up with where to get help and a live countdown.
 
 from __future__ import annotations
 
@@ -13,31 +13,34 @@ import streamlit as st
 
 import client as mani
 
-# The pop-up's wording is ours until the client supplies hers; the numbers come from GET /v1/crisis/resources.
-TITLE = "Let's make sure everyone is safe"
-BODY = (
-    "It sounds like someone could be at risk. Whether you're thinking about hurting yourself, worried you might hurt "
-    "someone else, or you're in a dangerous situation right now, you can reach a real person immediately."
+# The pop-up is the client's drawing of 2026-11-16, word for word ("Blocker." above the title and "temporary" as she
+# wrote them: muhammad, 2026-11-16), with the emergency line he asked to keep. How long it says the chat is paused is
+# the pause's own length, and the numbers come from GET /v1/crisis/resources.
+LABEL = "Blocker."
+TITLE = "Chat is temporary unavailable"
+PAUSED_FOR = "For your safety, chat is paused for {length}."
+LIBRARY = "You can still access our Library resources."
+SUPPORT = (
+    "If you are thinking about suicide or you need immediate support call or text {number} to connect with a trained "
+    "crisis counselor"
 )
-FOOTER = "I'm an AI and can't contact anyone for you, but I'll be here when you come back."
+EMERGENCY = "If you are in immediate danger, call {number}."
+GET_HELP = "Get help now"
+GO_TO_LIBRARY = "Go to library"
+# Beside the live timer at the bottom, which the drawing does not show and muhammad kept (2026-11-16). It says only
+# when the chat opens again: "while you reach out" assumed they had (the client's safety test, point 43).
+RESUMES_IN = "Chat resumes in"
 
-# The pop-up in the middle of the window (auto margins keep a tall one scrollable from its top), and its help cards.
-# Icons are ligatures of the Material Symbols font Streamlit already loads for its own icons.
+# The pop-up in the middle of the window (auto margins keep a tall one scrollable from its top), its words centred as
+# drawn.
 STYLE = """<style>
 [data-testid="stDialog"] > div { margin-block: auto; }
-[data-testid="stDialogIcon"] { background: #E7F0EE; color: #2C5F57; border-radius: 50%; padding: .55rem; }
+.pause-body { text-align: center; }
+.pause-body h2 { font-size: 1.6rem; font-weight: 700; margin: 0 0 1.25rem; padding: 0; }
+.pause-body p { margin: 0 0 1.1rem; }
+.pause-body a { color: inherit !important; text-decoration: underline !important; }
 .pause-icon { font-family: "Material Symbols Rounded"; font-size: 1.35rem; line-height: 1; font-feature-settings: "liga"; }
-.pause-call, .pause-text, .pause-emergency { display: flex; align-items: center; gap: .75rem; padding: .85rem 1.1rem;
-    border-radius: .65rem; text-decoration: none !important; }
-.pause-call { background: #2C5F57; color: #FFFFFF !important; }
-.pause-call b { display: block; font-size: 1.05rem; }
-.pause-call small { display: block; opacity: .9; }
-.pause-call .pause-chevron { margin-left: auto; }
-.pause-row { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; margin: .65rem 0 1rem; }
-.pause-text { border: 1px solid #C9DAD6; color: #2C5F57 !important; font-weight: 600; }
-.pause-emergency { border: 1px solid #E5C3AE; background: #FBF1EC; color: #9A3A12 !important; font-weight: 600; }
-.pause-outside a { color: #2C5F57 !important; }
-.pause-timer { display: flex; align-items: center; gap: .5rem; }
+.pause-timer { display: flex; align-items: center; gap: .5rem; margin-top: .75rem; }
 .pause-timer b { margin-left: auto; font-size: 1.35rem; }
 </style>"""
 
@@ -52,12 +55,11 @@ class Pause:
 
 @dataclass(frozen=True)
 class Help:
-    """What the pop-up offers, each None when the resources hold none: a line to call (and to text, when it takes
-    texts), emergency services, and the directory of helplines in other countries."""
+    """What the pop-up names, each None when the resources hold none: a line to call or text, and emergency
+    services."""
 
     call: dict[str, Any] | None
     emergency: dict[str, Any] | None
-    directory: dict[str, Any] | None
 
 
 def _stamp(source: dict[str, Any], end: str) -> datetime | None:
@@ -82,10 +84,17 @@ def countdown(until: datetime, now: datetime) -> str:
 
 def elapsed(pause: Pause, now: datetime) -> float:
     """How much of the pause has run, from 0 to 1."""
-    length = (pause.ends - pause.began).total_seconds()
-    if length <= 0:
+    total = (pause.ends - pause.began).total_seconds()
+    if total <= 0:
         return 1.0
-    return min(1.0, max(0.0, (now - pause.began).total_seconds() / length))
+    return min(1.0, max(0.0, (now - pause.began).total_seconds() / total))
+
+
+def length(pause: Pause) -> str:
+    """How long the pause runs, in whole hours when it is a number of them, else in minutes: "15 minutes", "24 hours"."""
+    minutes = max(1, round((pause.ends - pause.began).total_seconds() / 60))
+    count, unit = (minutes // 60, "hour") if minutes % 60 == 0 else (minutes, "minute")
+    return f"{count} {unit}" if count == 1 else f"{count} {unit}s"
 
 
 def pick(resources: list[dict[str, Any]]) -> Help:
@@ -94,7 +103,7 @@ def pick(resources: list[dict[str, Any]]) -> Help:
     def first(kind: str, field: str) -> dict[str, Any] | None:
         return next((r for r in resources if r.get("kind") == kind and r.get(field) is not None), None)
 
-    return Help(call=first("support", "phone"), emergency=first("emergency", "phone"), directory=first("directory", "url"))
+    return Help(call=first("support", "phone"), emergency=first("emergency", "phone"))
 
 
 def note(source: dict[str, Any]) -> bool:
@@ -116,34 +125,21 @@ def active(client: mani.ManiClient) -> Pause | None:
     return pause if pause is not None and pause.ends > now else None
 
 
-def _link(kind: str, href: str, icon: str, label: str, end: str = "") -> str:
-    """A help card: its icon, its label, then `end`."""
-    return (f'<a class="pause-{kind}" href="{html.escape(href)}"><span class="pause-icon">{icon}</span>'
-            f"<span>{label}</span>{end}</a>")
+def _number(resource: dict[str, Any]) -> str:
+    """A resource's phone number as a link that calls it."""
+    phone = html.escape(resource["phone"])
+    return f'<a href="tel:{phone}">{phone}</a>'
 
 
-def _cards(found: Help) -> str:
-    """The help as HTML; a part whose resource is missing is left out."""
+def words(pause: Pause, found: Help) -> str:
+    """The pop-up's words as HTML, in the drawing's order; a line whose number is missing is left out."""
     e = html.escape
-    parts, row = [], []
+    lines = [e(PAUSED_FOR.format(length=length(pause))), e(LIBRARY)]
     if found.call is not None:
-        about = " · ".join(e(v) for v in (found.call["name"], found.call.get("hours")) if v is not None)
-        label = f"<b>Call {e(found.call['phone'])}</b><small>{about}</small>"
-        chevron = '<span class="pause-icon pause-chevron">chevron_right</span>'
-        parts.append(_link("call", f"tel:{found.call['phone']}", "call", label, end=chevron))
-        if found.call.get("sms") is not None:
-            row.append(_link("text", f"sms:{found.call['sms']}", "chat_bubble", f"Text {e(found.call['sms'])}"))
+        lines.append(e(SUPPORT).format(number=_number(found.call)))
     if found.emergency is not None:
-        phone = e(found.emergency["phone"])
-        row.append(_link("emergency", f"tel:{found.emergency['phone']}", "warning", f"Emergency: {phone}"))
-    if row:
-        parts.append(f'<div class="pause-row">{"".join(row)}</div>')
-    if found.emergency is not None:
-        parts.append(f"<p><b>Someone in immediate danger?</b> Call {phone} or get to a safe place first.</p>")
-    if found.directory is not None:
-        url, name = e(found.directory["url"]), e(found.directory["name"])
-        parts.append(f'<p class="pause-outside">Outside the US? <a href="{url}" target="_blank">{name}</a></p>')
-    return "".join(parts)
+        lines.append(e(EMERGENCY).format(number=_number(found.emergency)))
+    return f'<div class="pause-body"><h2>{e(TITLE)}</h2>{"".join(f"<p>{line}</p>" for line in lines)}</div>'
 
 
 @st.fragment(run_every=1)
@@ -154,7 +150,7 @@ def _countdown(pause: Pause) -> None:
         st.rerun()
     st.markdown(
         f'<div class="pause-timer"><span class="pause-icon">schedule</span>'
-        f"<span>Chat is paused while you reach out. Resumes in</span><b>{countdown(pause.ends, now)}</b></div>",
+        f"<span>{html.escape(RESUMES_IN)}</span><b>{countdown(pause.ends, now)}</b></div>",
         unsafe_allow_html=True,
     )
     st.progress(elapsed(pause, now))
@@ -164,18 +160,20 @@ def _show_library() -> None:
     st.session_state.view = "library"
 
 
-@st.dialog(TITLE, icon=":material/shield:", on_dismiss=_show_library)
+@st.dialog(LABEL, on_dismiss=_show_library)
 def render(client: mani.ManiClient, pause: Pause) -> None:
     st.html(STYLE)
-    st.write(BODY)
     try:
-        resources = client.crisis_resources()
+        found = pick(client.crisis_resources())
     except mani.ApiError as exc:
-        resources = []
+        found = Help(call=None, emergency=None)
         st.caption(f"Could not load the help numbers: {exc}")
-    cards = _cards(pick(resources))
-    if cards:
-        st.markdown(cards, unsafe_allow_html=True)
-    st.divider()
+    st.markdown(words(pause, found), unsafe_allow_html=True)
+    help_line = found.call or found.emergency
+    get_help, library = st.columns(2)
+    if help_line is not None:
+        get_help.link_button(GET_HELP, f"tel:{help_line['phone']}", use_container_width=True)
+    if library.button(GO_TO_LIBRARY, use_container_width=True):
+        _show_library()
+        st.rerun()
     _countdown(pause)
-    st.caption(FOOTER)

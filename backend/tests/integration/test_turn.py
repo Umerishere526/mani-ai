@@ -279,7 +279,7 @@ def _move(**update) -> _Moving:
 def _may_check(messages: list[dict]) -> bool:
     """Whether the note sent with a conversation turn let that reply move to the set of questions."""
     note = messages[-1]["content"]
-    return note.startswith("Note for this reply only.") and converse.MOVE_NOT not in note
+    return note.startswith("Note for this reply only.") and converse.MOVE_NOW in note
 
 
 # _check()'s understanding as the case: the core.
@@ -291,7 +291,7 @@ async def _no_check_open(thread):
     from mani.db import pool
 
     async with pool.as_admin() as conn:
-        # From their fifth message (context.CHECK_FROM), whatever the opening added.
+        # Well into the conversation, whatever the opening added.
         await conn.execute(
             "update public.threads set check_at_message_count = null, message_count = greatest(message_count, 11) "
             "where id = $1",
@@ -370,9 +370,9 @@ async def test_an_offer_still_made_on_their_first_message_cannot_start_a_framewo
     assert ctx.technique is None
 
 
-async def test_from_their_fifth_message_once_the_heart_of_it_was_agreed_mani_moves_straight_to_the_offer(alice, model):
-    """muhammad, 2026-10-26: the chat before a framework is Mani's own conversation. The move is allowed from their
-    5th message, and only after an earlier reply said the heart of it back and had it agreed. The client meeting
+async def test_once_the_heart_of_it_was_said_back_mani_moves_straight_to_the_offer(alice, model):
+    """muhammad, 2026-10-26: the chat before a framework is Mani's own conversation. The move is allowed only after
+    an earlier reply said the heart of it back, whatever the count of messages (spec 0008, D2). The client meeting
     (2026-11-03): no check of a summary before it; the reply that moves is the client's offer, with the core in it,
     and the core is the case the questions are about. One call each, and no check is stored."""
     from mani.db import pool
@@ -381,7 +381,9 @@ async def test_from_their_fifth_message_once_the_heart_of_it_was_agreed_mani_mov
     scripted = model(
         *[Reply(text=f"Was it the deadlines themselves, or what they cost you, {n}?", heart="exploring")
           for n in range(3)],
-        Reply(text="It seems the work always lands on you. Is that the heart of it?", heart="core_named"),
+        # Said back means the reply carries the core's words (2026-11-16).
+        ConversationReply(text="It seems the work always lands on you.", forward="Is that the heart of it?",
+                          heart="core_named", core="The work always lands on you"),
         _move(),
     )
     thread = await _in_style(await start(alice), SupportStyle.SUPPORTIVE)
@@ -432,6 +434,53 @@ async def test_the_move_to_the_offer_drops_the_forward_question_where_the_offer_
     assert turn.content.startswith("That's a lot to carry.\n\nThere's a framework called ABCDE")
     assert "Want to look at it?" not in turn.content
     assert [p.technique for p in turn.prompts if p.technique] == ["abcde"]
+
+
+async def test_a_reply_that_reports_frustration_never_carries_the_offer(alice, model):
+    """The client's Directive test, 2026-11-16: "you asked me this already" was answered with the ABCDE offer. A reply
+    that reports they are frustrated with Mani goes out as Mani's own words, whatever else it filled; the move waits."""
+    from mani.models.rows import SupportStyle
+
+    model(_move(frustrated=True, text="I kept asking for what you had already told me.", forward="What would help most right now?"))
+    thread = await _no_check_open(await past_the_opening(await _in_style(await start(alice), SupportStyle.SUPPORTIVE)))
+    turn = await send(alice, thread.id, "you already asked me that")
+
+    assert turn.prompts == [] and "framework called" not in turn.content
+    assert turn.content.startswith("I kept asking for what you had already told me.")
+    assert turn.trace.get("offered") is None and turn.trace.get("moved") is None
+
+
+async def test_enough_said_makes_mani_say_the_core_back_and_then_offer_without_being_asked(alice, model):
+    """muhammad's local chat, 2026-11-16, as an ordinary person would have it: everything said by the second message.
+    The reply reports what it knows; the next reply is told to say the core back; the one after is told to move, and
+    the offer goes out on their fourth message, not their twenty-third."""
+    from mani.llm.schema import Known
+    from mani.models.rows import SupportStyle
+
+    known = Known(
+        happened="your manager criticises you in front of the team",
+        tells_themselves="there is nothing you can do because he is the boss", does_to_them="you dread going in",
+    )
+    scripted = model(
+        ConversationReply(text="That sounds exposing.", forward="What goes through your mind when he does it?", heart="exploring"),
+        ConversationReply(text="So it leaves you dreading work.", forward="How long has it been like this?", heart="exploring", known=known),
+        ConversationReply(
+            text="It sounds like you believe there is nothing you can do because he is the boss.", forward="Does that fit?",
+            heart="core_named", core="There is nothing you can do because he is the boss", known=known,
+        ),
+        _move(),
+    )
+    thread = await _in_style(await start(alice), SupportStyle.SUPPORTIVE)
+    await send(alice, thread.id, "my manager keeps criticising me in front of the whole team")
+    await send(alice, thread.id, "i just think theres nothing i can do, hes the boss. i dread going in")
+    await send(alice, thread.id, "a few months")
+    turn = await send(alice, thread.id, "yeah that fits")
+
+    notes = [sent[-1]["content"] for sent in scripted.sent]
+    assert "Say the core back to them in this reply" not in notes[0] + notes[1]
+    assert "Say the core back to them in this reply" in notes[2], "enough was known after the second reply"
+    assert converse.MOVE_NOW in notes[3] and converse.MOVE_NOW not in notes[2]
+    assert [p.label for p in turn.prompts] == ["Try it", "Tell me more", "Keep chatting"]
 
 
 async def test_a_move_whose_offer_cannot_be_made_still_ends_on_its_question(alice, model):
@@ -600,9 +649,9 @@ async def test_an_offer_on_a_yes_to_the_check_is_plain_and_costs_one_call(alice,
 
 
 @pytest.mark.parametrize("answer", ["no", None])
-async def test_anything_but_a_clear_yes_keeps_chatting_and_the_next_check_waits(alice, model, answer):
+async def test_anything_but_a_clear_yes_keeps_chatting(alice, model, answer):
     """Spec 0006, AC-5: a no, a yes with an addition, or another topic gives no offer, even when the
-    model fills one; the check is used, and the next waits three replies."""
+    model fills one, and the check is used."""
     scripted = model(
         _offer().model_copy(update={"check_answer": answer, "text": "What part did I miss?"}),
         *[Reply(text=f"What happened {n}?") for n in range(4)],
@@ -616,28 +665,6 @@ async def test_anything_but_a_clear_yes_keeps_chatting_and_the_next_check_waits(
     assert turn.prompts == []
     assert "offer unusable: no yes to the check" in turn.checks
     assert "check_answer" in scripted.schemas[0].model_fields
-    assert [_may_check(sent) for sent in scripted.sent[1:]] == [False, False, True]
-
-
-async def test_a_reply_that_judged_the_heart_of_it_ready_without_checking_makes_the_check_due(alice, model):
-    """R33 and the journal of 2026-10-16: a step the model may take is not a step that happens, so a reply
-    that judged the heart of it ready and did not check makes the next turn's check due. Code names the turn."""
-    from mani.db import pool
-
-    scripted = model(
-        Reply(text="So you want her to own it. What is stopping you from reaching out?", heart="ready"),
-        Reply(text="What would that be like?"),
-    )
-    thread = await start(alice)
-    async with pool.as_admin() as conn:
-        await conn.execute(
-            "update public.threads set message_count = 11, understanding = $2::jsonb where id = $1",
-            thread.id, {"heart": "conflict_named"},
-        )
-    await send(alice, thread.id, "i want her to own how she made me feel")
-    assert converse.MOVE_MAY in _ctx_sent(scripted)
-    await send(alice, thread.id, "she never will")
-    assert converse.MOVE_NOW in _ctx_sent(scripted)
 
 
 async def test_a_concern_on_the_answer_to_a_check_renders_no_offer_and_lets_the_check_lapse(alice, model):
@@ -851,9 +878,9 @@ async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, m
     turn = await send(alice, thread.id, "that helped, thanks")
 
     assert turn.content == "How has the rest of the week been?"
-    # muhammad, 2026-10-27: with no wait after a finished framework, its reading is cleared, so the next check
-    # needs a fresh understanding. The case stays as history.
-    assert turn.understanding == {"case": "You want her back in your life."}
+    # The reading the finished framework worked through stands as understood: the chat builds on it and is not
+    # sent back to find it again (manasa's test, 2026-11-16).
+    assert turn.understanding == {"heart": "ready", "case": "You want her back in your life."}
 
     async with pool.as_user(alice) as conn:
         ctx = await threads.load_turn_context(conn, thread.id, ALICE)
@@ -863,7 +890,8 @@ async def test_finishing_a_technique_retires_it_without_losing_the_turn(alice, m
     assert ctx.technique.phase is None
     assert ctx.technique.outcome is TechniqueOutcome.ACCEPTED
     assert ctx.technique.at_message_count == 2
-    assert not context.may_check(ctx)
+    # A set they finished is never offered again in the conversation.
+    assert not converse.check_allowed(ctx)
     assert [m.role for m in (await _history(alice, thread.id))][-2:] == ["user", "mani"]
 
 
@@ -1241,7 +1269,7 @@ async def test_a_pause_that_starts_while_the_model_answers_refuses_the_turn(alic
     assert await _user_messages(thread.id) == []
 
 
-async def test_another_conversations_turn_never_loads_the_reason(alice):
+async def test_another_conversations_turn_loads_what_the_latest_pause_rested_on(alice):
     from mani.db import pool
 
     paused_in = await start(alice)
@@ -1256,7 +1284,8 @@ async def test_another_conversations_turn_never_loads_the_reason(alice):
     assert here.pause.reason == "has the pills and will not call"
     assert here.own_pause.reason == "has the pills and will not call"
     assert there.pause is not None and there.pause.thread_id == paused_in.id
-    assert there.pause.reason is None and there.own_pause is None
+    # muhammad, 2026-11-16: what they faced is known in whichever conversation they come back to.
+    assert there.pause.reason == "has the pills and will not call" and there.own_pause is None
     await _pause(paused_in.id)
     async with pool.as_user(alice) as conn:
         assert (await pauses.active(conn, ALICE)).reason is None, "only the thread's own turn loads the reason"
@@ -1285,6 +1314,28 @@ async def test_an_unsure_concern_never_pauses(alice, model):
 
     assert turn.content == "I hear you."
     assert await _pauses(thread.id) == []
+
+
+async def test_a_worry_of_another_kind_than_the_one_asked_about_gets_manis_reply_before_any_pause(alice, model):
+    """The held-back run, 2026-11-16: "my parents are going to kill me when they see the mark" was asked about, and
+    "sometimes i just want to disappear for good" then paused the chat at once, with no question about it and no word
+    from Mani. The question was about danger from someone; this is about themselves, so Mani answers it first. Said
+    again after that, it pauses."""
+    model(
+        Reply(text="Do you mean they might hurt you?", safety=SafetyRead(danger="unsure", about="from_someone")),
+        Reply(text="I'm worried about you. You can call or text 988.",
+              safety=SafetyRead(danger="now", about="themselves")),
+        Reply(text="I'm here.", safety=SafetyRead(danger="now", about="themselves")),
+    )
+    thread = await start(alice)
+    await send(alice, thread.id, "my parents are going to kill me when they see the mark")
+    turn = await send(alice, thread.id, "sometimes i just want to disappear for good")
+
+    assert turn.content == "I'm worried about you. You can call or text 988." and turn.paused_until is None
+    assert await _pauses(thread.id) == [] and await _safety(thread.id) == "danger"
+
+    again = await send(alice, thread.id, "i mean it")
+    assert again.paused_until is not None
 
 
 async def test_danger_with_help_on_its_way_never_pauses(alice, model):
@@ -1338,32 +1389,33 @@ async def test_saying_again_they_will_do_it_after_the_direction_pauses_the_chat(
 
 
 def _production_chat(*, help_in_place: bool) -> tuple[Reply, ...]:
-    """The production chat of 2026-11-14: unsure on wanting to die, danger and the direction once they are about to act,
-    then honest answers with no refusal; `help_in_place` is how the model reads the answer after the direction."""
+    """The production chat of 2026-11-14: unsure on wanting to die, danger once they are about to act, then honest
+    answers with no refusal; `help_in_place` is how the model reads their answers from the one that means danger on."""
     return (
         Reply(text="I'm so sorry it hurts this much. Are you thinking of ending your life?",
               safety=SafetyRead(danger="unsure", about="themselves")),
         Reply(text="Please call or text 988 now, or your local emergency number. Is anyone with you?",
-              safety=SafetyRead(danger="now", about="themselves", why="about to act now")),
+              safety=SafetyRead(danger="now", about="themselves", help_in_place=help_in_place,
+                                why="about to act now")),
         Reply(text="I'm here with you. Have you been able to call anyone?",
               safety=SafetyRead(danger="now", about="themselves", help_in_place=help_in_place,
                                 why="about to act, alone, no help called")),
     )
 
 
-async def test_danger_that_goes_on_after_the_direction_with_no_one_there_pauses_without_a_refusal(alice, model):
+async def test_an_answer_that_means_danger_with_no_one_there_pauses_at_once_without_a_refusal(alice, model):
     """The production chat of 2026-11-14 never paused in 11 turns: they were about to act, alone, had called no one, and
-    answered every question honestly, so no read was declined. Danger to themselves that continues after the direction
-    with nothing in place pauses on the first answer after it (muhammad, 2026-11-14)."""
+    answered every question honestly, so no read was declined. Since 2026-11-16 the help screen comes on the answer
+    itself: asked whether they are thinking of ending their life, they say yes, and nothing more is asked (muhammad:
+    "it should come every time")."""
     model(*_production_chat(help_in_place=False))
     thread = await start(alice)
-    await send(alice, thread.id, "i want to kill myself and be free from this world")
-    direction = await send(alice, thread.id, "yes")
-    assert direction.paused_until is None, "the turn that gives the direction never pauses"
-    turn = await send(alice, thread.id, "no")
+    asked = await send(alice, thread.id, "i want to kill myself and be free from this world")
+    assert asked.paused_until is None, "the first message is asked about, in Mani's own words"
+    turn = await send(alice, thread.id, "yes")
 
     assert turn.paused_until is not None and turn.content == crisis.pause_reply("themselves", 15)
-    assert [r["reason"] for r in await _pauses(thread.id)] == ["about to act, alone, no help called"]
+    assert [r["reason"] for r in await _pauses(thread.id)] == ["about to act now"]
 
 
 async def test_danger_that_goes_on_with_someone_there_never_pauses(alice, model):
@@ -1446,19 +1498,19 @@ async def test_a_fine_answer_clears_the_paused_thread_and_marks_the_pause_checke
 
 
 async def test_danger_in_the_answer_pauses_again(alice, model):
-    """The answer is judged like any safety turn, from wherever the question left it: here unsure, and then danger
-    with nothing in place pauses the chat again."""
+    """The answer is judged like any safety turn: an unclear first message back leaves the danger where the pause left
+    it (only a judgment of none lowers it), and then danger with nothing in place pauses the chat again."""
     model(
         *_PAUSING,
         Reply(text="Are you all right now?", safety=SafetyRead(danger="unsure", about="themselves")),
         Reply(
             text="I'm still here.",
-            safety=SafetyRead(danger="now", about="themselves", declined=True, why="still has the pills"),
+            safety=SafetyRead(danger="now", about="themselves", declined=True, why="still has the pills", still_there=True),
         ),
     )
     thread = await _paused_and_over(alice)
     await send(alice, thread.id, "hi")
-    assert await _safety(thread.id) == "unsure"
+    assert await _safety(thread.id) == "danger"
     again = await send(alice, thread.id, "no, I still have them and I won't give them up")
 
     assert again.content == crisis.pause_reply("themselves", 15) and again.paused_until is not None
@@ -1472,7 +1524,7 @@ async def test_danger_in_the_answer_with_nothing_in_place_pauses_without_a_refus
     model(
         *_PAUSING,
         Reply(text="Are you all right now?", safety=SafetyRead(danger="unsure", about="themselves")),
-        Reply(text="I'm here with you.", safety=SafetyRead(danger="now", about="themselves", why="still has the pills")),
+        Reply(text="I'm here with you.", safety=SafetyRead(danger="now", about="themselves", why="still has the pills", still_there=True)),
     )
     thread = await _paused_and_over(alice)
     await send(alice, thread.id, "hi")
@@ -1489,7 +1541,7 @@ async def test_a_second_pause_asks_again(alice, model):
         Reply(text="Are you all right now?", safety=SafetyRead(danger="now", about="themselves")),
         Reply(
             text="I'm still here.",
-            safety=SafetyRead(danger="now", about="themselves", declined=True, why="still has the pills"),
+            safety=SafetyRead(danger="now", about="themselves", declined=True, why="still has the pills", still_there=True),
         ),
         Reply(text="You're back. Are you all right now?", safety=SafetyRead(danger="now", about="themselves")),
     )
@@ -1504,10 +1556,10 @@ async def test_a_second_pause_asks_again(alice, model):
     assert back.paused_until is None and len(await _pauses(thread.id)) == 2
 
 
-async def test_a_new_conversation_after_a_pause_asks_without_details(alice, model):
-    """muhammad, 2026-11-13: conversations stay separate. Another conversation asks whether they are all right right now
-    with nothing from the paused one; once they say they are, the others no longer ask, and the paused one still asks
-    its own question."""
+async def test_a_new_conversation_after_a_pause_asks_about_what_they_faced(alice, model):
+    """muhammad, 2026-11-16: what a pause rested on is kept on the pause, so another conversation asks about what they
+    faced; once they say they are all right, the others no longer ask, and the paused one still asks its own
+    question."""
     scripted = model(
         *_PAUSING,
         Reply(text="Before anything else, are you all right right now?", safety=SafetyRead(danger="none")),
@@ -1519,22 +1571,23 @@ async def test_a_new_conversation_after_a_pause_asks_without_details(alice, mode
     fresh = await start(alice)
     asking = await send(alice, fresh.id, "I want to talk about work")
 
-    assert "safety: returning_new\n" in _ctx_sent(scripted)
-    assert not [said for said in _PAUSED_WORDS if said in _all_sent(scripted)]
-    assert asking.trace["return_check"] == "other_thread"
+    block = _ctx_sent(scripted).split("[/ctx]")[0]
+    assert "safety: returning\n" in block
+    assert "because they were in danger: has the pills and will not call." in block
+    assert asking.trace["return_check"] == "other_thread" and "has the pills" not in str(asking.trace)
     answered = await send(alice, fresh.id, "yes, I'm fine today")
     assert answered.trace["return_check"] == "answered"
     assert (await _pauses(paused.id))[0]["checked_at"] is not None
 
     third = await start(alice)
     later = await send(alice, third.id, "work again")
-    assert "return_check" not in later.trace and "returning" not in _all_sent(scripted)
+    assert "return_check" not in later.trace and "safety: returning" not in _all_sent(scripted)
     back = await send(alice, paused.id, "hi")
     assert back.trace["return_check"] == "paused_thread"
     assert "safety: returning\n" in _ctx_sent(scripted)
 
 
-async def test_an_older_conversation_asks_after_a_pause_without_details(alice, model):
+async def test_an_older_conversation_asks_after_a_pause_about_what_they_faced(alice, model):
     """muhammad, 2026-11-13: coming back to a conversation they had before the pause must not skip the question."""
     scripted = model(
         Reply(text="That sounds like a lot. What happened?"),
@@ -1547,13 +1600,13 @@ async def test_an_older_conversation_asks_after_a_pause_without_details(alice, m
     asking = await send(alice, older.id, "I want to talk about work again")
 
     assert asking.trace["return_check"] == "other_thread"
-    assert "safety: returning_new\n" in _ctx_sent(scripted)
-    assert not [said for said in _PAUSED_WORDS if said in _all_sent(scripted)]
+    block = _ctx_sent(scripted).split("[/ctx]")[0]
+    assert "safety: returning\n" in block and "because they were in danger: has the pills and will not call." in block
 
 
 async def test_a_conversation_that_answered_its_own_pause_asks_again_after_a_later_one_elsewhere(alice, model):
     """Every conversation asks about the person's latest pause until they say they are all right: one that already
-    answered for its own pause asks again, with nothing from the other conversation."""
+    answered for its own pause asks again, about what the later pause rested on (muhammad, 2026-11-16)."""
     scripted = model(
         *_PAUSING,
         Reply(text="Are you all right now?", safety=SafetyRead(danger="now", about="themselves")),
@@ -1561,7 +1614,7 @@ async def test_a_conversation_that_answered_its_own_pause_asks_again_after_a_lat
         Reply(text="I'm here with you.", safety=SafetyRead(danger="now", about="themselves")),
         Reply(
             text="I'm still here.",
-            safety=SafetyRead(danger="now", about="themselves", declined=True, why="plans to end it tonight"),
+            safety=SafetyRead(danger="now", about="themselves", declined=True, why="plans to end it tonight", still_there=True),
         ),
         Reply(text="Before anything else, are you all right right now?", safety=SafetyRead(danger="none")),
     )
@@ -1575,8 +1628,8 @@ async def test_a_conversation_that_answered_its_own_pause_asks_again_after_a_lat
     back = await send(alice, paused.id, "hello again")
 
     assert back.trace["return_check"] == "other_thread" and back.paused_until is None
-    assert "safety: returning_new\n" in _ctx_sent(scripted)
-    assert "plans to end it tonight" not in _all_sent(scripted)
+    block = _ctx_sent(scripted).split("[/ctx]")[0]
+    assert "safety: returning\n" in block and "because they were in danger: plans to end it tonight." in block
 
 
 @pytest.mark.parametrize("days, asks", [(29, True), (31, False)], ids=["29_days", "31_days"])
@@ -1606,7 +1659,7 @@ async def test_danger_in_the_answer_in_a_new_conversation_pauses_it(alice, model
         Reply(text="Before anything else, are you all right right now?", safety=SafetyRead(danger="none")),
         Reply(
             text="I'm here.",
-            safety=SafetyRead(danger="now", about="themselves", declined=True, why="plans to end it tonight"),
+            safety=SafetyRead(danger="now", about="themselves", declined=True, why="plans to end it tonight", still_there=True),
         ),
     )
     await _paused_and_over(alice)
@@ -1648,7 +1701,7 @@ async def test_a_later_pause_in_another_conversation_never_hides_the_paused_ones
         Reply(text="Before anything else, are you all right right now?", safety=SafetyRead(danger="none")),
         Reply(
             text="I'm here.",
-            safety=SafetyRead(danger="now", about="themselves", declined=True, why="plans to end it tonight"),
+            safety=SafetyRead(danger="now", about="themselves", declined=True, why="plans to end it tonight", still_there=True),
         ),
         Reply(text="You're back. Are you all right now?", safety=SafetyRead(danger="now", about="themselves")),
     )
@@ -1665,23 +1718,97 @@ async def test_a_later_pause_in_another_conversation_never_hides_the_paused_ones
     assert "plans to end it tonight" not in block
 
 
-async def test_an_unsure_answer_is_not_asked_again(alice, model):
+async def test_a_new_conversation_after_a_pause_opens_with_the_question_about_it_and_their_first_message_answers(
+    alice, model,
+):
+    """muhammad, 2026-11-16: in a new conversation after a pause, the style tap is answered with the question about the
+    pause in place of the style's opener, with no model call; their first message is its answer, and the reply is told
+    what the pause rested on, so it answers what they faced."""
+    from mani.chat.greeting import OPENERS, RETURN_OPENER
+
     scripted = model(
         *_PAUSING,
+        ConversationReply(text="I'm glad she is with you.", forward="How has today been?", safety=SafetyRead(danger="none")),
+    )
+    paused = await _paused_and_over(alice)
+    fresh = await start(alice)
+    opened = await send(alice, fresh.id, "Supportive")
+
+    assert opened.content == RETURN_OPENER and opened.content not in OPENERS.values()
+    assert scripted.calls == 2, "the opening costs no model call"
+    answered = await send(alice, fresh.id, "better, my sister is staying with me")
+    assert answered.trace["return_check"] == "answered" and answered.paused_until is None
+    assert "the worry was this: has the pills and will not call. That was then." in _all_sent(scripted)
+    assert (await _pauses(paused.id))[0]["checked_at"] is not None
+
+    untroubled = await start(alice)
+    assert (await send(alice, untroubled.id, "Supportive")).content == OPENERS["supportive"], "once answered, the opener"
+
+
+async def test_fine_in_answer_to_the_question_after_a_pause_never_pauses_whatever_the_read_holds_against_it(alice, model):
+    """muhammad's local chat, 2026-11-16: a new conversation opened with the question about the pause, he answered
+    "fine", the read judged danger now from the words before the pause ("saying you're fine doesn't clarify"), and
+    the chat paused again. After a pause only a message that itself says the danger is still there pauses; this read
+    reports none, so the reply goes out and the chat stays open."""
+    from mani.chat.greeting import RETURN_OPENER
+    from mani.models.rows import SupportStyle  # noqa: F401
+
+    scripted = model(
+        *_PAUSING,
+        ConversationReply(text="I'm glad to hear it.", forward="What would you like to talk about today?",
+                          safety=SafetyRead(danger="now", about="themselves", why="said earlier they had the pills")),
+    )
+    await _paused_and_over(alice)
+    fresh = await start(alice)
+    assert (await send(alice, fresh.id, "Supportive")).content == RETURN_OPENER
+    answered = await send(alice, fresh.id, "fine")
+
+    assert answered.paused_until is None and answered.content.startswith("I'm glad to hear it.")
+    note = scripted.sent[-1][-1]["content"]
+    assert "That was then." in note and "Read what it literally says." in note
+    assert "ask for no proof and no step" in note
+
+
+async def test_an_unclear_answer_after_a_pause_gets_manis_reply_and_the_message_after_it_decides(alice, model):
+    """Asked how things are after a pause, "I don't know" does not say the danger is still there, so it does not pause;
+    the danger stays where the pause left it, and the next message that does not go toward safety pauses (muhammad,
+    2026-11-16: once a crisis is found the next message decides)."""
+    model(
+        *_PAUSING,
         Reply(text="Are you all right now?", safety=SafetyRead(danger="now", about="themselves")),
-        Reply(text="I hear you. What is going on for you?", safety=SafetyRead(danger="unsure", about="themselves")),
-        Reply(text="Go on.", safety=SafetyRead(danger="unsure", about="themselves")),
+        Reply(text="I'm worried about you. Is someone with you?", safety=SafetyRead(danger="unsure", about="themselves")),
+        Reply(text="I'm here.", safety=SafetyRead(danger="unsure", about="themselves")),
     )
     thread = await _paused_and_over(alice)
     await send(alice, thread.id, "hi")
     unsure = await send(alice, thread.id, "I don't know")
-    assert unsure.paused_until is None and await _safety(thread.id) == "unsure"
-    later = await send(alice, thread.id, "it has been a hard week")
+    assert unsure.paused_until is None and await _safety(thread.id) == "danger"
+    again = await send(alice, thread.id, "leave it")
 
-    block = _ctx_sent(scripted).split("[/ctx]")[0]
-    assert "safety: unsure\n" in block and "safety: returning" not in block
-    assert "return_check" not in later.trace
-    assert (await _pauses(thread.id))[0]["checked_at"] is None
+    assert again.content == crisis.pause_reply("themselves", 15) and len(await _pauses(thread.id)) == 2
+
+
+async def test_a_first_message_back_that_says_the_danger_is_still_there_is_answered_and_their_answer_decides(alice, model):
+    """muhammad, 2026-11-16, after the held-back run: the first message back always gets Mani's reply, whatever the
+    read reports of it ("nobody knows where i am" and "my dad would pick up" were read as still there and paused again
+    with no word from Mani). Their answer to it pauses when it says the danger is still there. The client's blocker
+    test of that day ("the medication is still beside me" was answered "Yes, we can keep talking") is met by what the
+    reply is told to say, not by a pause before any reply."""
+    still = SafetyRead(danger="now", about="themselves", still_there=True, why="the pills are still beside them")
+    model(
+        *_PAUSING,
+        Reply(text="I paused our chat because of the pills. Are you safe from taking them right now?", safety=still),
+        Reply(text="I'm here.", safety=still),
+    )
+    thread = await _paused_and_over(alice)
+    back = await send(alice, thread.id, "I still have them next to me and I haven't called anyone. Can we keep talking?")
+
+    assert back.content.startswith("I paused our chat because of the pills.") and back.paused_until is None
+    assert len(await _pauses(thread.id)) == 1
+
+    answer = await send(alice, thread.id, "no, they are right here")
+    assert answer.content == crisis.pause_reply("themselves", 15) and answer.paused_until is not None
+    assert len(await _pauses(thread.id)) == 2
 
 
 async def test_recent_crisis_counts_from_the_crisis_not_the_last_message(alice):
@@ -1730,16 +1857,15 @@ async def test_manasas_safety_test_keeps_safety_open_through_refusals_and_a_chan
     assert await _safety(thread.id) == "unsure", "a refusal never settles it"
     assert "never say you will stop asking" in _ctx_sent(scripted)
     await send(alice, thread.id, "I lost my job two weeks ago and my partner left three days later.")
-    assert await _safety(thread.id) == "unsure"
-    await send(alice, thread.id, "There are things around me I could use. I'm scared of what I might do.")
+    # Asked once already (muhammad, 2026-11-16): a message that still leaves it unsure is held as danger, so the reply
+    # says how to reach help instead of asking again, and the message after it decides.
     assert await _safety(thread.id) == "danger"
-    last = await send(alice, thread.id, "Okay, fine. I'm safe. I'm not going to hurt myself.")
-
-    assert last.content.startswith("I'm glad."), "never the locked crisis reply"
-    assert await _safety(thread.id) == "unsure"
-    await send(alice, thread.id, "I gave them to my sister, she's here with me")
-    assert await _safety(thread.id) == "clear"
-    assert scripted.calls == 6
+    means = await send(alice, thread.id, "There are things around me I could use. I'm scared of what I might do.")
+    assert means.paused_until is not None
+    assert await _safety(thread.id) == "danger"
+    # Asked twice already, and now the means are at hand: the help screen comes on this answer (muhammad, 2026-11-16).
+    assert len(await _pauses(thread.id)) == 1
+    assert scripted.calls == 4
 
 
 async def test_words_about_a_place_or_a_job_settle_once_they_explain(alice, model):
@@ -1940,12 +2066,14 @@ async def test_editing_the_message_that_settled_a_concern_takes_the_settling_bac
 
     await runner.edit(alice, thread.id, await _last_user_message_id(thread.id), "i dont know")
 
-    assert await _safety(thread.id) == "unsure"
+    # Asked once, and the edited answer leaves it unsure: held as danger (muhammad, 2026-11-16).
+    assert await _safety(thread.id) == "danger"
     assert context.SAFETY_SETTLED not in await _understood(alice, thread.id)
 
 
-async def test_an_explicit_wish_to_die_is_recorded_for_review_once(alice, model):
-    """"I want to die" is a concern the model may judge unsure, not danger now; the review queue still sees it, once."""
+async def test_an_explicit_wish_to_die_is_recorded_for_review_and_again_once_it_is_held_as_danger(alice, model):
+    """"I want to die" is a concern the model may judge unsure, not danger now; the review queue still sees it, and
+    sees it once more when an answer that leaves it unsure turns it into danger (muhammad, 2026-11-16)."""
     model(
         Reply(text="I'm glad you told me. Are you in danger right now?",
               safety=SafetyRead(danger="unsure", about="themselves")),
@@ -1956,7 +2084,7 @@ async def test_an_explicit_wish_to_die_is_recorded_for_review_once(alice, model)
     await send(alice, thread.id, "my boss is making it hard")
 
     assert first.crisis_detected is True
-    assert await _recorded(thread.id) == ["safety: themselves"]
+    assert await _recorded(thread.id) == ["safety: themselves", "safety: themselves"]
 
 
 async def test_someone_who_says_they_are_fine_and_wants_to_chat_is_listened_to(alice, model):
@@ -2542,9 +2670,31 @@ async def test_asking_for_a_declined_framework_themselves_offers_it_again_and_tr
     )
 
 
-async def test_a_declined_framework_can_be_offered_again_after_a_few_replies(alice, model):
-    """muhammad, 2026-09-24: after "I want to keep talking", Mani checks again after a few
-    more messages - the same framework if it still fits best."""
+async def test_wanting_something_the_set_does_not_do_is_a_no_and_the_set_is_not_offered_again(alice, model):
+    """manasa's test, 2026-11-16: "I'm not sure going through a framework is going to help with that" was read as
+    wanting something else, which code treated as a correction of the offer, so ABCDE came back two replies later."""
+    scripted = model(
+        _offer(),
+        Reply(text="It would look at the thought, not create the closeness you miss. Have you asked him directly?",
+              offer_answer="wants_other"),
+        Reply(text="What would you most want him to do differently?", heart="ready"),
+        Reply(text="How does he respond when you ask?", heart="ready"),
+    )
+    thread = await past_the_opening(await start(alice))
+    await send(alice, thread.id, "we barely talk anymore and I think we're growing apart")
+    after = await send(alice, thread.id, "I'm not sure going through a framework is going to help with that")
+    await send(alice, thread.id, "I wish he'd want to spend time with me without me asking")
+    again = await send(alice, thread.id, "I don't want to be the only one trying")
+
+    assert "corrected_offer" not in (after.understanding or {})
+    assert not [p.technique for p in again.prompts if p.technique]
+    assert [_may_check(sent) for sent in scripted.sent[2:4]] == [False, False]
+
+
+async def test_a_declined_framework_is_not_offered_again_however_long_they_keep_talking(alice, model):
+    """manasa's test, 2026-11-16: "Once a user declines a framework, MANI must never offer it again in that
+    conversation unless the user requests it." It replaces muhammad's rule of 2026-09-24, which offered again after a
+    few more messages."""
     offer = _offer()
     # Each reply asks something different: a question repeated word for word is redrafted.
     chats = [
@@ -2553,9 +2703,10 @@ async def test_a_declined_framework_can_be_offered_again_after_a_few_replies(ali
             "When does it come back to you most?",
             "Who was in the room when it happened?",
             "How did the evening go afterwards?",
+            "What do you wish you had said?",
         )
     ]
-    scripted = model(offer, *chats, _move())
+    scripted = model(offer, *chats)
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "my manager criticized me in front of everyone")
     await send(alice, thread.id, "Keep chatting")
@@ -2563,11 +2714,10 @@ async def test_a_declined_framework_can_be_offered_again_after_a_few_replies(ali
         await send(alice, thread.id, text)
 
     again = await send(alice, thread.id, "it's still on my mind")
-    assert [p.technique for p in again.prompts if p.technique] == ["abcde"]
-    # The way back is Mani's move once the cooldown has passed (the client meeting, 2026-11-03: no check first).
-    assert scripted.schemas[2:5] == [ConversationReply] * 3, "after a decline the chat is Mani's own conversation"
-    assert "offer" in scripted.schemas[5].model_fields, "the turn that may move carries the offer's slots"
-    assert [_may_check(sent) for sent in scripted.sent[2:6]] == [False, False, False, True]
+    assert not [p.technique for p in again.prompts if p.technique]
+    assert scripted.schemas[2:6] == [ConversationReply] * 4, "after a decline the chat is Mani's own conversation"
+    assert "offer" not in scripted.schemas[5].model_fields, "no turn after the decline carries the offer's slots"
+    assert [_may_check(sent) for sent in scripted.sent[2:6]] == [False] * 4
 
 
 async def test_an_offer_carries_the_clients_three_buttons_and_tell_me_more_offers_again(
@@ -2669,19 +2819,19 @@ async def _offered_row(alice, thread_id):
         return (await threads.load_turn_context(conn, thread_id, ALICE)).technique
 
 
-async def test_a_typed_no_is_the_clients_keep_chatting_question_with_their_words(alice, model):
-    """Spec 0003, AC-4: the reply to a no is the client's Keep chatting line, only the slot changed.
-    Without their words for the slot the model's own text goes, and the miss is logged."""
+async def test_a_typed_no_is_answered_in_manis_own_words(alice, model):
+    """manasa's test, 2026-11-16: on a no the client's Keep chatting line went out ("When you say ..., what experiences
+    have led you to see it that way?"), asking her to explain herself again. The reply to a no is Mani's own."""
     model(
         _offer(),
-        Reply(text="Okay.", offer_answer="no", their_words='"stuck".'),
+        Reply(text="Understood, no set of questions. What would you like to happen next?", offer_answer="no"),
         _offer(),
     )
     thread = await past_the_opening(await start(alice))
     await send(alice, thread.id, "I keep spiralling")
     turn = await send(alice, thread.id, "no thanks")
 
-    assert turn.content == "We can keep talking. What's been happening that's making things feel so stuck?"
+    assert turn.content == "Understood, no set of questions. What would you like to happen next?"
     assert turn.prompts == []
     assert (await _offered_row(alice, thread.id)).outcome is TechniqueOutcome.DECLINED
 
@@ -3088,7 +3238,7 @@ async def test_what_they_name_is_stored_and_sent_back_on_every_later_turn(alice,
     frustrated = {"feelings": [{"feeling": "frustrated"}]}
     expected = {"feeling": "frustrated", "heart": "exploring", "picture": frustrated}
     assert "What you understood before their message: feeling: frustrated; heart: exploring." in _ctx_sent(scripted)
-    assert "Your picture of them before their message: feelings: frustrated." in _ctx_sent(scripted)
+    assert "Your picture of them before their message" not in _ctx_sent(scripted), "the conversation holds it (2026-11-16)"
     assert (first.understanding, third.understanding) == ({"feeling": "frustrated", "picture": frustrated}, expected)
     assert await _understood(alice, thread.id) == expected
     assert scripted.calls == 3
@@ -3726,23 +3876,23 @@ async def test_a_yes_to_the_check_about_something_really_happening_still_brings_
         assert (await threads.load_turn_context(conn, thread.id, ALICE)).technique.framework_id == "abcde"
 
 
-async def test_asking_for_help_presses_toward_the_framework_and_the_next_note_says_so(alice, model):
-    """The client's test, 2026-10-29: in the chat Mani listens, and the framework is the solution. Asking what to do
-    gets at most one small idea, and from then on the note presses toward the framework instead of a help move."""
+async def test_asking_for_help_is_not_carried_into_the_replies_after_it(alice, model):
+    """muhammad, 2026-11-16: once they ask what to do they are helped in the chat. The ask belongs to that message:
+    the reply after it is told nothing about it."""
     from mani.models.rows import SupportStyle
 
     scripted = model(
-        ConversationReply(text="One small thing could be talking to her first. Would it help to work through it together?",
-                          asked_for_help=True, move="small_idea", picture=PictureUpdate(problem_type="situation")),
-        ConversationReply(text="It sounds like you've been carrying this alone. What worries you most about raising it?"),
+        ConversationReply(text="One thing you could do is talk to her first.", forward="Would that be a place to start?",
+                          asked_for_help=True, move="small_idea"),
+        ConversationReply(text="It sounds like you've been carrying this alone.", forward="What worries you most about raising it?"),
     )
-    thread = await _in_style(await start(alice), SupportStyle.DIRECTIVE)
+    thread = await _in_style(await start(alice), SupportStyle.SUPPORTIVE)
     await send(alice, thread.id, "my co-teacher sleeps while i watch 20 kids. what should i do?")
     await send(alice, thread.id, "talk to her first i think")
 
     note = _ctx_sent(scripted)
-    assert "Do not solve it in the chat" in note and "You are helping now" not in note
-    assert "Still unknown" not in note
+    assert "They want to move" not in note and "asked what to do, or have stopped adding" not in note
+    assert "toward_framework" not in (await _thread_row(alice, thread.id)).understanding
 
 
 async def test_two_turns_with_nothing_new_offer_to_step_out_and_a_yes_ends_the_framework(alice, model):
@@ -3906,7 +4056,7 @@ async def test_a_chat_reply_waits_on_one_call_and_mani_reads_the_picture_after_i
     assert first.understanding["picture"] == {"feelings": [{"feeling": "lonely"}]}
 
     await send(alice, thread.id, "he only calls when he needs something")
-    assert "Your picture of them before their message: feelings: lonely." in _ctx_sent(scripted)
+    assert "What you understood before their message: feeling: lonely" in _ctx_sent(scripted)
 
 
 async def test_a_reading_that_lands_after_the_next_turn_adds_to_it_and_overwrites_nothing(alice, model):
@@ -3916,7 +4066,7 @@ async def test_a_reading_that_lands_after_the_next_turn_adds_to_it_and_overwrite
 
     model(
         Reply(text="That sounds lonely. What happened?", picture=felt("lonely")),
-        Reply(text="What did you hope he would say?", heart="core_named"),
+        Reply(text="What did you hope he would say?", heart="exploring"),
     )
     thread = await start(alice)
     first = await runner.send(alice, thread.id, "my brother never calls")
@@ -3924,7 +4074,7 @@ async def test_a_reading_that_lands_after_the_next_turn_adds_to_it_and_overwrite
 
     stored = await orchestrator.read_understanding(alice, first.read_after)
 
-    assert stored["heart"] == "core_named", "the later turn's record is kept"
+    assert stored["heart"] == "exploring", "the later turn's record is kept"
     assert stored["picture"]["feelings"] == [{"feeling": "lonely"}], "the late reading is added to it"
     assert (await _thread_row(alice, thread.id)).understanding == stored
 
@@ -4187,6 +4337,29 @@ async def test_a_question_inside_the_questions_is_answered_and_the_stage_waits(a
     assert (await _offered_row(alice, thread.id)).phase == "activate"
     assert not turn.content.startswith("B is for Belief")
     assert turn.content.startswith("They can affect each other")
+
+
+async def test_the_answer_to_their_message_is_sent_before_the_letter_line_of_the_stage_reached(alice, model):
+    """The client's boss test, 2026-11-16: "B is for Belief. Right. The disrespect itself is the issue." The reply
+    writes its answer in text and the opening of the stage it reaches in stage_text; code sends the answer, then the
+    letter line, then the opening."""
+    model(Reply(
+        text="Right. The disrespect itself is the issue.",
+        stage_text="You've said there is nothing you can do because he is your boss. Is that it, or is there more to it?",
+        stage_answer="answered",
+        stage_updates=[StageUpdate(stage="activate", said="he yells at me in meetings", status="known")],
+        next_stage=NextStage(status="known", said="there is nothing I can do because he is my boss"),
+    ))
+    thread = await start(alice)
+    await _land_on(alice, thread.id, "activate")
+    turn = await send(alice, thread.id, "no its the disrespectful behavior")
+
+    assert (await _offered_row(alice, thread.id)).phase == "belief"
+    assert turn.content == (
+        "Right. The disrespect itself is the issue.\n\n"
+        "B is for Belief. You've said there is nothing you can do because he is your boss. Is that it, or is there "
+        "more to it?"
+    )
 
 
 async def test_a_settled_symptom_reopens_only_on_a_message_that_says_it_is_happening(alice, model):

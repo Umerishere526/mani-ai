@@ -88,7 +88,7 @@ def test_stage_a_says_back_only_what_happened(frameworks):
     assert all(stage["intro"].endswith(".") for stage in frameworks["thought_reframe"]["stages"].values() if stage.get("intro"))
     from mani.chat import walk
 
-    assert "unless this stage's reach names it" in walk.CONFIRM_ASK
+    assert "unless this stage's reach names it" in walk.ALREADY_ANSWERED
 
 
 def test_a_stage_with_nothing_known_is_asked_in_the_models_own_words_about_their_case():
@@ -106,7 +106,7 @@ def test_the_feeling_underneath_is_carried_into_every_stage_reply():
     from mani.chat import context, walk
 
     assert "the feeling underneath and what they said" in walk.reach_line("belief")
-    assert "the feeling underneath may frame it, never be its answer" in walk.CONFIRM_ASK
+    assert "the feeling underneath may frame it, never be its answer" in walk.ALREADY_ANSWERED
     assert "the feeling underneath" in context._MEANING["their_case"]
 
 

@@ -217,6 +217,29 @@ async def _a_thread() -> uuid.UUID:
         return (await orchestrator.start_thread(conn, claims_for(ALICE))).id
 
 
+async def test_the_opening_asks_about_a_pause_that_ran_out_until_they_have_answered(api):
+    """muhammad, 2026-11-16: back after a pause, a new conversation opens with the question about the pause in every
+    style, in place of the style's opener, until they have said they are all right. Reading the opening writes
+    nothing."""
+    from mani.chat.greeting import OPENERS, RETURN_OPENER
+
+    thread_id = await _a_thread()
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "insert into public.chat_pauses (user_id, thread_id, started_at, ends_at, reason) "
+            "values ($1, $2, now() - interval '20 minutes', now() - interval '5 minutes', 'why')",
+            ALICE, thread_id,
+        )
+
+    opening = (await api.get("/v1/threads/opening")).json()
+    assert opening["openers"] == dict.fromkeys(OPENERS, RETURN_OPENER)
+    assert opening["chat_paused_until"] is None
+
+    async with pool.as_admin() as conn:
+        await conn.execute("update public.chat_pauses set checked_at = now() where user_id = $1", ALICE)
+    assert (await api.get("/v1/threads/opening")).json()["openers"] == OPENERS
+
+
 async def test_every_chat_route_refuses_while_paused(api, model):  # noqa: F811
     scripted = model(Reply(text="Go on."))
     thread_id = await _a_thread()

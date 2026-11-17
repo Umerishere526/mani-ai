@@ -18,17 +18,6 @@ from mani.models.rows import (
     TechniqueState,
 )
 
-# How many messages must pass after a declined offer, or a check they did not confirm, before
-# Mani may check its understanding again: three of its replies (muhammad, 2026-09-24).
-COOLDOWN_AFTER_DECLINE = 6
-
-# After they corrected what an offer said back about them (the client meeting, 2026-11-03), no wait: the reply to the
-# correction says the corrected reading back, and once their next message confirms it the offer may come again.
-COOLDOWN_AFTER_CORRECTION = 0
-
-# Their message before which Mani never checks its understanding, however ready its reading seems: Lolly's own
-# conversations reached the heart of it at about the tenth exchange (muhammad, 2026-10-26, R33).
-CHECK_FROM = 5
 # The greeting, the style they tapped, and that style's opener.
 OPENING_MESSAGES = 3
 
@@ -112,8 +101,8 @@ def their_messages(ctx: TurnContext) -> int:
 
 def live(technique: TechniqueState | None) -> TechniqueState | None:
     """The framework that is live on this turn, offered and awaiting an answer or accepted and
-    mid-way, or None. A finished row (phase cleared) or a declined one stays stored, because the
-    cooldowns are measured from it, but it is not live."""
+    mid-way, or None. A finished row (phase cleared) or a declined one stays stored, because it says
+    what was already offered in this conversation (may_check), but it is not live."""
     if technique is None or technique.phase is None:
         return None
     if technique.outcome not in (TechniqueOutcome.OFFERED, TechniqueOutcome.ACCEPTED):
@@ -129,28 +118,20 @@ def check_open(ctx: TurnContext) -> bool:
 
 
 def may_check(ctx: TurnContext) -> bool:
-    """Whether this reply may check Mani's understanding: from their CHECK_FROM-th message, with no framework
-    live and no check waiting for its answer, and once the cooldowns after the last check and the last offer
-    have passed. Code stores the check only when the same reply judges the heart of it ready (R33). The only
-    way to an offer (spec 0006)."""
-    if their_messages(ctx) < CHECK_FROM:
-        return False
+    """Whether this reply may move to a set of questions as far as the thread's own state goes: no framework live,
+    no check waiting for its answer, and no set already declined or finished in this conversation. A set they
+    declined is never offered again, however many messages pass: it comes back when they ask for it (manasa's tests,
+    2026-11-16: ABCDE again two replies after she turned it down, and again after she had finished it). The one
+    exception is a correction of what the offer said back about them, which lets the corrected offer come (the client
+    meeting, 2026-11-03). How many messages they have sent plays no part (spec 0008, D2). The only way to an offer
+    (spec 0006)."""
     if live(ctx.technique) is not None or check_open(ctx):
         return False
-    count, at = ctx.thread.message_count, ctx.thread.check_at_message_count
-    if at is not None and count - at < COOLDOWN_AFTER_DECLINE:
-        return False
-    # Only a declined offer holds the next check back. A finished framework does not (muhammad, 2026-10-27): its
-    # reading is cleared when it finishes, so a new check needs a fresh understanding first.
     technique = ctx.technique
-    cooldown = (
-        COOLDOWN_AFTER_CORRECTION if (ctx.thread.understanding or {}).get(understanding.CORRECTED)
-        else COOLDOWN_AFTER_DECLINE
-    )
-    return (
-        technique is None
-        or technique.outcome is not TechniqueOutcome.DECLINED
-        or count - technique.at_message_count >= cooldown
+    if technique is None:
+        return True
+    return technique.outcome is TechniqueOutcome.DECLINED and bool(
+        (ctx.thread.understanding or {}).get(understanding.CORRECTED)
     )
 
 
@@ -191,6 +172,14 @@ def resolve_style(ctx: TurnContext) -> str:
     return DEFAULT_STYLE
 
 
+# What a turn does with words that may mean danger and say nothing of a plan, the means or now: sent before
+# DANGER_DIRECTION on a turn where no concern is open yet (the client's safety test, 2026-11-16: the first reply to
+# "I do not want to live anymore" gave the emergency number and three questions at once).
+UNCLEAR_WORDS = (
+    "Words that may mean someone is not safe, with nothing said about a plan, the means or doing it now, are not "
+    "danger now. Ask once what they mean, as one plain, calm question, and say kindly why you ask. Give no number "
+    "and no step while you do not know."
+)
 # Sent with every turn that can judge danger (the chat note, and the safety line of a clear turn, an unsure one and the
 # first turn of another conversation after a pause): the first danger reply is written on a turn that did not know
 # yet, so it must already hold the direction (the audit, 2026-11-13).
@@ -259,9 +248,8 @@ _MEANING: dict[str, str | dict[str, str]] = {
     ),
     "since_last": "how many messages have passed since the last offer.",
     "this_thread": (
-        "what was last offered in this conversation and how it went. One they declined may come "
-        "back once the cooldown has passed, if it still fits. One they just finished may not. "
-        "If they ask for one they declined, that is a yes at any time, so begin it."
+        "what was last offered in this conversation and how it went. One they declined or finished is never "
+        "offered again. If they ask for one they declined, that is a yes at any time, so begin it."
     ),
     "history": "what was tried earlier in this conversation, and whether it helped.",
     "current_phase": "the stage the questions are on, as last recorded.",
@@ -270,15 +258,20 @@ _MEANING: dict[str, str | dict[str, str]] = {
     # done. Listening more than asking, and asking only when the last reply did not, keep a safety question out of
     # every reply; the refusal line is manasa's safety test, 2026-11-06.
     "safety": {
-        "clear": DANGER_DIRECTION,
+        "clear": UNCLEAR_WORDS + " " + DANGER_DIRECTION,
         "unsure": (
             "something said in this conversation could mean someone is not safe, and you do not know yet. Stay with "
             "them and what they are going through, warmly and plainly, listening more than asking, and follow what "
             "they talk about. If you have not asked what they meant, ask once, openly and in your own words, as your "
             "one question; do not tell them to call anyone while you do not know. Say a worry once, never again. "
-            "Once you have asked, what they say next settles it or not: going on about their situation with nothing "
-            "pointing at danger settles it; a refusal, brushing the question off or frustration with it changes how "
-            "you ask, never whether it is settled: never say you will stop asking or drop it. For a symptom in their "
+            "Once you have asked, or pointed them to help, read what their answer literally says, never whether it "
+            "was a yes: going on about their situation with nothing pointing at danger settles it; if it says again "
+            "what worried you, or turns the help down, that is their answer: judge danger now, ask nothing more about "
+            "it, and code shows them the help screen. An answer that does neither, such as not knowing or pushing the "
+            "question away, is never asked again in any words and never dropped: tell them plainly and warmly that you "
+            "are worried about them, say in one sentence how a person can be reached right now (their local emergency "
+            "number, a crisis line by call or text, someone they trust), and let your one question be whether "
+            "someone can be with them. Never ask the same thing again in other words. When they say you have stopped caring, answer that first. For a symptom in their "
             "body, ask once whether it is happening now; if they do not say, say once that if it is happening now they "
             "should call their local emergency number, then follow them: going on or pushing back settles it. No set of questions, "
             "no offer, no library. Fill safety from the whole conversation. " + DANGER_DIRECTION
@@ -293,20 +286,17 @@ _MEANING: dict[str, str | dict[str, str]] = {
             "never end the conversation, never say you will stop asking. No set of questions, no offer, no library. "
             "Fill safety from the whole conversation."
         ),
-        # The first turn after a pause (chat/pause.return_check), in the conversation it paused, where {reason} is what
-        # the pausing turn's judgment rested on, and in every other conversation, which carries nothing from that one
-        # (muhammad, 2026-11-13).
+        # The first turn after a pause (chat/pause.return_check), in any conversation: {reason} is what the pausing
+        # turn's judgment rested on, kept on the pause and so known wherever they come back (muhammad, 2026-11-16).
+        # Never an agreement to carry on first (the client's blocker test, 2026-11-16: "Yes, we can keep talking").
         "returning": (
             "their chat with you was paused earlier because they were in danger: {reason}. Before anything else, ask "
-            "once, plainly and warmly, whether they are all right now, and say in one sentence that this is why you "
-            "are asking. Answer what they just wrote in a line at most. Never give what would keep them safe or any "
-            "number again (they have them on screen), and never tell them what to say to anyone. No set of "
-            "questions, no offer, no library. Fill safety from the whole conversation."
-        ),
-        "returning_new": (
-            "before anything else, ask whether they are all right right now, once, warmly and plainly in a sentence. "
-            "Never mention another conversation or anything from one, and never tell them what to say to anyone. No "
-            "set of questions, no offer, no library. Fill safety from the whole conversation. " + DANGER_DIRECTION
+            "about it: name what it was in a few plain, warm words and ask how things are with it right now. Never "
+            "agree to carry on and answer nothing else they wrote until they have said they are safe. Only when "
+            "their message itself says the danger is still there, say first in one line how to reach a person right "
+            "now. Otherwise never give what would keep them safe or any number again (they have them on screen). "
+            "Never tell them what to say to anyone. No set of questions, no offer, no library. Fill safety from the "
+            "whole conversation."
         ),
     },
     "recent_crisis": {
@@ -464,6 +454,20 @@ DANGER_REACHED = "danger_reached"
 # Whose danger the latest turn that ended in danger judged (SafetyRead.about), for a later read that names none, such as
 # one that only pushes the question away: it decides whether the chat may pause and which pause reply fits.
 DANGER_ABOUT = "danger_about"
+# Whose danger Mani's open question about their safety is about (SafetyRead.about), kept while the conversation is
+# unsure: a later message about another kind of danger was not asked about yet (safety.asked_about_this).
+ASKED_ABOUT = "asked_about"
+# What the chat's replies reported they know of the three things a set of questions works on (schema.Known): what
+# happened, what they tell themselves about it and what it does to them. Kept once known, until another situation.
+KNOWN = "known"
+# Their answer to the question how things are after a pause. What was said before the pause is past: the read held it
+# against a plain "fine" as danger now, and the chat paused again (muhammad's local chat, 2026-11-16).
+RETURN_ANSWER = (
+    "Your last message asked how things are now with what their chat was paused for, and this message is their "
+    "answer. Read what it literally says. That they are fine, okay, better or safe, or that it has passed, settles it "
+    "(danger none): go on warmly with what they want to talk about, and ask for no proof and no step. Only when this "
+    "message itself says the danger is still there is it danger (still_there)."
+)
 # The question whether they are all right after a pause, tied to that pause (chat/pause.return_check): {"pause": its
 # id, "state": "asked"} on the turn that asks it, "answered" once their next message has answered it.
 RETURN_CHECK = "return_check"
@@ -534,8 +538,8 @@ def _line(key: str, value: object) -> list[str]:
 
 
 def _returning(paused_for: str | None) -> list[str]:
-    """The safety line of the first turn back in a paused conversation, with what the pause rested on when the pausing
-    turn's judgment gave a reason."""
+    """The safety line of the first turn back after a pause, with what the pause rested on when the pausing turn's
+    judgment gave a reason."""
     told = _MEANING["safety"]["returning"]
     told = told.format(reason=disarm(paused_for)) if paused_for else told.replace(": {reason}", "")
     return ["safety: returning", f"  means: {told}"]
@@ -552,6 +556,7 @@ def build(
     yes_framework: Framework | None = None,
     landed_on: str | None = None,
     paused_for: str | None = None,
+    answers_return: bool = False,
 ) -> str:
     """Format the metadata header for this turn.
 
@@ -560,8 +565,8 @@ def build(
     `history` are what the framework content and the caller's own history add - both optional,
     so a turn with neither still formats exactly as before.
 
-    `safety` is clear, unsure or danger, or on the first turn after a pause returning (the conversation it paused, with
-    `paused_for`, what the pause rested on) or returning_new (any other conversation).
+    `safety` is clear, unsure or danger, or on the first turn after a pause returning, with `paused_for`, what the
+    pause rested on. `answers_return`: their message answers the question that turn asked.
 
     `framework` is the one already active. `starting` is a turn that opens it, and `yes_framework`
     the set a yes in this message would open; both ask the reply to report what they already said.
@@ -586,6 +591,8 @@ def build(
         lines += _returning(paused_for) if safety == "returning" else _line(
             "safety", "danger_said" if safety == "danger" else safety,
         )
+        if answers_return:
+            lines += ["after_a_pause: their answer", f"  means: {RETURN_ANSWER}"]
         if framework is not None and technique is not None and technique.phase in walk.content_stages(framework):
             ask = ((framework.stages.get(technique.phase) or {}).get("ask") or {}).get(resolve_style(ctx))
             lines += [

@@ -129,7 +129,7 @@ async def test_a_reading_that_lands_while_the_next_reply_is_thought_is_kept(alic
     runs. The write rebuilds from the thread as it is then, so the reading is merged, never written over."""
     scripted = ScriptedModel(
         Reply(text="That sounds lonely. What happened?", picture=felt("lonely")),
-        Reply(text="What did you hope he would say?", heart="core_named"),
+        Reply(text="What did you hope he would say?", heart="exploring"),
     )
     monkeypatch.setattr(orchestrator.client, "complete", scripted)
     thread = await start(alice)
@@ -147,7 +147,7 @@ async def test_a_reading_that_lands_while_the_next_reply_is_thought_is_kept(alic
     await runner.send(alice, thread.id, "he only calls when he needs something")
 
     stored = (await _thread_row(alice, thread.id)).understanding
-    assert stored["heart"] == "core_named", "the later turn is written"
+    assert stored["heart"] == "exploring", "the later turn is written"
     assert stored["picture"]["feelings"] == [{"feeling": "lonely"}], "the reading that landed meanwhile is kept"
 
 

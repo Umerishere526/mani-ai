@@ -99,7 +99,7 @@ def test_the_clients_offer_wording_reaches_the_person_but_never_the_framework_in
     from mani.prompts import composer
 
     index = composer.framework_index(Registry([as_framework(abcde)]))
-    for key in ("offer", "keep_chatting", "explain"):
+    for key in ("offer", "explain"):
         for text in abcde["stages"]["offering"][key].values():
             fixed = max(re.split(r"<[^>]*>", text), key=len).strip()
             assert fixed[:40] not in index, key
@@ -178,7 +178,7 @@ def test_an_open_offer_turn_costs_less_prompt_than_before_the_structured_fields(
                              phase="offering", at_message_count=11)
     block = context.build(TurnContext(thread=thread, profile=None, technique=offered), framework=framework,
                           history=[], offer_waiting=True, yes_framework=framework)
-    shape = reply_for(Moment.OFFER_OPEN, slots=repairs.slots_for(registry, "supportive", "abcde"))
+    shape = reply_for(Moment.OFFER_OPEN, slots=repairs.slots_for(registry, "supportive"))
 
     # The voice is the prefix every turn shares, the chat's included, and is cached once for all of them
     # (muhammad, 2026-10-27); what this turn adds after it is held to the old figure.

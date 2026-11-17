@@ -85,7 +85,9 @@ def close(text: str, stages: dict, *, plan: bool = False) -> tuple[str, list[But
     when something practical is still ahead of them (muhammad, 2026-11-06)."""
     script = _script(stages, CLOSING)
     buttons = (script.get("plan_buttons") or [] if plan else []) + script["buttons"]
-    return without_last_question(without_body_offer(text)), _buttons(buttons)
+    own = without_body_offer(text)
+    # A close that is only a question is kept: cut, it would go out empty.
+    return without_last_question(own) or own, _buttons(buttons)
 
 
 def _opening(stages: dict) -> Step:

@@ -12,7 +12,7 @@ endpoint (a conversation's first message through `POST /v1/threads`, which creat
 ## What it simulates versus what is real
 
 - **Real:** every chat turn, every capsule tap, style selection (tapping one of the greeting's
-  three style buttons), framework offers (including the nearest fit, shown as "Try the closest fit" beside "Keep chatting"), the body check-in (the client's six steps, with its two outcomes), the crisis pause (a centred "Let's make sure everyone is safe" pop-up with the help numbers and a live countdown to when the chat resumes; the Library stays open). All of it
+  three style buttons), framework offers (including the nearest fit, shown as "Try the closest fit" beside "Keep chatting"), the body check-in (the client's six steps, with its two outcomes), the crisis pause (the client's centred "Chat is temporary unavailable" pop-up with how long the pause runs, 988 and 911, Get help now and Go to library, and a live countdown at the bottom; the Library stays open). All of it
   goes over HTTP to the actual FastAPI app - nothing here calls `orchestrator.py` directly.
 - **Real, too:** the library page (sidebar **Library**, or any **Go to Library** button). It lists
   every exercise from `GET /v1/exercises` on one page, grouped by topic, each playable from its

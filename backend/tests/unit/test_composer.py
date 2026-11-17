@@ -355,7 +355,8 @@ def test_a_question_back_is_not_an_answer():
     from mani.llm.schema import Reply
 
     assert "They ask what you mean: the stage is not answered" in _sent("framework")
-    assert "a question back about what you asked" in Reply.model_fields["stage_answer"].description
+    assert "not_yet: a plain no, unclear, unsure, I don't know, a question to you" in (
+        Reply.model_fields["stage_answer"].description)
 
 
 def test_the_moments_prompt_keeps_what_the_old_one_held_for_these_turns():

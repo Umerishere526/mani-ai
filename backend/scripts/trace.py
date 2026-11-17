@@ -55,7 +55,7 @@ def turn_lines(number: int, trace: dict) -> list[str]:
     for key, label in (
         ("model", "model reported"), ("applied", "code applied"), ("walk", "walk"), ("stages", "stages"),
         ("may_move", "may move"), ("moved", "moved to the set"), ("offered", "offered"),
-        ("offer_dropped", "offer unusable"), ("funnel", "funnel"), ("core_fixed", "core held fixed"),
+        ("offer_dropped", "offer unusable"), ("core_fixed", "core held fixed"),
         ("buttons", "buttons"), ("notes", "notes"), ("checks", "checks"), ("guarded", "guarded"),
         ("safety", "safety"), ("reason", "reason"),
     ):

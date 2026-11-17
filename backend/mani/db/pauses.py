@@ -35,6 +35,18 @@ async def active(conn: asyncpg.Connection, user_id: uuid.UUID | str) -> Pause | 
     ))
 
 
+async def owed(conn: asyncpg.Connection, user_id: uuid.UUID | str, recent_days: int) -> Pause | None:
+    """The person's latest pause that has run out, when it still owes the question how things are now: it ended within
+    `recent_days` and they have not said they are all right. What a new conversation opens with reads it."""
+    pause = Pause.from_record(await conn.fetchrow(
+        "select id, user_id, thread_id, started_at, ends_at, checked_at from public.chat_pauses "
+        "where user_id = $1 and ends_at <= now() and ends_at > now() - make_interval(days => $2) "
+        "order by started_at desc limit 1",
+        user_id, recent_days,
+    ))
+    return pause if pause is not None and pause.checked_at is None else None
+
+
 async def mark_checked(conn: asyncpg.Connection, pause_id: uuid.UUID | str) -> None:
     await conn.execute(
         "update public.chat_pauses set checked_at = now() where id = $1", pause_id

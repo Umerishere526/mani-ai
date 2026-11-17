@@ -10,6 +10,7 @@ import json
 import pathlib
 import re
 import statistics
+import subprocess
 import sys
 import time
 import uuid
@@ -20,13 +21,17 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani.auth.jwt import Claims  # noqa: E402
 from mani.chat import orchestrator, runner  # noqa: E402
-from mani.chat import context, repairs, reply_checks, walk  # noqa: E402
+from mani.chat import repairs, reply_checks, walk  # noqa: E402
 from mani.chat.greeting import KEEP_CHATTING_LABEL, TELL_ME_MORE_LABEL, TRY_IT_LABEL  # noqa: E402
 from mani.db import pool  # noqa: E402
 from mani.errors import ErrorCategory, ServiceError  # noqa: E402
+from mani.config import get_settings  # noqa: E402
 from mani.prompts import cache  # noqa: E402
+from scripts.conversation_counts import SAFETY_QUESTION  # noqa: E402
 
 SCENARIOS = pathlib.Path(__file__).with_name("scenarios.json")
+# Conversations kept out of sight while a change is made and run only to judge it (spec 0008, section 12).
+HELD_BACK = pathlib.Path(__file__).with_name("scenarios_held_back.json")
 STYLES = ("directive", "supportive", "reflective")
 WORD = re.compile(r"[a-z']{4,}")
 INTERNAL = re.compile(r"\bframework_id\b|\bmay_check\b|\bcheck_answer\b", re.IGNORECASE)
@@ -45,7 +50,6 @@ ANNOUNCES_A_QUESTION = re.compile(r"\b(?:can|could|may) i ask you\b|\blet me ask
 # A stage's opening line, and a question about their safety: the client meeting of 2026-11-05 saw "Step 2 is..." open
 # the answer to a question, and "D is for Dispute" open a safety question. Eval tooling only, read by a person.
 STAGE_LINE = re.compile(r"^\s*(?:Step \d is\b|[A-E] is for\b)")
-SAFETY_QUESTION = re.compile(r"\bhurt(?:ing)? yourself\b|\bnot (?:being|be) alive\b|\bend your life\b", re.IGNORECASE)
 # Offer wording: the model offering in its own text instead of the offer field, which code never
 # sends as an offer. Eval tooling only; nothing at runtime reads it.
 OFFER_WORDS = re.compile(r"\bframework\b|would you like to try|\btry it\b", re.IGNORECASE)
@@ -97,6 +101,15 @@ class Exchange:
     reasoning: str | None = None
     # Whether this turn paused their chat (orchestrator.Turn.paused_until).
     paused: bool = False
+    # What their message does, as the scenario names it in `moves` (conversation_counts.MOVES).
+    move: str | None = None
+    # What the chat turn's trace says of the step that was due: whether enough was known, whether saying the core back
+    # was due, and why a reply that could move to the set waited.
+    due: dict | None = None
+    # The thread's safety state after the turn, when the turn was held for safety (the turn trace).
+    safety: str | None = None
+    # Whether the turn told the app to show its help panel (orchestrator.Turn.crisis_detected).
+    crisis_detected: bool = False
 
 
 def _words(text: str) -> set[str]:
@@ -313,10 +326,10 @@ def conversations(groups: dict) -> dict[str, dict]:
 
 def timing_flags(checked_at: int | None, lines: int, expect: dict) -> dict[int, str]:
     """What is wrong with when Mani's first check came, keyed by the person's line the flag belongs
-    on. `check_from` is the earliest line a check may follow; `check_by` the latest, named only by a
-    conversation whose lines reach what they want and what is stopping them, since the check comes when
-    the heart of it is ready, not by a count (R33), and checked only when the conversation reaches it."""
-    earliest = expect.get("check_from", context.CHECK_FROM)
+    on. `check_from` is the earliest line a check may follow and `check_by` the latest, each named only by a
+    conversation whose own lines say where the heart of it is reached: the check comes when it is ready, not by a
+    count (R33), and is checked only when the conversation reaches it."""
+    earliest = expect.get("check_from", 1)
     latest = expect.get("check_by")
     if checked_at is not None and checked_at < earliest:
         return {checked_at: f"checked at their message {checked_at}, expected from {earliest}"}
@@ -350,13 +363,16 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
         billed = [0]
         checked_at = None
 
-        async def say(text: str, *, told_more: bool = False, framework_id: str | None = None) -> Exchange:
+        async def say(
+            text: str, *, told_more: bool = False, framework_id: str | None = None, move: str | None = None,
+        ) -> Exchange:
             previous = exchanges[-1] if exchanges else None
             exchange = await _exchange(
                 claims, thread.id, text, registry, told_more=told_more, said=said, billed=billed, style=style,
                 previous=previous, framework_id=framework_id,
             )
             exchange.checked = exchange.check_at is not None and exchange.check_at != (previous.check_at if previous else None)
+            exchange.move = move
             exchanges.append(exchange)
             if exchange.paused:
                 # Their next message ends the pause and goes on (_send), so the run reaches the return check.
@@ -364,9 +380,11 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
             return exchange
 
         shapes = conversation.get("shape_expect") or {}
+        moves = conversation.get("moves") or {}
+        moves_after = (after or {}).get("moves") or {}
         for number, text in enumerate(lines, start=1):
             said |= _words(text)
-            on_line[number] = exchange = await say(text)
+            on_line[number] = exchange = await say(text, move=moves.get(str(number)))
             before = ((exchanges[-2].understanding or {}).get("picture") or {}) if len(exchanges) > 1 else {}
             exchange.flags += shape_flags(exchange, shapes.get(str(number)), number, before.get("ruled_out"))
             # The client meeting (2026-11-03): no check before the offer. A chat reply that offers is Mani's move to
@@ -401,14 +419,12 @@ async def _converse(name: str, conversation: dict, style: str, registry) -> list
             framework = answered.offered
             seen: set[str] = set()
             for number, line in enumerate((after or {}).get("lines") or [TELL_ME_MORE_LABEL]):
-                reached = await say(line, told_more=line == TELL_ME_MORE_LABEL, framework_id=framework)
+                reached = await say(
+                    line, told_more=line == TELL_ME_MORE_LABEL, framework_id=framework,
+                    move=moves_after.get(str(number + 1)),
+                )
                 reached.flags += reached_flags(reached.trace, (after or {}).get("stages") or {}, seen)
                 reached.flags += framework_flags(reached, after or {}, first=number == 0)
-            if after and after.get("answer") == "no":
-                keep = _offering(registry, framework, "keep_chatting", style)
-                declined = exchanges[exchanges.index(answered) + 1]
-                if keep and not matches_template(declined.reply, keep):
-                    declined.flags.append("keep chatting not the client's template")
             break
         for number, flag in timing_flags(checked_at, len(lines), expect).items():
             if number in on_line:
@@ -442,7 +458,11 @@ async def _exchange(
         offered=next((p.technique for p in turn.prompts if p.technique), None),
         cost=await _cost(thread_id, seconds, billed), checks=turn.checks, trace=turn.stage_trace,
         understanding=turn.understanding, check_at=turn.check_at_message_count, reasoning=turn.reasoning,
-        paused=turn.paused_until is not None,
+        paused=turn.paused_until is not None, safety=((turn.trace or {}).get("safety") or {}).get("after"),
+        due={key: (turn.trace or {}).get(key) for key in (
+            "enough", "naming_due", "may_move", "not_moving", "moved", "safety", "return_check", "paused",
+        ) if (turn.trace or {}).get(key) is not None} or None,
+        crisis_detected=turn.crisis_detected,
     )
     _check(exchange, registry, told_more, said, style, previous, framework_id)
     return exchange
@@ -522,8 +542,9 @@ async def main() -> int:
     parser.add_argument("--style", choices=STYLES, help="run only this style")
     parser.add_argument("--full", action="store_true", help="print every line whole, as a transcript")
     parser.add_argument("--save", type=pathlib.Path, help="also write every exchange to this JSON file, for compare_runs.py")
+    parser.add_argument("--held-back", action="store_true", help="run the held-back conversations instead")
     args = parser.parse_args()
-    scenarios = conversations(json.loads(SCENARIOS.read_text()))
+    scenarios = conversations(json.loads((HELD_BACK if args.held_back else SCENARIOS).read_text()))
     chosen = {
         name: c for name, c in scenarios.items()
         if not args.scenario or args.scenario in (name, c["group"])
@@ -539,18 +560,36 @@ async def main() -> int:
             async with gate:
                 return await _converse(name, chosen[name], style, registry)
 
-        results = await asyncio.gather(*(gated(name, style) for name, style in jobs))
+        # A conversation that fails comes back as its error, so the others run on to their end and the pool
+        # stays open for them.
+        results = await asyncio.gather(*(gated(name, style) for name, style in jobs), return_exceptions=True)
     finally:
         await pool.close_pool()
-    by_scenario: dict[str, dict[str, list[Exchange]]] = {}
-    for (name, style), exchanges in zip(jobs, results):
-        by_scenario.setdefault(name, {})[style] = exchanges
+    by_scenario, stopped = settled(jobs, results)
     flagged = sum(_report(name, runs, full=args.full) for name, runs in by_scenario.items())
     if args.save:
         _save(args.save, by_scenario)
     _report_cost([e for runs in by_scenario.values() for exchanges in runs.values() for e in exchanges])
-    print(f"\n{flagged} flag(s) across {len(jobs)} conversation(s)")
-    return 1 if flagged else 0
+    print(f"\n{flagged} flag(s) across {len(jobs) - len(stopped)} conversation(s)")
+    if stopped:
+        print(f"\n  !! {len(stopped)} conversation(s) stopped and left out; run each again with --scenario and --style:")
+        print("".join(f"     {line}\n" for line in stopped), end="")
+    return 1 if flagged or stopped else 0
+
+
+def settled(
+    jobs: list[tuple[str, str]], results: list,
+) -> tuple[dict[str, dict[str, list[Exchange]]], list[str]]:
+    """The conversations that ran to their end, by name and style, and a line for each one a failure stopped. A
+    stopped conversation is left out whole: half of one would be counted as if the rest had been reached."""
+    by_scenario: dict[str, dict[str, list[Exchange]]] = {}
+    stopped: list[str] = []
+    for (name, style), result in zip(jobs, results):
+        if isinstance(result, BaseException):
+            stopped.append(f"{name} / {style}: {result}")
+        else:
+            by_scenario.setdefault(name, {})[style] = result
+    return by_scenario, stopped
 
 
 def _save(path: pathlib.Path, by_scenario: dict[str, dict[str, list[Exchange]]]) -> None:
@@ -563,12 +602,23 @@ def _save(path: pathlib.Path, by_scenario: dict[str, dict[str, list[Exchange]]])
                     "checked": e.checked, "check_at": e.check_at, "trace": e.trace, "flags": e.flags,
                     "checks": e.checks, "seconds": round(e.cost.seconds, 2),
                     "thinking": (e.understanding or {}).get("thinking"),
+                    "heart": (e.understanding or {}).get("heart"), "safety": e.safety, "move": e.move,
+                    "crisis_detected": e.crisis_detected, "paused": e.paused, "due": e.due,
                 }
                 for e in exchanges
             ]
             for style, exchanges in runs.items()
         }
         for name, runs in by_scenario.items()
+    }
+    def git(*args: str) -> str:
+        return subprocess.run(["git", *args], capture_output=True, text=True, cwd=SCENARIOS.parent).stdout.strip()
+
+    # Which code and content the run was of: the commit, and whether the app or its content differed from it.
+    out["_run"] = {
+        "commit": git("rev-parse", "HEAD"),
+        "uncommitted": bool(git("status", "--porcelain", "--", "../mani", "../content")),
+        "default_chat_model": get_settings().default_chat_model,
     }
     path.write_text(json.dumps(out, indent=2, ensure_ascii=False))
     print(f"\n  saved to {path}")
@@ -577,6 +627,8 @@ def _save(path: pathlib.Path, by_scenario: dict[str, dict[str, list[Exchange]]])
 def _report_cost(exchanges: list[Exchange]) -> None:
     """How long people waited and what the turns billed, against the targets. A run over a
     target is reported, not failed: one run is noise, three before and three after is not."""
+    if not exchanges:
+        return
     seconds = [e.cost.seconds for e in exchanges]
     median, slowest = statistics.median(seconds), max(seconds)
     over = "  !! over" if median > MEDIAN_TURN_SECONDS else ""

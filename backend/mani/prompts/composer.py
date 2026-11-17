@@ -13,6 +13,16 @@ from mani.prompts.cache import Config
 
 # The key on the voice row's model_parameters that names the effort of a body check-in turn.
 BODY_EFFORT = "body_reasoning_effort"
+READING_EFFORT = "reading_reasoning_effort"
+
+
+def reading_parameters(parameters: dict) -> dict:
+    """The parameters of the reading after a reply: the turn's own, at the row's `reading_reasoning_effort` when it
+    names one. The reading thinks about 900 tokens at the reply's effort and lands a median 18.8 s after it (147 local
+    calls, 2026-11-10 to 16), later than many people answer; nothing waits on it, so it thinks less (muhammad,
+    2026-11-16)."""
+    effort = parameters.get(READING_EFFORT)
+    return parameters | {"reasoning_effort": effort} if effort else parameters
 
 DEBUG_LAYER = (
     "# Debug\n"

@@ -22,6 +22,19 @@ OPENERS = {
     "reflective": "What's on your mind today?",
 }
 
+# What Mani opens a new conversation with, in place of the style's opener, while a pause that has run out still owes
+# the question how things are (muhammad, 2026-11-16). Fixed, so the opening costs no model call; the wording is ours
+# until the client supplies hers.
+RETURN_OPENER = (
+    "Before we start, I want to check in with you. I paused our chat earlier because I was worried about what you "
+    "were facing. How are things with that right now?"
+)
+
+
+def openers(return_check_owed: bool) -> dict[str, str]:
+    """Each style's opener, or the question about the pause for every style while one is owed."""
+    return dict.fromkeys(OPENERS, RETURN_OPENER) if return_check_owed else OPENERS
+
 
 def greeting(nickname: str | None, returning: bool) -> str:
     name = nickname or DEFAULT_NAME

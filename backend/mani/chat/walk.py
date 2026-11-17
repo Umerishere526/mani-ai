@@ -17,10 +17,10 @@ from mani.models.rows import ENDING_STAGES, Framework
 STATUSES = ("partial", "possible", "known", "done")
 # What a reply may report for a stage. done is set only by code, when the walk leaves the stage.
 _REPORTED = frozenset({"partial", "possible", "known"})
-# A stage stored with one of these is said back and confirmed once, never asked.
+# A stage stored with one of these was already answered in the chat: it is opened as conversation, never asked again.
 CONFIRMED = frozenset({"known", "possible"})
 # How their message may answer the stage in force and move the walk on. Not knowing never moves it, and neither does
-# exploring what they added to a stage said back.
+# staying to explore what they added or said there is more to.
 MOVES = frozenset({"agreed", "answered", "corrected"})
 # What they added to a stage, explored before moving on: how many turns so far is kept on the stage's entry, for the
 # trace (the client meeting, 2026-11-03). There is no cap on it (muhammad, 2026-11-06: "the goal is not to reduce the
@@ -31,13 +31,16 @@ EXPLORE = "explore"
 EXPLORED = "explored"
 COVERED = "covered"
 SAID_LIMIT = 200
-# How Mani confirms a stage the person already answered, in its own words (muhammad's team lead, 2026-10-13).
-CONFIRM_ASK = (
-    "Say back what they said for this stage, never another stage's part unless this stage's reach names it "
-    "(the feeling underneath may frame it, never be its answer), to them as you, and invite them to add to it, "
-    "in one or two sentences, never ending the way your last reply did (last_ending), such as \"Is that it, or is there "
-    "more to it?\", \"Tell me a little more about it.\", \"Is there anything you'd like to add?\" or \"Let's look at it "
-    "a little more.\" Never just a yes-or-no question."
+# How Mani opens a stage the person already answered in the chat. Every stage still gets a reply of its own, but as
+# conversation, not a confirmation (muhammad, 2026-11-16: "make it more chatty than confirming at each stage, but each
+# stage individually is a must"; both testers that day found "here is what you said, is there more?" three times over
+# repetitive). Before it, Mani said the stage back and invited them to add (muhammad's team lead, 2026-10-13).
+ALREADY_ANSWERED = (
+    "Never ask them to confirm it, repeat it or add to it. In one fresh sentence say what you understand for this "
+    "stage, never another stage's part unless this stage's reach names it (the feeling underneath may frame it, "
+    "never be its answer), to them as you. Add one new thing (what stands out, a link to the stage before, an "
+    "insight they earned), then one open question (what or how) about a part of this stage you have not talked "
+    "about yet (stage_explore), never ending the way your last reply did (last_ending)."
 )
 _LETTER_LINE = re.compile(r"^\s*[A-E] is for\b")
 # "I" and its contractions keep their capital inside a sentence; nothing else that starts their words does.
@@ -216,33 +219,26 @@ def start(
 
 def _counts(answer: str, before: dict, updated: bool) -> bool:
     """Whether the stage answer can be true of the stage in force. agreed answers a check of their
-    words, so only a stage reached as one, and so does explore, which adds to them; answered and corrected
-    bring words for it."""
-    if answer in ("agreed", EXPLORE):
+    words, so only a stage reached as one; answered and corrected bring words for it. Staying to explore is open to
+    every stage, asked or said back."""
+    if answer == "agreed":
         return before.get("status") in CONFIRMED
     if answer in ("answered", "corrected"):
         return updated
     return True
 
 
-# A message that asks something: the question comes first and the stage waits (muhammad, 2026-11-05: manasa's "should
-# I look at this thought or my numbness? Does one affect the other?" moved the walk and the reply opened on Step 2).
-_ASKS = re.compile(
-    r"\?|^\s*(?:should|does|do|is|are|can|could|would|will|what|why|how|when|where|which|who)\b", re.IGNORECASE,
-)
-# The answers that move the walk, which a question never is.
-_MOVING = ("agreed", "answered", "corrected")
-
-
 def asks(message: str) -> bool:
-    """Whether their message asks something: a question mark, or one that opens like a question."""
-    return bool(_ASKS.search(message or ""))
+    """Whether their message has a question mark in it. How a message opens says nothing: "how he treats me" is an
+    answer (the client's boss test, 2026-11-16). A question typed without the mark is the reply's to judge."""
+    return "?" in (message or "")
 
 
 def held_by_question(answer: str | None, message: str) -> str | None:
-    """The stage answer to apply: a moving answer becomes not_yet when their message asks something, so the walk
-    stays and the reply answers it first. Anything else is kept."""
-    return "not_yet" if answer in _MOVING and asks(message) else answer
+    """The stage answer to apply: a moving answer becomes not_yet when their message asks something, so the question
+    comes first and the stage waits (muhammad, 2026-11-05: manasa's "should I look at this thought or my numbness?
+    Does one affect the other?" moved the walk and the reply opened on Step 2). Anything else is kept."""
+    return "not_yet" if answer in MOVES and asks(message) else answer
 
 
 def advance(
@@ -276,9 +272,13 @@ def advance(
         answer = "agreed"
     merged = merge(base, now, framework, in_force=in_force)
     notes += merged.notes
-    if (answer in ("agreed", EXPLORE) and before.get("status") not in CONFIRMED and in_force in merged.updated):
-        # A stage not said back, such as E waiting for the path, answered with words for it: it is answered,
-        # whatever the reply called it (the career chat, 2026-11-03: E stayed, and the body check-in came twice).
+    said_now = in_force in merged.updated
+    # The stage waited for one part of its answer, and their words filled it.
+    filled = before.get("status") == "partial" and (merged.entries.get(in_force) or {}).get("status") != "partial"
+    if said_now and ((answer == "agreed" and before.get("status") not in CONFIRMED) or (answer == EXPLORE and filled)):
+        # A stage not said back answered with words for it is answered, whatever the reply called it: an agreement
+        # that brought the words, or a stay on a stage that only waited for its missing part, such as E for the path
+        # (the career chat, 2026-11-03: E stayed, and the body check-in came twice). A stage asked whole may stay.
         notes.append(f"{answer} with words for a stage not said back read as answered")
         answer = "answered"
     if answer is not None and not _counts(answer, before, in_force in merged.updated):
@@ -286,7 +286,8 @@ def advance(
         answer = None
     stored = merged.entries
     if answer == EXPLORE:
-        # The stage stays while Mani explores what they added; their words for it were merged above.
+        # The stage stays while Mani explores what they added or said there is more to; their words for it were
+        # merged above.
         explored = before.get(EXPLORED, 0) + 1
         stored[in_force] = {**stored.get(in_force, {}), EXPLORED: explored}
         notes.append(f"exploring what they added to {in_force}: turn {explored}")
@@ -394,9 +395,13 @@ def reply_text(
     thread_id: uuid.UUID | str,
     feeling: str | None,
     options: str | None = None,
+    stage_text: str | None = None,
 ) -> tuple[str, list[str]]:
     """The reply and the fallbacks it took. A stage just reached opens with its letter line, then
-    what its stored status calls for; otherwise it is the model's text. Every stage reached is one
+    what its stored status calls for; otherwise it is the model's text. `stage_text` is what the reply wrote to open
+    the stage reached: then `text` is its answer to what they just said and goes first, on lines of its own, so the
+    letter line never stands in front of an answer to the stage before; a reply with no `stage_text` has it all in
+    `text`. Every stage reached is one
     [ctx] told the reply about, so once the reply judged it, the model's text is used for it when it
     asks something: a confirmation, the gap, or its question about their situation. A stage missing
     keeps the client's own line where it has one with their feeling word (A), and a stage left
@@ -408,6 +413,12 @@ def reply_text(
     if own != text.strip():
         notes.append("dropped a letter line")
     reached = walked.reached
+    opening = repairs.without_sentences(stage_text or "", lambda s: bool(_LETTER_LINE.match(s))).strip()
+    if opening and reached is None:
+        notes.append("stage_text dropped: the walk stayed")
+    lead = ""
+    if opening and reached is not None:
+        lead, own = own, opening
     if reached is None:
         if not own and walked.phase in content_stages(framework):
             notes.append("stay text empty")
@@ -455,7 +466,8 @@ def reply_text(
     intro = ((framework.stages or {}).get(reached) or {}).get("intro")
     # One paragraph, as the client's document writes it: "A is for Activating Event. You've mentioned..."
     text = " ".join(part for part in (intro, body) if part)
-    return (repairs.under(text, options) if body == own else text), notes
+    text = repairs.under(text, options) if body == own else text
+    return (f"{lead}\n\n{text}" if lead else text), notes
 
 
 def stay_question(framework: Framework, entries: dict[str, dict], stage: str, style: str) -> str | None:
@@ -498,9 +510,11 @@ def reach_line(stage: str) -> str:
     """What the reply's text does for a stage the walk reaches, by what next_stage reports for it.
     How the stage is judged lives in the next_stage field and the stage's own lines in [ctx]."""
     return (
-        f"your text follows what you report for {stage} in next_stage. Known or possible: your text is "
-        f"its confirmation, carrying anything they added at the stage before that belongs to it. {CONFIRM_ASK} Partial: your text asks only for what is missing, built on "
-        f"what they said. Missing: its letter line is sent for you, so your text is a short mirror of their "
+        f"what opens {stage} goes in stage_text and follows what you report for it in next_stage; text is only your "
+        f"answer to what they just said (a sentence or two, no question, or empty). Code sends text, then the "
+        f"stage's letter line, then stage_text. Known or possible: they already "
+        f"answered this stage, so stage_text talks it through, carrying anything they added at the stage before that belongs to it. {ALREADY_ANSWERED} Partial: stage_text asks only for what is missing, built on "
+        f"what they said. Missing: stage_text is a short mirror of their "
         f"situation, the feeling underneath and what they said for the stages before, then the stage's question "
         f"in your own words (keep what next_stage_ask asks, not its wording). Possibilities go in options only "
         f"when options says so."
@@ -522,7 +536,7 @@ def next_line(framework: Framework, phase: str) -> str:
         moved = f"the walk reaches {following}: {reach_line(following)}"
     return (
         f"If you answer agreed, answered or corrected, {moved} If explore, the walk stays: build on what they "
-        f"added, with an insight when they have earned one, and ask one open question (what or how, never yes or no) "
+        f"added or said there is more to, with an insight when they have earned one, and ask one open question (what or how, never yes or no) "
         f"about a part of this stage not yet explored (stage_explore, stage_explored), never one already asked or "
         f"answered, without moving to the next stage yet. If not_yet, the walk "
         f"stays: answer what they said as you would in the chat, talk about anything new they brought in, then come back toward this stage "
@@ -533,7 +547,7 @@ def next_line(framework: Framework, phase: str) -> str:
 
 # What the walk does with a stage, for a person watching the conversation.
 _ACTIONS = {
-    "known": "said back and confirmed once",
+    "known": "already answered, talked through and never asked again",
     "possible": "a possible event, confirmed once",
     "partial": "partly known, ask only the gap",
     "done": "done",

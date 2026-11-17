@@ -141,7 +141,7 @@ def chat_misses(
     earlier_insights: list[str] | None = None, last_shape: str | None = None, latest: str | None = None,
 ) -> list[str]:
     """What a chat reply got wrong about the three shapes and the line between moving the conversation and solving
-    it, named for the log and the scenario check. Counted, never fixed. One small idea is allowed when they asked."""
+    it, named for the log and the scenario check. Counted, never fixed. Suggestions are allowed when they asked."""
     notes: list[str] = []
     fixes = solutions(text)
     if fixes and not (move == "small_idea" and asked_for_help):
@@ -159,8 +159,8 @@ def chat_misses(
         notes.append("insight is a solution")
     if shape == "insight" and repeats_insight(insight, earlier_insights):
         notes.append("insight repeats an earlier one")
-    if shape == "reflect" and last_shape == "reflect":
-        notes.append("reflect two in a row")
+    if shape == "acknowledge" and last_shape == "acknowledge":
+        notes.append("acknowledge two in a row")
     if repeats_their_words(text, latest):
         notes.append("mirror repeats their words")
     return notes

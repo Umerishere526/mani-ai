@@ -18,6 +18,7 @@ FEELING_SEPARATOR = ", "
 READY = "ready"
 # The core said back and not corrected (muhammad, 2026-10-28). A record written before then says conflict_named.
 CORE_NAMED = "core_named"
+EXPLORING = "exploring"
 _LEGACY_HEART = {"conflict_named": CORE_NAMED}
 # They corrected what an offer said back about them (the client meeting, 2026-11-03). Named here, where the record is
 # merged; converse and context read it under the same name.
@@ -65,9 +66,10 @@ def merge(stored: dict, update: PictureUpdate | None, heart: str | None) -> dict
     merged = {
         key: stored[key]
         for key in (
-            *KEYS, picture.KEY, "plan", "thinking", context.INSIGHTS, CORRECTED, context.FOLLOW_THROUGH,
+            *KEYS, picture.KEY, "thinking", context.INSIGHTS, CORRECTED, context.FOLLOW_THROUGH,
             context.PREPARING, context.PROGRESS, context.EXPLORATION, context.SAFETY_SETTLED,
             context.SAFETY_END_CHECK, context.RETURN_CHECK, context.DANGER_REACHED, context.DANGER_ABOUT,
+            context.ASKED_ABOUT, context.KNOWN,
         )
         if stored.get(key)
     }
@@ -84,6 +86,7 @@ def merge(stored: dict, update: PictureUpdate | None, heart: str | None) -> dict
         # Another situation: the reading of the last one does not hold for it, so the heart of it is found again.
         merged.pop("heart", None)
         merged.pop(CORRECTED, None)
+        merged.pop(context.KNOWN, None)
     if heart:
         merged["heart"] = heart
     return merged
