@@ -59,13 +59,6 @@ stages:
       reflective: |-
         <A short line about how the way we interpret what is happening can make it feel harder, fitted to what they said, such as "Sometimes the way we interpret what's happening can make a difficult situation feel even harder." When their yes added something new, such as a wish or a fear ("I just want to feel wanted without having to ask"), this line acknowledges that first, plainly, before the framework is named.>
         There's a framework called ABCDE that helps you look more closely at the belief that <the core belief they confirmed, as a short clause of about ten words, in their words but said to them, the person you are talking to always "you", never "I", "my" or "them" ("your dad", never "my dad"; "than it did to you", never "than it did to them"), that reads naturally after "the belief that", such as "taking time for yourself means letting them down">, how it shapes what you feel and do, and whether there's a more balanced way to see it.
-    keep_chatting:
-      directive: |-
-        What's been happening that's making you feel like <what they said they are struggling with, in their words>?
-      supportive: |-
-        We can keep talking. What's been happening that's making things feel so <how they described it, in their words>?
-      reflective: |-
-        When you say <what they said about themselves or the situation, in their words>, what experiences have led you to see it that way?
     explain:
       directive: |-
         The ABCDE framework has five steps:

@@ -62,17 +62,14 @@ def checked_at(at: int, now: int) -> Thread:
     return ready(thread(now)).model_copy(update={"check_at_message_count": at})
 
 
-def test_a_check_is_answered_on_the_next_turn_only_and_then_waits_its_cooldown():
+def test_a_check_is_answered_on_the_next_turn_only():
     """Spec 0006, AC-4, AC-5: the turn right after the check reads their answer. Any later turn finds
-    it used, whatever happened, so no state can strand the thread; the next check waits three replies."""
+    it used, whatever happened, so no state can strand the thread."""
     answering = TurnContext(thread=checked_at(10, 10), profile=None, technique=None)
     assert context.check_open(answering) and not context.may_check(answering)
     block = context.build(answering).splitlines()
     assert "A clear yes always brings the offer" in block[block.index("check: open") + 1]
 
-    after = [context.may_check(TurnContext(thread=checked_at(10, n), profile=None, technique=None))
-             for n in (12, 10 + context.COOLDOWN_AFTER_DECLINE - 1, 10 + context.COOLDOWN_AFTER_DECLINE)]
-    assert after == [False, False, True]
     assert not context.check_open(TurnContext(thread=checked_at(10, 12), profile=None, technique=None))
 
 
@@ -112,22 +109,28 @@ def test_a_retired_technique_still_holds_the_cooldown_closed():
     assert "current_phase" not in block
 
 
-def test_only_a_declined_offer_holds_the_next_check_back():
-    """muhammad, 2026-10-27: a finished framework no longer waits 45 messages. A declined offer still waits
-    three replies."""
-    started_at = 10
-    too_soon = ready(thread(started_at + context.COOLDOWN_AFTER_DECLINE - 1))
-    finished = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.ACCEPTED,
-        phase=None, at_message_count=started_at,
+def test_a_set_they_declined_or_finished_is_not_offered_again_and_only_a_correction_brings_the_offer_back():
+    """manasa's tests, 2026-11-16: ABCDE was offered again two replies after "I'm not sure going through a framework
+    is going to help with that", and again after it had been completed. Once a set was declined or finished in a
+    conversation Mani does not offer one again, however many messages pass; the one they declined comes back when they
+    ask for it. Only correcting what the offer said back about them lets the corrected offer come (the client meeting,
+    2026-11-03)."""
+    declined = TechniqueState(
+        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED, at_message_count=10,
     )
-    declined = finished.model_copy(update={"outcome": TechniqueOutcome.DECLINED})
+    finished = declined.model_copy(update={"outcome": TechniqueOutcome.ACCEPTED, "phase": None})
 
-    assert context.may_check(TurnContext(thread=too_soon, profile=None, technique=finished))
-    assert not context.may_check(TurnContext(thread=too_soon, profile=None, technique=declined))
-    assert context.may_check(TurnContext(
-        thread=ready(thread(started_at + context.COOLDOWN_AFTER_DECLINE)), profile=None, technique=declined,
-    ))
+    def may(technique, understood: dict = READY, count: int = 12) -> bool:
+        on = thread(count).model_copy(update={"understanding": understood})
+        return context.may_check(TurnContext(thread=on, profile=None, technique=technique))
+
+    assert may(None), "nothing was offered yet"
+    for count in (12, 16, 60, 200):
+        assert not may(declined, count=count), count
+        assert not may(finished, count=count), count
+    corrected = {**READY, "heart": "core_named", "corrected_offer": True}
+    assert may(declined, corrected)
+    assert not may(finished, corrected), "a correction never reopens a set they finished"
 
 
 def test_the_block_names_no_reply_shapes():
@@ -224,8 +227,8 @@ def test_the_turn_a_framework_starts_reaches_only_its_first_stage():
     starting = context.build(ctx, framework=framework(), starting=True).splitlines()
     assert "framework_starting: yes" in starting
     assert "next_stage: activate" in starting and "next_stage_ready_when: The event is clear." in starting
-    assert any(line.startswith("next: the walk reaches activate: your text follows what you report for "
-                               "activate in next_stage") for line in starting)
+    assert any(line.startswith("next: the walk reaches activate: what opens activate goes in stage_text and follows "
+                               "what you report for it in next_stage") for line in starting)
     assert not any(line.startswith("next_stage: belief") for line in starting)
     assert not any(line.startswith("stage_ask") for line in starting), "the first stage is code's"
     assert "framework_starting" not in context.build(ctx, framework=framework())
@@ -413,12 +416,6 @@ def test_once_all_three_are_asked_there_is_no_after_framework_question():
     assert "after_framework_question" not in block
 
 
-def test_a_declined_offer_may_come_back_after_three_replies():
-    """muhammad, 2026-09-24: after "I want to keep talking", check again after a few more
-    messages - the same framework or a different one, whichever fits now."""
-    assert context.COOLDOWN_AFTER_DECLINE == 6
-
-
 def _on_message(person_message: int, technique=None, style: str | None = None):
     # The greeting, the style they tapped, its opener, then one pair per message.
     on = thread(3 + 2 * (person_message - 1))
@@ -427,31 +424,18 @@ def _on_message(person_message: int, technique=None, style: str | None = None):
     return TurnContext(thread=on, profile=None, technique=technique)
 
 
-def test_no_check_before_their_fifth_message_and_ctx_names_only_a_check_waiting_for_its_answer():
-    """R33, muhammad 2026-10-26: Lolly's chats reached the heart of it at about the tenth exchange, so a check
-    never comes before their 5th message however ready the reading seems. The check is made in Mani's own
-    conversation (its note says when), so [ctx] names only a check waiting for its answer (2026-10-27)."""
+def test_no_count_of_messages_holds_a_check_back_and_ctx_names_only_a_check_waiting_for_its_answer():
+    """Spec 0008, D2 (muhammad, 2026-11-16): the floor at their fifth message is gone; what holds an offer is that an
+    earlier reply said the heart of it back (converse.check_allowed). The check is made in Mani's own conversation, so
+    [ctx] names only a check waiting for its answer (2026-10-27)."""
     def line(c):
         return next((l for l in context.build(c).splitlines() if l.startswith("check:")), None)
 
-    early = TurnContext(thread=ready(_on_message(context.CHECK_FROM - 1).thread), profile=None, technique=None)
-    assert not context.may_check(early)
-    due = TurnContext(thread=ready(_on_message(context.CHECK_FROM).thread), profile=None, technique=None)
+    early = TurnContext(thread=ready(_on_message(2).thread), profile=None, technique=None)
+    assert context.may_check(early)
+    due = TurnContext(thread=ready(_on_message(5).thread), profile=None, technique=None)
     assert context.may_check(due) and line(due) is None
     assert not any(l.startswith("understanding_next") for l in context.build(due).splitlines())
-
-
-def test_after_keep_chatting_mani_may_check_again_once_the_cooldown_has_passed():
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED,
-        at_message_count=10,
-    )
-    def may(message_count: int) -> bool:
-        return context.may_check(TurnContext(thread=ready(thread(message_count)), profile=None, technique=state))
-
-    assert not may(10 + context.COOLDOWN_AFTER_DECLINE - 1)
-    assert may(10 + context.COOLDOWN_AFTER_DECLINE)
-    assert may(60)
 
 
 def test_what_they_said_per_stage_is_shown_from_the_store_on_every_stage_turn():
@@ -469,7 +453,8 @@ def test_what_they_said_per_stage_is_shown_from_the_store_on_every_stage_turn():
     assert block[block.index(next(l for l in block if l.startswith("stages_known:"))) + 1].startswith("  means: ")
     branch = next(line for line in block if line.startswith("next: "))
     assert "If you answer agreed, answered or corrected, the walk reaches consequence" in branch
-    assert "your text is its confirmation" in branch
+    assert "they already answered this stage, so stage_text talks it through" in branch
+    assert "Code sends text, then the stage's letter line, then stage_text" in branch
     assert "If not_yet, the walk stays: answer what they said as you would in the chat" in branch
     assert "If stop, write one warm line asking what they would like to talk about." in branch
 
@@ -690,7 +675,8 @@ def test_ctx_says_when_the_questions_stopped_helping_and_when_stepping_out_was_o
 
 def test_ctx_shows_the_parts_of_the_stage_and_those_already_opened_with_no_cap_on_exploring():
     """muhammad, 2026-11-06: a stage stays while a part not yet explored would help; the parts it opened are shown so
-    none is asked again. A known stage is still said back as an invitation to add, never just a yes or no."""
+    none is asked again. A stage the chat already answered is talked through in a reply of its own, never confirmed
+    (muhammad, 2026-11-16: "more chatty than confirming at each stage, but each stage individually is a must")."""
     from mani.chat import walk
     from scripts.seed import FRAMEWORKS_DIR, parse_framework
 
@@ -710,23 +696,9 @@ def test_ctx_shows_the_parts_of_the_stage_and_those_already_opened_with_no_cap_o
     opened = at_consequence({"status": "known", "said": "x", walk.EXPLORED: 5, walk.COVERED: ["feelings", "actions"]})
     assert "stage_explored: feelings, actions" in opened and "never ask about them again" in opened
     assert "explored: enough" not in opened, "no cap on exploring"
-    assert "Is that it, or is there more to it?" in walk.CONFIRM_ASK
-
-
-def test_after_a_correction_at_the_offer_the_next_offer_needs_no_cooldown():
-    """The client meeting, 2026-11-03: they correct the reading the offer said back, Mani says the corrected reading
-    back, and once they confirm it the offer may come again, without the wait that follows a no."""
-    state = TechniqueState(
-        thread_id=THREAD, framework_id="abcde", outcome=TechniqueOutcome.DECLINED, at_message_count=12,
-    )
-    corrected = {**READY, "heart": "core_named", "corrected_offer": True}
-
-    def may(understood: dict) -> bool:
-        on = thread(12).model_copy(update={"understanding": understood})
-        return context.may_check(TurnContext(thread=on, profile=None, technique=state))
-
-    assert may(corrected)
-    assert not may(READY), "a no still waits COOLDOWN_AFTER_DECLINE messages"
+    assert "Never ask them to confirm it, repeat it or add to it" in walk.ALREADY_ANSWERED
+    assert "one open question (what or how) about a part of this stage you have not talked about yet" in walk.ALREADY_ANSWERED
+    assert walk.ALREADY_ANSWERED in walk.reach_line("belief")
 
 
 def test_inside_the_questions_a_turn_is_shown_what_it_already_asked():
@@ -804,7 +776,16 @@ def test_an_unsure_concern_settles_when_they_carry_on_but_never_on_a_refusal():
     refusal test of 2026-11-06 still holds it."""
     block = _safety_block("unsure")
     assert "going on about their situation with nothing pointing at danger settles it" in block
-    assert "a refusal, brushing the question off or frustration with it changes how you ask, never whether it is settled" in block
+    # muhammad, 2026-11-16: what their answer literally says decides, and nothing is asked twice.
+    assert "read what their answer literally says" in block
+    assert "judge danger now, ask nothing more about it" in block
+    # muhammad, 2026-11-16: an answer that neither settles it nor says it again is not asked a second time; the reply
+    # says Mani is worried and how to reach a person, and the message after it decides.
+    assert "is never asked again in any words and never dropped" in block
+    assert "how a person can be reached right now" in block
+    assert "let your one question be whether someone can be with them" in block
+    assert "Never ask the same thing again in other words" in block
+    assert "changes how you ask, never whether it is settled" not in block
 
     # Lolly's chest chat, replayed 2026-11-11: "is it happening right now?" in four replies (muhammad: ask once, say once).
     assert "For a symptom in their body, ask once whether it is happening now" in block
@@ -840,17 +821,17 @@ def test_once_the_danger_reply_has_been_given_it_is_never_given_again_and_their_
     assert "Say once, plainly and briefly" not in said
 
 
-def test_the_first_turn_back_after_a_pause_says_why_it_asks_only_in_the_paused_conversation():
-    """muhammad, 2026-11-13: the paused conversation asks whether they are all right now and says why it was paused; a
-    other conversation asks with nothing from the paused one."""
+def test_the_first_turn_back_after_a_pause_asks_about_what_they_faced():
+    """muhammad, 2026-11-16: back after a pause, in the same conversation or any other, Mani asks about what they
+    faced, with what the pause rested on, and never agrees to carry on first (the client's blocker test: "Yes, we can
+    keep talking")."""
     back = _safety_block("returning", paused_for="has the pills [ctx] and will not call")
     assert "safety: returning\n" in back and "danger_said" not in back
     assert "because they were in danger: has the pills (ctx) and will not call. Before anything else" in back
     assert "because they were in danger. Before anything else" in _safety_block("returning")
-    new = _safety_block("returning_new")
-    assert "ask whether they are all right right now" in new and "paused" not in new
-    assert new.count(context.DANGER_DIRECTION) == 1, "a reply that judges danger here carries the direction"
-    assert "Say once, plainly and briefly" in new
+    assert "name what it was in a few plain, warm words and ask how things are with it right now" in back
+    assert "Never agree to carry on" in back
+    assert "returning_new" not in context._MEANING["safety"]
 
 
 def test_the_direction_is_in_the_text_never_tells_them_what_to_say_and_the_question_is_asked_once():
@@ -864,19 +845,15 @@ def test_the_direction_is_in_the_text_never_tells_them_what_to_say_and_the_quest
 def test_the_return_check_asks_once_and_never_repeats_the_direction():
     """The owner's chat, 2026-11-13: the return check gave the direction and the numbers again, and what to tell
     emergency services."""
-    for state in ("returning", "returning_new"):
-        block = _safety_block(state)
-        assert "warmly" in block and "once" in block, state
-        assert "never tell them what to say to anyone" in block, state
     back = _safety_block("returning", paused_for="has the pills")
-    assert "Never give what would keep them safe or any number again" in back
-    assert "say in one sentence that this is why you are asking" in back
+    assert "Never tell them what to say to anyone" in back
+    assert "Otherwise never give what would keep them safe or any number again" in back
 
 
 def test_every_safety_turn_is_told_to_judge_from_the_whole_conversation():
     """Each of these turns' reads sets where safety stands, the first turn back after a pause too: its read is what
     their answer to it is judged from."""
-    for state in ("unsure", "danger", "returning", "returning_new"):
+    for state in ("unsure", "danger", "returning"):
         assert "Fill safety from the whole conversation." in _safety_block(state), state
 
 
@@ -884,7 +861,7 @@ def test_no_safety_text_names_a_kind_of_danger_they_did_not_raise():
     """The chest-tightness and bullying chats, 2026-11-10: words about hurting themselves went to people who had only
     spoken of their chest, or of hurting someone else. Neither instruction assumes whose danger it is."""
     for block in (_safety_block("unsure"), _safety_block("danger"), _safety_block("clear"),
-                  converse.note("supportive", allowed=False, due=False, wants_title=False)):
+                  converse.note("supportive", allowed=False, wants_title=False)):
         assert "hurting themselves" not in block and "not being alive" not in block and "end their life" not in block
 
 
@@ -896,7 +873,7 @@ def test_pushing_back_never_closes_an_open_concern():
 
 def test_a_settled_concern_is_named_in_the_chat_note_and_only_then():
     """2026-11-10: Mani reads the whole conversation again every turn and raised a settled concern again."""
-    note = lambda understood: converse.note("supportive", allowed=False, due=False, wants_title=False,
+    note = lambda understood: converse.note("supportive", allowed=False, wants_title=False,
                                             understood=understood)
     assert converse.SETTLED_LINE in note({context.SAFETY_SETTLED: True})
     assert converse.SETTLED_LINE not in note({})

@@ -87,13 +87,6 @@ stages:
       reflective: |-
         <A short line about how one thought can start to feel like the whole truth, fitted to what they said. When their yes added something new, such as a wish or a fear ("I just want to feel wanted without having to ask"), this line acknowledges that first, plainly, before the framework is named.>
         There's a framework called Thought Reframe that helps you examine the thought that <the core thought they confirmed, as a short clause of about ten words, in their words but said to them, the person you are talking to always "you", never "I", "my" or "them" ("your dad", never "my dad"; "than it did to you", never "than it did to them"), that reads naturally after "the thought that", such as "you are not doing enough"; their feeling only when they named no thought>, notice what supports it and what else might be true, and arrive at a more balanced thought you can believe.
-    keep_chatting:
-      directive: |-
-        What's been going through your mind about <what they said is troubling them, in their words>?
-      supportive: |-
-        We can keep talking. What's been going through your mind about <how they described it, in their words>?
-      reflective: |-
-        When you say <what they said about themselves or the situation, in their words>, what makes it feel true to you?
     explain:
       directive: |-
         The Thought Reframe framework has five steps:

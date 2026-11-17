@@ -51,3 +51,9 @@ conflict under "Conflicts" in [requirements.md](requirements.md) and update the 
 | 2026-11-05 | Lolly, manasa, muhammad (meeting) | [Stay with them, don't placate, the framework still breaks, and Monday](messages/2026-11-05-meeting-stay-with-them-and-safety.md) |
 | 2026-11-06 | manasa | [Four Reflective test chats: repetitive, no help preparing, and safety that gives way](messages/2026-11-06-four-reflective-tests.md) |
 | 2026-11-10 | Lolly, and muhammad's own test | [Chest tightness: safety that scares, repeats, brings up self-harm, and does not let go](messages/2026-11-10-chest-tightness-safety.md) |
+| 2026-11-16 | Lolly | [Directive test, the boss who yells: moving through steps instead of a meaningful conversation](messages/2026-11-16-directive-boss-abcde-test.md) |
+| 2026-11-16 | Lolly | [Directive safety test: confusing safety procedures with caring for a person](messages/2026-11-16-directive-safety-test.md) |
+| 2026-11-16 | manasa | [Reflective, a boss who yells: endless exploration, then a mechanical ABCDE](messages/2026-11-16-reflective-boss-yelling-test.md) |
+| 2026-11-16 | manasa | [Reflective, too much work: ABCDE offered again after it was finished, and no ending](messages/2026-11-16-reflective-workload-test.md) |
+| 2026-11-16 | manasa | [Reflective, growing apart: a declined framework offered again, and no ending when she was done](messages/2026-11-16-reflective-relationship-test.md) |
+| 2026-11-16 | manasa | [Crisis test and the blocker: paused on a refusal, then agreed to keep talking before safety was established](messages/2026-11-16-crisis-blocker-test.md) |

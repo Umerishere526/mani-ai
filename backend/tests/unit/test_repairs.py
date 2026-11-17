@@ -194,23 +194,15 @@ def test_an_offer_field_outside_the_answer_to_a_check_or_on_a_concern_does_nothi
         assert (fixed.text, fixed.prompts, fixed.offer_dropped) == ("Model's own words.", [], None)
 
 
-def test_keep_chatting_is_the_clients_question_with_their_words(client_abcde):
-    assert repairs.keep_chatting(client_abcde, "supportive", "heavy.") == (
-        "We can keep talking. What's been happening that's making things feel so heavy?"
-    )
-    assert repairs.keep_chatting(client_abcde, "supportive", "") is None
-
-
 def test_once_told_more_the_offer_comes_back_with_two_buttons():
     assert [p.label for p in repairs.offer_buttons("abcde", explained=True)] == ["Try it", "Keep chatting"]
 
 
 def test_the_slot_descriptions_are_the_clients_placeholders(client_abcde):
-    directive = repairs.slots_for(Registry([client_abcde]), "directive", "abcde")
+    directive = repairs.slots_for(Registry([client_abcde]), "directive")
     assert directive.lead_line is None
     assert directive.going_through.startswith("the core belief they confirmed, as a short clause of about ten words, in their words")
-    assert directive.their_words == "what they said they are struggling with, in their words"
-    assert repairs.slots_for(Registry([client_abcde]), "supportive", None).lead_line.startswith(
+    assert repairs.slots_for(Registry([client_abcde]), "supportive").lead_line.startswith(
         "A short warm line"
     )
 

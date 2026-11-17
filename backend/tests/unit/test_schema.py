@@ -3,12 +3,13 @@
 
 from mani.llm.schema import Moment, Reply, SafetyRead, Slots, as_reply, reply_for
 
-SLOTS = Slots(going_through="what they are going through", lead_line="a warm line", their_words="their words")
+SLOTS = Slots(going_through="what they are going through", lead_line="a warm line")
 CORE = {"safety", "reasoning", "picture", "text", "title"}
 # Where a stage can be answered or a yes can start one (spec 0004).
 STAGE = {"stage_updates", "stage_answer"}
 # Where the walk can start or move, so the stage it reaches is judged (thread 4b93d612, 2026-10-14).
-REACH = STAGE | {"next_stage"}
+# What a turn that can reach a stage carries: its judgement of that stage, and what the reply says to open it.
+REACH = STAGE | {"next_stage", "stage_text"}
 
 
 def fields(moment: Moment, **flags) -> set[str]:
@@ -25,7 +26,7 @@ def test_each_moment_carries_only_the_fields_that_mean_something_in_it():
     # A stage turn speaks in the chat's voice: no reasoning pass and no reply shape (muhammad, 2026-10-27).
     assert fields(Moment.IN_STAGES) == (CORE - {"reasoning"}) | REACH | {
         "options", "framework_fit", "follow_through", "insight", "explored_now", "progress", "forward"}
-    assert fields(Moment.OFFER_OPEN) == CORE | {"offer_answer", "their_words", "options", *REACH}
+    assert fields(Moment.OFFER_OPEN) == CORE | {"offer_answer", "options", *REACH}
     assert fields(Moment.BODY) == CORE | {"body", "options"}
 
 
@@ -48,6 +49,8 @@ def test_mani_writes_its_text_before_reading_the_person_into_fields():
     fields = list(Reply.model_fields)
     for before in ("reasoning", "check_answer", "heart", "offer_answer", "stage_updates", "stage_answer", "next_stage"):
         assert fields.index(before) < fields.index("text"), before
+    # The answer to what they just said is written first; what opens the stage reached follows it, as it is sent.
+    assert fields.index("stage_text") == fields.index("text") + 1
     for after in ("picture", "heading_toward", "offer"):
         assert fields.index("text") < fields.index(after), after
     assert fields.index("heading_toward") < fields.index("offer")

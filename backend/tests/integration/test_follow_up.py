@@ -110,7 +110,7 @@ async def test_a_reading_asked_for_after_the_next_turn_began_adds_to_it_and_over
     """The app's request and their next message can cross: the reading merges onto the record as it is when it lands."""
     model(
         Reply(text="That sounds lonely. What happened?", picture=felt("lonely")),
-        Reply(text="What did you hope he would say?", heart="core_named"),
+        Reply(text="What did you hope he would say?", heart="exploring"),
     )
     thread = await start(alice)
     first = await runner.send(alice, thread.id, "my brother never calls")
@@ -120,7 +120,7 @@ async def test_a_reading_asked_for_after_the_next_turn_began_adds_to_it_and_over
 
     stored = await orchestrator.read_understanding(alice, orchestrator.ReadAfter.from_stored(waiting["reading"]))
 
-    assert stored["heart"] == "core_named", "the later turn's record is kept"
+    assert stored["heart"] == "exploring", "the later turn's record is kept"
     assert stored["picture"]["feelings"] == [{"feeling": "lonely"}]
 
 

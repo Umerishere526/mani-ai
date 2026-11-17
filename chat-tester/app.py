@@ -576,8 +576,9 @@ with st.sidebar:
             st.markdown(f"🔗 **Ties back to:** {thinking['link']}")
         if understood.get("insights"):
             st.markdown("💡 **Insights given:** " + " | ".join(understood["insights"]))
-        if understood.get("plan"):
-            st.markdown(f"🧭 **Plan:** {understood['plan']}")
+        if understood.get("known"):
+            st.markdown("🧩 **Known (enough when all three):** " + " | ".join(
+                f"{part}: {value}" for part, value in understood["known"].items()))
         # The picture of them the chat and every framework share (backend chat/picture.py).
         seen = understood.get("picture") or {}
         beliefs = seen.get("beliefs") or []
@@ -608,10 +609,6 @@ with st.sidebar:
             ("Risks", " | ".join(f"{r['risk']} ({r['to']})" for r in risks)),
             ("Depends on (inside)", " | ".join(d["what"] for d in seen.get("dependencies") or [] if d.get("kind") == "internal")),
             ("Depends on (outside)", " | ".join(d["what"] for d in seen.get("dependencies") or [] if d.get("kind") == "external")),
-            ("Depends on, most relevant first (Mani's reading)", " | ".join(
-                f"{t['what']} ({t['side']})" for t in seen.get("tied_to") or []
-            )),
-            ("Already explored", " | ".join(seen.get("explored") or [])),
             ("Ruled out", " | ".join(seen.get("ruled_out") or [])),
             ("Kind of problem", seen.get("problem_type")),
             ("Earlier situations", " | ".join(seen.get("earlier") or [])),

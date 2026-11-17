@@ -60,14 +60,6 @@ def test_the_focus_moves_to_a_new_situation_and_back_keeping_the_earlier_one():
     assert reworded["focus"] == "your brother's broken leg" and "earlier" not in reworded
 
 
-def test_messages_that_add_nothing_are_counted_until_one_does():
-    once = picture.merge(BROTHER, PictureUpdate(shift="nothing_new"))
-    twice = picture.merge(once, PictureUpdate(shift="nothing_new"))
-    assert (once["quiet"], twice["quiet"]) == (1, 2)
-    assert picture.merge(twice, PictureUpdate(shift="adds", wants="to visit him"))["quiet"] == 0
-    assert picture.merge(twice, PictureUpdate(shift="sideways")).get("quiet") == 2, "an off-list shift changes nothing"
-
-
 def test_a_long_list_keeps_what_they_came_with_and_the_latest():
     after = picture.merge({}, PictureUpdate(situations=[f"thing {n}" for n in range(20)]))
     assert len(after["situations"]) == picture.LIST_LIMIT
@@ -135,7 +127,7 @@ def test_a_short_answer_to_manis_question_is_not_counted_as_adding_nothing():
     to helping before the core was named. A short answer is `answered`, and the count starts again."""
     once = picture.merge(BROTHER, PictureUpdate(shift="nothing_new"))
     answered = picture.merge(once, PictureUpdate(shift="answered"))
-    assert answered["shift"] == "answered" and answered["quiet"] == 0
+    assert answered["shift"] == "answered"
 
 
 def test_the_heart_of_the_picture_holds_feelings_underneath_need_desire_and_the_tension():
@@ -247,38 +239,12 @@ def _read(**fields):
     } | fields))
 
 
-def test_what_a_feeling_may_depend_on_is_ranked_and_narrowed_down_one_at_a_time():
-    """The client meeting, 2026-11-03 (muhammad's funnel): what the feeling may depend on, most relevant first; what
-    the window landed on is explored; what they say it is not is ruled out and never ranked again."""
-    from mani.llm.schema import TiedTo
-
-    ranked = picture.apply_reading({}, _read(tied_to=[
-        TiedTo(what="your manager's comments", side="outside"), TiedTo(what="the deadline", side="outside"),
-        TiedTo(what="your fear of being seen as slow", side="inside"), TiedTo(what="nothing", side="sideways"),
-    ]))
-    assert [t["what"] for t in ranked[picture.TIED_TO]] == [
-        "your manager's comments", "the deadline", "your fear of being seen as slow",
-    ], "an entry off the two sides is ignored"
-    assert picture.funnel(ranked)[0]["what"] == "your manager's comments"
-
-    explored = picture.explored(ranked, "your manager's comments")
-    assert picture.funnel(explored)[:2] == ({"what": "the deadline", "side": "outside"}, ["your manager's comments"])
-
-    out = picture.merge(explored, PictureUpdate(ruled_out=["the deadline"]))
-    following, done, ruled = picture.funnel(out)
-    assert following["what"] == "your fear of being seen as slow" and ruled == ["the deadline"]
-    assert "the deadline" not in [t["what"] for t in out[picture.TIED_TO]]
-    reread = picture.apply_reading(out, _read(tied_to=[TiedTo(what="the deadline", side="outside")]))
-    assert picture.TIED_TO not in reread, "what they ruled out is never ranked again"
+def test_what_they_say_it_is_not_about_is_kept_and_starts_again_with_a_new_issue():
+    out = picture.merge({}, PictureUpdate(ruled_out=["the deadline"]))
     assert "they said it is not about, never ask about it again: the deadline" in picture.render(out)
-
+    assert "the deadline" in picture.brief(out)
     fresh = picture.merge(out, PictureUpdate(shift="new_issue", focus="your sister"))
-    assert not {picture.TIED_TO, picture.EXPLORED, picture.RULED_OUT} & set(fresh)
-
-
-def test_a_feeling_with_no_clear_cause_points_at_nothing():
-    held = picture.apply_reading({picture.TIED_TO: [{"what": "work", "side": "outside"}]}, _read())
-    assert picture.TIED_TO not in held and picture.funnel(held) == (None, [], [])
+    assert picture.RULED_OUT not in fresh
 
 
 def test_a_balanced_view_reported_as_the_core_never_replaces_it():

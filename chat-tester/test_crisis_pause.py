@@ -1,5 +1,5 @@
-# ABOUTME: Checks the crisis pause pop-up: where the pause is read from, the countdown and how far the pause has run,
-# ABOUTME: which help it shows, and that the chat page shows only the pop-up while paused. Fake backend; no services.
+# ABOUTME: Checks the crisis pause pop-up: where the pause is read from, the client's words with the pause's own length,
+# ABOUTME: which help it names, and that the chat page shows only the pop-up while paused. Fake backend; no services.
 
 from __future__ import annotations
 
@@ -56,13 +56,22 @@ def test_how_far_the_pause_has_run_stays_between_none_and_all_of_it():
     assert crisis_pause.elapsed(crisis_pause.Pause(NOW, NOW), NOW) == 1.0
 
 
+def test_the_pop_up_says_how_long_the_pause_itself_runs():
+    """muhammad, 2026-11-16: the drawing says 24 hours and the pause is 15 minutes, so the words follow the pause."""
+    assert crisis_pause.length(crisis_pause.Pause(NOW, NOW + timedelta(minutes=15))) == "15 minutes"
+    assert crisis_pause.length(crisis_pause.Pause(NOW, NOW + timedelta(hours=24))) == "24 hours"
+    assert crisis_pause.length(crisis_pause.Pause(NOW, NOW + timedelta(hours=1))) == "1 hour"
+    assert crisis_pause.length(crisis_pause.Pause(NOW, NOW + timedelta(minutes=1))) == "1 minute"
+    assert crisis_pause.length(crisis_pause.Pause(NOW, NOW + timedelta(minutes=90))) == "90 minutes"
+
+
 def test_the_help_is_picked_by_kind_and_a_missing_kind_is_none():
     found = crisis_pause.pick(RESOURCES)
-    assert (found.call, found.emergency, found.directory) == (LIFELINE, EMERGENCY, DIRECTORY)
+    assert (found.call, found.emergency) == (LIFELINE, EMERGENCY)
 
     # A support line with no phone number is not a line to call.
-    assert crisis_pause.pick([TEXT_LINE]) == crisis_pause.Help(call=None, emergency=None, directory=None)
-    assert crisis_pause.pick([]) == crisis_pause.Help(call=None, emergency=None, directory=None)
+    assert crisis_pause.pick([TEXT_LINE]) == crisis_pause.Help(call=None, emergency=None)
+    assert crisis_pause.pick([]) == crisis_pause.Help(call=None, emergency=None)
 
 
 class PausedBackend(mani.ManiClient):
@@ -130,30 +139,33 @@ def _shown(app: AppTest) -> str:
 
 
 def _resumes_in_minutes(app: AppTest) -> int:
-    """The minutes of the m:ss the pop-up says the chat resumes in."""
-    return int(re.search(r"Resumes in\D*(\d+):\d{2}", _shown(app)).group(1))
+    """The minutes of the m:ss the live timer at the bottom says the chat resumes in."""
+    return int(re.search(r"Chat resumes in\D*(\d+):\d{2}", _shown(app)).group(1))
 
 
-def test_a_paused_chat_shows_only_the_pop_up_and_the_library_still_opens():
+def test_a_paused_chat_shows_only_the_clients_pop_up_and_the_library_still_opens():
+    """The client's drawing of 2026-11-16, word for word, with the pause's own length, the emergency line and the live
+    timer at the bottom kept (muhammad, 2026-11-16); no list of situations and no "while you reach out" (her safety
+    test, points 35 to 47)."""
     backend = PausedBackend()
     app = _open(backend)
 
     shown = _shown(app)
-    assert crisis_pause.BODY in shown
-    assert crisis_pause.FOOTER in [c.value for c in app.caption]
-    assert "Call 988" in shown and "988 Suicide &amp; Crisis Lifeline · 24/7" in shown
-    assert "Text 988" in shown
-    assert "Emergency: 911" in shown
-    assert "Someone in immediate danger?" in shown
-    assert 'href="https://findahelpline.com"' in shown and "Find a helpline in your country" in shown
-    assert "741741" not in shown, "Crisis Text Line stays in Mani's pause message, not on the pop-up"
+    assert "<h2>Chat is temporary unavailable</h2>" in shown
+    assert "For your safety, chat is paused for 30 minutes." in shown
+    assert "You can still access our Library resources." in shown
+    assert ('If you are thinking about suicide or you need immediate support call or text <a href="tel:988">988</a> '
+            "to connect with a trained crisis counselor") in shown
+    assert 'If you are in immediate danger, call <a href="tel:911">911</a>.' in shown
+    assert "741741" not in shown and "while you reach out" not in shown and "everyone is safe" not in shown
     assert _resumes_in_minutes(app) in (29, 30)
+    assert [b.label for b in app.button if b.label == "Go to library"] == ["Go to library"]
     assert not app.chat_input
     assert [b for b in app.sidebar.button if "New conversation" in b.label][0].disabled
     assert ("GET", "/v1/threads/opening") not in backend.calls
     assert ("GET", "/v1/threads/current") not in backend.calls
 
-    next(b for b in app.sidebar.button if "Library" in b.label).click().run()
+    next(b for b in app.button if b.label == "Go to library").click().run()
     assert not app.exception
     assert app.title[0].value == "📚 Library"
 
@@ -162,9 +174,8 @@ def test_the_pop_up_leaves_out_the_help_it_was_not_given():
     app = _open(PausedBackend(resources=[DIRECTORY]))
 
     shown = _shown(app)
-    assert "Call " not in shown and "Text " not in shown and "Emergency:" not in shown
-    assert "Someone in immediate danger?" not in shown
-    assert "Outside the US?" in shown and "Resumes in" in shown
+    assert "call or text" not in shown and "immediate danger" not in shown
+    assert "For your safety, chat is paused for 30 minutes." in shown and "Library resources" in shown
 
 
 def test_the_chat_opens_once_the_pause_has_run_out():
@@ -180,7 +191,7 @@ def test_the_chat_opens_once_the_pause_has_run_out():
 
     assert not app.exception
     assert app.chat_input
-    assert "Resumes in" not in _shown(app)
+    assert "chat is paused" not in _shown(app) and "Chat resumes in" not in _shown(app)
 
 
 def test_a_turn_that_pauses_the_chat_shows_the_pop_up_on_the_next_run():
@@ -193,6 +204,7 @@ def test_a_turn_that_pauses_the_chat_shows_the_pop_up_on_the_next_run():
 
     assert not app.exception
     assert not app.chat_input
+    assert "For your safety, chat is paused for 10 minutes." in _shown(app)
     assert _resumes_in_minutes(app) in (9, 10)
 
 
@@ -206,7 +218,7 @@ def test_a_send_refused_because_the_chat_is_paused_shows_the_pop_up_and_queues_n
 
     assert not app.exception
     assert not app.chat_input
-    assert _resumes_in_minutes(app) in (19, 20)
+    assert "For your safety, chat is paused for 20 minutes." in _shown(app)
     assert "send_error" not in app.session_state
     assert "notice" not in app.session_state
     assert app.session_state.composer_draft == "hello"

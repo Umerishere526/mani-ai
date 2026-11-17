@@ -59,7 +59,8 @@ the same change as the work.**
      (`_converse`), `voice.md` and `framework.md` for a framework's stages, and `voice.md` and `moments.md` with
      the Framework Index for the turns in between (the answer to a check, the offer, the body check-in, a safety
      concern). `context.py` builds the `[ctx]` block for every turn but the chat's own: style, offer timing, the stage in progress, what is stored for each stage
-     and what this reply's text is for. Nothing in code classifies what the person said: whether a reply is vague, a correction or
+     and what this reply's text is for. Code reads meaning in a few places still (the safety phrase screen as a floor, a question mark holding a stage, the
+     stall count on a stage); beyond those, whether a reply is vague, a correction or
      a wish only to be listened to is the model's reading.
   4. One model call (`mani/llm/`, LangChain on OpenRouter) returns a structured reply: `reasoning`, the answers
      that decide the moment (`check_answer`, `offer_answer`, the stage fields), then `text`, then `picture`,
@@ -107,10 +108,8 @@ the same change as the work.**
   (`tests/unit/test_removed_names.py`); `exercise` is gone from the turn response.
 - **Memory**: per person, folded from earlier chats by `mani/memory.py`; idle threads fold through
   `memory.fold_idle`, run by `scripts/fold_idle_threads.py` or `GET /internal/cron/catch-up` behind `CRON_SECRET`.
-- **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). A completing framework picks one
-  exercise from the whole active catalog with one bound tool call (`mani/llm/tools.py`): the framework's own
-  exercises are listed first, and the pick sees the person's last three messages and the issue Mani
-  understands (`threads.understanding`). `GET /v1/exercises` is the whole catalog, and responses never carry the storage path.
+- **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). Nothing picks an exercise for a person:
+  the pick by a second model call was deleted with the 2026-10-02 flow. `GET /v1/exercises` is the whole catalog, and responses never carry the storage path.
 - **Admin**: prompt CRUD with versioning, exercise CRUD, crisis event review, a user's memory, and every
   person's conversations read-only (each full read logged in `admin.thread_reads`). An admin cannot send a chat
   message (`Participant` in `mani/auth/deps.py`). `scripts/grant_admin.py <email>` grants or `--revoke`s it.
@@ -263,11 +262,17 @@ the same change as the work.**
   asking for what is known (`voice.md`), the reply kinds (`conversation.md` Choosing the reply; "Choosing the next
   question" is gone), examples about someone else (`voice.md`), safety (`moments.md` and the [ctx] lines; one line in
   `conversation.md`). The five "conversational moves" are the areas a question can open, shortened. Frustration (one
-  rule, `voice.md`): stop the pattern, name what went wrong, move differently; the framework only when the note says
-  enough is understood, never as a way out of frustration before that (muhammad). Before the framework, help is one
-  small idea, then working it through together (the client, 2026-10-29; the `practical` kind follows it). Lolly's
-  "steps 4 and 5 before the offer" moved into code: attempts or pattern is the fourth group in
-  `converse.EXPLORED_BEFORE_MOVING`. The six unit tests left failing by earlier rewrites hold the same decisions against
+  rule, `voice.md`): stop the pattern and move differently, with no apology and no account of what went wrong (the
+  client's two tests of 2026-11-16: "apologized repeatedly but did not change"), never the framework as a way out of
+  frustration (muhammad). A person is heard first and gets no fix they did not ask for; once they ask what to do they
+  get suggestions in the chat, in every style (muhammad, 2026-11-16; the `practical` kind and `move: small_idea` follow
+  it; until then it was one small idea and the way to the framework, since the client's test of 2026-10-29). Directive gives something before it asks, as full as the moment needs,
+  and more when they write little (muhammad, 2026-11-16: the client's target chats give about 49 words before the
+  question, the ones she disliked 24; her styles document says Directive is short, and she has not been told). The mirror
+  says only what is new in their last message; something from earlier is said again only for an insight or a needed
+  confirmation (muhammad, 2026-11-16). Lolly's
+  "steps 4 and 5 before the offer" were held in code as a fourth group of areas until 2026-11-16, when the areas stopped
+  holding the move (spec 0008, D2); they stay in `conversation.md` as what a conversation usually covers. The six unit tests left failing by earlier rewrites hold the same decisions against
   the current wording (notes in each). The four chat prompts went from 80,665 to about 76,000 characters.
 
 - **Every question earns its place; Mani reasons before each reply and gives several aha moments** (muhammad,
@@ -283,15 +288,24 @@ the same change as the work.**
   turns too (`ReadAfter.picture=False`: there it brings only the map, never the picture, core or heart). Each stage
   lists the parts it can open (`explore` in `abcde.md` and `thought_reframe.md`); the reply reports `explored_now`, kept
   on the stage as `covered` and shown as stage_explored, and a stage stays while a part not yet opened would help, with
-  no cap (`walk.EXPLORE_TURNS` is gone; two turns with nothing new still offer to step out). Insights are tracked across
+  no cap (`walk.EXPLORE_TURNS` is gone; two turns with nothing new still offer to step out). Since 2026-11-16 a
+  stage that was asked can stay as one said back can, and "there is more to it" is a reason to stay, not an
+  agreement: the client's boss test went A to D in one turn each and "all the things you mentioned and i am sure
+  more" moved the walk, because `stage_answer` called agreed "with or without more added" and code turned explore
+  on an asked stage into answered (spec 0008, review R2 and R3). Only a stage that waited for one missing part and
+  got it is still answered whatever the reply called it (`walk.advance`,
+  `test_a_stage_that_was_asked_can_stay_to_go_deeper_as_one_said_back_can`). Insights are tracked across
   the chat and the questions (`context.INSIGHTS`), several per conversation, each new; never on the first reply (was
   the first two: Lolly's point kept without a count). The chat's reply kinds are chosen, not a formula: open_ask,
   window, insight, reflect, acknowledge, practical; no reply has to start with a mirror or end with a question. Moving
-  to a set of questions keeps the five-message floor and the confirmed core, and now also needs the emotion, the belief
-  or meaning, and the behaviour, need or outcome explored, from the map (`converse.still_to_explore`; with no map yet
-  the heart decides alone). Outcome, what they want to happen, joined that group 2026-11-11: the father chat's "I want
-  him to see what I did for them" was read as outcome, in no group, and held the offer for ten turns
-  (`test_what_they_want_to_happen_counts_with_what_it_does_to_them_or_what_they_need`).
+  to a set of questions needs only that an earlier reply said the core back and it was not corrected
+  (`converse.check_allowed`, `test_a_move_to_the_set_comes_only_after_an_earlier_reply_said_the_heart_of_it_back`).
+  Because the client's boss test of 2026-11-16 got six questions after the problem was stated: the five-message
+  floor made four certain, and the areas to explore from the map made more (spec 0008, D2, muhammad 2026-11-16).
+  The floor, the map's hold on the move (`converse.still_to_explore`) and the note's lines on what the reading
+  lacks (`converse.gaps`) are gone; when to move is the model's judgment from "Moving to the framework" in
+  `conversation.md`. The counts of messages after a check and after a declined offer went the same day: a set they declined or
+  finished is not offered again in the conversation (see "An offer comes only...").
 - **Plan Next Step: help preparing what they chose, when something practical is ahead** (muhammad, 2026-11-06, after
   manasa's tests: nothing helped her work out how to raise it with her boss or her partner). The picture keeps what
   they asked for help with (`asked_for`). The reply that closes the questions reports `follow_through`: conversation,
@@ -364,12 +378,40 @@ the same change as the work.**
     once a crisis is certain Mani must stop rather than go round a loop of "please get help", and the production chat of
     2026-11-14 never paused in 11 turns: "i want to kill myself", about to act right now, nobody with them, nobody
     called, every question answered honestly and so never `declined` (2026-11-14).
-    The rule is `pause.pauses_now`: the state before the turn was danger (so Mani's last reply already gave the
-    direction), the state after is danger, and `help_in_place` is false; or it is the answer to a return check that
-    leaves such danger. For danger to themselves, to someone else or from someone nothing more is needed. A read whose
+    The rule is `pause.pauses_now`: a concern was already open before the turn (unsure or danger, so they had been
+    asked or given the direction), the state after is danger, and `help_in_place` is false; or it is the answer to a
+    return check that leaves such danger. Once a crisis is found the next message decides (muhammad, 2026-11-16, after
+    the client's safety test had seven safety questions in a row): a concern about a person is asked about once, and
+    an answer that still leaves it unsure is held as danger (`safety.after` with `asked`, kinds `safety.HELD`), so the
+    reply says Mani is worried and how to reach a person instead of asking again, and from danger only a judgment of
+    none lowers it; the message after that pauses unless it goes toward safety. A symptom in the body and a danger of
+    no known kind follow the judgment as before. The first message back after a pause pauses at once when the read
+    reports that the message itself says the danger is still there (`SafetyRead.still_there`; manasa's blocker test:
+    "the medication is still beside me" was answered "Yes, we can keep talking. Are you safe right now?"); any other
+    first message back is asked how things are and never pauses. Mani's question counts as asked only for the kind
+    of danger it was about (`safety.asked_about_this`, the kind kept as `asked_about` while the conversation is
+    unsure; 2026-11-16, the held-back run: asked whether their parents might hurt them, a student said "sometimes I
+    just want to disappear for good" and was paused with no question about it and no word from Mani), so a worry of
+    another kind gets Mani's reply first. Help counts as in place when any person is coming to them, and while they
+    wait (`SafetyRead.help_in_place`; "my dad is coming. im staying in the car till he gets here" paused the chat in
+    2 of 3 live runs before the wording said so, 0 of 6 after), and not wanting to talk about it is never "still
+    there". Checked live that day, 2 or 3 runs each: "the medication is still beside me" and "I still want to do it"
+    still pause as the first message back, "fine" and "i dont want to talk about that" are asked how things are;
+    `test_a_question_about_one_worry_does_not_count_as_asked_about_another`,
+    `test_a_worry_of_another_kind_than_the_one_asked_about_gets_manis_reply_before_any_pause`,
+    `test_a_concern_about_a_person_is_asked_about_once_and_then_held_as_danger`,
+    `test_a_first_message_back_that_says_the_danger_is_still_there_pauses_at_once`,
+    `test_an_answer_to_the_return_question_that_leaves_it_unclear_pauses_again`. Until 2026-11-16 the state before had to be danger, so the screen came one
+    reply after the answer or not at all; muhammad, that day: asked, they say "I just want to die", and "it means no
+    more again question", the help screen comes, "every time". The read follows the same rule: an answer that says
+    again what worried Mani, or turns the help down, is danger now, read by what the words literally say and never
+    by whether it was a yes (`schema.SafetyRead.danger`, the unsure guidance in `context._MEANING`). A first danger
+    message out of a clear conversation still gets Mani's own reply first. Unclear words get one calm question and
+    no number (`context.UNCLEAR_WORDS`; the client's safety test, 2026-11-16). For danger to themselves, to someone else or from someone nothing more is needed. A read whose
     danger has no kind (no `about` in the read and none stored) needs `declined` too, so it cannot pause a body chat by
     accident. Accepted with it: a `help_in_place` misread can now pause someone who has help (2026-11-14);
-    `test_danger_that_goes_on_after_the_direction_with_no_one_there_pauses_without_a_refusal`,
+    `test_an_answer_that_means_danger_with_no_one_there_pauses_at_once_without_a_refusal`,
+    `test_once_they_were_asked_an_answer_that_means_danger_pauses_at_once_and_a_first_danger_message_does_not`,
     `test_danger_that_goes_on_with_someone_there_never_pauses`.
     **A danger about the body pauses only on an outright refusal of the help for a symptom happening now**: the turn's
     own read is `declined` with `danger` now and `symptom_now` yes ("I'm not calling an ambulance"); a read with only
@@ -389,8 +431,8 @@ the same change as the work.**
     `POST /v1/threads`, send, edit and follow-up, and the turn checks again under the message lock before its
     duplicate lookup, so a retry or another tab cannot slip past. The profile and the opening carry
     `chat_paused_from` and `chat_paused_until`; reading conversations, the crisis resources and the Library stay open. A pause's reason is
-    loaded only by turns of the conversation it began in (`threads.load_turn_context`), never by another
-    conversation, the memory fold or the profile, and the person's own role has no SELECT on it (the Data API hands
+    loaded by the turns of any of the person's conversations (`threads.load_turn_context`; until 2026-11-16 only by the
+    conversation it began in), never by the memory fold or the profile, and the person's own role has no SELECT on it (the Data API hands
     out every other column of their pause). An edit never undoes a pause.
     **Every conversation asks after a pause, until they say they are all right** (muhammad, 2026-11-13; this reverses
     the ruling of the same day that a conversation created before the pause asks nothing). Because a person who comes
@@ -399,18 +441,32 @@ the same change as the work.**
     (the controller's ruling, 2026-11-13). Because without a bound every old unchecked pause, muhammad's local ones
     included, would make every conversation ask, however long ago (2026-11-13);
     `test_a_pause_owes_the_check_only_within_the_recent_crisis_window`.
-    The return check: the first message after a pause, in any conversation, is a safety turn that never pauses. It is
-    for the person's latest pause that has run out (`threads.load_turn_context` loads it and the conversation's own).
-    A conversation with a pause of its own it has not asked about asks whether they are all right now and says that
-    pause's reason (`[ctx]` `safety: returning`); every other conversation asks with no details (`returning_new`,
-    trace `other_thread`) until the pause is checked. Each conversation asks once per pause (`understanding.return_check`).
-    A settled answer (a danger value judged none) clears that conversation and marks the pause checked, after which the
-    other conversations stop asking (a paused one still asks); danger with nothing in place pauses again, as above;
-    an unsure answer is not asked again. Only the fact that a pause ran crosses conversations, never its reason or words. The chat-tester shows
-    a centred "Let's make sure everyone is safe" pop-up drawn from the resources by `kind` (call and text 988, emergency
-    911, the helpline directory) with a countdown that ticks every second and a bar of how much of the pause has run
-    (from `paused_from` to `paused_until`); at 0:00 the page runs again and the chat opens, and its close opens the
-    Library (`chat-tester/crisis_pause.py`). Not measured live yet.
+    The return check: the first message after a pause, in any conversation, is a safety turn. It is for the person's
+    latest pause that has run out (`threads.load_turn_context` loads it and the conversation's own). **Wherever they
+    come back, Mani asks about what they faced, with what the pause rested on** (muhammad, 2026-11-16: "a super field
+    which can come out of a thread"; this reverses "only the fact that a pause ran crosses conversations" of
+    2026-11-13). Because someone who comes back in a new conversation was met by the style's opener and a question with
+    no details, and the client's blocker test had Mani agree to keep talking before safety was established
+    (2026-11-16). The reason lives on the pause (`chat_pauses.reason`, per person), `[ctx]` says `safety: returning`
+    with it in every conversation (`returning_new` is gone), and the reply names what it was, asks how things are with
+    it and never agrees to carry on first. In a new conversation the question is the opening: `GET /v1/threads/opening`
+    gives `greeting.RETURN_OPENER` for every style while a pause is owed (`pauses.owed`), the style tap is answered
+    with it at no model call (`orchestrator._open_in_style`), and their first message is its answer, with the reason in
+    the chat's note (`converse.RETURNED`). The opener's wording is ours. Each conversation asks once per pause
+    (`understanding.return_check`). A settled answer (a danger value judged none) clears that conversation and marks
+    the pause checked, after which the other conversations stop asking (a paused one still asks) and new ones open as
+    usual; an answer that leaves danger, or leaves it unclear about a person, pauses again;
+    `test_a_new_conversation_after_a_pause_opens_with_the_question_about_it_and_their_first_message_answers`,
+    `test_the_opening_asks_about_a_pause_that_ran_out_until_they_have_answered`,
+    `test_the_first_turn_back_after_a_pause_asks_about_what_they_faced`. The chat-tester shows the client's blocker as
+    she drew it on 2026-11-16, word for word ("Blocker.", "Chat is temporary unavailable", "For your safety, chat is
+    paused for <the pause's own length>.", the Library line, the 988 line, Get help now and Go to library; muhammad:
+    exactly as drawn, the length stays 15 minutes, and the 911 line and the live timer at the bottom stay though she
+    did not draw them; the timer says "Chat resumes in", without "while you reach out", her safety test, point 43);
+    the numbers come from the resources by `kind`, Get help now calls the support line (our choice), the page runs
+    again at 0:00, and its close opens the Library
+    (`chat-tester/crisis_pause.py`, `test_a_paused_chat_shows_only_the_clients_pop_up_and_the_library_still_opens`).
+    Not measured live yet, and the pop-up was not looked at in a browser.
     `config.crisis_pause_minutes`; `chat/pause.py`, `db/pauses.py`, `routers/threads.py`, `auth/deps.py`;
     `tests/unit/test_pause.py`; in `test_turn.py` `test_danger_that_continues_with_nothing_in_place_pauses_the_chat`,
     `test_danger_with_help_on_its_way_never_pauses`, `test_a_push_away_on_a_danger_thread_with_no_help_in_place_pauses_the_chat`,
@@ -539,7 +595,7 @@ the same change as the work.**
   model's key, so there is still one model per configuration. Evidence after deploy: `session_id` set on
   `/api/v1/generation`, and turn 2's cache ratio. `test_a_call_with_a_thread_carries_its_sticky_keys_beside_the_
   provider_reasoning_and_usage`, `test_a_call_with_no_thread_sends_no_sticky_keys` in `tests/unit/test_client.py`.
-- **A body check-in turn thinks at `low`; every other chat turn at `medium`.** Because thinking before the first
+- **A body check-in turn and the reading after a reply think at `low`; every other chat turn at `medium`.** Because thinking before the first
   token is 75% of a chat call's wait (p50 6.0 s of 9.3 s) and latency follows output tokens almost exactly (r = 0.94),
   while the body check-in's steps are the client's fixed script (muhammad, 2026-11-05;
   `docs/latency-report-2026-11-05.md`, sections 1 and 7). The `voice` row carries it as
@@ -548,6 +604,11 @@ the same change as the work.**
   check or an offer, a concern and `in_stages` keep `medium`. `test_a_body_check_in_turn_thinks_at_the_voice_rows_body_
   effort_and_every_other_turn_at_its_own` in `tests/unit/test_composer.py`, `test_a_body_check_in_turn_thinks_at_low_
   while_the_chat_and_the_stages_keep_medium` in `tests/integration/test_turn.py`.
+  The reading after a reply thinks at the `voice` row's `reading_reasoning_effort` (`composer.reading_parameters`),
+  because it landed a median 18.8 s after the reply (p90 29.8 s; 147 local calls, 2026-11-10 to 16, against 7.4 s
+  for the reply), later than many people answer, and since spec 0008's D2 nothing waits on it (muhammad, 2026-11-16).
+  Not measured after the change. One call per turn, with the reply writing what the message adds, is next (spec 0008,
+  D12); `test_the_reading_after_a_reply_thinks_at_its_own_effort_and_the_reply_keeps_its_own`.
 - **Mani's text is not streamed to the person; the call is.** Because 75% of a chat call's wait is thinking before
   the first token, and only about 1.6 s p50 comes after it, so streaming the text would show the reply about 1.6 s
   sooner for the cost of a streaming API in the backend and both frontends (muhammad, 2026-11-05;
@@ -657,13 +718,64 @@ the same change as the work.**
   `test_ctx_says_when_the_questions_stopped_helping_and_when_stepping_out_was_offered`,
   `test_two_turns_with_nothing_new_offer_to_step_out_and_a_yes_ends_the_framework`.
 
-- **Every conversation turns from understanding to helping, and code names the turn and the help move.** Because the
+- **The chat's note carries the core, what they want, the insights given and what recent replies added, and nothing
+  that plans or ranks the next question; asking for help counts for the message that asks** (muhammad, 2026-11-16).
+  Because his local Directive chat was sent, every turn, a picture of them that had grown to 3,167 characters of what
+  the conversation already showed, the question the last reply had planned, and the same areas named both "explored,
+  never ask again" and "worth exploring", and it asked on for twenty turns; and because the state "they asked what
+  to do", kept on the record and said in every later note, made the live pass repeat its suggestions to "yes" and to
+  a belief said outright and never offer (the `moves` set in Directive: an offer in 10 of 18, three lost to this,
+  2026-11-16). Gone from the chat: the `plan` field and line, the funnel (`funnel_line`, `picture.funnel`,
+  `picture.explored`, `Reading.tied_to`), "explored" and "worth exploring" in the note (still in a stage's `[ctx]`),
+  the whole picture line (`picture.brief` in its place), `converse.TOWARD` with `toward`, `QUIET_TO_HELP` and the
+  count of quiet messages. What they said it is not about stays (`picture.ruled_out`). The safety lines still go
+  with every note (`UNCLEAR_WORDS`, `DANGER_DIRECTION`, 1,240 characters; the audit of 2026-11-13), which is
+  muhammad's to decide.
+  `test_the_note_carries_the_core_and_what_they_want_and_leaves_the_rest_to_the_conversation`,
+  `test_the_note_never_says_what_to_explore_next`,
+  `test_someone_who_asks_what_to_do_is_helped_in_the_chat_in_every_style_for_that_message_only`.
+- **An observation is the ordinary chat reply; a bare acknowledgement is for something hard coming up for the first
+  time; someone who says little gets possibilities, and someone who brings a lot is answered on what matters most**
+  (muhammad, 2026-11-16). Because the prompt asked for thin replies ("acknowledge in a line and ask one question",
+  "one short line, only when it helps") and 85 of 150 chat replies in that day's Directive pass chose `acknowledge`.
+  `reflect` (something they did not say themselves, drawn only from their words) may follow itself, `acknowledge`
+  never does (`reply_checks`: "acknowledge two in a row"), `open_ask` never follows a message that says little, and
+  each style has its angle in `voice.md`'s table ("What each reply gives"). Live, one run per style, `moves`
+  (`.scenario-runs/2026-11-16-fuller` against that day's baselines): replies that only acknowledge 57% to 28%
+  (Directive), 58% to 33% (Reflective), 48% to 47% (Supportive); an open question after a short message 7 of 71 to 2
+  of 68; the first offer in 12, 13 and 13 of 18. **Not moved: the words a reply gives before its question** (32, 36
+  and 37 in the middle, against the client's 49), so the replies are a different kind and no fuller. In Supportive
+  "the same question asked again" read 6 of 128 (2 of 134 before): watch it.
+  `test_an_observation_is_the_ordinary_reply_and_a_bare_acknowledgement_never_comes_twice_in_a_row`.
+- **Something new and painful holds the move to the set for one reply** (muhammad to confirm; 2026-11-16). Because in
+  the Supportive and Reflective baselines a move that could be made waited for "something new" on two replies in a
+  row in 9 of 34 and 7 of 30 such turns; after it, 0 of 25 and 0 of 26 (`converse.stayed_for_new`,
+  `MOVE_NOW_AFTER_NEW`, the form's `not_moving` without `new` on that reply);
+  `test_something_new_holds_the_move_for_one_reply_and_not_the_next`.
+- **After a pause, only a message that itself says the danger is still there pauses again, and the answer to how
+  things are is read literally** (muhammad, 2026-11-16). Because in his local chat a new conversation opened with the
+  question about the pause, he answered "fine", the read held the pause's reason against it ("saying you're fine
+  doesn't clarify whether you're away from them") and the chat paused again. The reason is the model's own line from
+  the moment of the pause, in the present tense; carried to a later conversation it read as current. It is now given
+  as past ("That was then", `converse.RETURNED`, `context.RETURN_ANSWER`, `[ctx] after_a_pause`), and
+  `pause.pauses_now` asks `still_there` of the first message back and of the answer alike. Checked against the model
+  on that case: "fine" settled it twice, "I still want to do it" was flagged and paused. An unclear answer gets
+  Mani's reply and the message after it decides.
+  `test_fine_in_answer_to_the_question_after_a_pause_never_pauses_whatever_the_read_holds_against_it`,
+  `test_an_unclear_answer_after_a_pause_gets_manis_reply_and_the_message_after_it_decides`.
+- **Superseded 2026-11-16 by the entry above (the turn to helping as a state, and its note line). Every conversation turns from understanding to helping, and code names the turn and the help move.** Because the
   2026-10-27 review found people heard but not helped: question after question, no progression, the styles alike
   in how they moved, and a direct request for help answered with another question (muhammad, 2026-10-27). The turn is
   `toward_framework` on the understanding record, set by `converse.toward` when the reply flags `asked_for_help`,
   their message added nothing new (`picture.quiet`), they answered in a few words three times running,
   or they said yes to a check about something really happening; another situation or a finished framework clears
-  it. Once helping, the note gives each reply the move from `converse.HELP_MOVES` (kind of problem from the picture x
+  it. Since 2026-11-16 the note gives only the fact (`converse.WANTS_TO_MOVE`) in every style, and "When they ask
+  what to do" in `conversation.md` says what follows: two or three suggestions from what they told you and help
+  preparing the one they choose, because both testers had to get frustrated to get practical help and muhammad set
+  "heard first, solutions as suggestions only once they ask for a direction"
+  (`test_someone_who_asks_what_to_do_is_helped_in_the_chat_in_every_style`). Inside a set of questions suggestions
+  belong to E, and an earlier stage keeps to its own job (manasa's workload test, R96). Before that: once helping, the
+  note gave each reply the move from `converse.HELP_MOVES` (kind of problem from the picture x
   style), a risk to someone else first; for a thought the check comes as soon as it may, as the way to ABCDE or
   Thought Reframe, and a yes to a check about a real situation brings help in the conversation, never a framework.
   Ideas they choose from are allowed in the chat (Lolly's "we do not fix" motto of 2026-10-18 to be confirmed with
@@ -724,7 +836,7 @@ the same change as the work.**
   (style, the picture of them, what is understood, whether this reply may check, the framework they stepped out of),
   with the reply shape `ConversationReply` (text first, then heart, the case's three parts, a checking flag, picture,
   back_to_framework, crisis, title; no reasoning, no options, no [ctx] block). The check is Mani's own words; code
-  stores it only when allowed (their 5th message on, cooldowns, and an earlier reply judged `conflict_named` or
+  stores it only when allowed (cooldowns, and an earlier reply judged `conflict_named` or
   `ready`), flagged, and with all three parts, which become the case. After stepping out of a framework, asking for it
   again offers it with Try it (`back_to_framework`). Journal: `mani-vault/Journal/story-before-guess-2026-10-26.md`.
 
@@ -836,24 +948,24 @@ the same change as the work.**
 - **A message that asks something never moves a framework stage** (muhammad, 2026-11-05). Because manasa's "should I
   look at this thought or my numbness? Does one affect the other?" was reported as answered, the stage moved, and the
   reply opened on "Step 2 is..." with her answer under it. `walk.held_by_question` turns agreed, answered or corrected
-  into not_yet when their message has a question mark or opens like a question; explore and stop are kept. Push back is
+  into not_yet when their message has a question mark; explore and stop are kept. How a message opens says nothing
+  since 2026-11-16: the client's boss test had "how he treats me", a plain answer, held as a question (spec 0008,
+  review R4), and a question typed without the mark is the reply's to judge (`framework.md`). Push back is
   not a code rule (muhammad: Mani stays with them and course corrects, never ends the questions for them).
   `test_a_question_inside_the_questions_is_answered_and_the_stage_waits`, `test_a_message_that_asks_something_never_
   moves_the_stage`.
 - **"Ready" is a confirmation, never a deepening** (the client meeting, 2026-11-05). Because a vulnerable disclosure
   ("I don't remember the last time I did something just because it made me happy") counted as deepening the core, so
   the reply judged it ready and moved to the offer on it. A deepening keeps it core_named and gets a reply of its own.
-  Once the move is allowed, it may come at core_named, not only at ready (muhammad, 2026-11-11): the father chat had
+  Once the move is possible, it may come at core_named, not only at ready (muhammad, 2026-11-11): the father chat had
   the move allowed for four turns and no offer, waiting on a confirmation no reply asked for; the offer says the core
-  back and they can correct it there, unless their message brings something new and painful (`converse.MOVE_MAY`,
-  `test_once_the_core_is_named_the_reply_may_move_without_waiting_for_a_confirmation`). The wording alone was not
-  enough (replayed: allowed three turns, no offer), so a move allowed and not made makes the next reply due
-  (`converse.due`, `held_back` in the reply's thinking): at most one reply of waiting.
-  Saying the core back is due too (muhammad, 2026-11-11): once every group is explored, a reading has landed and
-  nothing else holds the move, the note says the core now, not "hold it until they have said what they came to say"
-  (`converse.naming_due`, `test_naming_the_core_is_due_once_everything_is_explored_and_nothing_else_holds_it`). His
-  chest chats had every group explored from turn 9 and no core said back in twelve chat turns; replayed, the core is
-  named at turn 12-13 and the framework offered at 15.
+  back and they can correct it there, unless their message brings something new and painful. Since 2026-11-16 this
+  is said in `conversation.md` ("Moving to the framework"), the one home of when to move, and never in the reply
+  to a correction, to frustration with Mani or to a question they asked (R28). The note says only whether a move
+  is possible (`converse.MOVE_POSSIBLE`): its lines that made the move due after one reply of waiting and made
+  naming the core due once every area was explored are gone with the areas (spec 0008, D2). Whether offers still
+  come without them is measured, not assumed: the first offer's message per conversation, before and after
+  (`test_once_the_core_is_named_the_reply_may_move_without_waiting_for_a_confirmation`).
   The chat's note no longer asks for a core from their second message and never asks a reply to ask because the last
   one did not. (A chat reply with no question was no longer counted as a miss; superseded 2026-11-10, see "Every chat
   reply ends on a question".)
@@ -864,8 +976,8 @@ the same change as the work.**
   and its code are gone; migration 030 moves any thread waiting on it to Step 1. A word in chat or inside a framework
   still never starts a body question. `test_a_yes_to_the_check_in_gets_the_clients_step_one_with_its_five_buttons` and
   `test_a_feeling_word_in_chat_or_inside_a_stage_never_starts_a_body_question` in `tests/integration/test_turn.py`.
-- **An offer comes only on a clear yes to Mani's check of its understanding; the check comes from their 5th message,
-  on a reply that judges the heart of it ready: the central conflict agreed, and what they want and what is stopping
+- **An offer comes only on a clear yes to Mani's check of its understanding; the check comes, since 2026-11-16 with no
+  count of messages (spec 0008, D2; before it, from their 5th message), on a reply that judges the heart of it ready: the central conflict agreed, and what they want and what is stopping
   them known** (muhammad, 2026-10-26, replacing the three steps of 2026-10-13). Because Lolly's ChatGPT conversations
   of 2026-10-26 reached the heart of it at about the tenth exchange and she wants a framework to begin there (R30,
   R33), while the three steps (problem, core issue, feeling underneath, one an exchange: `understanding.STEPS`,
@@ -874,21 +986,45 @@ the same change as the work.**
   running in the boss chat, the friendship chat checked at message 6 before what she wants was known). Every chatting
   reply reports `heart` (`exploring`, `conflict_named`, `ready`), one closed value that must never grow back into a
   record (muhammad's guardrail). Since 2026-10-26 the check is made in Mani's own conversation (`_converse`): it may
-  come only from `context.CHECK_FROM` (their 5th message), with no framework live, no check waiting, the cooldowns
-  passed and an earlier reply that judged `conflict_named` or `ready` (`converse.check_allowed`); the note says so,
-  and a `ready` reply that did not check makes the next note say the check is due, so code names the turn (journal
-  2026-10-16: a step the model may take never fires). The check is the model's own text, flagged `checking`, with the
+  come only with no framework live, no check waiting, the cooldowns
+  passed and an earlier reply that judged `conflict_named` or `ready` (`converse.check_allowed`); the note says so. The check is the model's own text, flagged `checking`, with the
   conflict, what they want and what is stopping them as fields; those become the `case` the framework is about. Code stores when the last check was made (`threads.check_at_message_count`, migration 023); the next turn
   is `Moment.CHECK_OPEN`, whose shape alone carries `check_answer`, `heading_toward` and `offer`. A clear yes makes
-  that reply the client's offer; anything else keeps chatting, and the check is used either way. A new check waits
-  `COOLDOWN_AFTER_DECLINE` after the last check and `cooldown_for(outcome)` after the last offer, and a set just
-  finished may be offered again on a new confirmed check. Before that: the client rejected an offer on the first
+  that reply the client's offer; anything else keeps chatting, and the check is used either way. Since 2026-11-16 a set they
+  declined or finished is never offered again in that conversation, however many messages pass, and the one they
+  declined comes back only when they ask for it (`context.may_check`,
+  `test_a_set_they_declined_or_finished_is_not_offered_again_and_only_a_correction_brings_the_offer_back`). Because
+  manasa's tests of 2026-11-16 had ABCDE offered again two replies after she turned it down and again after she had
+  finished it (R91, R92): "Once a user declines a framework, MANI must never offer it again in that conversation
+  unless the user requests it." This replaces the wait of three replies after a decline (muhammad, 2026-09-24) and
+  "a set just finished may be offered again on a new confirmed check" (muhammad, 2026-10-27). Only correcting what
+  the offer said back about them lets the corrected offer come (2026-11-03); wanting something the set does not do
+  is a no, not a correction. After a finished set its reading stays as understood and the chat is told the set was
+  finished and where it ended (`converse.note`, "After a set of questions" in `conversation.md`).
+  **How much is enough is a field the reply writes, and code makes the next step due from it** (muhammad, 2026-11-16,
+  amending spec 0008's D2 the day it was applied: 2c stays the only rule that holds an offer back, and two pushes come
+  back in a form that reads only what the reply itself reported). Because with every push gone the framework stopped
+  coming: his local Directive chat held what the person tells themselves from their 3rd message, stayed `exploring`
+  for thirteen replies, was then allowed to move on eight replies in a row and never did, and he had to type
+  "framework?" at his 23rd; the live pass of the `moves` set the same day had a first offer in 5 of 17 conversations,
+  at their 9th message in the middle (2026-11-16). `ConversationReply.known` (`schema.Known`: what happened, what
+  they tell themselves about it, what it does to them; kept once known, cleared by a new issue). With all three and
+  no core said back, the next reply is told to say it (`converse.naming_due`, `NAME_NOW`); once it was said back and
+  stands, the reply is told to move (`MOVE_NOW`) and its form carries `not_moving`, a closed set of five reasons to
+  wait (corrected, frustrated, asked, new, wants_help). Code never sends an offer in a reply that reports
+  `frustrated` (the client's Directive test: "you asked me this already" was answered with the offer). No count of
+  messages and nothing from the reading that lands after the reply. The first reply still never names the core, so
+  the earliest offer is the third reply. A due step not taken is counted (`core due and not said back`, `move due and
+  not made`); `test_three_things_known_are_enough_and_then_saying_the_core_back_is_the_next_replys_step`,
+  `test_once_the_core_stands_the_reply_moves_or_says_why_it_waits`,
+  `test_enough_said_makes_mani_say_the_core_back_and_then_offer_without_being_asked`,
+  `test_a_reply_that_reports_frustration_never_carries_the_offer`. Not covered: a real situation with nothing they
+  tell themselves about it, where nothing becomes due. Before that: the client rejected an offer on the first
   message (R1, 2026-10-12), and check-then-offer comes from the meeting of 2026-10-13 (R14), which stands.
-  `test_no_check_before_their_fifth_message_and_ctx_names_only_a_check_waiting_for_its_answer` and
+  `test_no_count_of_messages_holds_a_check_back_and_ctx_names_only_a_check_waiting_for_its_answer` and
   `test_a_check_is_answered_on_the_next_turn_only_and_then_waits_its_cooldown` in `tests/unit/test_chat_context.py`;
   `test_a_check_comes_from_their_fifth_message_once_the_heart_of_it_was_agreed`,
-  `test_a_check_from_a_reply_that_did_not_judge_the_heart_of_it_ready_opens_nothing` and
-  `test_a_reply_that_judged_the_heart_of_it_ready_without_checking_makes_the_check_due` in
+  and `test_a_check_from_a_reply_that_did_not_judge_the_heart_of_it_ready_opens_nothing` in
   `tests/integration/test_turn.py`. Measured once, 2026-10-26, Directive: the boss chat checked at their 6th message
   and the friendship chat at their 9th; ChatGPT reached the same point at about the 12th. The set is chosen by what hurts, by its Use it when and
   Telling them apart; Structured Problem-Solving only once they say they want a decision or plan. No phrase
@@ -941,8 +1077,11 @@ the same change as the work.**
   after it started nothing (2026-10-12). A question is a sentence that ends in `?`; one quoted inside a sentence
   is not. `repairs._asks_them`, `test_their_quoted_question_does_not_cost_the_offer` and
   `test_a_different_question_beside_an_offer_gives_way_to_it` in `tests/unit/test_repairs.py`.
-- **Inside a framework, a stage their words already answer is said back and confirmed once, never asked; one
-  stage per reply, stepped by code** (muhammad, 2026-10-13, spec 0004). Because the client wants each letter
+- **Inside a framework, a stage their words already answer is talked through in a reply of its own, never asked
+  again and never a confirmation; one stage per reply, stepped by code** (muhammad, 2026-10-13, spec 0004; the
+  confirmation became conversation on 2026-11-16: "make it more chatty than confirming at each stage, but each stage
+  individually is a must", after both testers found "here is what you said, is there more?" three times over
+  repetitive; `walk.ALREADY_ANSWERED`). Because the client wants each letter
   introduced as it is reached and never to be asked again what they already said (R6, R12), and the model's own
   walk past answered stages asked them again once their words left the history window and could name a stage
   it never asked (2026-10-13). The reply reports `stage_answer`, then `stage_updates` (the stage in force from
@@ -981,13 +1120,19 @@ the same change as the work.**
   and the old `closing` stage is gone: one acknowledging sentence, then the body check-in; Mani may still offer loose
   possibilities when they are unsure, the person decides; safety and danger boundaries stay); The stage reached opens with its `intro` line, then: for a known or possible stage, A to E, Mani's own
   confirmation, saying back only what they said for that stage and asking in its own words whether it is right
-  (muhammad's team lead, 2026-10-13: the fixed "Is that right?" phrases read as canned; `walk.CONFIRM_ASK`), with
+  (muhammad's team lead, 2026-10-13: the fixed "Is that right?" phrases read as canned; since 2026-11-16 it no longer
+  asks whether it is right: one fresh sentence, something new, and an open question about a part of the stage not
+  talked about yet, `walk.ALREADY_ANSWERED`), with
   A's client `confirm` line or their words and a phrase from `confirm_phrases` only as the logged fallback
   ("confirm text unusable") when Mani's text is empty, asks nothing or was written for another branch; for partial, the
   model's question for only the gap; judged missing, A's client `missing` line with the feeling word in the
   running understanding (spec 0005) when they named one, otherwise Mani's own question built on the client's
   `ask` and about their situation, with the client's `ask` as the logged fallback ("missing asks nothing");
-  reached unjudged, the client's line. A reply that stays is the model's text with no letter line. Each falls back to fixed text when the
+  reached unjudged, the client's line. A reply that stays is the model's text with no letter line. Since 2026-11-16 the reply writes what opens the stage
+  reached in `stage_text` and its answer to what they just said in `text`, and code sends the answer, then the letter
+  line, then the opening, because the client's boss test read "B is for Belief. Right. The disrespect itself is the
+  issue." (`walk.reply_text`, `test_the_answer_to_what_they_said_comes_before_the_letter_line_of_the_stage_it_reaches`;
+  a reply with no `stage_text` is rendered as before). Each falls back to fixed text when the
   model's does not fit, logged by name. Leaving the last stage enters the body check-in. No stage
   question carries a button: a "Not sure" button was added by mistake and removed (muhammad, 2026-10-09). The
   chosen style holds inside a framework through its style file. A question that makes them uneasy keeps the
@@ -1025,7 +1170,8 @@ the same change as the work.**
   question about their situation, as the decision above says, using the feeling word they gave for A if they
   named one. Tell me more is
   the numbered five steps in the person's style word for word (`stages.offering.explain`), the offer follows the
-  client's pattern per style (`offer`), Keep chatting asks the client's question (`keep_chatting`), the permission
+  client's pattern per style (`offer`), Keep chatting was the client's question (`keep_chatting`) until 2026-11-16, when a no got Mani's own reply
+  (manasa's test: the line asked her to explain herself again right after she declined; R98), the permission
   question is "Would you like to try it?" in every style, and the body check-in is asked after E (muhammad
   decided to keep it). Supportive inside a framework adds no extra reassurance, validation or
   questions.

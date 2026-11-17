@@ -12,8 +12,9 @@ import streamlit as st
 _ORDER = (
     ("moment", "Moment"), ("style", "Style"), ("their_message", "Their message no."), ("framework", "Framework"),
     ("phase_before", "Stage before"), ("phase_after", "Stage after"), ("tapped", "Tapped"),
-    ("may_move", "May move to the set"), ("move_held", "Move held by"), ("moved", "Moved to the set"), ("offered", "Offered"),
-    ("offer_dropped", "Offer unusable"), ("toward_framework", "Pressing toward the framework"),
+    ("enough", "Enough known"), ("naming_due", "Core due to be said back"),
+    ("may_move", "May move to the set"), ("move_held", "Move held by"), ("not_moving", "Waited because"), ("moved", "Moved to the set"), ("offered", "Offered"),
+    ("offer_dropped", "Offer unusable"),
     ("corrected_offer", "Corrected the offer"), ("core_fixed", "Core held fixed"), ("safety", "Safety screen"),
     ("model_concern", "Model concern"), ("guarded", "Guarded"), ("safety_settled", "Safety settled"),
     ("paused", "Chat paused"), ("return_check", "Return check"), ("end_check", "Safety check after the last stage"),
@@ -35,7 +36,7 @@ def lines(trace: dict[str, Any]) -> list[str]:
     """One line per decision the trace holds: the ordered ones, then the longer records."""
     shown = [_line(label, trace[key]) for key, label in _ORDER if key in trace]
     for key, label in (("model", "Model reported"), ("applied", "Code applied"), ("walk", "Walk"),
-                       ("funnel", "Funnel"), ("stages", "Stages after"), ("buttons", "Buttons"),
+                       ("stages", "Stages after"), ("buttons", "Buttons"),
                        ("notes", "Code's notes"), ("checks", "Checks")):
         if key in trace:
             shown.append(_line(label, trace[key]))

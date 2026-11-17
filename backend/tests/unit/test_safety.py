@@ -162,6 +162,22 @@ def test_the_models_judgment_moves_the_state():
     assert after(State.UNSURE, None, False) is State.UNSURE, "a reply that judged nothing leaves it as it was"
 
 
+def test_a_concern_about_a_person_is_asked_about_once_and_then_held_as_danger():
+    """muhammad, 2026-11-16: no safety question after safety question (the client's safety test, seven in a row). Once
+    Mani has asked what they meant, an answer that still leaves it unsure is held as danger, so the reply says how to
+    reach help and asks nothing more about it; from there only a judgment of none lowers it. A symptom in the body, or
+    a danger of no known kind, follows the judgment as before."""
+    for about in ("themselves", "someone_else", "from_someone"):
+        assert after(State.UNSURE, "unsure", False, about=about, asked=True) is State.DANGER, about
+        assert after(State.DANGER, "unsure", False, about=about) is State.DANGER, about
+        assert after(State.DANGER, "none", False, about=about) is State.CLEAR, "a step toward safety settles it"
+        assert after(State.UNSURE, "none", False, about=about, asked=True) is State.CLEAR, "they explained"
+        assert after(State.UNSURE, "unsure", False, about=about) is State.UNSURE, "first sight: Mani has not asked yet"
+    for about in ("body", None):
+        assert after(State.UNSURE, "unsure", False, about=about, asked=True) is State.UNSURE, about
+        assert after(State.DANGER, "unsure", False, about=about) is State.UNSURE, about
+
+
 def test_a_refusal_never_settles_a_concern():
     """manasa's safety test, 2026-11-06: each time she pushed back, Mani agreed to drop the question and went back to
     chatting."""

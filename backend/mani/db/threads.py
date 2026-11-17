@@ -236,7 +236,7 @@ class TurnContext:
     memory: Memory | None = None
     # The pauses this turn may owe the question whether they are all right for (chat/pause.return_check), each the
     # latest that has run out by the database's clock as the pause gate reads it, within RECENT_CRISIS_DAYS of its
-    # end (an older one owes nothing): this person's, and this conversation's own. A reason is loaded only for a pause that began in this conversation.
+    # end (an older one owes nothing): this person's, and this conversation's own, each with what it rested on.
     pause: Pause | None = None
     own_pause: Pause | None = None
 
@@ -266,7 +266,7 @@ select
   (select jsonb_build_object(
             'id', cp.id, 'user_id', cp.user_id, 'thread_id', cp.thread_id, 'started_at', cp.started_at,
             'ends_at', cp.ends_at, 'checked_at', cp.checked_at,
-            'reason', case when cp.thread_id = t.id then cp.reason end)
+            'reason', cp.reason)
      from public.chat_pauses cp
     where cp.user_id = t.user_id and cp.ends_at <= now()
       and cp.ends_at > now() - interval '{RECENT_CRISIS_DAYS} days'

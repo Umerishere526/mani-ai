@@ -520,11 +520,11 @@ def test_a_stage_explores_as_long_as_each_turn_opens_a_new_part_and_keeps_what_i
     assert walk.covered(abcde, done, "consequence", ["feelings"]) == done, "a stage left behind is never touched"
 
 
-def test_explore_counts_only_on_a_stage_said_back_and_the_other_answers_move_as_before(abcde):
+def test_explore_stays_on_any_stage_and_the_other_answers_move_as_before(abcde):
     partial = {"consequence": {"said": "I felt bad", "status": "partial"}}
     stays = walk.advance(abcde, partial, None, "explore", in_force="consequence")
-    assert stays.phase == "consequence" and walk.EXPLORED not in stays.entries["consequence"]
-    assert "stage answer invalid: explore" in stays.notes
+    assert stays.phase == "consequence" and stays.entries["consequence"][walk.EXPLORED] == 1
+    assert "stage answer invalid: explore" not in stays.notes
     known = {"activate": {"said": "the birthday", "status": "known", walk.EXPLORED: 1}}
     for answer in ("agreed", "corrected", "answered"):
         update = [said("activate", "the group chat", "known", corrected=answer == "corrected")] \
@@ -546,7 +546,53 @@ def test_a_stage_not_said_back_answered_with_its_words_moves_whatever_the_reply_
         assert moved.phase == "somatic_ask", answer
         assert f"{answer} with words for a stage not said back read as answered" in moved.notes
         stays = walk.advance(abcde, partial, None, answer, in_force="effective")
-        assert stays.phase == "effective" and f"stage answer invalid: {answer}" in stays.notes
+        assert stays.phase == "effective"
+    assert "stage answer invalid: agreed" in walk.advance(abcde, partial, None, "agreed", in_force="effective").notes
+
+
+def test_a_stage_that_was_asked_can_stay_to_go_deeper_as_one_said_back_can(abcde):
+    """The client's boss test, 2026-11-16: A to D in one turn each, and "all the things you mentioned and i am sure
+    more" moved the walk. Staying was only possible on a stage said back; on one that was asked, explore with words
+    was turned into answered and explore without them was invalid (spec 0008, review R3)."""
+    stayed = walk.advance(abcde, {}, [said("consequence", "angry, and I go quiet for days")], "explore",
+                          in_force="consequence")
+    assert stayed.phase == "consequence" and stayed.reached is None
+    assert stayed.entries["consequence"]["said"] == "angry, and I go quiet for days"
+    assert stayed.entries["consequence"][walk.EXPLORED] == 1
+    assert not [n for n in stayed.notes if "invalid" in n or "read as answered" in n]
+    more = walk.advance(abcde, stayed.entries, None, "explore", in_force="consequence")
+    assert more.phase == "consequence" and more.entries["consequence"][walk.EXPLORED] == 2
+    moved = walk.advance(abcde, more.entries, [said("consequence", "and I dread every Monday")], "answered",
+                         in_force="consequence")
+    assert moved.phase == "dispute"
+
+
+def test_the_answer_to_what_they_said_comes_before_the_letter_line_of_the_stage_it_reaches(abcde):
+    """The client's boss test, 2026-11-16: "B is for Belief. Right. The disrespect itself is the issue. ..." The
+    letter line stood in front of Mani's answer to the stage before. With the opening of the stage in a field of its
+    own, the answer goes first and the letter line opens what follows it."""
+    walked = walk.advance(abcde, {}, [said("activate", "he yells at me in meetings")], "answered", in_force="activate",
+                          report=judged("known", "there is nothing I can do because he is my boss"))
+    answer = "Right. The disrespect itself is the issue."
+    opening = "You've said that because he's your boss there is nothing you can do. Is that it, or is there more to it?"
+    text, notes = walk.reply_text(abcde, walked, text=answer, stage_text=opening, style="directive",
+                                  thread_id=THREAD, feeling=None)
+    assert text == f"{answer}\n\nB is for Belief. {opening}"
+    assert notes == []
+    alone, _ = walk.reply_text(abcde, walked, text="", stage_text=opening, style="directive", thread_id=THREAD,
+                               feeling=None)
+    assert alone == f"B is for Belief. {opening}"
+    as_before, _ = walk.reply_text(abcde, walked, text=opening, style="directive", thread_id=THREAD, feeling=None)
+    assert as_before == f"B is for Belief. {opening}", "a reply with no stage_text is rendered as it always was"
+
+
+def test_an_opening_written_for_a_stage_the_walk_did_not_reach_is_not_sent(abcde):
+    stayed = walk.advance(abcde, {}, None, "not_yet", in_force="activate")
+    text, notes = walk.reply_text(abcde, stayed, text="Take your time. What happened that day?",
+                                  stage_text="So the belief is that you can do nothing. Is that it?",
+                                  style="directive", thread_id=THREAD, feeling=None)
+    assert text == "Take your time. What happened that day?"
+    assert "stage_text dropped: the walk stayed" in notes
 
 
 def test_where_the_new_view_forms_is_flagged_in_both_frameworks(abcde):
@@ -641,9 +687,13 @@ def test_a_message_that_asks_something_never_moves_the_stage():
     """muhammad, 2026-11-05: "should I look at this thought or my numbness? Does one affect the other in any way" was
     read as an answer and the reply opened on Step 2."""
     for asked in ("should I look at this thought or my numbness? Does one affect the other in any way",
-                  "does one affect the other", "What do you mean by that"):
+                  "What do you mean by that?"):
         assert walk.held_by_question("answered", asked) == "not_yet", asked
         assert walk.held_by_question("agreed", asked) == "not_yet", asked
+    # The client's boss test, 2026-11-16 (spec 0008, review R4): an answer that opens with how, what or is was held as
+    # a question. Only a question mark is something code can see; without one the reply judges (framework.md).
+    for plain in ("how he treats me", "what he said in front of everyone", "is it the yelling, mostly"):
+        assert walk.held_by_question("answered", plain) == "answered", plain
     assert walk.held_by_question("explore", "why does it hurt so much?") == "explore", "staying stays"
     assert walk.held_by_question("stop", "can we stop?") == "stop", "a wish to stop is still theirs"
     assert walk.held_by_question("answered", "the past 7 or 8 weeks") == "answered"

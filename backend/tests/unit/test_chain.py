@@ -181,7 +181,7 @@ def test_every_prompt_on_a_reasoning_model_says_how_hard_to_think():
     authored prompt that names a reasoning model carries one the configuration accepts."""
     import typing
 
-    from mani.prompts.composer import BODY_EFFORT
+    from mani.prompts.composer import BODY_EFFORT, READING_EFFORT
     from scripts.seed import PROMPTS_DIR, SOMATIC_FILE, parse_prompt
 
     allowed = set(typing.get_args(Settings.model_fields["reasoning_effort"].annotation))
@@ -194,6 +194,22 @@ def test_every_prompt_on_a_reasoning_model_says_how_hard_to_think():
             assert effort in allowed, f"{path.name} sets reasoning_effort {effort!r}"
             body_effort = prompt["model_parameters"].get(BODY_EFFORT)
             assert body_effort is None or body_effort in allowed, f"{path.name} sets {BODY_EFFORT} {body_effort!r}"
+            reading = prompt["model_parameters"].get(READING_EFFORT)
+            assert reading is None or reading in allowed, f"{path.name} sets {READING_EFFORT} {reading!r}"
+
+
+def test_the_reading_after_a_reply_thinks_at_its_own_effort_and_the_reply_keeps_its_own():
+    """muhammad, 2026-11-16: the reading landed a median 18.8 s after the reply, later than many people answer. It
+    thinks at the row's `reading_reasoning_effort`; the reply's own parameters are untouched, and a row that names none
+    leaves the reading as the reply."""
+    from mani.prompts.composer import READING_EFFORT, reading_parameters
+    from scripts.seed import PROMPTS_DIR, parse_prompt
+
+    voice = parse_prompt(PROMPTS_DIR / "voice.md")["model_parameters"]
+    assert voice["reasoning_effort"] == "medium" and voice[READING_EFFORT] == "low"
+    assert reading_parameters(voice)["reasoning_effort"] == "low"
+    assert voice["reasoning_effort"] == "medium", "the reply's parameters are not changed in place"
+    assert reading_parameters({"reasoning_effort": "medium"}) == {"reasoning_effort": "medium"}
 
 
 def test_thinking_never_eats_the_budget_the_reply_was_given():

@@ -37,3 +37,14 @@ def test_every_exercise_gets_the_player_and_only_a_story_gets_the_speed_choice()
     assert len(players) == 2
     assert ['class="mani-speed"' in player for player in players] == [False, True]
     assert [c.value for c in app.caption if c.value == "Audio unavailable right now."] == ["Audio unavailable right now."]
+
+
+def test_an_exercises_length_is_shown_to_the_nearest_half_minute():
+    """muhammad, 2026-11-16: 4:35 and 4:40 read as false precision; the length is rounded to the nearest 30 seconds."""
+    import library
+
+    assert library._duration(4.58) == "4:30"
+    assert library._duration(4.8) == "5:00"
+    assert library._duration(0.3) == "0:30", "a short one is never shown as 0:00"
+    assert library._duration(10) == "10:00"
+    assert library._duration(None) == ""

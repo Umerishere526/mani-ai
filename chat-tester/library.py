@@ -28,7 +28,7 @@ STORY = "Story"
 def _duration(minutes: float | None) -> str:
     if minutes is None:
         return ""
-    seconds = 5 * round(minutes * 12)  # to the nearest 5 seconds
+    seconds = max(30, 30 * round(minutes * 2))  # to the nearest 30 seconds, and never 0:00
     return f"{seconds // 60}:{seconds % 60:02d}"
 
 
