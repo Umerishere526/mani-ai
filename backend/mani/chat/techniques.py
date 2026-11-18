@@ -12,6 +12,9 @@ OFFERING = "offering"
 STEPS = "steps"
 # A framework whose last stage is answered, while Mani asks how they feel now; the next answer closes it.
 FEELINGS = "feelings_check"
+# How the reply that starts a set opens, so the jump from the chat into the first stage is not abrupt.
+FIRST_STAGE_OPENING = ("one short sentence that takes them from the whole story to one moment, then its line and that "
+                       "stage's question")
 
 
 def stages_of(framework: Framework) -> list[str]:

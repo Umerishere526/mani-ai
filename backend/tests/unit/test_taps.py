@@ -19,6 +19,7 @@ def test_start_starts_only_the_framework_on_the_offer_that_is_still_open():
 def test_start_tells_the_reply_the_first_stage_only():
     fact = tap_event(SmartPrompt(label="Start ABCDE", technique="abcde"), REGISTRY, offered("abcde", "steps")).fact
     assert '"A is for Activating Event."' in fact and "B is for" not in fact and "go on to" not in fact
+    assert "from the whole story to one moment" in fact
 
 
 def test_each_lead_in_button_asks_for_the_five_steps():

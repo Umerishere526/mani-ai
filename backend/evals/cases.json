@@ -596,8 +596,9 @@
    ],
    "reference": null,
    "facts": [
-    "They tapped to start ABCDE. Your reply opens its first stage, `activate`, with its line \"A is for Activating Event.\" and that stage's question, even if the chat already touched it.",
-    "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
+    "ABCDE's five steps are showing (id abcde). A clear yes in their words starts it: set stage to its first stage and open it with one short sentence that takes them from the whole story to one moment, then its line and that stage's question. A clear no: set action to stop.",
+    "You cannot offer a set of questions in this reply: never ask whether they would like to try one.",
+    "They tapped to start ABCDE. Your reply opens its first stage, `activate`, with one short sentence that takes them from the whole story to one moment, then its line and that stage's question (its line: \"A is for Activating Event.\"), even if the chat already touched it."
    ],
    "checks": {
     "stage_in": [
@@ -921,8 +922,9 @@
     }
    ],
    "facts": [
-    "They tapped to start ABCDE. Your reply opens its first stage, `activate`, with its line \"A is for Activating Event.\" and that stage's question, even if the chat already touched it.",
-    "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
+    "ABCDE's five steps are showing (id abcde). A clear yes in their words starts it: set stage to its first stage and open it with one short sentence that takes them from the whole story to one moment, then its line and that stage's question. A clear no: set action to stop.",
+    "You cannot offer a set of questions in this reply: never ask whether they would like to try one.",
+    "They tapped to start ABCDE. Your reply opens its first stage, `activate`, with one short sentence that takes them from the whole story to one moment, then its line and that stage's question (its line: \"A is for Activating Event.\"), even if the chat already touched it."
    ],
    "checks": {
     "stage_in": [

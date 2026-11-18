@@ -98,6 +98,7 @@ def test_the_open_offer_line_says_which_step_is_showing():
     assert "five steps follow your reply" in lead_in and "starts it" not in lead_in
     steps = facts_for(ctx(), open_offer=offered("abcde", "steps"))
     assert "A clear yes in their words starts it" in steps and "action to stop" in steps
+    assert "from the whole story to one moment" in steps
 
 
 def test_the_last_stage_asks_how_they_feel_and_the_check_in_offers_a_next_step():
@@ -112,7 +113,7 @@ def test_a_held_feelings_check_is_about_their_safety_and_promises_no_close():
     """The final review, 2026-11-18: held for safety, the check's line still said to ask nothing and that code closes."""
     held = facts_for(ctx(safety="unsure"), running=running("abcde", "feelings_check"), holding=True)
     assert "ask nothing" not in held and "code closes the set" not in held and "safety" in held
-    assert "next step" not in held
+    assert "say nothing about the set or a next step" in held
 
 
 def test_no_offer_is_allowed_before_their_third_message():

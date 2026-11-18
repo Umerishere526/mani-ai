@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from mani.chat.greeting import (
     CLOSING_KEEP_CHATTING_LABEL, EXAMPLE_LABEL, FINISH_LABEL, LEAD_IN_LABELS, TALK_MORE_FIRST_LABEL,
 )
-from mani.chat.techniques import Registry, line_of, stages_of
+from mani.chat.techniques import FIRST_STAGE_OPENING, Registry, line_of, stages_of
 from mani.llm.schema import SmartPrompt
 from mani.models.rows import Framework, Message, MessageRole, SupportStyle, TechniqueState
 
@@ -72,8 +72,8 @@ def tap_event(tapped: SmartPrompt | None, registry: Registry, open_offer: Techni
             return TapEvent()
         first = stages_of(offered)[0]
         return TapEvent(starting=offered, fact=(
-            f"They tapped to start {offered.name}. Your reply opens its first stage, `{first}`, with its line "
-            f"\"{line_of(offered, first)}\" and that stage's question, even if the chat already touched it."
+            f"They tapped to start {offered.name}. Your reply opens its first stage, `{first}`, with "
+            f"{FIRST_STAGE_OPENING} (its line: \"{line_of(offered, first)}\"), even if the chat already touched it."
         ))
     if offered is not None and tapped.decline:
         # A Keep chatting button stored before the client's sequence (2026-11-18) meant no for now.

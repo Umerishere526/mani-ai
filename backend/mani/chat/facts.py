@@ -7,7 +7,7 @@ from mani.chat import record as rec
 from mani.chat.decide import OFFER_FROM_MESSAGE
 from mani.chat.greeting import style_label
 from mani.chat.pause import ReturnCheck
-from mani.chat.techniques import FEELINGS, STEPS, Registry, line_of, stages_of
+from mani.chat.techniques import FEELINGS, FIRST_STAGE_OPENING, STEPS, Registry, line_of, stages_of
 from mani.db.threads import TurnContext
 from mani.models.rows import TechniqueState
 from mani.prompts import cache, composer
@@ -93,7 +93,7 @@ def _offer_line(framework, phase: str | None) -> str:
     starts the set."""
     if phase == STEPS:
         return (f"{framework.name}'s five steps are showing (id {framework.id}). A clear yes in their words starts it: "
-                "set stage to its first stage and open it with its line and question. A clear no: set action to stop.")
+                f"set stage to its first stage and open it with {FIRST_STAGE_OPENING}. A clear no: set action to stop.")
     return (f"Your last reply was the lead-in to {framework.name} (id {framework.id}); its five steps follow your reply, "
             "added by code. Answer what they said in a sentence or two and do not start the set. A clear no: set action "
             "to stop.")
@@ -102,7 +102,7 @@ def _offer_line(framework, phase: str | None) -> str:
 def _running_line(framework, phase: str | None, *, held: bool) -> str:
     if phase == FEELINGS and held:
         return (f"{framework.name}'s last stage is done and you asked how they feel. This reply is about their safety: "
-                "answer that first. The set stays open and nothing closes now.")
+                "answer that, and say nothing about the set or a next step. The set stays open and nothing closes now.")
     if phase == FEELINGS:
         return (f"{framework.name}'s last stage is done and you asked how they feel now. Answer how they feel, warmly, "
                 "in a sentence or two (in Directive, one), carrying their new way of seeing it forward. Then ask whether "
