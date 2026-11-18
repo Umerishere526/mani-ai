@@ -31,7 +31,8 @@ What it may not do is reach past their words.
 ## Evidence
 
 - Reflective coworker noise, first reply (139 words): the whole outside connection after a one-line message.
-- Supportive coworker noise, first reply (148 words): "proving your place", which the person never said.
+- Supportive coworker noise, first reply (148 words): "proving your place", which the person never said in that chat.
+  It came from the test account's memory of earlier chats ([[loops-came-from-the-host-the-guard-and-memory-2026-11-18]]).
 - Supportive partner lying: replies of 85, 113, 124, 101 and 114 words, flat.
 - The client's own example replies (the eval references in `backend/evals/cases.json`) already have the shape she
   wants. One-line openers get 64 to 80 words (`sad-1`, `office-1`), and later replies get 190 to 207. Her only

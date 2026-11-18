@@ -17,9 +17,8 @@ the same change as the work.**
   the same data (2026-11-06): `heqenombgkihfeggrxqc` (muhammad's org, ca-central-1, the Hobby deployment's database)
   and `aipgficduzufstilndbw` "mani-app" (the Mani org, us-east-1, for the Vercel Pro deployment). Migration 037 has
   run only on this machine's databases (2026-11-13), and 039 and 040 likewise (2026-11-18).
-- Models: the chat turn runs on `minimax/minimax-m3.1-flash` at reasoning effort `low`, routed only to six
-  zero-data-retention hosts (`inferact-vllm`, `together`, `modelrun`, `fireworks`, `makora`, `nebius`, with
-  `zdr: true`), as the `mani` prompt row names them (`content/prompts/mani.md` frontmatter, seeded into
+- Models: the chat turn runs on `minimax/minimax-m3.1-flash` at reasoning effort `high`, routed only to the three
+  zero-data-retention hosts that run its reasoning (`modelrun`, `fireworks`, `makora`, with `zdr: true`), as the `mani` prompt row names them (`content/prompts/mani.md` frontmatter, seeded into
   `admin.prompts`; see Decisions in force). Summaries and the memory fold run on `openai/gpt-6-luna` at `high`, routed
   only to OpenAI (`mani/config.py` and their prompt rows), and so does the voice transcription in `mani/stt.py`. Every
   endpoint keeps `data_collection: deny`, so training use stays refused. Effort is billed: measured against Azure,
@@ -155,17 +154,19 @@ the same change as the work.**
   during a safety turn taps again once safe (accepted 2026-11-17). `facts.HELD_START`;
   `test_a_held_turn_never_invites_a_move_a_start_or_an_offer_that_code_would_refuse` in `tests/unit/test_facts.py`,
   `test_a_guarded_turn_changes_no_framework_state` in `tests/unit/test_decide.py`.
-- **The chat turn runs on MiniMax M3.1 Flash at reasoning effort `low`, only on zero-data-retention hosts, within
-  $0.002 a turn** (muhammad, 2026-11-17). Because on the real stack, 20 cases with three runs each, it scored 3.57
+- **The chat turn runs on MiniMax M3.1 Flash at reasoning effort `high`, only on zero-data-retention hosts that run
+  its reasoning, within $0.002 a turn** (muhammad, 2026-11-17; effort high and the reasoning hosts, 2026-11-18). Because on the real stack, 20 cases with three runs each, it scored 3.57
   against ChatGPT as 5 for about $0.00045 a turn and a median of 3.8 s, where `openai/gpt-chat-latest` scored 4.07 at
   $0.016 (over budget) and DeepSeek V4.1 Flash scored 3.64 but judged chest pain with arm symptoms `unsure` in 4 of 9
   runs (MiniMax `danger` in 9 of 9); three prompt variants did not move the cheap models past about 3.6, so the gap is
   the model's (2026-11-17). The model, effort and hosts live in the `mani` row (`model_id`,
-  `model_parameters.reasoning_effort`, `routing: {only: [inferact-vllm, together, modelrun, fireworks, makora, nebius],
-  zdr: true}`), from `content/prompts/mani.md`'s frontmatter through `scripts/seed.py`, never in environment
+  `model_parameters.reasoning_effort`, `routing: {only: [modelrun, fireworks, makora], zdr: true}`), from `content/prompts/mani.md`'s frontmatter through `scripts/seed.py`, never in environment
   variables; never the model makers' own APIs or other China-based hosts. A failing host falls back to the next in
   the list. The row's `only` replaces the settings' OpenAI-only default (`Settings.routing`). Accepted: about 88% of
-  the chat model's score. `test_the_model_effort_and_hosts_come_from_the_prompt_row` in `tests/unit/test_composer.py`,
+  the chat model's score. Inferact vLLM, Together and Nebius answer this model with no reasoning at all, so they
+  were dropped (2026-11-18): since 16:00 UTC that day 87 of 91 live chat calls had landed on Inferact, and at the same
+  moment of a replayed chat Makora offered the set 4 of 6 times where Inferact offered 0 of 6 and copied its own last
+  reply. When a host is added, check a probe call shows reasoning tokens. `test_the_model_effort_and_hosts_come_from_the_prompt_row` in `tests/unit/test_composer.py`,
   `test_a_prompt_file_carries_its_routing` in `test_seed.py`,
   `test_a_prompt_can_override_routing_without_losing_the_data_policy` in `test_config.py`.
 - **A model that always reasons is sent its row's effort, and its output budget includes the reasoning allowance**

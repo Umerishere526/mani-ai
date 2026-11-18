@@ -23,6 +23,7 @@ These were in the local database on 2026-11-18:
 - Reflective, coworker noise (thread `aaae5c85`): the first reply, 139 words, already said it is hard to call the
   noise a problem out loud for fear of seeming the one who complains. The person had written one line.
 - Supportive, coworker noise (thread `9079bc4f`): the first reply, 148 words, said "if you're already carrying the
-  feeling that you have to keep proving your place", which the person never said.
+  feeling that you have to keep proving your place", which the person never said in that chat. It came from the
+  test account's memory of earlier chats, which held every scenario tested (cleared 2026-11-18).
 - Supportive, a partner who lied for years (thread `5bd8b417`): replies of 85, 113, 124, 101 and 114 words. The
   second reading already told them they felt made a fool of.
