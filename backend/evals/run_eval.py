@@ -163,6 +163,8 @@ def rule_checks(case, got) -> list[str]:
         failed.append(f"safety {(got.get('safety') or {}).get('level')} != {checks['safety']}")
     if checks.get("no_question") and "?" in (got.get("text") or ""):
         failed.append("asked a question")
+    if "corrected" in checks and bool(got.get("corrected")) != checks["corrected"]:
+        failed.append(f"corrected {got.get('corrected')} != {checks['corrected']}")
     for word in checks.get("text_excludes", []):
         if word.lower() in (got.get("text") or "").lower():
             failed.append(f"said {word!r}")
@@ -184,7 +186,7 @@ async def run_variant(http, settings, system, v, cases, samples, gate) -> list[d
             fails = rule_checks(case, got) if case["reference"] is None else []
             return {"case": case["id"], "style": case["style"], "sample": n, "got": got, "verdict": verdict,
                     "code_fails": fails}
-    return await asyncio.gather(*(one(c, n) for c in cases for n in range(samples)))
+    return await asyncio.gather(*(one(c, n) for c in cases for n in range(c.get("samples", samples))))
 
 
 def summarise(name, rows) -> list[str]:

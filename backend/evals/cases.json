@@ -711,6 +711,84 @@
     "no_question": true,
     "judge": "The reply is a warm, brief close of one or two sentences that asks nothing."
    }
+  },
+  {
+   "id": "rule-first-reply-no-core",
+   "style": "Directive",
+   "samples": 5,
+   "opener": "How can I help you today?",
+   "turns": [
+    {
+     "role": "user",
+     "content": "I think I'm getting tired of always being the understanding friend. Whenever my friends need something, I'm there for them. But when I'm struggling, everyone suddenly seems busy. I feel selfish for even expecting the same effort back."
+    }
+   ],
+   "reference": null,
+   "facts": [
+    "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
+   ],
+   "checks": {
+    "action_not": "offer",
+    "judge": "The reply reflects what they said and asks a question. It does NOT state, as a fact about them, a core belief, fear or deep reading (such as 'you believe you're only worth it when useful' or 'you can never stop performing to be loved'), and uses no heavy psychological words. At most one gentle possibility put as a question ('I wonder if...') passes."
+   }
+  },
+  {
+   "id": "rule-no-offer-after-correction",
+   "style": "Directive",
+   "samples": 5,
+   "opener": "How can I help you today?",
+   "turns": [
+    {
+     "role": "user",
+     "content": "I think I'm getting tired of always being the understanding friend. Whenever my friends need something, I'm there for them. But when I'm struggling, everyone suddenly seems busy. I feel selfish for even expecting the same effort back."
+    },
+    {
+     "role": "assistant",
+     "content": "This isn't really about your friends being busy. You show up for everyone, and when you need something, the phone goes quiet. Then you turn it on yourself and call it selfish.\n\nWhen you reach out to someone you're close to and they don't reply, what lands hardest?"
+    },
+    {
+     "role": "user",
+     "content": "I don't think it's that I'm afraid they won't love me. I genuinely enjoy helping people. I just wish someone would notice when I'm struggling without me having to spell everything out."
+    }
+   ],
+   "reference": null,
+   "facts": [
+    "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
+   ],
+   "checks": {
+    "action_not": "offer",
+    "corrected": true,
+    "judge": "The reply takes the correction completely, drops the earlier reading, and does not move toward a set of questions, a framework or testing a belief."
+   }
+  },
+  {
+   "id": "rule-no-offer-on-second-message",
+   "style": "Directive",
+   "samples": 5,
+   "opener": "How can I help you today?",
+   "turns": [
+    {
+     "role": "user",
+     "content": "I think I'm getting tired of always being the understanding friend. Whenever my friends need something, I'm there for them. But when I'm struggling, everyone suddenly seems busy. I feel selfish for even expecting the same effort back."
+    },
+    {
+     "role": "assistant",
+     "content": "This isn't really about your friends being busy. You show up for everyone, and when you need something, the phone goes quiet. Then you turn it on yourself and call it selfish.\n\nWhen you reach out to someone you're close to and they don't reply, what lands hardest?"
+    },
+    {
+     "role": "user",
+     "content": "I wait and hope someone notices"
+    }
+   ],
+   "reference": null,
+   "facts": [
+    "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
+   ],
+   "checks": {
+    "action_not": "offer",
+    "corrected": false,
+    "judge": "The reply stays with what they said and asks one question. It does not offer a set of questions or ask how they could test a belief."
+   }
   }
  ]
 }
