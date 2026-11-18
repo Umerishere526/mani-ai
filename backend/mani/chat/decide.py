@@ -17,6 +17,11 @@ from mani.llm.schema import LibrarySection, SmartPrompt
 from mani.models.rows import Framework, TechniqueOutcome, TechniqueState
 
 
+# The person's message an offer may come with at the earliest; the style tap is not one of theirs. The same opening
+# offered on the 2nd message in one run and the 3rd in the next (muhammad, 2026-11-18).
+OFFER_FROM_MESSAGE = 3
+
+
 @dataclass(frozen=True)
 class Decision:
     """What this reply changes: the buttons under it, the framework row, and the record's outcomes."""
@@ -58,7 +63,7 @@ def closing_buttons() -> list[SmartPrompt]:
 def decide(
     reply: TurnReply, registry: Registry, *, thread_id: uuid.UUID, running: TechniqueState | None,
     open_offer: TechniqueState | None, tap: TapEvent, record: dict, guarded: bool, count_after: int,
-    end_check_due: bool, end_check_asked: bool,
+    end_check_due: bool, end_check_asked: bool, person_messages: int,
 ) -> Decision:
     """The spec's guarantees, in order: a start, a running framework's move, an open offer's answer, a new offer, and
     the library. A guarded turn (a safety worry open or found) changes no framework state and makes no offer."""
@@ -77,8 +82,10 @@ def decide(
         decision = _answered_offer(base, open_offer, offered, tap, reply)
     else:
         decision = base
+    # An offer is refused while a set runs or is offered, before their 3rd message, and on a turn that corrects Mani.
     decision = _offer(decision, reply, registry, thread_id, count_after,
-                      blocked=running is not None or open_offer is not None or tap.starting is not None)
+                      blocked=(running is not None or open_offer is not None or tap.starting is not None
+                               or person_messages < OFFER_FROM_MESSAGE or reply.corrected))
     if reply.action == "library" and not decision.prompts:
         decision = dataclasses.replace(decision, prompts=[
             SmartPrompt(label=GO_TO_LIBRARY_LABEL, library=LibrarySection.HOME.value)])

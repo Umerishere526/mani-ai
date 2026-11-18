@@ -69,6 +69,15 @@ async def test_notes_written_by_one_turn_reach_the_next_turns_facts(alice, model
     assert "Your notes from your last turn: boss piles work; feels like a pushover" in facts_of(scripted)
 
 
+# Two ordinary exchanges first: an offer may come with the person's 3rd message at the earliest.
+WARM_UP = (said("Go on."), said("Tell me more."))
+
+
+async def warm_up(alice, thread_id) -> None:
+    await send(alice, thread_id, "work has been a lot lately")
+    await send(alice, thread_id, "my boss keeps adding things")
+
+
 async def abcde_text(kind: str, style: str = "supportive") -> str:
     from mani.chat import techniques
     from mani.prompts import cache
@@ -81,9 +90,10 @@ START = ["Start ABCDE", "I need an example", "Talk more first"]
 
 
 async def test_a_clear_offer_is_the_lead_in_with_its_three_buttons(alice, model):
-    model(said("Just because a belief feels true doesn't mean it is. How could you test that thought?",
+    model(*WARM_UP, said("Just because a belief feels true doesn't mean it is. How could you test that thought?",
                action="offer", framework="abcde"))
     thread = await start(alice)
+    await warm_up(alice, thread.id)
     turn = await send(alice, thread.id, "i always feel like a pushover")
     assert [p.label for p in turn.prompts] == ["Not sure", "Show me how", "Give me a tool"]
     assert (await technique_of(alice, thread.id)).outcome is TechniqueOutcome.OFFERED
@@ -91,16 +101,17 @@ async def test_a_clear_offer_is_the_lead_in_with_its_three_buttons(alice, model)
 
 async def test_the_offer_runs_lead_in_steps_example_then_start(alice, model):
     """The client's sequence document, 2026-11-18: the steps and the example are hers, sent with no model call."""
-    scripted = model(said("Lead-in.", action="offer", framework="abcde"),
+    scripted = model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"),
                      said("A is for Activating Event. What happened?", stage="activate"),
                      said("B is for Belief. What did you tell yourself?", stage="belief"))
     thread = await start(alice)
+    await warm_up(alice, thread.id)
     await send(alice, thread.id, "i feel like a pushover")
     steps = await send(alice, thread.id, "Not sure")
-    assert scripted.calls == 1 and steps.content == await abcde_text("steps")
+    assert scripted.calls == 3 and steps.content == await abcde_text("steps")
     assert [p.label for p in steps.prompts] == START
     example = await send(alice, thread.id, "I need an example")
-    assert scripted.calls == 1 and example.content == await abcde_text("example")
+    assert scripted.calls == 3 and example.content == await abcde_text("example")
     assert [p.label for p in example.prompts] == ["Start ABCDE", "Talk more first"]
     await send(alice, thread.id, "Start ABCDE")
     assert (await technique_of(alice, thread.id)).phase == "activate"
@@ -110,8 +121,9 @@ async def test_the_offer_runs_lead_in_steps_example_then_start(alice, model):
 
 
 async def test_a_typed_reply_to_the_lead_in_gets_the_reply_then_the_steps(alice, model):
-    model(said("Lead-in.", action="offer", framework="abcde"), said("That's a fair way to start."))
+    model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"), said("That's a fair way to start."))
     thread = await start(alice)
+    await warm_up(alice, thread.id)
     await send(alice, thread.id, "i feel like a pushover")
     turn = await send(alice, thread.id, "maybe look at what i've actually managed?")
     assert turn.content == "That's a fair way to start.\n\n" + await abcde_text("steps")
@@ -120,9 +132,10 @@ async def test_a_typed_reply_to_the_lead_in_gets_the_reply_then_the_steps(alice,
 
 
 async def test_talk_more_first_lets_the_offer_lapse_and_it_may_come_back(alice, model):
-    model(said("Lead-in.", action="offer", framework="abcde"), said("Sure, let's keep talking."),
+    model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"), said("Sure, let's keep talking."),
           said("Lead-in again.", action="offer", framework="abcde"))
     thread = await start(alice)
+    await warm_up(alice, thread.id)
     await send(alice, thread.id, "i feel like a pushover")
     await send(alice, thread.id, "Show me how")
     await send(alice, thread.id, "Talk more first")
@@ -133,9 +146,10 @@ async def test_talk_more_first_lets_the_offer_lapse_and_it_may_come_back(alice, 
 
 
 async def test_a_declined_framework_is_never_offered_again(alice, model):
-    model(said("Lead-in.", action="offer", framework="abcde"), said("Okay, we'll leave it.", action="stop"),
+    model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"), said("Okay, we'll leave it.", action="stop"),
           said("Offer again.", action="offer", framework="abcde"))
     thread = await start(alice)
+    await warm_up(alice, thread.id)
     await send(alice, thread.id, "i feel like a pushover")
     await send(alice, thread.id, "no, i don't want to do any exercise")
     turn = await send(alice, thread.id, "still feel like a pushover")
@@ -298,10 +312,11 @@ async def test_a_pausing_body_turn_sends_only_the_pause_reply(alice, model):
 async def test_an_offer_they_moved_past_is_no_longer_open_and_its_old_button_starts_nothing(alice, model):
     """The final review, 2026-11-18: a lapsed offer kept its row as offered, so every later facts block still said a
     yes starts it, an old Start started it, and no other set could ever be offered."""
-    scripted = model(said("Lead-in.", action="offer", framework="abcde"), said("Tell me about her."),
+    scripted = model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"), said("Tell me about her."),
                      said("Go on."), said("A is for Activating Event. What happened?", stage="activate"),
                      said("Offer again.", action="offer", framework="abcde"))
     thread = await start(alice)
+    await warm_up(alice, thread.id)
     await send(alice, thread.id, "i always feel like a pushover")
     await send(alice, thread.id, "Not sure")
     await send(alice, thread.id, "actually can we talk about my sister")
@@ -339,8 +354,9 @@ async def test_editing_the_reply_that_opened_the_feelings_check_restores_the_las
 
 
 async def test_an_empty_reply_to_the_lead_in_gets_the_fixed_reply_not_the_steps_alone(alice, model):
-    model(said("Lead-in.", action="offer", framework="abcde"), said(" \u2014 "))
+    model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"), said(" \u2014 "))
     thread = await start(alice)
+    await warm_up(alice, thread.id)
     await send(alice, thread.id, "i feel like a pushover")
     turn = await send(alice, thread.id, "maybe look at what i've managed")
     assert turn.content == crisis.TROUBLE_REPLY and turn.prompts == []
@@ -351,8 +367,9 @@ async def test_an_owed_return_check_comes_before_the_five_steps(alice, model):
     """A pause elsewhere that has run out owes the question how things are; a lead-in tap does not jump it."""
     from mani.db import pool
 
-    scripted = model(said("Lead-in.", action="offer", framework="abcde"), said("Before that, how are things now?"))
+    scripted = model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"), said("Before that, how are things now?"))
     thread = await start(alice)
+    await warm_up(alice, thread.id)
     await send(alice, thread.id, "i feel like a pushover")
     other = await start(alice)
     async with pool.as_admin() as conn:
@@ -360,4 +377,17 @@ async def test_an_owed_return_check_comes_before_the_five_steps(alice, model):
             "insert into public.chat_pauses (user_id, thread_id, started_at, ends_at, reason) "
             "values ($1, $2, now() - interval '20 minutes', now() - interval '5 minutes', 'took pills')", ALICE, other.id)
     turn = await send(alice, thread.id, "Not sure")
-    assert scripted.calls == 2 and turn.content == "Before that, how are things now?"
+    assert scripted.calls == 4 and turn.content == "Before that, how are things now?"
+
+
+async def test_an_offer_on_the_persons_second_message_is_refused_and_the_next_may_offer(alice, model):
+    """The style tap is not one of their messages; their 2nd message gets no offer, their 3rd may."""
+    model(said("Go on."), said("Lead-in.", action="offer", framework="abcde"),
+          said("Lead-in.", action="offer", framework="abcde"))
+    thread = await start(alice)
+    await send(alice, thread.id, "i'm tired of always being the understanding friend")
+    second = await send(alice, thread.id, "nobody checks in on me")
+    assert second.prompts == [] and second.trace["refused"] == "offer"
+    assert await technique_of(alice, thread.id) is None
+    third = await send(alice, thread.id, "i don't think they'd help")
+    assert [p.label for p in third.prompts] == ["Not sure", "Show me how", "Give me a tool"]

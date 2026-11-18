@@ -27,7 +27,7 @@ def ctx(safety: str = "clear") -> TurnContext:
 
 def facts_for(context: TurnContext, **given) -> str:
     base = dict(record={}, style="supportive", running=None, open_offer=None, event=None, wants_title=False,
-                return_check=None, answering_return=None, end_check_asked=False, holding=False)
+                return_check=None, answering_return=None, end_check_asked=False, holding=False, person_messages=5)
     return facts(context, CONFIG, **{**base, **given})
 
 
@@ -111,3 +111,8 @@ def test_a_held_feelings_check_is_about_their_safety_and_promises_no_close():
     """The final review, 2026-11-18: held for safety, the check's line still said to ask nothing and that code closes."""
     held = facts_for(ctx(safety="unsure"), running=running("abcde", "feelings_check"), holding=True)
     assert "ask nothing" not in held and "code closes the set" not in held and "safety" in held
+
+
+def test_no_offer_is_allowed_before_their_third_message():
+    assert "You cannot offer" in facts_for(ctx(), person_messages=2)
+    assert "You cannot offer" not in facts_for(ctx(), person_messages=3)

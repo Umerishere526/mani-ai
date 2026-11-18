@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from mani.chat import record as rec
+from mani.chat.decide import OFFER_FROM_MESSAGE
 from mani.chat.greeting import style_label
 from mani.chat.pause import ReturnCheck
 from mani.chat.techniques import FEELINGS, STEPS, Registry, line_of, stages_of
@@ -50,7 +51,7 @@ def system_prompt(config: cache.Config, ctx: TurnContext, *, summary_due: bool) 
 def facts(
     ctx: TurnContext, config: cache.Config, *, record: dict, style: str, running: TechniqueState | None,
     open_offer: TechniqueState | None, event: str | None, wants_title: bool, return_check: ReturnCheck | None,
-    answering_return: str | None, end_check_asked: bool, holding: bool,
+    answering_return: str | None, end_check_asked: bool, holding: bool, person_messages: int,
 ) -> str:
     """What this reply needs to know that the conversation does not show. `holding`: the turn is held for safety, so
     code moves, starts and offers nothing, and nothing here invites it."""
@@ -68,7 +69,8 @@ def facts(
         lines.append(f"They finished in this conversation: {', '.join(finished)}. Never offer a set again.")
     if safety != "clear":
         lines.append(f"A safety worry is open in this conversation ({safety}). Judge their message for it first.")
-    if running is not None or open_offer is not None or finished or holding or safety != "clear":
+    if (running is not None or open_offer is not None or finished or holding or safety != "clear"
+            or person_messages < OFFER_FROM_MESSAGE):
         lines.append(NO_OFFER)
     lines += _pause_lines(ctx, return_check, answering_return)
     if end_check_asked:

@@ -48,7 +48,7 @@ async def test_a_thread_mid_framework_keeps_its_stage_and_is_never_offered_its_d
     refused = decide_mod.decide(
         TurnReply(text="Offer.", action="offer", framework="thought_reframe", safety=Safety(level="none"), notes=""),
         config.registry, thread_id=thread.id, running=None, open_offer=None, tap=TapEvent(), record=seen["record"],
-        guarded=False, count_after=6, end_check_due=False, end_check_asked=False,
+        guarded=False, count_after=6, end_check_due=False, end_check_asked=False, person_messages=5,
     )
     assert refused.refused == "offer" and refused.prompts == []
 

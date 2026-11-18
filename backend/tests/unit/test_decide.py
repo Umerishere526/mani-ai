@@ -16,7 +16,7 @@ def reply(**fields) -> TurnReply:
 
 def decided(answer: TurnReply, **given):
     base = dict(thread_id=THREAD, running=None, open_offer=None, tap=TapEvent(), record={}, guarded=False,
-                count_after=8, end_check_due=False, end_check_asked=False)
+                count_after=8, end_check_due=False, end_check_asked=False, person_messages=5)
     return decide(answer, REGISTRY, **{**base, **given})
 
 
@@ -168,3 +168,27 @@ def test_a_lead_in_that_is_no_longer_the_last_reply_lapses_instead_of_showing_th
     assert d.show_steps is None and d.retire_technique and d.prompts == []
     fresh = offered("abcde").model_copy(update={"at_message_count": 8})
     assert decided(reply(), open_offer=fresh, count_after=10).show_steps.id == "abcde"
+
+
+def test_no_offer_before_their_third_message():
+    """muhammad, 2026-11-18: the same opening offered on the 2nd message one run and the 3rd the next."""
+    for early in (1, 2):
+        d = decided(reply(action="offer", framework="abcde"), person_messages=early)
+        assert d.refused == "offer" and d.prompts == [] and d.technique is None, early
+    assert labels(decided(reply(action="offer", framework="abcde"), person_messages=3)) == [
+        "Not sure", "Show me how", "Give me a tool"]
+
+
+def test_no_offer_on_a_turn_that_corrects_mani():
+    d = decided(reply(action="offer", framework="abcde", corrected=True), person_messages=5)
+    assert d.refused == "offer" and d.prompts == [] and d.technique is None
+
+
+def test_a_correction_inside_a_set_still_moves_the_stage():
+    d = decided(reply(stage="belief", corrected=True), running=running("abcde", "activate"))
+    assert d.technique.phase == "belief"
+
+
+def test_the_floor_never_closes_an_offer_already_made():
+    d = decided(reply(), open_offer=offered("abcde"), count_after=6, person_messages=1)
+    assert d.show_steps.id == "abcde"

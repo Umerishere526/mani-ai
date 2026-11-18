@@ -175,6 +175,7 @@ async def _turn(
         await within_limits(conn, claims.user_id, settings)
 
     wants_title = ctx.thread.message_count >= TITLE_AFTER_MESSAGES and not ctx.thread.title
+    person_messages = _person_messages(history)
     end_check_asked = rec.end_check(record) == rec.END_CHECK_ASKED
     # The question after a framework's last stage holds the turn too, but its answer may close the set.
     held = holding and not end_check_asked
@@ -183,6 +184,7 @@ async def _turn(
         open_offer=open_offer if open_offer is None or decide_mod.offer_current(open_offer, ctx.thread.message_count)
         else None, event=facts.HELD_START if held and tap.starting else tap.fact, wants_title=wants_title,
         return_check=check, answering_return=answering, end_check_asked=end_check_asked, holding=held,
+        person_messages=person_messages,
     )
     model, parameters, routing = composer.model_settings(config, "mani")
     call = await ask(
@@ -203,13 +205,13 @@ async def _turn(
                         open_offer=open_offer, check=check, answering=answering, before=before, holding=holding,
                         wants_title=wants_title, end_check_asked=end_check_asked, window=window, config=config,
                         client_message_id=client_message_id, settings=settings, answer_failure=answer_failure,
-                        style=style_name)
+                        style=style_name, person_messages=person_messages)
 
 
 async def _apply(
     conn, ctx: threads.TurnContext, call: client.Call, *, content, tapped, tap, record, running, open_offer, check,
     answering, before, holding, wants_title, end_check_asked, window, config, client_message_id, settings,
-    answer_failure, style,
+    answer_failure, style, person_messages,
 ) -> Turn:
     """What the reply decides, written in this transaction."""
     reply: TurnReply = call.value
@@ -223,7 +225,7 @@ async def _apply(
         record=record, guarded=guarded,
         count_after=ctx.thread.message_count + 2,
         end_check_due=bool(record.get(rec.DANGER_REACHED)) and rec.end_check(record) != rec.END_CHECK_DONE,
-        end_check_asked=end_check_asked,
+        end_check_asked=end_check_asked, person_messages=person_messages,
     )
     text = (crisis.pause_reply(judgment.about, settings.crisis_pause_minutes) if judgment.pausing
             else crisis.END_CHECK if decision.end_check else reply.text)
@@ -381,6 +383,18 @@ async def _open_in_style(conn, ctx, content: str, style: SupportStyle, client_me
         updates.understanding = rec.return_check(ctx.thread.understanding or {}, str(check.pause_id), "asked")
     await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
     return Turn(message_id=pair.mani_message_id, content=reply, created_at=pair.created_at, title=ctx.thread.title)
+
+
+def _person_messages(history: list[Message]) -> int:
+    """How many messages the person has sent in this conversation, this one included. The tap that chose the style
+    answers the greeting's style buttons and is not one of theirs."""
+    count, styles_shown = 1, False
+    for message in history:
+        if message.role is MessageRole.MANI:
+            styles_shown = any(option.get("style") for option in message.prompt_options or [])
+        elif not styles_shown:
+            count += 1
+    return count
 
 
 def _summary_due(ctx, window) -> bool:

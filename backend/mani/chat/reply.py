@@ -34,3 +34,5 @@ class TurnReply(BaseModel):
     safety: Safety
     notes: str = Field(description="Your private working notes for your next turn, under 150 words.")
     title: str | None = Field(default=None, description="Only when the facts ask for a title.")
+    corrected: bool = Field(default=False, description=(
+        "True when their latest message corrects something you said or understood about them."))
