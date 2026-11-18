@@ -9,7 +9,7 @@ import logging
 
 from mani import memory, summarize
 from mani.auth.jwt import Claims
-from mani.chat import orchestrator
+from mani.chat import turn as chat_turn
 from mani.db import pool, threads
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ async def follow_ups(limit: int = LIMIT) -> int:
         waiting = await threads.waiting_follow_ups(conn, now - QUIET_AFTER, now - GIVE_UP_AFTER, limit)
     ran = 0
     for row in waiting:
-        done = await orchestrator.follow_up(Claims.acting_as(row["user_id"]), row["thread_id"], row["message_id"])
+        done = await chat_turn.follow_up(Claims.acting_as(row["user_id"]), row["thread_id"], row["message_id"])
         if done is not None and not done.pending:
             ran += 1
     return ran

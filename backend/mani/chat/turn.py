@@ -78,7 +78,47 @@ def follow_up_due(turn: Turn) -> dict | None:
     """What the turn leaves for after its reply, as threads.pending_follow_up holds it: the summary, or nothing."""
     if turn.message_id is None or not turn.needs_summary:
         return None
-    return {"message_id": str(turn.message_id), "reading": None, "summary": True}
+    return {"message_id": str(turn.message_id), "summary": True}
+
+
+@dataclass(frozen=True)
+class FollowedUp:
+    """What the work after a reply did: whether the summary was brought up to date, and whether it failed and still
+    waits for the next request. `understanding` stays None: nothing reads the conversation after a reply."""
+
+    understanding: dict | None = None
+    summarized: bool = False
+    pending: bool = False
+
+
+# The summary stops here, well inside its claim (threads.FOLLOW_UP_CLAIM_SECONDS), so no second request takes the work
+# while it still runs.
+FOLLOW_UP_DEADLINE_SECONDS = 90
+
+
+async def follow_up(claims: Claims, thread_id: uuid.UUID | str, message_id: uuid.UUID | str) -> FollowedUp | None:
+    """Bring the summary up to date for Mani's reply `message_id`, when the app or the schedule asks once the reply is
+    shown. None when nothing waits for that reply, or another request is running it. A request of its own, since on
+    Vercel nothing runs after a response; claimed and settled in short transactions, and a failure stays waiting."""
+    from mani import summarize
+    from mani.db import pool
+
+    async with pool.as_user(claims) as conn:
+        waiting = await threads.claim_pending_follow_up(conn, thread_id, claims.user_id, message_id)
+    if waiting is None:
+        return None
+    summarized = failed = False
+    if waiting.get("summary"):
+        try:
+            async with asyncio.timeout(FOLLOW_UP_DEADLINE_SECONDS):
+                summarized = await summarize.update(claims, thread_id) is not None
+        except Exception:
+            logger.exception("summarization failed for thread %s", thread_id)
+            failed = True
+    left = {"message_id": str(message_id), "summary": True} if failed else None
+    async with pool.as_user(claims) as conn:
+        await threads.settle_pending_follow_up(conn, thread_id, claims.user_id, message_id, left)
+    return FollowedUp(summarized=summarized, pending=failed)
 
 
 async def _turn(
