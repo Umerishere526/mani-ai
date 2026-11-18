@@ -86,7 +86,9 @@ def _moved(base: Decision, reply: TurnReply, framework: Framework, running: Tech
     if reply.action == "stop":
         return dataclasses.replace(base, declined=[*base.declined, framework.id], technique=running.model_copy(
             update={"outcome": TechniqueOutcome.DECLINED, "phase": None}))
-    if reply.action == "finish" and running.phase == stages_of(framework)[-1]:
+    on_last = running.phase == stages_of(framework)[-1]
+    # A turn that reaches decide after the safety question was asked is one whose answer settled it: it closes the set.
+    if on_last and (reply.action == "finish" or end_check_asked):
         if end_check_due and not end_check_asked:
             return dataclasses.replace(base, end_check=True)
         return dataclasses.replace(base, finished=[*base.finished, framework.id], retire_technique=True,

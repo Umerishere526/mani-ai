@@ -63,10 +63,13 @@ class Turn:
 
 async def send(
     conn: asyncpg.Connection, claims: Claims, thread_id: uuid.UUID | str, content: str,
-    client_message_id: uuid.UUID | str | None = None, *, ask: Ask, config: cache.Config,
+    client_message_id: uuid.UUID | str | None = None, *, ask: Ask, config: cache.Config, answer_failure: bool,
 ) -> Turn:
-    """Run one turn in the caller's transaction, and leave the summary for after the reply when it is due."""
-    turn = await _turn(conn, claims, thread_id, content, client_message_id, ask=ask, config=config)
+    """Run one turn in the caller's transaction, and leave the summary for after the reply when it is due.
+    `answer_failure`: a reply the model left empty gets the fixed words; otherwise it fails the turn and nothing is
+    written (an edit), as runner.run does for a model that never answered."""
+    turn = await _turn(conn, claims, thread_id, content, client_message_id, ask=ask, config=config,
+                       answer_failure=answer_failure)
     if not turn.was_duplicate:
         await threads.set_pending_follow_up(conn, thread_id, claims.user_id, follow_up_due(turn))
     return turn
@@ -125,7 +128,7 @@ async def follow_up(claims: Claims, thread_id: uuid.UUID | str, message_id: uuid
 
 async def _turn(
     conn: asyncpg.Connection, claims: Claims, thread_id, content: str, client_message_id, *, ask: Ask,
-    config: cache.Config,
+    config: cache.Config, answer_failure: bool,
 ) -> Turn:
     settings = get_settings()
     if (duplicate := await _arrival(conn, claims, thread_id, client_message_id)) is not None:
@@ -146,7 +149,9 @@ async def _turn(
     technique = ctx.technique
     running = technique if (technique is not None and technique.outcome is TechniqueOutcome.ACCEPTED
                             and technique.phase not in (None, OFFERING)) else None
-    open_offer = technique if technique is not None and technique.outcome is TechniqueOutcome.OFFERED else None
+    # An offer is open only while its row stands at the offer: one they moved past is retired (phase null).
+    open_offer = technique if (technique is not None and technique.outcome is TechniqueOutcome.OFFERED
+                               and technique.phase == OFFERING) else None
     tapped = taps.find_tapped_prompt(history, content)
     tap = taps.tap_event(tapped, config.registry, open_offer)
     style_name = resolve_style(
@@ -193,12 +198,13 @@ async def _turn(
     return await _apply(conn, ctx, call, content=content, tapped=tapped, tap=tap, record=record, running=running,
                         open_offer=open_offer, check=check, answering=answering, before=before, holding=holding,
                         wants_title=wants_title, end_check_asked=end_check_asked, window=window, config=config,
-                        client_message_id=client_message_id, settings=settings)
+                        client_message_id=client_message_id, settings=settings, answer_failure=answer_failure)
 
 
 async def _apply(
     conn, ctx: threads.TurnContext, call: client.Call, *, content, tapped, tap, record, running, open_offer, check,
     answering, before, holding, wants_title, end_check_asked, window, config, client_message_id, settings,
+    answer_failure,
 ) -> Turn:
     """What the reply decides, written in this transaction."""
     reply: TurnReply = call.value
@@ -219,9 +225,16 @@ async def _apply(
     if judgment.body_emergency and not judgment.pausing:
         text = f"{text.rstrip()}\n\n{crisis.BODY_EMERGENCY}"
     text = without_dashes(text).strip()
-    if not text:
+    if not text and not answer_failure:
         raise ServiceError(f"reply on thread {ctx.thread.id} was empty", ErrorCategory.LLM_UNAVAILABLE, retryable=True,
                            user_message="Mani had trouble responding. Please try again.")
+    if not text:
+        # An empty reply is answered like no reply at all, with the fixed words; its safety judgment still stands, and
+        # nothing else it asked for moves.
+        logger.warning("reply on thread %s was empty; sending the fixed reply", ctx.thread.id)
+        text = (crisis.CRISIS_REPLY if holding or judgment.state_after is not safety.State.CLEAR
+                else crisis.TROUBLE_REPLY)
+        decision = decide_mod.Decision(declined=rec.declined(record), finished=rec.finished(record))
     updates, after = _updates(ctx, reply, decision, judgment, record=record, check=check, answering=answering,
                               end_check_asked=end_check_asked, wants_title=wants_title)
     pair = await messages_db.create_pair(

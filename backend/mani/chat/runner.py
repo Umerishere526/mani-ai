@@ -129,7 +129,7 @@ async def send(
 
     async def steps(conn: asyncpg.Connection, model: Model) -> chat_turn.Turn:
         return await chat_turn.send(
-            conn, claims, thread_id, content, client_message_id, ask=model, config=config
+            conn, claims, thread_id, content, client_message_id, ask=model, config=config, answer_failure=True
         )
 
     if client_message_id is None:
@@ -200,6 +200,6 @@ async def edit(
 
     async def steps(conn: asyncpg.Connection, model: Model) -> chat_turn.Turn:
         await rewind.undo_last_turn(conn, claims.user_id, thread_id, message_id)
-        return await chat_turn.send(conn, claims, thread_id, content, ask=model, config=config)
+        return await chat_turn.send(conn, claims, thread_id, content, ask=model, config=config, answer_failure=False)
 
     return await run(claims, thread_id, steps, answer_failure=False)

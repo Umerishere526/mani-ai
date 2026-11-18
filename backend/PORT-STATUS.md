@@ -186,8 +186,10 @@ the same change as the work.**
   `evals/suite.json` through the real stack with a model-played person (`evals/drive.py`, which calls OpenRouter
   directly, never billed as chat) and exits 0 only when every check passes; muhammad reads the rest. Last gate,
   2026-11-17: 3.62 with all 21 rules passing.
-- **When no host answers, a send or a first message gets a fixed reply, never an error; an edit fails instead and
-  changes nothing** (muhammad, 2026-11-17; the edit, 2026-11-18). Because a safety turn must never go out with no
+- **When no host answers, or the reply's text is empty, a send or a first message gets a fixed reply, never an
+  error; an edit fails instead and changes nothing** (muhammad, 2026-11-17; the edit and the empty text, 2026-11-18).
+  An empty text keeps its safety judgment and moves nothing else (`test_an_empty_reply_gets_a_fixed_one_and_keeps_the_
+  safety_judgment`). Because a safety turn must never go out with no
   reply, and a first message about danger during an outage must still reach the numbers (2026-11-17); and a failed
   model call on an edit stored the outage reply in place of the original exchange (2026-11-18). The reply is
   `crisis.CRISIS_REPLY` while a worry is open or a return check is owed, otherwise `crisis.TROUBLE_REPLY` (a short
@@ -313,7 +315,7 @@ the same change as the work.**
     that still leaves it unsure is held as danger (`safety.HELD`; muhammad, 2026-11-16, after the client's safety test
     had seven safety questions in a row); from danger only a judgment of none lowers it. A symptom in the body
     that they have not said stopped is danger now, and when the model judged it lower code adds the call-now line after
-    Mani's text, once per rise (`safety.danger_of`, `crisis.BODY_EMERGENCY`; muhammad, 2026-11-18: a possible medical
+    Mani's text, once per body worry, also on a thread already in danger of another kind (`safety.danger_of`, `crisis.BODY_EMERGENCY`; muhammad, 2026-11-18: a possible medical
     emergency gets "call emergency services now" every time, over-triggering accepted, after MiniMax held chest pain
     with a strange left arm at unsure in 7 of 30 runs; `test_a_body_worry_that_has_not_stopped_is_danger_now`,
     `test_a_body_worry_the_model_held_lower_still_gets_call_now`). Once a concern settled, only their newest message
@@ -385,7 +387,8 @@ the same change as the work.**
     `test_the_opening_asks_about_a_pause_that_ran_out_until_they_have_answered`.
   - After a framework's last stage, a conversation that reached danger asks about safety once, as a reply of its own
     (`crisis.END_CHECK`), before the closing choices; their answer is a safety turn, and the reply that settles it
-    carries the close and the choices (muhammad, 2026-11-11). It keys on `danger_reached` on the record, set when a
+    carries the close and the choices, whatever action the model chose (muhammad, 2026-11-11; the final review,
+    2026-11-18, `test_a_settled_answer_to_the_safety_question_closes_the_framework_whatever_the_action`). It keys on `danger_reached` on the record, set when a
     turn ends in danger, not on the crisis flag (the audit, 2026-11-13); the record keeps `safety_end_check` as asked
     or done (`decide._moved`, `turn._updates`). Conversations that reached danger before 2026-11-13 hold no
     `danger_reached` and get no end check (no backfill). `test_finish_after_danger_asks_the_safety_question_first`,
@@ -807,7 +810,9 @@ the same change as the work.**
   with no buttons showing, and a typed yes to it then started nothing (2026-10-09). A tap on Try it starts it only
   while that offer is still open (`taps.tap_event`); a typed yes starts it when the reply moves to a stage of the
   offered set (`decide.decide`). Tell me more is answered with the client's explanation and the offer's other two
-  buttons. Keep chatting declines it; any other answer lets it lapse (2026-11-17).
+  buttons. Keep chatting declines it; any other answer lets it lapse (2026-11-17), and a lapsed offer (its row
+  retired, phase null) is no longer open: an old Try it starts nothing and a new offer may come (the final review,
+  2026-11-18, `test_an_offer_they_moved_past_is_no_longer_open_and_its_old_button_starts_nothing`).
   `test_try_it_starts_only_the_framework_on_the_offer_that_is_still_open` in `test_taps.py`,
   `test_a_typed_yes_that_opens_the_first_stage_starts_the_framework`, `test_any_other_reply_to_an_open_offer_lets_it_lapse`
   in `test_decide.py`.

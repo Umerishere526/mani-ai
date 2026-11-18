@@ -70,3 +70,26 @@ async def test_a_thread_left_at_the_body_check_in_is_retired_and_counted_finishe
             seen["record"] = await conn.fetchval("select understanding from public.threads where id = $1", thread.id)
             raise _RolledBack
     assert seen["phase"] is None and seen["record"]["finished"] == ["abcde"]
+
+
+@pytest.mark.parametrize(("outcome", "phase"), [("accepted", "belief"), ("offered", "offering")])
+async def test_a_set_running_or_on_offer_keeps_its_stage_and_is_not_counted_finished(alice, model, outcome, phase):
+    """The final review, 2026-11-18: the test above never had a running or open row. One mid-set keeps its stage,
+    one on offer stays on offer, and neither is counted finished or declined."""
+    from mani.db import pool
+
+    thread = await start(alice)
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "insert into public.thread_technique_state (thread_id, user_id, framework_id, outcome, phase, at_message_count) "
+            "values ($1, $2, 'abcde', $3, $4, 6)", thread.id, ALICE, outcome, phase)
+    seen = {}
+    with pytest.raises(_RolledBack):
+        async with pool.as_admin() as conn, conn.transaction():
+            await conn.execute(MIGRATION.read_text())
+            seen["row"] = await conn.fetchrow(
+                "select outcome, phase from public.thread_technique_state where thread_id = $1", thread.id)
+            seen["record"] = await conn.fetchval("select understanding from public.threads where id = $1", thread.id)
+            raise _RolledBack
+    assert (seen["row"]["outcome"], seen["row"]["phase"]) == (outcome, phase)
+    assert seen["record"]["finished"] == [] and seen["record"]["declined"] == []

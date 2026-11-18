@@ -254,3 +254,34 @@ async def test_a_pausing_body_turn_sends_only_the_pause_reply(alice, model):
     paused = await send(alice, thread.id, "no im not calling anyone")
     assert paused.paused_until is not None
     assert paused.content == crisis.pause_reply("body", 15) and crisis.BODY_EMERGENCY not in paused.content
+
+
+async def test_an_offer_they_moved_past_is_no_longer_open_and_its_old_button_starts_nothing(alice, model):
+    """The final review, 2026-11-18: a lapsed offer kept its row as offered, so every later facts block still said a
+    yes starts it, an old Try it started it, and no other set could ever be offered."""
+    scripted = model(said("Offer.", action="offer", framework="abcde"), said("Tell me about her."),
+                     said("Go on."), said("A is for Activating Event. What happened?", stage="activate"),
+                     said("Offer again.", action="offer", framework="abcde"))
+    thread = await start(alice)
+    await send(alice, thread.id, "i always feel like a pushover")
+    await send(alice, thread.id, "actually can we talk about my sister")
+    await send(alice, thread.id, "she never calls")
+    assert "Your last reply offered" not in facts_of(scripted)
+    await send(alice, thread.id, "Try it")
+    technique = await technique_of(alice, thread.id)
+    assert technique is None or technique.outcome is not TechniqueOutcome.ACCEPTED, "an old button starts nothing"
+    offered = await send(alice, thread.id, "yes i think that would help")
+    assert [p.label for p in offered.prompts] == ["Try it", "Tell me more", "Keep chatting"]
+
+
+async def test_an_empty_reply_gets_a_fixed_one_and_keeps_the_safety_judgment(alice, model):
+    """The final review, 2026-11-18: an empty text raised an error, so a first danger message lost its reply, its
+    danger record and, on a first message, the conversation itself."""
+    model(said("", safety=DANGER), said(" — "))
+    thread = await start(alice)
+    danger = await send(alice, thread.id, "i took a bunch of pills")
+    assert danger.content == crisis.CRISIS_REPLY and danger.crisis_detected
+    assert (await thread_row(alice, thread.id)).safety == "danger"
+    other = await start(alice)
+    plain = await send(alice, other.id, "hello")
+    assert plain.content == crisis.TROUBLE_REPLY

@@ -103,6 +103,13 @@ def test_keep_chatting_on_an_offer_records_it_declined():
     assert d.declined == ["abcde"] and d.technique.outcome is TechniqueOutcome.DECLINED
 
 
+def test_a_settled_answer_to_the_safety_question_closes_the_framework_whatever_the_action():
+    """The final review, 2026-11-18: "i'm okay now" with a plain reply left the set on its last stage, no closing
+    buttons, and the safety question still marked asked. The old turn closed it on the settled answer alone."""
+    d = decided(reply(), running=running("abcde", "effective"), end_check_due=True, end_check_asked=True)
+    assert d.finished == ["abcde"] and labels(d)[-1] == "Finish for Now" and d.retire_technique
+
+
 def test_any_other_reply_to_an_open_offer_lets_it_lapse():
     d = decided(reply(), open_offer=offered("abcde"))
     assert d.retire_technique and d.declined == [] and d.technique is None

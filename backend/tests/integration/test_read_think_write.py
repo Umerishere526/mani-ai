@@ -84,7 +84,8 @@ async def test_the_same_message_on_two_instances_at_once_stores_one_turn(alice, 
     def on_its_own_instance():
         async def steps(conn, ask):
             return await turn.send(
-                conn, alice, thread.id, "work was hard", client_message_id, ask=ask, config=config
+                conn, alice, thread.id, "work was hard", client_message_id, ask=ask, config=config,
+                answer_failure=True,
             )
         return runner.run(alice, thread.id, steps, answer_failure=True)
 

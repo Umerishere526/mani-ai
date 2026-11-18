@@ -66,4 +66,6 @@ def test_code_raises_a_body_worry_the_model_held_lower_and_says_so():
     raised = judged(State.CLEAR, held_lower)
     assert raised.state_after is State.DANGER and raised.body_emergency is True
     assert judged(State.CLEAR, Safety(level="danger", about="body", symptom_now="yes")).body_emergency is False
-    assert judged(State.DANGER, held_lower).body_emergency is False, "once per rise, never every turn"
+    assert judged(State.DANGER, held_lower, {"danger_about": "body"}).body_emergency is False, "once per body worry"
+    assert judged(State.DANGER, held_lower, {"danger_about": "themselves"}).body_emergency is True, (
+        "the final review, 2026-11-18: chest pain after an overdose went out with no call-now line")
