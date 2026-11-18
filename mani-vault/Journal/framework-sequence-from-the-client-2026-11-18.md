@@ -28,8 +28,12 @@ Lessons:
 - A "Not sure" button on a stage was removed on 2026-10-09 because its taps skipped stages
   ([[stages-are-skipped-not-confirmed-2026-10-09]]). The client's "Not sure" sits only under the lead-in, where a tap
   shows the steps and cannot skip a stage.
-- Unrelated, found on the way: five chat-tester tests (copy button, nickname, password reset) fail with "OSError:
-  could not get source code" from Streamlit's AppTest whenever local Supabase is up; they skip when it is down.
+- Five chat-tester tests (copy button, nickname, password reset) failed with "OSError: could not get source code"
+  from Streamlit's AppTest whenever local Supabase was up. The cause was not our code: their cached bytecode
+  (`__pycache__`, gitignored) had been compiled on 2026-11-04 by a sandboxed session that mounted the repo at
+  `/sessions/.../mnt/...`, and pytest kept reusing it because the sources had not changed, so `inspect` looked for the
+  test file at that path. Sixty such caches were deleted; all 55 tests pass. If `inspect` or AppTest ever reports
+  source it cannot find, check `code.co_filename` in the `.pyc` before anything else.
 
 Supersedes the path part of [[framework-progression-and-plan-next-step-2026-11-06]]. See
 [[flat-replies-were-the-model-2026-11-17]].

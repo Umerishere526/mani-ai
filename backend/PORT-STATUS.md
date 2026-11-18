@@ -189,7 +189,10 @@ the same change as the work.**
   `evals/suite.json` through the real stack with a model-played person (`evals/drive.py`, which calls OpenRouter
   directly, never billed as chat) and exits 0 only when every check passes; muhammad reads the rest. Last gate,
   2026-11-18, the client's framework sequence: Supportive and Reflective 3.30 against the baseline's 3.36, rules 32 of
-  33 (one Directive close a sentence long, accepted by muhammad); the suite passed 8 of 8.
+  33 (one Directive close a sentence long, accepted by muhammad); then the prompt's own examples stopped teaching the
+  stock phrases: 3.42, none of the phrases in 75 replies, rules 30 of 33 (the model suggested answers on the passive
+  wish-not-to-wake case in 2 of 3 runs, judged unsure, so code drops them; one Directive close a sentence long); the
+  suite passed 8 of 8 both times.
 - **Directive replies are short: three or four short sentences at most, in the chat and inside a set, with one short
   acknowledgment before each stage** (muhammad, 2026-11-18). Because the client's sequence document shows Directive's
   short acknowledgments, and muhammad's Directive chat of 2026-11-18 ran long. Supportive and Reflective keep their
