@@ -210,6 +210,12 @@ the same change as the work.**
   Activating Event."** (muhammad, 2026-11-18). Because the client's review found Mani disputing at B, leaving D
   nothing new, and the jump into A abrupt. The chat before a set may still offer a fair perspective. `mani.md`
   ("Inside the set of questions"); eval `rule-no-dispute-at-b`, `rule-start-bridge`.
+- **In Supportive and Reflective a reply builds with what they have told: early replies reflect and notice one thing,
+  the highlight waits until they have said what happened, what it does to them and what it means, and replies grow
+  longer** (muhammad, 2026-11-18). Because the client found the highlight came too early and asked for replies that
+  grow (2026-11-18). This reverses the 2026-11-17 R73 overrule for these two styles. Directive is unchanged. `mani.md`
+  ("How you listen", "How a reply looks"); eval `rule-sr-first-reply-builds`, `rule-sr-first-reply-builds-reflective`,
+  `rule-sr-highlight-when-laid-out`.
 - **Retired 2026-11-18: suggested answers as buttons** (muhammad, 2026-11-18, the same day). Because muhammad asked
   for them to be removed after testing; the reply no longer carries `options`.
 - **When no host answers, or the reply's text is empty, a send or a first message gets a fixed reply, never an
