@@ -17,6 +17,12 @@ CRISIS_REPLY = (
     "immediate danger, please contact your local emergency number now.\n\n"
     "I'm not going anywhere."
 )
+# What goes out when no host answered and no safety worry was open, so a first message about danger during an outage
+# still reaches the numbers (the design of 2026-11-17). Wording is ours until the client supplies hers.
+TROUBLE_REPLY = (
+    "I'm having trouble replying right now, so please try again in a moment. If you're in danger or thinking about "
+    "hurting yourself, call 911 now, or call or text 988."
+)
 
 # What Mani asks after a framework's last stage when a turn of the conversation reached danger
 # (context.DANGER_REACHED), as a reply of its own before the closing choices (muhammad, 2026-11-11). Wording is ours
