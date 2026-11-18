@@ -8,6 +8,7 @@ import asyncio
 import datetime as dt
 import json
 import pathlib
+import re
 import statistics
 import sys
 import time
@@ -150,9 +151,20 @@ SHORT_BY_DESIGN = (" In this style short replies are the aim: never count shortn
 GATED_STYLES = ("Supportive", "Reflective")
 
 
+# A sentence ends at . ? or ! (with any closing quote) when a capital letter or the end of the text follows, so a
+# question quoted inside a sentence ('He said "why me?" and left') does not end it.
+SENTENCE_END = re.compile(r"[.?!]+[\"'”’)]*(?=\s+[\"“‘(]?[A-Z]|\s*$)")
+
+
+def sentences(text: str) -> int:
+    return sum(1 for piece in SENTENCE_END.split(text.strip()) if piece.strip())
+
+
 def rule_checks(case, got) -> list[str]:
     """What code can check from the reply's fields; empty when it passes."""
     failed, checks = [], case["checks"]
+    if "max_sentences" in checks and (count := sentences(got.get("text") or "")) > checks["max_sentences"]:
+        failed.append(f"{count} sentences > {checks['max_sentences']}")
     if "action" in checks and got.get("action") != checks["action"]:
         failed.append(f"action {got.get('action')} != {checks['action']}")
     if "action_not" in checks and got.get("action") == checks["action_not"]:

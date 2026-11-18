@@ -703,13 +703,12 @@
    ],
    "reference": null,
    "facts": [
-    "ABCDE's last stage is done and your last reply asked how they feel now. Answer how they feel, warmly, in a sentence or two (in Directive, one), and ask nothing: code closes the set and shows the closing buttons.",
+    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel, warmly, in a sentence or two (in Directive, one), carrying their new way of seeing it forward. Then ask whether they'd like to think about a practical next step for what they are facing. Recap nothing: code closes the set and shows the closing buttons.",
     "They finished in this conversation: abcde. Never offer a set again.",
     "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
    ],
    "checks": {
-    "no_question": true,
-    "judge": "The reply is a warm, brief close of one or two sentences that asks nothing."
+    "judge": "The reply closes warmly in one sentence, then asks whether they would like to think about a practical next step. It recaps nothing."
    }
   },
   {
@@ -788,6 +787,249 @@
     "action_not": "offer",
     "corrected": false,
     "judge": "The reply stays with what they said and asks one question. It does not offer a set of questions or ask how they could test a belief."
+   }
+  },
+  {
+   "style": "Directive",
+   "samples": 5,
+   "opener": "How can I help you today?",
+   "reference": null,
+   "id": "rule-directive-short",
+   "turns": [
+    {
+     "role": "user",
+     "content": "i feel like everyone around me is moving forward in life, and I'm the only one standing still."
+    },
+    {
+     "role": "assistant",
+     "content": "That comparison can be brutal. It makes your own life look small while everyone else's looks like it's moving.\n\nBut standing still and falling behind are not the same thing. Standing still means you haven't changed direction. It doesn't mean you haven't been trying, and it doesn't mean you're behind.\n\nI want to understand what you're comparing yourself against. When you say everyone is moving forward, what is it specifically that makes you feel like you're the only one standing still?"
+    },
+    {
+     "role": "user",
+     "content": "Honestly, I don't even know anymore. My manager keeps telling me I'm doing a great job, but when promotion opportunities come up, someone else always gets picked. It's getting harder to believe that my hard work actually means anything."
+    },
+    {
+     "role": "assistant",
+     "content": "That is a hard thing to sit with. Your manager says you're doing well, and then someone else gets the promotion. So the praise stops feeling like good news and starts feeling like something that doesn't lead anywhere.\n\nWhat has it been like for you, watching that happen?"
+    },
+    {
+     "role": "user",
+     "content": "I think it's that I'm starting to feel invisible. I see people who joined after me getting opportunities, and I keep wondering what they have that I don't. Maybe I'm just not someone people see as leadership material."
+    },
+    {
+     "role": "assistant",
+     "content": "Watching people who joined after you move ahead would make anyone start to wonder.\n\nWhat do you think they have that you don't?"
+    },
+    {
+     "role": "user",
+     "content": "I think they're more confident. They speak up in meetings, they know how to present themselves, and they seem comfortable making decisions. I'm more reserved. I usually just focus on getting the work done. Maybe being good at my job isn't enough to get ahead."
+    }
+   ],
+   "facts": [],
+   "checks": {
+    "max_sentences": 4,
+    "judge": "The reply makes one or two points, then asks one open question. It states no reading of what they feel or want as a fact ('That is the core of it', 'This is really about...'): any reading is put as a possibility. It does not repeat a point the history already made."
+   }
+  },
+  {
+   "style": "Directive",
+   "samples": 5,
+   "opener": "How can I help you today?",
+   "reference": null,
+   "id": "rule-directive-open-question",
+   "turns": [
+    {
+     "role": "user",
+     "content": "i feel like everyone around me is moving forward in life, and I'm the only one standing still."
+    },
+    {
+     "role": "assistant",
+     "content": "That comparison can be brutal. It makes your own life look small while everyone else's looks like it's moving.\n\nBut standing still and falling behind are not the same thing. Standing still means you haven't changed direction. It doesn't mean you haven't been trying, and it doesn't mean you're behind.\n\nI want to understand what you're comparing yourself against. When you say everyone is moving forward, what is it specifically that makes you feel like you're the only one standing still?"
+    },
+    {
+     "role": "user",
+     "content": "Honestly, I don't even know anymore. My manager keeps telling me I'm doing a great job, but when promotion opportunities come up, someone else always gets picked. It's getting harder to believe that my hard work actually means anything."
+    }
+   ],
+   "facts": [
+    "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
+   ],
+   "checks": {
+    "max_sentences": 4,
+    "action_not": "offer",
+    "judge": "The reply asks one open question. It never offers listed options to choose between (such as 'what hurts most: X, Y, or Z?'), and it does not tell them what the problem 'really' is."
+   }
+  },
+  {
+   "style": "Directive",
+   "samples": 5,
+   "opener": "How can I help you today?",
+   "reference": null,
+   "id": "rule-start-bridge",
+   "turns": [
+    {
+     "role": "user",
+     "content": "i feel like everyone around me is moving forward in life, and I'm the only one standing still."
+    },
+    {
+     "role": "assistant",
+     "content": "That comparison can be brutal. It makes your own life look small while everyone else's looks like it's moving.\n\nBut standing still and falling behind are not the same thing. Standing still means you haven't changed direction. It doesn't mean you haven't been trying, and it doesn't mean you're behind.\n\nI want to understand what you're comparing yourself against. When you say everyone is moving forward, what is it specifically that makes you feel like you're the only one standing still?"
+    },
+    {
+     "role": "user",
+     "content": "Honestly, I don't even know anymore. My manager keeps telling me I'm doing a great job, but when promotion opportunities come up, someone else always gets picked. It's getting harder to believe that my hard work actually means anything."
+    },
+    {
+     "role": "assistant",
+     "content": "That is a hard thing to sit with. Your manager says you're doing well, and then someone else gets the promotion. So the praise stops feeling like good news and starts feeling like something that doesn't lead anywhere.\n\nWhat has it been like for you, watching that happen?"
+    },
+    {
+     "role": "user",
+     "content": "I think it's that I'm starting to feel invisible. I see people who joined after me getting opportunities, and I keep wondering what they have that I don't. Maybe I'm just not someone people see as leadership material."
+    },
+    {
+     "role": "assistant",
+     "content": "Watching people who joined after you move ahead would make anyone start to wonder.\n\nWhat do you think they have that you don't?"
+    },
+    {
+     "role": "user",
+     "content": "I think they're more confident. They speak up in meetings, they know how to present themselves, and they seem comfortable making decisions. I'm more reserved. I usually just focus on getting the work done. Maybe being good at my job isn't enough to get ahead."
+    },
+    {
+     "role": "assistant",
+     "content": "Maybe what you really want is for good work to count without having to put on a show.\n\nWhen you picture speaking up more in meetings, what feels wrong about it?"
+    },
+    {
+     "role": "user",
+     "content": "I guess I'd want my manager to notice the work without me having to constantly advertise myself. I don't want to become someone who talks over everyone or takes credit for things. I just want to feel that doing good work actually matters. And honestly, I'm tired of having to prove myself every single year."
+    },
+    {
+     "role": "assistant",
+     "content": "You've said that doing good work alone isn't enough to be seen. A belief can feel true and still not be a fact. How could you test it?"
+    },
+    {
+     "role": "user",
+     "content": "Not sure"
+    },
+    {
+     "role": "assistant",
+     "content": "The ABCDE technique can really help. It breaks down thoughts into five steps:\n\n- A: Activating event (what happened)\n- B: Belief (what did your mind start saying)\n- C: Consequences (what did you feel or do)\n- D: Dispute (how can you challenge this belief)\n- E: Effective new belief (What kind of belief could you hold instead)\n\nReady to dive into a real life situation?"
+    },
+    {
+     "role": "user",
+     "content": "Start ABCDE"
+    }
+   ],
+   "facts": [
+    "They tapped to start ABCDE. Your reply opens its first stage, `activate`, with its line \"A is for Activating Event.\" and that stage's question, even if the chat already touched it.",
+    "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
+   ],
+   "checks": {
+    "stage_in": [
+     "activate"
+    ],
+    "text_excludes": [
+     "B is for Belief"
+    ],
+    "max_sentences": 4,
+    "judge": "The reply opens with one short sentence that moves from the whole story to one moment, then says \"A is for Activating Event.\" and asks for one specific, recent moment (such as the last promotion round). It does not summarise the whole pattern as the event."
+   }
+  },
+  {
+   "style": "Directive",
+   "samples": 5,
+   "opener": "How can I help you today?",
+   "reference": null,
+   "id": "rule-no-dispute-at-b",
+   "turns": [
+    {
+     "role": "user",
+     "content": "i feel like everyone around me is moving forward in life, and I'm the only one standing still."
+    },
+    {
+     "role": "assistant",
+     "content": "That comparison can be brutal. It makes your own life look small while everyone else's looks like it's moving.\n\nBut standing still and falling behind are not the same thing. Standing still means you haven't changed direction. It doesn't mean you haven't been trying, and it doesn't mean you're behind.\n\nI want to understand what you're comparing yourself against. When you say everyone is moving forward, what is it specifically that makes you feel like you're the only one standing still?"
+    },
+    {
+     "role": "user",
+     "content": "Honestly, I don't even know anymore. My manager keeps telling me I'm doing a great job, but when promotion opportunities come up, someone else always gets picked. It's getting harder to believe that my hard work actually means anything."
+    },
+    {
+     "role": "assistant",
+     "content": "That is a hard thing to sit with. Your manager says you're doing well, and then someone else gets the promotion. So the praise stops feeling like good news and starts feeling like something that doesn't lead anywhere.\n\nWhat has it been like for you, watching that happen?"
+    },
+    {
+     "role": "user",
+     "content": "I think it's that I'm starting to feel invisible. I see people who joined after me getting opportunities, and I keep wondering what they have that I don't. Maybe I'm just not someone people see as leadership material."
+    },
+    {
+     "role": "assistant",
+     "content": "Watching people who joined after you move ahead would make anyone start to wonder.\n\nWhat do you think they have that you don't?"
+    },
+    {
+     "role": "user",
+     "content": "I think they're more confident. They speak up in meetings, they know how to present themselves, and they seem comfortable making decisions. I'm more reserved. I usually just focus on getting the work done. Maybe being good at my job isn't enough to get ahead."
+    },
+    {
+     "role": "assistant",
+     "content": "Maybe what you really want is for good work to count without having to put on a show.\n\nWhen you picture speaking up more in meetings, what feels wrong about it?"
+    },
+    {
+     "role": "user",
+     "content": "I guess I'd want my manager to notice the work without me having to constantly advertise myself. I don't want to become someone who talks over everyone or takes credit for things. I just want to feel that doing good work actually matters. And honestly, I'm tired of having to prove myself every single year."
+    },
+    {
+     "role": "assistant",
+     "content": "You've said that doing good work alone isn't enough to be seen. A belief can feel true and still not be a fact. How could you test it?"
+    },
+    {
+     "role": "user",
+     "content": "Not sure"
+    },
+    {
+     "role": "assistant",
+     "content": "The ABCDE technique can really help. It breaks down thoughts into five steps:\n\n- A: Activating event (what happened)\n- B: Belief (what did your mind start saying)\n- C: Consequences (what did you feel or do)\n- D: Dispute (how can you challenge this belief)\n- E: Effective new belief (What kind of belief could you hold instead)\n\nReady to dive into a real life situation?"
+    },
+    {
+     "role": "user",
+     "content": "Start ABCDE"
+    },
+    {
+     "role": "assistant",
+     "content": "Let's look at one time this happened, rather than all of it. A is for Activating Event. What happened in the last promotion round?"
+    },
+    {
+     "role": "user",
+     "content": "About two months ago, my manager announced that Sarah was getting promoted to team lead. She's been here for barely two years. I've been here for six. I trained her when she joined, and now she's going to be leading projects that I helped her learn how to handle. Nobody even discussed my name for the position."
+    },
+    {
+     "role": "assistant",
+     "content": "That sounds painful, especially after training her yourself.\n\nHow did you handle it when the announcement was made?"
+    },
+    {
+     "role": "user",
+     "content": "I congratulated her and acted like everything was fine. I didn't want to look bitter or jealous. But honestly, I felt humiliated. I went back to my desk and barely spoke to anyone for the rest of the day. I haven't brought it up with my manager because I don't even know how to have that conversation anymore."
+    },
+    {
+     "role": "assistant",
+     "content": "You kept the humiliation to yourself and haven't had clearer answers since. B is for Belief. What did you conclude about yourself when your name was never mentioned?"
+    },
+    {
+     "role": "user",
+     "content": "I think I told myself that I'm just not good enough. Maybe I'm reliable and hardworking, but I'm not someone they see as special or capable of leading. And if someone I trained can move ahead of me so quickly, maybe that says something about where I stand."
+    }
+   ],
+   "facts": [
+    "ABCDE is running. You are on stage `belief` (its line, already said: \"B is for Belief.\"). Stay on it while it helps. If its purpose is met, move to `consequence` and say its line: \"C is for Consequences.\". Never move further than that.",
+    "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
+   ],
+   "checks": {
+    "stage_in": [
+     "belief",
+     "consequence"
+    ],
+    "max_sentences": 4,
+    "judge": "The reply takes in the belief they named. It does NOT argue with it: no reassurance that it is untrue ('But it does not say that', 'that is not proof'), and nothing about what doesn't fit it. Saying the belief back, or moving to C with 'C is for Consequences.' and a question, passes."
    }
   }
  ]
