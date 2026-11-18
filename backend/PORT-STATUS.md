@@ -311,9 +311,13 @@ the same change as the work.**
   - `threads.safety` is clear, unsure or danger (migration 036). Code applies the judgment with rules of its own
     (`safety.after`): a refusal never lowers a concern; a concern about a person is asked about once, and an answer
     that still leaves it unsure is held as danger (`safety.HELD`; muhammad, 2026-11-16, after the client's safety test
-    had seven safety questions in a row); from danger only a judgment of none lowers it. A symptom in the body is
-    danger only when they said it is happening now, otherwise unsure, and once a concern settled only their newest
-    message reopens a body worry (`safety.danger_of`; Lolly's chest chat and the stroke chat, replayed 2026-11-11).
+    had seven safety questions in a row); from danger only a judgment of none lowers it. A symptom in the body
+    that they have not said stopped is danger now, and when the model judged it lower code adds the call-now line after
+    Mani's text, once per rise (`safety.danger_of`, `crisis.BODY_EMERGENCY`; muhammad, 2026-11-18: a possible medical
+    emergency gets "call emergency services now" every time, over-triggering accepted, after MiniMax held chest pain
+    with a strange left arm at unsure in 7 of 30 runs; `test_a_body_worry_that_has_not_stopped_is_danger_now`,
+    `test_a_body_worry_the_model_held_lower_still_gets_call_now`). Once a concern settled, only their newest message
+    reopens a body worry (the stroke chat, replayed 2026-11-11).
     Mani's question counts as asked only for the kind of danger it was about (`safety.asked_about_this`, the kind
     kept as `asked_about` while unsure; the held-back run, 2026-11-16). A worry that settles is kept on the record as
     `safety_settled` (`judged.safety_record`).

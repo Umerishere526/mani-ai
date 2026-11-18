@@ -3,6 +3,7 @@ type: journal
 date: 2026-11-11
 tags: [journal, safety, cadence, testing, lessons]
 ---
+> Superseded 2026-11-18 (a body symptom held at unsure until they say it is now) — see [[body-emergency-every-time-2026-11-18]]
 
 > Superseded 2026-11-13 — see [[crisis-pause-audit-findings-2026-11-13]] (the block on refused help, and the end check tied to `crisis_detected`)
 
