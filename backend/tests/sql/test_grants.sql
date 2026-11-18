@@ -68,8 +68,7 @@ do $$
 declare
   c text;
 begin
-  foreach c in array array['understanding', 'rewind_snapshot', 'pending_follow_up', 'safety',
-                           'memory_folded_at', 'message_count']
+  foreach c in array array['understanding', 'rewind_snapshot', 'pending_follow_up', 'safety', 'message_count']
   loop
     if has_column_privilege('authenticated', 'public.threads', c, 'INSERT') then
       raise exception 'FAIL: a user can insert threads.%', c;
@@ -85,8 +84,7 @@ do $$
 declare
   c text;
 begin
-  foreach c in array array['understanding', 'rewind_snapshot', 'pending_follow_up', 'vague_streak',
-                           'memory_folded_at']
+  foreach c in array array['understanding', 'rewind_snapshot', 'pending_follow_up', 'vague_streak']
   loop
     if has_column_privilege('authenticated', 'public.threads', c, 'SELECT') then
       raise exception 'FAIL: a user can read threads.% with their own token', c;
@@ -350,19 +348,12 @@ select pg_temp.want('the backend can write summaries and technique state',
 select pg_temp.want('profile topics are bounded in the database, not only in the API',
   exists (select 1 from pg_constraint where conname = 'profiles_topics_bounded'), true);
 
--- Health data about the person, backend-only. Not even its owner reads it through the API.
-select pg_temp.want('a user holds nothing on the memory kept about them',
-  has_table_privilege('authenticated', 'admin.user_memory', 'SELECT')
-  or has_table_privilege('authenticated', 'admin.user_memory', 'INSERT')
-  or has_table_privilege('authenticated', 'admin.user_memory', 'UPDATE')
-  or has_table_privilege('anon', 'admin.user_memory', 'SELECT'), false);
-
-select pg_temp.want('the backend can read and write the memory',
-  has_table_privilege('mani_service', 'admin.user_memory', 'SELECT')
-  and has_table_privilege('mani_service', 'admin.user_memory', 'UPDATE'), true);
-
-select pg_temp.want('the memory is row-scoped even for the backend',
-  (select relrowsecurity from pg_class where oid = 'admin.user_memory'::regclass), true);
+-- Every chat stands alone (muhammad, 2026-11-18): nothing is kept about a person across their chats.
+select pg_temp.want('no memory is kept about a person across chats',
+  to_regclass('admin.user_memory') is null
+  and not exists (select 1 from information_schema.columns
+                   where table_schema = 'public' and table_name = 'threads' and column_name = 'memory_folded_at'),
+  true);
 
 select pg_temp.want('a user cannot delete technique state directly',
   has_table_privilege('authenticated', 'public.thread_technique_state', 'DELETE'), false);
