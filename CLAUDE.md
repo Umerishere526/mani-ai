@@ -89,6 +89,19 @@ Rule #1: If you want an exception to any rule, stop and get explicit permission 
 
 Before building any feature or UI component, check whether the framework (Next.js, Expo, FastAPI, Streamlit, Supabase) or a well-maintained library already does it — read the official docs for the version we use. Tell muhammad what exists and recommend using it or say why custom is better. Hand-building something the framework ships is a defect, even if it works.
 
+Use these exact Context7 library IDs directly with `query-docs` (skip `resolve-library-id` unless a library is unlisted). IDs ending in a version are pinned to the installed dependency — update the ID when that dependency is upgraded:
+
+- **Next.js 16**: `/vercel/next.js` (specify `v16` in queries)
+- **React 19**: `/reactjs/react.dev`
+- **Tailwind CSS v4**: `/tailwindlabs/tailwindcss.com`
+- **Expo SDK 57**: `/websites/expo_dev_versions/v57.0.0` (SDK package API reference)
+- **Expo Router**: `/expo/expo` (no SDK 57 version exists — specify `SDK 57` in queries and check the answer is not for SDK 58)
+- **React Native 0.86**: `/react/react-native-website` (unversioned and leans on 0.88 docs — specify `0.86` in queries and check the source path)
+- **NativeWind v5**: `/websites/nativewind_dev/v5`
+- **FastAPI**: `/websites/fastapi_tiangolo`
+- **Supabase**: `/supabase/supabase`
+- **Streamlit**: `/streamlit/docs` (unversioned, tracks the latest release; `chat-tester/` pins 1.64.0)
+
 ### When the design is the problem
 
 Decisions in this repo were made with what we knew at the time. Some will turn out to be wrong. Patching around a wrong design is the most expensive outcome — every later fix pays for it again — so catching this is part of your job.
