@@ -3,7 +3,8 @@
 - **From:** the client, relayed by muhammad on 2026-11-18, after testing Supportive and Reflective chats in the chat
   tester.
 - **muhammad's ruling (2026-11-18):** "yes, reverse it for supportive and reflective". He reversed his 2026-11-17
-  overrule of R73 for those two styles, and it stays in force for Directive. The design is
+  overrule of R73 for those two styles. For Directive, what remains of it is one gentle possibility, put as a
+  question, in the first reply. The design is
   `docs/superpowers/specs/2026-11-18-supportive-reflective-build-up-design.md`.
 - **Requirement drawn from it:** R123 in [requirements.md](../requirements.md).
 

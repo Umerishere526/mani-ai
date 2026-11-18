@@ -199,7 +199,7 @@ the same change as the work.**
   (2026-11-18) found Directive stacking four or five points, a three-option question, and an A that bundled the whole
   pattern. The first rule, sentences only, was ignored in every reply: the prompt's other lines (two or three moves a
   reply, 120 to 220 words, 60 to 120 inside a set) said the opposite, so those now name Supportive and Reflective,
-  which keep their length, their possibilities questions and their A. If the eval still finds long Directive replies,
+  which keep their own length (see the build-up entry below), their possibilities questions and their A. If the eval still finds long Directive replies,
   the next step is code counting sentences and asking once more, not another line. `mani.md`; eval
   `rule-directive-short`, `rule-directive-open-question`, `max_sentences`.
 - **Every reading is a possibility, each point is made once, and no causal claim the person hasn't made** (muhammad,

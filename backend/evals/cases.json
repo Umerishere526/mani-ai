@@ -1112,13 +1112,13 @@
     },
     {
      "role": "user",
-     "content": "that maybe i care about this friendship more than she does. like i'm always the one making the effort and she just fits me in when nothing better comes up. we've been friends since school and it used to feel equal"
+     "content": "honestly i don't know. we've been friends since school, she was the first person i'd call about anything. she texted this morning asking if i'm free saturday and i still haven't answered"
     }
    ],
    "checks": {
     "min_words": 150,
     "action_not": "offer",
-    "judge": "The reply gives a clear highlight: what may really be at stake for them beyond the cancelled plans themselves (such as caring more than she does, or the friendship no longer being equal), held as a possibility they can correct. It may also offer other things, such as permission or a fair perspective, but it never states a reading of what they feel, want or mean as a fact."
+    "judge": "They have said what happened, what it does to them, and hinted at what it means without putting it in words. The reply gives one clear highlight that goes beyond what they said: what may really be at stake for them (such as fearing they matter less to her than she does to them, or bracing to be let down again), held as a possibility they can correct. It FAILS if it only says back what they already said, if it gives more than one such reading, or if it states any reading of what they feel, want or mean as a fact. It may also offer other things, such as permission or a fair perspective."
    }
   }
  ]

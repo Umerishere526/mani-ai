@@ -59,7 +59,12 @@ The eval cases are `rule-sr-first-reply-builds`, `rule-sr-first-reply-builds-ref
   modelled a deep reading. Removing it took first replies from 7 of 10 to 10 of 10.
 - The long band first waited for "laid out", and later replies stayed short (office-2 at 97 words against the
   client's 193). It now starts once they have told what happened.
-- In the highlight case the highlight arrives every time. Two problems that predate this change still fail it:
+- The first highlight case let the person say the meaning themselves ("maybe i care about this friendship more than
+  she does"), so a reply that only said it back passed. That's why "the highlight arrives every time" was wrong.
+  With the meaning left implicit, the case fails 0 of 10: the model offers several guesses ("self-protection",
+  "losing her place", "the friendship changing shape") instead of building to one, in 100 to 148 words. The build-up
+  to a single highlight is not there yet.
+- Two problems that predate this change showed up in the first highlight runs:
   - Readings are stated as fact ("That's the part that stings").
   - In 4 of 5 samples the model offers the set in the same reply where it first says the core back. The prompt
     asks for an earlier reply, and this is the same mistake as the Directive coworker-noise chat.
