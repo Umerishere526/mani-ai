@@ -182,7 +182,6 @@ with st.sidebar:
             st.error(str(exc))
             st.stop()
         start_draft(opening)
-        st.session_state.client.fold_memory()
         st.session_state.view = "chat"
         st.rerun()
     if st.button("📚 Library", use_container_width=True):
@@ -587,19 +586,6 @@ with st.sidebar:
     if not conversations:
         st.caption("No conversations yet.")
 
-    st.divider()
-    # Shown to a client too: that a returning person's patterns were kept is part of the demo.
-    with st.expander("🧠 What Mani remembers"):
-        memory = run(mani.remembered(st.session_state.user_id))
-        entries = {k: v for k, v in ((memory or {}).get("memory") or {}).items() if v}
-        if entries:
-            for key, values in entries.items():
-                st.markdown(f"**{key.replace('_', ' ').capitalize()}**")
-                for value in values:
-                    st.markdown(f"- {value}")
-            st.caption(f"updated {memory['updated_at']:%H:%M:%S} - folded in when a new chat starts")
-        else:
-            st.caption("Nothing yet. It's folded in when this person starts a new chat.")
 
     if developer:
         with st.expander("🔍 Framework state (direct DB read)"):

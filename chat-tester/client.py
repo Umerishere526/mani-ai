@@ -254,12 +254,6 @@ class ManiClient:
         self._ask_for_follow_up(started["thread"]["id"], started["turn"])
         return started
 
-    def fold_memory(self) -> None:
-        """POST /v1/threads/memory-fold - a new chat is when the earlier ones count as finished, so they are folded
-        into Mani's memory. The backend folds only the chats written before this request, so the conversation the
-        first message starts meanwhile is left alone."""
-        self._in_background(lambda: self._call("POST", "/v1/threads/memory-fold"), "memory fold")
-
     def send_message(self, thread_id: str, content: str, client_message_id: str | None = None) -> dict[str, Any]:
         turn = self._call(
             "POST", f"/v1/threads/{thread_id}/messages",
@@ -435,26 +429,3 @@ async def recent_call_costs(thread_id: str, limit: int = 5) -> list[dict[str, An
         await conn.close()
 
 
-async def remembered(user_id: str) -> dict[str, Any] | None:
-    """What Mani has folded together about this person across chats - admin.user_memory.
-
-    Same caveat as the reads above: a dev-only window onto state no client response carries,
-    here so a demo can show that a returning person's patterns were kept.
-    """
-    if not DATABASE_URL:
-        return None
-    conn = await asyncpg.connect(DATABASE_URL)
-    try:
-        row = await conn.fetchrow(
-            "select memory, updated_at from admin.user_memory where user_id = $1",
-            uuid.UUID(user_id),
-        )
-        if row is None:
-            return None
-        # A bare asyncpg connection returns jsonb as text; the backend's pool decodes it with a
-        # codec this tool does not register.
-        memory = row["memory"]
-        return {"memory": json.loads(memory) if isinstance(memory, str) else memory,
-                "updated_at": row["updated_at"]}
-    finally:
-        await conn.close()

@@ -137,8 +137,6 @@ bit tired.
   refreshed on every interaction. Watch `phase` move through a framework's stages as the
   conversation continues, and `outcome` flip from `offered` to `accepted` when you tap
   Start or say yes after the five steps. The current framework and stage also show under the title.
-- **"What Mani remembers"** - a direct read of `admin.user_memory`: the patterns folded in
-  from this person's earlier chats. It fills in a few seconds after **New conversation**.
 - **The "Recent calls" panel** - one row per model call, in order, with token counts and
   the cached fraction. Every turn is one call; a completing framework no longer makes a second one.
 - **"Last turn, raw"** - the exact `TurnOut` JSON, including `reasoning` if

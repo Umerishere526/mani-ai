@@ -1,4 +1,4 @@
-# ABOUTME: Checks the chat tester asks for the work after a reply, and the memory fold after a new chat, off the wait.
+# ABOUTME: Checks the chat tester asks for the work after a reply off the wait.
 # ABOUTME: A fake backend records the calls; needs no services.
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ class Backend(mani.ManiClient):
 
     def _call(self, method, path, **kwargs):
         self.calls.append((method, path))
-        if path.endswith(("/follow-up", "/memory-fold")):
+        if path.endswith("/follow-up"):
             self.after.set()
             if self.fail_after:
                 raise mani.ApiError(500, {"error": {"category": "internal", "message": "down"}})
@@ -51,15 +51,6 @@ def test_a_reply_with_nothing_waiting_asks_for_nothing():
     backend.send_message("T", "I need a minute")
 
     assert not backend.after.wait(0.2)
-
-
-def test_a_new_chat_asks_for_the_earlier_ones_to_be_folded_into_memory():
-    backend = Backend({})
-
-    backend.fold_memory()
-
-    assert backend.after.wait(2)
-    assert ("POST", "/v1/threads/memory-fold") in backend.calls
 
 
 def test_the_first_message_asks_for_its_follow_up_by_the_reply():
