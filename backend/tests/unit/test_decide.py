@@ -48,7 +48,6 @@ def test_a_clear_offer_shows_try_it_tell_me_more_and_keep_chatting():
     d = decided(reply(action="offer", framework="abcde"))
     assert labels(d) == ["Try it", "Tell me more", "Keep chatting"]
     assert d.technique.outcome is TechniqueOutcome.OFFERED and d.technique.phase == "offering"
-    assert d.offered == "abcde" and d.reset_outcomes
 
 
 def test_a_stage_two_ahead_is_held_to_the_next_one():
@@ -100,7 +99,7 @@ def test_stop_records_the_framework_declined():
 
 
 def test_keep_chatting_on_an_offer_records_it_declined():
-    d = decided(reply(), open_offer=offered("abcde"), tap=TapEvent(declined="abcde"))
+    d = decided(reply(), open_offer=offered("abcde"), tap=TapEvent(declined=True))
     assert d.declined == ["abcde"] and d.technique.outcome is TechniqueOutcome.DECLINED
 
 

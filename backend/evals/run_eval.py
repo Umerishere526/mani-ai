@@ -18,9 +18,11 @@ import httpx  # noqa: E402
 from openai.lib._pydantic import to_strict_json_schema  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
-from mani.chat.facts import framework_guide  # noqa: E402
+from mani.chat.facts import facts_block, framework_guide  # noqa: E402
+from mani.chat.greeting import style_label  # noqa: E402
 from mani.chat.reply import TurnReply  # noqa: E402
 from mani.config import get_settings  # noqa: E402
+from mani.llm import chain, client  # noqa: E402
 from mani.db import pool  # noqa: E402
 from mani.prompts import cache  # noqa: E402
 from scripts.seed import PROMPTS_DIR, parse_prompt  # noqa: E402
@@ -55,8 +57,9 @@ class RuleVerdict(BaseModel):
 def variant(spec: str) -> dict:
     name, _, rest = spec.partition("=")
     model, effort, hosts = (rest.split(",") + [None, None])[:3]
-    return {"name": name, "model": model, "effort": effort or None,
-            "hosts": [h for h in (hosts or "").split("|") if h]}
+    only = [h for h in (hosts or "").split("|") if h]
+    return {"name": name, "model": model, "effort": effort or None, "parameters": {},
+            "routing": {"only": only, "zdr": True} if only else None}
 
 
 async def post(http, settings, body) -> tuple[dict, float]:
@@ -71,20 +74,18 @@ async def post(http, settings, body) -> tuple[dict, float]:
 
 
 async def reply(http, settings, v, system, case) -> dict:
-    facts = "Facts for this reply (never mention them):\n" + "\n".join(
-        f"- {line}" for line in [f"Their style: {case['style']}.", *case["facts"]])
+    """One reply, sent as the turn sends it: the same request fields beside the messages (chain.request_body and
+    chain.sampling), and the facts in the turn's own format."""
+    facts = facts_block([f"Their style: {style_label(case['style'])}.", *case["facts"]])
+    parameters = v["parameters"]
     body = {"model": v["model"], "messages": [{"role": "system", "content": system},
                                               {"role": "assistant", "content": case["opener"]}]
             + case["turns"] + [{"role": "system", "content": facts}],
             "response_format": {"type": "json_schema", "json_schema": {
                 "name": "reply", "strict": True, "schema": to_strict_json_schema(TurnReply)}},
-            "usage": {"include": True}}
-    if v["effort"]:
-        body["reasoning"] = {"effort": v["effort"]}
-    if v["hosts"]:
-        body["provider"] = {"only": v["hosts"], "zdr": True}
-    if v["model"].startswith("anthropic/"):
-        body["cache_control"] = {"type": "ephemeral"}
+            **chain.sampling(v["model"], parameters.get("temperature", client.DEFAULT_TEMPERATURE),
+                             parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS)),
+            **chain.request_body(v["model"], settings, v["routing"], v["effort"])}
     try:
         raw, took = await post(http, settings, body)
         out = json.loads(raw["choices"][0]["message"]["content"])
@@ -107,10 +108,15 @@ async def judge(http, settings, case, got) -> dict:
         prompt = (f"Conversation so far:\n\n{convo}\n\nREPLY:\n{got['text']}\n\nRule: {case['checks']['judge']}\n"
                   f"Does the reply pass the rule?")
         schema = RuleVerdict
-    body = {"model": JUDGE_MODEL, "reasoning": {"effort": "low"},
-            "messages": [{"role": "user", "content": prompt}],
+    return await structured(http, settings, JUDGE_MODEL, [{"role": "user", "content": prompt}], schema)
+
+
+async def structured(http, settings, model: str, messages: list[dict], schema: type[BaseModel]) -> dict:
+    """A call the evaluation makes for itself (the judge, the model-played person), straight to OpenRouter at effort
+    low: never recorded as a chat call, and never on the chat's priority tier."""
+    body = {"model": model, "reasoning": {"effort": "low"}, "messages": messages,
             "response_format": {"type": "json_schema", "json_schema": {
-                "name": "verdict", "strict": True, "schema": to_strict_json_schema(schema)}}}
+                "name": schema.__name__.lower(), "strict": True, "schema": to_strict_json_schema(schema)}}}
     raw, _ = await post(http, settings, body)
     return json.loads(raw["choices"][0]["message"]["content"])
 
@@ -183,7 +189,7 @@ async def main() -> None:
     if not args.variant:
         args.variant = [{"name": "current", "model": prompt["model_id"],
                          "effort": prompt["model_parameters"].get("reasoning_effort"),
-                         "hosts": prompt["routing"].get("only") or []}]
+                         "parameters": prompt["model_parameters"], "routing": prompt["routing"] or None}]
     gate = asyncio.Semaphore(12)
     out_dir = HERE / "results" / f"{dt.datetime.now():%Y%m%d-%H%M}-{args.label}"
     out_dir.mkdir(parents=True, exist_ok=True)

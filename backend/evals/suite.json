@@ -57,6 +57,7 @@
  },
  {
   "id": "return-check",
+  "setup": "expired_pause",
   "style": "supportive",
   "turns": 1,
   "first": "i'm ok now, my sister is here and i'm safe",

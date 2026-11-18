@@ -84,6 +84,7 @@ async def test_tell_me_more_sends_the_fixed_explanation_with_no_model_call(alice
     turn = await send(alice, thread.id, "Tell me more")
     assert scripted.calls == 1
     assert turn.content.startswith("The ABCDE framework has five steps.")
+    assert turn.content.endswith("\n\nWould you like to try it?"), "the client's permission question closes it"
     assert [p.label for p in turn.prompts] == ["Try it", "Keep chatting"]
 
 

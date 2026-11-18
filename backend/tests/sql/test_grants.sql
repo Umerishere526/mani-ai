@@ -68,7 +68,7 @@ do $$
 declare
   c text;
 begin
-  foreach c in array array['understanding', 'rewind_snapshot', 'pending_follow_up', 'safety', 'check_at_message_count',
+  foreach c in array array['understanding', 'rewind_snapshot', 'pending_follow_up', 'safety',
                            'memory_folded_at', 'message_count']
   loop
     if has_column_privilege('authenticated', 'public.threads', c, 'INSERT') then
@@ -86,7 +86,7 @@ declare
   c text;
 begin
   foreach c in array array['understanding', 'rewind_snapshot', 'pending_follow_up', 'vague_streak',
-                           'check_at_message_count', 'memory_folded_at']
+                           'memory_folded_at']
   loop
     if has_column_privilege('authenticated', 'public.threads', c, 'SELECT') then
       raise exception 'FAIL: a user can read threads.% with their own token', c;
@@ -211,14 +211,6 @@ select pg_temp.want('a user cannot settle their own safety concern',
 
 select pg_temp.want('the backend can move the safety state',
   has_column_privilege('mani_service', 'public.threads', 'safety', 'UPDATE'), true);
-
--- Migration 023: the offer is made only on the turn right after Mani's check, so a user who
--- could write when the check was made could open an offer for themselves.
-select pg_temp.want('a user cannot open a check for themselves',
-  has_column_privilege('authenticated', 'public.threads', 'check_at_message_count', 'UPDATE'), false);
-
-select pg_temp.want('the backend can record when Mani checked',
-  has_column_privilege('mani_service', 'public.threads', 'check_at_message_count', 'UPDATE'), true);
 
 select pg_temp.want('a user can change their own nickname',
   has_column_privilege('authenticated', 'public.profiles', 'nickname', 'UPDATE'), true);

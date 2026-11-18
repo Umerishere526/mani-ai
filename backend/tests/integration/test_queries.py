@@ -8,7 +8,7 @@ import asyncpg
 import pytest
 
 from mani.auth.jwt import Claims
-from mani.chat import orchestrator
+from mani.chat import turn as chat_turn
 from mani.config import get_settings
 from mani.db import config_tables, llm_calls, messages, pauses, profiles, summaries, threads
 from mani.models.rows import (
@@ -73,7 +73,7 @@ async def test_a_thread_round_trips(alice):
 
 async def test_a_thread_with_only_a_greeting_or_a_style_tap_is_not_listed(alice):
     """A conversation counts once they have written in it: Mani's opening line and a style button do not."""
-    thread = await orchestrator.start_thread(alice, claims_for(ALICE))
+    thread = await chat_turn.start_thread(alice, claims_for(ALICE))
     assert (await threads.list_for_user(alice, ALICE)).threads == []
     assert await threads.most_recent(alice, ALICE) is None
 
@@ -106,8 +106,8 @@ async def test_the_admin_list_leaves_out_threads_nobody_has_written_in(users):
 
 
 async def test_start_thread_always_creates(alice):
-    first = await orchestrator.start_thread(alice, claims_for(ALICE))
-    second = await orchestrator.start_thread(alice, claims_for(ALICE))
+    first = await chat_turn.start_thread(alice, claims_for(ALICE))
+    second = await chat_turn.start_thread(alice, claims_for(ALICE))
     assert first.id != second.id
 
 
@@ -181,7 +181,6 @@ async def test_the_composed_read_returns_the_whole_turn(alice):
         technique=TechniqueState(
             thread_id=thread.id, framework_id="abcde",
             outcome=TechniqueOutcome.OFFERED, phase="offering", at_message_count=2),
-        offer_frameworks=["abcde"],
     ))
     await summaries.upsert(
         alice, thread.id, ALICE, summary="Talked about work.",
@@ -194,7 +193,6 @@ async def test_the_composed_read_returns_the_whole_turn(alice):
     assert ctx.profile.support_style == "reflective"
     assert ctx.technique.framework_id == "abcde"
     assert ctx.technique.outcome == TechniqueOutcome.OFFERED
-    assert ctx.techniques_offered == ["abcde"]
     assert ctx.summary.summary == "Talked about work."
     assert ctx.summary.techniques_tried[0].name == "abcde"
 
@@ -228,17 +226,6 @@ async def test_the_composed_read_refuses_another_users_thread(alice, users):
         assert await threads.load_turn_context(bob, thread.id, BOB) is None
 
 
-async def test_offering_the_same_technique_twice_stores_it_once(alice):
-    """A composite primary key, rather than merging an array in application code."""
-    thread = await threads.create(alice, ALICE)
-    for _ in range(3):
-        await threads.apply(alice, thread.id, ALICE,
-                            threads.ThreadUpdates(offer_frameworks=["abcde"]))
-
-    ctx = await threads.load_turn_context(alice, thread.id, ALICE)
-    assert ctx.techniques_offered == ["abcde"]
-
-
 async def test_a_turn_keeps_its_halves_in_order(alice):
     """now() is fixed per transaction, so both halves of a pair would share a timestamp
     and their order would be undefined. The previous project shipped that, hit it, and
@@ -257,7 +244,7 @@ async def test_an_empty_update_touches_nothing(alice):
     thread = await threads.create(alice, ALICE)
     await threads.apply(alice, thread.id, ALICE, threads.ThreadUpdates())
     ctx = await threads.load_turn_context(alice, thread.id, ALICE)
-    assert ctx.technique is None and ctx.techniques_offered == []
+    assert ctx.technique is None
 
 
 async def test_a_crisis_is_recorded_with_its_reason(alice):
@@ -294,12 +281,11 @@ async def test_config_tables_are_readable_and_seeded(users):
         prompts = await config_tables.list_active_prompts(conn)
         frameworks = await config_tables.list_active_frameworks(conn)
 
-    # The authored layers. The framework catalogue is generated from the registry at compose time, so it is
-    # deliberately not a row here, and the old path's layers are switched off by the seed (2026-10-27).
+    # The turn's one prompt; the framework guide is generated from the registry, and the retired prompts are switched
+    # off by the seed.
     names = {p.name for p in prompts}
-    assert names >= {"voice", "conversation", "framework", "moments"}
-    assert not names & {"mani_base", "response_format", "style_directive", "style_supportive", "style_reflective"}
-    assert "framework_index" not in {p.name for p in prompts}
+    assert "mani" in names
+    assert not names & {"voice", "conversation", "framework", "moments", "mani_base", "framework_index"}
     # ABCDE and Thought Reframe are offered; the others are paused, not removed.
     assert {f.id for f in frameworks} == {"abcde", "thought_reframe"}
     assert all(f.phases[0] == "offering" for f in frameworks)
@@ -348,37 +334,6 @@ async def test_a_model_call_is_recorded_with_its_cost(users):
     assert spend["calls"] == 1
     assert thinking == 300
     assert generation == "gen-1760400000-abc"
-
-
-async def test_a_scenario_turn_is_billed_only_for_the_calls_it_made(users):
-    """The scenario check reads one thread's cost rows turn by turn, so a turn that redrafted or
-    picked an exercise shows its extra calls and the next turn does not inherit them."""
-    from mani.db import pool, threads
-    from scripts import scenario_check
-
-    async def call(thread_id, output: int, thinking: int) -> None:
-        async with pool.as_admin() as conn:
-            await llm_calls.record(
-                conn, purpose=llm_calls.Purpose.CHAT, model="m", outcome=llm_calls.Outcome.OK,
-                latency_ms=1, user_id=ALICE, thread_id=thread_id,
-                usage=llm_calls.Usage(
-                    input_tokens=1000, output_tokens=output, cached_input_tokens=800,
-                    reasoning_tokens=thinking,
-                ),
-            )
-
-    async with pool.as_admin() as conn:
-        thread = await threads.create(conn, ALICE)
-    billed = [0]
-    await call(thread.id, 100, 60)
-    await call(thread.id, 50, 10)
-    first = await scenario_check._cost(thread.id, 1.5, billed)
-    await call(thread.id, 30, 0)
-    second = await scenario_check._cost(thread.id, 0.5, billed)
-
-    assert (first.calls, first.input_tokens, first.cached_tokens) == (2, 2000, 1600)
-    assert (first.output_tokens, first.reasoning_tokens, first.seconds) == (150, 70, 1.5)
-    assert (second.calls, second.output_tokens, second.reasoning_tokens) == (1, 30, 0)
 
 
 async def test_threads_needing_summary_lists_across_users(users):

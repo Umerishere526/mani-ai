@@ -16,7 +16,6 @@ def framework(file_id: str) -> Framework:
     parsed = parse_framework(FRAMEWORKS_DIR / f"{file_id}.md")
     return Framework(**{key: parsed[key] for key in (
         "id", "name", "summary", "body", "activation_conditions", "phases", "display_order", "activation", "stages",
-        "confirm_phrases",
     )})
 
 

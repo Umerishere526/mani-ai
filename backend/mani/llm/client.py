@@ -180,8 +180,7 @@ def _apply_model_quirks(messages: list[dict[str, str]], model: str) -> list[dict
     """Per-model workarounds, kept here rather than in the conversation logic.
 
     Qwen models reason inline unless told not to, which lands `<think>` blocks in a
-    reply meant for a person. The reference sniffed the model id from inside the chat
-    orchestrator and edited the user's own message there.
+    reply meant for a person. Handled here, so no chat code needs to know which model it talks to.
     """
     if "qwen" not in model.lower() or not messages:
         return messages

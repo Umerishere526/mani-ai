@@ -86,7 +86,7 @@ async def test_the_same_message_on_two_instances_at_once_stores_one_turn(alice, 
             return await turn.send(
                 conn, alice, thread.id, "work was hard", client_message_id, ask=ask, config=config
             )
-        return runner.run(alice, thread.id, steps)
+        return runner.run(alice, thread.id, steps, answer_failure=True)
 
     first, second = await asyncio.gather(on_its_own_instance(), on_its_own_instance())
 
@@ -101,7 +101,7 @@ async def test_a_failed_edit_leaves_the_original_exchange_in_place(alice, monkey
     """The edit's promise: the original message and Mani's reply stay unless the new turn is written."""
     first = ScriptedModel(said("What has been the hardest part?"))
     monkeypatch.setattr(client, "complete", first)
-    thread = await start(alice, style=None)
+    thread = await start(alice)
     await send(alice, thread.id, "work has been hard lately")
     before = await _thread_row(alice, thread.id)
     replies_before = await _mani_messages(thread.id)
@@ -109,13 +109,13 @@ async def test_a_failed_edit_leaves_the_original_exchange_in_place(alice, monkey
     async def timed_out(messages, schema, **kwargs):
         raise ServiceError("provider timed out", ErrorCategory.LLM_TIMEOUT, retryable=True)
 
-    # Leaked script metadata only: empty once repaired, so the write refuses it.
-    empty = ScriptedModel(said("(Include prompts: Yes, No)"))
+    # Only dashes and spaces: empty once the dashes go, so the write refuses it.
+    empty = ScriptedModel(said(" — "))
     monkeypatch.setattr(client, "complete", timed_out if fails == "while_thinking" else empty)
     with pytest.raises(ServiceError):
         await runner.edit(alice, thread.id, await _last_user_message_id(thread.id), "it's more that I'm tired")
 
-    assert await _user_messages(thread.id) == ["work has been hard lately"]
+    assert await _user_messages(thread.id) == ["Supportive", "work has been hard lately"]
     assert await _mani_messages(thread.id) == replies_before
     after = await _thread_row(alice, thread.id)
     assert (after.message_count, after.understanding) == (before.message_count, before.understanding)

@@ -3,9 +3,16 @@
 
 from types import SimpleNamespace
 
+from pydantic import BaseModel
+
 from mani.config import Settings
 from mani.llm import chain
-from mani.llm.schema import Reply
+
+
+class Said(BaseModel):
+    """Any structured reply: the client is schema-agnostic."""
+
+    text: str
 
 
 def settings() -> Settings:
@@ -20,7 +27,7 @@ def settings() -> Settings:
 def test_the_model_is_pointed_at_openrouter_not_openai():
     """langchain-openai is an OpenAI-protocol client. The base_url decides who is billed."""
     runnable = chain.build(
-        Reply, model="google/gemini-3-flash-preview", temperature=0.7,
+        Said, model="google/gemini-3-flash-preview", temperature=0.7,
         max_tokens=2048, routing=None, settings=settings(), chunk_timeout=15.0,
     )
     # with_structured_output wraps the model; the configured chat model is underneath it.
@@ -32,7 +39,7 @@ def test_the_model_is_pointed_at_openrouter_not_openai():
 def test_the_silence_a_call_may_keep_reaches_the_streaming_model():
     """A call that sends nothing for this long is cut by the library (a streamed chunk, not a keepalive)."""
     chain.build(
-        Reply, model="m", temperature=0.7, max_tokens=100, routing=None, settings=settings(),
+        Said, model="m", temperature=0.7, max_tokens=100, routing=None, settings=settings(),
         chunk_timeout=7.5,
     )
     model = chain._model(
@@ -45,7 +52,7 @@ def test_the_silence_a_call_may_keep_reaches_the_streaming_model():
 def test_the_provider_sdk_never_retries_on_its_own():
     """Its default is three, which multiplies the bill and the latency of a slow turn."""
     chain.build(
-        Reply, model="m", temperature=0.7, max_tokens=100, routing=None, settings=settings(),
+        Said, model="m", temperature=0.7, max_tokens=100, routing=None, settings=settings(),
         chunk_timeout=15.0,
     )
     model = chain._model(
@@ -113,7 +120,7 @@ def test_a_reasoning_model_is_not_sent_a_temperature():
     every call, so the request shape follows the model."""
     chain._model.cache_clear()
     chain.build(
-        Reply, model="openai/gpt-6-luna", temperature=0.7,
+        Said, model="openai/gpt-6-luna", temperature=0.7,
         max_tokens=2048, routing=None, settings=settings(), chunk_timeout=15.0,
     )
     sent = chain._model("sk-test-not-a-real-key", "https://openrouter.ai/api/v1",
@@ -167,7 +174,7 @@ def test_the_effort_reaches_the_request_body():
     chain._model = spy
     try:
         chain.build(
-            Reply, model="openai/gpt-6-luna", temperature=0.7, max_tokens=2048,
+            Said, model="openai/gpt-6-luna", temperature=0.7, max_tokens=2048,
             routing=None, settings=settings(), chunk_timeout=15.0, reasoning_effort="low",
         )
     finally:
@@ -181,7 +188,6 @@ def test_every_prompt_on_a_reasoning_model_says_how_hard_to_think():
     authored prompt that names a reasoning model carries one the configuration accepts."""
     import typing
 
-    from mani.prompts.composer import BODY_EFFORT, READING_EFFORT
     from scripts.seed import PROMPTS_DIR, parse_prompt
 
     allowed = set(typing.get_args(Settings.model_fields["reasoning_effort"].annotation))
@@ -190,24 +196,6 @@ def test_every_prompt_on_a_reasoning_model_says_how_hard_to_think():
         if prompt["model_id"] and chain.is_reasoning_model(prompt["model_id"]):
             effort = prompt["model_parameters"].get("reasoning_effort")
             assert effort in allowed, f"{path.name} sets reasoning_effort {effort!r}"
-            body_effort = prompt["model_parameters"].get(BODY_EFFORT)
-            assert body_effort is None or body_effort in allowed, f"{path.name} sets {BODY_EFFORT} {body_effort!r}"
-            reading = prompt["model_parameters"].get(READING_EFFORT)
-            assert reading is None or reading in allowed, f"{path.name} sets {READING_EFFORT} {reading!r}"
-
-
-def test_the_reading_after_a_reply_thinks_at_its_own_effort_and_the_reply_keeps_its_own():
-    """muhammad, 2026-11-16: the reading landed a median 18.8 s after the reply, later than many people answer. It
-    thinks at the row's `reading_reasoning_effort`; the reply's own parameters are untouched, and a row that names none
-    leaves the reading as the reply."""
-    from mani.prompts.composer import READING_EFFORT, reading_parameters
-    from scripts.seed import PROMPTS_DIR, parse_prompt
-
-    voice = parse_prompt(PROMPTS_DIR / "voice.md")["model_parameters"]
-    assert voice["reasoning_effort"] == "medium" and voice[READING_EFFORT] == "low"
-    assert reading_parameters(voice)["reasoning_effort"] == "low"
-    assert voice["reasoning_effort"] == "medium", "the reply's parameters are not changed in place"
-    assert reading_parameters({"reasoning_effort": "medium"}) == {"reasoning_effort": "medium"}
 
 
 def test_thinking_never_eats_the_budget_the_reply_was_given():
@@ -230,3 +218,11 @@ def test_the_priority_tier_is_asked_for_only_on_openai_models():
     body = chain.request_body("minimax/minimax-m3.1-flash", settings(), {"only": ["together"], "zdr": True}, priority=True)
     assert "service_tier" not in body and body["provider"]["only"] == ["together"] and body["provider"]["zdr"] is True
     assert chain.request_body("openai/gpt-6-luna", settings(), None, priority=True)["service_tier"] == "priority"
+
+
+def test_a_model_that_always_reasons_is_told_the_rows_effort_and_given_room_to_think():
+    """MiniMax reasons on every call (OpenRouter, 2026-11-18: reasoning mandatory, default effort max). Sent no effort,
+    every turn thought at max while the gate was measured at the row's low; its budget covers the thinking too."""
+    assert chain.request_body("minimax/minimax-m3.1-flash", settings(), None, "low")["reasoning"] == {"effort": "low"}
+    assert chain.sampling("minimax/minimax-m3.1-flash", 0.7, 2048) == {
+        "temperature": 0.7, "max_tokens": 2048 + chain.REASONING_ALLOWANCE_TOKENS}

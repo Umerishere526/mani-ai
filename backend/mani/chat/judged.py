@@ -18,7 +18,6 @@ class Judged:
     state_after: safety.State
     pausing: bool
     about: str | None
-    asked: bool
     settled_now: bool
 
 
@@ -46,7 +45,7 @@ def judge(
         is_return_check=return_check is not None, still_there=read.still_there,
     )
     settled_now = before is not safety.State.CLEAR and state_after is safety.State.CLEAR
-    return Judged(state_after=state_after, pausing=pausing, about=about, asked=asked, settled_now=settled_now)
+    return Judged(state_after=state_after, pausing=pausing, about=about, settled_now=settled_now)
 
 
 def safety_record(
@@ -60,9 +59,9 @@ def safety_record(
     if asked_about:
         after[rec.ASKED_ABOUT] = asked_about
     if return_check is not None:
-        after[rec.RETURN_CHECK] = {"pause": str(return_check.pause_id), "state": "asked"}
+        after = rec.return_check(after, str(return_check.pause_id), "asked")
     elif answering_return is not None:
-        after[rec.RETURN_CHECK] = {"pause": answering_return, "state": "answered"}
+        after = rec.return_check(after, answering_return, "answered")
     if judged.state_after is safety.State.DANGER:
         after[rec.DANGER_REACHED] = True
         if judged.about:

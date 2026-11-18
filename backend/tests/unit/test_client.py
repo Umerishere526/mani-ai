@@ -11,12 +11,18 @@ import openai
 import pytest
 from openai.types import CompletionUsage
 from openai.types.chat import ChatCompletion
+from pydantic import BaseModel
 
 from mani.config import Settings
 from mani.db import llm_calls
 from mani.errors import ServiceError
 from mani.llm import client
-from mani.llm.schema import Reply
+
+
+class Said(BaseModel):
+    """Any structured reply: the client is schema-agnostic."""
+
+    text: str
 
 
 def settings() -> Settings:
@@ -49,7 +55,7 @@ class FakeRunnable:
 
 
 def valid(text: str = "hi") -> dict:
-    return {"raw": None, "parsed": Reply(text=text), "parsing_error": None}
+    return {"raw": None, "parsed": Said(text=text), "parsing_error": None}
 
 
 def invalid(error: str = "bad json") -> dict:
@@ -78,7 +84,7 @@ async def test_a_valid_first_reply_needs_no_retry(monkeypatch, recorded):
     install(monkeypatch, runnable)
 
     call = await client.complete(
-        [], Reply, model="m", purpose=llm_calls.Purpose.CHAT, settings=settings()
+        [], Said, model="m", purpose=llm_calls.Purpose.CHAT, settings=settings()
     )
 
     assert runnable.calls == 1
@@ -95,7 +101,7 @@ async def test_one_schema_failure_is_retried_and_both_attempts_are_recorded(
     install(monkeypatch, runnable)
 
     call = await client.complete(
-        [], Reply, model="m", purpose=llm_calls.Purpose.CHAT, settings=settings()
+        [], Said, model="m", purpose=llm_calls.Purpose.CHAT, settings=settings()
     )
 
     assert runnable.calls == 2
@@ -112,7 +118,7 @@ async def test_two_schema_failures_raise_and_record_both_attempts(monkeypatch, r
 
     with pytest.raises(ServiceError):
         await client.complete(
-            [], Reply, model="m", purpose=llm_calls.Purpose.CHAT, settings=settings()
+            [], Said, model="m", purpose=llm_calls.Purpose.CHAT, settings=settings()
         )
 
     assert runnable.calls == client.MAX_SCHEMA_ATTEMPTS == 2
@@ -136,7 +142,7 @@ async def test_a_provider_error_is_not_retried_by_the_schema_loop(monkeypatch, r
 
     with pytest.raises(ServiceError):
         await client.complete(
-            [], Reply, model="m", purpose=llm_calls.Purpose.CHAT, settings=settings()
+            [], Said, model="m", purpose=llm_calls.Purpose.CHAT, settings=settings()
         )
 
     assert runnable.calls == 1
@@ -168,7 +174,7 @@ async def test_a_reply_cut_off_by_the_token_limit_is_retried(monkeypatch, record
     install(monkeypatch, runnable)
 
     call = await client.complete(
-        [{"role": "user", "content": "hi"}], Reply, model="m",
+        [{"role": "user", "content": "hi"}], Said, model="m",
         purpose=llm_calls.Purpose.CHAT, settings=settings(),
     )
 
@@ -194,7 +200,7 @@ async def test_a_failed_second_attempt_does_not_repeat_the_first_attempts_tokens
 
     with pytest.raises(ServiceError):
         await client.complete(
-            [{"role": "user", "content": "hi"}], Reply, model="m",
+            [{"role": "user", "content": "hi"}], Said, model="m",
             purpose=llm_calls.Purpose.CHAT, settings=settings(),
         )
 
@@ -217,7 +223,7 @@ async def test_a_retried_attempts_latency_is_its_own_not_the_attempts_before_it(
     install(monkeypatch, SlowThenValid(invalid(), valid()))
 
     await client.complete(
-        [{"role": "user", "content": "hi"}], Reply, model="m",
+        [{"role": "user", "content": "hi"}], Said, model="m",
         purpose=llm_calls.Purpose.CHAT, settings=settings(),
     )
 
@@ -243,7 +249,7 @@ async def test_a_provider_blip_is_retried_once(monkeypatch, recorded):
     monkeypatch.setattr(client, "TRANSIENT_RETRY_DELAY_SECONDS", 0)
 
     call = await client.complete(
-        [{"role": "user", "content": "hi"}], Reply, model="m",
+        [{"role": "user", "content": "hi"}], Said, model="m",
         purpose=llm_calls.Purpose.CHAT, settings=settings(),
     )
 
@@ -258,7 +264,7 @@ async def test_a_provider_down_twice_fails_the_turn(monkeypatch, recorded):
 
     with pytest.raises(ServiceError) as failed:
         await client.complete(
-            [{"role": "user", "content": "hi"}], Reply, model="m",
+            [{"role": "user", "content": "hi"}], Said, model="m",
             purpose=llm_calls.Purpose.CHAT, settings=settings(),
         )
     assert failed.value.retryable
@@ -276,7 +282,7 @@ async def test_a_timeout_is_not_retried(monkeypatch, recorded):
 
     with pytest.raises(ServiceError):
         await client.complete(
-            [{"role": "user", "content": "hi"}], Reply, model="m",
+            [{"role": "user", "content": "hi"}], Said, model="m",
             purpose=llm_calls.Purpose.CHAT, settings=settings(),
         )
     assert runnable.calls == 1
@@ -297,7 +303,7 @@ async def test_a_chat_reply_past_its_deadline_fails_as_too_slow_and_is_recorded(
     quick = settings().model_copy(update={"chat_deadline_seconds": 0.05})
     with pytest.raises(ServiceError) as raised:
         await client.complete(
-            [{"role": "user", "content": "hi"}], Reply, model="m",
+            [{"role": "user", "content": "hi"}], Said, model="m",
             purpose=llm_calls.Purpose.CHAT, settings=quick,
         )
     assert raised.value.retryable and raised.value.user_message == "Mani took too long to answer. Please try again."
@@ -345,7 +351,7 @@ def over_openrouter(monkeypatch, *streams, chunk_timeout: float = 5.0) -> list:
         api_key="sk-test-not-a-real-key", max_retries=0, stream_chunk_timeout=chunk_timeout,
         http_async_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
     )
-    install(monkeypatch, model.with_structured_output(Reply, method="json_schema", include_raw=True))
+    install(monkeypatch, model.with_structured_output(Said, method="json_schema", include_raw=True))
     return requests
 
 
@@ -359,7 +365,7 @@ async def test_each_call_records_the_generation_that_served_it(monkeypatch, reco
     )
 
     call = await client.complete(
-        [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+        [{"role": "user", "content": "hi"}], Said, model="openai/gpt-6-luna",
         purpose=llm_calls.Purpose.CHAT, settings=settings(),
     )
 
@@ -374,7 +380,7 @@ async def test_a_streamed_reply_records_its_usage_and_generation(monkeypatch, re
     over_openrouter(monkeypatch, openrouter_stream('{"text": "hello"}', "gen-streamed"))
 
     call = await client.complete(
-        [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+        [{"role": "user", "content": "hi"}], Said, model="openai/gpt-6-luna",
         purpose=llm_calls.Purpose.CHAT, settings=settings(),
     )
 
@@ -395,7 +401,7 @@ async def test_a_call_that_sends_nothing_for_too_long_is_cut_and_tried_once_more
     )
 
     call = await client.complete(
-        [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+        [{"role": "user", "content": "hi"}], Said, model="openai/gpt-6-luna",
         purpose=llm_calls.Purpose.CHAT, settings=settings(),
     )
 
@@ -417,7 +423,7 @@ async def test_a_call_silent_twice_fails_as_too_slow_after_two_tries_only(monkey
 
     with pytest.raises(ServiceError) as raised:
         await client.complete(
-            [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+            [{"role": "user", "content": "hi"}], Said, model="openai/gpt-6-luna",
             purpose=llm_calls.Purpose.CHAT, settings=settings(),
         )
 
@@ -437,7 +443,7 @@ async def test_the_silence_a_chat_call_may_keep_is_the_first_token_limit_and_a_b
 
     monkeypatch.setattr(client.chain, "build", build)
     for purpose in (llm_calls.Purpose.CHAT, llm_calls.Purpose.SUMMARIZE):
-        await client.complete([], Reply, model="m", purpose=purpose, settings=settings())
+        await client.complete([], Said, model="m", purpose=purpose, settings=settings())
 
     assert seen == [settings().chat_first_token_seconds, settings().llm_timeout_seconds]
 
@@ -480,7 +486,7 @@ async def test_a_call_with_a_thread_carries_its_sticky_keys_beside_the_provider_
     still one per configuration, not one per conversation."""
     for thread in (THREAD, OTHER_THREAD):
         await client.complete(
-            [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+            [{"role": "user", "content": "hi"}], Said, model="openai/gpt-6-luna",
             purpose=llm_calls.Purpose.CHAT, reasoning_effort="medium", thread_id=thread, settings=settings(),
         )
 
@@ -496,7 +502,7 @@ async def test_a_call_with_a_thread_carries_its_sticky_keys_beside_the_provider_
 
 async def test_a_call_with_no_thread_sends_no_sticky_keys(sent_bodies, recorded):
     await client.complete(
-        [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+        [{"role": "user", "content": "hi"}], Said, model="openai/gpt-6-luna",
         purpose=llm_calls.Purpose.MEMORY_FOLD, settings=settings(),
     )
 
@@ -509,11 +515,10 @@ async def test_only_the_chat_reply_asks_for_the_priority_tier_and_each_purpose_k
     """The person waits on the chat reply alone: it asks for OpenAI's priority endpoint and may fall back to the
     standard one, never to Azure, Bedrock or flex. The calls after the reply stay on the default tier, under a
     key of their own, so they never re-pin the chat's conversation to another endpoint."""
-    purposes = (llm_calls.Purpose.CHAT, llm_calls.Purpose.UNDERSTANDING, llm_calls.Purpose.SUMMARIZE,
-                llm_calls.Purpose.MEMORY_FOLD)
+    purposes = (llm_calls.Purpose.CHAT, llm_calls.Purpose.SUMMARIZE, llm_calls.Purpose.MEMORY_FOLD)
     for purpose in purposes:
         await client.complete(
-            [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna",
+            [{"role": "user", "content": "hi"}], Said, model="openai/gpt-6-luna",
             purpose=purpose, thread_id=THREAD, settings=settings(),
         )
 
@@ -531,7 +536,7 @@ async def test_only_the_chat_reply_asks_for_the_priority_tier_and_each_purpose_k
 
 async def test_the_priority_tier_is_switched_off_by_configuration(sent_bodies, recorded):
     await client.complete(
-        [{"role": "user", "content": "hi"}], Reply, model="openai/gpt-6-luna", purpose=llm_calls.Purpose.CHAT,
+        [{"role": "user", "content": "hi"}], Said, model="openai/gpt-6-luna", purpose=llm_calls.Purpose.CHAT,
         thread_id=THREAD, settings=settings().model_copy(update={"openrouter_chat_service_tier": "default"}),
     )
 
@@ -553,7 +558,7 @@ async def test_a_retry_gets_only_what_is_left_of_the_chat_budget(monkeypatch, re
     began = asyncio.get_running_loop().time()
 
     with pytest.raises(ServiceError) as raised:
-        await client.complete([], Reply, model="m", purpose=llm_calls.Purpose.CHAT, settings=tight)
+        await client.complete([], Said, model="m", purpose=llm_calls.Purpose.CHAT, settings=tight)
 
     assert asyncio.get_running_loop().time() - began < 4.0, "the retry was cut at the budget, not the deadline"
     assert raised.value.user_message == "Mani took too long to answer. Please try again."
@@ -572,12 +577,12 @@ async def test_a_call_that_finds_every_slot_taken_is_refused_quickly_as_busy(mon
     install(monkeypatch, Stalled())
     one_slot = settings().model_copy(update={"model_calls_in_flight": 1, "model_slot_wait_seconds": 0.05})
     holding = asyncio.create_task(
-        client.complete([], Reply, model="m", purpose=llm_calls.Purpose.SUMMARIZE, settings=one_slot)
+        client.complete([], Said, model="m", purpose=llm_calls.Purpose.SUMMARIZE, settings=one_slot)
     )
     await asyncio.sleep(0.01)
     try:
         with pytest.raises(ServiceError) as raised:
-            await client.complete([], Reply, model="m", purpose=llm_calls.Purpose.CHAT, settings=one_slot)
+            await client.complete([], Said, model="m", purpose=llm_calls.Purpose.CHAT, settings=one_slot)
     finally:
         holding.cancel()
 
@@ -592,9 +597,9 @@ def _quoting(words: str) -> list[BaseException]:
     from pydantic import ValidationError
 
     try:
-        Reply.model_validate({"text": [words]})
+        Said.model_validate({"text": [words]})
     except ValidationError as exc:
-        return [exc, OutputParserException(f"Failed to parse Reply from completion {words}")]
+        return [exc, OutputParserException(f"Failed to parse Said from completion {words}")]
     raise AssertionError("expected the reply to be refused")
 
 
@@ -607,7 +612,7 @@ async def test_a_reply_that_does_not_fit_is_recorded_and_raised_without_its_word
     install(monkeypatch, FakeRunnable({"raw": None, "parsed": None, "parsing_error": failure}))
 
     with pytest.raises(ServiceError) as raised:
-        await client.complete([], Reply, model="m", purpose=llm_calls.Purpose.CHAT, settings=settings())
+        await client.complete([], Said, model="m", purpose=llm_calls.Purpose.CHAT, settings=settings())
 
     kept = [r["error_message"] for r in recorded] + [str(raised.value)]
     assert all(words not in k and "input_value" not in k for k in kept), kept

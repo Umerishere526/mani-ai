@@ -22,7 +22,7 @@ def test_a_framework_needs_no_offer_template_since_the_model_writes_the_offer():
     from scripts.seed import FRAMEWORKS_DIR, missing_for_activation, parse_framework
 
     framework = parse_framework(FRAMEWORKS_DIR / "abcde.md")
-    framework["stages"]["offering"].pop("offer")
+    assert "offer" not in framework["stages"]["offering"]
     assert missing_for_activation(framework) == []
 
 

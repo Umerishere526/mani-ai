@@ -5,13 +5,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from mani.chat.greeting import CLOSING_KEEP_CHATTING_LABEL, FINISH_LABEL, TELL_ME_MORE_LABEL
 from mani.chat.techniques import Registry, line_of, stages_of
 from mani.llm.schema import SmartPrompt
 from mani.models.rows import Framework, Message, MessageRole, SupportStyle, TechniqueState
 
-TELL_ME_MORE = "tell me more"
-FINISH = "finish for now"
-KEEP_CHATTING = "keep chatting"
+TELL_ME_MORE = TELL_ME_MORE_LABEL.lower()
+FINISH = FINISH_LABEL.lower()
+KEEP_CHATTING = CLOSING_KEEP_CHATTING_LABEL.lower()
 
 
 @dataclass(frozen=True)
@@ -20,9 +21,8 @@ class TapEvent:
 
     fact: str | None = None
     starting: Framework | None = None
-    declined: str | None = None
+    declined: bool = False
     explain: Framework | None = None
-    closing: str | None = None
 
 
 def find_tapped_prompt(history: list[Message], content: str) -> SmartPrompt | None:
@@ -44,14 +44,6 @@ def chosen_style(history: list[Message], content: str) -> SupportStyle | None:
     for option in _last_offered(history):
         if option.get("style") and str(option.get("label", "")).strip().lower() == typed:
             return SupportStyle(option["style"])
-    return None
-
-
-def pending_offer(history: list[Message]) -> SmartPrompt | None:
-    """The technique button still awaiting an answer, if there is one."""
-    for option in _last_offered(history):
-        if option.get("technique"):
-            return SmartPrompt.model_validate(option)
     return None
 
 
@@ -82,11 +74,10 @@ def tap_event(tapped: SmartPrompt | None, registry: Registry, open_offer: Techni
     if label == TELL_ME_MORE and offered is not None:
         return TapEvent(explain=offered)
     if tapped.decline and offered is not None:
-        return TapEvent(declined=offered.id,
+        return TapEvent(declined=True,
                         fact="They tapped Keep chatting instead of trying the set you offered. Carry on with them.")
     if label == FINISH:
-        return TapEvent(closing="finish",
-                        fact="They tapped Finish for Now. Say goodbye warmly in a sentence or two, and ask nothing.")
+        return TapEvent(fact="They tapped Finish for Now. Say goodbye warmly in a sentence or two, and ask nothing.")
     if label == KEEP_CHATTING:
-        return TapEvent(closing="keep_chatting", fact="They chose to keep chatting after the set of questions.")
+        return TapEvent(fact="They chose to keep chatting after the set of questions.")
     return TapEvent(fact=f'They tapped the button "{tapped.label}".')

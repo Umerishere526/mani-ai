@@ -8,7 +8,6 @@ import logging
 from enum import StrEnum
 
 from mani.auth.jwt import Claims
-from mani.chat import context
 from mani.config import get_settings
 from mani.db import llm_calls, memory as memory_db
 from mani.llm import client
@@ -71,8 +70,7 @@ def bounded(memory: Memory) -> Memory:
 
 def _transcript(messages: list[Message]) -> str:
     return "\n\n".join(
-        f"{'Person' if m.role is MessageRole.USER else 'Mani'}: "
-        f"{context.disarm(m.content) if m.role is MessageRole.USER else m.content}"
+        f"{'Person' if m.role is MessageRole.USER else 'Mani'}: {m.content}"
         for m in messages
     )
 

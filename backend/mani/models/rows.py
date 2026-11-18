@@ -67,13 +67,9 @@ class Thread(Row):
     # Chosen per conversation. Null means this thread has not chosen, and the profile's
     # support_style stands as the default - the same closed set, deliberately.
     conversation_style: SupportStyle | None = None
-    # What Mani understands of them so far: feeling, issue, core issue, underlying feeling
-    # (chat/understanding.py).
-    # Loaded only for a turn, never in a thread list.
+    # The conversation's record: Mani's notes for its next turn, the frameworks declined or finished, and the safety
+    # keys the pause rules read (chat/record.py). Loaded only for a turn, never in a thread list.
     understanding: dict[str, Any] = Field(default_factory=dict)
-    # The message_count after the turn whose reply was Mani's latest check of its understanding
-    # (spec 0006). Loaded only for a turn, never in a thread list.
-    check_at_message_count: int | None = None
     # Where the conversation stands on safety: clear, unsure or danger (chat/safety.State).
     # Loaded only for a turn.
     safety: str = "clear"
@@ -101,13 +97,6 @@ class TechniqueState(Row):
     outcome: TechniqueOutcome
     phase: str | None = None
     at_message_count: int
-    # What the body check-in found, each apart from the other (migration 025): how the body felt after the
-    # exercise, and whether the whole conversation helped. Null until the person answers the step.
-    physical_response: str | None = None
-    conversation_effect: str | None = None
-    # What they said per stage, by framework id then stage id. Kept when a run retires, so a
-    # framework that comes back can read it; a new start of one framework clears only its own.
-    stages_known: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class Pause(Row):
@@ -141,13 +130,6 @@ class ThreadSummary(Row):
     summarized_message_count: int = 0
 
 
-# The body check-in that ends every framework. Code runs these stages from the client's script, so the model
-# never skips or words them and no stage button is shown on them.
-ENDING_STAGES = frozenset({
-    "somatic_ask", "somatic_body", "somatic_practice", "somatic_effect", "somatic_closing",
-})
-
-
 class Framework(Row):
     """A therapeutic technique, with its phase sequence as ordered data."""
 
@@ -158,32 +140,11 @@ class Framework(Row):
     activation_conditions: str = ""
     phases: list[str]
     display_order: int = 0
-    # The activation data (central indication, distinctions, contraindications) and the
-    # per-phase clinical content (purpose, listening cues, readiness, boundaries, the styled
-    # `ask`). activation_conditions is left in place and simply stops being read for routing -
-    # a flat string cannot hold either shape.
+    # The activation data (central indication, contraindications) and the per-stage content (intro line, purpose,
+    # when it is answered, the Tell me more explanation). activation_conditions is not read for routing; a flat string
+    # cannot hold either shape.
     activation: dict[str, Any] = Field(default_factory=dict)
     stages: dict[str, Any] = Field(default_factory=dict)
-    # The short phrases that close a stage said back to them ("Is that right?"), one pool for the
-    # whole framework.
-    confirm_phrases: list[str] = Field(default_factory=list)
-
-    def phase_index(self, phase: str | None) -> int:
-        """Position in the sequence, or -1 for nothing started / unknown."""
-        if phase is None:
-            return -1
-        try:
-            return self.phases.index(phase)
-        except ValueError:
-            return -1
-
-    def knows_phase(self, phase: str | None) -> bool:
-        return phase in self.phases
-
-    @property
-    def closing(self) -> str | None:
-        """The last stage before the body route: where the person says whether it helped."""
-        return next((p for p in reversed(self.phases) if p not in ENDING_STAGES), None)
 
 
 class Prompt(Row):

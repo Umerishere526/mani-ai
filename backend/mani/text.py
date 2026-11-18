@@ -1,10 +1,11 @@
 # ABOUTME: Cleans what a person typed before anything reads it: invisible characters, odd spaces and control codes go.
-# ABOUTME: One place for it, so the safety screen, the [ctx] guard and the stored message all see the same visible text.
+# ABOUTME: Also strips a stored context block from old messages and catches Mani's last reply sent back.
 
 from __future__ import annotations
 
 import re
 import unicodedata
+from difflib import SequenceMatcher
 
 EMPTY_MESSAGE = "Write a message first. It can't be empty or only spaces."
 TOO_LONG_MESSAGE = "That message is too long. Keep it under 4000 characters, or send it in parts."
@@ -36,3 +37,28 @@ def clean_message(text: str) -> str:
             out.append(ch)
     lines = (_SPACES.sub(" ", line).strip() for line in "".join(out).split("\n"))
     return _BLANK_LINES.sub("\n\n", "\n".join(lines)).strip()
+
+
+_CTX_BLOCK = re.compile(r"^\[ctx\].*?\[/ctx\]\s*", re.DOTALL)
+# A message this close to Mani's last reply is that reply sent back, not an answer to it. Long enough that "yes",
+# "okay" or a short phrase of Mani's they repeat is never caught (the friend chat, 2026-11-04).
+COPY_SHARE = 0.9
+COPY_MIN_CHARS = 40
+
+
+def strip(content: str) -> str:
+    """Remove a context block from stored text: some stored messages were saved with one prefixed, and nothing written
+    now contains one."""
+    return _CTX_BLOCK.sub("", content, count=1)
+
+
+def _plain(text: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9']+", text.casefold().replace("\u2019", "'")))
+
+
+def copies_last_reply(content: str, last_reply: str | None) -> bool:
+    """Whether their message is Mani's last reply sent back, as a copy and paste would."""
+    theirs = _plain(content)
+    if last_reply is None or len(theirs) < COPY_MIN_CHARS:
+        return False
+    return SequenceMatcher(None, theirs, _plain(last_reply)).ratio() >= COPY_SHARE

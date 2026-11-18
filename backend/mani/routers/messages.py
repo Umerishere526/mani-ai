@@ -38,12 +38,8 @@ async def send(
     thread_id: uuid.UUID,
     body: SendMessageIn,
 ) -> TurnOut:
-    """One user message in, one reply out.
-
-    One provider call on the person's wait: the checks that the previous implementation
-    answered with a regeneration - up to six of them - are deterministic corrections in
-    `chat/repairs.py`. A chat turn's reading of them is a second call, asked for by the app after the reply
-    (`follow_up` below).
+    """One user message in, one reply out, with one provider call on the person's wait. The summary, when due, is
+    asked for by the app after the reply (`follow_up` below).
     """
     turn = await runner.send(user, thread_id, body.content, body.client_message_id)
     return await respond(thread_id, turn)

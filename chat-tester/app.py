@@ -1,5 +1,5 @@
-# ABOUTME: A minimal chat UI against the real Mani backend - for trying frameworks and
-# ABOUTME: the body check-in directly, not a product interface. Talks over HTTP like any client.
+# ABOUTME: A minimal chat UI against the real Mani backend - for trying conversations and frameworks
+# ABOUTME: directly, not a product interface. Talks over HTTP like any client.
 
 from __future__ import annotations
 
@@ -547,98 +547,16 @@ elif submitted and submitted.text:
 
 with st.sidebar:
     st.divider()
-    # What the backend has stored for each stage of the running framework after the last reply, and
-    # what the walk does about it. Sent by the backend only while AI_DEBUG_MODE is on.
     st.subheader("🧾 What Mani knows")
-    # What Mani understands of them as the backend has stored it for this thread (spec 0005, 0006).
-    understood = (last_turn or {}).get("understanding")
-    if understood:
-        for key, label in (
-            ("feeling", "Feelings"), ("heart", "Core status"), ("case", "Confirmed case"),
-        ):
-            if understood.get(key):
-                st.markdown(f"**{label}:** {understood[key]}")
-        # What Mani asked itself before its last reply, and where it is heading (backend chat/converse.py, 2026-10-29).
-        thinking = understood.get("thinking") or {}
-        if thinking.get("need"):
-            st.markdown(f"🤔 **Needs right now:** {thinking['need']}")
-        if "needs_info" in thinking:
-            st.markdown("🤔 **Needs more information:** " + ("yes" if thinking["needs_info"] else "no")
-                        + (f": {thinking['info']}" if thinking.get("info") else ""))
-        if thinking.get("shape"):
-            st.markdown(f"🧩 **Shape:** {thinking['shape']}" + (f"  ·  **Move:** {thinking['move']}" if thinking.get("move") else ""))
-        if window := thinking.get("window"):
-            st.markdown(f"🪟 **Window:** {window.get('feeling')} ↔ {' | '.join(window.get('tied_to') or [])}"
-                        + (f" (closest: {window['closest']})" if window.get("closest") else ""))
-        if thinking.get("insight"):
-            st.markdown(f"🤔 **Insight:** {thinking['insight']}" + (f" (from: {thinking['from']})" if thinking.get("from") else ""))
-        if thinking.get("link"):
-            st.markdown(f"🔗 **Ties back to:** {thinking['link']}")
-        if understood.get("insights"):
-            st.markdown("💡 **Insights given:** " + " | ".join(understood["insights"]))
-        if understood.get("known"):
-            st.markdown("🧩 **Known (enough when all three):** " + " | ".join(
-                f"{part}: {value}" for part, value in understood["known"].items()))
-        # The picture of them the chat and every framework share (backend chat/picture.py).
-        seen = understood.get("picture") or {}
-        beliefs = seen.get("beliefs") or []
-        risks = seen.get("risks") or []
-        for label, value in (
-            ("Focus", seen.get("focus")),
-            ("What is happening", " | ".join(seen.get("situations") or [])),
-            ("Feelings they named", " | ".join(
-                f["feeling"] + (f" (about {f['about']})" if f.get("about") else "") for f in seen.get("feelings") or []
-            )),
-            ("Feelings underneath (Mani's reading)", " | ".join(
-                u["feeling"] + (f" (from \"{u['rests_on']}\")" if u.get("rests_on") else "")
-                for u in seen.get("underneath") or []
-            )),
-            ("Tells themselves", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "thought")),
-            ("Really happening", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "happening")),
-            ("New ways of seeing it", " | ".join(b["belief"] for b in beliefs if b.get("kind") == "new")),
-            ("Still uncertain", " | ".join(seen.get("uncertain") or [])),
-            ("How they react", " | ".join(seen.get("reactions") or [])),
-            ("What they want (their words)", seen.get("wants")),
-            ("Need underneath (Mani's reading)", seen.get("needs")),
-            ("Desire (Mani's reading)", seen.get("desire")),
-            ("Core", (seen.get("core") or {}).get("belief")),
-            ("Feeling under the core (Mani's reading)", (seen.get("core") or {}).get("feeling")),
-            ("Tension", (seen.get("core") or {}).get("tension")),
-            ("Core rests on (their words)", (seen.get("core") or {}).get("rests_on")),
-            ("In the way", seen.get("in_the_way")),
-            ("Risks", " | ".join(f"{r['risk']} ({r['to']})" for r in risks)),
-            ("Depends on (inside)", " | ".join(d["what"] for d in seen.get("dependencies") or [] if d.get("kind") == "internal")),
-            ("Depends on (outside)", " | ".join(d["what"] for d in seen.get("dependencies") or [] if d.get("kind") == "external")),
-            ("Ruled out", " | ".join(seen.get("ruled_out") or [])),
-            ("Kind of problem", seen.get("problem_type")),
-            ("Earlier situations", " | ".join(seen.get("earlier") or [])),
-        ):
-            if value:
-                st.markdown(f"🖼️ **{label}:** {value}")
-        if seen.get("shift"):
-            st.caption(f"Last message: {seen['shift']}, {seen.get('quiet', 0)} in a row with nothing new")
+    # Mani's notes for its next turn, and the frameworks this conversation declined or finished, as the backend stored
+    # them after the last reply. Sent by the backend only while AI_DEBUG_MODE is on.
+    record = (last_turn or {}).get("understanding")
+    if record:
+        for key, label in (("notes", "Notes"), ("declined", "Declined"), ("finished", "Finished")):
+            if value := record.get(key):
+                st.markdown(f"**{label}:** {' | '.join(value) if isinstance(value, list) else value}")
     else:
-        st.caption("Nothing understood yet, or AI_DEBUG_MODE is off in the backend.")
-    # When Mani last checked its understanding with them; the next message answers it.
-    check_at = (last_turn or {}).get("check_at_message_count")
-    if check_at is not None:
-        st.caption(f"Mani's last check: after message {check_at}")
-    LEDGER_ICONS = {
-        "known": "✅", "possible": "❓", "partial": "🟡", "missing": "⬜", "done": "✔️", "not_reached": "⚪",
-    }
-    ledger = (last_turn or {}).get("ledger")
-    if ledger:
-        for row in ledger:
-            marker = "▶ " if row.get("asking") else ""
-            st.markdown(
-                f"{LEDGER_ICONS.get(row['status'], '•')} {marker}**{row.get('title') or row['stage']}**  \n"
-                f"{row['action']}"
-            )
-            if row.get("known"):
-                st.caption(f"knows: {row['known']}")
-        st.caption("✅ known, confirm once  ❓ possible event  🟡 partial  ⬜ missing  ✔️ done  ▶ on it now")
-    else:
-        st.caption("Shown while a framework is running, with AI_DEBUG_MODE on in the backend.")
+        st.caption("Nothing yet, or AI_DEBUG_MODE is off in the backend.")
 
     st.divider()
     # The person's conversations, newest activity first. Tapping one opens it to continue; the

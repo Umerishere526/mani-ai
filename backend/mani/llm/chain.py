@@ -31,10 +31,14 @@ from mani.db import llm_calls
 # `max_completion_tokens` rather than `max_tokens`. Sending the wrong one is a 400 on every
 # call, so the shape of the request follows the model rather than the call site.
 REASONING_MODEL_PREFIXES = ("openai/gpt-6", "openai/gpt-5", "openai/o1", "openai/o3")
+# Models that always reason but keep the ordinary sampling parameters. MiniMax's reasoning is mandatory with a default
+# effort of max (OpenRouter, 2026-11-18), so a call that names no effort thinks at max.
+ALWAYS_REASONING_PREFIXES = ("minimax/",)
 
 
 def is_reasoning_model(model: str) -> bool:
-    return model.startswith(REASONING_MODEL_PREFIXES)
+    """The model reads a reasoning effort, and its output budget covers its thinking."""
+    return model.startswith(REASONING_MODEL_PREFIXES + ALWAYS_REASONING_PREFIXES)
 
 
 def _reasoning(model: str, settings: Settings, effort: str | None = None) -> dict[str, Any]:
@@ -59,8 +63,10 @@ REASONING_ALLOWANCE_TOKENS = 8192
 
 def sampling(model: str, temperature: float, max_tokens: int) -> dict[str, Any]:
     """The output budget, and the temperature for the models that take one."""
-    if is_reasoning_model(model):
+    if model.startswith(REASONING_MODEL_PREFIXES):
         return {"max_completion_tokens": max_tokens + REASONING_ALLOWANCE_TOKENS}
+    if is_reasoning_model(model):
+        return {"temperature": temperature, "max_tokens": max_tokens + REASONING_ALLOWANCE_TOKENS}
     return {"temperature": temperature, "max_tokens": max_tokens}
 
 

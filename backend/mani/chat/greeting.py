@@ -2,6 +2,11 @@
 # ABOUTME: opener, and the offer explanation. Written here rather than generated, so they cost nothing.
 
 DEFAULT_NAME = "there"
+# The greeting, the style they tapped, and that style's opener: a conversation's first three messages.
+OPENING_MESSAGES = 3
+# The style when neither the conversation nor the profile has chosen one. A thread's own choice wins over the profile's
+# onboarding answer.
+DEFAULT_STYLE = "supportive"
 
 # Wording from the client spec, docs/specs/conversational-styles.md "Conversation opening":
 # every conversation starts by asking how the person wants to be spoken to.
@@ -55,5 +60,15 @@ KEEP_CHATTING_LABEL = "Keep chatting"
 CLOSING_KEEP_CHATTING_LABEL = "Keep Chatting"
 GO_TO_LIBRARY_LABEL = "Go to Library"
 FINISH_LABEL = "Finish for Now"
-TELL_ME_ABOUT_THIS_LABEL = "Tell me about this"
-EXPLAIN_LABELS = {TELL_ME_ABOUT_THIS_LABEL.lower(), TELL_ME_MORE_LABEL.lower()}
+# What closes the Tell me more explanation, in the client's words.
+PERMISSION_QUESTION = "Would you like to try it?"
+
+
+def style_label(style: str) -> str:
+    """The style's button label, which is also how Mani's facts name it."""
+    return next((option["label"] for option in STYLE_OPTIONS if option["style"] == style), style)
+
+
+def resolve_style(conversation_style: str | None, profile_style: str | None) -> str:
+    """The style in force: the conversation's own choice, else the profile's onboarding answer, else the default."""
+    return conversation_style or profile_style or DEFAULT_STYLE

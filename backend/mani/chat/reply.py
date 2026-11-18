@@ -34,8 +34,3 @@ class TurnReply(BaseModel):
     safety: Safety
     notes: str = Field(description="Your private working notes for your next turn, under 150 words.")
     title: str | None = Field(default=None, description="Only when the facts ask for a title.")
-
-    @classmethod
-    def fallback(cls, text: str) -> TurnReply:
-        """The fixed reply that stands in when no host answered: it judges nothing and keeps no notes."""
-        return cls(text=text, safety=Safety(level="none"), notes="")

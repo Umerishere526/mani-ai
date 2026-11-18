@@ -24,10 +24,8 @@ class Decision:
     prompts: list[SmartPrompt] = field(default_factory=list)
     technique: TechniqueState | None = None
     retire_technique: bool = False
-    offered: str | None = None
     declined: list[str] = field(default_factory=list)
     finished: list[str] = field(default_factory=list)
-    reset_outcomes: bool = False
     end_check: bool = False
     refused: str | None = None
 
@@ -101,7 +99,7 @@ def _moved(base: Decision, reply: TurnReply, framework: Framework, running: Tech
 
 def _answered_offer(base: Decision, open_offer: TechniqueState, tap: TapEvent) -> Decision:
     """Keep chatting declines the offer; any other answer that is not a yes lets it lapse."""
-    if tap.declined is not None:
+    if tap.declined:
         return dataclasses.replace(base, declined=[*base.declined, open_offer.framework_id], technique=open_offer.model_copy(
             update={"outcome": TechniqueOutcome.DECLINED, "phase": None}))
     return dataclasses.replace(base, retire_technique=True)
@@ -116,7 +114,6 @@ def _offer(decision: Decision, reply: TurnReply, registry: Registry, thread_id, 
     if not allowed:
         return dataclasses.replace(decision, refused="offer")
     return dataclasses.replace(
-        decision, prompts=offer_buttons(reply.framework, explained=False), offered=reply.framework,
-        reset_outcomes=True, retire_technique=False, technique=TechniqueState(
-            thread_id=thread_id, framework_id=reply.framework, outcome=TechniqueOutcome.OFFERED, phase=OFFERING,
-            at_message_count=count_after))
+        decision, prompts=offer_buttons(reply.framework, explained=False), retire_technique=False,
+        technique=TechniqueState(thread_id=thread_id, framework_id=reply.framework, outcome=TechniqueOutcome.OFFERED,
+                                 phase=OFFERING, at_message_count=count_after))

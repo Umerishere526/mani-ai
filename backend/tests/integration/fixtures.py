@@ -18,7 +18,7 @@ ALICE = uuid.UUID("a0000000-0000-4000-8000-0000000000d1")
 
 
 def claims_for(user_id: uuid.UUID) -> Claims:
-    return Claims(sub=str(user_id), raw={"sub": str(user_id), "role": "authenticated"})
+    return Claims.acting_as(user_id)
 
 
 def said(text: str, *, level: str = "none", notes: str = "", **fields) -> TurnReply:

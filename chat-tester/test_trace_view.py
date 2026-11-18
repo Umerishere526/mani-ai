@@ -6,21 +6,20 @@ from __future__ import annotations
 import trace_view
 
 
-def test_the_question_safety_and_reading_entries_each_get_a_labelled_line():
-    """2026-11-11: these were written into the trace and never shown."""
+def test_every_decision_the_turn_writes_gets_a_labelled_line():
     trace = {
-        "safety_settled": True, "no_forward": True, "text_asks": True, "forward_asks_many": True,
-        "reading_before": "failed:timeout", "stepped_out_of": "abcde",
+        "action": "offer", "framework": "abcde", "stage": "belief", "safety": {"level": "none"}, "paused": True,
+        "refused": "offer", "unanswered": True, "buttons": ["Try it"], "latency_ms": 900, "notes": "pushover",
     }
     shown = "\n".join(trace_view.lines(trace))
-    for label in ("Safety settled", "Reply asked no question", "Question in the text too",
-                  "More than one question at the end", "Reading of the turn before", "Stepped out of"):
-        assert f"**{label}:**" in shown
-    assert "failed:timeout" in shown
+    for label in ("Action", "Framework", "Stage", "Safety", "Chat paused", "Code refused", "No host answered",
+                  "Buttons", "Model time (ms)", "Mani's notes"):
+        assert f"**{label}:**" in shown, label
+    assert "**Safety:** level none" in shown
 
 
-def test_a_paused_chat_and_the_safety_check_at_the_end_each_get_a_labelled_line():
-    shown = "\n".join(trace_view.lines({"paused": True, "return_check": "paused_thread", "end_check": "asked"}))
-    assert "**Chat paused:** True" in shown
-    assert "**Return check:** paused_thread" in shown
-    assert "**Safety check after the last stage:** asked" in shown
+def test_a_key_the_panel_does_not_know_is_still_shown_under_its_own_name():
+    """Turns stored before the one-call turn keep their own trace keys, and an admin reading one sees them all."""
+    shown = trace_view.lines({"moment": "chatting", "action": "none"})
+    assert shown[0] == "**Action:** none"
+    assert "**moment:** chatting" in shown

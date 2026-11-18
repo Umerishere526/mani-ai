@@ -6,7 +6,6 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from mani.chat import context
 from mani.config import get_settings
 from mani.db.exercises import Completion
 from mani.llm.schema import SmartPrompt
@@ -30,6 +29,7 @@ from mani.models.rows import (
     Prompt,
     Thread,
 )
+from mani.text import strip as strip_context_block
 
 if TYPE_CHECKING:
     from mani.chat.turn import Turn
@@ -60,10 +60,10 @@ def to_message(message: Message, *, prompts_live: bool = False) -> MessageOut:
         id=message.id,
         thread_id=message.thread_id,
         role=message.role,
-        # Nothing written by this backend carries a [ctx] block, but messages written by
-        # the system it replaces do, and those must not be shown to anyone.
+        # Nothing written by this backend carries a [ctx] block, but some stored messages do, and those must not be
+        # shown to anyone.
         content=(
-            context.strip(message.content)
+            strip_context_block(message.content)
             if message.role is MessageRole.USER
             else message.content
         ),
@@ -95,10 +95,7 @@ def to_turn(turn: Turn) -> TurnOut:
         paused_from=turn.paused_from,
         paused_until=turn.paused_until,
         was_duplicate=turn.was_duplicate,
-        reasoning=turn.reasoning,
-        ledger=turn.ledger,
         understanding=turn.understanding if debug else None,
-        check_at_message_count=turn.check_at_message_count if debug else None,
         trace=turn.trace if debug else None,
         follow_up_pending=turn.needs_summary and not turn.was_duplicate,
     )

@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Literal
 
-from mani.chat import context
+from mani.chat import record
 from mani.chat.safety import State
 from mani.db.threads import TurnContext
 from mani.errors import ErrorCategory, ServiceError
@@ -70,7 +70,7 @@ def return_check(ctx: TurnContext) -> ReturnCheck | None:
     is known wherever they come back), until they have said, in any conversation, that they are all right
     (checked_at)."""
     held, own = ctx.pause, ctx.own_pause
-    asked = (ctx.thread.understanding.get(context.RETURN_CHECK) or {}).get("pause")
+    asked = record.return_check_pause(ctx.thread.understanding)
     if held is None or asked == str(held.id):
         return None
     if own is not None and (own.id == held.id or asked is None):
@@ -82,8 +82,7 @@ def return_check(ctx: TurnContext) -> ReturnCheck | None:
 
 def answering(ctx: TurnContext) -> str | None:
     """The pause whose return check Mani's last reply asked, so this message answers it; None otherwise."""
-    asked = ctx.thread.understanding.get(context.RETURN_CHECK) or {}
-    return asked.get("pause") if asked.get("state") == "asked" else None
+    return record.return_check_pause(ctx.thread.understanding, state="asked")
 
 
 def paused_error(pause: Pause) -> ServiceError:
