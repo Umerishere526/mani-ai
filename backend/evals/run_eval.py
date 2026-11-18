@@ -162,10 +162,10 @@ def sentences(text: str) -> int:
 
 def rule_checks(case, got) -> list[str]:
     """What code can check from the reply's fields; empty when it passes."""
-    failed, checks = [], case["checks"]
-    if "max_sentences" in checks and (count := sentences(got.get("text") or "")) > checks["max_sentences"]:
+    failed, checks, text = [], case["checks"], got.get("text") or ""
+    if "max_sentences" in checks and (count := sentences(text)) > checks["max_sentences"]:
         failed.append(f"{count} sentences > {checks['max_sentences']}")
-    words = len((got.get("text") or "").split())
+    words = len(text.split())
     if "max_words" in checks and words > checks["max_words"]:
         failed.append(f"{words} words > {checks['max_words']}")
     if "min_words" in checks and words < checks["min_words"]:
@@ -181,7 +181,7 @@ def rule_checks(case, got) -> list[str]:
     if "corrected" in checks and bool(got.get("corrected")) != checks["corrected"]:
         failed.append(f"corrected {got.get('corrected')} != {checks['corrected']}")
     for word in checks.get("text_excludes", []):
-        if word.lower() in (got.get("text") or "").lower():
+        if word.lower() in text.lower():
             failed.append(f"said {word!r}")
     return failed
 
