@@ -521,7 +521,7 @@ async def test_a_chat_call_never_opts_into_openrouters_response_cache(sent_bodie
 async def test_a_call_with_no_thread_sends_no_sticky_keys(sent_bodies, recorded):
     await client.complete(
         [{"role": "user", "content": "hi"}], Said, model="openai/gpt-6-luna",
-        purpose=llm_calls.Purpose.MEMORY_FOLD, settings=settings(),
+        purpose=llm_calls.Purpose.SUMMARIZE, settings=settings(),
     )
 
     assert "session_id" not in sent_bodies[0] and "prompt_cache_key" not in sent_bodies[0]
@@ -533,7 +533,7 @@ async def test_only_the_chat_reply_asks_for_the_priority_tier_and_each_purpose_k
     """The person waits on the chat reply alone: it asks for OpenAI's priority endpoint and may fall back to the
     standard one, never to Azure, Bedrock or flex. The calls after the reply stay on the default tier, under a
     key of their own, so they never re-pin the chat's conversation to another endpoint."""
-    purposes = (llm_calls.Purpose.CHAT, llm_calls.Purpose.SUMMARIZE, llm_calls.Purpose.MEMORY_FOLD)
+    purposes = (llm_calls.Purpose.CHAT, llm_calls.Purpose.SUMMARIZE)
     for purpose in purposes:
         await client.complete(
             [{"role": "user", "content": "hi"}], Said, model="openai/gpt-6-luna",

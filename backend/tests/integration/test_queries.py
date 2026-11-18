@@ -439,17 +439,11 @@ async def test_the_active_pause_is_the_users_own_and_the_latest(alice):
     assert await pauses.active(alice, ALICE) is None
 
 
-@pytest.mark.xfail(strict=True, reason="memory carries earlier chats until the memory path is removed")
 async def test_a_new_chat_carries_nothing_from_an_earlier_one_but_the_safety_check(alice):
     """Each chat stands alone, even when the person comes back with the same issue (muhammad, 2026-11-18). Only the
     safety check after a pause crosses over."""
-    from mani.db import pool
-
     earlier = await threads.create(alice, ALICE)
     await messages.create_pair(alice, earlier.id, "my flatmate never cleans and i'm so done", "That sounds tiring.")
-    async with pool.as_admin() as conn:
-        await conn.execute("insert into admin.user_memory (user_id, memory) values ($1, $2)",
-                           ALICE, {"themes": ["flatmate never cleans"]})
     # A pause of no minutes ends the moment it starts, so the next chat owes the check whether they are all right.
     await pauses.start(alice, ALICE, earlier.id, 0, "crisis")
 

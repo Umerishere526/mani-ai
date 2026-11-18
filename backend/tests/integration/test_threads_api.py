@@ -13,11 +13,10 @@ from mani.auth.deps import current_user
 from mani.chat import crisis, turn
 from mani.chat.greeting import greeting
 from mani.config import get_settings
-from mani.db import llm_calls, pool, profiles
+from mani.db import pool, profiles
 from mani.db import messages as messages_db
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
-from mani.llm.schema import Memory
 from tests.integration.fixtures import ALICE, ScriptedModel, claims_for, said
 
 OPENING = "Hi Al. It's MANI. How would you like me to speak with you today?"
@@ -68,6 +67,12 @@ async def test_the_opening_says_again_once_they_have_written_in_an_earlier_chat(
     opening = (await api.get("/v1/threads/opening")).json()
 
     assert opening["greeting"] == greeting("Al", returning=True)
+
+
+async def test_the_memory_fold_endpoint_is_gone(api):
+    """Each chat stands alone (muhammad, 2026-11-18): nothing folds one chat into the next. An older client asking for
+    the fold reaches the thread route, which takes no POST, and gets a client error rather than a server one."""
+    assert (await api.post("/v1/threads/memory-fold")).status_code == 405
 
 
 async def test_current_writes_nothing_for_a_new_account(api):
@@ -155,45 +160,6 @@ async def test_a_retry_arriving_while_the_first_try_waits_on_the_model_gets_that
     assert retry.json()["thread"]["id"] == first.json()["thread"]["id"]
     assert scripted.calls == 1
     assert await _threads_kept() == 1
-
-
-async def test_a_chat_begun_while_the_memory_fold_runs_is_not_folded_by_it(api, monkeypatch):
-    """The fold is asked for when they open a new conversation, so their first message can land while it still runs."""
-    chat = ScriptedModel(said("Go on."))
-    reached_the_model, let_it_answer = asyncio.Event(), asyncio.Event()
-
-    async def answering(messages, schema, **kwargs):
-        if schema is not Memory:
-            return await chat(messages, schema, **kwargs)
-        reached_the_model.set()
-        await let_it_answer.wait()
-        return client.Call(
-            value=Memory(), model="test/model", usage=llm_calls.Usage(), latency_ms=1, call_id=None
-        )
-
-    monkeypatch.setattr(client, "complete", answering)
-    finished = (await api.post("/v1/threads", json={"content": "work was hard"})).json()["thread"]["id"]
-    async with pool.as_admin() as conn:
-        await conn.execute(
-            "update public.threads set last_message_at = now() - interval '1 minute' where id = $1", finished
-        )
-
-    fold = asyncio.create_task(api.post("/v1/threads/memory-fold"))
-    await asyncio.wait_for(reached_the_model.wait(), timeout=5)
-    begun = (await api.post("/v1/threads", json={"content": "my brother never calls"})).json()["thread"]["id"]
-    let_it_answer.set()
-    response = await fold
-
-    assert response.json() == {"folded": 1}
-    async with pool.as_admin() as conn:
-        folded_at = {
-            row["id"]: row["memory_folded_at"]
-            for row in await conn.fetch(
-                "select id::text, memory_folded_at from public.threads where user_id = $1", ALICE
-            )
-        }
-    assert folded_at[finished] is not None
-    assert folded_at[begun] is None
 
 
 async def _paused(thread_id) -> None:

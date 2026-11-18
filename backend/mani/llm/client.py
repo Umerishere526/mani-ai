@@ -300,7 +300,7 @@ async def complete[T: BaseModel](
                 started = time.perf_counter()
                 try:
                     # A chat reply has a deadline for the whole call; the per read timeout alone let one
-                    # run for 102 s. The background calls (summaries, the memory fold) keep only that.
+                    # run for 102 s. The background calls (summaries) keep only that.
                     # A retry gets the deadline or what is left of the budget, whichever is shorter.
                     if chat:
                         left = settings.chat_budget_seconds - (time.perf_counter() - began)

@@ -122,12 +122,6 @@ class FollowUpOut(BaseModel):
     understanding: dict[str, Any] | None = None
 
 
-class MemoryFoldOut(BaseModel):
-    """How many finished conversations were folded into what Mani remembers of the person."""
-
-    folded: int
-
-
 class StyleOption(BaseModel):
     label: str
     style: SupportStyle

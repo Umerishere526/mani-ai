@@ -9,7 +9,6 @@ import pytest
 from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.errors import ServiceError
-from mani.llm.schema import Memory
 from mani.models.rows import Profile, Prompt, TechniqueTried, ThreadSummary
 from mani.prompts import composer
 from mani.prompts.cache import Config
@@ -31,15 +30,6 @@ def test_onboarding_answers_reach_the_prompt_but_the_style_does_not():
     assert "directive" not in said.lower()
     assert composer.user_context(Profile(user_id=USER)) is None
     assert composer.user_context(None) is None
-
-
-def test_what_is_remembered_across_chats_reaches_the_prompt_as_patterns_never_quoted():
-    remembered = composer.user_memory(Memory(
-        low_times=["feels low on Sunday evenings, because of work"], what_helps=["walking the dog"]))
-    assert "feels low on Sunday evenings, because of work" in remembered
-    assert "walking the dog" in remembered
-    assert "never say you remember" in remembered.lower()
-    assert composer.user_memory(Memory()) is None
 
 
 def test_the_summary_carries_what_was_tried_and_whether_it_helped():

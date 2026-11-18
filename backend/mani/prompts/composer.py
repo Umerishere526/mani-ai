@@ -1,10 +1,9 @@
-# ABOUTME: What a turn's system prompt says about the person (onboarding, memory, the summary), and which model, effort
+# ABOUTME: What a turn's system prompt says about the person (onboarding, the summary), and which model, effort
 # ABOUTME: and hosts a prompt row names. The prompt itself is facts.system_prompt.
 
 from __future__ import annotations
 
 from mani.config import get_settings
-from mani.llm.schema import Memory
 from mani.models.rows import Profile, ThreadSummary
 from mani.prompts.cache import Config
 
@@ -26,41 +25,6 @@ def user_context(profile: Profile | None) -> str | None:
         lines.append(f"Topics they came here for: {', '.join(profile.topics)}.")
 
     return "## User Context\n" + "\n".join(lines) if lines else None
-
-
-# Headings for each part of the memory, in the order a reply would use them.
-_MEMORY_HEADINGS = (
-    ("themes", "Keeps coming back to"),
-    ("low_times", "Feels low when"),
-    ("better_times", "Feels better when"),
-    ("what_helps", "What has helped"),
-    ("what_doesnt", "What has not helped"),
-    ("how_they_talk", "How they like the conversation to go"),
-)
-
-
-def user_memory(memory: Memory | None) -> str | None:
-    """What this person has said about themselves across earlier chats, as patterns.
-
-    Never the earlier conversations themselves: a new chat starts with none of their
-    messages. This is what lets Mani choose how to respond without making them repeat it.
-    """
-    if memory is None:
-        return None
-    parts = [
-        f"- **{heading}:** " + "; ".join(getattr(memory, field))
-        for field, heading in _MEMORY_HEADINGS
-        if getattr(memory, field)
-    ]
-    if not parts:
-        return None
-    return (
-        "## What you know about them from earlier conversations\n"
-        "Patterns they have described, in their words. Use them to choose how you respond: "
-        "what to ask about, what to offer, what to avoid. Never quote them, never say you "
-        "remember, and never mention an earlier conversation. If they bring something up, "
-        "respond to what they say now.\n\n" + "\n".join(parts)
-    )
 
 
 def summary_layer(summary: ThreadSummary | None) -> str | None:

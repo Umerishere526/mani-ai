@@ -18,7 +18,6 @@ class Outcome(StrEnum):
 class Purpose(StrEnum):
     CHAT = "chat"
     SUMMARIZE = "summarize"
-    MEMORY_FOLD = "memory_fold"
 
 
 @dataclass(frozen=True)

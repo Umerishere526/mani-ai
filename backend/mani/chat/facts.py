@@ -42,7 +42,6 @@ def system_prompt(config: cache.Config, ctx: TurnContext, *, summary_due: bool) 
         config.require("mani").content,
         framework_guide(config.registry),
         composer.user_context(ctx.profile),
-        composer.user_memory(ctx.memory),
         composer.summary_layer(ctx.summary) if summary_due else None,
     ]
     return "\n\n".join(part for part in parts if part)

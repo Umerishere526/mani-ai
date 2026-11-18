@@ -1,5 +1,5 @@
 # ABOUTME: The structured shapes beside the turn's own reply (chat/reply.py): the buttons under a reply, and what the
-# ABOUTME: summary and the memory fold ask the model for. Field descriptions are read by the model.
+# ABOUTME: summary asks the model for. Field descriptions are read by the model.
 
 from __future__ import annotations
 
@@ -87,49 +87,4 @@ class ExtractedTechnique(BaseModel):
     helpful: bool = Field(description="Whether it seemed to help.")
     context: str | None = Field(
         default=None, description="Brief note on when or how it was used. May be null."
-    )
-
-
-class Memory(BaseModel):
-    """What the memory fold asks for: patterns across conversations, in the person's words.
-
-    Each list holds short statements of what they said, never an interpretation of it. The
-    fold replaces the whole memory each time, so an entry that no longer holds is dropped by
-    leaving it out.
-    """
-
-    model_config = ConfigDict(extra="ignore")
-
-    themes: list[str] = Field(
-        default_factory=list,
-        description="What they keep coming back to, in their words. Short phrases.",
-    )
-    low_times: list[str] = Field(
-        default_factory=list,
-        description=(
-            "When they feel low, and the reason they gave, e.g. \"feels low most Sunday "
-            "evenings, because of work on Monday\". Only what they said; no diagnosis."
-        ),
-    )
-    better_times: list[str] = Field(
-        default_factory=list,
-        description="When they feel better, and what was going on, as they described it.",
-    )
-    what_helps: list[str] = Field(
-        default_factory=list,
-        description="Ways of coping they described as helping, including any framework.",
-    )
-    what_doesnt: list[str] = Field(
-        default_factory=list,
-        description=(
-            "What they said did not help, asked not to do, or a question they skipped or found "
-            "uncomfortable."
-        ),
-    )
-    how_they_talk: list[str] = Field(
-        default_factory=list,
-        description=(
-            "How they like the conversation to go, from how they responded: e.g. \"prefers "
-            "short replies\", \"usually declines exercises\"."
-        ),
     )

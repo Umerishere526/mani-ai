@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 
 import asyncpg
 
-from mani.llm.schema import Memory
 from mani.models.rows import (
     Pause,
     Profile,
@@ -216,8 +215,6 @@ class TurnContext:
     # Another of this person's conversations was flagged for crisis recently. Only the fact
     # crosses threads, never what was said in it.
     recent_crisis: bool = False
-    # Patterns from this person's earlier conversations, folded in as each one finished.
-    memory: Memory | None = None
     # The pauses this turn may owe the question whether they are all right for (chat/pause.return_check), each the
     # latest that has run out by the database's clock as the pause gate reads it, within RECENT_CRISIS_DAYS of its
     # end (an older one owes nothing): this person's, and this conversation's own, each with what it rested on.
@@ -242,8 +239,6 @@ select
            where c.user_id = t.user_id and c.id <> t.id
              and c.crisis_at > now() - interval '{RECENT_CRISIS_DAYS} days')
                                                    as recent_crisis,
-  (select um.memory from admin.user_memory um
-    where um.user_id = t.user_id)                  as memory,
   (select jsonb_build_object(
             'id', cp.id, 'user_id', cp.user_id, 'thread_id', cp.thread_id, 'started_at', cp.started_at,
             'ends_at', cp.ends_at, 'checked_at', cp.checked_at,
@@ -275,7 +270,6 @@ async def load_turn_context(
         if row["technique"] else None,
         summary=ThreadSummary.model_validate(row["summary"]) if row["summary"] else None,
         recent_crisis=row["recent_crisis"],
-        memory=Memory.model_validate(row["memory"]) if row["memory"] else None,
         pause=Pause.model_validate(row["pause"]) if row["pause"] else None,
         own_pause=Pause.model_validate(row["own_pause"]) if row["own_pause"] else None,
     )

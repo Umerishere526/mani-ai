@@ -181,11 +181,7 @@ def test_signup_through_deletion_is_one_working_system(gotrue, model):
             assert refused.status_code == 401
 
             # Real GoTrue deletes as supabase_auth_admin, which RLS applies to - the one path
-            # test_rls.sql cannot assume on real Supabase, so the memory and a pause are checked here.
-            _plant(
-                database_url, "insert into admin.user_memory (user_id, memory) values ($1, $2)",
-                uuid.UUID(user_id), '{"themes": ["should not survive the account"]}',
-            )
+            # test_rls.sql cannot assume on real Supabase, so a pause is checked here.
             _plant(
                 database_url,
                 "insert into public.chat_pauses (user_id, thread_id, ends_at, reason) "
@@ -197,8 +193,7 @@ def test_signup_through_deletion_is_one_working_system(gotrue, model):
             assert deletion.status_code == 204
 
         for table in (
-            "public.profiles", "public.threads", "public.messages", "admin.user_memory",
-            "public.chat_pauses",
+            "public.profiles", "public.threads", "public.messages", "public.chat_pauses",
         ):
             remaining = _row_count(database_url, table, uuid.UUID(user_id))
             assert remaining == 0, f"{table} still has rows after account deletion"
