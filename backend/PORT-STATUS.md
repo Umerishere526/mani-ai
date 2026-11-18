@@ -197,12 +197,8 @@ the same change as the work.**
   acknowledgment before each stage** (muhammad, 2026-11-18). Because the client's sequence document shows Directive's
   short acknowledgments, and muhammad's Directive chat of 2026-11-18 ran long. Supportive and Reflective keep their
   length. `mani.md` ("How a reply looks", "Your style", "Inside the set of questions").
-- **Mani suggests up to three answers as buttons when it asks what is behind something, what matters most, or which
-  of a few things** (muhammad, 2026-11-18). Because the client's sequence document shows them (Work / Family /
-  Everything at once). The reply's `options`; code shows them only in the chat: never beside its own buttons, inside a
-  set or an offer, or on a turn held for safety; a tap reaches the model as their words (`repairs.suggestion_buttons`,
-  `turn._apply`). `test_suggestions_show_as_buttons_on_a_plain_chat_reply_and_a_tap_is_their_answer`,
-  `test_suggestions_never_show_beside_an_offer_inside_a_set_or_on_a_safety_turn` in `test_turn.py`.
+- **Retired 2026-11-18: suggested answers as buttons** (muhammad, 2026-11-18, the same day). Because muhammad asked
+  for them to be removed after testing; the reply no longer carries `options`.
 - **When no host answers, or the reply's text is empty, a send or a first message gets a fixed reply, never an
   error; an edit fails instead and changes nothing** (muhammad, 2026-11-17; the edit and the empty text, 2026-11-18).
   An empty text keeps its safety judgment and moves nothing else (`test_an_empty_reply_gets_a_fixed_one_and_keeps_the_

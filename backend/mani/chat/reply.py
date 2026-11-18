@@ -34,6 +34,3 @@ class TurnReply(BaseModel):
     safety: Safety
     notes: str = Field(description="Your private working notes for your next turn, under 150 words.")
     title: str | None = Field(default=None, description="Only when the facts ask for a title.")
-    options: list[str] = Field(default_factory=list, description=(
-        "Up to three short answers they might give to your question, in their own terms, shown as buttons. Empty when "
-        "your question has no few natural answers, and on any reply about safety."))

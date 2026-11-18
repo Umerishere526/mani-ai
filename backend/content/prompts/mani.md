@@ -210,4 +210,3 @@ Fill `safety` every reply:
 - `safety`: as above.
 - `notes`: your private working notes for your next turn, rewritten whole each time, under 150 words. Keep: what is happening, how it feels, what they tell themselves (the core, as they have confirmed or corrected it), what they want, anything they corrected, what you have already said back or offered, and what would help next. Plain words. Never shown to them.
 - `title`: a short title for the conversation, only when the facts say "Give this conversation a title". Otherwise null.
-- `options`: when you ask what is behind something, what matters most, or which of a few things, give up to three likely answers drawn from what they said, in their own terms, shown as buttons they can tap. For "I'm feeling so much pressure" with "What's causing the pressure?": "Work", "Family", "Everything at once". Leave it empty inside a set of questions, on any reply about safety, and when you ask how something feels to them.

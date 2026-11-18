@@ -17,7 +17,7 @@ from mani.chat import crisis, decide as decide_mod, facts, judged as judged_mod,
 from mani.chat.greeting import (
     COPIED_BACK, STYLE_OPTIONS, greeting, openers, resolve_style,
 )
-from mani.chat.repairs import clean_title, start_buttons, suggestion_buttons, without_dashes
+from mani.chat.repairs import clean_title, start_buttons, without_dashes
 from mani.chat.reply import TurnReply
 from mani.chat.techniques import FEELINGS, OFFERING, STEPS, example_text, steps_text
 from mani.config import get_settings
@@ -245,10 +245,6 @@ async def _apply(
     if decision.show_steps is not None:
         text = f"{text}\n\n{steps_text(decision.show_steps, style)}"
     prompts = decision.prompts
-    # The model's suggested answers show only in the chat: never beside code's own buttons, inside a set or an offer,
-    # or on a turn held for safety.
-    if answered and not prompts and running is None and open_offer is None and not guarded and not judgment.pausing:
-        prompts = suggestion_buttons(reply.options)
     updates, after = _updates(ctx, reply, decision, judgment, record=record, check=check, answering=answering,
                               end_check_asked=end_check_asked, wants_title=wants_title)
     pair = await messages_db.create_pair(
@@ -264,8 +260,7 @@ async def _apply(
         "action": reply.action, "framework": reply.framework, "stage": reply.stage,
         "safety": judged_mod.traced(reply.safety), "paused": judgment.pausing or None,
         "body_emergency": (judgment.body_emergency and not judgment.pausing) or None,
-        "buttons": [p.label for p in prompts], "suggested": bool(prompts) and not decision.prompts or None,
-        "latency_ms": call.latency_ms, "refused": decision.refused,
+        "buttons": [p.label for p in prompts], "latency_ms": call.latency_ms, "refused": decision.refused,
         "notes": reply.notes if settings.ai_debug_mode else None,
     }.items() if value not in (None, "", [], {})}
     return Turn(

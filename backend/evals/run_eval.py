@@ -161,10 +161,6 @@ def rule_checks(case, got) -> list[str]:
         failed.append(f"stage {got.get('stage')} not in {checks['stage_in']}")
     if "safety" in checks and (got.get("safety") or {}).get("level") != checks["safety"]:
         failed.append(f"safety {(got.get('safety') or {}).get('level')} != {checks['safety']}")
-    if checks.get("options_empty") and got.get("options"):
-        failed.append(f"suggested {got.get('options')} where none belong")
-    if checks.get("options_given") and not got.get("options"):
-        failed.append("no suggestions where the question has a few natural answers")
     if checks.get("no_question") and "?" in (got.get("text") or ""):
         failed.append("asked a question")
     for word in checks.get("text_excludes", []):
