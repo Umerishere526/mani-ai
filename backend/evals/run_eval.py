@@ -165,6 +165,11 @@ def rule_checks(case, got) -> list[str]:
     failed, checks = [], case["checks"]
     if "max_sentences" in checks and (count := sentences(got.get("text") or "")) > checks["max_sentences"]:
         failed.append(f"{count} sentences > {checks['max_sentences']}")
+    words = len((got.get("text") or "").split())
+    if "max_words" in checks and words > checks["max_words"]:
+        failed.append(f"{words} words > {checks['max_words']}")
+    if "min_words" in checks and words < checks["min_words"]:
+        failed.append(f"{words} words < {checks['min_words']}")
     if "action" in checks and got.get("action") != checks["action"]:
         failed.append(f"action {got.get('action')} != {checks['action']}")
     if "action_not" in checks and got.get("action") == checks["action_not"]:
