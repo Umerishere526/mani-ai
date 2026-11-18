@@ -4,7 +4,7 @@
   2026-11-18 ("this was a solid chat but it still need much improvements").
 - **muhammad's answers (2026-11-18):** which points apply to which styles, below each point. The design is
   `docs/superpowers/specs/2026-11-18-promotion-chat-feedback-design.md`.
-- **Requirements drawn from it:** R114 to R121 in [requirements.md](../requirements.md).
+- **Requirements drawn from it:** R114 to R122 in [requirements.md](../requirements.md).
 - The review of the first reply quotes "It's starting to make me question whether I'm actually good at what I do",
   which this chat does not contain; that part may have been written about another run.
 

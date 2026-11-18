@@ -193,10 +193,23 @@ the same change as the work.**
   stock phrases: 3.42, none of the phrases in 75 replies, rules 30 of 33 (the model suggested answers on the passive
   wish-not-to-wake case in 2 of 3 runs, judged unsure, so code drops them; one Directive close a sentence long); the
   suite passed 8 of 8 both times.
-- **Directive replies are short: three or four short sentences at most, in the chat and inside a set, with one short
-  acknowledgment before each stage** (muhammad, 2026-11-18). Because the client's sequence document shows Directive's
-  short acknowledgments, and muhammad's Directive chat of 2026-11-18 ran long. Supportive and Reflective keep their
-  length. `mani.md` ("How a reply looks", "Your style", "Inside the set of questions").
+- **Directive replies are short: three or four short sentences at most, one or two points then one open question
+  (never a pick-from-several), and A asks for one specific recent event** (muhammad, 2026-11-18). Because the
+  client's sequence document shows Directive's short acknowledgments, and her review of the promotion chat
+  (2026-11-18) found Directive stacking four or five points, a three-option question, and an A that bundled the whole
+  pattern. The first rule, sentences only, was ignored in every reply: the prompt's other lines (two or three moves a
+  reply, 120 to 220 words, 60 to 120 inside a set) said the opposite, so those now name Supportive and Reflective,
+  which keep their length, their possibilities questions and their A. If the eval still finds long Directive replies,
+  the next step is code counting sentences and asking once more, not another line. `mani.md`; eval
+  `rule-directive-short`, `rule-directive-open-question`, `max_sentences`.
+- **Every reading is a possibility, each point is made once, and no causal claim the person hasn't made** (muhammad,
+  2026-11-18). Because the client's promotion-chat review found readings stated as fact ("That is the core of it"),
+  the same reassurance four times, and "That silence probably reinforced the feeling", which blamed the person. All
+  styles. `mani.md` ("What a good reply gives").
+- **Inside a set the belief is never argued with before D, and the set opens with one bridge sentence before "A is for
+  Activating Event."** (muhammad, 2026-11-18). Because the client's review found Mani disputing at B, leaving D
+  nothing new, and the jump into A abrupt. The chat before a set may still offer a fair perspective. `mani.md`
+  ("Inside the set of questions"); eval `rule-no-dispute-at-b`, `rule-start-bridge`.
 - **Retired 2026-11-18: suggested answers as buttons** (muhammad, 2026-11-18, the same day). Because muhammad asked
   for them to be removed after testing; the reply no longer carries `options`.
 - **When no host answers, or the reply's text is empty, a send or a first message gets a fixed reply, never an
@@ -764,7 +777,9 @@ the same change as the work.**
   on its own reply (`decide.stage_of`; 2026-11-18). A stage of another framework changes nothing. `action: finish` on
   the last stage opens the feelings check: Mani acknowledges the new belief and asks how they feel now, with Stronger /
   More focused / Still a bit tired, and the next answer closes the set with Keep Chatting, Go to Library and Finish for
-  Now and records it finished (phase `feelings_check`, `decide._moved`; 2026-11-18). E ends on the new belief, with no
+  Now and records it finished (phase `feelings_check`, `decide._moved`; 2026-11-18). The closing reply answers warmly
+  and asks whether they want to think about a practical next step, since feeling better is not the situation solved
+  (the client's promotion-chat review; muhammad, 2026-11-18; `facts._running_line`). E ends on the new belief, with no
   "one thing they'll do" (muhammad, 2026-11-18). `action: stop` records the set declined. A set starts on a tap on
   Start for the offer still open (`taps.tap_event`), or on a typed yes after its five steps when the reply moves to
   its first stage. The facts name the stage in force, the next stage's line and the one-step
