@@ -14,6 +14,7 @@ import asyncpg
 
 from mani.auth.jwt import Claims
 from mani.chat import body as body_route, context, converse, crisis, pause, picture, repairs, reply_checks, rewind, safety, understanding, walk
+from mani.chat.taps import chosen_style, find_tapped_prompt, pending_offer
 from mani.chat.greeting import (
     COPIED_BACK,
     EXPLAIN_LABELS,
@@ -245,54 +246,6 @@ def _stage_reports(reply) -> dict:
 def _raw(reply, settings) -> dict | None:
     """The model's reply as it came back, only with AI_DEBUG_MODE."""
     return reply.model_dump(mode="json", exclude_none=True) if settings.ai_debug_mode else None
-
-
-def find_tapped_prompt(history: list[Message], content: str) -> SmartPrompt | None:
-    """Whether this message is a tap on a button Mani offered last turn.
-
-    There is no button id on the wire, so a tap is a text match against the options on
-    the most recent Mani message that carried any. The reference matched against the
-    most recent Mani message *full stop*, so a plain reply in between made every later
-    accept or decline evaluate a stale offer.
-    """
-    typed = content.strip().lower()
-    if not typed:
-        return None
-
-    for option in _last_offered(history):
-        label = str(option.get("label", "")).strip().lower()
-        if label and label == typed:
-            return SmartPrompt.model_validate(option)
-    return None
-
-
-def chosen_style(history: list[Message], content: str) -> SupportStyle | None:
-    """The style this message picks, when it is a tap on one of the greeting's style buttons.
-
-    Read from the stored options rather than through SmartPrompt: `style` is a greeting-only
-    key the model is never asked for, so it is not part of the reply schema at all.
-    """
-    typed = content.strip().lower()
-    for option in _last_offered(history):
-        if option.get("style") and str(option.get("label", "")).strip().lower() == typed:
-            return SupportStyle(option["style"])
-    return None
-
-
-def pending_offer(history: list[Message]) -> SmartPrompt | None:
-    """The technique button still awaiting an answer, if there is one."""
-    for option in _last_offered(history):
-        if option.get("technique"):
-            return SmartPrompt.model_validate(option)
-    return None
-
-
-def _last_offered(history: list[Message]) -> list[dict]:
-    """The buttons under Mani's most recent message, which may be none."""
-    for message in reversed(history):
-        if message.role is MessageRole.MANI:
-            return message.prompt_options or []
-    return []
 
 
 def _decided_framework(

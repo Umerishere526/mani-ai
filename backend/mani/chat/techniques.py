@@ -10,6 +10,16 @@ from mani.models.rows import Framework
 OFFERING = "offering"
 
 
+def stages_of(framework: Framework) -> list[str]:
+    """The stages the person answers, in order: every phase after the offer."""
+    return [phase for phase in framework.phases if phase != OFFERING]
+
+
+def line_of(framework: Framework, stage: str) -> str:
+    """What opens a stage when it is reached, such as "A is for Activating Event."."""
+    return (framework.stages.get(stage) or {}).get("intro", "")
+
+
 class Registry:
     """The active frameworks, keyed by id.
 
