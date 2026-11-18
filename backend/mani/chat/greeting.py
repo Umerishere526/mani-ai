@@ -64,6 +64,13 @@ GO_TO_LIBRARY_LABEL = "Go to Library"
 FINISH_LABEL = "Finish for Now"
 
 
+# Every label code puts on a button; a suggestion from the model never takes one, since a tap is read by its label.
+CODE_LABELS = frozenset(label.lower() for label in (
+    *LEAD_IN_LABELS, EXAMPLE_LABEL, TALK_MORE_FIRST_LABEL, *FEELINGS_LABELS, CLOSING_KEEP_CHATTING_LABEL,
+    GO_TO_LIBRARY_LABEL, FINISH_LABEL, *(option["label"] for option in STYLE_OPTIONS),
+))
+
+
 def start_label(framework_name: str) -> str:
     """The button that starts a set after its five steps, such as "Start ABCDE"."""
     return f"Start {framework_name}"

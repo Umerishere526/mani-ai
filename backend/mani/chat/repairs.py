@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import re
 
-from mani.chat.greeting import EXAMPLE_LABEL, FEELINGS_LABELS, LEAD_IN_LABELS, TALK_MORE_FIRST_LABEL, start_label
+from mani.chat.greeting import (
+    CODE_LABELS, EXAMPLE_LABEL, FEELINGS_LABELS, LEAD_IN_LABELS, TALK_MORE_FIRST_LABEL, start_label,
+)
 from mani.llm.schema import SmartPrompt
 from mani.models.rows import Framework
 
@@ -71,15 +73,18 @@ MAX_SUGGESTION_LENGTH = 40
 
 
 def suggestion_buttons(options: list[str]) -> list[SmartPrompt]:
-    """The model's suggested answers as buttons: trimmed, blanks, repeats and ones too long for a button dropped, at
-    most three."""
+    """The model's suggested answers as buttons: trimmed; blanks, repeats, ones too long for a button and ones named like
+    a button of code's own dropped; at most three."""
     seen: set[str] = set()
     buttons = []
     for option in options:
         label = option.strip()
-        if label and len(label) <= MAX_SUGGESTION_LENGTH and label.lower() not in seen:
-            seen.add(label.lower())
-            buttons.append(SmartPrompt(label=label))
+        key = label.lower()
+        if (not label or len(label) > MAX_SUGGESTION_LENGTH or key in seen or key in CODE_LABELS
+                or key.startswith("start ")):
+            continue
+        seen.add(key)
+        buttons.append(SmartPrompt(label=label))
     return buttons[:3]
 
 

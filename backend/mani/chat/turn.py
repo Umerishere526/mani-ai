@@ -158,16 +158,16 @@ async def _turn(
         ctx.thread.conversation_style.value if ctx.thread.conversation_style else None,
         ctx.profile.support_style.value if ctx.profile and ctx.profile.support_style else None,
     )
-    if tap.explain is not None:
-        return await _explained(conn, ctx, content, tap.explain, style_name, tapped, client_message_id)
-    if tap.example is not None:
-        return await _fixed_step(conn, ctx, content, example_text(tap.example),
-                                 start_buttons(tap.example, with_example=False), tapped, client_message_id)
-
     check = pause.return_check(ctx)
     answering = None if check is not None else pause.answering(ctx)
     before = safety.State(ctx.thread.safety)
     holding = before is not safety.State.CLEAR or check is not None
+    # A held turn (an open worry, or the question owed after a pause) goes to the model, never to a fixed step.
+    if tap.explain is not None and not holding:
+        return await _explained(conn, ctx, content, tap.explain, style_name, tapped, client_message_id)
+    if tap.example is not None and not holding:
+        return await _fixed_step(conn, ctx, content, example_text(tap.example),
+                                 start_buttons(tap.example, with_example=False), tapped, client_message_id)
     last_reply = next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None)
     if tapped is None and not holding and copies_last_reply(content, last_reply):
         return await _copied_back(conn, ctx, content, client_message_id)
@@ -227,10 +227,6 @@ async def _apply(
     )
     text = (crisis.pause_reply(judgment.about, settings.crisis_pause_minutes) if judgment.pausing
             else crisis.END_CHECK if decision.end_check else reply.text)
-    if judgment.body_emergency and not judgment.pausing:
-        text = f"{text.rstrip()}\n\n{crisis.BODY_EMERGENCY}"
-    if decision.show_steps is not None:
-        text = f"{text.rstrip()}\n\n{steps_text(decision.show_steps, style)}"
     text = without_dashes(text).strip()
     answered = bool(text)
     if not text and not answer_failure:
@@ -243,6 +239,11 @@ async def _apply(
         text = (crisis.CRISIS_REPLY if holding or judgment.state_after is not safety.State.CLEAR
                 else crisis.TROUBLE_REPLY)
         decision = decide_mod.Decision(declined=rec.declined(record), finished=rec.finished(record))
+    # Code's own pieces follow the reply only once it says something: the call-now line, and the five steps.
+    if judgment.body_emergency and not judgment.pausing:
+        text = f"{text}\n\n{crisis.BODY_EMERGENCY}"
+    if decision.show_steps is not None:
+        text = f"{text}\n\n{steps_text(decision.show_steps, style)}"
     prompts = decision.prompts
     # The model's suggested answers show only in the chat: never beside code's own buttons, inside a set or an offer,
     # or on a turn held for safety.

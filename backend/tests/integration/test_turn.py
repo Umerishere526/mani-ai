@@ -363,3 +363,28 @@ async def test_suggestions_never_show_beside_an_offer_inside_a_set_or_on_a_safet
     await put_technique(running.id, "abcde", TechniqueOutcome.ACCEPTED, "activate")
     stage = await send(alice, running.id, "my boss moved the deadline")
     assert stage.prompts == []
+
+
+async def test_an_empty_reply_to_the_lead_in_gets_the_fixed_reply_not_the_steps_alone(alice, model):
+    model(said("Lead-in.", action="offer", framework="abcde"), said(" \u2014 "))
+    thread = await start(alice)
+    await send(alice, thread.id, "i feel like a pushover")
+    turn = await send(alice, thread.id, "maybe look at what i've managed")
+    assert turn.content == crisis.TROUBLE_REPLY and turn.prompts == []
+    assert (await technique_of(alice, thread.id)).phase == "offering"
+
+
+async def test_an_owed_return_check_comes_before_the_five_steps(alice, model):
+    """A pause elsewhere that has run out owes the question how things are; a lead-in tap does not jump it."""
+    from mani.db import pool
+
+    scripted = model(said("Lead-in.", action="offer", framework="abcde"), said("Before that, how are things now?"))
+    thread = await start(alice)
+    await send(alice, thread.id, "i feel like a pushover")
+    other = await start(alice)
+    async with pool.as_admin() as conn:
+        await conn.execute(
+            "insert into public.chat_pauses (user_id, thread_id, started_at, ends_at, reason) "
+            "values ($1, $2, now() - interval '20 minutes', now() - interval '5 minutes', 'took pills')", ALICE, other.id)
+    turn = await send(alice, thread.id, "Not sure")
+    assert scripted.calls == 2 and turn.content == "Before that, how are things now?"

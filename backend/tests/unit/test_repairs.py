@@ -61,3 +61,9 @@ def test_suggestions_are_cleaned_and_held_to_three_short_buttons():
     labels = [p.label for p in repairs.suggestion_buttons([" Work", "Family", "", "work", "Everything at once", "Fourth"])]
     assert labels == ["Work", "Family", "Everything at once"]
     assert repairs.suggestion_buttons(["x" * 41]) == [], "a suggestion too long for a button is dropped"
+
+
+def test_a_suggestion_named_like_one_of_codes_buttons_is_dropped():
+    """A suggestion labelled "Keep chatting" or "Finish for Now" would read, when tapped, as code's own button."""
+    options = ["Keep chatting", "finish for now", "Not sure", "Start ABCDE", "Stronger", "Directive", "Work"]
+    assert [p.label for p in repairs.suggestion_buttons(options)] == ["Work"]
