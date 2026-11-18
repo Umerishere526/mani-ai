@@ -1033,6 +1033,93 @@
     "max_sentences": 4,
     "judge": "The reply takes in the belief they named. It does NOT argue with it: no reassurance that it is untrue ('But it does not say that', 'that is not proof'), and nothing about what doesn't fit it. Saying the belief back, or moving to C with 'C is for Consequences.' and a question, passes."
    }
+  },
+  {
+   "id": "rule-sr-first-reply-builds",
+   "style": "Supportive",
+   "samples": 5,
+   "opener": "How can I support you today?",
+   "reference": null,
+   "turns": [
+    {
+     "role": "user",
+     "content": "my co workers keep on blabbering and i can't focus"
+    }
+   ],
+   "facts": [
+    "You cannot offer a set of questions in this reply: never ask whether they would like to try one.",
+    "Give this conversation a title."
+   ],
+   "checks": {
+    "max_words": 120,
+    "action_not": "offer",
+    "judge": "The reply reflects what they said in their own terms, notices at most one small thing drawn only from their words, and asks one question. It does NOT say what is at stake for them beyond their words, such as a fear of being disliked or seen as a complainer, having to prove their place, or being judged. It is specific to what they said, not a generic invitation to say more."
+   }
+  },
+  {
+   "id": "rule-sr-first-reply-builds-reflective",
+   "style": "Reflective",
+   "samples": 5,
+   "opener": "What's on your mind today?",
+   "reference": null,
+   "turns": [
+    {
+     "role": "user",
+     "content": "my co workers keep on blabbering and i can't focus"
+    }
+   ],
+   "facts": [
+    "You cannot offer a set of questions in this reply: never ask whether they would like to try one.",
+    "Give this conversation a title."
+   ],
+   "checks": {
+    "max_words": 120,
+    "action_not": "offer",
+    "judge": "The reply reflects what they said in their own terms, notices at most one small thing drawn only from their words, and asks one question. It does NOT say what is at stake for them beyond their words, such as a fear of being disliked or seen as a complainer, having to prove their place, or being judged. It is specific to what they said, not a generic invitation to say more."
+   }
+  },
+  {
+   "id": "rule-sr-highlight-when-laid-out",
+   "style": "Supportive",
+   "samples": 5,
+   "opener": "How can I support you today?",
+   "reference": null,
+   "facts": [],
+   "turns": [
+    {
+     "role": "user",
+     "content": "my friend cancelled on me again last night"
+    },
+    {
+     "role": "assistant",
+     "content": "Again. That word says this isn't the first time, and it sounds like it's starting to wear on you.\n\nI'd like to understand what happened.\n\nWhat did last night look like, from the plan to the moment it fell through?"
+    },
+    {
+     "role": "user",
+     "content": "we were supposed to have dinner, i booked the place and everything. she texted an hour before saying something came up. this is like the fourth time in two months"
+    },
+    {
+     "role": "assistant",
+     "content": "You booked the table, you were getting ready, and an hour before, a text. Four times in two months is a pattern, not bad luck.\n\nYou're the one who keeps making the plans.\n\nWhen that text came through last night, what did you do with the evening?"
+    },
+    {
+     "role": "user",
+     "content": "i just sat at home feeling stupid honestly. i had cancelled something else to keep that night free. and now i've kind of stopped suggesting things because i don't want to set myself up again"
+    },
+    {
+     "role": "assistant",
+     "content": "You gave something up to keep that night for her, and then sat at home with it. Feeling stupid after that makes sense, even though you did nothing wrong.\n\nAnd now you've started pulling back, so you don't have to feel that again.\n\nWhen you think about her cancelling, what goes through your mind about the two of you?"
+    },
+    {
+     "role": "user",
+     "content": "that maybe i care about this friendship more than she does. like i'm always the one making the effort and she just fits me in when nothing better comes up. we've been friends since school and it used to feel equal"
+    }
+   ],
+   "checks": {
+    "min_words": 150,
+    "action_not": "offer",
+    "judge": "The reply gives one clear highlight: what may really be at stake for them beyond the cancelled plans themselves, held as a possibility they can correct, never stated as a fact. It says this once and does not list several readings."
+   }
   }
  ]
 }
