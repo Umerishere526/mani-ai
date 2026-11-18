@@ -1053,7 +1053,7 @@
    "checks": {
     "max_words": 120,
     "action_not": "offer",
-    "judge": "The reply reflects what they said in their own terms, notices at most one small thing drawn only from their words, and asks one question. It does NOT say what is at stake for them beyond their words, such as a fear of being disliked or seen as a complainer, having to prove their place, or being judged. It is specific to what they said, not a generic invitation to say more."
+    "judge": "The reply reflects what they said and asks one question (a question offering options counts as one). It may notice small, ordinary things about their situation. It FAILS if it says what may be at stake for them beyond their words: a fear (such as being disliked, seen as a complainer, or judged), a need, a belief about themselves (such as having to prove their place), or a deeper meaning behind the situation. It also fails if it is generic, a stock invitation to say more with nothing specific to what they said."
    }
   },
   {
@@ -1075,7 +1075,7 @@
    "checks": {
     "max_words": 120,
     "action_not": "offer",
-    "judge": "The reply reflects what they said in their own terms, notices at most one small thing drawn only from their words, and asks one question. It does NOT say what is at stake for them beyond their words, such as a fear of being disliked or seen as a complainer, having to prove their place, or being judged. It is specific to what they said, not a generic invitation to say more."
+    "judge": "The reply reflects what they said and asks one question (a question offering options counts as one). It may notice small, ordinary things about their situation. It FAILS if it says what may be at stake for them beyond their words: a fear (such as being disliked, seen as a complainer, or judged), a need, a belief about themselves (such as having to prove their place), or a deeper meaning behind the situation. It also fails if it is generic, a stock invitation to say more with nothing specific to what they said."
    }
   },
   {
@@ -1092,7 +1092,7 @@
     },
     {
      "role": "assistant",
-     "content": "Again. That word says this isn't the first time, and it sounds like it's starting to wear on you.\n\nI'd like to understand what happened.\n\nWhat did last night look like, from the plan to the moment it fell through?"
+     "content": "Again. That word says this isn't the first time, and it sounds like it's starting to wear on you.\n\nWhen someone cancels once, it's easy to let it go. When it keeps happening, each one lands on top of the last, and the plans you were looking forward to start to feel like something you can't count on.\n\nI'd like to understand what happened.\n\nWhat did last night look like, from making the plan to the moment it fell through?"
     },
     {
      "role": "user",
@@ -1100,7 +1100,7 @@
     },
     {
      "role": "assistant",
-     "content": "You booked the table, you were getting ready, and an hour before, a text. Four times in two months is a pattern, not bad luck.\n\nYou're the one who keeps making the plans.\n\nWhen that text came through last night, what did you do with the evening?"
+     "content": "You booked the table, you were getting ready, and then an hour before, a text. Four times in two months is a pattern, not bad luck.\n\nIt also sounds like you're the one who keeps making the plans happen: choosing the place, booking it, keeping the evening free. So when it falls through, it's your effort that ends up unused.\n\nI'd like to understand how this sits with you afterwards.\n\nWhen that text came through last night, what did you do with the evening?"
     },
     {
      "role": "user",
@@ -1108,7 +1108,7 @@
     },
     {
      "role": "assistant",
-     "content": "You gave something up to keep that night for her, and then sat at home with it. Feeling stupid after that makes sense, even though you did nothing wrong.\n\nAnd now you've started pulling back, so you don't have to feel that again.\n\nWhen you think about her cancelling, what goes through your mind about the two of you?"
+     "content": "You gave something up to keep that night for her, and then sat at home with it. Feeling stupid after that makes sense, even though you did nothing wrong. You kept your side of the plan.\n\nAnd now you've started holding back from suggesting things, so you don't have to go through that again. That's a real change in how you are with her, and it tells me this has been costing you more than a few evenings.\n\nWhen you think about her cancelling, what goes through your mind about the two of you?"
     },
     {
      "role": "user",
@@ -1118,7 +1118,7 @@
    "checks": {
     "min_words": 150,
     "action_not": "offer",
-    "judge": "The reply gives one clear highlight: what may really be at stake for them beyond the cancelled plans themselves, held as a possibility they can correct, never stated as a fact. It says this once and does not list several readings."
+    "judge": "The reply gives a clear highlight: what may really be at stake for them beyond the cancelled plans themselves (such as caring more than she does, or the friendship no longer being equal), held as a possibility they can correct. It may also offer other things, such as permission or a fair perspective, but it never states a reading of what they feel, want or mean as a fact."
    }
   }
  ]
