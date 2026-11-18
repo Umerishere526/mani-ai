@@ -200,6 +200,8 @@ Notes live in `./mani-vault/Journal/`.
 - Before starting complex tasks, search the journal for relevant lessons. Then judge the current code on its own merits.
 - Track patterns in user feedback to improve collaboration over time by updating the appropriate journal entry.
 - Link notes to each other with `[[wikilinks]]`. Do not copy stack facts from `.claude/` into the vault — link to them, or they drift.
+- Every journal note's frontmatter carries `summary:` (one line: what it is about) and, when it records something that did not work, `failed:` (a list of "Tried X; failed because Y"). The edit hook flags a note without its summary.
+- Every session starts with a digest generated from those lines and from the bold lines under "Decisions in force" (`.claude/hooks/digest.py`), so keep them current: a stale line there is what the next session believes.
 
 ### How to weigh the journal
 

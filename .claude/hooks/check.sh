@@ -25,6 +25,15 @@ report() {
   status=2
 }
 
+# The session-start digest reads journal frontmatter and PORT-STATUS's decisions; say at once what one of them lacks.
+case "$rel" in
+  mani-vault/Journal/*.md|backend/PORT-STATUS.md)
+    out="$(python3 "$ROOT/.claude/hooks/digest.py" --check "$file" 2>&1)"
+    [ -n "$out" ] && report "session digest: $out"
+    exit $status
+    ;;
+esac
+
 case "$app" in
   web)
     case "$file" in
