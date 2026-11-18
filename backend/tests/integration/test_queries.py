@@ -2,20 +2,24 @@
 # ABOUTME: Covers the composed turn read, the batched write, and the old leak's shape.
 
 import datetime as dt
+import time
 import uuid
 
 import asyncpg
 import pytest
 
 from mani.auth.jwt import Claims
-from mani.chat import turn as chat_turn
+from mani.chat import facts, pause, turn as chat_turn
+from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.db import config_tables, llm_calls, messages, pauses, profiles, summaries, threads
 from mani.models.rows import (
+    Prompt,
     TechniqueOutcome,
     TechniqueState,
     TechniqueTried,
 )
+from mani.prompts.cache import Config
 from tests.integration.cleanup import remove_test_users
 
 ALICE = uuid.UUID("a0000000-0000-4000-8000-0000000000c1")
@@ -433,3 +437,27 @@ async def test_the_active_pause_is_the_users_own_and_the_latest(alice):
         BOB, ALICE)
     await alice.execute("delete from public.chat_pauses where user_id = $1", ALICE)
     assert await pauses.active(alice, ALICE) is None
+
+
+@pytest.mark.xfail(strict=True, reason="memory carries earlier chats until the memory path is removed")
+async def test_a_new_chat_carries_nothing_from_an_earlier_one_but_the_safety_check(alice):
+    """Each chat stands alone, even when the person comes back with the same issue (muhammad, 2026-11-18). Only the
+    safety check after a pause crosses over."""
+    from mani.db import pool
+
+    earlier = await threads.create(alice, ALICE)
+    await messages.create_pair(alice, earlier.id, "my flatmate never cleans and i'm so done", "That sounds tiring.")
+    async with pool.as_admin() as conn:
+        await conn.execute("insert into admin.user_memory (user_id, memory) values ($1, $2)",
+                           ALICE, {"themes": ["flatmate never cleans"]})
+    # A pause of no minutes ends the moment it starts, so the next chat owes the check whether they are all right.
+    await pauses.start(alice, ALICE, earlier.id, 0, "crisis")
+
+    later = await threads.create(alice, ALICE)
+    ctx = await threads.load_turn_context(alice, later.id, ALICE)
+    mani = Prompt(id=uuid.uuid4(), name="mani", content="MANI")
+    system = facts.system_prompt(Config(prompts={"mani": mani}, registry=Registry([]), loaded_at=time.monotonic()),
+                                 ctx, summary_due=False)
+
+    assert "flatmate" not in system.lower()
+    assert pause.return_check(ctx) is not None

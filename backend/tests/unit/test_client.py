@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import uuid
 from types import SimpleNamespace
 
@@ -449,12 +450,17 @@ async def test_the_silence_a_chat_call_may_keep_is_the_first_token_limit_and_a_b
 
 
 @pytest.fixture
-def sent_bodies(monkeypatch):
+def sent_headers() -> list[dict]:
+    """The headers of each request that reached the fake OpenRouter, in the order sent_bodies keeps its bodies."""
+    return []
+
+
+@pytest.fixture
+def sent_bodies(monkeypatch, sent_headers):
     """chain.build, langchain-openai and the OpenAI SDK as they run, with only the HTTP replies scripted: every
     model chain.build makes talks to a fake OpenRouter that answers each request with a valid reply. Yields the
     JSON body of each request that reached the network."""
     import functools
-    import json
 
     import httpx
     from langchain_openai import ChatOpenAI
@@ -463,6 +469,7 @@ def sent_bodies(monkeypatch):
 
     def handler(request: httpx.Request) -> httpx.Response:
         bodies.append(json.loads(request.content))
+        sent_headers.append(dict(request.headers))
         stream = openrouter_stream('{"text": "hi"}', f"gen-{len(bodies)}")
         return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=stream())
 
@@ -498,6 +505,17 @@ async def test_a_call_with_a_thread_carries_its_sticky_keys_beside_the_provider_
     assert first["usage"] == {"include": True}
     assert first["stream"] is True
     assert client.chain._model.cache_info().currsize == 1, "one model for both threads"
+
+
+async def test_a_chat_call_never_opts_into_openrouters_response_cache(sent_bodies, sent_headers, recorded):
+    """A stored reply could reach another chat. OpenRouter replays one only on X-OpenRouter-Cache or a preset."""
+    for thread in (THREAD, OTHER_THREAD):
+        await client.complete([{"role": "user", "content": "hi"}], Said, model="minimax/minimax-m3.1-flash",
+                              purpose=llm_calls.Purpose.CHAT, thread_id=thread, settings=settings())
+    for body, sent in zip(sent_bodies, sent_headers, strict=True):
+        assert not any(name.lower().startswith("x-openrouter-cache") for name in sent)
+        assert "preset" not in body and "cache_enabled" not in json.dumps(body)
+    assert [b["prompt_cache_key"] for b in sent_bodies] == [f"{THREAD}:chat", f"{OTHER_THREAD}:chat"]
 
 
 async def test_a_call_with_no_thread_sends_no_sticky_keys(sent_bodies, recorded):
