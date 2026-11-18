@@ -3,6 +3,7 @@ type: journal
 date: 2026-11-16
 tags: [journal, cadence, safety, framework, design, client-test]
 ---
+> Superseded 2026-11-17 (moments, and every reply ending on a question: one call with no moments, and a question only when it helps) — see [[flat-replies-were-the-model-2026-11-17]]
 
 # Exclusive moments and forced questions (2026-11-16)
 

@@ -4,6 +4,7 @@ date: 2026-11-16
 apps: [backend]
 tags: [journal, offers, cadence, design, lessons]
 ---
+> Superseded 2026-11-17 (code pressing the move to a framework: the model decides when to offer) — see [[flat-replies-were-the-model-2026-11-17]]
 2026-11-16
 
 # "Enough" is a field the reply writes, and the push to the framework came back

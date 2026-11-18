@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-21
 tags: [journal, somatic, body, misread, lessons]
 ---
+> Superseded 2026-11-17 (the body check-in: deleted) — see [[flat-replies-were-the-model-2026-11-17]]
 
 # The body question belongs at the end of a framework, not in the middle of a chat (2026-10-21)
 

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 REQUIRED_PROMPTS = ("mani",)
 
 # Used by particular paths rather than every turn, but still misconfiguration if absent.
-EXPECTED_PROMPTS = REQUIRED_PROMPTS + ("title_generation", "summarization")
+EXPECTED_PROMPTS = REQUIRED_PROMPTS + ("summarization",)
 
 
 @dataclass(frozen=True)

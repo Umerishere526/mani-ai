@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-13
 tags: [journal, frameworks, stages, memory, gotchas]
 ---
+> Superseded 2026-11-17 (the stage walk owned by code: the model writes each stage and code holds only the order) — see [[flat-replies-were-the-model-2026-11-17]]
 > Superseded 2026-10-13 (seeding every stage at the yes: each stage is now judged when the walk reaches it, from the whole thread) — see [[transcript-is-the-memory-2026-10-13]]
 
 # The ABCDE walk is owned by code (2026-10-13)

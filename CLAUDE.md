@@ -7,7 +7,7 @@ Three apps and a test tool in one directory. Each has its own dependencies and i
 | `web/`         | Next.js 16 (App Router), React 19, Tailwind v4                                                                 | `cd web && npm run dev`                                              |
 | `mobile/`      | Expo SDK 57, expo-router, RN 0.86, NativeWind v5                                                               | `cd mobile && npx expo start`                                        |
 | `backend/`     | FastAPI on Python 3.14, venv at `backend/.venv`                                                                | `cd backend && source .venv/bin/activate && fastapi dev main.py`     |
-| `chat-tester/` | Streamlit page for real conversations against the running backend; not part of the other three, see its README | `cd chat-tester && source venv/bin/activate && streamlit run app.py` |
+| `chat-tester/` | Streamlit page for real conversations against the running backend; not part of the other three, see its README | `cd chat-tester && source .venv/bin/activate && streamlit run app.py` |
 
 Per-app context — before working in a directory, read its file (only the one you need):
 
@@ -63,7 +63,7 @@ Rule #1: If you want an exception to any rule, stop and get explicit permission 
 - Tedious, systematic work is often the correct solution. Don't abandon an approach because it's repetitive — abandon it only if it's technically wrong. When it is technically wrong, say so (see "When the design is the problem").
 - Honesty is a core value. If you lie, you'll be replaced.
 - Think of and address your human partner as "muhammad" at all times.
-- Look for a virtual environment or .venv in the repo and activate it before running Python commands. For this repo that is `backend/.venv` (and `chat-tester/venv` for the tester).
+- Look for a virtual environment or .venv in the repo and activate it before running Python commands. For this repo that is `backend/.venv` (and `chat-tester/.venv` for the tester).
 
 ## Our relationship
 

@@ -1,3 +1,4 @@
+> Superseded 2026-11-17 (the body check-in after a framework: deleted) — see [[flat-replies-were-the-model-2026-11-17]]
 2026-10-22
 
 # The body check-in is the client's script, and code owns its order

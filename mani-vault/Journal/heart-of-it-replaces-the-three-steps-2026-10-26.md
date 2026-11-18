@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-26
 tags: [journal, prompts, understanding, check, design, lessons]
 ---
+> Superseded 2026-11-17 (the heart of it stored by code, and the check that gates the offer: the prompt holds when to offer) — see [[flat-replies-were-the-model-2026-11-17]]
 
 # The heart of it replaces the three steps (2026-10-26)
 

@@ -1,3 +1,4 @@
+> Superseded 2026-11-17 (the framework's confirm phrases: no longer read, and the column is dropped) — see [[flat-replies-were-the-model-2026-11-17]]
 # Confirm phrases dropped with no stage asking (2026-10-27)
 
 Commit f3e7016 ("fix: add chat flow and admin ui", 2026-10-26) removed `confirm_phrases` from both `abcde.md` and

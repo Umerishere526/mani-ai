@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-21
 tags: [journal, abcde, dispute, feeling, stages, lessons]
 ---
+> Superseded 2026-11-17 (D's two halves remembered by code: the model asks D as the prompt says) — see [[flat-replies-were-the-model-2026-11-17]]
 
 # D's two halves are remembered by code, and the feeling underneath stays in every stage (2026-10-21)
 

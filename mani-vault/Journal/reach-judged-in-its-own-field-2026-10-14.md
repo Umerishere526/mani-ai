@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-14
 tags: [journal, abcde, stages, schema, lessons]
 ---
+> Superseded 2026-11-17 (the stage the walk reaches, judged in its own field: the reply's stage, held to one step by code) — see [[flat-replies-were-the-model-2026-11-17]]
 
 # The stage the walk reaches is judged in its own field (2026-10-14)
 

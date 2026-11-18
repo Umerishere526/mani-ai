@@ -100,7 +100,7 @@ Then stop and wait. muhammad's approval of the report is permission to delete ex
 - After each batch, run the app's checks:
   - `web/`: `npx tsc --noEmit`, `npm run lint`, `npm run build`. There is no test script.
   - `mobile/`: `npx tsc --noEmit`, `npm run lint`, `npm test`.
-  - `backend/`: the test commands in `.claude/BACKEND.md`, with pristine output, and confirm `fastapi dev main.py` boots. Never run `scripts/scenario_check.py` or a live model conversation, because they spend the client's credits.
+  - `backend/`: the test commands in `.claude/BACKEND.md`, with pristine output, and confirm `fastapi dev main.py` boots. Never run anything in `backend/evals/` or a live model conversation, because they spend the client's credits.
   - `chat-tester/`: its tests and a `streamlit run app.py` boot.
 - If a batch breaks anything, revert the whole batch and re-verify the candidates. Don't patch forward.
 - Propose one commit per batch, with a message naming what was removed and why it was unused. Commit only when muhammad says so.

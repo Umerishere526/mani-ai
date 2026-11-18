@@ -68,8 +68,8 @@ anyone who can reach the page: every new account can spend model credit.
 
 ```bash
 cd chat-tester
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 ```
@@ -96,7 +96,7 @@ cd backend && source .venv/bin/activate && supabase start && fastapi dev main.py
 Then, in another terminal:
 
 ```bash
-cd chat-tester && source venv/bin/activate && streamlit run app.py
+cd chat-tester && source .venv/bin/activate && streamlit run app.py
 ```
 
 The app opens on a **Sign in** / **Sign up** screen. Sign up takes an email, a password and an
@@ -118,7 +118,7 @@ tab, shows the whole conversation, with Mani's buttons live only on its newest m
 ## Tests
 
 ```bash
-cd chat-tester && source venv/bin/activate && pip install -r requirements-dev.txt
+cd chat-tester && source .venv/bin/activate && pip install -r requirements-dev.txt
 pytest
 ```
 

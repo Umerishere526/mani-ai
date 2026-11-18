@@ -23,7 +23,7 @@ PROMPTS_DIR = CONTENT_DIR / "prompts"
 # Prompt rows no turn reads any more: switched off on every seed, kept for the calls that reference them.
 RETIRED_PROMPTS = (
     "mani_base", "response_format", "style_directive", "style_supportive", "style_reflective",
-    "voice", "conversation", "framework", "moments",
+    "voice", "conversation", "framework", "moments", "title_generation",
 )
 FRAMEWORKS_DIR = CONTENT_DIR / "frameworks"
 

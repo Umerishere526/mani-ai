@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-14
 tags: [journal, voice, layout, rendering, lessons]
 ---
+> Superseded 2026-11-17 (the reply's layout set by code: the model's text goes out as written) — see [[flat-replies-were-the-model-2026-11-17]]
 
 # Mani's reply layout is decided in code (2026-10-14)
 
