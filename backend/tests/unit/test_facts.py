@@ -100,17 +100,19 @@ def test_the_open_offer_line_says_which_step_is_showing():
     assert "A clear yes in their words starts it" in steps and "action to stop" in steps
 
 
-def test_the_last_stage_asks_how_they_feel_and_the_check_in_asks_nothing():
+def test_the_last_stage_asks_how_they_feel_and_the_check_in_offers_a_next_step():
     last = facts_for(ctx(), running=running("abcde", "effective"))
     assert "ask how they feel now" in last and "set action to finish" in last
     check_in = facts_for(ctx(), running=running("abcde", "feelings_check"))
-    assert "how they feel" in check_in and "ask nothing" in check_in and "is for" not in check_in
+    assert "how they feel" in check_in and "practical next step" in check_in
+    assert "ask nothing" not in check_in and "is for" not in check_in
 
 
 def test_a_held_feelings_check_is_about_their_safety_and_promises_no_close():
     """The final review, 2026-11-18: held for safety, the check's line still said to ask nothing and that code closes."""
     held = facts_for(ctx(safety="unsure"), running=running("abcde", "feelings_check"), holding=True)
     assert "ask nothing" not in held and "code closes the set" not in held and "safety" in held
+    assert "next step" not in held
 
 
 def test_no_offer_is_allowed_before_their_third_message():

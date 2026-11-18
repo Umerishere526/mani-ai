@@ -105,8 +105,9 @@ def _running_line(framework, phase: str | None, *, held: bool) -> str:
                 "answer that first. The set stays open and nothing closes now.")
     if phase == FEELINGS:
         return (f"{framework.name}'s last stage is done and you asked how they feel now. Answer how they feel, warmly, "
-                "in a sentence or two (in Directive, one), and ask nothing: code closes the set and shows the closing "
-                "buttons.")
+                "in a sentence or two (in Directive, one), carrying their new way of seeing it forward. Then ask whether "
+                "they'd like to think about a practical next step for what they are facing. Recap nothing: code closes "
+                "the set and shows the closing buttons.")
     stages = stages_of(framework)
     at = stages.index(phase) if phase in stages else 0
     if held:
