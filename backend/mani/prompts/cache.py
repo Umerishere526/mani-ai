@@ -8,7 +8,6 @@ import logging
 import time
 from dataclasses import dataclass
 
-from mani.chat.body import STAGES as BODY_STAGES
 from mani.chat.techniques import Registry
 from mani.config import get_settings
 from mani.db import config_tables, pool
@@ -76,24 +75,6 @@ async def _read() -> Config:
         logger.warning("prompts missing or inactive: %s", ", ".join(absent))
     if not frameworks:
         logger.warning("no active frameworks; technique offers will be refused")
-    for framework in frameworks:
-        # A stage said back closes with one of these when Mani's own confirmation cannot be used. Without them the
-        # confirmation asks nothing, so it is refused here rather than sent.
-        if not framework.confirm_phrases:
-            raise ServiceError(
-                f"framework {framework.id} has no confirm_phrases; run scripts/seed.py",
-                ErrorCategory.CONFIG_ERROR,
-                user_message="Mani is not available right now.",
-            )
-        # Code sends the body check-in's script for each step. A framework seeded without it would send
-        # nothing at the end of its questions, so it is refused here rather than discovered mid-conversation.
-        if missing := [s for s in BODY_STAGES if not (framework.stages.get(s) or {}).get("script")]:
-            raise ServiceError(
-                f"framework {framework.id} has no body check-in script for {', '.join(missing)}; "
-                "run scripts/seed.py",
-                ErrorCategory.CONFIG_ERROR,
-                user_message="Mani is not available right now.",
-            )
 
     return Config(
         prompts=by_name, registry=Registry(frameworks), loaded_at=time.monotonic()

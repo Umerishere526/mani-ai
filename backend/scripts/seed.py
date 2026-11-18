@@ -4,7 +4,6 @@
 import asyncio
 import json
 import pathlib
-import re
 import sys
 
 import asyncpg
@@ -12,10 +11,9 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from mani.chat.repairs import template_slots  # noqa: E402
 from mani.chat.techniques import OFFERING  # noqa: E402
 from mani.config import get_settings  # noqa: E402
-from mani.models.rows import ENDING_STAGES, SupportStyle  # noqa: E402
+from mani.models.rows import SupportStyle  # noqa: E402
 
 # Authored content, not code: markdown is the input this script loads, and once loaded the
 # database is what the application reads. Kept outside the `mani` package for that reason -
@@ -29,36 +27,6 @@ FRAMEWORKS_DIR = CONTENT_DIR / "frameworks"
 # Only the files directly in frameworks/ are seeded. A framework moved into frameworks/paused/ is
 # left out of the registry (its row is set inactive, never deleted, because threads and exercises
 # refer to it) and comes back by moving the file up again.
-# The somatic route is authored once and appended to every framework, rather than repeated in
-# each framework file. It is not a prompt row and not a composer layer - its two stages are
-# merged into each framework's phases and stages here, so the phase machine and [ctx] handle
-# them like any other stage. Skipped in the prompts loop below for the same reason.
-SOMATIC_FILE = PROMPTS_DIR / "somatic.md"
-_FENCED_YAML = re.compile(r"```yaml\n(.*?)\n```", re.DOTALL)
-
-
-def _somatic_block() -> dict:
-    match = _FENCED_YAML.search(SOMATIC_FILE.read_text())
-    if not match:
-        raise ValueError(f"{SOMATIC_FILE.name} has no fenced yaml stages block")
-    return yaml.safe_load(match.group(1)) or {}
-
-
-def load_somatic_stages() -> dict:
-    """The shared somatic route's stage defs, from the fenced yaml block in somatic.md."""
-    stages = _somatic_block().get("stages")
-    if not stages:
-        raise ValueError(f"{SOMATIC_FILE.name} yaml block has no stages")
-    return stages
-
-
-def somatic_phases() -> list[str]:
-    """The somatic stages appended to every framework's phases: all of them but the ones somatic.md pauses, so a
-    paused body check-in ends the questions on the closing choices (muhammad, 2026-11-05)."""
-    paused = set(_somatic_block().get("paused") or [])
-    return [stage for stage in load_somatic_stages() if stage not in paused]
-
-
 def parse_prompt(path: pathlib.Path) -> dict:
     """Split a prompt file into its YAML frontmatter and its body."""
     raw = path.read_text()
@@ -75,6 +43,7 @@ def parse_prompt(path: pathlib.Path) -> dict:
         "content": body.strip(),
         "model_id": meta.get("model_id"),
         "model_parameters": meta.get("model_parameters") or {},
+        "routing": meta.get("routing") or {},
     }
 
 
@@ -111,26 +80,18 @@ def parse_framework(path: pathlib.Path) -> dict:
 
 
 def missing_for_activation(framework: dict) -> list[str]:
-    """What an active framework lacks of the content the chat reads, named by its path in the
-    file. Empty when it can be seeded active, so a paused framework moved back fails here, not in
-    a live chat (spec 0006, AC-13)."""
+    """What an active framework lacks of the content a turn reads, named by its path in the file: each style's
+    Tell me more text, and each stage's line, purpose and when it is answered. Empty when it can be seeded active,
+    so a paused framework moved back fails here, not in a live chat."""
     stages = framework["stages"]
     offering = stages.get(OFFERING) or {}
-    missing = []
-    for style in SupportStyle:
-        offer = (offering.get("offer") or {}).get(style.value)
-        if not offer or template_slots(offer)[1] is None:
-            missing.append(f"stages.offering.offer.{style.value} with a <going_through> slot")
-        if not (offering.get("explain") or {}).get(style.value):
-            missing.append(f"stages.offering.explain.{style.value}")
+    missing = [f"stages.offering.explain.{style.value}" for style in SupportStyle
+               if not (offering.get("explain") or {}).get(style.value)]
     for phase in framework["phases"]:
-        if phase == OFFERING or phase in ENDING_STAGES:
+        if phase == OFFERING:
             continue
         stage = stages.get(phase) or {}
-        if not stage.get("intro"):
-            missing.append(f"stages.{phase}.intro")
-        missing += [f"stages.{phase}.ask.{style.value}" for style in SupportStyle
-                    if not (stage.get("ask") or {}).get(style.value)]
+        missing += [f"stages.{phase}.{key}" for key in ("intro", "purpose", "ready_when") if not stage.get(key)]
     return missing
 
 
@@ -143,19 +104,11 @@ async def seed() -> None:
             if not framework_files:
                 raise SystemExit(f"no framework files in {FRAMEWORKS_DIR}")
 
-            somatic_stages = load_somatic_stages()
-            appended = somatic_phases()
-
             for path in framework_files:
                 framework = parse_framework(path)
                 missing = missing_for_activation(framework)
                 if missing:
                     raise SystemExit(f"{path.name} cannot be active, it lacks: {', '.join(missing)}")
-                # Append the shared somatic route after each framework's own phases. The files
-                # end at `closing`, and this is rebuilt from the file every run, so appending is
-                # idempotent - there is nothing to dedupe.
-                framework["phases"] = framework["phases"] + appended
-                framework["stages"] = {**framework["stages"], **somatic_stages}
                 await conn.execute(
                     """
                     insert into admin.frameworks
@@ -196,8 +149,7 @@ async def seed() -> None:
                 print(f"  {row['id']:<28} paused")
             print(f"frameworks: {len(framework_files)}")
 
-            # somatic.md is the merge source above, not a prompt row.
-            files = [p for p in sorted(PROMPTS_DIR.glob("*.md")) if p != SOMATIC_FILE]
+            files = sorted(PROMPTS_DIR.glob("*.md"))
             if not files:
                 raise SystemExit(f"no prompt files in {PROMPTS_DIR}")
 
@@ -206,13 +158,14 @@ async def seed() -> None:
                 await conn.execute(
                     """
                     insert into admin.prompts
-                        (id, name, description, content, model_id, model_parameters)
-                    values (coalesce($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6::jsonb)
+                        (id, name, description, content, model_id, model_parameters, routing)
+                    values (coalesce($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6::jsonb, $7::jsonb)
                     on conflict (name) do update set
                         description = excluded.description,
                         content = excluded.content,
                         model_id = excluded.model_id,
-                        model_parameters = excluded.model_parameters
+                        model_parameters = excluded.model_parameters,
+                        routing = excluded.routing
                     """,
                     prompt["id"],
                     prompt["name"],
@@ -220,6 +173,7 @@ async def seed() -> None:
                     prompt["content"],
                     prompt["model_id"],
                     json.dumps(prompt["model_parameters"]),
+                    json.dumps(prompt["routing"]),
                 )
                 print(f"  {prompt['name']:<18} {len(prompt['content']):>6} chars")
             print(f"prompts: {len(files)}")

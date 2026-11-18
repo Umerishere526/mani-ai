@@ -182,12 +182,10 @@ def test_every_prompt_on_a_reasoning_model_says_how_hard_to_think():
     import typing
 
     from mani.prompts.composer import BODY_EFFORT, READING_EFFORT
-    from scripts.seed import PROMPTS_DIR, SOMATIC_FILE, parse_prompt
+    from scripts.seed import PROMPTS_DIR, parse_prompt
 
     allowed = set(typing.get_args(Settings.model_fields["reasoning_effort"].annotation))
     for path in sorted(PROMPTS_DIR.glob("*.md")):
-        if path == SOMATIC_FILE:
-            continue
         prompt = parse_prompt(path)
         if prompt["model_id"] and chain.is_reasoning_model(prompt["model_id"]):
             effort = prompt["model_parameters"].get("reasoning_effort")

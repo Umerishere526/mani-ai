@@ -147,47 +147,6 @@ def test_every_stage_asks_the_clients_own_question_in_each_style(abcde):
 CHARACTERS_BEFORE_STRUCTURED_FIELDS = 35752
 
 
-def test_an_open_offer_turn_costs_less_prompt_than_before_the_structured_fields(abcde):
-    import datetime as dt
-    import json
-    import time
-    import uuid
-
-    from mani.db.threads import TurnContext
-    from mani.llm.schema import Moment, reply_for
-    from mani.models.rows import Prompt, TechniqueOutcome, TechniqueState, Thread
-    from mani.prompts import composer
-    from mani.prompts.cache import Config
-    from scripts.seed import PROMPTS_DIR, load_somatic_stages, parse_prompt
-
-    somatic = load_somatic_stages()
-    framework = as_framework({**abcde, "phases": abcde["phases"] + list(somatic),
-                              "stages": {**abcde["stages"], **somatic}})
-    registry = Registry([framework])
-    prompts = {
-        name: Prompt(id=uuid.uuid4(), name=name, content=parse_prompt(PROMPTS_DIR / f"{name}.md")["content"])
-        for name in ("voice", "moments")
-    }
-    system = composer.compose_moment(
-        Config(prompts=prompts, registry=registry, loaded_at=time.monotonic()), None, offered=["abcde"],
-    )
-    now = dt.datetime.now(dt.UTC)
-    thread = Thread(id=uuid.uuid4(), user_id=uuid.uuid4(), message_count=11, conversation_style="supportive",
-                    created_at=now, last_message_at=now)
-    offered = TechniqueState(thread_id=thread.id, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
-                             phase="offering", at_message_count=11)
-    block = context.build(TurnContext(thread=thread, profile=None, technique=offered), framework=framework,
-                          history=[], offer_waiting=True, yes_framework=framework)
-    shape = reply_for(Moment.OFFER_OPEN, slots=repairs.slots_for(registry, "supportive"))
-
-    # The voice is the prefix every turn shares, the chat's included, and is cached once for all of them
-    # (muhammad, 2026-10-27); what this turn adds after it is held to the old figure.
-    voice = len(prompts["voice"].content) + 2
-    total = len(system.text) - voice + len(block) + len(json.dumps(shape.model_json_schema()))
-    assert system.text.startswith(prompts["voice"].content)
-    assert total < CHARACTERS_BEFORE_STRUCTURED_FIELDS
-
-
 def test_the_stages_that_look_at_the_belief_or_thought_carry_the_stack_in_both_frameworks():
     """Lolly, 2026-10-22: the stack must reach C, D and E. A framework says which of its stages carry it."""
     carrying = {
