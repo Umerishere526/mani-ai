@@ -26,6 +26,14 @@ def test_a_framework_needs_no_offer_template_since_the_model_writes_the_offer():
     assert missing_for_activation(framework) == []
 
 
+def test_a_framework_without_its_worked_example_cannot_be_seeded_active():
+    from scripts.seed import FRAMEWORKS_DIR, missing_for_activation, parse_framework
+
+    framework = parse_framework(FRAMEWORKS_DIR / "abcde.md")
+    framework["stages"]["offering"].pop("example", None)
+    assert missing_for_activation(framework) == ["stages.offering.example"]
+
+
 def test_a_framework_stage_without_its_purpose_cannot_be_seeded_active():
     from scripts.seed import FRAMEWORKS_DIR, missing_for_activation, parse_framework
 

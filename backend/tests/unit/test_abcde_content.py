@@ -41,11 +41,36 @@ def test_each_letter_line_reaches_the_guide_in_order(abcde):
     assert positions == sorted(positions)
 
 
-def test_tell_me_more_has_the_clients_explanation_in_every_style(abcde):
-    explain = abcde["stages"]["offering"]["explain"]
-    assert set(explain) == set(STYLES)
-    for text in explain.values():
-        assert "A: Activating Event" in text and "E: Effective New Belief" in text
+LIST = (
+    "- A: Activating event (what happened)\n"
+    "- B: Belief (what did your mind start saying)\n"
+    "- C: Consequences (what did you feel or do)\n"
+    "- D: Dispute (how can you challenge this belief)\n"
+    "- E: Effective new belief (What kind of belief could you hold instead)"
+)
+STEPS = {
+    "directive": f"The ABCDE technique can really help. It breaks down thoughts into five steps:\n\n{LIST}\n\n"
+                 "Ready to dive into a real life situation?",
+    "reflective": f"The ABCDE technique can help reflect on these thoughts by breaking them down:\n\n{LIST}\n\n"
+                  "Are you ready to dive into a real life situation?",
+    "supportive": f"The ABCDE technique is a kind way to help break these thoughts down:\n\n{LIST}\n\n"
+                  "Would you like to try diving into a real life situation together?",
+}
+
+
+def test_the_five_steps_are_the_clients_in_every_style(abcde):
+    """The client's sequence document, 2026-11-18, minus the openers that answer only Not sure."""
+    from mani.chat.techniques import steps_text
+
+    for style, text in STEPS.items():
+        assert steps_text(as_framework(abcde), style) == text, style
+
+
+def test_the_worked_example_runs_a_to_e(abcde):
+    from mani.chat.techniques import example_text
+
+    example = example_text(as_framework(abcde))
+    assert "my child is sick" in example and "one step at a time" in example
 
 
 def test_when_a_stage_counts_as_answered_keeps_the_clients_reading(abcde):

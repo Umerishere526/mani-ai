@@ -69,43 +69,75 @@ async def test_notes_written_by_one_turn_reach_the_next_turns_facts(alice, model
     assert "Your notes from your last turn: boss piles work; feels like a pushover" in facts_of(scripted)
 
 
-async def test_a_clear_offer_shows_the_three_buttons_and_records_it(alice, model):
-    model(said("There's a set of questions called ABCDE. Would you like to try it?", action="offer", framework="abcde"))
+async def abcde_text(kind: str, style: str = "supportive") -> str:
+    from mani.chat import techniques
+    from mani.prompts import cache
+
+    framework = (await cache.load()).registry.get("abcde")
+    return techniques.steps_text(framework, style) if kind == "steps" else techniques.example_text(framework)
+
+
+START = ["Start ABCDE", "I need an example", "Talk more first"]
+
+
+async def test_a_clear_offer_is_the_lead_in_with_its_three_buttons(alice, model):
+    model(said("Just because a belief feels true doesn't mean it is. How could you test that thought?",
+               action="offer", framework="abcde"))
     thread = await start(alice)
     turn = await send(alice, thread.id, "i always feel like a pushover")
-    assert [p.label for p in turn.prompts] == ["Try it", "Tell me more", "Keep chatting"]
+    assert [p.label for p in turn.prompts] == ["Not sure", "Show me how", "Give me a tool"]
     assert (await technique_of(alice, thread.id)).outcome is TechniqueOutcome.OFFERED
 
 
-async def test_tell_me_more_sends_the_fixed_explanation_with_no_model_call(alice, model):
-    scripted = model(said("Offer.", action="offer", framework="abcde"))
+async def test_the_offer_runs_lead_in_steps_example_then_start(alice, model):
+    """The client's sequence document, 2026-11-18: the steps and the example are hers, sent with no model call."""
+    scripted = model(said("Lead-in.", action="offer", framework="abcde"),
+                     said("A is for Activating Event. What happened?", stage="activate"),
+                     said("B is for Belief. What did you tell yourself?", stage="belief"))
     thread = await start(alice)
     await send(alice, thread.id, "i feel like a pushover")
-    turn = await send(alice, thread.id, "Tell me more")
-    assert scripted.calls == 1
-    assert turn.content.startswith("The ABCDE framework has five steps.")
-    assert turn.content.endswith("\n\nWould you like to try it?"), "the client's permission question closes it"
-    assert [p.label for p in turn.prompts] == ["Try it", "Keep chatting"]
-
-
-async def test_try_it_then_a_stage_reply_stores_the_stage(alice, model):
-    model(said("Offer.", action="offer", framework="abcde"),
-          said("A is for Activating Event. What happened?", stage="activate"),
-          said("B is for Belief. What did you tell yourself?", stage="belief"))
-    thread = await start(alice)
-    await send(alice, thread.id, "i feel like a pushover")
-    await send(alice, thread.id, "Try it")
+    steps = await send(alice, thread.id, "Not sure")
+    assert scripted.calls == 1 and steps.content == await abcde_text("steps")
+    assert [p.label for p in steps.prompts] == START
+    example = await send(alice, thread.id, "I need an example")
+    assert scripted.calls == 1 and example.content == await abcde_text("example")
+    assert [p.label for p in example.prompts] == ["Start ABCDE", "Talk more first"]
+    await send(alice, thread.id, "Start ABCDE")
+    assert (await technique_of(alice, thread.id)).phase == "activate"
     await send(alice, thread.id, "he dumped a report on me friday")
     technique = await technique_of(alice, thread.id)
     assert technique.outcome is TechniqueOutcome.ACCEPTED and technique.phase == "belief"
 
 
+async def test_a_typed_reply_to_the_lead_in_gets_the_reply_then_the_steps(alice, model):
+    model(said("Lead-in.", action="offer", framework="abcde"), said("That's a fair way to start."))
+    thread = await start(alice)
+    await send(alice, thread.id, "i feel like a pushover")
+    turn = await send(alice, thread.id, "maybe look at what i've actually managed?")
+    assert turn.content == "That's a fair way to start.\n\n" + await abcde_text("steps")
+    assert [p.label for p in turn.prompts] == START
+    assert (await technique_of(alice, thread.id)).phase == "steps"
+
+
+async def test_talk_more_first_lets_the_offer_lapse_and_it_may_come_back(alice, model):
+    model(said("Lead-in.", action="offer", framework="abcde"), said("Sure, let's keep talking."),
+          said("Lead-in again.", action="offer", framework="abcde"))
+    thread = await start(alice)
+    await send(alice, thread.id, "i feel like a pushover")
+    await send(alice, thread.id, "Show me how")
+    await send(alice, thread.id, "Talk more first")
+    technique = await technique_of(alice, thread.id)
+    assert technique.outcome is TechniqueOutcome.OFFERED and technique.phase is None, "set aside, not declined"
+    again = await send(alice, thread.id, "ok i think i'm ready now")
+    assert [p.label for p in again.prompts] == ["Not sure", "Show me how", "Give me a tool"]
+
+
 async def test_a_declined_framework_is_never_offered_again(alice, model):
-    model(said("Offer.", action="offer", framework="abcde"), said("Okay, let's keep talking."),
+    model(said("Lead-in.", action="offer", framework="abcde"), said("Okay, we'll leave it.", action="stop"),
           said("Offer again.", action="offer", framework="abcde"))
     thread = await start(alice)
     await send(alice, thread.id, "i feel like a pushover")
-    await send(alice, thread.id, "Keep chatting")
+    await send(alice, thread.id, "no, i don't want to do any exercise")
     turn = await send(alice, thread.id, "still feel like a pushover")
     assert turn.prompts == [] and turn.trace["refused"] == "offer"
 
@@ -258,20 +290,21 @@ async def test_a_pausing_body_turn_sends_only_the_pause_reply(alice, model):
 
 async def test_an_offer_they_moved_past_is_no_longer_open_and_its_old_button_starts_nothing(alice, model):
     """The final review, 2026-11-18: a lapsed offer kept its row as offered, so every later facts block still said a
-    yes starts it, an old Try it started it, and no other set could ever be offered."""
-    scripted = model(said("Offer.", action="offer", framework="abcde"), said("Tell me about her."),
+    yes starts it, an old Start started it, and no other set could ever be offered."""
+    scripted = model(said("Lead-in.", action="offer", framework="abcde"), said("Tell me about her."),
                      said("Go on."), said("A is for Activating Event. What happened?", stage="activate"),
                      said("Offer again.", action="offer", framework="abcde"))
     thread = await start(alice)
     await send(alice, thread.id, "i always feel like a pushover")
+    await send(alice, thread.id, "Not sure")
     await send(alice, thread.id, "actually can we talk about my sister")
     await send(alice, thread.id, "she never calls")
     assert "Your last reply offered" not in facts_of(scripted)
-    await send(alice, thread.id, "Try it")
+    await send(alice, thread.id, "Start ABCDE")
     technique = await technique_of(alice, thread.id)
     assert technique is None or technique.outcome is not TechniqueOutcome.ACCEPTED, "an old button starts nothing"
     offered = await send(alice, thread.id, "yes i think that would help")
-    assert [p.label for p in offered.prompts] == ["Try it", "Tell me more", "Keep chatting"]
+    assert [p.label for p in offered.prompts] == ["Not sure", "Show me how", "Give me a tool"]
 
 
 async def test_an_empty_reply_gets_a_fixed_one_and_keeps_the_safety_judgment(alice, model):

@@ -32,31 +32,48 @@ stages:
     if_unclear:
       - when: "the user declines"
         reply: "You do not want to use a framework. What would be most helpful to talk through?"
+    # The five steps, word for word from the client's sequence document (2026-11-18), minus the openers that answer
+    # only Not sure ("No worries", "It's okay to be unsure").
     explain:
       directive: |-
-        The ABCDE framework has five steps:
+        The ABCDE technique can really help. It breaks down thoughts into five steps:
 
-        1. A: Activating Event: What happened or what has been happening?
-        2. B: Belief: What did you start telling yourself about it?
-        3. C: Consequences: How did that thought affect how you felt or what you did?
-        4. D: Dispute: What makes you believe it's true, and what makes you question it?
-        5. E: Effective New Belief: What's a more realistic and helpful way to think about it?
+        - A: Activating event (what happened)
+        - B: Belief (what did your mind start saying)
+        - C: Consequences (what did you feel or do)
+        - D: Dispute (how can you challenge this belief)
+        - E: Effective new belief (What kind of belief could you hold instead)
+
+        Ready to dive into a real life situation?
       supportive: |-
-        The ABCDE framework has five steps. Each one helps you understand what happened, what you started believing about it, and how those thoughts may be affecting you.
+        The ABCDE technique is a kind way to help break these thoughts down:
 
-        1. A: Activating Event: What happened or what has been happening that brought up these feelings?
-        2. B: Belief: What did you begin telling yourself about the situation?
-        3. C: Consequences: How did that belief affect how you felt or what you did?
-        4. D: Dispute: What makes you believe that thought is true, and is there anything that might suggest otherwise?
-        5. E: Effective New Belief: What's a more realistic and helpful way to think about what happened?
+        - A: Activating event (what happened)
+        - B: Belief (what did your mind start saying)
+        - C: Consequences (what did you feel or do)
+        - D: Dispute (how can you challenge this belief)
+        - E: Effective new belief (What kind of belief could you hold instead)
+
+        Would you like to try diving into a real life situation together?
       reflective: |-
-        The ABCDE framework has five steps that help you examine how your interpretation of an experience influences what you believe and how you respond.
+        The ABCDE technique can help reflect on these thoughts by breaking them down:
 
-        1. A: Activating Event: What happened or what has been happening that started these concerns?
-        2. B: Belief: What meaning did you give to what happened?
-        3. C: Consequences: How did that belief influence your feelings or actions?
-        4. D: Dispute: What supports your interpretation, and what might suggest a different understanding?
-        5. E: Effective New Belief: What's a more accurate and helpful way to understand the situation?
+        - A: Activating event (what happened)
+        - B: Belief (what did your mind start saying)
+        - C: Consequences (what did you feel or do)
+        - D: Dispute (how can you challenge this belief)
+        - E: Effective new belief (What kind of belief could you hold instead)
+
+        Are you ready to dive into a real life situation?
+    # Sent when they tap I need an example: the answers from the client's own example conversation (2026-11-18).
+    example: |-
+      Here's how it can go for someone whose boss moved a deadline up while their child was sick.
+
+      - A (what happened): My boss moved the deadline up and my child is sick.
+      - B (the belief): I am failing and I can't keep up with anything.
+      - C (the consequences): I'm just sitting here staring at the screen. I'm paralyzed.
+      - D (the dispute): I've handled tight deadlines before. I'm not a failure, it's just a hard day.
+      - E (the new belief): I have a lot on my plate, but I am capable of doing what I can one step at a time.
 
   activate:
     title: "A: Activating Event"

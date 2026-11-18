@@ -8,6 +8,8 @@ from mani.models.rows import Framework
 # Every framework opens by offering itself. The schema enforces it; the machine relies
 # on it to tell "nothing started" apart from "started at the beginning".
 OFFERING = "offering"
+# An offer whose five steps have been shown: the next answer starts the set, sets it aside, or lets it lapse.
+STEPS = "steps"
 
 
 def stages_of(framework: Framework) -> list[str]:
@@ -18,6 +20,16 @@ def stages_of(framework: Framework) -> list[str]:
 def line_of(framework: Framework, stage: str) -> str:
     """What opens a stage when it is reached, such as "A is for Activating Event."."""
     return (framework.stages.get(stage) or {}).get("intro", "")
+
+
+def steps_text(framework: Framework, style: str) -> str:
+    """The client's five steps for this style, with the ready question that closes them."""
+    return ((framework.stages.get(OFFERING) or {}).get("explain") or {}).get(style) or framework.summary
+
+
+def example_text(framework: Framework) -> str:
+    """The worked example shown when they tap I need an example."""
+    return (framework.stages.get(OFFERING) or {}).get("example") or framework.summary
 
 
 class Registry:

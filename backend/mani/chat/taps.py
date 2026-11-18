@@ -1,16 +1,20 @@
-# ABOUTME: What a message means when it is a tap on a button Mani showed: a style, an offer's answer, or a closing
+# ABOUTME: What a message means when it is a tap on a button Mani showed: a style, a step of an offer, or a closing
 # ABOUTME: choice. A tap is a text match against the last reply's buttons, since no button id comes on the wire.
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from mani.chat.greeting import CLOSING_KEEP_CHATTING_LABEL, FINISH_LABEL, TELL_ME_MORE_LABEL
+from mani.chat.greeting import (
+    CLOSING_KEEP_CHATTING_LABEL, EXAMPLE_LABEL, FINISH_LABEL, LEAD_IN_LABELS, TALK_MORE_FIRST_LABEL,
+)
 from mani.chat.techniques import Registry, line_of, stages_of
 from mani.llm.schema import SmartPrompt
 from mani.models.rows import Framework, Message, MessageRole, SupportStyle, TechniqueState
 
-TELL_ME_MORE = TELL_ME_MORE_LABEL.lower()
+LEAD_IN = {label.lower() for label in LEAD_IN_LABELS}
+EXAMPLE = EXAMPLE_LABEL.lower()
+TALK_MORE_FIRST = TALK_MORE_FIRST_LABEL.lower()
 FINISH = FINISH_LABEL.lower()
 KEEP_CHATTING = CLOSING_KEEP_CHATTING_LABEL.lower()
 
@@ -21,8 +25,9 @@ class TapEvent:
 
     fact: str | None = None
     starting: Framework | None = None
-    declined: bool = False
     explain: Framework | None = None
+    example: Framework | None = None
+    set_aside: bool = False
 
 
 def find_tapped_prompt(history: list[Message], content: str) -> SmartPrompt | None:
@@ -56,7 +61,7 @@ def _last_offered(history: list[Message]) -> list[dict]:
 
 
 def tap_event(tapped: SmartPrompt | None, registry: Registry, open_offer: TechniqueState | None) -> TapEvent:
-    """What the tap means. Try it starts only the framework whose offer is still open, so a tap on an old button
+    """What the tap means. Start starts only the framework whose offer is still open, so a tap on an old button
     from a lapsed offer starts nothing."""
     if tapped is None:
         return TapEvent()
@@ -65,17 +70,19 @@ def tap_event(tapped: SmartPrompt | None, registry: Registry, open_offer: Techni
     if tapped.technique:
         if offered is None or offered.id != tapped.technique:
             return TapEvent()
-        first, second = stages_of(offered)[:2]
+        first = stages_of(offered)[0]
         return TapEvent(starting=offered, fact=(
-            f"They tapped Try it: {offered.name} starts now. Your reply opens its first stage, `{first}`, with its "
-            f"line \"{line_of(offered, first)}\". If the chat already answered it, go on to `{second}` "
-            f"(\"{line_of(offered, second)}\") as your instructions say. Never further."
+            f"They tapped to start {offered.name}. Your reply opens its first stage, `{first}`, with its line "
+            f"\"{line_of(offered, first)}\" and that stage's question, even if the chat already touched it."
         ))
-    if label == TELL_ME_MORE and offered is not None:
+    if offered is not None and label in LEAD_IN:
         return TapEvent(explain=offered)
-    if tapped.decline and offered is not None:
-        return TapEvent(declined=True,
-                        fact="They tapped Keep chatting instead of trying the set you offered. Carry on with them.")
+    if offered is not None and label == EXAMPLE:
+        return TapEvent(example=offered)
+    if offered is not None and label == TALK_MORE_FIRST:
+        return TapEvent(set_aside=True, fact=(
+            f"They chose to talk more before trying {offered.name}. Carry on with them; you may offer it again later "
+            "when it fits."))
     if label == FINISH:
         return TapEvent(fact="They tapped Finish for Now. Say goodbye warmly in a sentence or two, and ask nothing.")
     if label == KEEP_CHATTING:

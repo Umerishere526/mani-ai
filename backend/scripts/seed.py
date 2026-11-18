@@ -89,6 +89,8 @@ def missing_for_activation(framework: dict) -> list[str]:
     offering = stages.get(OFFERING) or {}
     missing = [f"stages.offering.explain.{style.value}" for style in SupportStyle
                if not (offering.get("explain") or {}).get(style.value)]
+    if not offering.get("example"):
+        missing.append("stages.offering.example")
     for phase in framework["phases"]:
         if phase == OFFERING:
             continue

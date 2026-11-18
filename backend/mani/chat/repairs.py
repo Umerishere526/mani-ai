@@ -1,12 +1,13 @@
-# ABOUTME: The few things code does to a reply's words: dashes replaced, a title tidied, and the client's buttons under
-# ABOUTME: an offer. Everything else the model writes goes out as written.
+# ABOUTME: The few things code does to a reply's words: dashes replaced, a title tidied, and the client's buttons at
+# ABOUTME: each step of an offer. Everything else the model writes goes out as written.
 
 from __future__ import annotations
 
 import re
 
-from mani.chat.greeting import KEEP_CHATTING_LABEL, TELL_ME_MORE_LABEL, TRY_IT_LABEL
+from mani.chat.greeting import EXAMPLE_LABEL, LEAD_IN_LABELS, TALK_MORE_FIRST_LABEL, start_label
 from mani.llm.schema import SmartPrompt
+from mani.models.rows import Framework
 
 MAX_TITLE_LENGTH = 100
 
@@ -60,11 +61,15 @@ def clean_title(title: str | None) -> str | None:
     return cleaned[:MAX_TITLE_LENGTH].strip() or None
 
 
-def offer_buttons(framework_id: str, *, explained: bool) -> list[SmartPrompt]:
-    """The client's buttons under an offer. Once they have tapped Tell me more they have been told, so the offer comes
-    back with the other two."""
-    buttons = [SmartPrompt(label=TRY_IT_LABEL, technique=framework_id)]
-    if not explained:
-        buttons.append(SmartPrompt(label=TELL_ME_MORE_LABEL))
-    buttons.append(SmartPrompt(label=KEEP_CHATTING_LABEL, decline=True))
-    return buttons
+def lead_in_buttons() -> list[SmartPrompt]:
+    """The client's three buttons under the lead-in; any of them shows the five steps."""
+    return [SmartPrompt(label=label) for label in LEAD_IN_LABELS]
+
+
+def start_buttons(framework: Framework, *, with_example: bool) -> list[SmartPrompt]:
+    """The buttons under the five steps, and under the example without its own button. Start carries the framework's
+    id, so it starts only the offer still open."""
+    buttons = [SmartPrompt(label=start_label(framework.name), technique=framework.id)]
+    if with_example:
+        buttons.append(SmartPrompt(label=EXAMPLE_LABEL))
+    return [*buttons, SmartPrompt(label=TALK_MORE_FIRST_LABEL)]

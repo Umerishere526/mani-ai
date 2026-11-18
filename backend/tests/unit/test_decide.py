@@ -44,9 +44,9 @@ def test_an_offer_while_a_safety_worry_is_open_is_refused():
     assert d.prompts == [] and d.refused == "offer"
 
 
-def test_a_clear_offer_shows_try_it_tell_me_more_and_keep_chatting():
+def test_a_clear_offer_is_the_lead_in_with_the_clients_three_buttons():
     d = decided(reply(action="offer", framework="abcde"))
-    assert labels(d) == ["Try it", "Tell me more", "Keep chatting"]
+    assert labels(d) == ["Not sure", "Show me how", "Give me a tool"]
     assert d.technique.outcome is TechniqueOutcome.OFFERED and d.technique.phase == "offering"
 
 
@@ -60,14 +60,15 @@ def test_a_stage_from_another_framework_leaves_the_phase_unchanged():
     assert d.technique is None and d.prompts == []
 
 
-def test_the_starting_turn_may_reach_the_second_stage_and_no_further():
+def test_the_starting_turn_opens_the_first_stage_only():
+    """The client's sequence asks every letter on its own reply, even one the chat already touched."""
     tap = TapEvent(starting=ABCDE)
-    assert decided(reply(stage="belief"), open_offer=offered("abcde"), tap=tap).technique.phase == "belief"
-    assert decided(reply(stage="dispute"), open_offer=offered("abcde"), tap=tap).technique.phase == "belief"
+    assert decided(reply(stage="belief"), open_offer=offered("abcde", "steps"), tap=tap).technique.phase == "activate"
+    assert decided(reply(stage="dispute"), open_offer=offered("abcde", "steps"), tap=tap).technique.phase == "activate"
 
 
 def test_a_typed_yes_that_opens_the_first_stage_starts_the_framework():
-    d = decided(reply(stage="activate"), open_offer=offered("abcde"))
+    d = decided(reply(stage="activate"), open_offer=offered("abcde", "steps"))
     assert d.technique.outcome is TechniqueOutcome.ACCEPTED and d.technique.phase == "activate"
 
 
@@ -98,9 +99,9 @@ def test_stop_records_the_framework_declined():
     assert d.declined == ["abcde"] and d.technique.outcome is TechniqueOutcome.DECLINED and d.technique.phase is None
 
 
-def test_keep_chatting_on_an_offer_records_it_declined():
-    d = decided(reply(), open_offer=offered("abcde"), tap=TapEvent(declined=True))
-    assert d.declined == ["abcde"] and d.technique.outcome is TechniqueOutcome.DECLINED
+def test_talk_more_first_sets_the_offer_aside_for_now_and_never_declines_it():
+    d = decided(reply(), open_offer=offered("abcde", "steps"), tap=TapEvent(set_aside=True))
+    assert d.retire_technique and d.declined == [] and d.technique is None
 
 
 def test_a_settled_answer_to_the_safety_question_closes_the_framework_whatever_the_action():
@@ -111,7 +112,7 @@ def test_a_settled_answer_to_the_safety_question_closes_the_framework_whatever_t
 
 
 def test_any_other_reply_to_an_open_offer_lets_it_lapse():
-    d = decided(reply(), open_offer=offered("abcde"))
+    d = decided(reply(), open_offer=offered("abcde", "steps"))
     assert d.retire_technique and d.declined == [] and d.technique is None
 
 
@@ -128,3 +129,21 @@ def test_library_shows_the_go_to_library_button():
 def test_stage_of_reads_only_the_frameworks_own_stages():
     assert stage_of(ABCDE, "made_up", "activate") is None
     assert stage_of(ABCDE, "belief", "activate") == "belief"
+
+
+def test_a_typed_reply_to_the_lead_in_gets_the_five_steps_and_the_start_buttons():
+    """muhammad, 2026-11-18: most people type an answer to the lead-in's question; it gets the reply, then the steps."""
+    d = decided(reply(), open_offer=offered("abcde"))
+    assert d.show_steps.id == "abcde" and labels(d) == ["Start ABCDE", "I need an example", "Talk more first"]
+    assert d.technique.outcome is TechniqueOutcome.OFFERED and d.technique.phase == "steps" and d.declined == []
+
+
+def test_a_clear_no_to_the_lead_in_declines_the_set():
+    d = decided(reply(action="stop"), open_offer=offered("abcde"))
+    assert d.declined == ["abcde"] and d.show_steps is None and d.technique.outcome is TechniqueOutcome.DECLINED
+
+
+def test_a_guarded_turn_at_either_step_of_the_offer_moves_nothing():
+    for phase in ("offering", "steps"):
+        d = decided(reply(), open_offer=offered("abcde", phase), guarded=True)
+        assert (d.show_steps, d.technique, d.retire_technique, d.prompts) == (None, None, False, []), phase

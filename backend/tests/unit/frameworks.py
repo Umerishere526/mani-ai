@@ -22,9 +22,9 @@ def framework(file_id: str) -> Framework:
 REGISTRY = Registry([framework("abcde"), framework("thought_reframe")])
 
 
-def offered(framework_id: str = "abcde") -> TechniqueState:
+def offered(framework_id: str = "abcde", phase: str = "offering") -> TechniqueState:
     return TechniqueState(thread_id=THREAD, framework_id=framework_id, outcome=TechniqueOutcome.OFFERED,
-                          phase="offering", at_message_count=4)
+                          phase=phase, at_message_count=4)
 
 
 def running(framework_id: str, phase: str) -> TechniqueState:

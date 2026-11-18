@@ -91,3 +91,12 @@ def test_the_guide_says_when_never_to_offer_each_framework():
 def test_the_system_prompt_is_mani_then_the_guide_and_the_summary_only_when_due():
     prompt = system_prompt(CONFIG, ctx(), summary_due=False)
     assert prompt.startswith(MANI["content"][:200]) and "A is for Activating Event." in prompt
+
+
+def test_the_open_offer_line_says_which_step_is_showing():
+    """At the lead-in, code adds the five steps after the reply, so a yes does not start the set yet; after the steps,
+    a clear yes starts it and a clear no declines it."""
+    lead_in = facts_for(ctx(), open_offer=offered("abcde"))
+    assert "five steps follow your reply" in lead_in and "starts it" not in lead_in
+    steps = facts_for(ctx(), open_offer=offered("abcde", "steps"))
+    assert "A clear yes in their words starts it" in steps and "action to stop" in steps

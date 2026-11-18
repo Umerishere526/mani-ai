@@ -6,7 +6,7 @@ from __future__ import annotations
 from mani.chat import record as rec
 from mani.chat.greeting import style_label
 from mani.chat.pause import ReturnCheck
-from mani.chat.techniques import Registry, line_of, stages_of
+from mani.chat.techniques import STEPS, Registry, line_of, stages_of
 from mani.db.threads import TurnContext
 from mani.models.rows import TechniqueState
 from mani.prompts import cache, composer
@@ -61,8 +61,7 @@ def facts(
     if running is not None and (framework := config.registry.get(running.framework_id)):
         lines.append(_running_line(framework, running.phase, held=holding))
     if open_offer is not None and not holding and (framework := config.registry.get(open_offer.framework_id)):
-        lines.append(f"Your last reply offered {framework.name} (id {framework.id}). A clear yes in their words starts "
-                     "it: set stage to its first stage and open it.")
+        lines.append(_offer_line(framework, open_offer.phase))
     if declined := rec.declined(record):
         lines.append(f"They declined in this conversation: {', '.join(declined)}. Never offer these again.")
     if finished := rec.finished(record):
@@ -85,6 +84,17 @@ def facts(
 def facts_block(lines: list[str]) -> str:
     """The facts as the model reads them, after their message."""
     return "Facts for this reply (never mention them):\n" + "\n".join(f"- {line}" for line in lines)
+
+
+def _offer_line(framework, phase: str | None) -> str:
+    """Where the open offer stands: at the lead-in code adds the five steps after the reply; after them, a clear yes
+    starts the set."""
+    if phase == STEPS:
+        return (f"{framework.name}'s five steps are showing (id {framework.id}). A clear yes in their words starts it: "
+                "set stage to its first stage and open it with its line and question. A clear no: set action to stop.")
+    return (f"Your last reply was the lead-in to {framework.name} (id {framework.id}); its five steps follow your reply, "
+            "added by code. Answer what they said in a sentence or two and do not start the set. A clear no: set action "
+            "to stop.")
 
 
 def _running_line(framework, phase: str | None, *, held: bool) -> str:

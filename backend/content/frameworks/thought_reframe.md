@@ -78,6 +78,8 @@ stages:
         3. Explore What Makes the Thought Feel True: What makes it convincing, and is there anything that complicates it?
         4. Consider Another Interpretation: Is there another explanation that could also make sense?
         5. Create a Believable Replacement Thought: What is a more balanced way to see this that you can believe?
+
+        Ready to dive into a real life situation?
       supportive: |-
         The Thought Reframe framework has five steps. Each one helps you understand a thought that is weighing on you and consider a more balanced way to see it.
 
@@ -86,6 +88,8 @@ stages:
         3. Explore What Makes the Thought Feel True: What makes it so convincing, and is there anything that complicates it?
         4. Consider Another Interpretation: Is there another explanation that could also make sense?
         5. Create a Believable Replacement Thought: What is a more balanced way of seeing this that you could genuinely believe?
+
+        Would you like to try diving into a real life situation together?
       reflective: |-
         The Thought Reframe framework has five steps that help you examine one thought and what it means to you.
 
@@ -94,6 +98,17 @@ stages:
         3. Explore What Makes the Thought Feel True: What seems to support it, and is there anything that makes you see it a little differently?
         4. Consider Another Interpretation: Given what you know, is there another explanation that could also fit?
         5. Create a Believable Replacement Thought: What more balanced understanding could you genuinely believe?
+
+        Are you ready to dive into a real life situation?
+    # Sent when they tap I need an example. Ours until the client supplies hers.
+    example: |-
+      Here's how it can go for someone who wasn't invited to a friend's birthday dinner.
+
+      - The thought: My friends don't really care about me.
+      - What makes it painful: It might mean I'll end up on my own.
+      - What makes it feel true: They didn't invite me, and nobody said anything about it. But two of them did call me last week.
+      - Another interpretation: Maybe the dinner was small, or someone assumed I'd been told.
+      - A believable replacement: I wasn't at this dinner, and that hurts, but people in my life do reach out to me.
 
   thought:
     title: "Identify the Thought"

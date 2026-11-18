@@ -15,11 +15,11 @@ import asyncpg
 from mani.auth.jwt import Claims
 from mani.chat import crisis, decide as decide_mod, facts, judged as judged_mod, pause, record as rec, rewind, safety, taps
 from mani.chat.greeting import (
-    COPIED_BACK, PERMISSION_QUESTION, STYLE_OPTIONS, greeting, openers, resolve_style,
+    COPIED_BACK, STYLE_OPTIONS, greeting, openers, resolve_style,
 )
-from mani.chat.repairs import clean_title, offer_buttons, without_dashes
+from mani.chat.repairs import clean_title, start_buttons, without_dashes
 from mani.chat.reply import TurnReply
-from mani.chat.techniques import OFFERING
+from mani.chat.techniques import OFFERING, STEPS, example_text, steps_text
 from mani.config import get_settings
 from mani.text import copies_last_reply
 from mani.db import llm_calls, messages as messages_db, pauses, profiles, threads
@@ -149,9 +149,9 @@ async def _turn(
     technique = ctx.technique
     running = technique if (technique is not None and technique.outcome is TechniqueOutcome.ACCEPTED
                             and technique.phase not in (None, OFFERING)) else None
-    # An offer is open only while its row stands at the offer: one they moved past is retired (phase null).
+    # An offer is open while its row stands at the lead-in or the five steps: one they moved past is retired (phase null).
     open_offer = technique if (technique is not None and technique.outcome is TechniqueOutcome.OFFERED
-                               and technique.phase == OFFERING) else None
+                               and technique.phase in (OFFERING, STEPS)) else None
     tapped = taps.find_tapped_prompt(history, content)
     tap = taps.tap_event(tapped, config.registry, open_offer)
     style_name = resolve_style(
@@ -160,6 +160,9 @@ async def _turn(
     )
     if tap.explain is not None:
         return await _explained(conn, ctx, content, tap.explain, style_name, tapped, client_message_id)
+    if tap.example is not None:
+        return await _fixed_step(conn, ctx, content, example_text(tap.example),
+                                 start_buttons(tap.example, with_example=False), tapped, client_message_id)
 
     check = pause.return_check(ctx)
     answering = None if check is not None else pause.answering(ctx)
@@ -198,13 +201,14 @@ async def _turn(
     return await _apply(conn, ctx, call, content=content, tapped=tapped, tap=tap, record=record, running=running,
                         open_offer=open_offer, check=check, answering=answering, before=before, holding=holding,
                         wants_title=wants_title, end_check_asked=end_check_asked, window=window, config=config,
-                        client_message_id=client_message_id, settings=settings, answer_failure=answer_failure)
+                        client_message_id=client_message_id, settings=settings, answer_failure=answer_failure,
+                        style=style_name)
 
 
 async def _apply(
     conn, ctx: threads.TurnContext, call: client.Call, *, content, tapped, tap, record, running, open_offer, check,
     answering, before, holding, wants_title, end_check_asked, window, config, client_message_id, settings,
-    answer_failure,
+    answer_failure, style,
 ) -> Turn:
     """What the reply decides, written in this transaction."""
     reply: TurnReply = call.value
@@ -224,6 +228,8 @@ async def _apply(
             else crisis.END_CHECK if decision.end_check else reply.text)
     if judgment.body_emergency and not judgment.pausing:
         text = f"{text.rstrip()}\n\n{crisis.BODY_EMERGENCY}"
+    if decision.show_steps is not None:
+        text = f"{text.rstrip()}\n\n{steps_text(decision.show_steps, style)}"
     text = without_dashes(text).strip()
     if not text and not answer_failure:
         raise ServiceError(f"reply on thread {ctx.thread.id} was empty", ErrorCategory.LLM_UNAVAILABLE, retryable=True,
@@ -338,11 +344,18 @@ async def _arrival(conn, claims: Claims, thread_id, client_message_id) -> Turn |
 
 
 async def _explained(conn, ctx, content, framework: Framework, style: str, tapped, client_message_id) -> Turn:
-    """Tell me more: the client's explanation for their style and the permission question, word for word, with no
-    model call."""
-    explained = ((framework.stages.get(OFFERING) or {}).get("explain") or {}).get(style) or framework.summary
-    text = f"{explained}\n\n{PERMISSION_QUESTION}"
-    prompts = offer_buttons(framework.id, explained=True)
+    """A lead-in button: the client's five steps for their style, word for word, with no model call. The offer moves
+    to its steps, where the next answer starts it, sets it aside or lets it lapse."""
+    turn = await _fixed_step(conn, ctx, content, steps_text(framework, style),
+                             start_buttons(framework, with_example=True), tapped, client_message_id)
+    if not turn.was_duplicate and ctx.technique is not None:
+        await threads.apply(conn, ctx.thread.id, ctx.thread.user_id,
+                            threads.ThreadUpdates(technique=ctx.technique.model_copy(update={"phase": STEPS})))
+    return turn
+
+
+async def _fixed_step(conn, ctx, content, text: str, prompts: list[SmartPrompt], tapped, client_message_id) -> Turn:
+    """One of the client's fixed offer steps (the five steps, the example), sent with its buttons and no model call."""
     pair = await messages_db.create_pair(
         conn, ctx.thread.id, content, text, selected_prompt=tapped.label,
         prompt_options=[p.model_dump(mode="json", exclude_none=True) for p in prompts],
