@@ -12,7 +12,7 @@ import streamlit as st
 _ORDER = (
     ("action", "Action"), ("framework", "Framework"), ("stage", "Stage"), ("safety", "Safety"),
     ("paused", "Chat paused"), ("body_emergency", "Call-now line added"), ("refused", "Code refused"), ("unanswered", "No host answered"),
-    ("buttons", "Buttons"), ("latency_ms", "Model time (ms)"), ("notes", "Mani's notes"),
+    ("buttons", "Buttons"), ("suggested", "Buttons are the model's suggestions"), ("latency_ms", "Model time (ms)"), ("notes", "Mani's notes"),
 )
 _LABELS = dict(_ORDER)
 

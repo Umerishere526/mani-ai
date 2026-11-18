@@ -66,6 +66,23 @@ def lead_in_buttons() -> list[SmartPrompt]:
     return [SmartPrompt(label=label) for label in LEAD_IN_LABELS]
 
 
+# A suggestion longer than this does not fit on a button.
+MAX_SUGGESTION_LENGTH = 40
+
+
+def suggestion_buttons(options: list[str]) -> list[SmartPrompt]:
+    """The model's suggested answers as buttons: trimmed, blanks, repeats and ones too long for a button dropped, at
+    most three."""
+    seen: set[str] = set()
+    buttons = []
+    for option in options:
+        label = option.strip()
+        if label and len(label) <= MAX_SUGGESTION_LENGTH and label.lower() not in seen:
+            seen.add(label.lower())
+            buttons.append(SmartPrompt(label=label))
+    return buttons[:3]
+
+
 def feelings_buttons() -> list[SmartPrompt]:
     """The client's three answers to how they feel after the last stage."""
     return [SmartPrompt(label=label) for label in FEELINGS_LABELS]

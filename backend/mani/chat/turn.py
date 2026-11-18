@@ -17,7 +17,7 @@ from mani.chat import crisis, decide as decide_mod, facts, judged as judged_mod,
 from mani.chat.greeting import (
     COPIED_BACK, STYLE_OPTIONS, greeting, openers, resolve_style,
 )
-from mani.chat.repairs import clean_title, start_buttons, without_dashes
+from mani.chat.repairs import clean_title, start_buttons, suggestion_buttons, without_dashes
 from mani.chat.reply import TurnReply
 from mani.chat.techniques import FEELINGS, OFFERING, STEPS, example_text, steps_text
 from mani.config import get_settings
@@ -231,6 +231,7 @@ async def _apply(
     if decision.show_steps is not None:
         text = f"{text.rstrip()}\n\n{steps_text(decision.show_steps, style)}"
     text = without_dashes(text).strip()
+    answered = bool(text)
     if not text and not answer_failure:
         raise ServiceError(f"reply on thread {ctx.thread.id} was empty", ErrorCategory.LLM_UNAVAILABLE, retryable=True,
                            user_message="Mani had trouble responding. Please try again.")
@@ -241,11 +242,16 @@ async def _apply(
         text = (crisis.CRISIS_REPLY if holding or judgment.state_after is not safety.State.CLEAR
                 else crisis.TROUBLE_REPLY)
         decision = decide_mod.Decision(declined=rec.declined(record), finished=rec.finished(record))
+    prompts = decision.prompts
+    # The model's suggested answers show only in the chat: never beside code's own buttons, inside a set or an offer,
+    # or on a turn held for safety.
+    if answered and not prompts and running is None and open_offer is None and not guarded and not judgment.pausing:
+        prompts = suggestion_buttons(reply.options)
     updates, after = _updates(ctx, reply, decision, judgment, record=record, check=check, answering=answering,
                               end_check_asked=end_check_asked, wants_title=wants_title)
     pair = await messages_db.create_pair(
         conn, ctx.thread.id, content, text, selected_prompt=tapped.label if tapped else None,
-        prompt_options=[p.model_dump(mode="json", exclude_none=True) for p in decision.prompts] or None,
+        prompt_options=[p.model_dump(mode="json", exclude_none=True) for p in prompts] or None,
         client_message_id=client_message_id,
     )
     await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
@@ -256,11 +262,12 @@ async def _apply(
         "action": reply.action, "framework": reply.framework, "stage": reply.stage,
         "safety": judged_mod.traced(reply.safety), "paused": judgment.pausing or None,
         "body_emergency": (judgment.body_emergency and not judgment.pausing) or None,
-        "buttons": [p.label for p in decision.prompts], "latency_ms": call.latency_ms, "refused": decision.refused,
+        "buttons": [p.label for p in prompts], "suggested": bool(prompts) and not decision.prompts or None,
+        "latency_ms": call.latency_ms, "refused": decision.refused,
         "notes": reply.notes if settings.ai_debug_mode else None,
     }.items() if value not in (None, "", [], {})}
     return Turn(
-        message_id=pair.mani_message_id, content=text, created_at=pair.created_at, prompts=decision.prompts,
+        message_id=pair.mani_message_id, content=text, created_at=pair.created_at, prompts=prompts,
         title=updates.title or ctx.thread.title, crisis_detected=flagged or judgment.state_after is safety.State.DANGER,
         paused_from=paused.started_at if paused else None, paused_until=paused.ends_at if paused else None,
         was_duplicate=pair.was_duplicate, needs_summary=_summary_due(ctx, window) and not judgment.pausing,

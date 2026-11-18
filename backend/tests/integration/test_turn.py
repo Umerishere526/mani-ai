@@ -335,3 +335,31 @@ async def test_editing_the_reply_that_opened_the_feelings_check_restores_the_las
     assert (await technique_of(alice, thread.id)).phase == "feelings_check"
     await runner.edit(alice, thread.id, await last_user_message_id(thread.id), "not sure yet")
     assert (await technique_of(alice, thread.id)).phase == "effective"
+
+
+SUGGESTED = ["Work", "Family", "Everything at once"]
+
+
+async def test_suggestions_show_as_buttons_on_a_plain_chat_reply_and_a_tap_is_their_answer(alice, model):
+    scripted = model(said("What's causing the pressure?", options=SUGGESTED), said("Tell me more."))
+    thread = await start(alice)
+    asked = await send(alice, thread.id, "i'm under so much pressure")
+    assert [p.label for p in asked.prompts] == SUGGESTED
+    await send(alice, thread.id, "Everything at once")
+    assert scripted.last_messages[-2] == {"role": "user", "content": "Everything at once"}
+
+
+async def test_suggestions_never_show_beside_an_offer_inside_a_set_or_on_a_safety_turn(alice, model):
+    model(said("Lead-in.", action="offer", framework="abcde", options=SUGGESTED),
+          said("Call now.", safety=DANGER, options=SUGGESTED))
+    thread = await start(alice)
+    offered = await send(alice, thread.id, "i feel like a pushover")
+    assert [p.label for p in offered.prompts] == ["Not sure", "Show me how", "Give me a tool"]
+    other = await start(alice)
+    danger = await send(alice, other.id, "i took a bunch of pills")
+    assert danger.prompts == []
+    model(said("B is for Belief. What did you tell yourself?", stage="belief", options=SUGGESTED))
+    running = await start(alice)
+    await put_technique(running.id, "abcde", TechniqueOutcome.ACCEPTED, "activate")
+    stage = await send(alice, running.id, "my boss moved the deadline")
+    assert stage.prompts == []

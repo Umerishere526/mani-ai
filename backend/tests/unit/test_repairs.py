@@ -54,3 +54,10 @@ def test_dashes_are_taken_out_of_what_mani_says(draft, sent):
     any that still come."""
     assert repairs.without_dashes(draft) == sent
     assert "\u2014" not in repairs.without_dashes(draft)
+
+
+def test_suggestions_are_cleaned_and_held_to_three_short_buttons():
+    """The client's sequence document (2026-11-18): suggested answers as buttons, such as Work / Family / Everything."""
+    labels = [p.label for p in repairs.suggestion_buttons([" Work", "Family", "", "work", "Everything at once", "Fourth"])]
+    assert labels == ["Work", "Family", "Everything at once"]
+    assert repairs.suggestion_buttons(["x" * 41]) == [], "a suggestion too long for a button is dropped"
