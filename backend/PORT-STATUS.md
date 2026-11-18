@@ -10,7 +10,7 @@ the same change as the work.**
 - Tests: `pytest` runs 338 tests, 325 passing and 13 skipped (2026-11-18, after the one-call rebuild): the 13 mint a
   symmetric token and skip on a JWKS-configured project.
 - Database: 34 migrations (000 to 010 and 018 to 040), 19 tables (10 `public`, 9 `admin`), 2 frameworks and 3 prompts
-  seeded (`mani`, `summarization`, `memory_fold`).
+  seeded (`mani`, `summarization`).
   `admin.exercises` holds the 30 library exercises from `content/exercises/` (as "mani-app" holds them on 2026-11-13;
   the other hosted project was not compared), with their audio in the
   private `exercises` bucket (`scripts/seed_exercises.py`). Two hosted projects held every migration of the time and
@@ -19,7 +19,7 @@ the same change as the work.**
   run only on this machine's databases (2026-11-13), and 039 and 040 likewise (2026-11-18).
 - Models: the chat turn runs on `minimax/minimax-m3.1-flash` at reasoning effort `high`, routed only to the three
   zero-data-retention hosts that run its reasoning (`modelrun`, `fireworks`, `makora`, with `zdr: true`), as the `mani` prompt row names them (`content/prompts/mani.md` frontmatter, seeded into
-  `admin.prompts`; see Decisions in force). Summaries and the memory fold run on `openai/gpt-6-luna` at `high`, routed
+  `admin.prompts`; see Decisions in force). Summaries run on `openai/gpt-6-luna` at `high`, routed
   only to OpenAI (`mani/config.py` and their prompt rows), and so does the voice transcription in `mani/stt.py`. Every
   endpoint keeps `data_collection: deny`, so training use stays refused. Effort is billed: measured against Azure,
   `high` spent 26 reasoning tokens where `low` spent 0, about three times the cost of the same call.
@@ -53,7 +53,7 @@ the same change as the work.**
      worked example (`turn._fixed_step`); their message equal to Mani's last reply gets `greeting.COPIED_BACK` (`turn._copied_back`).
   3. Otherwise exactly one model call. The system prompt is `content/prompts/mani.md`, the framework guide built from
      the registry (each active framework: when it fits, when never to offer it, and each stage's line, purpose and
-     when it is answered), the person's onboarding answers and memory, and the summary once messages have left the
+     when it is answered), the person's onboarding answers, and the summary once messages have left the
      window (`facts.system_prompt`). Then the transcript, their message, and a system message of facts
      (`facts.facts`): their style, Mani's notes from its last turn, the framework running and its next stage, an open
      offer, what was declined or finished, an open safety worry, what code would refuse (`facts.NO_OFFER`), the
@@ -78,11 +78,11 @@ the same change as the work.**
   Library and Finish for Now. The body check-in (the client's "SOMATIC SECTION OF MANI", paused since 2026-11-05) was
   deleted on 2026-11-17 with its code, script and phases; migration 039 retired any thread left in it, and the
   client's script stays in `docs/client/`.
-- **Memory**: per person, folded from earlier chats by `mani/memory.py`; idle threads fold through
-  `memory.fold_idle`, run by `scripts/fold_idle_threads.py` or `GET /internal/cron/catch-up` behind `CRON_SECRET`.
+- **Memory**: none across chats. Each chat stands alone; only the safety check after a pause crosses chats
+  (Decisions in force).
 - **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). Nothing picks an exercise for a person:
   the pick by a second model call was deleted with the 2026-10-02 flow. `GET /v1/exercises` is the whole catalog, and responses never carry the storage path.
-- **Admin**: prompt CRUD with versioning, exercise CRUD, crisis event review, a user's memory, and every
+- **Admin**: prompt CRUD with versioning, exercise CRUD, crisis event review, and every
   person's conversations read-only (each full read logged in `admin.thread_reads`). An admin cannot send a chat
   message (`Participant` in `mani/auth/deps.py`). `scripts/grant_admin.py <email>` grants or `--revoke`s it.
 - **Account deletion**: `DELETE /v1/account` removes the user and everything they own.
@@ -103,7 +103,6 @@ the same change as the work.**
 | GET PATCH DELETE | `/v1/threads/{id}` | fetch, set `conversation_style`, soft delete |
 | GET POST | `/v1/threads/{id}/messages` | history (paged), **send a turn** |
 | POST | `/v1/threads/{id}/messages/{message_id}/follow-up` | the summary a turn left, asked for once its reply is shown (`follow_up_pending`); `read` is always false; a summary that fails stays waiting (`pending`) |
-| POST | `/v1/threads/memory-fold` | folds finished chats into memory, asked for when the app opens a new conversation; leaves out any chat written after the request arrived |
 | GET | `/v1/exercises`, `/home`, `/{id}` | catalog with signed audio |
 | GET POST | `/v1/exercises/completions` | a user's completions |
 | PUT DELETE | `/v1/exercises/{id}/feedback` | the person's 👍/👎 on an exercise, with an optional reason; replaces any earlier one |
@@ -115,11 +114,10 @@ the same change as the work.**
 | POST | `/v1/admin/prompts/cache/invalidate` | publish now |
 | GET POST, PATCH DELETE | `/v1/admin/exercises`, `/{id}` | catalog CRUD |
 | GET | `/v1/admin/crisis-events` | review queue |
-| GET | `/v1/admin/users/{id}/memory` | what is remembered about a person |
 | GET | `/v1/admin/threads` | every person's conversations they have written in, newest activity first; `search` by email or user id |
 | GET | `/v1/admin/exercise-feedback` | every person's library ratings, newest first; `search` by email or user id |
 | GET | `/v1/admin/threads/{id}` | one conversation in full, oldest first; logs the read |
-| GET | `/internal/cron/catch-up` | summaries behind, follow-ups the app never asked for, quiet chats folded into memory (`mani/catch_up.py`); bearer `CRON_SECRET`, no JWT |
+| GET | `/internal/cron/catch-up` | summaries behind and follow-ups the app never asked for (`mani/catch_up.py`); bearer `CRON_SECRET`, no JWT |
 
 ## Decisions in force
 
@@ -255,13 +253,11 @@ the same change as the work.**
 - **A scheduled catch-up finishes what the app never asked for** (muhammad, 2026-11-06). Because on Vercel the app
   triggers the work after a reply and a new chat, so a closed tab lost a reading and someone who never taps New chat
   was never remembered. `mani/catch_up.py`, every 5 minutes from `backend/vercel.json` (Vercel Pro): summaries behind,
-  follow-ups waiting on a reply quiet for `QUIET_AFTER` (5 min) and given up after `GIVE_UP_AFTER` (1 h), and quiet
-  chats folded (`memory.fold_idle`, longest-quiet people first, the limit counting paid folds), each as its person
-  (`Claims.acting_as`). Each job starts at most `catch_up.LIMIT` (10) items a run and stops at `RUN_SECONDS` (240),
-  inside the function's 300 s. Nothing failing is retried forever: a follow-up for `GIVE_UP_AFTER` (1 h), a summary
-  while its thread had a message in `summarize.CATCH_UP_FOR` (1 day), a fold for `memory.FOLD_RETRY_FOR` (1 day) after
-  `IDLE_AFTER`; past that a summary waits for the thread's next turn and a fold for the person's next New chat. Work
-  a request has claimed is passed over. Tests: `test_follow_up.py`, `test_memory.py`, `test_queries.py`
+  follow-ups waiting on a reply quiet for `QUIET_AFTER` (5 min) and given up after `GIVE_UP_AFTER` (1 h), each as its
+  person (`Claims.acting_as`). Each job starts at most `catch_up.LIMIT` (10) items a run and stops at `RUN_SECONDS`
+  (240), inside the function's 300 s. Nothing failing is retried forever: a follow-up for `GIVE_UP_AFTER` (1 h), a
+  summary while its thread had a message in `summarize.CATCH_UP_FOR` (1 day); past that a summary waits for the
+  thread's next turn. Work a request has claimed is passed over. Tests: `test_follow_up.py`, `test_queries.py`
   (`due_for_summary`), `test_catch_up.py`, `test_cron.py`.
 - **The hosted chat-tester runs as it does locally, Forgot password included, for testing only** (muhammad,
   2026-11-06). Because testers need it now and the safe flow can wait. It is a public Streamlit Community Cloud app
@@ -305,7 +301,7 @@ the same change as the work.**
   hand: built from the migrations, "mani-app" let any signed-in person call `create_message_pair` and forge Mani's
   reply. `000_supabase_defaults_off.sql` turns the defaults off before 001; `034_backend_only_state.sql` pins the
   definer functions to `mani_service`, hides `threads.understanding`, `rewind_snapshot`, `pending_follow_up`,
-  `vague_streak`, a column migration 040 dropped since, and `memory_folded_at` from
+  `vague_streak`, a column migration 040 dropped since, and `memory_folded_at`, which 041 dropped, from
   `authenticated` (they were readable through the Data API with the person's own token), and moves `admin` schema
   usage with `admin.exercises` and `admin.frameworks` from `authenticated` to `mani_service`. `035` takes `public`
   away from PUBLIC and names each role that uses it, `supabase_auth_admin` included: the hosted project had lost
@@ -386,8 +382,7 @@ the same change as the work.**
     follow-up, and the turn checks again under the message lock before its duplicate lookup (`turn._arrival`), so a
     retry or another tab cannot slip past. The profile and the opening carry `chat_paused_from` and
     `chat_paused_until`; reading conversations, the crisis resources and the Library stay open. A pause's reason is
-    loaded by the turns of any of the person's conversations (`threads.load_turn_context`), never by the memory fold or
-    the profile, and the person's own role has no SELECT on it. An edit never undoes a pause.
+    loaded by the turns of any of the person's conversations (`threads.load_turn_context`), never by the profile, and the person's own role has no SELECT on it. An edit never undoes a pause.
     **Every conversation asks after a pause, until they say they are all right** (muhammad, 2026-11-13). Because a
     person who comes back and chats in another conversation, new or older, must not bypass the check (2026-11-13).
     **A pause owes the check only while it ended within `RECENT_CRISIS_DAYS` (30)** (the controller's ruling,
@@ -460,10 +455,9 @@ the same change as the work.**
   cache (`cache.load`, which reloads on its own connection); each raises `RuntimeError`, so a test finds it. Because the
   turn's read still called `cache.load()`, which on a stale cache took a second connection under a process-wide lock:
   at 500 people every connection was held by a read waiting on it, and 3,694 of 3,708 sends failed `busy`. The runner
-  reads the prompts first and passes them in (`turn.send(config=...)`). Summaries (`summarize.update`) and the
-  memory fold (`memory.fold_one`) read, call the model, then write only onto what they read; the fold no longer claims
-  its thread ahead (`memory_db.next_to_fold`, `mark_folded_through(was=...)`), so a fold that fails or dies leaves the
-  thread waiting. In one process a second summary or fold waits for the first (`mani/one_at_a_time.py`).
+  reads the prompts first and passes them in (`turn.send(config=...)`). Summaries (`summarize.update`) read, call the
+  model, then write only onto what they read. In one process a second summary waits for the first
+  (`mani/one_at_a_time.py`).
 - **The backend reaches Postgres through Supabase's transaction pooler (port 6543), with small pools** (muhammad,
   2026-11-05). Because each instance opened its own pool against the session pooler, so connections multiplied with
   instances; the transaction pooler shares backends across every instance. `mani/db/pool.py`: `statement_cache_size=0`,
@@ -512,12 +506,10 @@ the same change as the work.**
   conversation last written in, or none. The lists, `most_recent` and the admin list show only conversations with a
   message the person wrote (`threads.WRITTEN_IN`; a style tap does not count), so greeting-only threads already stored
   are hidden, not deleted. `threads.create` always inserts a new conversation. The greeting says "good to see you again" only
-  when an earlier conversation was written in (`turn.has_written_in_earlier_thread`). `POST
-  /v1/threads/memory-fold` takes no thread and folds only conversations last written before the request arrived.
+  when an earlier conversation was written in (`turn.has_written_in_earlier_thread`).
   `tests/integration/test_threads_api.py`: `test_opening_writes_nothing`,
   `test_the_first_message_creates_the_thread_with_its_opening`, `test_a_retried_first_message_returns_the_same_thread`,
-  `test_a_first_turn_no_host_answers_still_gets_the_fixed_reply`,
-  `test_a_chat_begun_while_the_memory_fold_runs_is_not_folded_by_it`.
+  `test_a_first_turn_no_host_answers_still_gets_the_fixed_reply`.
 
 - **Every call that has a thread sends `session_id` and `prompt_cache_key`, both `<thread_id>:<purpose>`.** Because
   OpenRouter recorded `session_id` null on every call of 2026-11-01 to 05 and turn 2 of a thread was cached in 1 of 8
@@ -551,8 +543,7 @@ the same change as the work.**
   tapping an option, the style tap, a message already inside the thread summary. A crisis thread is edited wherever a
   message can still be sent: the edit has no crisis rule of its own; while a pause runs the edit route's gate and the
   send that runs the new text both refuse as `chat_paused`, and the whole edit rolls back (muhammad, 2026-11-10: a
-  thread flagged once refused every edit as "paused" while it still took messages). The crisis record in `admin.crisis_events` outlives an edited message. The overnight memory fold is not
-  undone, so an edit after it leaves the old words in memory (accepted for the tester). Tests:
+  thread flagged once refused every edit as "paused" while it still took messages). The crisis record in `admin.crisis_events` outlives an edited message. Tests:
   `test_editing_after_a_finishing_turn_restores_the_framework_state` in `test_turn.py`,
   `test_a_failed_edit_leaves_the_original_exchange_in_place` in `test_read_think_write.py`.
 - **A message is cleaned to its visible text before anything reads it, and an empty one is refused with what to do.**
@@ -649,8 +640,7 @@ the same change as the work.**
   delete the endpoint, `follow_up_pending` and `pending_follow_up`, and run the summary in the process after the
   response. Only the chat tester calls it today; `web/` and `mobile/` are not wired to the API. The call link and the
   trace are database writes only, awaited side by side before the turn's response (`turn.link_call`,
-  `turn.record_trace`). The app posts `/v1/threads/memory-fold` when it opens a new conversation; work the app never
-  asks for is done by the catch-up. `test_notes_written_by_one_turn_reach_the_next_turns_facts` in `test_turn.py`,
+  `turn.record_trace`). Work the app never asks for is done by the catch-up. `test_notes_written_by_one_turn_reach_the_next_turns_facts` in `test_turn.py`,
   `test_the_notes_from_the_last_turn_are_handed_back` in `test_facts.py`, `tests/integration/test_follow_up.py`,
   `tests/unit/test_follow_up_endpoint.py`, chat-tester `test_follow_up.py`.
 - **A chat reply is streamed: a call silent for 15 s is cut and tried once more, one attempt has a deadline of
@@ -687,7 +677,7 @@ the same change as the work.**
   the default ones in the list, so a turn is never failed for want of priority capacity and is billed at the endpoint
   that served it; the explicit slug is there because a base slug never matches a tier endpoint, and nothing else is
   allowed, so never Azure, Bedrock or flex; `data_collection: deny` stays; no `provider.order`, which turns off sticky
-  routing. `memory_fold` and `summarize` stay on the default tier. `OPENROUTER_CHAT_SERVICE_TIER=default`
+  routing. `summarize` stays on the default tier. `OPENROUTER_CHAT_SERVICE_TIER=default`
   turns it off with no change to code. Evidence after deploy: `service_tier` is `priority` on `GET /api/v1/generation`
   for chat generation ids (`scripts/llm_call_providers.py` prints the endpoint; see the report's section 7 for the
   call). `test_only_the_chat_reply_asks_for_the_priority_tier_and_each_purpose_keeps_its_own_key`,
@@ -747,8 +737,14 @@ the same change as the work.**
   bringing one back is a content change. `facts.framework_guide`;
   `test_the_guide_says_when_never_to_offer_each_framework` in `test_facts.py`,
   `test_a_framework_stage_without_its_purpose_cannot_be_seeded_active` in `test_seed.py`.
-- **Memory is per person**. Because Mani should learn each person's patterns across chats, while a new chat
-  still starts with none of the last one's messages (2026-09-23).
+- **Every chat stands alone: nothing from an earlier chat reaches a new one except the safety check after a pause**
+  (muhammad, 2026-11-18). Because a tester's memory held every scenario tested and pulled old themes and loops into
+  new chats, and muhammad wants each chat separate even when the person returns with the same issue (2026-11-18). The
+  safety check is the return question after a pause and the "go gently" line for a recent worry
+  (`chat/pause.return_check`, `TurnContext.recent_crisis`); the onboarding profile is not a chat. No chat call opts into
+  OpenRouter's response cache, and its prompt-cache key is that chat's own. Migration `041`;
+  `test_a_new_chat_carries_nothing_from_an_earlier_one_but_the_safety_check` in `tests/integration/test_queries.py`,
+  `test_a_chat_call_never_opts_into_openrouters_response_cache` in `tests/unit/test_client.py`.
 - **The offer is the client's three steps: a lead-in the model writes, then her five steps, then the choice to
   start** (muhammad, 2026-11-18). Because the client's sequence document (2026-11-18,
   `docs/client/messages/2026-11-18-framework-sequences.md`) shows how a framework is meant to run, and the newest client
@@ -932,7 +928,7 @@ I recommend:
   moves to a stateful host.
 - The evaluation's pass mark: no drop of more than 0.15 overall against a side-by-side run, and every rule passes.
   Recommended: confirm.
-- Summaries, memory folds and transcription stay on `openai/gpt-6-luna` through OpenAI: should zero data retention
+- Summaries and transcription stay on `openai/gpt-6-luna` through OpenAI: should zero data retention
   cover them too? Recommended: yes, as a change of its own.
 - The stage letter lines are checked by the evaluation, not by code at runtime. Recommended: confirm.
 - Conversations in progress keep their declined and finished lists, rebuilt by migration 039; a set declined before a
@@ -980,7 +976,6 @@ Earlier:
 - Panic with no action in sight: the overview sends it to DBT STOP, the STOP specification is written around an
   action about to be taken. The client's call.
 - Whether a crisis turn should hand off to an exercise. Left out on purpose; do not add it as a missing branch.
-- Whether a person should see or erase their memory short of deleting the account.
 - The three styles still differ little in length and question rate. Schema field order was the lever that worked
   for openers; more prose rules did not.
 - Revisit the grief veto (Behavioral Activation after loss words) with real transcripts.
@@ -1022,7 +1017,7 @@ Earlier:
 - **Admin audio upload.** The 30 seeded exercises come from `content/exercises/` through
   `scripts/seed_exercises.py`; there is no upload route, and the admin exercise CRUD takes an existing
   `audio_path`.
-- **A worker process** for summaries and the memory fold, for when there is more than one instance.
+- **A worker process** for summaries, for when there is more than one instance.
 - **Model-call capacity at 500 people.** One instance's 100 slots run out (Latest measurements, measured when each
   turn also held a slot for a reading after it, which is gone). Either more instances (Vercel adds them on its own;
   each has its own 100), or a higher `MODEL_CALLS_IN_FLIGHT` once OpenRouter's rate limit for the key is known.

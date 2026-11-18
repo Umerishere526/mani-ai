@@ -8,6 +8,7 @@ failed:
   - "Tried creating a thread on page load and New conversation; failed because a style tap alone counted as a spoken thread."
 ---
 
+> Superseded 2026-11-18 (the memory fold on the New conversation click) — see [[loops-came-from-the-host-the-guard-and-memory-2026-11-18]]: every chat stands alone.
 # A conversation is created by its first message (2026-11-13)
 
 2026-11-13. History, not rules. The decision in force is "A conversation exists only once the person sends it their

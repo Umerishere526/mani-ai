@@ -8,6 +8,8 @@ failed:
   - "Tried a 20-message window inherited from the old system; failed because threads reach E at message 23 to 30"
   - "Tried a rule clearing stale seeded stages; failed because it fired on 'yes, and more' and could wipe good stages"
 ---
+
+> Superseded 2026-11-18 (the memory fold across chats) — see [[loops-came-from-the-host-the-guard-and-memory-2026-11-18]]: every chat stands alone.
 > Superseded 2026-10-14 (each stage judged "since the confirmed check", reported in stage_updates) — see [[reach-judged-in-its-own-field-2026-10-14]]
 
 # The transcript is the memory within a thread (2026-10-13)

@@ -45,6 +45,9 @@ longer. He sent two Directive chats:
    - The "proving your place" in a Supportive first reply came from there, not from the prompt (correcting
      [[highlight-came-before-the-build-up-2026-11-18]]).
    - Cleared on muhammad's word. The one unfolded chat was marked folded so it would not refill the memory.
+   - The same day muhammad ruled that every chat stands alone, with only the safety check after a pause crossing
+     over. The whole memory path was removed and its data dropped (migration `041`,
+     `docs/superpowers/specs/2026-11-18-separate-chats-design.md`).
 
 ## Not the cause
 
