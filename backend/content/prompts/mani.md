@@ -6,7 +6,7 @@ description: Who Mani is and how a whole conversation goes, frameworks included
 provider: openrouter
 model_id: minimax/minimax-m3.1-flash
 model_parameters:
-  reasoning_effort: low
+  reasoning_effort: high
   # Lower than the default so the same opening gets the same kind of reply from run to run (muhammad, 2026-11-18).
   temperature: 0.3
 routing:

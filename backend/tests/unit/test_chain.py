@@ -226,3 +226,11 @@ def test_a_model_that_always_reasons_is_told_the_rows_effort_and_given_room_to_t
     assert chain.request_body("minimax/minimax-m3.1-flash", settings(), None, "low")["reasoning"] == {"effort": "low"}
     assert chain.sampling("minimax/minimax-m3.1-flash", 0.7, 2048) == {
         "temperature": 0.7, "max_tokens": 2048 + chain.REASONING_ALLOWANCE_TOKENS}
+
+
+def test_deepseek_is_told_the_rows_effort_and_given_room_to_think():
+    """DeepSeek V4.1 Flash thinks at high by default (OpenRouter, 2026-11-18); sent no effort, it would think at its
+    default whatever the row says."""
+    assert chain.request_body("deepseek/deepseek-v4.1-flash", settings(), None, "high")["reasoning"] == {"effort": "high"}
+    assert chain.sampling("deepseek/deepseek-v4.1-flash", 0.3, 2048) == {
+        "temperature": 0.3, "max_tokens": 2048 + chain.REASONING_ALLOWANCE_TOKENS}

@@ -31,9 +31,10 @@ from mani.db import llm_calls
 # `max_completion_tokens` rather than `max_tokens`. Sending the wrong one is a 400 on every
 # call, so the shape of the request follows the model rather than the call site.
 REASONING_MODEL_PREFIXES = ("openai/gpt-6", "openai/gpt-5", "openai/o1", "openai/o3")
-# Models that always reason but keep the ordinary sampling parameters. MiniMax's reasoning is mandatory with a default
-# effort of max (OpenRouter, 2026-11-18), so a call that names no effort thinks at max.
-ALWAYS_REASONING_PREFIXES = ("minimax/",)
+# Models that reason by default but keep the ordinary sampling parameters. MiniMax's reasoning is mandatory with a
+# default effort of max, DeepSeek's on by default at high (OpenRouter, 2026-11-18), so a call that names no effort
+# thinks at that default.
+ALWAYS_REASONING_PREFIXES = ("minimax/", "deepseek/")
 
 
 def is_reasoning_model(model: str) -> bool:
