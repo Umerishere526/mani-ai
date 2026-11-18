@@ -2,7 +2,9 @@
 type: journal
 date: 2026-10-12
 tags: [journal, schema, offers, body-route, tests, lessons]
+summary: "Spec 0003: the model reports judgments in typed fields and code sends the client's fixed text."
 ---
+> Superseded 2026-11-17 (code sending the client's fixed offer text from typed fields: the model writes the offer) — see [[flat-replies-were-the-model-2026-11-17]]
 
 # Structured reply fields (2026-10-12)
 

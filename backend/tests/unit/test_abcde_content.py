@@ -1,11 +1,9 @@
-# ABOUTME: Checks the one seeded framework, ABCDE, carries what the client's ABCDE document asks for.
-# ABOUTME: Read from the framework file itself, the same structure that is seeded, so no database is needed.
-
-import re
+# ABOUTME: Checks the seeded frameworks carry what the turn reads from them: the letters in order, each letter's line,
+# ABOUTME: the five steps in every style and the worked example, and when each stage counts as answered. No database needed.
 
 import pytest
 
-from mani.chat import context, repairs
+from mani.chat.facts import framework_guide
 from mani.chat.techniques import Registry
 from mani.models.rows import Framework
 from scripts.seed import FRAMEWORKS_DIR, parse_framework
@@ -22,7 +20,6 @@ def as_framework(parsed: dict) -> Framework:
     return Framework(
         id=parsed["id"], name=parsed["name"], summary=parsed["summary"], body="b",
         phases=parsed["phases"], activation=parsed["activation"], stages=parsed["stages"],
-        confirm_phrases=parsed["confirm_phrases"],
     )
 
 
@@ -30,183 +27,56 @@ def test_abcde_and_thought_reframe_are_the_frameworks_seeded():
     assert sorted(p.stem for p in FRAMEWORKS_DIR.glob("*.md")) == ["abcde", "thought_reframe"]
 
 
-def test_abcde_runs_a_to_e_and_the_body_check_in_follows(abcde):
+def test_abcde_runs_a_to_e(abcde):
     assert abcde["phases"] == ["offering", "activate", "belief", "consequence", "dispute", "effective"]
-    framework = as_framework(abcde)
-    assert framework.closing == "effective", "the last letter is asked, never skipped"
 
 
-def test_every_letter_has_a_title_for_the_ledger_and_asks_in_all_three_styles(abcde):
-    titles = {"activate": "A: Activating Event", "belief": "B: Belief", "consequence": "C: Consequences",
-              "dispute": "D: Dispute", "effective": "E: Effective New Belief"}
-    for stage, title in titles.items():
-        assert abcde["stages"][stage]["title"] == title
-        assert set(abcde["stages"][stage]["ask"]) == set(STYLES)
+def test_each_letter_line_reaches_the_guide_in_order(abcde):
+    """The client asked for each letter to be named as it is reached, so the person knows which step they are on;
+    the model says the line, and the guide is where it reads it."""
+    guide = framework_guide(Registry([as_framework(abcde)]))
+    lines = ["A is for Activating Event.", "B is for Belief.", "C is for Consequences.", "D is for Dispute.",
+             "E is for Effective New Belief."]
+    positions = [guide.index(line) for line in lines]
+    assert positions == sorted(positions)
 
 
-def test_tell_me_more_is_the_five_steps_in_the_selected_style(abcde):
-    registry = Registry([as_framework(abcde)])
-    for style in STYLES:
-        text = repairs.explanation(registry.get("abcde"), style)
-        assert text.count("\n") >= 6 and "A: Activating Event" in text and "E: Effective New Belief" in text
-        assert text.endswith("Would you like to try it?")
-
-
-def test_the_event_stage_carries_the_clients_confirm_and_missing_lines_in_each_style(abcde):
-    """The document's three cases for A: an event said back and confirmed, and the event asked for
-    with their own word for the feeling (spec 0004, AC-4 and AC-6)."""
-    activate = abcde["stages"]["activate"]
-    assert activate["confirm"]["supportive"] == (
-        "You mentioned <the event, in their words>. Is that what started these feelings?"
-    )
-    assert activate["missing"]["supportive"] == "What's been happening that's left you feeling so <their word for it>?"
-    for key in ("confirm", "missing"):
-        assert set(activate[key]) == set(STYLES)
-        assert all(line.endswith("?") and "<" in line for line in activate[key].values())
-
-
-def test_each_letter_opens_with_the_clients_intro_line(abcde):
-    """Spec 0004, AC-1 and AC-7: the document introduces each letter by its name as it is reached,
-    and a stage said back closes with one of four short phrases."""
-    intros = {stage: abcde["stages"][stage]["intro"] for stage in abcde["phases"][1:]}
-    assert intros == {
-        "activate": "A is for Activating Event.", "belief": "B is for Belief.",
-        "consequence": "C is for Consequences.", "dispute": "D is for Dispute.",
-        "effective": "E is for Effective New Belief.",
-    }
-    assert abcde["confirm_phrases"] == [
-        "Is that right?", "Do we have this right?", "Did I get that right?", "Does that sound right?",
-    ]
-
-
-def test_the_offer_follows_the_clients_pattern_with_a_slot_for_their_situation(abcde):
-    offer = abcde["stages"]["offering"]["offer"]
-    assert set(offer) == set(STYLES)
-    for text in offer.values():
-        assert "There's a framework called ABCDE" in text
-        assert "<" in text and ">" in text and "?" not in text, "a slot to fill, and no question of its own"
-        # The client's review, 2026-10-29: the offer names the belief they confirmed, and never suggests Mani has
-        # already decided it is wrong.
-        assert "the belief that <the core belief they confirmed" in text
-        assert "really true" not in text and "whether they're true" not in text
-    assert "what supports it, and whether there's a more balanced way to see it." in offer["directive"]
-    assert "look at what's supporting that belief, and find a more balanced way to think about it." in offer["supportive"]
-
-
-def test_the_clients_offer_wording_reaches_the_person_but_never_the_framework_index(abcde):
-    """Code renders the offer, Keep chatting and Tell me more from these templates, so the model
-    is given none of them to copy (spec 0003)."""
-    from mani.prompts import composer
-
-    index = composer.framework_index(Registry([as_framework(abcde)]))
-    for key in ("offer", "explain"):
-        for text in abcde["stages"]["offering"][key].values():
-            fixed = max(re.split(r"<[^>]*>", text), key=len).strip()
-            assert fixed[:40] not in index, key
-
-
-def test_the_offer_does_not_list_the_steps(abcde):
-    """muhammad, 2026-10-22: the offer is the framework line and the permission question; the five steps are
-    told only when they ask Tell me more."""
-    assert "steps" not in abcde["stages"]["offering"]
-
-
-# The client's wording, 2026-10-30, made general so it fits any situation. E is muhammad's plain wording (2026-11-04):
-# "a more balanced way" left people asking what was meant.
-CLIENT_QUESTIONS = {
-    "belief": {
-        "directive": "When that happens, what thought worries you most?",
-        "supportive": "When that happens, what's the thought that hurts or worries you the most?",
-        "reflective": "When that happens, what does it make you believe about yourself or your situation?",
-    },
-    "consequence": {
-        "directive": "When you believe that, how does it affect how you feel and what you do?",
-        "supportive": "When that thought is with you, how does it affect how you feel and what you do?",
-        "reflective": "What do you notice in how you feel and what you do when you believe that?",
-    },
-    "dispute": {
-        "directive": "What has happened that makes you believe that thought, and has anything happened that doesn't fit it?",
-        "supportive": "What has happened that makes this feel true, and is there anything you might be overlooking that doesn't fit it?",
-        "reflective": "What makes you connect what's happening with that thought, and what have you actually seen or done that doesn't fit it?",
-    },
-    "effective": {
-        "directive": "Knowing both of those things, what would you tell yourself now about that thought?",
-        "supportive": "Knowing both of those things, what could you tell yourself about that thought that feels true to you?",
-        "reflective": "With both of those in mind, how would you put that thought to yourself now?",
-    },
+LIST = (
+    "- A: Activating event (what happened)\n"
+    "- B: Belief (what did your mind start saying)\n"
+    "- C: Consequences (what did you feel or do)\n"
+    "- D: Dispute (how can you challenge this belief)\n"
+    "- E: Effective new belief (What kind of belief could you hold instead)"
+)
+STEPS = {
+    "directive": f"The ABCDE technique can really help. It breaks down thoughts into five steps:\n\n{LIST}\n\n"
+                 "Ready to dive into a real life situation?",
+    "reflective": f"The ABCDE technique can help reflect on these thoughts by breaking them down:\n\n{LIST}\n\n"
+                  "Are you ready to dive into a real life situation?",
+    "supportive": f"The ABCDE technique is a kind way to help break these thoughts down:\n\n{LIST}\n\n"
+                  "Would you like to try diving into a real life situation together?",
 }
 
 
-def test_every_stage_asks_the_clients_own_question_in_each_style(abcde):
-    for stage, asks in CLIENT_QUESTIONS.items():
-        assert abcde["stages"][stage]["ask"] == asks, stage
+def test_the_five_steps_are_the_clients_in_every_style(abcde):
+    """The client's sequence document, 2026-11-18, minus the openers that answer only Not sure."""
+    from mani.chat.techniques import steps_text
+
+    for style, text in STEPS.items():
+        assert steps_text(as_framework(abcde), style) == text, style
 
 
-# Spec 0003, AC-9: the supportive ABCDE offer_open turn, measured before the change as the composed
-# system prompt plus [ctx] plus the JSON schema of the one Reply then sent (2026-10-12).
-CHARACTERS_BEFORE_STRUCTURED_FIELDS = 35752
+def test_the_worked_example_runs_a_to_e(abcde):
+    from mani.chat.techniques import example_text
+
+    example = example_text(as_framework(abcde))
+    assert "my child is sick" in example and "one step at a time" in example
 
 
-def test_an_open_offer_turn_costs_less_prompt_than_before_the_structured_fields(abcde):
-    import datetime as dt
-    import json
-    import time
-    import uuid
-
-    from mani.db.threads import TurnContext
-    from mani.llm.schema import Moment, reply_for
-    from mani.models.rows import Prompt, TechniqueOutcome, TechniqueState, Thread
-    from mani.prompts import composer
-    from mani.prompts.cache import Config
-    from scripts.seed import PROMPTS_DIR, load_somatic_stages, parse_prompt
-
-    somatic = load_somatic_stages()
-    framework = as_framework({**abcde, "phases": abcde["phases"] + list(somatic),
-                              "stages": {**abcde["stages"], **somatic}})
-    registry = Registry([framework])
-    prompts = {
-        name: Prompt(id=uuid.uuid4(), name=name, content=parse_prompt(PROMPTS_DIR / f"{name}.md")["content"])
-        for name in ("voice", "moments")
-    }
-    system = composer.compose_moment(
-        Config(prompts=prompts, registry=registry, loaded_at=time.monotonic()), None, offered=["abcde"],
-    )
-    now = dt.datetime.now(dt.UTC)
-    thread = Thread(id=uuid.uuid4(), user_id=uuid.uuid4(), message_count=11, conversation_style="supportive",
-                    created_at=now, last_message_at=now)
-    offered = TechniqueState(thread_id=thread.id, framework_id="abcde", outcome=TechniqueOutcome.OFFERED,
-                             phase="offering", at_message_count=11)
-    block = context.build(TurnContext(thread=thread, profile=None, technique=offered), framework=framework,
-                          history=[], offer_waiting=True, yes_framework=framework)
-    shape = reply_for(Moment.OFFER_OPEN, slots=repairs.slots_for(registry, "supportive"))
-
-    # The voice is the prefix every turn shares, the chat's included, and is cached once for all of them
-    # (muhammad, 2026-10-27); what this turn adds after it is held to the old figure.
-    voice = len(prompts["voice"].content) + 2
-    total = len(system.text) - voice + len(block) + len(json.dumps(shape.model_json_schema()))
-    assert system.text.startswith(prompts["voice"].content)
-    assert total < CHARACTERS_BEFORE_STRUCTURED_FIELDS
-
-
-def test_the_stages_that_look_at_the_belief_or_thought_carry_the_stack_in_both_frameworks():
-    """Lolly, 2026-10-22: the stack must reach C, D and E. A framework says which of its stages carry it."""
-    carrying = {
-        name: sorted(stage for stage, body in parse_framework(FRAMEWORKS_DIR / f"{name}.md")["stages"].items()
-                     if body.get("carries_case"))
-        for name in ("abcde", "thought_reframe")
-    }
-    assert carrying == {
-        "abcde": ["consequence", "dispute", "effective"],
-        "thought_reframe": ["alternative", "feels_true", "painful", "replacement"],
-    }
-
-
-def test_the_stages_keep_clinical_words_and_judgements_out_of_what_mani_says(abcde):
-    """Lolly, 2026-10-22: the language read as artificial. The offer never names the method, B never calls a
-    belief irrational or distorted, C never judges a feeling, and A counts only what happened as the event."""
+def test_when_a_stage_counts_as_answered_keeps_the_clients_reading(abcde):
+    """Lolly, 2026-10-22: A counts only what happened as the event. E is the new belief alone (2026-11-18)."""
     stages = abcde["stages"]
-    assert any("clinical terms such as REBT, CBT" in rule for rule in stages["offering"]["boundaries"])
-    assert any("must not call the belief irrational" in rule for rule in stages["belief"]["boundaries"])
-    assert "must not judge the feeling or behaviour as wrong or unhealthy" in stages["consequence"]["boundaries"]
     assert "rather than as their interpretation of it" in stages["activate"]["ready_when"]
-    assert "commitment for next time counts as the path" in stages["effective"]["ready_when"]
+    assert "is not the new belief" in stages["effective"]["ready_when"], (
+        "muhammad, 2026-11-18: E ends on the new belief, as the client's sequence document does")
+    assert "path" not in stages["effective"]["ready_when"]

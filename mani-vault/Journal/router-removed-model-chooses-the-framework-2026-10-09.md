@@ -2,6 +2,9 @@
 type: journal
 date: 2026-10-09
 tags: [journal, router, frameworks, decisions]
+summary: "The phrase router is gone; the model chooses the framework from the index, and code keeps only urgent and vetoes."
+failed:
+  - "Tried a phrase-list router to rank frameworks; failed because phrases misread paraphrases and were silently wrong."
 ---
 > Superseded 2026-10-12 — see [[one-call-turns-at-low-effort-2026-10-12]] (ids still enforced by `redraft.py`: it is `reply_checks.py` and `repairs.py`, and neither asks the model again)
 

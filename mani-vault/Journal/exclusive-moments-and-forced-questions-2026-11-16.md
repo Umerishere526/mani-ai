@@ -2,7 +2,14 @@
 type: journal
 date: 2026-11-16
 tags: [journal, cadence, safety, framework, design, client-test]
+summary: "Lolly's tests read as three characters; one cause behind all three, drafted as spec 0008 (one conversation)."
+failed:
+  - "Tried a question on every reply (PR #52); failed because the chat read as an interviewer, objected to three times"
+  - "Tried code reacting to eight kinds of message and five safety levels; failed because it hard-coded each scenario"
+  - "Tried the safety phrase screen as a net for failed calls; failed because it matched none of the test's messages"
+  - "Tried blaming the coverage gate from reading code; failed because running it showed 'heart' held 40 of 49 turns"
 ---
+> Superseded 2026-11-17 (moments, and every reply ending on a question: one call with no moments, and a question only when it helps) — see [[flat-replies-were-the-model-2026-11-17]]
 
 # Exclusive moments and forced questions (2026-11-16)
 

@@ -2,6 +2,7 @@
 type: journal
 date: 2026-10-22
 tags: [journal, prompts, mirror, understanding, lessons]
+summary: "The mirror picked one clause and dropped the headline of the person's message, and the chat never recovered."
 ---
 
 > Superseded 2026-10-26 (the mirror of the last message: each reply now says what is new and how it changes Mani's reading) - see [[heart-of-it-replaces-the-three-steps-2026-10-26]].

@@ -2,6 +2,7 @@
 type: journal
 date: 2026-11-05
 tags: [journal, tests, prompts, broken-windows]
+summary: "Twelve tests failed on main, left behind by prompt rewrites; they assert wording the prompts no longer hold."
 ---
 
 # 12 tests fail on `main`, left behind by the prompt rewrites (2026-11-05)

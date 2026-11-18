@@ -31,3 +31,6 @@ backend/content/exercises/*.mp3
 
 # Saved live runs of scripts/scenario_check.py: transcripts of test conversations, compared locally and never committed.
 backend/.scenario-runs/
+
+# The evaluation and suite write their runs here; the files hold model replies, not code.
+backend/evals/results/

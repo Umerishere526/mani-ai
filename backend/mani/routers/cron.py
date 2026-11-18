@@ -27,8 +27,7 @@ def _check_secret(authorization: str | None) -> None:
 
 @router.get("/catch-up")
 async def run_catch_up(authorization: str | None = Header(default=None)) -> dict:
-    """Finish what the app left: summaries fallen behind, follow-ups it never asked for, and quiet chats to fold
-    into memory. See mani/catch_up.py."""
+    """Finish what the app left: summaries fallen behind and follow-ups it never asked for. See mani/catch_up.py."""
     _check_secret(authorization)
     done = await catch_up.run()
     logger.info("cron catch-up: %s", done)

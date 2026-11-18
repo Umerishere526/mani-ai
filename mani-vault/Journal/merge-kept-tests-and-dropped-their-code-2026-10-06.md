@@ -1,6 +1,7 @@
 ---
 date: 2026-10-06
 tags: [journal, merge, backend, testing]
+summary: "A merge kept one branch's tests and the other's code with no conflict, so main shipped with failing checks."
 ---
 
 # A merge kept one branch's tests and the other's code

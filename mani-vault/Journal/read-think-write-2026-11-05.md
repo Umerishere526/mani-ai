@@ -2,6 +2,9 @@
 type: journal
 date: 2026-11-05
 tags: [journal, backend, database, scaling, turn]
+summary: "The turn was split into read, think and write so no database connection is held during a model call."
+failed:
+  - "Tried holding a database transaction open across the model call; failed because 10 in-flight turns hung an instance."
 ---
 
 # Why the turn was split into read, think, write (2026-11-05)

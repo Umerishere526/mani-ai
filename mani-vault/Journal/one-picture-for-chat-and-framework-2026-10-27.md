@@ -1,3 +1,10 @@
+---
+type: journal
+date: 2026-10-27
+tags: [journal, understanding, frameworks, chat]
+summary: "One picture, updated on every reply, serves both chat and framework so understanding crosses the framework's door."
+---
+> Superseded 2026-11-17 (the picture written by a second call after the reply: Mani's notes, written in the same call) — see [[flat-replies-were-the-model-2026-11-17]]
 # One picture for the chat and the framework (2026-10-27)
 
 The tester's review of 2026-10-27 and muhammad's 28 points come down to: Mani understands but does not know what to

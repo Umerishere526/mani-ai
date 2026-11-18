@@ -1,3 +1,12 @@
+---
+type: journal
+date: 2026-10-07
+tags: [journal, migrations, database, git]
+summary: "Reverting code with git does not revert the database; migrations are forward-only writes the repo does not own."
+failed:
+  - "Tried undoing a merge with git revert alone; failed because both databases stayed seven migrations ahead"
+  - "Tried parallel branches each taking the next migration number; failed because 011 and 013 collided at merge"
+---
 # Reverting code does not revert the database
 
 2026-10-07. `main` was reverted to `1473a0c` to undo a merge that should not have happened.

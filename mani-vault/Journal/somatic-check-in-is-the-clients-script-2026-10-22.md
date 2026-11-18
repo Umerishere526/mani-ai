@@ -1,3 +1,10 @@
+---
+type: journal
+date: 2026-10-22
+tags: [journal, somatic, body, client]
+summary: "The body check-in follows the client's script and code owns its order, built as five phases after every framework."
+---
+> Superseded 2026-11-17 (the body check-in after a framework: deleted) — see [[flat-replies-were-the-model-2026-11-17]]
 2026-10-22
 
 # The body check-in is the client's script, and code owns its order

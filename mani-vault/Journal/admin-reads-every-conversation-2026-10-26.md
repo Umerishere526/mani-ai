@@ -2,6 +2,7 @@
 type: journal
 date: 2026-10-26
 tags: [journal, admin, chat-tester, privacy, auth]
+summary: "Admins read every conversation read-only in the chat-tester; its no-email password reset must refuse admin accounts."
 ---
 
 # Admins read every conversation, read-only, in the chat-tester

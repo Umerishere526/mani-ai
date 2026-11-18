@@ -180,8 +180,7 @@ def _apply_model_quirks(messages: list[dict[str, str]], model: str) -> list[dict
     """Per-model workarounds, kept here rather than in the conversation logic.
 
     Qwen models reason inline unless told not to, which lands `<think>` blocks in a
-    reply meant for a person. The reference sniffed the model id from inside the chat
-    orchestrator and edited the user's own message there.
+    reply meant for a person. Handled here, so no chat code needs to know which model it talks to.
     """
     if "qwen" not in model.lower() or not messages:
         return messages
@@ -301,7 +300,7 @@ async def complete[T: BaseModel](
                 started = time.perf_counter()
                 try:
                     # A chat reply has a deadline for the whole call; the per read timeout alone let one
-                    # run for 102 s. The background calls (summaries, the memory fold) keep only that.
+                    # run for 102 s. The background calls (summaries) keep only that.
                     # A retry gets the deadline or what is left of the budget, whichever is shorter.
                     if chat:
                         left = settings.chat_budget_seconds - (time.perf_counter() - began)

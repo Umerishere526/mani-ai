@@ -2,6 +2,7 @@
 type: journal
 date: 2026-11-05
 tags: [journal, latency, openrouter, prompt-cache, vercel, lessons]
+summary: "A chat turn's wait is mostly reasoning before the first token (p50 6.0 s of 9.8 s); decisions followed from the report."
 ---
 
 # Where a chat turn's wait goes, and what the cache and Vercel were doing (2026-11-05)

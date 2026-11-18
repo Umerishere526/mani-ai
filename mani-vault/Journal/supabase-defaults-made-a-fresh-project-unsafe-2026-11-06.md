@@ -1,3 +1,12 @@
+---
+type: journal
+date: 2026-11-06
+tags: [journal, supabase, privileges, migrations]
+summary: "Supabase's default privileges made a fresh project unsafe; migrations now turn them off and the harness reproduces them."
+failed:
+  - "Tried revoke all from public to lock functions; failed because Supabase grants anon and authenticated directly"
+  - "Tried a test harness without Supabase's default grants; failed because it could not see a fresh project was unsafe"
+---
 2026-11-06
 
 # Supabase's default privileges made a fresh project unsafe

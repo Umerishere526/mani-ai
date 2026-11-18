@@ -18,9 +18,6 @@ class Outcome(StrEnum):
 class Purpose(StrEnum):
     CHAT = "chat"
     SUMMARIZE = "summarize"
-    MEMORY_FOLD = "memory_fold"
-    # What Mani reads of them after a chat reply is sent (orchestrator.read_understanding).
-    UNDERSTANDING = "understanding"
 
 
 @dataclass(frozen=True)

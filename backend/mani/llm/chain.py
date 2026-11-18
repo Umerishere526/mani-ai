@@ -31,10 +31,15 @@ from mani.db import llm_calls
 # `max_completion_tokens` rather than `max_tokens`. Sending the wrong one is a 400 on every
 # call, so the shape of the request follows the model rather than the call site.
 REASONING_MODEL_PREFIXES = ("openai/gpt-6", "openai/gpt-5", "openai/o1", "openai/o3")
+# Models that reason by default but keep the ordinary sampling parameters. MiniMax's reasoning is mandatory with a
+# default effort of max, DeepSeek's on by default at high (OpenRouter, 2026-11-18), so a call that names no effort
+# thinks at that default.
+ALWAYS_REASONING_PREFIXES = ("minimax/", "deepseek/")
 
 
 def is_reasoning_model(model: str) -> bool:
-    return model.startswith(REASONING_MODEL_PREFIXES)
+    """The model reads a reasoning effort, and its output budget covers its thinking."""
+    return model.startswith(REASONING_MODEL_PREFIXES + ALWAYS_REASONING_PREFIXES)
 
 
 def _reasoning(model: str, settings: Settings, effort: str | None = None) -> dict[str, Any]:
@@ -59,8 +64,10 @@ REASONING_ALLOWANCE_TOKENS = 8192
 
 def sampling(model: str, temperature: float, max_tokens: int) -> dict[str, Any]:
     """The output budget, and the temperature for the models that take one."""
-    if is_reasoning_model(model):
+    if model.startswith(REASONING_MODEL_PREFIXES):
         return {"max_completion_tokens": max_tokens + REASONING_ALLOWANCE_TOKENS}
+    if is_reasoning_model(model):
+        return {"temperature": temperature, "max_tokens": max_tokens + REASONING_ALLOWANCE_TOKENS}
     return {"temperature": temperature, "max_tokens": max_tokens}
 
 
@@ -78,7 +85,10 @@ def request_body(
 
     `priority` asks for the priority tier: OpenRouter tries priority endpoints first and falls back to the
     default ones in the same `only` list, and bills the endpoint that served. The tier that served is
-    `service_tier` on OpenRouter's /generation record of the call."""
+    `service_tier` on OpenRouter's /generation record of the call. The tier is OpenAI's, so it is asked for only on
+    an OpenAI model. An Anthropic model caches only when the request asks, with a top-level `cache_control` that moves
+    the breakpoint forward as the conversation grows."""
+    priority = priority and model.startswith("openai/")
     body: dict[str, Any] = {
         "provider": settings.routing(routing, priority=priority),
         # Without this OpenRouter omits the cached-token count, which is the only way to tell
@@ -88,6 +98,8 @@ def request_body(
     }
     if priority:
         body["service_tier"] = "priority"
+    if model.startswith("anthropic/"):
+        body["cache_control"] = {"type": "ephemeral"}
     return body
 
 

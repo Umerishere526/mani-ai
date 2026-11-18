@@ -13,9 +13,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import create_app
-from mani.chat import orchestrator
 from mani.config import get_settings
-from mani.llm.schema import Reply
+from mani.llm import client
+from tests.integration.fixtures import said
 
 # Deliberately a sync test, not async. TestClient runs the ASGI app on its own internal
 # event loop via a background portal - an async test calling into the same shared
@@ -63,14 +63,14 @@ def model(monkeypatch):
             scripted_calls["count"] += 1
         return client_module.Call(
             # In the shape the turn asked for, as the real call parses it.
-            value=schema.model_validate(Reply(text="How can I support you with that today?").model_dump()),
+            value=schema.model_validate(said("How can I support you with that today?").model_dump()),
             model="test/model",
             usage=llm_calls.Usage(input_tokens=100, output_tokens=20),
             latency_ms=1,
             call_id=uuid.uuid4(),
         )
 
-    monkeypatch.setattr(orchestrator.client, "complete", scripted)
+    monkeypatch.setattr(client, "complete", scripted)
     return scripted_calls
 
 
@@ -181,11 +181,7 @@ def test_signup_through_deletion_is_one_working_system(gotrue, model):
             assert refused.status_code == 401
 
             # Real GoTrue deletes as supabase_auth_admin, which RLS applies to - the one path
-            # test_rls.sql cannot assume on real Supabase, so the memory and a pause are checked here.
-            _plant(
-                database_url, "insert into admin.user_memory (user_id, memory) values ($1, $2)",
-                uuid.UUID(user_id), '{"themes": ["should not survive the account"]}',
-            )
+            # test_rls.sql cannot assume on real Supabase, so a pause is checked here.
             _plant(
                 database_url,
                 "insert into public.chat_pauses (user_id, thread_id, ends_at, reason) "
@@ -197,8 +193,7 @@ def test_signup_through_deletion_is_one_working_system(gotrue, model):
             assert deletion.status_code == 204
 
         for table in (
-            "public.profiles", "public.threads", "public.messages", "admin.user_memory",
-            "public.chat_pauses",
+            "public.profiles", "public.threads", "public.messages", "public.chat_pauses",
         ):
             remaining = _row_count(database_url, table, uuid.UUID(user_id))
             assert remaining == 0, f"{table} still has rows after account deletion"

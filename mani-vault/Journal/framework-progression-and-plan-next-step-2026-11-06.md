@@ -2,7 +2,9 @@
 type: journal
 date: 2026-11-06
 tags: [journal, framework, walk, follow-through, client-test]
+summary: "Steps move on when their question is answered, not by how much was said; Plan Next Step follows the closing reply."
 ---
+> Superseded 2026-11-18 (E's path: E ends on the new belief, then the feelings check) — see [[framework-sequence-from-the-client-2026-11-18]]
 
 # Steps move on when answered; Plan Next Step after the questions (2026-11-06)
 

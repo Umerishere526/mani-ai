@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-12
 apps: [web, mobile, backend]
 tags: [journal, cleanup, knip, tooling]
+summary: "Things the dead-code scanners flagged that are in use, so the next scan can skip re-verifying them."
 ---
 
 # What the dead-code scanners get wrong here

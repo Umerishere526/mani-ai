@@ -3,6 +3,7 @@ type: journal
 date: 2026-10-09
 apps: [backend, chat-tester]
 tags: [journal, backend, chat-tester, streamlit, migrations]
+summary: "Switching branch left the local database ahead of the code, and the chat tester hid the failed send."
 ---
 
 # Switching branch leaves the database ahead, and the chat tester hid it

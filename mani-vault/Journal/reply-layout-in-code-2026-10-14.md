@@ -2,7 +2,11 @@
 type: journal
 date: 2026-10-14
 tags: [journal, voice, layout, rendering, lessons]
+summary: "Reply layout is decided in code because the model put the closing question on its own line only sometimes."
+failed:
+  - "Tried asking in the prompt for the question on its own line; failed because the model followed it in some replies only."
 ---
+> Superseded 2026-11-17 (the reply's layout set by code: the model's text goes out as written) — see [[flat-replies-were-the-model-2026-11-17]]
 
 # Mani's reply layout is decided in code (2026-10-14)
 

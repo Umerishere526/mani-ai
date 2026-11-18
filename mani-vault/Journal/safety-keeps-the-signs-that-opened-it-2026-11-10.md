@@ -2,6 +2,12 @@
 type: journal
 date: 2026-11-10
 tags: [journal, safety, state, client-test]
+summary: "Safety keeps the signs that opened it, so a medical emergency is not handled with the suicide-risk script."
+failed:
+  - "Tried one unsafe state with a suicide-risk text; failed because chest-pain chats were told to put away self-harm means."
+  - "Tried raising the state on every reported sign; failed because the model re-reported old signs, so nothing settled"
+  - "Tried 'reach a person' as the step that settles intent; failed because a step that can only be refused traps them"
+  - "Tried a history re-read fix only while a concern was open; failed because a settled chat reopened on old signs"
 ---
 
 > Superseded 2026-11-10 — see [[safety-is-the-models-judgment-2026-11-10]] (the signs and their rules)

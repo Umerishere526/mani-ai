@@ -1,3 +1,9 @@
+---
+type: journal
+date: 2026-10-06
+tags: [journal, migrations, merge, supabase]
+summary: "A merge left duplicate migration versions 011 and 012; the other branch's files were renumbered to 016 and 017."
+---
 # Migration versions after the dummy-merge
 
 The merge of `fix/improvement-mani` into `dummy-merge-branch` left two files on `011` and two on `012`. `supabase_migrations.schema_migrations` keys on `version`, so a reset cannot record both.

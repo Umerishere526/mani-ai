@@ -3,6 +3,12 @@ type: journal
 date: 2026-09-14
 apps: [mobile]
 tags: [journal, mobile, design-system, port]
+summary: "Ported mani-app's mobile UI into mobile/ (Expo 57, NativeWind v5), UI layer only; some early assumptions proved wrong."
+failed:
+  - "Tried /static icon imports assuming a dev build; failed because no ios/android build existed; icons never rendered"
+  - "Tried FeatherIcon/Ionicon wrappers forcing lineHeight; failed because the clipped icon only needed an app reload"
+  - "Tried className='absolute inset-0' on react-native-svg's Svg; failed because className positioning fails on Svg"
+  - "Tried carrying reanimated 4.6.0 drift as harmless; failed because its Worklets 0.10.1 mismatch crashed every route"
 ---
 > Superseded 2026-10-12 (the NativewindReanimatedSpike paragraph: the spike was deleted) — see [[knip-false-positives]]
 

@@ -2,6 +2,12 @@
 type: journal
 date: 2026-11-10
 tags: [journal, safety, design, client-test]
+summary: "Safety is the model's judgment, held by code; the sign-based design needed five fixes in one day."
+failed:
+  - "Tried the sign-based safety design; failed because it needed five fixes in a day and its rules overrode the model."
+  - "Tried 'ask the one thing still missing' during a concern; failed because every reply then asked a safety question"
+  - "Tried an unsure that counted Mani's own unanswered question; failed because it stayed unsure on a hunch"
+  - "Tried declined blocking only a clear; failed because danger stepped down to unsure, dropping the emergency line"
 ---
 
 # Safety is the model's judgment, held by code (2026-11-10)

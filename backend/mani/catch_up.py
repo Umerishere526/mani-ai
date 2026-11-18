@@ -7,9 +7,9 @@ import asyncio
 import datetime as dt
 import logging
 
-from mani import memory, summarize
+from mani import summarize
 from mani.auth.jwt import Claims
-from mani.chat import orchestrator
+from mani.chat import turn as chat_turn
 from mani.db import pool, threads
 
 logger = logging.getLogger(__name__)
@@ -33,21 +33,20 @@ async def follow_ups(limit: int = LIMIT) -> int:
         waiting = await threads.waiting_follow_ups(conn, now - QUIET_AFTER, now - GIVE_UP_AFTER, limit)
     ran = 0
     for row in waiting:
-        done = await orchestrator.follow_up(Claims.acting_as(row["user_id"]), row["thread_id"], row["message_id"])
+        done = await chat_turn.follow_up(Claims.acting_as(row["user_id"]), row["thread_id"], row["message_id"])
         if done is not None and not done.pending:
             ran += 1
     return ran
 
 
 async def run() -> dict[str, int | None]:
-    """Every catch-up, side by side: summaries fallen behind, follow-ups never asked for, and quiet chats to fold.
+    """Every catch-up, side by side: summaries fallen behind and follow-ups never asked for.
     Each count is None for a job stopped at the run's budget."""
-    summaries, ran, folded = await asyncio.gather(
+    summaries, ran = await asyncio.gather(
         _within_budget("summaries", summarize.reconcile_due(limit=LIMIT)),
         _within_budget("follow-ups", follow_ups()),
-        _within_budget("memory folds", memory.fold_idle(limit=LIMIT)),
     )
-    return {"summaries": summaries, "follow_ups": ran, "folded": folded}
+    return {"summaries": summaries, "follow_ups": ran}
 
 
 async def _within_budget(job: str, work) -> int | None:

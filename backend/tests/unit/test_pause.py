@@ -5,7 +5,7 @@ import datetime as dt
 import uuid
 from itertools import product
 
-from mani.chat import context, pause, safety
+from mani.chat import pause, record, safety
 from mani.chat.safety import State
 from mani.db.threads import TurnContext
 from mani.models.rows import Pause, Thread
@@ -132,7 +132,7 @@ def _turn(
 ) -> TurnContext:
     """A turn whose person's latest pause is `held`; its conversation's own is `own`, by default `held` when it began
     there, as threads.load_turn_context loads them."""
-    understanding = {context.RETURN_CHECK: {"pause": asked, "state": "answered"}} if asked else {}
+    understanding = {record.RETURN_CHECK: {"pause": asked, "state": "answered"}} if asked else {}
     thread = Thread(
         id=thread_id, user_id=USER, created_at=created_at, last_message_at=created_at, understanding=understanding,
     )

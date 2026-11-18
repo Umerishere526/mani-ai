@@ -2,6 +2,7 @@
 type: journal
 date: 2026-10-02
 tags: [journal, tests, exercises, lessons]
+summary: "Seeding library exercises made dormant code paths live in tests and made real paid model calls; a fixture stops it."
 ---
 
 # Seeded content turns dormant code paths live in tests

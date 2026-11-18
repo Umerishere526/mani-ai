@@ -2,7 +2,14 @@
 type: journal
 date: 2026-11-11
 tags: [journal, safety, cadence, testing, lessons]
+summary: "Audit of the safety branch: prompt layers contradicted each other and 'ask twice' made the model ask forever."
+failed:
+  - "Tried telling the model to ask once more; failed because it asked in every reply and cannot count its questions."
+  - "Tried 'never repeat a sentence' in the danger instruction; failed because the model writes each reply fresh"
+  - "Tried checking safety changes only on the chats the rules came from; failed because unseen chats went unmeasured"
+  - "Tried a prompt line against chasing 'tell your wife'; failed because it still appeared in 1 of 3 replays"
 ---
+> Superseded 2026-11-18 (a body symptom held at unsure until they say it is now) — see [[body-emergency-every-time-2026-11-18]]
 
 > Superseded 2026-11-13 — see [[crisis-pause-audit-findings-2026-11-13]] (the block on refused help, and the end check tied to `crisis_detected`)
 

@@ -1,3 +1,11 @@
+---
+type: journal
+date: 2026-10-21
+tags: [journal, frameworks, stages, escapes]
+summary: "'I don't know' is the case Mani helps with, not one it routes around; the skip escapes were removed."
+failed:
+  - "Tried silent skips, a Not sure button and let_go for 'I don't know'; failed because each left people no clearer."
+---
 2026-10-21
 
 > Supersedes the "let_go" and "second not_yet moves on" parts of [[abcde-walk-owned-by-code-2026-10-13]] and the

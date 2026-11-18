@@ -1,3 +1,11 @@
+---
+type: journal
+date: 2026-10-29
+tags: [journal, prompt, voice, examples]
+summary: "Eight rule-adding commits kept mirror-then-question replies; restarted from a therapist-session example."
+failed:
+  - "Tried rule after rule against mirror-then-question replies; failed because the model copied the voice.md examples."
+---
 # A session, not a set of rules (2026-10-29)
 
 `feat/identify-the-connection` is deleted. Eight commits over two days each added rules (feeling underneath, limits,

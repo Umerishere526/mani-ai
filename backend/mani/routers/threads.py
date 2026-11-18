@@ -6,15 +6,13 @@ import uuid
 
 from fastapi import APIRouter, Query
 
-from mani import memory
 from mani.auth.deps import ChatOpen, CurrentUser
-from mani.chat import greeting, orchestrator, runner
+from mani.chat import greeting, runner, turn as chat_turn
 from mani.db import messages as messages_db, pauses, threads
 from mani.db.deps import UserConn
 from mani.errors import ErrorCategory, ServiceError
 from mani.models.api import (
     CurrentOut,
-    MemoryFoldOut,
     MessageOut,
     OpeningOut,
     ThreadListOut,
@@ -54,7 +52,7 @@ async def opening(user: CurrentUser, conn: UserConn) -> OpeningOut:
     return OpeningOut(
         chat_paused_from=pause.started_at if pause else None,
         chat_paused_until=pause.ends_at if pause else None,
-        greeting=await orchestrator.opening_greeting(conn, user.user_id),
+        greeting=await chat_turn.opening_greeting(conn, user.user_id),
         style_options=greeting.STYLE_OPTIONS,
         openers=greeting.openers(owed is not None),
     )
@@ -66,16 +64,6 @@ async def start(user: ChatOpen, body: ThreadStartIn) -> ThreadStartedOut:
     as a turn. Mani's opening line is written here rather than generated, so it costs nothing."""
     thread, turn = await runner.start(user, body.content, body.client_message_id, body.style)
     return ThreadStartedOut(thread=to_thread(thread), turn=await respond(thread.id, turn))
-
-
-@router.post("/memory-fold", response_model=MemoryFoldOut)
-async def fold_memory(user: CurrentUser) -> MemoryFoldOut:
-    """Fold the person's finished conversations into what Mani remembers of them. Asked for by the app when they open
-    a new conversation, not left running after that response: Vercel stops the instance once a response is sent, and
-    folds started that way never wrote a row (2026-11-05). Only conversations last written before this request
-    arrived are folded, so the one their first message starts while it runs is left alone. Folds only what waits, so a
-    repeated request costs nothing; a failure is logged and costs only that memory."""
-    return MemoryFoldOut(folded=await memory.fold_finished(user, idle_before=dt.datetime.now(dt.UTC)))
 
 
 @router.get("/current", response_model=CurrentOut)

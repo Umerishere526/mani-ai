@@ -7,9 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-# The previous implementation returned an empty string here, so at the single most
-# important moment in the product the person saw nothing at all. This is a plain,
-# non-clinical acknowledgement that stays on screen while the resource panel opens.
+# A plain, non-clinical acknowledgement that stays on screen while the resource panel opens, so at the most
+# important moment in the product the person never sees nothing.
 CRISIS_REPLY = (
     "I'm really glad you told me that, and I want to be honest with you: what you're "
     "carrying is heavier than I can hold on my own.\n\n"
@@ -17,15 +16,24 @@ CRISIS_REPLY = (
     "immediate danger, please contact your local emergency number now.\n\n"
     "I'm not going anywhere."
 )
+# Where to get help, said wherever a message goes out unread for safety: an outage, or a refusal for a limit.
+IN_DANGER = "If you're in danger or thinking about hurting yourself, call 911 now, or call or text 988."
+# Added after Mani's text when code raised a body worry to danger that the model judged lower: a possible medical
+# emergency gets "call emergency services now" every time (muhammad, 2026-11-18). Wording is ours until the client
+# supplies hers.
+BODY_EMERGENCY = "If this is happening now, please call 911 or get to the nearest emergency room now."
+# What goes out when no host answered and no safety worry was open, so a first message about danger during an outage
+# still reaches the numbers (the design of 2026-11-17). Wording is ours until the client supplies hers.
+TROUBLE_REPLY = f"I'm having trouble replying right now, so please try again in a moment. {IN_DANGER}"
 
 # What Mani asks after a framework's last stage when a turn of the conversation reached danger
-# (context.DANGER_REACHED), as a reply of its own before the closing choices (muhammad, 2026-11-11). Wording is ours
+# (record.DANGER_REACHED), as a reply of its own before the closing choices (muhammad, 2026-11-11). Wording is ours
 # until the client supplies hers.
 END_CHECK = (
     "Thank you for going through that with me. Before we finish, I want to come back to the worry about safety that "
     "came up earlier. How are things with that right now?"
 )
-# The reply on the turn that pauses the chat, by whose danger it is (SafetyRead.about): whom Mani worries for, and the
+# The reply on the turn that pauses the chat, by whose danger it is (the reply's safety.about): whom Mani worries for, and the
 # help that fits. A body emergency gets no suicide line; a danger of unknown kind keeps it. Wording is ours (muhammad,
 # 2026-11-13); every number is one of RESOURCES.
 _PAUSE_FOR: dict[str | None, tuple[str, str]] = {

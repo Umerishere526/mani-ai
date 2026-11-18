@@ -3,6 +3,7 @@ type: journal
 date: 2026-09-24
 apps: [backend, mobile]
 tags: [journal, linear, process, testing]
+summary: "Linear drifted from the code when work landed unticketed; 'Done' there is a claim, so check the code."
 ---
 
 # Linear drifts from the code when work is not ticketed as it lands

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ABOUTME: PostToolUse hook that lints and typechecks the app a just-edited file belongs to.
-# ABOUTME: Routes web/ to eslint+tsc, mobile/ to expo lint+tsc, backend/ to a py_compile check.
+# ABOUTME: PostToolUse hook that lints and typechecks the app a just-edited file belongs to, and checks a journal note
+# ABOUTME: or PORT-STATUS.md for the session digest. Routes web/ and mobile/ to lint+tsc, backend/ to py_compile+ruff.
 
 set -uo pipefail
 
@@ -24,6 +24,15 @@ report() {
   printf '%s\n' "$1" >&2
   status=2
 }
+
+# The session-start digest reads journal frontmatter and PORT-STATUS's decisions; say at once what one of them lacks.
+case "$rel" in
+  mani-vault/Journal/*.md|backend/PORT-STATUS.md)
+    out="$(python3 "$ROOT/.claude/hooks/digest.py" --check "$file" 2>&1)"
+    [ -n "$out" ] && report "session digest: $out"
+    exit $status
+    ;;
+esac
 
 case "$app" in
   web)

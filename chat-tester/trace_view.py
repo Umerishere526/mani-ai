@@ -8,20 +8,13 @@ from typing import Any
 
 import streamlit as st
 
-# The decisions read first, in the order a review asks them.
+# Each decision the turn writes, in the order a review asks them.
 _ORDER = (
-    ("moment", "Moment"), ("style", "Style"), ("their_message", "Their message no."), ("framework", "Framework"),
-    ("phase_before", "Stage before"), ("phase_after", "Stage after"), ("tapped", "Tapped"),
-    ("enough", "Enough known"), ("naming_due", "Core due to be said back"),
-    ("may_move", "May move to the set"), ("move_held", "Move held by"), ("not_moving", "Waited because"), ("moved", "Moved to the set"), ("offered", "Offered"),
-    ("offer_dropped", "Offer unusable"),
-    ("corrected_offer", "Corrected the offer"), ("core_fixed", "Core held fixed"), ("safety", "Safety screen"),
-    ("model_concern", "Model concern"), ("guarded", "Guarded"), ("safety_settled", "Safety settled"),
-    ("paused", "Chat paused"), ("return_check", "Return check"), ("end_check", "Safety check after the last stage"),
-    ("stepped_out_of", "Stepped out of"), ("no_forward", "Reply asked no question"),
-    ("text_asks", "Question in the text too"), ("forward_asks_many", "More than one question at the end"),
-    ("reading_before", "Reading of the turn before"), ("latency_ms", "Model time (ms)"),
+    ("action", "Action"), ("framework", "Framework"), ("stage", "Stage"), ("safety", "Safety"),
+    ("paused", "Chat paused"), ("body_emergency", "Call-now line added"), ("refused", "Code refused"), ("unanswered", "No host answered"),
+    ("buttons", "Buttons"), ("latency_ms", "Model time (ms)"), ("notes", "Mani's notes"),
 )
+_LABELS = dict(_ORDER)
 
 
 def _line(label: str, value: Any) -> str:
@@ -33,14 +26,9 @@ def _line(label: str, value: Any) -> str:
 
 
 def lines(trace: dict[str, Any]) -> list[str]:
-    """One line per decision the trace holds: the ordered ones, then the longer records."""
-    shown = [_line(label, trace[key]) for key, label in _ORDER if key in trace]
-    for key, label in (("model", "Model reported"), ("applied", "Code applied"), ("walk", "Walk"),
-                       ("stages", "Stages after"), ("buttons", "Buttons"),
-                       ("notes", "Code's notes"), ("checks", "Checks")):
-        if key in trace:
-            shown.append(_line(label, trace[key]))
-    return shown
+    """One line per decision the trace holds: the known ones in order, then any other under its own name."""
+    return ([_line(label, trace[key]) for key, label in _ORDER if key in trace]
+            + [_line(key, value) for key, value in trace.items() if key not in _LABELS])
 
 
 def render(trace: dict[str, Any] | None, raw_reply: dict[str, Any] | None = None) -> None:

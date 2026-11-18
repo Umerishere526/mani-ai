@@ -7,8 +7,7 @@ import uuid
 from fastapi import APIRouter, Query
 
 from mani.auth.deps import ChatOpen, CurrentUser
-from mani.chat import orchestrator, runner
-from mani.config import get_settings
+from mani.chat import runner, turn as chat_turn
 from mani.db import messages as messages_db
 from mani.db.deps import UserConn
 from mani.models.api import EditMessageIn, FollowUpOut, MessageListOut, SendMessageIn, TurnOut
@@ -39,12 +38,8 @@ async def send(
     thread_id: uuid.UUID,
     body: SendMessageIn,
 ) -> TurnOut:
-    """One user message in, one reply out.
-
-    One provider call on the person's wait: the checks that the previous implementation
-    answered with a regeneration - up to six of them - are deterministic corrections in
-    `chat/repairs.py`. A chat turn's reading of them is a second call, asked for by the app after the reply
-    (`follow_up` below).
+    """One user message in, one reply out, with one provider call on the person's wait. The summary, when due, is
+    asked for by the app after the reply (`follow_up` below).
     """
     turn = await runner.send(user, thread_id, body.content, body.client_message_id)
     return await respond(thread_id, turn)
@@ -66,18 +61,15 @@ async def edit(
 
 @router.post("/{message_id}/follow-up", response_model=FollowUpOut)
 async def follow_up(user: ChatOpen, thread_id: uuid.UUID, message_id: uuid.UUID) -> FollowUpOut:
-    """The work a turn leaves for after its reply `message_id` (Mani's reading of them, the summary when it is due),
-    asked for by the app once the reply is shown.
+    """The work a turn leaves for after its reply `message_id`, which is the summary when it falls due, asked for by
+    the app once the reply is shown.
 
     A request of its own, not work left running after the turn's response: on Vercel the instance stops once a
-    response is sent, and about a third of the readings started that way were cut off (2026-11-05). Runs only what
-    the turn stored for this reply, once; a part that fails stays waiting (`pending`) and asking again runs only
-    that part. Any other call does nothing and costs nothing.
+    response is sent. Runs only what the turn stored for this reply, once; a summary that fails stays waiting
+    (`pending`) for the next request. Any other call does nothing and costs nothing. `read` is always false:
+    nothing reads the conversation after a reply.
     """
-    done = await orchestrator.follow_up(user, thread_id, message_id)
+    done = await chat_turn.follow_up(user, thread_id, message_id)
     return FollowUpOut(
-        read=bool(done and done.understanding is not None),
-        summarized=bool(done and done.summarized),
-        pending=bool(done and done.pending),
-        understanding=done.understanding if done and get_settings().ai_debug_mode else None,
+        read=False, summarized=bool(done and done.summarized), pending=bool(done and done.pending), understanding=None,
     )

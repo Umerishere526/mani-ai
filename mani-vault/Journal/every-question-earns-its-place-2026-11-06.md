@@ -2,6 +2,9 @@
 type: journal
 date: 2026-11-06
 tags: [journal, cadence, reasoning, framework, insight]
+summary: "Every question must earn its place: the model reasons first and gets a map of what is explored, not a question count."
+failed:
+  - "Tried a one-extra-turn cap on questions; failed because the fault was asking blind to what was explored"
 ---
 
 # Every question earns its place (2026-11-06)

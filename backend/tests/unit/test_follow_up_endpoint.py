@@ -1,5 +1,5 @@
 # ABOUTME: Nothing runs after a response any more: the turn awaits its writes, and the app asks for the rest.
-# ABOUTME: Over HTTP with the turn, the follow-up and the fold faked, so this checks the wiring, not the work.
+# ABOUTME: Over HTTP with the turn and the follow-up faked, so this checks the wiring, not the work.
 
 import datetime as dt
 import uuid
@@ -7,8 +7,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
-from mani import memory
-from mani.chat import orchestrator
+from mani.chat import turn as chat_turn
 from mani.routers import messages as messages_router
 from main import create_app
 from tests.unit.test_endpoint_auth import USER, _token, secret  # noqa: F401 - secret is a fixture
@@ -17,25 +16,20 @@ THREAD = uuid.uuid4()
 REPLY = uuid.uuid4()
 
 
-def _turn(read_after: bool = False, needs_summary: bool = False, was_duplicate: bool = False) -> orchestrator.Turn:
-    job = orchestrator.ReadAfter(
-        thread_id=THREAD, user_id=uuid.UUID(USER), message_id=REPLY, messages=[], model="test/model",
-        parameters={}, routing=None,
-    )
-    return orchestrator.Turn(
+def _turn(needs_summary: bool = False, was_duplicate: bool = False) -> chat_turn.Turn:
+    return chat_turn.Turn(
         message_id=REPLY, content="What happened?", created_at=dt.datetime.now(dt.UTC), llm_call_id=uuid.uuid4(),
-        trace={"moment": "chatting"}, was_duplicate=was_duplicate, needs_summary=needs_summary,
-        read_after=job if read_after else None,
+        trace={"action": "none"}, was_duplicate=was_duplicate, needs_summary=needs_summary,
     )
 
 
 @pytest.fixture
 def wired(monkeypatch, secret):  # noqa: F811
-    seen = {"follow_ups": [], "links": [], "traces": [], "folds": []}
+    seen = {"follow_ups": [], "links": [], "traces": []}
 
     async def follow_up(user, thread_id, message_id):
         seen["follow_ups"].append((user.user_id, thread_id, message_id))
-        return orchestrator.FollowedUp(understanding={"heart": "exploring"}, summarized=True)
+        return chat_turn.FollowedUp(summarized=True)
 
     async def link_call(call_id, message_id):
         seen["links"].append(message_id)
@@ -43,14 +37,9 @@ def wired(monkeypatch, secret):  # noqa: F811
     async def record_trace(turn, thread_id):
         seen["traces"].append(turn.message_id)
 
-    async def fold_finished(user, *, idle_before=None):
-        seen["folds"].append((user.user_id, idle_before))
-        return 2
-
-    monkeypatch.setattr(orchestrator, "follow_up", follow_up)
-    monkeypatch.setattr(orchestrator, "link_call", link_call)
-    monkeypatch.setattr(orchestrator, "record_trace", record_trace)
-    monkeypatch.setattr(memory, "fold_finished", fold_finished)
+    monkeypatch.setattr(chat_turn, "follow_up", follow_up)
+    monkeypatch.setattr(chat_turn, "link_call", link_call)
+    monkeypatch.setattr(chat_turn, "record_trace", record_trace)
     return seen, {"Authorization": f"Bearer {_token(secret)}"}
 
 
@@ -67,10 +56,9 @@ def _send(monkeypatch, headers, turn) -> dict:
 
 
 @pytest.mark.parametrize(("turn", "pending"), [
-    (_turn(read_after=True), True),
     (_turn(needs_summary=True), True),
     (_turn(), False),
-    (_turn(read_after=True, needs_summary=True, was_duplicate=True), False),
+    (_turn(needs_summary=True, was_duplicate=True), False),
 ])
 def test_a_turn_says_whether_work_waits_for_after_its_reply(wired, monkeypatch, turn, pending):
     """On Vercel the instance stops once the response is sent, and work started after it was cut off (2026-11-05)."""
@@ -84,35 +72,20 @@ def test_the_call_link_and_the_trace_are_written_before_the_response(wired, monk
     assert seen["links"] == [REPLY] and seen["traces"] == [REPLY]
 
 
-def test_the_follow_up_endpoint_runs_what_waits_for_that_reply(wired):
+def test_the_follow_up_endpoint_reports_read_false_and_summarizes(wired):
     seen, headers = wired
     with TestClient(create_app()) as client:
         response = client.post(f"/v1/threads/{THREAD}/messages/{REPLY}/follow-up", headers=headers)
 
     assert response.status_code == 200
-    assert response.json() == {"read": True, "summarized": True, "pending": False, "understanding": None}, (
-        "what Mani understands goes to a client only in debug mode"
+    assert response.json() == {"read": False, "summarized": True, "pending": False, "understanding": None}, (
+        "nothing reads the conversation after a reply any more; only the summary runs"
     )
     assert seen["follow_ups"] == [(USER, THREAD, REPLY)]
 
 
-def test_the_memory_fold_endpoint_folds_the_chats_finished_before_the_request(wired):
-    seen, headers = wired
-    asked = dt.datetime.now(dt.UTC)
-    with TestClient(create_app()) as client:
-        response = client.post("/v1/threads/memory-fold", headers=headers)
-
-    assert response.status_code == 200
-    assert response.json() == {"folded": 2}
-    [(user, idle_before)] = seen["folds"]
-    assert user == USER
-    assert asked <= idle_before <= dt.datetime.now(dt.UTC)
-
-
-@pytest.mark.parametrize("path", [f"/v1/threads/{THREAD}/messages/{REPLY}/follow-up",
-                                  "/v1/threads/memory-fold"])
-def test_the_after_work_endpoints_need_a_token(wired, path):
+def test_the_follow_up_endpoint_needs_a_token(wired):
     seen, _ = wired
     with TestClient(create_app()) as client:
-        assert client.post(path).status_code == 401
-    assert seen["follow_ups"] == [] and seen["folds"] == []
+        assert client.post(f"/v1/threads/{THREAD}/messages/{REPLY}/follow-up").status_code == 401
+    assert seen["follow_ups"] == []

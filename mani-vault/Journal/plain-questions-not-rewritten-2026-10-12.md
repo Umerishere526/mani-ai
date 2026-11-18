@@ -2,6 +2,9 @@
 type: journal
 date: 2026-10-12
 tags: [journal, prompts, voice, stages, lessons]
+summary: "Stage questions are asked as written, not reworded; the prompt ordered rewording in five places."
+failed:
+  - "Tried ordering the model to reword every stage question; failed because it blended the client's example into stage B."
 ---
 > Superseded 2026-10-14 (sending the stage question as written) — see [[stage-questions-from-the-conversation-2026-10-14]]
 

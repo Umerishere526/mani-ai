@@ -2,6 +2,7 @@
 type: journal
 date: 2026-11-10
 tags: [journal, backend, chat, edit, safety]
+summary: "An edit was refused in crisis threads by a stale lock rule; an edit now follows the same refusal as a send."
 ---
 
 > Superseded 2026-11-13 — see [[crisis-pause-audit-findings-2026-11-13]] (the lock the edit follows: `crisis_blocks_chat` is removed; the edit and the send both meet the pause gate, "same as sending" stands)

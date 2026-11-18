@@ -1,5 +1,5 @@
 # ABOUTME: One holder at a time per key within this process, for work that must not run twice at once.
-# ABOUTME: Used where a database lock can no longer span a model call: a send, a summary, a memory fold.
+# ABOUTME: Used where a database lock can no longer span a model call: a send, a summary.
 
 from __future__ import annotations
 

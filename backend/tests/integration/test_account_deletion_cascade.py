@@ -65,12 +65,6 @@ async def test_deleting_the_auth_user_takes_every_owned_row_with_it(admin_conn):
         thread_id, USER, "should not survive either",
     )
 
-    # What was remembered about them across conversations is theirs too, and goes with them.
-    await admin_conn.execute(
-        "insert into admin.user_memory (user_id, memory) values ($1, $2::jsonb)",
-        USER, {"low_times": ["should not survive"]},
-    )
-
     await admin_conn.execute("delete from auth.users where id = $1", USER)
 
     assert await admin_conn.fetchval(
@@ -81,7 +75,4 @@ async def test_deleting_the_auth_user_takes_every_owned_row_with_it(admin_conn):
     ) == 0
     assert await admin_conn.fetchval(
         "select count(*) from public.messages where user_id = $1", USER
-    ) == 0
-    assert await admin_conn.fetchval(
-        "select count(*) from admin.user_memory where user_id = $1", USER
     ) == 0

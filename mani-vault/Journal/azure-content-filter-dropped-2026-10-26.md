@@ -2,6 +2,9 @@
 type: journal
 date: 2026-10-26
 tags: [journal, openrouter, routing, content-filter, lessons]
+summary: "Azure's content filter blocked ordinary replies with no fallback, so chat is pinned to OpenAI only."
+failed:
+  - "Tried OpenRouter fallbacks plus a schema retry; failed because a content filter is a finish reason, not an HTTP error."
 ---
 
 # Azure's content filter stopped ordinary replies, so chat goes to OpenAI only (2026-10-26)

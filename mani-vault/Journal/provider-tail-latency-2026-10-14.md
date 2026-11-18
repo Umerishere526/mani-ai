@@ -2,6 +2,10 @@
 type: journal
 date: 2026-10-14
 tags: [journal, latency, openrouter, routing, lessons]
+summary: "504s came from provider tail latency, not the prompt; the pinned provider order was based on a wrong claim."
+failed:
+  - "Tried order: ['azure','openai'] from the old system; failed because it kills balancing and keeps slow Azure regions"
+  - "Tried blaming azure global for most slow calls; failed because a 6.2 s p50 meant fast endpoints served most turns"
 ---
 > Superseded 2026-11-05 (the `openai/fast` cost decision: chat replies now ask for the priority tier) - see [[latency-where-the-wait-goes-2026-11-05]]
 > Superseded 2026-10-26 (Azure and OpenAI: chat now goes to OpenAI only) - see [[azure-content-filter-dropped-2026-10-26]]

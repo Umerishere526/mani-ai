@@ -2,6 +2,10 @@
 type: journal
 date: 2026-10-25
 tags: [journal, prompts, understanding, feelings, pacing, lessons]
+summary: "The core issue was defined as more situation, so replies chased events; the definition and merge order were fixed."
+failed:
+  - "Tried defining the core issue as the consequences of the problem; failed because Mani chased the situation."
+  - "Tried storing every step when said with no pacing; failed because a guessed core issue brought ABCDE at message 2"
 ---
 
 > Superseded 2026-10-26 (the three steps, their pacing by `found`, and the add-only problem, core issue and feeling) - see [[heart-of-it-replaces-the-three-steps-2026-10-26]].

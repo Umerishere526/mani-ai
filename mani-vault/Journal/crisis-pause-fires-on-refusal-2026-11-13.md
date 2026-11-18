@@ -3,6 +3,12 @@ type: journal
 date: 2026-11-13
 apps: [backend]
 tags: [journal, safety, crisis, pause, lessons]
+summary: "The crisis pause fired on flipped help_in_place reads; it now keys on a refusal."
+failed:
+  - "Tried gating the pause on one help_in_place judgment; failed because it flipped on short lines and paused wrongly."
+  - "Tried a blanket 'never pause a body danger' guard; failed because refusing an ambulance for chest pain now needs it"
+  - "Tried defining declined in its description alone; failed because the model read 'you already said this' as declined"
+  - "Tried loading only the conversation's own pause; failed because it hid a later pause from one that answered its own"
 ---
 > Superseded 2026-11-14 — see [[pause-needs-no-refusal-for-suicide-2026-11-14]] (the refusal as a gate for every kind of danger; it stays for the body)
 

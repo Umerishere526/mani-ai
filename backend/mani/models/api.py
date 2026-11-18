@@ -90,18 +90,6 @@ class EditMessageIn(BaseModel):
     _visible = field_validator("content", mode="before")(_visible_text)
 
 
-class LedgerRow(BaseModel):
-    """One stage of the running framework as the stage store holds it after this turn. Debug mode only."""
-
-    stage: str
-    title: str | None = None
-    status: str
-    known: str | None = None
-    action: str
-    # The stage the walk is on after this reply.
-    asking: bool = False
-
-
 class TurnOut(BaseModel):
     id: uuid.UUID | None = None
     content: str
@@ -113,35 +101,25 @@ class TurnOut(BaseModel):
     paused_from: dt.datetime | None = None
     paused_until: dt.datetime | None = None
     was_duplicate: bool = False
-    # Null unless AI_DEBUG_MODE is on.
-    reasoning: str | None = None
-    # Null unless AI_DEBUG_MODE is on: what is stored for each stage and what the walk does about it.
-    ledger: list[LedgerRow] | None = None
-    # Null unless AI_DEBUG_MODE is on: what Mani understands of them (spec 0005, spec 0006).
+    # Null unless AI_DEBUG_MODE is on: the conversation's record after this turn (Mani's notes, the frameworks declined
+    # or finished, the safety keys the pause rules read).
     understanding: dict[str, Any] | None = None
-    # Null unless AI_DEBUG_MODE is on: when Mani's latest check of its understanding was made.
-    check_at_message_count: int | None = None
     # Null unless AI_DEBUG_MODE is on: what code decided this turn and why (admin.turn_traces), never their words.
     trace: dict[str, Any] | None = None
-    # True when the turn left work for after its reply (Mani's reading of them, the summary): once the reply is
-    # shown, the app posts to /v1/threads/{thread_id}/messages/{id}/follow-up, so the work runs to the end.
+    # True when the turn left the summary for after its reply: once the reply is shown, the app posts to
+    # /v1/threads/{thread_id}/messages/{id}/follow-up, so the work runs to the end.
     follow_up_pending: bool = False
 
 
 class FollowUpOut(BaseModel):
-    """What the work after a reply did, and, only with AI_DEBUG_MODE, what Mani understands of them after it."""
+    """What the work after a reply did. `read` is always false and `understanding` always null: only the summary
+    runs after a reply."""
 
     read: bool
     summarized: bool
     # A part failed and still waits: asking again runs only that part.
     pending: bool = False
     understanding: dict[str, Any] | None = None
-
-
-class MemoryFoldOut(BaseModel):
-    """How many finished conversations were folded into what Mani remembers of the person."""
-
-    folded: int
 
 
 class StyleOption(BaseModel):

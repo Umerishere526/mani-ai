@@ -1,3 +1,9 @@
+---
+type: journal
+date: 2026-11-03
+tags: [journal, latency, timeouts, chat-turn]
+summary: "Lolly's 504 timeouts follow the long reading written before the reply text; the turn was split into two calls."
+---
 # 504s follow what the reply writes before its text
 
 2026-11-03. Lolly's four Directive chats ([[../../docs/client/messages/2026-11-03-four-directive-chats]]): two ended in

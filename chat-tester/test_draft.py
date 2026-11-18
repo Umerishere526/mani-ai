@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import base64
 import pathlib
-import threading
 
 import pytest
 import requests
@@ -48,7 +47,6 @@ class DraftBackend(mani.ManiClient):
         self.history_fails = history_fails
         self.creates_timing_out = creates_timing_out
         self.calls: list[tuple] = []
-        self.folded = threading.Event()
         self.stored: list[dict] = []
 
     def _call(self, method, path, **kwargs):
@@ -57,9 +55,6 @@ class DraftBackend(mani.ManiClient):
             return {"thread": THREAD, "messages": EARLIER[-20:]} if self.earlier else {"thread": None, "messages": []}
         if path == "/v1/threads/opening":
             return OPENING
-        if path == "/v1/threads/memory-fold":
-            self.folded.set()
-            return {"folded": 0}
         if (method, path) == ("POST", "/v1/threads"):
             if self.creates_timing_out:
                 self.creates_timing_out -= 1
@@ -124,8 +119,7 @@ def test_new_conversation_calls_nothing_that_writes():
     next(b for b in app.sidebar.button if b.label.endswith("New conversation")).click().run()
 
     assert not app.exception
-    assert backend.folded.wait(2)
-    assert backend.writes() == [("POST", "/v1/threads/memory-fold")]
+    assert backend.writes() == []
     assert ("GET", "/v1/threads/opening", None) in backend.calls
     assert app.session_state.thread is None
     assert _contents(app) == [GREETING]

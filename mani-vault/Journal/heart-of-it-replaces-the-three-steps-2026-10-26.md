@@ -2,7 +2,13 @@
 type: journal
 date: 2026-10-26
 tags: [journal, prompts, understanding, check, design, lessons]
+summary: "One growing reading, the heart of it, replaces code filling three slots one per turn; the patch limit tripped."
+failed:
+  - "Tried code filling problem, core issue, feeling a slot a turn; failed because Mani filled a form and checked early"
+  - "Tried an options line ending every reply; failed because every reply closed on 'Is it A, B, or something else?'"
+  - "Tried banning a reading ('never explain people to themselves'); failed because Mani filled slots, never guessed"
 ---
+> Superseded 2026-11-17 (the heart of it stored by code, and the check that gates the offer: the prompt holds when to offer) — see [[flat-replies-were-the-model-2026-11-17]]
 
 # The heart of it replaces the three steps (2026-10-26)
 

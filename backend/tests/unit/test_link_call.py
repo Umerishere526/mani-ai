@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 import asyncpg
 import pytest
 
-from mani.chat import orchestrator
+from mani.chat import turn
 from mani.db import llm_calls
 
 
@@ -43,9 +43,9 @@ async def test_a_race_that_clears_on_the_second_attempt_still_links(monkeypatch)
             raise not_found()
 
     monkeypatch.setattr(llm_calls, "attach_message", flaky)
-    monkeypatch.setattr(orchestrator, "LINK_RETRY_DELAY_SECONDS", 0)
+    monkeypatch.setattr(turn, "LINK_RETRY_DELAY_SECONDS", 0)
 
-    await orchestrator.link_call(call_id="c", message_id="m")
+    await turn.link_call(call_id="c", message_id="m")
 
     assert calls["n"] == 2
 
@@ -55,10 +55,10 @@ async def test_a_race_that_never_clears_gives_up_without_raising(monkeypatch):
         raise not_found()
 
     monkeypatch.setattr(llm_calls, "attach_message", always_fails)
-    monkeypatch.setattr(orchestrator, "LINK_RETRY_DELAY_SECONDS", 0)
+    monkeypatch.setattr(turn, "LINK_RETRY_DELAY_SECONDS", 0)
 
     # Never raises - a failed link costs a forensic record, not a delivered reply.
-    await orchestrator.link_call(call_id="c", message_id="m")
+    await turn.link_call(call_id="c", message_id="m")
 
 
 async def test_a_clean_first_attempt_does_not_retry(monkeypatch):
@@ -69,6 +69,6 @@ async def test_a_clean_first_attempt_does_not_retry(monkeypatch):
 
     monkeypatch.setattr(llm_calls, "attach_message", clean)
 
-    await orchestrator.link_call(call_id="c", message_id="m")
+    await turn.link_call(call_id="c", message_id="m")
 
     assert calls["n"] == 1

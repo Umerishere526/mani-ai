@@ -12,8 +12,8 @@ endpoint (a conversation's first message through `POST /v1/threads`, which creat
 ## What it simulates versus what is real
 
 - **Real:** every chat turn, every capsule tap, style selection (tapping one of the greeting's
-  three style buttons), framework offers (including the nearest fit, shown as "Try the closest fit" beside "Keep chatting"), the body check-in (the client's six steps, with its two outcomes), the crisis pause (the client's centred "Chat is temporary unavailable" pop-up with how long the pause runs, 988 and 911, Get help now and Go to library, and a live countdown at the bottom; the Library stays open). All of it
-  goes over HTTP to the actual FastAPI app - nothing here calls `orchestrator.py` directly.
+  three style buttons), framework offers (the lead-in, the five steps and Start), the feelings check after the last stage, the crisis pause (the client's centred "Chat is temporary unavailable" pop-up with how long the pause runs, 988 and 911, Get help now and Go to library, and a live countdown at the bottom; the Library stays open). All of it
+  goes over HTTP to the actual FastAPI app - nothing here calls the chat code directly.
 - **Real, too:** the library page (sidebar **Library**, or any **Go to Library** button). It lists
   every exercise from `GET /v1/exercises` on one page, grouped by topic, each playable from its
   signed link in one player with 10-second skips; stories also get 0.5x, 1x, 1.5x or 2x speed. Under
@@ -68,8 +68,8 @@ anyone who can reach the page: every new account can spend model credit.
 
 ```bash
 cd chat-tester
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 ```
@@ -96,7 +96,7 @@ cd backend && source .venv/bin/activate && supabase start && fastapi dev main.py
 Then, in another terminal:
 
 ```bash
-cd chat-tester && source venv/bin/activate && streamlit run app.py
+cd chat-tester && source .venv/bin/activate && streamlit run app.py
 ```
 
 The app opens on a **Sign in** / **Sign up** screen. Sign up takes an email, a password and an
@@ -118,7 +118,7 @@ tab, shows the whole conversation, with Mani's buttons live only on its newest m
 ## Tests
 
 ```bash
-cd chat-tester && source venv/bin/activate && pip install -r requirements-dev.txt
+cd chat-tester && source .venv/bin/activate && pip install -r requirements-dev.txt
 pytest
 ```
 
@@ -129,15 +129,14 @@ not running. Never point them at a hosted project.
 
 The three developer panels below only appear with `CHAT_TESTER_DEV_MODE=1` in `chat-tester/.env`
 **and** the sidebar's "Show developer details" toggle switched on. "What Mani remembers" shows without
-them. The developer view lists an offer's framework id but not whether the offer was a confident one
-or the nearest fit; the button's label ("Try it" or "Try the closest fit") is how you tell.
+them. An offer shows the client's three steps: the lead-in's buttons (Not sure / Show me how / Give me a tool), the five
+steps with Start / I need an example / Talk more first, and after the last stage Stronger / More focused / Still a
+bit tired.
 
 - **The sidebar's "Framework state" panel** - a direct read of `thread_technique_state`,
   refreshed on every interaction. Watch `phase` move through a framework's stages as the
   conversation continues, and `outcome` flip from `offered` to `accepted` when you tap
-  "Try it" or say so in free text. The current framework and stage also show under the title.
-- **"What Mani remembers"** - a direct read of `admin.user_memory`: the patterns folded in
-  from this person's earlier chats. It fills in a few seconds after **New conversation**.
+  Start or say yes after the five steps. The current framework and stage also show under the title.
 - **The "Recent calls" panel** - one row per model call, in order, with token counts and
   the cached fraction. Every turn is one call; a completing framework no longer makes a second one.
 - **"Last turn, raw"** - the exact `TurnOut` JSON, including `reasoning` if

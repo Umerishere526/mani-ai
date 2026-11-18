@@ -2,8 +2,12 @@
 type: journal
 date: 2026-11-05
 tags: [journal, latency, vercel, understanding, memory, summary]
+summary: "Background jobs were cut off when Vercel stopped the function; the app now requests the follow-up work itself."
+failed:
+  - "Tried fire_and_forget jobs after the response; failed because Vercel stops the function, cutting off 15 of 49 readings."
 ---
 
+> Superseded 2026-11-18 (the memory fold on a new chat) — see [[loops-came-from-the-host-the-guard-and-memory-2026-11-18]]: every chat stands alone.
 > Superseded 2026-11-13 — see [[threads-only-from-the-first-message-2026-11-13]] (how the memory fold is asked for: `memory_fold_pending` and `/v1/threads/{id}/memory-fold` are replaced by `/v1/threads/memory-fold` on New conversation)
 
 # Nothing runs after the response any more (2026-11-05)

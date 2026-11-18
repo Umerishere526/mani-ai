@@ -3,7 +3,13 @@ type: journal
 date: 2026-11-16
 apps: [backend]
 tags: [journal, offers, cadence, design, lessons]
+summary: "'Enough' is a field the reply writes, and the push to the framework came back after the floor was removed."
+failed:
+  - "Tried removing the offer floor and both pushes together; failed because with no push the model kept asking questions."
+  - "Tried storing asked_for_help as a state; failed because every later reply went practical and the move never came"
+  - "Tried a push fed by the late reading's map; failed because that map lands a median 18.8 s after the reply"
 ---
+> Superseded 2026-11-17 (code pressing the move to a framework: the model decides when to offer) — see [[flat-replies-were-the-model-2026-11-17]]
 2026-11-16
 
 # "Enough" is a field the reply writes, and the push to the framework came back

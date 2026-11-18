@@ -7,7 +7,7 @@ Three apps and a test tool in one directory. Each has its own dependencies and i
 | `web/`         | Next.js 16 (App Router), React 19, Tailwind v4                                                                 | `cd web && npm run dev`                                              |
 | `mobile/`      | Expo SDK 57, expo-router, RN 0.86, NativeWind v5                                                               | `cd mobile && npx expo start`                                        |
 | `backend/`     | FastAPI on Python 3.14, venv at `backend/.venv`                                                                | `cd backend && source .venv/bin/activate && fastapi dev main.py`     |
-| `chat-tester/` | Streamlit page for real conversations against the running backend; not part of the other three, see its README | `cd chat-tester && source venv/bin/activate && streamlit run app.py` |
+| `chat-tester/` | Streamlit page for real conversations against the running backend; not part of the other three, see its README | `cd chat-tester && source .venv/bin/activate && streamlit run app.py` |
 
 Per-app context — before working in a directory, read its file (only the one you need):
 
@@ -63,7 +63,7 @@ Rule #1: If you want an exception to any rule, stop and get explicit permission 
 - Tedious, systematic work is often the correct solution. Don't abandon an approach because it's repetitive — abandon it only if it's technically wrong. When it is technically wrong, say so (see "When the design is the problem").
 - Honesty is a core value. If you lie, you'll be replaced.
 - Think of and address your human partner as "muhammad" at all times.
-- Look for a virtual environment or .venv in the repo and activate it before running Python commands. For this repo that is `backend/.venv` (and `chat-tester/venv` for the tester).
+- Look for a virtual environment or .venv in the repo and activate it before running Python commands. For this repo that is `backend/.venv` (and `chat-tester/.venv` for the tester).
 
 ## Our relationship
 
@@ -88,6 +88,19 @@ Rule #1: If you want an exception to any rule, stop and get explicit permission 
 ### Check the ecosystem first
 
 Before building any feature or UI component, check whether the framework (Next.js, Expo, FastAPI, Streamlit, Supabase) or a well-maintained library already does it — read the official docs for the version we use. Tell muhammad what exists and recommend using it or say why custom is better. Hand-building something the framework ships is a defect, even if it works.
+
+Use these exact Context7 library IDs directly with `query-docs` (skip `resolve-library-id` unless a library is unlisted). IDs ending in a version are pinned to the installed dependency — update the ID when that dependency is upgraded:
+
+- **Next.js 16**: `/vercel/next.js` (specify `v16` in queries)
+- **React 19**: `/reactjs/react.dev`
+- **Tailwind CSS v4**: `/tailwindlabs/tailwindcss.com`
+- **Expo SDK 57**: `/websites/expo_dev_versions/v57.0.0` (SDK package API reference)
+- **Expo Router**: `/expo/expo` (no SDK 57 version exists — specify `SDK 57` in queries and check the answer is not for SDK 58)
+- **React Native 0.86**: `/react/react-native-website` (unversioned and leans on 0.88 docs — specify `0.86` in queries and check the source path)
+- **NativeWind v5**: `/websites/nativewind_dev/v5`
+- **FastAPI**: `/websites/fastapi_tiangolo`
+- **Supabase**: `/supabase/supabase`
+- **Streamlit**: `/streamlit/docs` (unversioned, tracks the latest release; `chat-tester/` pins 1.64.0)
 
 ### When the design is the problem
 
@@ -187,6 +200,8 @@ Notes live in `./mani-vault/Journal/`.
 - Before starting complex tasks, search the journal for relevant lessons. Then judge the current code on its own merits.
 - Track patterns in user feedback to improve collaboration over time by updating the appropriate journal entry.
 - Link notes to each other with `[[wikilinks]]`. Do not copy stack facts from `.claude/` into the vault — link to them, or they drift.
+- Every journal note's frontmatter carries `summary:` (one line: what it is about) and, when it records something that did not work, `failed:` (a list of "Tried X; failed because Y"). The edit hook flags a note without its summary.
+- Every session starts with a digest generated from those lines and from the bold lines under "Decisions in force" (`.claude/hooks/digest.py`), so keep them current: a stale line there is what the next session believes.
 
 ### How to weigh the journal
 

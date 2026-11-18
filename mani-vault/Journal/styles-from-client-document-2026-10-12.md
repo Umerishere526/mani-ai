@@ -2,6 +2,9 @@
 type: journal
 date: 2026-10-12
 tags: [journal, prompts, styles, directive, supportive, reflective, lessons]
+summary: "The styles drifted from the client's document because we wrote our own recipe five times instead of sending hers."
+failed:
+  - "Tried our own style recipes in five places; failed because their shared rules contradicted the client's examples."
 ---
 > Superseded 2026-10-13 (the two client example conversations per style file: removed, the voice now comes from `mani_base.md` `sounds_like`) — see [[client-sample-voice-and-confirmed-check-2026-10-13]]
 > Superseded 2026-10-12 — see [[restating-is-not-reflecting-2026-10-12]] (keeping "never ask about something that has not happened yet": the client now asks "What would making the wrong choice mean to you?")

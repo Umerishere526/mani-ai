@@ -562,8 +562,6 @@ values ('44444444-0000-4000-8000-000000000001',
 insert into public.messages (thread_id, user_id, role, content)
 values ('44444444-0000-4000-8000-000000000001',
         '33333333-0000-4000-8000-000000000001', 'user', 'should cascade away too');
-insert into admin.user_memory (user_id, memory)
-values ('33333333-0000-4000-8000-000000000001', '{"themes": ["should cascade away"]}');
 insert into public.chat_pauses (user_id, thread_id, ends_at)
 values ('33333333-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000001', now() + interval '1 hour');
 
@@ -586,15 +584,7 @@ begin
   end if;
   raise notice 'PASS: supabase_auth_admin can complete a real cascade, including the message-count trigger';
 
-  -- Read as postgres again: supabase_auth_admin holds DELETE on the memory, not SELECT.
   reset role;
-  if exists (
-    select 1 from admin.user_memory where user_id = '33333333-0000-4000-8000-000000000001'
-  ) then
-    raise exception 'FAIL: deleting the account left what was remembered about them';
-  end if;
-  raise notice 'PASS: deleting the account deletes their memory';
-
   if exists (
     select 1 from public.chat_pauses where user_id = '33333333-0000-4000-8000-000000000001'
   ) then

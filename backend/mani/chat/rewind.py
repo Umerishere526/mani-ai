@@ -7,7 +7,7 @@ import uuid
 
 import asyncpg
 
-from mani.chat.context import OPENING_MESSAGES
+from mani.chat.greeting import OPENING_MESSAGES
 from mani.db import threads
 from mani.db.threads import TurnContext, load_turn_context
 from mani.errors import ErrorCategory, ServiceError
@@ -25,10 +25,8 @@ def snapshot_of(ctx: TurnContext) -> dict:
     return {
         "title": ctx.thread.title,
         "understanding": ctx.thread.understanding,
-        "check_at_message_count": ctx.thread.check_at_message_count,
         "safety": ctx.thread.safety,
         "technique": ctx.technique.model_dump(mode="json") if ctx.technique else None,
-        "offered": ctx.techniques_offered,
     }
 
 
@@ -48,7 +46,7 @@ async def undo_last_turn(
 ) -> None:
     """Delete the person's last message and Mani's reply, and restore the state from before that turn.
     Raises a ServiceError, changing nothing, when the turn cannot be undone safely."""
-    await conn.execute("select pg_advisory_xact_lock(hashtextextended($1, 1))", f"thread:{thread_id}")
+    await threads.lock(conn, thread_id)
     ctx = await load_turn_context(conn, thread_id, user_id)
     if ctx is None:
         raise _refuse(ErrorCategory.NOT_FOUND, "That conversation is not available.")
@@ -77,9 +75,8 @@ async def _restore(conn: asyncpg.Connection, user_id, thread_id, snapshot: dict)
         snapshot["title"], thread_id, user_id,
     )
     await conn.execute(
-        "update public.threads set understanding = $1::jsonb, check_at_message_count = $2, rewind_snapshot = null "
-        "where id = $3 and user_id = $4",
-        snapshot["understanding"], snapshot["check_at_message_count"], thread_id, user_id,
+        "update public.threads set understanding = $1::jsonb, rewind_snapshot = null where id = $2 and user_id = $3",
+        snapshot["understanding"], thread_id, user_id,
     )
     await threads.set_safety(conn, thread_id, user_id, snapshot.get("safety") or "clear")
     if snapshot["technique"] is None:
@@ -89,22 +86,13 @@ async def _restore(conn: asyncpg.Connection, user_id, thread_id, snapshot: dict)
         await conn.execute(
             """
             insert into public.thread_technique_state
-                (thread_id, user_id, framework_id, outcome, phase, at_message_count,
-                 physical_response, conversation_effect, stages_known)
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+                (thread_id, user_id, framework_id, outcome, phase, at_message_count)
+            values ($1, $2, $3, $4, $5, $6)
             on conflict (thread_id) do update set
-                framework_id        = excluded.framework_id,
-                outcome             = excluded.outcome,
-                phase               = excluded.phase,
-                at_message_count    = excluded.at_message_count,
-                physical_response   = excluded.physical_response,
-                conversation_effect = excluded.conversation_effect,
-                stages_known        = excluded.stages_known
+                framework_id     = excluded.framework_id,
+                outcome          = excluded.outcome,
+                phase            = excluded.phase,
+                at_message_count = excluded.at_message_count
             """,
             thread_id, user_id, t.framework_id, t.outcome.value, t.phase, t.at_message_count,
-            t.physical_response, t.conversation_effect, t.stages_known,
         )
-    await conn.execute(
-        "delete from public.thread_techniques_offered where thread_id = $1 and framework_id <> all($2::text[])",
-        thread_id, snapshot["offered"],
-    )

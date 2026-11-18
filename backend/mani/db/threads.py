@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 
 import asyncpg
 
-from mani.llm.schema import Memory
 from mani.models.rows import (
     Pause,
     Profile,
@@ -72,17 +71,6 @@ async def get(
         thread_id, user_id,
     )
     return Thread.from_record(row)
-
-
-async def understanding_of(
-    conn: asyncpg.Connection, thread_id: uuid.UUID | str, user_id: uuid.UUID | str
-) -> dict | None:
-    """What Mani understands of them as stored now, or None when the thread is gone."""
-    row = await conn.fetchrow(
-        "select understanding from public.threads where id = $1 and user_id = $2 and deleted_at is null",
-        thread_id, user_id,
-    )
-    return None if row is None else dict(row["understanding"] or {})
 
 
 async def set_pending_follow_up(
@@ -217,23 +205,16 @@ async def soft_delete(
 
 @dataclass(frozen=True)
 class TurnContext:
-    """Everything about a thread a turn needs, fetched together.
-
-    The previous implementation read these as separate round trips and then kept a
-    mutable in-memory mirror that drifted from the database within a single request.
-    One read, one immutable snapshot.
-    """
+    """Everything about a thread a turn needs, fetched together in one read as one immutable snapshot, so nothing
+    drifts from the database within a request."""
 
     thread: Thread
     profile: Profile | None
     technique: TechniqueState | None
-    techniques_offered: list[str] = field(default_factory=list)
     summary: ThreadSummary | None = None
     # Another of this person's conversations was flagged for crisis recently. Only the fact
     # crosses threads, never what was said in it.
     recent_crisis: bool = False
-    # Patterns from this person's earlier conversations, folded in as each one finished.
-    memory: Memory | None = None
     # The pauses this turn may owe the question whether they are all right for (chat/pause.return_check), each the
     # latest that has run out by the database's clock as the pause gate reads it, within RECENT_CRISIS_DAYS of its
     # end (an older one owes nothing): this person's, and this conversation's own, each with what it rested on.
@@ -252,17 +233,12 @@ select
     where p.user_id = t.user_id)                   as profile,
   (select to_jsonb(s) from public.thread_technique_state s
     where s.thread_id = t.id)                      as technique,
-  coalesce((select jsonb_agg(o.framework_id order by o.offered_at)
-    from public.thread_techniques_offered o
-    where o.thread_id = t.id), '[]'::jsonb)        as techniques_offered,
   (select to_jsonb(sm) from public.thread_summaries sm
     where sm.thread_id = t.id)                     as summary,
   exists (select 1 from public.threads c
            where c.user_id = t.user_id and c.id <> t.id
              and c.crisis_at > now() - interval '{RECENT_CRISIS_DAYS} days')
                                                    as recent_crisis,
-  (select um.memory from admin.user_memory um
-    where um.user_id = t.user_id)                  as memory,
   (select jsonb_build_object(
             'id', cp.id, 'user_id', cp.user_id, 'thread_id', cp.thread_id, 'started_at', cp.started_at,
             'ends_at', cp.ends_at, 'checked_at', cp.checked_at,
@@ -275,7 +251,7 @@ select
     where cp.thread_id = t.id and cp.user_id = t.user_id and cp.ends_at <= now()
       and cp.ends_at > now() - interval '{RECENT_CRISIS_DAYS} days'
     order by cp.started_at desc limit 1)          as own_pause
-from (select {COLUMNS}, understanding, check_at_message_count, safety from public.threads
+from (select {COLUMNS}, understanding, safety from public.threads
        where id = $1 and user_id = $2 and deleted_at is null) t
 """
 
@@ -292,10 +268,8 @@ async def load_turn_context(
         profile=Profile.model_validate(row["profile"]) if row["profile"] else None,
         technique=TechniqueState.model_validate(row["technique"])
         if row["technique"] else None,
-        techniques_offered=list(row["techniques_offered"] or []),
         summary=ThreadSummary.model_validate(row["summary"]) if row["summary"] else None,
         recent_crisis=row["recent_crisis"],
-        memory=Memory.model_validate(row["memory"]) if row["memory"] else None,
         pause=Pause.model_validate(row["pause"]) if row["pause"] else None,
         own_pause=Pause.model_validate(row["own_pause"]) if row["own_pause"] else None,
     )
@@ -308,32 +282,17 @@ async def load_turn_context(
 
 @dataclass
 class ThreadUpdates:
-    """What a turn changed, applied in one go at the end of the transaction.
-
-    The previous implementation issued up to fourteen writes per turn, thirteen of
-    them unprotected, several of them before the model had even been called - so a
-    failure left the thread describing a turn that never happened. Collecting them
-    means they land together or not at all.
-    """
+    """What a turn changed, applied in one go at the end of the transaction, so the writes land together or not at
+    all and a failed turn leaves nothing describing a turn that never happened."""
 
     title: str | None = None
     technique: TechniqueState | None = None
     retire_technique: bool = False
-    offer_frameworks: list[str] = field(default_factory=list)
-    # What the body check-in found, set only on the turn that answers its step, never overwritten within a run.
-    physical_response: str | None = None
-    conversation_effect: str | None = None
-    # A new offer starts a new run, so the last run's two outcomes are cleared.
-    reset_outcomes: bool = False
     conversation_style: SupportStyle | None = None
-    # The whole stage store, set only when this turn's merge changed it.
-    stages_known: dict | None = None
-    # What Mani understands of them, set only when this turn's merge changed it.
+    # The conversation's record (chat/record.py), set only when this turn changed it.
     understanding: dict | None = None
     # Where the conversation stands on safety, set only when this turn moved it (chat/safety.after).
     safety: str | None = None
-    # When Mani's check of its understanding was made, set only on the turn whose reply is one.
-    check_at_message_count: int | None = None
 
     def __bool__(self) -> bool:
         # Each optional field is tested for presence, not for truth. A field whose
@@ -343,15 +302,9 @@ class ThreadUpdates:
             self.title is not None
             or self.technique is not None
             or self.retire_technique
-            or bool(self.offer_frameworks)
-            or self.physical_response is not None
-            or self.conversation_effect is not None
-            or self.reset_outcomes
             or self.conversation_style is not None
-            or self.stages_known is not None
             or self.understanding is not None
             or self.safety is not None
-            or self.check_at_message_count is not None
         )
 
 
@@ -381,10 +334,7 @@ async def apply(
         )
 
     if updates.retire_technique:
-        # Retired, not removed. at_message_count is what the cooldown is measured from,
-        # so deleting the row tells the next turn no technique has ever run and lets a
-        # second framework start immediately. A finished technique is one whose outcome
-        # is accepted and whose phase is null.
+        # Retired, not removed: a finished technique is one whose outcome is accepted and whose phase is null.
         await conn.execute(
             "update public.thread_technique_state set phase = null "
             "where thread_id = $1 and user_id = $2",
@@ -408,33 +358,6 @@ async def apply(
             t.at_message_count,
         )
 
-    if updates.reset_outcomes:
-        await conn.execute(
-            "update public.thread_technique_state set physical_response = null, conversation_effect = null "
-            "where thread_id = $1 and user_id = $2",
-            thread_id, user_id,
-        )
-    for column, value in (
-        ("physical_response", updates.physical_response), ("conversation_effect", updates.conversation_effect),
-    ):
-        if value is not None:
-            # Its own statement per outcome, never part of the upsert above, so a later turn's upsert cannot
-            # erase it; written once per run by mani_service (migration 025).
-            await conn.execute(
-                f"update public.thread_technique_state set {column} = $1 where thread_id = $2 and user_id = $3 "
-                f"and {column} is null",
-                value, thread_id, user_id,
-            )
-
-    if updates.stages_known is not None:
-        # Its own statement after the upsert above, never part of it: a new offer row upserts over
-        # a retired one, and the store has to survive that.
-        await conn.execute(
-            "update public.thread_technique_state set stages_known = $1::jsonb "
-            "where thread_id = $2 and user_id = $3",
-            updates.stages_known, thread_id, user_id,
-        )
-
     if updates.safety is not None:
         await set_safety(conn, thread_id, user_id, updates.safety)
     if updates.understanding is not None:
@@ -444,25 +367,12 @@ async def apply(
             updates.understanding, thread_id, user_id,
         )
 
-    if updates.check_at_message_count is not None:
-        # Its own column grant, to mani_service only (migration 023).
-        await conn.execute(
-            "update public.threads set check_at_message_count = $1 where id = $2 and user_id = $3",
-            updates.check_at_message_count, thread_id, user_id,
-        )
 
-    if updates.offer_frameworks:
-        # One statement. The previous version read the whole row, merged in
-        # JavaScript and wrote it back, losing an entry whenever two turns overlapped.
-        await conn.executemany(
-            """
-            insert into public.thread_techniques_offered (thread_id, framework_id, user_id)
-            values ($1, $2, $3)
-            on conflict (thread_id, framework_id) do nothing
-            """,
-            [(thread_id, fid, user_id) for fid in updates.offer_frameworks],
-        )
 
+async def lock(conn: asyncpg.Connection, thread_id: uuid.UUID | str) -> None:
+    """One writer at a time per conversation, held until the transaction ends: a send and an edit shut each other
+    out."""
+    await conn.execute("select pg_advisory_xact_lock(hashtextextended($1, 1))", f"thread:{thread_id}")
 
 
 async def set_safety(
