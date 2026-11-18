@@ -235,12 +235,12 @@ stages:
       - {id: holds_up, about: "whether the thought holds up"}
       - {id: new_thought, about: "a more balanced thought they can believe"}
       - {id: step, about: "one gentle step from here"}
-    reach: "Report replacement as known only where they've given a thought that fits what they know, said they believe it and named one thing they would like to do with it, or concluded the thought is accurate and named one step they'll take. A permission or intention they give themselves, such as 'trust them more', is part of the thought, never the step. If they believe their thought and have named nothing to do with it yet, it's partial with the gap 'step', once. A step that is more of what they said the thought makes them do, such as pulling back, waiting or holding back, is not the step yet: it's partial with the gap 'step', once, so your text asks gently about the person or situation it is about. If they offered a thought without saying they believe it, it's partial, with their words and the gap 'believe', so your text asks whether it feels true to them. Another interpretation from Step 4 is the material, never the replacement thought: until they have put a thought into their own words, it's partial with the gap 'thought'. If they concluded the thought is accurate and named no step yet, it's partial with the gap 'step'."
+    reach: "Report replacement as known only where they've given a thought that fits what they know, said they believe it, or concluded the thought is accurate and named one step they'll take. A permission or intention they give themselves, such as 'trust them more', is part of the thought, never the step. A step that is more of what they said the thought makes them do, such as pulling back, waiting or holding back, is not the step yet: it's partial with the gap 'step', once, so your text asks gently about the person or situation it is about. If they offered a thought without saying they believe it, it's partial, with their words and the gap 'believe', so your text asks whether it feels true to them. Another interpretation from Step 4 is the material, never the replacement thought: until they have put a thought into their own words, it's partial with the gap 'thought'. If they concluded the thought is accurate and named no step yet, it's partial with the gap 'step'."
     listen_for: "A balanced thought, in their own words, that fits what's known and that they find believable. It may be cautious, partial or uncertain, and often keeps the feeling while putting it in proportion ('Even though I feel anxious, it's unlikely that...'). Also listen for whether they've concluded the thought is accurate, which means the upset is pointing to a real problem."
     ready_when: >-
       Either (a) they've given a thought, in their own words, that fits what's known and that they
       say they believe, or (b) they've concluded the original thought is accurate and named one
-      practical step they'll take. With (a), one thing they would like to do with the new thought, asked once, gently. Neither has to be positive. For (a), the test is whether they
+      practical step they'll take. Neither has to be positive. For (a), the test is whether they
       believe it: "yes", "that feels fairer" and "that's closer" all mean it's done. If it doesn't
       feel true yet, adjust it with them until it does. Check once, plainly, if they haven't said;
       never ask for a number. If they've already arrived at a thought or a step, recognise it and
@@ -256,7 +256,7 @@ stages:
         when: 'it does not feel true yet - "I don''t really believe that."'
         reply: "It isn't there yet. What would need to change in it to make it feel truer?"
       - id: step
-        when: "they believe their new thought and haven't said what they'd like to do with it, or the thought seems accurate and points to a real problem"
+        when: "the thought seems accurate and points to a real problem"
         reply: "What would you like to do with that, from here?"
 ---
 

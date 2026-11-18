@@ -142,26 +142,33 @@ async def test_a_declined_framework_is_never_offered_again(alice, model):
     assert turn.prompts == [] and turn.trace["refused"] == "offer"
 
 
-async def test_the_last_stage_finished_shows_the_closing_buttons(alice, model):
-    model(said("Warm close.", action="finish", stage="effective"))
+async def test_after_e_the_feelings_check_then_the_closing_buttons(alice, model):
+    model(said("That's a strong shift. How are you feeling now?", action="finish", stage="effective"),
+          said("Excellent. You found a path forward."))
     thread = await start(alice)
     await put_technique(thread.id, "abcde", TechniqueOutcome.ACCEPTED, "effective")
-    turn = await send(alice, thread.id, "I can be a team player and still say no")
-    assert [p.label for p in turn.prompts] == ["Keep Chatting", "Go to Library", "Finish for Now"]
+    check = await send(alice, thread.id, "I can be a team player and still say no")
+    assert [p.label for p in check.prompts] == ["Stronger", "More focused", "Still a bit tired"]
+    assert "abcde" not in ((await thread_row(alice, thread.id)).understanding.get("finished") or [])
+    closed = await send(alice, thread.id, "More focused")
+    assert [p.label for p in closed.prompts] == ["Keep Chatting", "Go to Library", "Finish for Now"]
     assert (await thread_row(alice, thread.id)).understanding["finished"] == ["abcde"]
 
 
 async def test_a_finish_after_danger_sends_the_end_check_then_the_close(alice, model):
     model(said("Warm close.", action="finish", stage="effective"),
-          said("Glad you're safe. Warm close.", action="finish", stage="effective"))
+          said("Glad you're safe. How are you feeling now?", action="finish", stage="effective"),
+          said("Good to hear."))
     thread = await start(alice)
     await put_technique(thread.id, "abcde", TechniqueOutcome.ACCEPTED, "effective")
     await put_record(thread.id, {"danger_reached": True, "danger_about": "themselves"})
     first = await send(alice, thread.id, "my new belief is that I'm allowed limits")
     assert first.content == crisis.END_CHECK and first.prompts == []
-    closed = await send(alice, thread.id, "i'm okay now, my sister is here")
-    assert [p.label for p in closed.prompts][-1] == "Finish for Now"
+    check = await send(alice, thread.id, "i'm okay now, my sister is here")
+    assert [p.label for p in check.prompts] == ["Stronger", "More focused", "Still a bit tired"]
     assert (await thread_row(alice, thread.id)).understanding["safety_end_check"] == "done"
+    closed = await send(alice, thread.id, "Stronger")
+    assert [p.label for p in closed.prompts][-1] == "Finish for Now"
 
 
 async def test_overdose_on_the_first_message_gets_manis_reply_and_the_next_message_pauses(alice, model):
@@ -318,3 +325,13 @@ async def test_an_empty_reply_gets_a_fixed_one_and_keeps_the_safety_judgment(ali
     other = await start(alice)
     plain = await send(alice, other.id, "hello")
     assert plain.content == crisis.TROUBLE_REPLY
+
+
+async def test_editing_the_reply_that_opened_the_feelings_check_restores_the_last_stage(alice, model):
+    model(said("How are you feeling now?", action="finish", stage="effective"), said("Let's keep going.", stage="effective"))
+    thread = await start(alice)
+    await put_technique(thread.id, "abcde", TechniqueOutcome.ACCEPTED, "effective")
+    await send(alice, thread.id, "I can say no")
+    assert (await technique_of(alice, thread.id)).phase == "feelings_check"
+    await runner.edit(alice, thread.id, await last_user_message_id(thread.id), "not sure yet")
+    assert (await technique_of(alice, thread.id)).phase == "effective"

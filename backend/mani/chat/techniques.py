@@ -10,6 +10,8 @@ from mani.models.rows import Framework
 OFFERING = "offering"
 # An offer whose five steps have been shown: the next answer starts the set, sets it aside, or lets it lapse.
 STEPS = "steps"
+# A framework whose last stage is answered, while Mani asks how they feel now; the next answer closes it.
+FEELINGS = "feelings_check"
 
 
 def stages_of(framework: Framework) -> list[str]:

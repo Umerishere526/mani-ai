@@ -19,7 +19,7 @@ from mani.chat.greeting import (
 )
 from mani.chat.repairs import clean_title, start_buttons, without_dashes
 from mani.chat.reply import TurnReply
-from mani.chat.techniques import OFFERING, STEPS, example_text, steps_text
+from mani.chat.techniques import FEELINGS, OFFERING, STEPS, example_text, steps_text
 from mani.config import get_settings
 from mani.text import copies_last_reply
 from mani.db import llm_calls, messages as messages_db, pauses, profiles, threads
@@ -281,7 +281,7 @@ def _updates(ctx, reply: TurnReply, decision, judgment, *, record, check, answer
     if decision.end_check:
         after[rec.SAFETY_END_CHECK] = rec.END_CHECK_ASKED
         updates.safety = safety.State.UNSURE.value
-    elif end_check_asked and decision.finished != rec.finished(record):
+    elif end_check_asked and decision.technique is not None and decision.technique.phase == FEELINGS:
         after[rec.SAFETY_END_CHECK] = rec.END_CHECK_DONE
     elif judgment.settled_now and rec.end_check(after) == rec.END_CHECK_DONE:
         after.pop(rec.SAFETY_END_CHECK)

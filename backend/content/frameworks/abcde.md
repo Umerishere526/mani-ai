@@ -206,29 +206,22 @@ stages:
     first_gap: belief
     carries_case: true
     intro: "E is for Effective New Belief."
-    purpose: "Help them reach a more realistic and helpful way of seeing it, based on what they've examined, plus one clear thing they'll focus on from here, both in their own words. Where it fits, help them plan to bring the new belief to mind the next time a similar event happens."
+    # E ends on the new belief, as the client's sequence document does (muhammad, 2026-11-18): how they feel comes next.
+    purpose: "Help them reach a more realistic and helpful way of seeing it, based on what they've examined, in their own words."
     # The parts of the experience this stage can open, each only when it adds something (muhammad, 2026-11-06).
     explore:
       - {id: new_view, about: "a more balanced way to see it, in their words"}
-      - {id: path, about: "one thing they will do"}
-      - {id: practice, about: "one situation where they can try it"}
-    reach: "Report effective as known only where they've given, at this stage, both a more balanced way to see it and one path, such as raising it with someone. A permission or intention they give themselves, such as 'trust them more' or 'give myself permission', is part of the new view, never the path: the path is one thing they would do in their life. A path that is more of what they said at C, such as pulling back, waiting or holding back, is not the path yet: report partial with the gap 'path', once, so your text asks gently about the person or situation it is about, such as 'Is there something you'd want to say to that friend?'. What they said in D never counts as the new belief: a challenge to the old belief is not yet a new one. If only the new view has come, report it as partial with the gap 'path', so your text asks what one thing they could do. If only an action or intention has come, report it as partial with the gap 'belief', so your text asks for the balanced belief behind it. When the new belief has come and the path is general, such as 'say no when I'm exhausted', report it as partial with the gap 'practice', once, so your text asks for one situation where they could practise it; a specific path, or a practice question already asked, closes the stage. A balanced view already forming in the chat before the framework counts: help them refine it rather than start again."
-    listen_for: "A more realistic and helpful view that separates what they know from what they assumed, usually more flexible than the original belief ('I made a mistake' rather than 'I'm a failure'). Also listen for the one thing they'll focus on from here, any change in how they feel now, and how they might use the new belief next time."
-    ready_when: "They've said, in their own words, a more balanced way to see it, such as 'I don't have to give up my independence to let someone close', and one clear path they'll focus on, or picked one of Mani's suggestions as theirs. A plan, an action or a commitment for next time counts as the path, never as the belief."
-    # Optional follow-ups. One at a time, and only before they have a clear view and a path.
+    reach: "Report effective as known only where they've given, at this stage, a more balanced way to see it in their own words. What they said in D never counts as the new belief: a challenge to the old belief is not yet a new one. If only an action or intention has come, report it as partial with the gap 'belief', so your text asks for the balanced belief behind it. A balanced view already forming in the chat before the framework counts: help them refine it rather than start again."
+    listen_for: "A more realistic and helpful view that separates what they know from what they assumed, usually more flexible than the original belief ('I made a mistake' rather than 'I'm a failure')."
+    ready_when: "They've said, in their own words, a more balanced way to see it, such as 'I don't have to give up my independence to let someone close', or picked one of Mani's suggested wordings as theirs. A plan, an action or a commitment for next time is not the new belief."
+    # Optional follow-ups. One at a time, and only before they have a clear view.
     question_bank:
       - "Saying it that way, how do you feel now?"
       - "Next time something like this happens, what would you like to remind yourself?"
     if_unclear:
-      - id: path
-        when: "they've said a more balanced way to see it, and haven't been asked what one thing they'll focus on"
-        reply: "What would you like to do with that new way of seeing it?"
       - id: belief
         when: "they've said an action or intention but not yet a more balanced way to see it"
         reply: "Knowing both sides of it, what would you tell yourself now about that thought?"
-      - id: practice
-        when: "they've said a new belief and a general path, and haven't been asked where they could practise it"
-        reply: "What's one situation coming up where you could practise that?"
 ---
 
 # ABCDE

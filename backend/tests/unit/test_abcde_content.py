@@ -74,7 +74,9 @@ def test_the_worked_example_runs_a_to_e(abcde):
 
 
 def test_when_a_stage_counts_as_answered_keeps_the_clients_reading(abcde):
-    """Lolly, 2026-10-22: A counts only what happened as the event, and E accepts a commitment for next time."""
+    """Lolly, 2026-10-22: A counts only what happened as the event. E is the new belief alone (2026-11-18)."""
     stages = abcde["stages"]
     assert "rather than as their interpretation of it" in stages["activate"]["ready_when"]
-    assert "commitment for next time counts as the path" in stages["effective"]["ready_when"]
+    assert "is not the new belief" in stages["effective"]["ready_when"], (
+        "muhammad, 2026-11-18: E ends on the new belief, as the client's sequence document does")
+    assert "path" not in stages["effective"]["ready_when"]

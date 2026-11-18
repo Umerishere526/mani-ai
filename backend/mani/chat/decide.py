@@ -9,10 +9,10 @@ from dataclasses import dataclass, field
 
 from mani.chat import record as rec
 from mani.chat.greeting import CLOSING_KEEP_CHATTING_LABEL, FINISH_LABEL, GO_TO_LIBRARY_LABEL
-from mani.chat.repairs import lead_in_buttons, start_buttons
+from mani.chat.repairs import feelings_buttons, lead_in_buttons, start_buttons
 from mani.chat.reply import TurnReply
 from mani.chat.taps import TapEvent
-from mani.chat.techniques import OFFERING, STEPS, Registry, stages_of
+from mani.chat.techniques import FEELINGS, OFFERING, STEPS, Registry, stages_of
 from mani.llm.schema import LibrarySection, SmartPrompt
 from mani.models.rows import Framework, TechniqueOutcome, TechniqueState
 
@@ -86,6 +86,10 @@ def _started(base: Decision, reply: TurnReply, framework: Framework, thread_id, 
 
 def _moved(base: Decision, reply: TurnReply, framework: Framework, running: TechniqueState, end_check_due: bool,
            end_check_asked: bool) -> Decision:
+    if running.phase == FEELINGS:
+        # Their answer to how they feel, tapped or typed, closes the set.
+        return dataclasses.replace(base, finished=[*base.finished, framework.id], retire_technique=True,
+                                   prompts=closing_buttons())
     if reply.action == "stop":
         return dataclasses.replace(base, declined=[*base.declined, framework.id], technique=running.model_copy(
             update={"outcome": TechniqueOutcome.DECLINED, "phase": None}))
@@ -94,8 +98,8 @@ def _moved(base: Decision, reply: TurnReply, framework: Framework, running: Tech
     if on_last and (reply.action == "finish" or end_check_asked):
         if end_check_due and not end_check_asked:
             return dataclasses.replace(base, end_check=True)
-        return dataclasses.replace(base, finished=[*base.finished, framework.id], retire_technique=True,
-                                   prompts=closing_buttons())
+        return dataclasses.replace(base, technique=running.model_copy(update={"phase": FEELINGS}),
+                                   prompts=feelings_buttons())
     stage = stage_of(framework, reply.stage, running.phase)
     if stage is not None and stage != running.phase:
         return dataclasses.replace(base, technique=running.model_copy(update={"phase": stage}))

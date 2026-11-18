@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import re
 
-from mani.chat.greeting import EXAMPLE_LABEL, LEAD_IN_LABELS, TALK_MORE_FIRST_LABEL, start_label
+from mani.chat.greeting import EXAMPLE_LABEL, FEELINGS_LABELS, LEAD_IN_LABELS, TALK_MORE_FIRST_LABEL, start_label
 from mani.llm.schema import SmartPrompt
 from mani.models.rows import Framework
 
@@ -64,6 +64,11 @@ def clean_title(title: str | None) -> str | None:
 def lead_in_buttons() -> list[SmartPrompt]:
     """The client's three buttons under the lead-in; any of them shows the five steps."""
     return [SmartPrompt(label=label) for label in LEAD_IN_LABELS]
+
+
+def feelings_buttons() -> list[SmartPrompt]:
+    """The client's three answers to how they feel after the last stage."""
+    return [SmartPrompt(label=label) for label in FEELINGS_LABELS]
 
 
 def start_buttons(framework: Framework, *, with_example: bool) -> list[SmartPrompt]:

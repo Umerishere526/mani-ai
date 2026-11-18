@@ -6,7 +6,7 @@ from __future__ import annotations
 from mani.chat import record as rec
 from mani.chat.greeting import style_label
 from mani.chat.pause import ReturnCheck
-from mani.chat.techniques import STEPS, Registry, line_of, stages_of
+from mani.chat.techniques import FEELINGS, STEPS, Registry, line_of, stages_of
 from mani.db.threads import TurnContext
 from mani.models.rows import TechniqueState
 from mani.prompts import cache, composer
@@ -98,6 +98,10 @@ def _offer_line(framework, phase: str | None) -> str:
 
 
 def _running_line(framework, phase: str | None, *, held: bool) -> str:
+    if phase == FEELINGS:
+        return (f"{framework.name}'s last stage is done and your last reply asked how they feel now. Answer how they "
+                "feel, warmly, in a sentence or two (in Directive, one), and ask nothing: code closes the set and shows "
+                "the closing buttons.")
     stages = stages_of(framework)
     at = stages.index(phase) if phase in stages else 0
     if held:
@@ -106,7 +110,8 @@ def _running_line(framework, phase: str | None, *, held: bool) -> str:
         after = (f" If its purpose is met, move to `{stages[at + 1]}` and say its line: "
                  f"\"{line_of(framework, stages[at + 1])}\". Never move further than that.")
     else:
-        after = " It is the last stage: when it is answered, close and finish."
+        after = (" It is the last stage: when the new belief is said in their own words, acknowledge it, ask how they "
+                 "feel now, and set action to finish.")
     return (f"{framework.name} is running. You are on stage `{stages[at]}` (its line, already said: "
             f"\"{line_of(framework, stages[at])}\"). Stay on it while it helps.{after}")
 

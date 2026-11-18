@@ -61,10 +61,6 @@ def test_a_held_turn_never_invites_a_move_a_start_or_an_offer_that_code_would_re
     assert "You cannot offer" in owed, "a clear thread still owes the question about a pause"
 
 
-def test_the_last_stage_says_to_close_and_finish():
-    assert "close and finish" in facts_for(ctx(), running=running("abcde", "effective"))
-
-
 def test_the_notes_from_the_last_turn_are_handed_back():
     assert "Your notes from your last turn: boss, pushover" in facts_for(ctx(), record={"notes": "boss, pushover"})
 
@@ -100,3 +96,10 @@ def test_the_open_offer_line_says_which_step_is_showing():
     assert "five steps follow your reply" in lead_in and "starts it" not in lead_in
     steps = facts_for(ctx(), open_offer=offered("abcde", "steps"))
     assert "A clear yes in their words starts it" in steps and "action to stop" in steps
+
+
+def test_the_last_stage_asks_how_they_feel_and_the_check_in_asks_nothing():
+    last = facts_for(ctx(), running=running("abcde", "effective"))
+    assert "ask how they feel now" in last and "set action to finish" in last
+    check_in = facts_for(ctx(), running=running("abcde", "feelings_check"))
+    assert "how they feel" in check_in and "ask nothing" in check_in and "is for" not in check_in

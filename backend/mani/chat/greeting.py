@@ -56,6 +56,8 @@ COPIED_BACK = "It looks like you've sent my last message back to me. What did yo
 LEAD_IN_LABELS = ("Not sure", "Show me how", "Give me a tool")
 EXAMPLE_LABEL = "I need an example"
 TALK_MORE_FIRST_LABEL = "Talk more first"
+# How they feel after a framework's last stage, asked before the close (the client's sequence document, 2026-11-18).
+FEELINGS_LABELS = ("Stronger", "More focused", "Still a bit tired")
 # The three choices after a framework's last stage, in the client's words.
 CLOSING_KEEP_CHATTING_LABEL = "Keep Chatting"
 GO_TO_LIBRARY_LABEL = "Go to Library"
