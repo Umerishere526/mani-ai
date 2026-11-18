@@ -18,6 +18,10 @@ CRISIS_REPLY = (
 )
 # Where to get help, said wherever a message goes out unread for safety: an outage, or a refusal for a limit.
 IN_DANGER = "If you're in danger or thinking about hurting yourself, call 911 now, or call or text 988."
+# Added after Mani's text when code raised a body worry to danger that the model judged lower: a possible medical
+# emergency gets "call emergency services now" every time (muhammad, 2026-11-18). Wording is ours until the client
+# supplies hers.
+BODY_EMERGENCY = "If this is happening now, please call 911 or get to the nearest emergency room now."
 # What goes out when no host answered and no safety worry was open, so a first message about danger during an outage
 # still reaches the numbers (the design of 2026-11-17). Wording is ours until the client supplies hers.
 TROUBLE_REPLY = f"I'm having trouble replying right now, so please try again in a moment. {IN_DANGER}"

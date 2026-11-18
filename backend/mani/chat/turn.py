@@ -216,6 +216,8 @@ async def _apply(
     )
     text = (crisis.pause_reply(judgment.about, settings.crisis_pause_minutes) if judgment.pausing
             else crisis.END_CHECK if decision.end_check else reply.text)
+    if judgment.body_emergency and not judgment.pausing:
+        text = f"{text.rstrip()}\n\n{crisis.BODY_EMERGENCY}"
     text = without_dashes(text).strip()
     if not text:
         raise ServiceError(f"reply on thread {ctx.thread.id} was empty", ErrorCategory.LLM_UNAVAILABLE, retryable=True,
@@ -234,6 +236,7 @@ async def _apply(
     trace = {key: value for key, value in {
         "action": reply.action, "framework": reply.framework, "stage": reply.stage,
         "safety": judged_mod.traced(reply.safety), "paused": judgment.pausing or None,
+        "body_emergency": (judgment.body_emergency and not judgment.pausing) or None,
         "buttons": [p.label for p in decision.prompts], "latency_ms": call.latency_ms, "refused": decision.refused,
         "notes": reply.notes if settings.ai_debug_mode else None,
     }.items() if value not in (None, "", [], {})}

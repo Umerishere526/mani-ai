@@ -17,16 +17,17 @@ _RANK = {State.CLEAR: 0, State.UNSURE: 1, State.DANGER: 2}
 
 
 def danger_of(danger: str | None, about: str | None, symptom_now: str | None, *, reopening: bool = False) -> str | None:
-    """The model's judgment, except for a symptom in the body: it is danger now only when they said it is happening
-    now; until they say so it is unsure, which asks (Lolly's chest chat, replayed 2026-11-11: a tightening in the chest
-    was read as now and the emergency number went into four replies). A concern that already settled is reopened only by
-    their newest message saying so: the stroke chat, replayed 2026-11-11, flipped back to danger on "I am afraid of
-    losing him", read from the father's symptoms earlier."""
-    if about == "body" and danger in ("now", "unsure") and symptom_now != "yes" and reopening:
-        return "none"
-    if danger == "now" and about == "body" and symptom_now != "yes":
-        return "unsure"
-    return danger
+    """The model's judgment, except for a symptom in the body. One judged above none that they have not said stopped is
+    danger now: a possible medical emergency gets "call emergency services now" every time (muhammad, 2026-11-18, after
+    MiniMax held chest pain with a strange left arm at unsure in 7 of 30 runs); over-triggering is accepted. Their word
+    that it stopped holds it at unsure. A concern that already settled is reopened only by their newest message saying
+    it is happening: the stroke chat, replayed 2026-11-11, flipped back to danger on "I am afraid of losing him", read
+    from the father's symptoms earlier."""
+    if about != "body" or danger not in ("now", "unsure"):
+        return danger
+    if reopening:
+        return "now" if symptom_now == "yes" else "none"
+    return "unsure" if symptom_now == "no" else "now"
 
 
 # Whose danger a person is asked about once and then held to. A symptom in the body is not one: it is asked whether it

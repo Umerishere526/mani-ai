@@ -11,7 +11,7 @@ import streamlit as st
 # Each decision the turn writes, in the order a review asks them.
 _ORDER = (
     ("action", "Action"), ("framework", "Framework"), ("stage", "Stage"), ("safety", "Safety"),
-    ("paused", "Chat paused"), ("refused", "Code refused"), ("unanswered", "No host answered"),
+    ("paused", "Chat paused"), ("body_emergency", "Call-now line added"), ("refused", "Code refused"), ("unanswered", "No host answered"),
     ("buttons", "Buttons"), ("latency_ms", "Model time (ms)"), ("notes", "Mani's notes"),
 )
 _LABELS = dict(_ORDER)

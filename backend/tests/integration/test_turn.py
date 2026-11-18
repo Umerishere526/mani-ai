@@ -221,3 +221,36 @@ async def test_a_return_check_answer_that_is_fine_marks_the_pause_checked(alice,
     async with pool.as_admin() as conn:
         checked = await conn.fetchval("select checked_at is not null from public.chat_pauses where user_id = $1", ALICE)
     assert checked is True
+
+
+CHEST = Safety(level="unsure", about="body", symptom_now="unsaid")
+
+
+async def test_a_body_worry_the_model_held_lower_still_gets_call_now(alice, model):
+    """muhammad, 2026-11-18: a possible medical emergency gets "call emergency services now" every time; MiniMax held
+    chest pain with a strange left arm at unsure in 7 of 30 runs. The line comes once per rise, never every turn."""
+    model(said("That needs checking soon.", safety=CHEST), said("I'm here with you.", safety=CHEST))
+    thread = await start(alice)
+    first = await send(alice, thread.id, "my chest is tight and my left arm feels weird")
+    assert first.content.endswith("\n\n" + crisis.BODY_EMERGENCY)
+    assert (await thread_row(alice, thread.id)).safety == "danger"
+    second = await send(alice, thread.id, "it's probably just stress")
+    assert crisis.BODY_EMERGENCY not in second.content
+
+
+async def test_a_body_danger_the_model_judged_itself_goes_out_as_written(alice, model):
+    model(said("Call your emergency number now.", safety=Safety(level="danger", about="body", symptom_now="yes")))
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "my chest is crushing right now")
+    assert turn.content == "Call your emergency number now."
+
+
+async def test_a_pausing_body_turn_sends_only_the_pause_reply(alice, model):
+    now = Safety(level="danger", about="body", symptom_now="yes")
+    model(said("Call your emergency number now.", safety=now),
+          said("Okay.", safety=now.model_copy(update={"declined": True})))
+    thread = await start(alice)
+    await send(alice, thread.id, "my chest is crushing right now")
+    paused = await send(alice, thread.id, "no im not calling anyone")
+    assert paused.paused_until is not None
+    assert paused.content == crisis.pause_reply("body", 15) and crisis.BODY_EMERGENCY not in paused.content

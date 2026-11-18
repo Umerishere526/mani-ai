@@ -19,6 +19,8 @@ class Judged:
     pausing: bool
     about: str | None
     settled_now: bool
+    # Code raised this turn to danger on a body worry the model itself judged lower, so the reply gets the call-now line.
+    body_emergency: bool = False
 
 
 def danger_value(level: str) -> str:
@@ -45,7 +47,10 @@ def judge(
         is_return_check=return_check is not None, still_there=read.still_there,
     )
     settled_now = before is not safety.State.CLEAR and state_after is safety.State.CLEAR
-    return Judged(state_after=state_after, pausing=pausing, about=about, settled_now=settled_now)
+    body_emergency = (read.about == "body" and read.level != "danger" and state_after is safety.State.DANGER
+                      and before is not safety.State.DANGER)
+    return Judged(state_after=state_after, pausing=pausing, about=about, settled_now=settled_now,
+                  body_emergency=body_emergency)
 
 
 def safety_record(

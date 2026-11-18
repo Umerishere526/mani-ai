@@ -58,3 +58,12 @@ def test_the_record_keeps_whose_danger_was_reached_and_the_return_check_asked():
     after = safety_record({}, return_check=CHECK, answering_return=None, judged=j, read_about="themselves")
     assert after["danger_reached"] is True and after["danger_about"] == "themselves"
     assert after["return_check"] == {"pause": str(CHECK.pause_id), "state": "asked"}
+
+
+def test_code_raises_a_body_worry_the_model_held_lower_and_says_so():
+    """The call-now line is added only when code raised the turn: the model's own danger reply already says it."""
+    held_lower = Safety(level="unsure", about="body", symptom_now="unsaid")
+    raised = judged(State.CLEAR, held_lower)
+    assert raised.state_after is State.DANGER and raised.body_emergency is True
+    assert judged(State.CLEAR, Safety(level="danger", about="body", symptom_now="yes")).body_emergency is False
+    assert judged(State.DANGER, held_lower).body_emergency is False, "once per rise, never every turn"

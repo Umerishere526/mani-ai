@@ -56,15 +56,17 @@ def test_a_judgment_code_does_not_know_never_clears_a_concern():
     assert after(State.DANGER, "mostly fine", False) is State.DANGER
 
 
-def test_a_symptom_in_the_body_is_danger_only_when_they_said_it_is_happening_now():
-    """Lolly's chest chat, replayed 2026-11-11: "the pain is in my chest a tightening feeling" was read as happening now,
-    and Mani told her to call the emergency number four times. Not said is unsure, which asks."""
+def test_a_body_worry_that_has_not_stopped_is_danger_now():
+    """muhammad, 2026-11-18: a possible medical emergency gets "call emergency services now" every time, no exceptions,
+    and over-triggering is accepted. MiniMax held "my chest is tight and painful right now and my left arm feels weird"
+    at unsure in 7 of 30 runs that day. Only their word that it stopped holds it below danger."""
     assert danger_of("now", "body", "yes") == "now"
-    assert danger_of("now", "body", "unsaid") == "unsure"
-    assert danger_of("now", "body", None) == "unsure"
-    assert danger_of("now", "body", "no") == "unsure"
-    assert danger_of("now", "themselves", None) == "now", "only a symptom in the body waits for their word"
-    assert danger_of("none", "body", None) == "none"
+    assert danger_of("now", "body", "unsaid") == "now"
+    assert danger_of("unsure", "body", "unsaid") == "now"
+    assert danger_of("unsure", "body", None) == "now"
+    assert danger_of("now", "body", "no") == "unsure", "they said it stopped"
+    assert danger_of("none", "body", "unsaid") == "none"
+    assert danger_of("now", "themselves", None) == "now"
 
 
 def test_a_settled_symptom_reopens_only_when_their_newest_message_says_it_is_happening():
@@ -74,4 +76,4 @@ def test_a_settled_symptom_reopens_only_when_their_newest_message_says_it_is_hap
     assert danger_of("now", "body", "unsaid", reopening=True) == "none"
     assert danger_of("unsure", "body", None, reopening=True) == "none"
     assert danger_of("now", "themselves", None, reopening=True) == "now", "only a symptom in the body waits for their word"
-    assert danger_of("now", "body", "unsaid") == "unsure", "a concern that never settled still asks"
+    assert danger_of("now", "body", "unsaid") == "now", "a worry that never settled gets the number"
