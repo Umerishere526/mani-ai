@@ -1,3 +1,9 @@
+---
+type: journal
+date: 2026-11-06
+tags: [journal, supabase, privileges, migrations]
+summary: "Supabase's default privileges made a fresh project unsafe; migrations now turn them off and the harness reproduces them."
+---
 2026-11-06
 
 # Supabase's default privileges made a fresh project unsafe

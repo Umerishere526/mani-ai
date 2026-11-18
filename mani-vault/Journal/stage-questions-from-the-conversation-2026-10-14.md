@@ -2,6 +2,9 @@
 type: journal
 date: 2026-10-14
 tags: [journal, abcde, stages, voice, lessons]
+summary: "A missing stage is asked about the person's situation; the client's stage question sent verbatim confused people."
+failed:
+  - "Tried sending the client's stage question word for word; failed because the person answered 'regarding?'."
 ---
 
 # A missing stage is asked about their situation (2026-10-14)

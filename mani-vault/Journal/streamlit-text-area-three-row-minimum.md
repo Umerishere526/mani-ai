@@ -3,6 +3,9 @@ type: journal
 date: 2026-10-07
 apps: [chat-tester]
 tags: [journal, chat-tester, streamlit]
+summary: "Streamlit's text_area never renders under three rows; field-sizing: content sizes it to its text."
+failed:
+  - "Tried overriding min-height alone; failed because the textarea's height comes from rows."
 ---
 
 # Streamlit's text_area never renders under three rows

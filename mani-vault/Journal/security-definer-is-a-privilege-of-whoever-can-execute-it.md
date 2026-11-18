@@ -3,6 +3,9 @@ type: journal
 date: 2026-09-16
 apps: [backend]
 tags: [journal, security, postgres, rls, code-review]
+summary: "Any signed-in user could forge Mani's side of a conversation through an executable security definer function."
+failed:
+  - "Tried a reviewer's fix exc.errors(include_input=False); failed because FastAPI's errors() takes no arguments."
 ---
 
 # A security definer function is a privilege held by whoever may EXECUTE it

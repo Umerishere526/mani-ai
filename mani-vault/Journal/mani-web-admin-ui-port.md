@@ -3,6 +3,7 @@ type: journal
 date: 2026-09-15
 apps: [web]
 tags: [journal, web, design-system, port]
+summary: "Ported mani-app's admin dashboard UI into web/, UI layer only; the reference backend was a Next.js app."
 ---
 
 # Porting mani-app's admin dashboard UI into web/ (UI layer only, no API)

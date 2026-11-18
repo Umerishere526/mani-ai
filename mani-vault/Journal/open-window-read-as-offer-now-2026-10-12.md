@@ -2,6 +2,9 @@
 type: journal
 date: 2026-10-12
 tags: [journal, offers, abcde, prompts, lessons]
+summary: "An open offer window was read as 'offer now': ABCDE was offered at the third message before any feeling was said."
+failed:
+  - "Tried opening the offer window at the third message; failed because the model read open as offer now (18 of 18)."
 ---
 > Superseded 2026-10-13 (the window and its `open` and `due` values are gone; [ctx] sends `check: may_check` or `check: open`) — see [[client-sample-voice-and-confirmed-check-2026-10-13]]
 > Superseded 2026-10-12 — see [[general-judgment-over-case-patches-2026-10-12]] (the fit wording and the scenario: replaced by the slot test and the behavior groups)

@@ -2,6 +2,9 @@
 type: journal
 date: 2026-10-14
 tags: [journal, abcde, stages, schema, lessons]
+summary: "The stage the walk reaches is judged in its own field so feelings and evidence said earlier are not asked again."
+failed:
+  - "Tried scoping the stage reach to what was said since the confirmed check; failed because an earlier feeling was missed."
 ---
 > Superseded 2026-11-17 (the stage the walk reaches, judged in its own field: the reply's stage, held to one step by code) — see [[flat-replies-were-the-model-2026-11-17]]
 

@@ -2,6 +2,9 @@
 type: journal
 date: 2026-11-17
 tags: [journal, model, prompt, cost, latency, spike]
+summary: "Flat replies came from the model, not the prompt: prompt changes stopped helping while bare API models wrote short."
+failed:
+  - "Tried prompt changes to close the gap with ChatGPT; failed because they stopped moving it and the model was the cause."
 ---
 
 # Flat replies were the model, not the prompt

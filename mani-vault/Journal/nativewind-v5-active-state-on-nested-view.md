@@ -3,6 +3,9 @@ type: journal
 date: 2026-09-16
 apps: [mobile]
 tags: [journal, mobile, nativewind, gotcha, tailwind-content-scanning]
+summary: "Two NativeWind gotchas: active: on a child View breaks Pressable's onPress, and dynamic class strings emit no CSS."
+failed:
+  - "Tried active: styling on a child View inside a Pressable; failed because it broke the Pressable's onPress."
 ---
 
 # Two NativeWind gotchas: `active:` on a child View breaks Pressable's onPress, and dynamic class strings never generate CSS

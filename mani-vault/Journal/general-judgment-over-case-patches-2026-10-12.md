@@ -2,6 +2,7 @@
 type: journal
 date: 2026-10-12
 tags: [journal, prompts, offers, design, lessons]
+summary: "About 1,000 of 6,000 static prompt tokens were case patches or contradictions; the prompt was cut to general judgment."
 ---
 > Superseded 2026-10-13 (the slot test fit rule and `due` checking understanding: the fit line now comes from the client's cheat sheet and the check gates the offer) — see [[client-sample-voice-and-confirmed-check-2026-10-13]]
 > Superseded 2026-10-13 ("Finding the fit" and `to_find_out`: removed, one question rule instead) — see [[running-understanding-and-one-question-rule-2026-10-13]]

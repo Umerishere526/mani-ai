@@ -3,6 +3,9 @@ type: journal
 date: 2026-11-13
 apps: [backend, chat-tester]
 tags: [journal, threads, api, lessons]
+summary: "A conversation is created by its first message; page loads and style taps no longer write threads."
+failed:
+  - "Tried creating a thread on page load and New conversation; failed because a style tap alone counted as a spoken thread."
 ---
 
 # A conversation is created by its first message (2026-11-13)

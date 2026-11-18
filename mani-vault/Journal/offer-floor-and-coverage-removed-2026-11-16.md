@@ -1,3 +1,9 @@
+---
+type: journal
+date: 2026-11-16
+tags: [journal, offers, spec-0008, conversation]
+summary: "The offer floor, coverage gate and gap lines were removed together; one rule remains: the heart said back uncorrected."
+---
 > Superseded 2026-11-17 (the one code rule on when Mani may offer, once the heart of it was said back: the prompt holds it) — see [[flat-replies-were-the-model-2026-11-17]]
 > Superseded 2026-11-16 (the due naming and the due move were removed with the areas: both are back, driven by what the reply itself reports) — see [[enough-is-a-field-and-the-push-came-back-2026-11-16]]
 

@@ -1,3 +1,9 @@
+---
+type: journal
+date: 2026-11-03
+tags: [journal, endings, repeats, cadence]
+summary: "Endings and repeats from two reviews: our own 'another time' close, agreement detection and near-match repeats."
+---
 > Superseded 2026-11-17 (the close carrying the body check-in question: the body check-in is deleted) — see [[flat-replies-were-the-model-2026-11-17]]
 # Endings and repeats, from two reviews
 

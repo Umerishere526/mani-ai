@@ -2,6 +2,7 @@
 type: journal
 date: 2026-11-11
 tags: [journal, deploy, vercel, supabase, safety, lessons]
+summary: "Deploy check of the safety branch: renaming stored values is a three-part release and merging to main deploys."
 ---
 
 # Deploy check of the safety branch (2026-11-11)

@@ -2,6 +2,7 @@
 type: journal
 date: 2026-11-16
 tags: [journal, cadence, safety, framework, design, client-test]
+summary: "Lolly's tests read as three characters; one cause behind all three, drafted as spec 0008 (one conversation)."
 ---
 > Superseded 2026-11-17 (moments, and every reply ending on a question: one call with no moments, and a question only when it helps) — see [[flat-replies-were-the-model-2026-11-17]]
 

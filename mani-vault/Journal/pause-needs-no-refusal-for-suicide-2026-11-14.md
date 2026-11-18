@@ -3,6 +3,9 @@ type: journal
 date: 2026-11-14
 apps: [backend]
 tags: [journal, safety, crisis, pause, lessons]
+summary: "The crisis pause needs no refusal for suicide, harm to others or a threat; honest answers must still pause."
+failed:
+  - "Tried requiring a refusal for every kind of danger; failed because a person answering honestly never paused."
 ---
 
 # The pause needs no refusal for suicide, harm to others or a threat (2026-11-14)

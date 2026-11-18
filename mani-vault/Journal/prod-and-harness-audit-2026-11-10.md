@@ -1,3 +1,9 @@
+---
+type: journal
+date: 2026-11-10
+tags: [journal, audit, production, design]
+summary: "Read-only audit of production and the harness: the data points at the design as the suspect; proposals undecided."
+---
 2026-11-10
 
 # Production and harness audit: what the data says, and that the design is the suspect

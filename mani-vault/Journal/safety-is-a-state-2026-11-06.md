@@ -2,6 +2,9 @@
 type: journal
 date: 2026-11-06
 tags: [journal, safety, state, client-test]
+summary: "Safety is a state the conversation holds: manasa's test showed four failures that looked like one."
+failed:
+  - "Tried screening each message alone with a one-reply hold; failed because the next message was ordinary chat again."
 ---
 
 > Superseded 2026-11-13 — see [[crisis-pause-audit-findings-2026-11-13]] (nothing locks by default: danger that continues with nothing in place pauses the chat)

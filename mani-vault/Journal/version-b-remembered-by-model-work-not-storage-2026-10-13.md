@@ -2,6 +2,7 @@
 type: journal
 date: 2026-10-13
 tags: [journal, frameworks, stages, memory, client]
+summary: "Version B felt like it remembered through more model work, not storage; the architecture review found no extra store."
 ---
 
 # Version B remembered by doing more model work, not by storing anything

@@ -3,6 +3,7 @@ type: journal
 date: 2026-11-14
 apps: [backend, chat-tester]
 tags: [journal, library, feedback, streamlit, worktree]
+summary: "Library feedback was built beside another session; avoid the shared test database container and migration number clash."
 ---
 
 # Library feedback, built beside another session

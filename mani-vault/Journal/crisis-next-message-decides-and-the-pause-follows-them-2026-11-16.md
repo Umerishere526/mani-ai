@@ -3,6 +3,7 @@ type: journal
 date: 2026-11-16
 apps: [backend, chat-tester]
 tags: [journal, safety, crisis, pause, prompts, lessons]
+summary: "Once a crisis is found the next message decides, and what a pause was about follows the person."
 ---
 2026-11-16
 

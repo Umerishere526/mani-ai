@@ -3,6 +3,9 @@ type: journal
 date: 2026-10-09
 apps: [chat-tester]
 tags: [journal, chat-tester, streamlit]
+summary: "st.chat_input has a mic and can be filled from code, so the hand-built composer was needless."
+failed:
+  - "Tried a hand-built composer because chat_input could not be seeded; failed because that belief was false and unchecked."
 ---
 
 # st.chat_input has a mic and can be filled from code

@@ -3,6 +3,7 @@ type: journal
 date: 2026-11-13
 apps: [backend]
 tags: [journal, supabase, rls, account-deletion, lessons]
+summary: "A user delete's foreign-key cascade runs as the table owner, so dropping the policy or grant cannot fail the test."
 ---
 
 # Account deletion cascades run as the table owner (2026-11-13)

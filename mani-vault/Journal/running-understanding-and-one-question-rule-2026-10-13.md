@@ -2,6 +2,9 @@
 type: journal
 date: 2026-10-13
 tags: [journal, prompts, questions, memory, lessons]
+summary: "A running understanding and one question rule replace a checklist that steered questions toward ABCDE's needs."
+failed:
+  - "Tried the to_find_out checklist plus bans on saying feelings back; failed because the feeling was never held."
 ---
 
 > Superseded 2026-10-26 (the steps before the check and the record's step fields) - see [[heart-of-it-replaces-the-three-steps-2026-10-26]].

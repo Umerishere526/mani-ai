@@ -3,6 +3,7 @@ type: journal
 date: 2026-11-13
 apps: [chat-tester]
 tags: [journal, streamlit, audio, supabase-storage]
+summary: "Exercise audio speed lives in the browser: st.audio has no speed option in 1.64, so stories get a custom player."
 ---
 
 # Exercise audio speed lives in the browser

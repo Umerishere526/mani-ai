@@ -3,6 +3,7 @@ type: journal
 date: 2026-09-11
 apps: [mobile, web, backend]
 tags: [journal, tooling, claude-code]
+summary: "Claude Code reads project settings only from the session's working directory; nested .claude/ folders are ignored."
 ---
 
 # Claude Code settings load from the working directory only

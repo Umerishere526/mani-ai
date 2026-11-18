@@ -2,6 +2,7 @@
 type: journal
 date: 2026-10-12
 tags: [journal, offers, repairs, design, lessons]
+summary: "A '?' inside a quoted phrase made code drop a valid offer's buttons and leave the framework inactive."
 ---
 
 # A quoted question cost a valid offer (2026-10-12)

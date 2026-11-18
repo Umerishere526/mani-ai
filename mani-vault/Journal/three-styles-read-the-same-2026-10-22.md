@@ -2,6 +2,7 @@
 type: journal
 date: 2026-10-22
 tags: [journal, prompts, styles, voice, lessons]
+summary: "The three styles read the same because one shared sample voice went to all; the example and blending line were removed."
 ---
 
 > Superseded 2026-10-26 (no example conversation in any style file: Directive now carries Lolly's two ChatGPT chats) - see [[heart-of-it-replaces-the-three-steps-2026-10-26]].

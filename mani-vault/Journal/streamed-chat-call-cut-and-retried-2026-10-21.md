@@ -2,6 +2,7 @@
 type: journal
 date: 2026-10-21
 tags: [journal, latency, streaming, reasoning, lessons]
+summary: "504s at effort medium came from thinking time, so the chat call is streamed, cut on silence and retried."
 ---
 > Superseded 2026-11-05 (the 30 s deadline, now 45 s) - see [[latency-where-the-wait-goes-2026-11-05]]
 

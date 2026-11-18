@@ -3,6 +3,9 @@ type: journal
 date: 2026-11-13
 apps: [backend, chat-tester]
 tags: [journal, safety, crisis, pause, audit, lessons]
+summary: "The danger instruction was picked before the model judged and reached no turn; one shared text now goes to every turn."
+failed:
+  - "Tried picking the safety instruction before the model judged; failed because the danger instruction reached no turn."
 ---
 > Superseded 2026-11-13 — see [[crisis-pause-fires-on-refusal-2026-11-13]] (the turn loading only its own pause first, and a doubt in a chest chat pausing)
 

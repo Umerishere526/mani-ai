@@ -1,3 +1,9 @@
+---
+type: journal
+date: 2026-11-06
+tags: [journal, worktrees, database, testing]
+summary: "Worktrees share one local database, so one branch's data and migrations changed what another branch saw."
+---
 2026-11-06
 
 # Worktrees share one local database

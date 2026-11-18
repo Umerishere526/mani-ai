@@ -2,6 +2,9 @@
 type: journal
 date: 2026-10-07
 tags: [journal, prompts, frameworks, decisions]
+summary: "Prompt restructure: shorter YAML-style prompts with a held style, from about 15,000 static tokens."
+failed:
+  - "Tried an output budget sized for the reply alone at effort high; failed because thinking used 1,955 of 2,048 tokens."
 ---
 > Superseded 2026-10-13 (`questions` steering toward Finding the fit) — see [[running-understanding-and-one-question-rule-2026-10-13]]
 > Superseded 2026-10-09 (Choosing a framework, Synonyms) — see [[router-removed-model-chooses-the-framework-2026-10-09]]

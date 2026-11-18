@@ -3,6 +3,9 @@ type: journal
 date: 2026-11-13
 apps: [backend]
 tags: [journal, safety, crisis, pause, lessons]
+summary: "The crisis pause fired on flipped help_in_place reads; it now keys on a refusal."
+failed:
+  - "Tried gating the pause on one help_in_place judgment; failed because it flipped on short lines and paused wrongly."
 ---
 > Superseded 2026-11-14 — see [[pause-needs-no-refusal-for-suicide-2026-11-14]] (the refusal as a gate for every kind of danger; it stays for the body)
 

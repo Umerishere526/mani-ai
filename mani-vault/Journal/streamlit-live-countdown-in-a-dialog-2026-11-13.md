@@ -3,6 +3,7 @@ type: journal
 date: 2026-11-13
 apps: [chat-tester]
 tags: [journal, streamlit, chat-tester, crisis, pause, lessons]
+summary: "An st.fragment with run_every inside an st.dialog ticks live; st.rerun from it reruns the whole page."
 ---
 
 # A live countdown inside a Streamlit dialog (2026-11-13)

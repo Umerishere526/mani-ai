@@ -1,3 +1,11 @@
+---
+type: journal
+date: 2026-11-16
+tags: [journal, evals, scenarios, reliability]
+summary: "One failed model call lost a whole scenario run because a plain asyncio.gather aborted before anything was saved."
+failed:
+  - "Tried a plain asyncio.gather over scenario conversations; failed because one error closed the pool and saved nothing."
+---
 2026-11-16
 
 # One failed model call lost a whole scenario run

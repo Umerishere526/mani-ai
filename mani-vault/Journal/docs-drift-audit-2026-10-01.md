@@ -2,6 +2,7 @@
 type: journal
 date: 2026-10-01
 tags: [journal, documentation, lessons]
+summary: "An audit of project docs against code found about thirty stale statements; the 'where facts live' table came out."
 ---
 
 # Documentation drift: what an audit found and the rule it produced

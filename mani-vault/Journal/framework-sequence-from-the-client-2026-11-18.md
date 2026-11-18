@@ -2,6 +2,7 @@
 type: journal
 date: 2026-11-18
 tags: [journal, framework, client, offer, eval, lessons]
+summary: "The framework follows the client's sequence document: a lead-in, her five steps verbatim, and one reply per letter."
 ---
 
 # The framework runs the way the client's sequence document shows

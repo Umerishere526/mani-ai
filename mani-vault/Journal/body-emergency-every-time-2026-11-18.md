@@ -2,6 +2,9 @@
 type: journal
 date: 2026-11-18
 tags: [journal, safety, model, eval, lessons]
+summary: "A possible medical emergency gets 'call now' every time from code; the gate drop was the model's day-to-day drift."
+failed:
+  - "Tried a conditional wording of the chest prompt line; failed because it made no measurable difference (2/9 against 1/9)."
 ---
 
 # A possible medical emergency gets "call now" every time, from code

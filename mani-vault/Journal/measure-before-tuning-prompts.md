@@ -2,6 +2,9 @@
 type: journal
 date: 2026-09-23
 tags: [journal, prompts, evals, lessons]
+summary: "Measure before tuning prompts: one stochastic eval run is noise, so run each scenario three times before and after."
+failed:
+  - "Tried a style check in the reasoning steps; failed because it did nothing, raised latency, and was reverted."
 ---
 > Superseded 2026-11-05 — see [[read-think-write-2026-11-05]] (the fold's `FOR NO KEY UPDATE` claim: the fold no longer claims a thread or holds a connection across its model call)
 

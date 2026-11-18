@@ -1,3 +1,9 @@
+---
+type: journal
+date: 2026-10-27
+tags: [journal, frameworks, content, gotchas]
+summary: "A commit dropped the confirm_phrases that walk.py still reads; content keys read by code need a load-time check."
+---
 > Superseded 2026-11-17 (the framework's confirm phrases: no longer read, and the column is dropped) — see [[flat-replies-were-the-model-2026-11-17]]
 # Confirm phrases dropped with no stage asking (2026-10-27)
 

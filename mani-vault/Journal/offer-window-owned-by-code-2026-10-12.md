@@ -2,6 +2,9 @@
 type: journal
 date: 2026-10-12
 tags: [journal, offers, cadence, design, lessons]
+summary: "Lolly's Direct test got ABCDE on her first message; the offer window is now owned by code."
+failed:
+  - "Tried offering a framework as soon as it fits; failed because ABCDE was offered on the person's first message."
 ---
 > Superseded 2026-11-17 (when and how an offer is made, owned by code: the model writes the offer and code adds the buttons) — see [[flat-replies-were-the-model-2026-11-17]]
 > Superseded 2026-10-13 (the message count window: an offer now comes only on a yes to Mani's check, spec 0006) — see [[client-sample-voice-and-confirmed-check-2026-10-13]]

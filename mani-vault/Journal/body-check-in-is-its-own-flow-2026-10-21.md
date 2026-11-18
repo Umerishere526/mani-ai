@@ -2,6 +2,9 @@
 type: journal
 date: 2026-10-21
 tags: [journal, somatic, body, misread, lessons]
+summary: "The body check-in belongs at the end of a framework, not mid-chat; the mid-chat trigger was removed."
+failed:
+  - "Tried firing the body question on any typed feeling word mid-chat; failed because it asked about the chest too early."
 ---
 > Superseded 2026-11-17 (the body check-in: deleted) — see [[flat-replies-were-the-model-2026-11-17]]
 

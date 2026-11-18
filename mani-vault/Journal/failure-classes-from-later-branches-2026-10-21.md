@@ -1,3 +1,9 @@
+---
+type: journal
+date: 2026-10-21
+tags: [journal, branches, process, lessons]
+summary: "Failure classes from the abandoned later branches: case patches, prompt growth, specs ahead of data, layout churn."
+---
 2026-10-21
 
 # Why the later branches went off the rails, and what stops it recurring

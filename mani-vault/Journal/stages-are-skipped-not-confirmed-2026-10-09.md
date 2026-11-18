@@ -2,6 +2,9 @@
 type: journal
 date: 2026-10-09
 tags: [journal, frameworks, stages, dialog-management]
+summary: "A stage the conversation already answers is skipped, never confirmed; the Not sure button and chat labels were removed."
+failed:
+  - "Tried a Not sure button that skips stages; failed because its taps skipped stages the person had not answered."
 ---
 > Superseded 2026-10-13 — see [[abcde-walk-owned-by-code-2026-10-13]] (a stage already answered is now said back and confirmed once, each letter is named, and code owns the step and the store)
 > Superseded 2026-10-12 — see [[one-call-turns-at-low-effort-2026-10-12]] (a draft whose step disagrees with its ledger is redrafted once, and `redraft.stayed_on`: the step is now set from the ledger, with no second call)

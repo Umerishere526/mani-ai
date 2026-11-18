@@ -2,6 +2,9 @@
 type: journal
 date: 2026-10-12
 tags: [journal, latency, redraft, effort, design, lessons]
+summary: "A turn is one model call at low effort; the high-effort draft, judge and redraft loop cost up to three calls."
+failed:
+  - "Tried effort high plus judging and redrafting in code; failed because the median turn took 12.6 s and the slowest 41 s."
 ---
 > Superseded 2026-11-17 (the corrections code made to a reply's text in reply_checks and repairs: code only takes out dashes) — see [[flat-replies-were-the-model-2026-11-17]]
 > Superseded 2026-10-13 (only the step set from the reply's ledger by `with_ledger_step`; code now steps the walk) — see [[abcde-walk-owned-by-code-2026-10-13]]

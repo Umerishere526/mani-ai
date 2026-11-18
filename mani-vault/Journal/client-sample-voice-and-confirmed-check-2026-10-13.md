@@ -2,6 +2,9 @@
 type: journal
 date: 2026-10-13
 tags: [journal, prompts, offers, client, lessons]
+summary: "The client's sample voice breaks our earlier banning rules; the newer document wins and its replies became the example."
+failed:
+  - "Tried a stored open/confirmed/declined state for the check; failed because chats could stick with no way to an offer."
 ---
 
 > Superseded 2026-10-26 (the check after the problem, core issue and control or feeling; it now comes on a ready heart of it from their 5th message) - see [[heart-of-it-replaces-the-three-steps-2026-10-26]].

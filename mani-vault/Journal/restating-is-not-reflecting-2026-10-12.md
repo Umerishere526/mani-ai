@@ -2,6 +2,7 @@
 type: journal
 date: 2026-10-12
 tags: [journal, prompts, reflecting, questions, lessons]
+summary: "Restating is not reflecting: Mani handed the person's feeling back; Directive no longer restates."
 ---
 > Superseded 2026-10-13 (the reflecting ban on handing their words or feelings back: replaced by one question rule that lets their feeling word come back inside a question, never as a statement) — see [[running-understanding-and-one-question-rule-2026-10-13]]
 

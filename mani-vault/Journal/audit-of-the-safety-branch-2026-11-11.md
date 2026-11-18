@@ -2,6 +2,9 @@
 type: journal
 date: 2026-11-11
 tags: [journal, safety, cadence, testing, lessons]
+summary: "Audit of the safety branch: prompt layers contradicted each other and 'ask twice' made the model ask forever."
+failed:
+  - "Tried telling the model to ask once more; failed because it asked in every reply and cannot count its questions."
 ---
 > Superseded 2026-11-18 (a body symptom held at unsure until they say it is now) — see [[body-emergency-every-time-2026-11-18]]
 

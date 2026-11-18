@@ -1,3 +1,11 @@
+---
+type: journal
+date: 2026-10-28
+tags: [journal, core-issue, heart, chat]
+summary: "The core, not the symptom: Mani named what the core leads to because the heart field fit only two-pull stories."
+failed:
+  - "Tried a heart field shaped as torn between, wants and stopping them; failed because it named what the core leads to."
+---
 # The core, not the symptom (2026-10-28)
 
 muhammad ran the weight-loss case in Directive. Every line of Mani's check came from her, and she said yes, yet the

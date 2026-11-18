@@ -3,6 +3,7 @@ type: journal
 date: 2026-09-14
 apps: [mobile]
 tags: [journal, mobile, design-system, port]
+summary: "Ported mani-app's mobile UI into mobile/ (Expo 57, NativeWind v5), UI layer only; some early assumptions proved wrong."
 ---
 > Superseded 2026-10-12 (the NativewindReanimatedSpike paragraph: the spike was deleted) — see [[knip-false-positives]]
 
