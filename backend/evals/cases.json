@@ -582,7 +582,15 @@
     },
     {
      "role": "assistant",
-     "content": "There's a set of questions called ABCDE that can help you look at the belief that saying no makes you a pushover, what supports it, and whether there's a more balanced way to see it. Would you like to try it?"
+     "content": "You've said that saying no makes you a pushover. A belief can feel true and still not be a fact. How could you test it?"
+    },
+    {
+     "role": "user",
+     "content": "Not sure"
+    },
+    {
+     "role": "assistant",
+     "content": "The ABCDE technique can really help. It breaks down thoughts into five steps:\n\n- A: Activating event (what happened)\n- B: Belief (what did your mind start saying)\n- C: Consequences (what did you feel or do)\n- D: Dispute (how can you challenge this belief)\n- E: Effective new belief (What kind of belief could you hold instead)\n\nReady to dive into a real life situation?"
     },
     {
      "role": "user",

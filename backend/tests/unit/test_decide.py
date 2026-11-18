@@ -145,7 +145,7 @@ def test_stage_of_reads_only_the_frameworks_own_stages():
 
 def test_a_typed_reply_to_the_lead_in_gets_the_five_steps_and_the_start_buttons():
     """muhammad, 2026-11-18: most people type an answer to the lead-in's question; it gets the reply, then the steps."""
-    d = decided(reply(), open_offer=offered("abcde"))
+    d = decided(reply(), open_offer=offered("abcde"), count_after=6)
     assert d.show_steps.id == "abcde" and labels(d) == ["Start ABCDE", "I need an example", "Talk more first"]
     assert d.technique.outcome is TechniqueOutcome.OFFERED and d.technique.phase == "steps" and d.declined == []
 
@@ -159,3 +159,12 @@ def test_a_guarded_turn_at_either_step_of_the_offer_moves_nothing():
     for phase in ("offering", "steps"):
         d = decided(reply(), open_offer=offered("abcde", phase), guarded=True)
         assert (d.show_steps, d.technique, d.retire_technique, d.prompts) == (None, None, False, []), phase
+
+
+def test_a_lead_in_that_is_no_longer_the_last_reply_lapses_instead_of_showing_the_steps():
+    """The final review, 2026-11-18: after a safety exchange, the first ordinary message got the five steps pushed."""
+    stale = offered("abcde").model_copy(update={"at_message_count": 4})
+    d = decided(reply(), open_offer=stale, count_after=10)
+    assert d.show_steps is None and d.retire_technique and d.prompts == []
+    fresh = offered("abcde").model_copy(update={"at_message_count": 8})
+    assert decided(reply(), open_offer=fresh, count_after=10).show_steps.id == "abcde"

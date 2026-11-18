@@ -75,6 +75,11 @@ def tap_event(tapped: SmartPrompt | None, registry: Registry, open_offer: Techni
             f"They tapped to start {offered.name}. Your reply opens its first stage, `{first}`, with its line "
             f"\"{line_of(offered, first)}\" and that stage's question, even if the chat already touched it."
         ))
+    if offered is not None and tapped.decline:
+        # A Keep chatting button stored before the client's sequence (2026-11-18) meant no for now.
+        return TapEvent(set_aside=True, fact=(
+            f"They chose to keep talking instead of trying {offered.name}. Carry on with them; you may offer it again "
+            "later when it fits."))
     if offered is not None and label in LEAD_IN:
         return TapEvent(explain=offered)
     if offered is not None and label == EXAMPLE:

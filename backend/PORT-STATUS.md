@@ -132,8 +132,8 @@ the same change as the work.**
   joined text, and the turn's module took 81 commits in 2.5 months (2026-11-17). Design:
   `../docs/superpowers/specs/2026-11-17-one-call-conversation-design.md`; journal:
   `mani-vault/Journal/flat-replies-were-the-model-2026-11-17.md`. Code guarantees only:
-  - the client's fixed pieces, sent whole: the greeting, the style question and openers, the return opener, Tell me
-    more's explanation per style with "Would you like to try it?", every button label, `crisis.CRISIS_REPLY`,
+  - the client's fixed pieces, sent whole: the greeting, the style question and openers, the return opener, the five
+    steps per style and the worked example, every button label, `crisis.CRISIS_REPLY`,
     `crisis.pause_reply`, `crisis.END_CHECK` and `greeting.COPIED_BACK`;
   - an offer only when it is allowed, as the client's three steps with their buttons (`decide._offer`,
     `decide._answered_offer`);

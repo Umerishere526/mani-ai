@@ -72,8 +72,8 @@ def facts(
         lines.append(NO_OFFER)
     lines += _pause_lines(ctx, return_check, answering_return)
     if end_check_asked:
-        lines.append("You asked the safety question after the last stage. If their answer settles it, close the set "
-                     "now in two or three warm sentences and set action to finish.")
+        lines.append("You asked the safety question after the last stage. If their answer settles it, acknowledge it, "
+                     "ask how they feel now about what they worked through, and set action to finish.")
     if event:
         lines.append(event)
     if wants_title:
@@ -98,10 +98,13 @@ def _offer_line(framework, phase: str | None) -> str:
 
 
 def _running_line(framework, phase: str | None, *, held: bool) -> str:
+    if phase == FEELINGS and held:
+        return (f"{framework.name}'s last stage is done and you asked how they feel. This reply is about their safety: "
+                "answer that first. The set stays open and nothing closes now.")
     if phase == FEELINGS:
-        return (f"{framework.name}'s last stage is done and your last reply asked how they feel now. Answer how they "
-                "feel, warmly, in a sentence or two (in Directive, one), and ask nothing: code closes the set and shows "
-                "the closing buttons.")
+        return (f"{framework.name}'s last stage is done and you asked how they feel now. Answer how they feel, warmly, "
+                "in a sentence or two (in Directive, one), and ask nothing: code closes the set and shows the closing "
+                "buttons.")
     stages = stages_of(framework)
     at = stages.index(phase) if phase in stages else 0
     if held:

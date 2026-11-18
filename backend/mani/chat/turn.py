@@ -180,7 +180,8 @@ async def _turn(
     held = holding and not end_check_asked
     told = facts.facts(
         ctx, config, record=record, style=style_name, running=running if held or not tap.starting else None,
-        open_offer=open_offer, event=facts.HELD_START if held and tap.starting else tap.fact, wants_title=wants_title,
+        open_offer=open_offer if open_offer is None or decide_mod.offer_current(open_offer, ctx.thread.message_count)
+        else None, event=facts.HELD_START if held and tap.starting else tap.fact, wants_title=wants_title,
         return_check=check, answering_return=answering, end_check_asked=end_check_asked, holding=held,
     )
     model, parameters, routing = composer.model_settings(config, "mani")

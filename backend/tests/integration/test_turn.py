@@ -306,7 +306,7 @@ async def test_an_offer_they_moved_past_is_no_longer_open_and_its_old_button_sta
     await send(alice, thread.id, "Not sure")
     await send(alice, thread.id, "actually can we talk about my sister")
     await send(alice, thread.id, "she never calls")
-    assert "Your last reply offered" not in facts_of(scripted)
+    assert "lead-in to ABCDE" not in facts_of(scripted) and "five steps are showing" not in facts_of(scripted)
     await send(alice, thread.id, "Start ABCDE")
     technique = await technique_of(alice, thread.id)
     assert technique is None or technique.outcome is not TechniqueOutcome.ACCEPTED, "an old button starts nothing"

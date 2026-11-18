@@ -42,6 +42,13 @@ def stage_of(framework: Framework, reported: str | None, current: str | None) ->
     return stages[min(stages.index(reported), furthest, len(stages) - 1)]
 
 
+def offer_current(open_offer: TechniqueState, message_count: int) -> bool:
+    """Whether the open offer is still what they are answering: at its lead-in, only while the lead-in is Mani's last
+    reply. After a turn about something else (a safety exchange), the lead-in has passed and the offer lapses rather
+    than pushing the five steps onto their next message (the final review, 2026-11-18)."""
+    return open_offer.phase != OFFERING or open_offer.at_message_count == message_count
+
+
 def closing_buttons() -> list[SmartPrompt]:
     return [SmartPrompt(label=CLOSING_KEEP_CHATTING_LABEL),
             SmartPrompt(label=GO_TO_LIBRARY_LABEL, library=LibrarySection.HOME.value),
@@ -66,7 +73,8 @@ def decide(
     elif running is not None and (framework := registry.get(running.framework_id)):
         decision = _moved(base, reply, framework, running, end_check_due, end_check_asked)
     elif open_offer is not None:
-        decision = _answered_offer(base, open_offer, registry.get(open_offer.framework_id), tap, reply)
+        offered = registry.get(open_offer.framework_id) if offer_current(open_offer, count_after - 2) else None
+        decision = _answered_offer(base, open_offer, offered, tap, reply)
     else:
         decision = base
     decision = _offer(decision, reply, registry, thread_id, count_after,

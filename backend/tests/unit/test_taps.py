@@ -48,3 +48,10 @@ def test_no_tap_means_nothing():
 
 def test_a_frameworks_stages_are_its_phases_after_the_offer():
     assert stages_of(REGISTRY.get("abcde")) == ["activate", "belief", "consequence", "dispute", "effective"]
+
+
+def test_an_old_keep_chatting_button_sets_the_offer_aside():
+    """The final review, 2026-11-18: a decline button stored before the client's sequence read as the closing Keep
+    Chatting, and the person who said no got the five steps."""
+    event = tap_event(SmartPrompt(label="Keep chatting", decline=True), REGISTRY, offered("abcde"))
+    assert event.set_aside is True and event.explain is None

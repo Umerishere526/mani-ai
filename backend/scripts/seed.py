@@ -83,7 +83,7 @@ def parse_framework(path: pathlib.Path) -> dict:
 
 def missing_for_activation(framework: dict) -> list[str]:
     """What an active framework lacks of the content a turn reads, named by its path in the file: each style's
-    Tell me more text, and each stage's line, purpose and when it is answered. Empty when it can be seeded active,
+    five steps, the worked example, and each stage's line, purpose and when it is answered. Empty when it can be seeded active,
     so a paused framework moved back fails here, not in a live chat."""
     stages = framework["stages"]
     offering = stages.get(OFFERING) or {}

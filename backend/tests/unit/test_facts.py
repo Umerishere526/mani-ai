@@ -65,8 +65,10 @@ def test_the_notes_from_the_last_turn_are_handed_back():
     assert "Your notes from your last turn: boss, pushover" in facts_for(ctx(), record={"notes": "boss, pushover"})
 
 
-def test_the_check_after_a_framework_says_to_close_once_settled():
-    assert "If their answer settles it, close the set now" in facts_for(ctx(), end_check_asked=True)
+def test_a_settled_answer_to_the_check_after_a_framework_leads_to_how_they_feel():
+    """The final review, 2026-11-18: the line said to close the set, while code opens the feelings check."""
+    told = facts_for(ctx(), end_check_asked=True)
+    assert "ask how they feel now" in told and "close the set now" not in told
 
 
 def test_the_guide_lists_every_stage_line_of_every_active_framework():
@@ -103,3 +105,9 @@ def test_the_last_stage_asks_how_they_feel_and_the_check_in_asks_nothing():
     assert "ask how they feel now" in last and "set action to finish" in last
     check_in = facts_for(ctx(), running=running("abcde", "feelings_check"))
     assert "how they feel" in check_in and "ask nothing" in check_in and "is for" not in check_in
+
+
+def test_a_held_feelings_check_is_about_their_safety_and_promises_no_close():
+    """The final review, 2026-11-18: held for safety, the check's line still said to ask nothing and that code closes."""
+    held = facts_for(ctx(safety="unsure"), running=running("abcde", "feelings_check"), holding=True)
+    assert "ask nothing" not in held and "code closes the set" not in held and "safety" in held
