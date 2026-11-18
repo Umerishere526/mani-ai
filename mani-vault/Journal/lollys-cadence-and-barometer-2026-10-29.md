@@ -5,6 +5,7 @@ tags: [journal, cadence, client, barometer]
 summary: "Lolly's cadence is acknowledge, open the window, insight, ask; the summary check became her barometer."
 failed:
   - "Tried a summary as the check; failed because Lolly rejects summarising and showing the notes."
+  - "Tried reading 'open the window' as inviting the story; failed because it means widening to the situation"
 ---
 # Lolly's cadence and the barometer
 

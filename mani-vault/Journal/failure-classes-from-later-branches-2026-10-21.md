@@ -3,6 +3,11 @@ type: journal
 date: 2026-10-21
 tags: [journal, branches, process, lessons]
 summary: "Failure classes from the abandoned later branches: case patches, prompt growth, specs ahead of data, layout churn."
+failed:
+  - "Tried stacking gates on the model (offer window, check yes-gate, deadline); failed because each looped or stalled"
+  - "Tried the options line as a prose rule; failed because it lost twice to three 'one question' lines in the prompt"
+  - "Tried cutting reasoning effort for latency; failed because it traded away comprehension, the client's first rank"
+  - "Tried 'most of the time, say what you want to understand'; failed because that phrase became every reply"
 ---
 2026-10-21
 

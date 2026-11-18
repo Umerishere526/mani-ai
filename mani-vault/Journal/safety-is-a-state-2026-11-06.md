@@ -5,6 +5,9 @@ tags: [journal, safety, state, client-test]
 summary: "Safety is a state the conversation holds: manasa's test showed four failures that looked like one."
 failed:
   - "Tried screening each message alone with a one-reply hold; failed because the next message was ordinary chat again."
+  - "Tried 'stay with what they said, leave room for more' on a concern; failed because Mani backed off the risk"
+  - "Tried 'accept a clarification' and 'stop when frustrated' in danger; failed because a refusal to answer settled it"
+  - "Tried a phrase screen for safety; failed because 9 of 10 messages passed and 'I'm not going to hurt myself' locked"
 ---
 
 > Superseded 2026-11-13 — see [[crisis-pause-audit-findings-2026-11-13]] (nothing locks by default: danger that continues with nothing in place pauses the chat)

@@ -5,6 +5,9 @@ tags: [journal, model, prompt, cost, latency, spike]
 summary: "Flat replies came from the model, not the prompt: prompt changes stopped helping while bare API models wrote short."
 failed:
   - "Tried prompt changes to close the gap with ChatGPT; failed because they stopped moving it and the model was the cause."
+  - "Tried plain text over JSON and verbosity: high for richer replies; failed because neither changed quality or length"
+  - "Tried prompt changes to get lists or bold from API models; failed because no model wrote them"
+  - "Tried code refusing an offer the model made while safety was open; failed because the reply text still made it"
 ---
 
 # Flat replies were the model, not the prompt

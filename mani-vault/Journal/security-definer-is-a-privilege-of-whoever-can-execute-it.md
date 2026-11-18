@@ -6,6 +6,9 @@ tags: [journal, security, postgres, rls, code-review]
 summary: "Any signed-in user could forge Mani's side of a conversation through an executable security definer function."
 failed:
   - "Tried a reviewer's fix exc.errors(include_input=False); failed because FastAPI's errors() takes no arguments."
+  - "Tried revoking INSERT but granting EXECUTE on the definer function; failed because users could forge Mani's side"
+  - "Tried a grants test that a user can write through the function; failed because it locked the forgery in as required"
+  - "Tried the backend running as authenticated; failed because every privilege it needed was also the end user's"
 ---
 
 # A security definer function is a privilege held by whoever may EXECUTE it

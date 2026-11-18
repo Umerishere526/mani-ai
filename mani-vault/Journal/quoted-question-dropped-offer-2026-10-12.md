@@ -3,6 +3,8 @@ type: journal
 date: 2026-10-12
 tags: [journal, offers, repairs, design, lessons]
 summary: "A '?' inside a quoted phrase made code drop a valid offer's buttons and leave the framework inactive."
+failed:
+  - "Tried finding a second question by '?' in the text; failed because a quoted 'Why me?' dropped an offer's buttons"
 ---
 
 # A quoted question cost a valid offer (2026-10-12)

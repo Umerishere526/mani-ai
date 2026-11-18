@@ -4,7 +4,10 @@ date: 2026-10-09
 tags: [journal, prompts, questions, direct, lessons]
 summary: "Direct style's fixed question list made Mani ask what people had already said; the phrase lists were removed."
 failed:
-  - "Tried rewording the Direct question prompt; failed because it changed nothing and every edit was reverted."
+  - "Tried rewording Direct's question list; failed because it swung between a checklist and a generic check-in"
+  - "Tried 'talk through X or work out Y' as a target; failed because it became a menu, asked twice, holding the offer"
+  - "Tried banning restating ('the pointed question alone'); failed because Direct lost all warmth and audited events"
+  - "Tried 'ask how that part is for them'; failed because a feeling question with nothing concrete is a hypothetical"
 ---
 > Superseded 2026-10-12 — see [[restating-is-not-reflecting-2026-10-12]] (the ban on "what would it mean" and on two-part questions: the client asks both in her job decision feedback)
 

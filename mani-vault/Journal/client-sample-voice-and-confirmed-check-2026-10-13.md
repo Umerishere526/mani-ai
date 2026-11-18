@@ -5,6 +5,9 @@ tags: [journal, prompts, offers, client, lessons]
 summary: "The client's sample voice breaks our earlier banning rules; the newer document wins and its replies became the example."
 failed:
   - "Tried a stored open/confirmed/declined state for the check; failed because chats could stick with no way to an offer."
+  - "Tried a message count as the offer gate (3 fixes); failed because a count only stood in for 'understood enough'"
+  - "Tried banning summaries, repeats and the sample's connectors; failed because Mani's replies read like case notes"
+  - "Tried wording to open the check with the problem; failed because the voice rule opens on their last message (twice)"
 ---
 
 > Superseded 2026-10-26 (the check after the problem, core issue and control or feeling; it now comes on a ready heart of it from their 5th message) - see [[heart-of-it-replaces-the-three-steps-2026-10-26]].

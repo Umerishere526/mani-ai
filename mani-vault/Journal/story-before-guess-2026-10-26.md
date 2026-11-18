@@ -5,6 +5,7 @@ tags: [journal, cadence, chat, styles]
 summary: "Story before guess: care and ask for the story first, the ChatGPT cadence, in every style."
 failed:
   - "Tried 'say your reading as a guess' and 'offer possibilities'; failed because short answers cued guessing too early."
+  - "Tried banning 'a general statement about how people are'; failed because it banned a line the client's chats use"
 ---
 # Story before guess: the ChatGPT cadence in every style (2026-10-26)
 

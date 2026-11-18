@@ -3,6 +3,9 @@ type: journal
 date: 2026-11-06
 tags: [journal, worktrees, database, testing]
 summary: "Worktrees share one local database, so one branch's data and migrations changed what another branch saw."
+failed:
+  - "Tried one local Supabase for all worktrees; failed because another branch's threads made New chat open the check-in"
+  - "Tried supabase migration list as proof a migration ran; failed because 031-032 listed applied, column missing"
 ---
 2026-11-06
 

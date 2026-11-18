@@ -5,6 +5,8 @@ tags: [journal, memory, architecture, abcde, lessons]
 summary: "The transcript is the memory within a thread: the whole thread up to 40,000 characters replaces guessed stores."
 failed:
   - "Tried seeding every stage into a store at the yes from the last 20 messages; failed because stores were stale or thin."
+  - "Tried a 20-message window inherited from the old system; failed because threads reach E at message 23 to 30"
+  - "Tried a rule clearing stale seeded stages; failed because it fired on 'yes, and more' and could wipe good stages"
 ---
 > Superseded 2026-10-14 (each stage judged "since the confirmed check", reported in stage_updates) — see [[reach-judged-in-its-own-field-2026-10-14]]
 

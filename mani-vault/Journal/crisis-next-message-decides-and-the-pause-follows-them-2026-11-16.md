@@ -4,6 +4,11 @@ date: 2026-11-16
 apps: [backend, chat-tester]
 tags: [journal, safety, crisis, pause, prompts, lessons]
 summary: "Once a crisis is found the next message decides, and what a pause was about follows the person."
+failed:
+  - "Tried pausing the first message back on danger: now; failed because that field reads the whole chat, so 'hi' paused"
+  - "Tried carrying a pause's reason into new chats; failed because its present tense read as current, so 'fine' paused"
+  - "Tried 'asked' as a state of the chat, not the worry; failed because an idiom asked about made a later worry pause"
+  - "Tried help_in_place as 'help called or on its way'; failed because 'my dad is coming' read false in 2 of 3 runs"
 ---
 2026-11-16
 

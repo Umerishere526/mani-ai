@@ -5,6 +5,7 @@ tags: [journal, thought-reframe, content, client, lessons]
 summary: "Thought Reframe was the older six-stage spec, not the client's five steps; it was rewritten to hers."
 failed:
   - "Tried a six-stage Thought Reframe with a facts stage; failed because it was not the client's five steps."
+  - "Tried asks written around one friend's silence; failed because they read wrongly for any other thought"
 ---
 
 # Thought Reframe was the old spec plus one example, not the client's five steps (2026-10-21)

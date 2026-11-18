@@ -4,6 +4,8 @@ date: 2026-09-11
 apps: [mobile, web, backend]
 tags: [journal, tooling, claude-code]
 summary: "Claude Code reads project settings only from the session's working directory; nested .claude/ folders are ignored."
+failed:
+  - "Tried stating Claude Code's settings scope from memory; failed because nested .claude/ folders are never loaded"
 ---
 
 # Claude Code settings load from the working directory only

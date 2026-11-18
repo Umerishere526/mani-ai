@@ -5,6 +5,8 @@ tags: [journal, core-issue, heart, chat]
 summary: "The core, not the symptom: Mani named what the core leads to because the heart field fit only two-pull stories."
 failed:
   - "Tried a heart field shaped as torn between, wants and stopping them; failed because it named what the core leads to."
+  - "Tried cutting 'the feeling underneath' from the prompts; failed because nothing asked Mani to look beneath feelings"
+  - "Tried a yes to the check as proof of the core; failed because a warm, mostly true reading is easy to say yes to"
 ---
 # The core, not the symptom (2026-10-28)
 

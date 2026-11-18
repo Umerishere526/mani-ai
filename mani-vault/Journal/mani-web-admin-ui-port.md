@@ -4,6 +4,11 @@ date: 2026-09-15
 apps: [web]
 tags: [journal, web, design-system, port]
 summary: "Ported mani-app's admin dashboard UI into web/, UI layer only; the reference backend was a Next.js app."
+failed:
+  - "Tried an SVG data-URI in a Tailwind arbitrary value; failed because spaces became underscores, corrupting the SVG"
+  - "Tried sync placeholder data via useEffect + setState; failed because react-hooks/set-state-in-effect errors on it"
+  - "Tried keeping source's .btn/.card CSS classes; failed because the nextjs skill forbids custom CSS and inline style"
+  - "Tried porting a page from an early partial read; failed because pagination and a status column were missed"
 ---
 
 # Porting mani-app's admin dashboard UI into web/ (UI layer only, no API)
