@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ABOUTME: PostToolUse hook that lints and typechecks the app a just-edited file belongs to.
-# ABOUTME: Routes web/ to eslint+tsc, mobile/ to expo lint+tsc, backend/ to a py_compile check.
+# ABOUTME: PostToolUse hook that lints and typechecks the app a just-edited file belongs to, and checks a journal note
+# ABOUTME: or PORT-STATUS.md for the session digest. Routes web/ and mobile/ to lint+tsc, backend/ to py_compile+ruff.
 
 set -uo pipefail
 

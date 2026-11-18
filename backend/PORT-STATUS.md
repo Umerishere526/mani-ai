@@ -841,11 +841,11 @@ the same change as the work.**
   no email. Because the test tool should need no mail setup, accepting that the page stays non-public
   (2026-10-07); the seven day session: reason unknown, muhammad to confirm. Anyone who can reach the page can reset any ordinary account, so it stays non-public; an admin account is refused, because it reads every conversation (2026-10-26). A browser session
   is remembered for seven days.
-- Also settled: OpenRouter only, asyncpg not PostgREST, the
-  `public` and `admin` split, the `mani_service` role, three security definer write functions, the
-  deterministic safety screen as the only thing that locks a thread (superseded 2026-11-06, when nothing locked, and
-  2026-11-13: no phrase locks, and danger that continues with nothing in place pauses the chat, see the safety
-  entry; the screen itself was deleted 2026-11-17), in process routing, no streaming.
+- **Also settled: OpenRouter only, asyncpg not PostgREST, the `public` and `admin` split, the `mani_service` role,
+  three security definer write functions, no streaming.** Settled with them: the deterministic safety screen as the
+  only thing that locks a thread (superseded 2026-11-06, when nothing locked, and 2026-11-13: no phrase locks, and
+  danger that continues with nothing in place pauses the chat, see the safety entry; the screen itself was deleted
+  2026-11-17), and in process routing.
   Because: one provider was ever used (2026-09-14); a turn's writes must succeed or fail together, which
   PostgREST cannot do (2026-09-15); anything PostgREST exposes is reachable with the anon key (2026-09-15);
   a backend acting as `authenticated` let users forge Mani's replies (2026-09-16); the definer functions write

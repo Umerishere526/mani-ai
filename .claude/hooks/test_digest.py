@@ -23,10 +23,6 @@ PORT_STATUS = """# Port status
 """
 
 
-def note(body: str) -> str:
-    return body
-
-
 def make_repo(notes: dict[str, str], port_status: str = PORT_STATUS) -> pathlib.Path:
     root = pathlib.Path(tempfile.mkdtemp())
     (root / "backend").mkdir()
@@ -59,22 +55,42 @@ def test_decisions_in_force_are_read_whole_and_retired_ones_left_out():
     assert found[0][1] == "2026-11-17"
 
 
+def test_a_decisions_date_is_the_one_its_because_gives():
+    entry = ("- **Also settled: OpenRouter only.** Settled with them: a screen (superseded 2026-11-06).\n"
+             "  Because: one provider was ever used (2026-09-14).\n")
+    found = digest.decisions(PORT_STATUS.replace("## Before it", entry + "\n## Before it"))
+    assert found[-1] == ("Also settled: OpenRouter only.", "2026-09-14")
+
+
 def test_a_note_superseded_whole_is_left_out_and_one_superseded_in_part_keeps_its_failures():
     whole = GOOD.replace("---\n\n# Flat", "---\n> Superseded 2026-11-18 — see [[other]]\n\n# Flat")
     part = GOOD.replace("---\n\n# Flat", "---\n> Superseded 2026-11-18 (the floor part) — see [[other]]\n\n# Flat")
     root = make_repo({"whole-2026-11-17.md": whole, "part-2026-11-17.md": part})
-    text = digest.digest(root)
+    text = digest.failed_digest(root)
     assert text.count("Tried three prompt variants") == 1 and "part-2026-11-17" in text
     assert "whole-2026-11-17" not in text
 
 
-def test_the_digest_says_it_is_history_and_stays_under_the_limit():
+def test_each_half_says_it_is_history_and_stays_under_the_limit_on_its_own():
     many = {f"n{i:03d}-2026-10-{(i % 28) + 1:02d}.md": GOOD.replace("Tried three", f"Tried idea {i} with words " * 3)
             for i in range(200)}
-    text = digest.digest(make_repo(many))
-    assert len(text) < digest.LIMIT
-    assert "history" in text.splitlines()[0].lower() or "history" in text.splitlines()[1].lower()
-    assert "left out" in text.splitlines()[-1]
+    entry = "- **A decision that runs long enough to matter, number {i}, kept whole** (2026-10-{d:02d}).\n"
+    crowded = PORT_STATUS.replace("## Before it", "".join(entry.format(i=i, d=i % 28 + 1) for i in range(200))
+                                  + "\n## Before it")
+    root = make_repo(many, port_status=crowded)
+    for text in (digest.decisions_digest(root), digest.failed_digest(root)):
+        assert len(text) < digest.LIMIT
+        assert "history" in " ".join(text.splitlines()[:2]).lower()
+        assert "left out" in text.splitlines()[-1]
+
+
+def test_the_failed_half_keeps_every_failure_that_fits_beside_many_decisions():
+    notes = {f"n{i:03d}-2026-10-{(i % 28) + 1:02d}.md": GOOD.replace("Tried three", f"Tried idea {i}")
+             for i in range(46)}
+    entry = "- **A decision that runs long enough to matter, number {i}, kept whole** (2026-10-01).\n"
+    crowded = PORT_STATUS.replace("## Before it", "".join(entry.format(i=i) for i in range(44)) + "\n## Before it")
+    text = digest.failed_digest(make_repo(notes, port_status=crowded))
+    assert text.count("Tried idea") == 46 and "left out" not in text
 
 
 def test_malformed_frontmatter_yields_nothing_and_never_raises():
@@ -83,6 +99,14 @@ def test_malformed_frontmatter_yields_nothing_and_never_raises():
     found = {n.name: n for n in digest.notes(root / "mani-vault" / "Journal")}
     assert found["broken-2026-11-01"].summary == ""
     assert found["colon-2026-11-02"].summary == "Flat: with a colon replies came from the model, not the prompt."
+
+
+def test_check_names_a_decision_without_its_bold_line():
+    plain = PORT_STATUS.replace("## Before it", "- Also settled: OpenRouter only (2026-09-14).\n\n## Before it")
+    root = make_repo({}, port_status=plain)
+    problems = digest.missing(root, [root / "backend" / "PORT-STATUS.md"])
+    assert len(problems) == 1 and "Also settled: OpenRouter only" in problems[0]
+    assert digest.missing(make_repo({}), [make_repo({}) / "backend" / "PORT-STATUS.md"]) == []
 
 
 def test_check_names_a_note_without_its_summary():

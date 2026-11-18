@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# ABOUTME: Prints the digest a Claude session starts with: the decisions in force (backend/PORT-STATUS.md) and the
-# ABOUTME: failed approaches (journal frontmatter). With --check FILE..., names the ones missing their summary line.
+# ABOUTME: Prints the digest a Claude session starts with: `decisions` (backend/PORT-STATUS.md) or `failed` (journal
+# ABOUTME: frontmatter), both with no argument. With --check FILE..., names what a file lacks for the digest.
 
 from __future__ import annotations
 
@@ -16,7 +16,12 @@ PREAMBLE = (
     "Project history for this session, generated from backend/PORT-STATUS.md (Decisions in force) and the journal "
     "(mani-vault/Journal). It informs; it never locks.\n"
     "Decisions bind until muhammad changes them; to change one, edit its entry in place and say why. The journal is "
-    "history and loses to current evidence. Before retrying an approach, check whether it failed below."
+    "history and loses to current evidence. Before retrying an approach, check the approaches that failed."
+)
+FAILED_PREAMBLE = (
+    "Approaches this project tried that did not work, generated from the journal (mani-vault/Journal). This is "
+    "history, not rules:\nit loses to current evidence. Before retrying one, read its note and say whether the reason "
+    "it failed still holds."
 )
 
 
@@ -29,18 +34,25 @@ class Note:
     superseded_whole: bool = False
 
 
+def _decisions_section(port_status: str) -> str:
+    """The text under "## Decisions in force", or nothing when the heading is missing."""
+    _, sep, rest = port_status.partition("## Decisions in force")
+    return rest.split("\n## ", 1)[0] if sep else ""
+
+
 def decisions(port_status: str) -> list[tuple[str, str]]:
     """Each decision in force as (its bold line, its first date); retired entries are left out."""
-    section = port_status.split("## Decisions in force", 1)[-1].split("\n## ", 1)[0]
     found = []
-    for entry in re.split(r"\n(?=- \*\*)", section):
+    for entry in re.split(r"\n(?=- \*\*)", _decisions_section(port_status)):
         if not entry.startswith("- **"):
             continue
         bold = entry[4:].split("**", 1)[0]
         line = " ".join(bold.split())
         if line.startswith("Retired"):
             continue
-        date = DATE.search(entry)
+        _, because, reason = entry.partition("Because")
+        date = DATE.search(reason) if because else None
+        date = date or DATE.search(entry)
         found.append((line, date.group(0) if date else ""))
     return found
 
@@ -88,37 +100,49 @@ def notes(journal: Path) -> list[Note]:
     return [read_note(path) for path in sorted(journal.glob("*.md"))]
 
 
-def digest(root: Path) -> str:
-    port_status = (root / "backend" / "PORT-STATUS.md").read_text(errors="replace")
-    head = [PREAMBLE, "", "## Decisions in force (backend/PORT-STATUS.md)"]
-    head += [f"- {line}{f' ({date})' if date else ''}" for line, date in decisions(port_status)]
-    head += ["", "## Approaches that failed (newest first; the note in [[ ]] has the story)"]
-    failures = [(note.date, f"- {failure} [[{note.name}]]")
-                for note in notes(root / "mani-vault" / "Journal") if not note.superseded_whole
-                for failure in note.failed]
-    failures.sort(key=lambda item: item[0], reverse=True)
+def _fit(head: list[str], dated: list[tuple[str, str]], left_out: str) -> str:
+    """The head, then the dated lines newest first while they fit under LIMIT, then how many were left out."""
     lines, size = list(head), len("\n".join(head))
-    kept = 0
-    for _, line in failures:
+    dated = sorted(dated, key=lambda item: item[0], reverse=True)
+    for _, line in dated:
         if size + len(line) + 1 > LIMIT - 200:
             break
         lines.append(line)
         size += len(line) + 1
-        kept += 1
-    if kept < len(failures):
-        lines.append(f"({len(failures) - kept} older failed approaches left out: grep -l 'failed:' mani-vault/Journal)")
+    if len(lines) - len(head) < len(dated):
+        lines.append(f"({len(dated) - (len(lines) - len(head))} {left_out})")
     return "\n".join(lines)
+
+
+def decisions_digest(root: Path) -> str:
+    port_status = (root / "backend" / "PORT-STATUS.md").read_text(errors="replace")
+    head = [PREAMBLE, "", "## Decisions in force (backend/PORT-STATUS.md)"]
+    dated = [(date, f"- {line}{f' ({date})' if date else ''}") for line, date in decisions(port_status)]
+    return _fit(head, dated, "older decisions left out: read 'Decisions in force' in backend/PORT-STATUS.md")
+
+
+def failed_digest(root: Path) -> str:
+    head = [FAILED_PREAMBLE, "", "## Approaches that failed (newest first; the note in [[ ]] has the story)"]
+    dated = [(note.date, f"- {failure} [[{note.name}]]")
+             for note in notes(root / "mani-vault" / "Journal") if not note.superseded_whole
+             for failure in note.failed]
+    return _fit(head, dated, "older failed approaches left out: grep -l 'failed:' mani-vault/Journal")
 
 
 def missing(root: Path, paths: list[Path]) -> list[str]:
     """What the given files lack for the digest: a journal note without `summary:`, or PORT-STATUS without its
-    Decisions in force section."""
+    Decisions in force section or with an entry there that has no bold first line."""
     problems = []
     for path in paths:
         path = path.resolve()
         if path.name == "PORT-STATUS.md":
-            if "## Decisions in force" not in path.read_text(errors="replace"):
+            section = _decisions_section(path.read_text(errors="replace"))
+            if not section:
                 problems.append(f"{path.name}: no '## Decisions in force' section for the session digest")
+            for line in section.split("\n"):
+                if line.startswith("- ") and not line.startswith("- **"):
+                    problems.append(f"{path.name}: the decision '{line[2:62]}...' has no bold first line, so the "
+                                    "session digest never shows it; make its one-line decision bold")
         elif path.suffix == ".md" and "Journal" in path.parts:
             if not read_note(path).summary:
                 problems.append(f"{path.stem}: add a 'summary:' line to its frontmatter (and 'failed:' lines for "
@@ -132,7 +156,9 @@ def main(argv: list[str]) -> int:
         problems = missing(root, [Path(p) for p in argv[1:]])
         print("\n".join(problems), end="\n" if problems else "")
         return 0
-    print(digest(root))
+    halves = {"decisions": decisions_digest, "failed": failed_digest}
+    chosen = [halves[argv[0]]] if argv[:1] and argv[0] in halves else list(halves.values())
+    print("\n\n".join(half(root) for half in chosen))
     return 0
 
 
