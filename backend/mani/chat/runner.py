@@ -12,7 +12,7 @@ from typing import Any
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import orchestrator, rewind
+from mani.chat import rewind, turn as chat_turn
 from mani.chat.greeting import STYLE_OPTIONS
 from mani.db import llm_calls, pool, threads
 from mani.db import messages as messages_db
@@ -24,7 +24,7 @@ from mani.prompts import cache
 
 logger = logging.getLogger(__name__)
 
-Steps = Callable[[asyncpg.Connection, "Model"], Awaitable[orchestrator.Turn]]
+Steps = Callable[[asyncpg.Connection, "Model"], Awaitable[chat_turn.Turn]]
 
 
 @dataclass(frozen=True)
@@ -65,7 +65,7 @@ class Model:
         if self._answered:
             raise RuntimeError("a turn asked the model twice")
         self._answered = True
-        # The thread is locked by now (orchestrator._lock_thread). A message that landed while the model
+        # The thread is locked by now (chat_turn.lock_thread). A message that landed while the model
         # thought, or a reply asked for in another shape, means this reply answers a conversation that has moved.
         if version != self.request.version or schema.model_json_schema() != self.request.schema.model_json_schema():
             raise ServiceError(
@@ -93,7 +93,7 @@ async def thread_version(conn: asyncpg.Connection, thread_id: uuid.UUID | str) -
     return (row["message_count"], row["newest"]) if row else (None, None)
 
 
-async def run(claims: Claims, thread_id: uuid.UUID | str, steps: Steps) -> orchestrator.Turn:
+async def run(claims: Claims, thread_id: uuid.UUID | str, steps: Steps) -> chat_turn.Turn:
     """Run a turn's steps with no connection held while the model thinks.
 
     Read: the steps run in a transaction up to the model call, which records what they ask and rolls back.
@@ -110,11 +110,11 @@ async def run(claims: Claims, thread_id: uuid.UUID | str, steps: Steps) -> orche
     except ServiceError:
         if request.fallback is None:
             raise
-        # Someone who may not be safe gets words rather than an error: the write stores them as Mani's reply, read
-        # as a reply that reports nothing, so the safety state stays where it was.
-        logger.exception("model failed on a safety turn for thread %s; sending the fallback", thread_id)
+        # No host answered: the person gets the fixed words rather than an error. The write stores them as Mani's
+        # reply, a reply that judges nothing, so the safety state stays where it was.
+        logger.exception("model failed for thread %s; sending the fallback", thread_id)
         call = client.Call(
-            value=request.schema.model_validate({"text": request.fallback}), model="fallback",
+            value=request.schema.fallback(request.fallback), model="fallback",
             usage=llm_calls.Usage(), latency_ms=0, call_id=None,
         )
     async with pool.as_user(claims) as conn:
@@ -123,13 +123,13 @@ async def run(claims: Claims, thread_id: uuid.UUID | str, steps: Steps) -> orche
 
 async def send(
     claims: Claims, thread_id: uuid.UUID | str, content: str, client_message_id: uuid.UUID | str | None = None
-) -> orchestrator.Turn:
+) -> chat_turn.Turn:
     """One message in, one reply out."""
     # Read before any connection is taken: a stale cache reloads on a connection of its own.
     config = await cache.load()
 
-    async def steps(conn: asyncpg.Connection, model: Model) -> orchestrator.Turn:
-        return await orchestrator.send(
+    async def steps(conn: asyncpg.Connection, model: Model) -> chat_turn.Turn:
+        return await chat_turn.send(
             conn, claims, thread_id, content, client_message_id, ask=model, config=config
         )
 
@@ -144,7 +144,7 @@ async def send(
 
 async def start(
     claims: Claims, content: str, client_message_id: uuid.UUID | str | None, style: SupportStyle | None
-) -> tuple[Thread, orchestrator.Turn]:
+) -> tuple[Thread, chat_turn.Turn]:
     """A person's first message: the conversation it opens is created with it, holding Mani's greeting and, when they
     tapped one, the style they chose, and then the message runs as the turn it is.
 
@@ -161,7 +161,7 @@ async def start(
 
 async def _start(
     claims: Claims, content: str, client_message_id: uuid.UUID | str | None, style: SupportStyle | None
-) -> tuple[Thread, orchestrator.Turn]:
+) -> tuple[Thread, chat_turn.Turn]:
     async with pool.as_user(claims) as conn:
         thread_id = (
             await messages_db.thread_of_client_message(conn, claims.user_id, client_message_id)
@@ -170,7 +170,7 @@ async def _start(
         )
         created = thread_id is None
         if created:
-            thread_id = (await orchestrator.start_thread(conn, claims)).id
+            thread_id = (await chat_turn.start_thread(conn, claims)).id
     try:
         if created and style is not None:
             tap = next(option["label"] for option in STYLE_OPTIONS if option["style"] == style.value)
@@ -194,14 +194,14 @@ async def _start(
 
 async def edit(
     claims: Claims, thread_id: uuid.UUID | str, message_id: uuid.UUID | str, content: str
-) -> orchestrator.Turn:
+) -> chat_turn.Turn:
     """Replace the person's last message and Mani's reply with a turn on the new text. The read takes the turn
     back in a transaction that rolls back; the write takes it back again and runs the new text in one, so a
     failed edit leaves the original exchange in place."""
     config = await cache.load()
 
-    async def steps(conn: asyncpg.Connection, model: Model) -> orchestrator.Turn:
+    async def steps(conn: asyncpg.Connection, model: Model) -> chat_turn.Turn:
         await rewind.undo_last_turn(conn, claims.user_id, thread_id, message_id)
-        return await orchestrator.send(conn, claims, thread_id, content, ask=model, config=config)
+        return await chat_turn.send(conn, claims, thread_id, content, ask=model, config=config)
 
     return await run(claims, thread_id, steps)

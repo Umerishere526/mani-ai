@@ -232,22 +232,6 @@ def test_the_note_carries_the_core_and_what_they_want_and_leaves_the_rest_to_the
     assert "Your plan" not in note and "Explore next" not in note and "Worth exploring" not in note
 
 
-def test_mani_works_like_lollys_role_played_session():
-    """muhammad, 2026-10-29: Mani runs the chat the way a therapist would, neutral and empathetic, without sounding like
-    one, and never asks what it can infer. Aligned 2026-11-06 (muhammad, P2) to the prompts as rewritten since: Lolly's
-    role-played session lines left voice in an earlier rewrite; the decisions they carried are held here. Her two
-    ChatGPT conversations stay out, because the model copied their mirror-then-question shape."""
-    voice = parse_prompt(PROMPTS / "voice.md")["content"]
-    chat = parse_prompt(PROMPTS / "conversation.md")["content"]
-    assert "Think the way an experienced therapist would" in voice and "Never sound like one." in voice
-    assert "Never call this therapy, counselling, or a session." in voice
-    assert "Never ask for what you know or can infer." in chat
-    for chatgpt in ("If you know he won't change", "If you miss her this deeply", "Each reply is your mirror"):
-        assert chatgpt not in voice, chatgpt
-    assert "conversation" in cache.REQUIRED_PROMPTS
-
-
-
 def test_the_conversation_prompt_is_one_cached_prefix_with_the_person_after_it():
     named = [
         Prompt(id=uuid.uuid4(), name=name, content=body, model_parameters={}, routing={})

@@ -4,12 +4,12 @@
 import asyncio
 import uuid
 
-from mani.chat import orchestrator
+from mani.chat import turn as chat_turn
 from mani.models.api import TurnOut
 from mani.routers.serializers import to_turn
 
 
-async def respond(thread_id: uuid.UUID, turn: orchestrator.Turn) -> TurnOut:
+async def respond(thread_id: uuid.UUID, turn: chat_turn.Turn) -> TurnOut:
     """A turn as a client sees it, after the two writes that tie it to its reply.
 
     Awaited, not left running after the response: Vercel stops the instance once a response is sent, so work
@@ -18,9 +18,9 @@ async def respond(thread_id: uuid.UUID, turn: orchestrator.Turn) -> TurnOut:
     """
     linking = []
     if turn.llm_call_id and turn.message_id:
-        linking.append(orchestrator.link_call(turn.llm_call_id, turn.message_id))
+        linking.append(chat_turn.link_call(turn.llm_call_id, turn.message_id))
     if turn.trace and turn.message_id and not turn.was_duplicate:
         # Why this turn went the way it did (admin.turn_traces).
-        linking.append(orchestrator.record_trace(turn, thread_id))
+        linking.append(chat_turn.record_trace(turn, thread_id))
     await asyncio.gather(*linking)
     return to_turn(turn)

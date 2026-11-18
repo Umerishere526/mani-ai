@@ -78,7 +78,10 @@ def request_body(
 
     `priority` asks for the priority tier: OpenRouter tries priority endpoints first and falls back to the
     default ones in the same `only` list, and bills the endpoint that served. The tier that served is
-    `service_tier` on OpenRouter's /generation record of the call."""
+    `service_tier` on OpenRouter's /generation record of the call. The tier is OpenAI's, so it is asked for only on
+    an OpenAI model. An Anthropic model caches only when the request asks, with a top-level `cache_control` that moves
+    the breakpoint forward as the conversation grows."""
+    priority = priority and model.startswith("openai/")
     body: dict[str, Any] = {
         "provider": settings.routing(routing, priority=priority),
         # Without this OpenRouter omits the cached-token count, which is the only way to tell
@@ -88,6 +91,8 @@ def request_body(
     }
     if priority:
         body["service_tier"] = "priority"
+    if model.startswith("anthropic/"):
+        body["cache_control"] = {"type": "ephemeral"}
     return body
 
 

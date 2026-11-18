@@ -32,6 +32,7 @@ def config() -> Config:
         prompt("conversation", "CONVERSATION"),
         prompt("framework", "FRAMEWORK"),
         prompt("moments", "MOMENTS"),
+        prompt("mani", "MANI"),
         prompt("title_generation", "TITLE"),
     ]
     return Config(
@@ -81,7 +82,7 @@ async def test_a_missing_prompt_row_is_refused_when_the_prompts_load(config, mon
         yield object()
 
     async def active_prompts(conn):
-        return [p for name, p in config.prompts.items() if name != "moments"]
+        return [p for name, p in config.prompts.items() if name != "mani"]
 
     async def active_frameworks(conn):
         return []
@@ -90,9 +91,9 @@ async def test_a_missing_prompt_row_is_refused_when_the_prompts_load(config, mon
     monkeypatch.setattr(cache.config_tables, "list_active_prompts", active_prompts)
     monkeypatch.setattr(cache.config_tables, "list_active_frameworks", active_frameworks)
 
-    with pytest.raises(ServiceError, match="moments"):
+    with pytest.raises(ServiceError, match="mani"):
         await cache._read()
-    assert cache.REQUIRED_PROMPTS == ("voice", "conversation", "framework", "moments")
+    assert cache.REQUIRED_PROMPTS == ("mani",)
 
 
 async def _read_with(framework_row: Framework, config, monkeypatch) -> None:

@@ -7,11 +7,11 @@ import uuid
 import pytest
 
 from mani import memory
-from mani.chat import orchestrator, runner
+from mani.chat import runner, turn as chat_turn
 from mani.db import llm_calls, threads
 from mani.llm import client
-from mani.llm.schema import Memory, Reply
-from tests.integration.test_turn import claims_for, reachable
+from mani.llm.schema import Memory
+from tests.integration.fixtures import claims_for, reachable, said
 from tests.integration.cleanup import remove_test_users
 
 BEA = uuid.UUID("a0000000-0000-4000-8000-0000000000d2")
@@ -20,11 +20,12 @@ REMEMBERED = Memory(low_times=["feels low on Sunday evenings, because of work on
 
 
 class Scripted:
-    """Answers a chat turn with a Reply and a fold with a Memory, and keeps what it was sent."""
+    """Answers a chat turn with a reply and a fold with a Memory, and keeps what it was sent."""
 
-    def __init__(self, remembered: Memory = REMEMBERED, fail_fold: bool = False) -> None:
+    def __init__(self, remembered: Memory = REMEMBERED, fail_fold: bool = False, level: str = "none") -> None:
         self.remembered = remembered
         self.fail_fold = fail_fold
+        self.level = level
         self.folds: list[list[dict]] = []
 
     async def __call__(self, messages, schema, **kwargs):
@@ -35,7 +36,7 @@ class Scripted:
             value = self.remembered
         else:
             # In the shape the turn asked for, as the real call returns it.
-            value = schema.model_validate({"text": "What happens on those evenings?"})
+            value = schema.model_validate(said("What happens on those evenings?", level=self.level).model_dump())
         return client.Call(
             value=value, model="test/model",
             usage=llm_calls.Usage(input_tokens=10, output_tokens=5),
@@ -75,7 +76,7 @@ async def _chat(claims, text: str):
     from mani.db import pool
 
     async with pool.as_user(claims) as conn:
-        thread = await orchestrator.start_thread(conn, claims)
+        thread = await chat_turn.start_thread(conn, claims)
     await runner.send(claims, thread.id, text)
     return thread
 
@@ -143,7 +144,7 @@ async def test_a_conversation_holding_only_a_style_tap_is_not_folded(bea, script
 
     fake = scripted()
     async with pool.as_user(bea) as conn:
-        tapped = await orchestrator.start_thread(conn, bea)
+        tapped = await chat_turn.start_thread(conn, bea)
     turn = await runner.send(bea, tapped.id, "Supportive")
     assert turn.content == "How can I support you today?", "the greeting's style button, not a message"
 
@@ -153,8 +154,8 @@ async def test_a_conversation_holding_only_a_style_tap_is_not_folded(bea, script
 
 
 async def test_a_crisis_conversation_is_never_folded(bea, scripted):
-    fake = scripted()
-    await _chat(bea, "I am going to kill myself")  # the safety screen flags this thread
+    fake = scripted(level="danger")
+    await _chat(bea, "I am going to kill myself")  # the model judges danger, which flags this thread
     assert await memory.fold_finished(bea) == 0
     assert fake.folds == []
 
@@ -255,7 +256,7 @@ async def test_the_next_chat_is_shaped_by_the_memory_but_carries_none_of_the_old
 
     async def watching(messages, schema, **kwargs):
         sent.append(messages)
-        return client.Call(value=schema.model_validate({"text": "How has today been?"}), model="test/model",
+        return client.Call(value=schema.model_validate(said("How has today been?").model_dump()), model="test/model",
                            usage=llm_calls.Usage(), latency_ms=1, call_id=uuid.uuid4())
 
     monkeypatch.setattr(client, "complete", watching)

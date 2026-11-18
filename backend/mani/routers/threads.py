@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query
 
 from mani import memory
 from mani.auth.deps import ChatOpen, CurrentUser
-from mani.chat import greeting, orchestrator, runner
+from mani.chat import greeting, runner, turn as chat_turn
 from mani.db import messages as messages_db, pauses, threads
 from mani.db.deps import UserConn
 from mani.errors import ErrorCategory, ServiceError
@@ -54,7 +54,7 @@ async def opening(user: CurrentUser, conn: UserConn) -> OpeningOut:
     return OpeningOut(
         chat_paused_from=pause.started_at if pause else None,
         chat_paused_until=pause.ends_at if pause else None,
-        greeting=await orchestrator.opening_greeting(conn, user.user_id),
+        greeting=await chat_turn.opening_greeting(conn, user.user_id),
         style_options=greeting.STYLE_OPTIONS,
         openers=greeting.openers(owed is not None),
     )

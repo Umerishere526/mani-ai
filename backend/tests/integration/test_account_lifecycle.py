@@ -13,9 +13,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import create_app
-from mani.chat import orchestrator
 from mani.config import get_settings
-from mani.llm.schema import Reply
+from mani.llm import client
+from tests.integration.fixtures import said
 
 # Deliberately a sync test, not async. TestClient runs the ASGI app on its own internal
 # event loop via a background portal - an async test calling into the same shared
@@ -63,14 +63,14 @@ def model(monkeypatch):
             scripted_calls["count"] += 1
         return client_module.Call(
             # In the shape the turn asked for, as the real call parses it.
-            value=schema.model_validate(Reply(text="How can I support you with that today?").model_dump()),
+            value=schema.model_validate(said("How can I support you with that today?").model_dump()),
             model="test/model",
             usage=llm_calls.Usage(input_tokens=100, output_tokens=20),
             latency_ms=1,
             call_id=uuid.uuid4(),
         )
 
-    monkeypatch.setattr(orchestrator.client, "complete", scripted)
+    monkeypatch.setattr(client, "complete", scripted)
     return scripted_calls
 
 

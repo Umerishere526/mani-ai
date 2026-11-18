@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Mani's voice, which carries all three styles, and the three parts read after it: the chat, a framework's stages,
 # and the moments in between. The framework catalogue is generated from the registry rather than stored as a prompt,
 # so it is not listed here and cannot go missing.
-REQUIRED_PROMPTS = ("voice", "conversation", "framework", "moments")
+REQUIRED_PROMPTS = ("mani",)
 
 # Used by particular paths rather than every turn, but still misconfiguration if absent.
 EXPECTED_PROMPTS = REQUIRED_PROMPTS + ("title_generation", "summarization")

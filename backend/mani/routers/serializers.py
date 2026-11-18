@@ -32,7 +32,7 @@ from mani.models.rows import (
 )
 
 if TYPE_CHECKING:
-    from mani.chat.orchestrator import Turn
+    from mani.chat.turn import Turn
 
 
 def to_thread(thread: Thread) -> ThreadOut:
@@ -100,7 +100,7 @@ def to_turn(turn: Turn) -> TurnOut:
         understanding=turn.understanding if debug else None,
         check_at_message_count=turn.check_at_message_count if debug else None,
         trace=turn.trace if debug else None,
-        follow_up_pending=bool(turn.read_after or turn.needs_summary) and not turn.was_duplicate,
+        follow_up_pending=turn.needs_summary and not turn.was_duplicate,
     )
 
 

@@ -219,3 +219,14 @@ def test_thinking_never_eats_the_budget_the_reply_was_given():
     for reply_budget in (200, 500, 800, 2048):
         sent = chain.sampling("openai/gpt-6-luna", 0.7, reply_budget)["max_completion_tokens"]
         assert sent - longest_thinking_seen >= reply_budget
+
+
+def test_an_anthropic_model_asks_for_automatic_prompt_caching():
+    assert chain.request_body("anthropic/claude-sonnet-5.5", settings(), None)["cache_control"] == {"type": "ephemeral"}
+    assert "cache_control" not in chain.request_body("openai/gpt-6-luna", settings(), None)
+
+
+def test_the_priority_tier_is_asked_for_only_on_openai_models():
+    body = chain.request_body("minimax/minimax-m3.1-flash", settings(), {"only": ["together"], "zdr": True}, priority=True)
+    assert "service_tier" not in body and body["provider"]["only"] == ["together"] and body["provider"]["zdr"] is True
+    assert chain.request_body("openai/gpt-6-luna", settings(), None, priority=True)["service_tier"] == "priority"
