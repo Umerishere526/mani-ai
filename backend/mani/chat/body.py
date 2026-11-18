@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from mani.chat.greeting import FINISH_LABEL
 from mani.chat.repairs import (
     with_the_check_in,
     without_body_offer,
@@ -29,8 +30,6 @@ _ANSWERS = {
     RETIRING: {"finish", "keep_chatting", PLAN := "plan"},
 }
 LIBRARY_ID = "library"
-# The closing choice that ends the conversation: shown on the last step, so the turn after it may carry it.
-FINISH_LABEL = "Finish for Now"
 
 
 def closing_shown(history: list) -> bool:

@@ -51,5 +51,9 @@ COPIED_BACK = "It looks like you've sent my last message back to me. What did yo
 TRY_IT_LABEL = "Try it"
 TELL_ME_MORE_LABEL = "Tell me more"
 KEEP_CHATTING_LABEL = "Keep chatting"
+# The three choices after a framework's last stage, in the client's words.
+CLOSING_KEEP_CHATTING_LABEL = "Keep Chatting"
+GO_TO_LIBRARY_LABEL = "Go to Library"
+FINISH_LABEL = "Finish for Now"
 TELL_ME_ABOUT_THIS_LABEL = "Tell me about this"
 EXPLAIN_LABELS = {TELL_ME_ABOUT_THIS_LABEL.lower(), TELL_ME_MORE_LABEL.lower()}
