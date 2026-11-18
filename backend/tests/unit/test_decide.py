@@ -179,9 +179,10 @@ def test_no_offer_before_their_third_message():
         "Not sure", "Show me how", "Give me a tool"]
 
 
-def test_no_offer_on_a_turn_that_corrects_mani():
+def test_an_offer_the_model_made_on_a_correction_keeps_its_buttons():
+    """Code cannot unsay a lead-in already written, so refusing it would leave the words with no buttons and no offer."""
     d = decided(reply(action="offer", framework="abcde", corrected=True), person_messages=5)
-    assert d.refused == "offer" and d.prompts == [] and d.technique is None
+    assert d.refused is None and labels(d) == ["Not sure", "Show me how", "Give me a tool"]
 
 
 def test_a_correction_inside_a_set_still_moves_the_stage():

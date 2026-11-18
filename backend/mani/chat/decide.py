@@ -82,10 +82,10 @@ def decide(
         decision = _answered_offer(base, open_offer, offered, tap, reply)
     else:
         decision = base
-    # An offer is refused while a set runs or is offered, before their 3rd message, and on a turn that corrects Mani.
+    # An offer is refused while a set runs or is offered, and before their 3rd message: each is said in the facts first.
     decision = _offer(decision, reply, registry, thread_id, count_after,
                       blocked=(running is not None or open_offer is not None or tap.starting is not None
-                               or person_messages < OFFER_FROM_MESSAGE or reply.corrected))
+                               or person_messages < OFFER_FROM_MESSAGE))
     if reply.action == "library" and not decision.prompts:
         decision = dataclasses.replace(decision, prompts=[
             SmartPrompt(label=GO_TO_LIBRARY_LABEL, library=LibrarySection.HOME.value)])
