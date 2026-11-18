@@ -49,9 +49,9 @@ the same change as the work.**
   1. The duplicate check, the advisory locks, the pause gate (423 `chat_paused` while a pause runs, see Decisions in
      force), loading the turn's context, saving the rewind snapshot, and the history window within
      `CONTEXT_BUDGET_CHARS`.
-  2. With no model call: a tap on a style button gets that style's fixed opener (`turn._open_in_style`); a tap on
-     Tell me more gets the framework's fixed explanation for their style and "Would you like to try it?"
-     (`turn._explained`); their message equal to Mani's last reply gets `greeting.COPIED_BACK` (`turn._copied_back`).
+  2. With no model call: a tap on a style button gets that style's fixed opener (`turn._open_in_style`); a tap on a
+     lead-in button gets the framework's five steps for their style (`turn._explained`), and I need an example its
+     worked example (`turn._fixed_step`); their message equal to Mani's last reply gets `greeting.COPIED_BACK` (`turn._copied_back`).
   3. Otherwise exactly one model call. The system prompt is `content/prompts/mani.md`, the framework guide built from
      the registry (each active framework: when it fits, when never to offer it, and each stage's line, purpose and
      when it is answered), the person's onboarding answers and memory, and the summary once messages have left the
@@ -135,7 +135,8 @@ the same change as the work.**
   - the client's fixed pieces, sent whole: the greeting, the style question and openers, the return opener, Tell me
     more's explanation per style with "Would you like to try it?", every button label, `crisis.CRISIS_REPLY`,
     `crisis.pause_reply`, `crisis.END_CHECK` and `greeting.COPIED_BACK`;
-  - an offer only when it is allowed, with Try it, Tell me more and Keep chatting (`decide._offer`);
+  - an offer only when it is allowed, as the client's three steps with their buttons (`decide._offer`,
+    `decide._answered_offer`);
   - one stage step per turn, and finish only on the last stage (`decide.stage_of`, `decide._moved`);
   - the safety question after a framework when the conversation reached danger (`crisis.END_CHECK`);
   - the declined and finished lists on the thread record (`chat/record.py`);
@@ -146,11 +147,11 @@ the same change as the work.**
   `test_notes_written_by_one_turn_reach_the_next_turns_facts` in `tests/integration/test_turn.py`;
   `tests/unit/test_decide.py`, `test_facts.py`, `test_judged.py`, `test_taps.py`, `test_record.py`.
 - **A turn held for safety changes no framework state and makes no offer, and its facts invite neither: it stays on
-  its stage, a tap on Try it does not start the set, and no offer is allowed** (2026-11-18). Because the facts told a
+  its stage, a tap on Start does not start the set, and no offer is allowed** (2026-11-18). Because the facts told a
   held turn it might move to the next stage, start an open offer or start a tapped set, which code then refused, so
   the reply could say a line code did not follow (2026-11-18). Held: a worry is open or a return check is owed
   (`holding` in `turn._turn`); a worry found in this message guards the turn too (`guarded` in `turn._apply`). The one
-  exception is the answer to the safety question after a framework, which may close the set. Someone who taps Try it
+  exception is the answer to the safety question after a framework, which may close the set. Someone who taps Start
   during a safety turn taps again once safe (accepted 2026-11-17). `facts.HELD_START`;
   `test_a_held_turn_never_invites_a_move_a_start_or_an_offer_that_code_would_refuse` in `tests/unit/test_facts.py`,
   `test_a_guarded_turn_changes_no_framework_state` in `tests/unit/test_decide.py`.
@@ -177,15 +178,28 @@ the same change as the work.**
 - **The evaluation is the gate for every change to the prompt or the model** (muhammad, 2026-11-17). Because the
   scenario script counted words, offers and phrases rather than whether a reply was good, and the rebuild needed a
   scored comparison with ChatGPT; 0.15 is about the noise between runs (2026-11-17). `evals/run_eval.py`: 14 quality
-  cases and 7 rule cases from muhammad's 2026-11-17 comparisons (`evals/cases.json`), three runs each, scored by
-  `openai/gpt-6.1-sol` with a strict JSON schema, the expensive calls a few at a time. The change and the current
-  prompt and model run side by side in the same session; the change is kept only if its overall score is no more than
-  0.15 below and every rule passes. A score from an earlier day is never the comparison. It sends production's request
+  cases from muhammad's 2026-11-17 comparisons and 11 rule cases (`evals/cases.json`), three runs each, scored by
+  `openai/gpt-6.1-sol` with a strict JSON schema, four calls at a time, waiting when OpenRouter's in-flight budget
+  refuses one (402). The change and the current prompt and model run one after the other in the same session; the
+  change is kept only if its Supportive and Reflective overall is no more than 0.15 below and every rule passes.
+  Directive is judged with length set aside and reported apart, since its replies are short by design (muhammad,
+  2026-11-18). A score from an earlier day is never the comparison. It sends production's request
   (`chain.request_body`, `chain.sampling`; since 2026-11-18, so earlier scores measured a different request), and it
   runs only from the command line. Before a merge, `evals/check_suite.py` runs the 8 conversations of
   `evals/suite.json` through the real stack with a model-played person (`evals/drive.py`, which calls OpenRouter
   directly, never billed as chat) and exits 0 only when every check passes; muhammad reads the rest. Last gate,
-  2026-11-17: 3.62 with all 21 rules passing.
+  2026-11-18, the client's framework sequence: Supportive and Reflective 3.30 against the baseline's 3.36, rules 32 of
+  33 (one Directive close a sentence long, accepted by muhammad); the suite passed 8 of 8.
+- **Directive replies are short: three or four short sentences at most, in the chat and inside a set, with one short
+  acknowledgment before each stage** (muhammad, 2026-11-18). Because the client's sequence document shows Directive's
+  short acknowledgments, and muhammad's Directive chat of 2026-11-18 ran long. Supportive and Reflective keep their
+  length. `mani.md` ("How a reply looks", "Your style", "Inside the set of questions").
+- **Mani suggests up to three answers as buttons when it asks what is behind something, what matters most, or which
+  of a few things** (muhammad, 2026-11-18). Because the client's sequence document shows them (Work / Family /
+  Everything at once). The reply's `options`; code shows them only in the chat: never beside its own buttons, inside a
+  set or an offer, or on a turn held for safety; a tap reaches the model as their words (`repairs.suggestion_buttons`,
+  `turn._apply`). `test_suggestions_show_as_buttons_on_a_plain_chat_reply_and_a_tap_is_their_answer`,
+  `test_suggestions_never_show_beside_an_offer_inside_a_set_or_on_a_safety_turn` in `test_turn.py`.
 - **When no host answers, or the reply's text is empty, a send or a first message gets a fixed reply, never an
   error; an edit fails instead and changes nothing** (muhammad, 2026-11-17; the edit and the empty text, 2026-11-18).
   An empty text keeps its safety judgment and moves nothing else (`test_an_empty_reply_gets_a_fixed_one_and_keeps_the_
@@ -412,7 +426,7 @@ the same change as the work.**
   back, ends where the turn asks the model (`runner.Model` records the request and the thread's version, its message
   count and newest message id); the model is called holding nothing; the write runs the same steps in a fresh
   transaction under `threads.lock` and answers them with that reply. A turn that never asks the model (a style
-  button, Tell me more, a duplicate, their own message sent back) commits in the read, and one refused by a pause writes nothing.
+  button, a lead-in button or I need an example, a duplicate, their own message sent back) commits in the read, and one refused by a pause writes nothing.
   At the write, a message id
   already stored returns that turn; a thread whose version moved, or a reply asked for in another shape, is refused as
   `CONFLICT` 409, retryable, "Mani is still answering your last message. Please try again." The write rebuilds from the
@@ -709,51 +723,60 @@ the same change as the work.**
   an established fact or feed an OCD checking loop (2026-11-18). No framework id is in code: the reply names
   `framework`, and code checks only that it is in the registry and allowed (`decide._offer`). The paused files carry
   their cheat sheet line too, and the seed refuses to activate a framework missing what the turn reads
-  (`seed.missing_for_activation`: each style's Tell me more, each stage's line, `purpose` and `ready_when`), so
+  (`seed.missing_for_activation`: each style's five steps, the worked example, each stage's line, `purpose` and
+  `ready_when`), so
   bringing one back is a content change. `facts.framework_guide`;
   `test_the_guide_says_when_never_to_offer_each_framework` in `test_facts.py`,
   `test_a_framework_stage_without_its_purpose_cannot_be_seeded_active` in `test_seed.py`.
 - **Memory is per person**. Because Mani should learn each person's patterns across chats, while a new chat
   still starts with none of the last one's messages (2026-09-23).
-- **The model writes the offer; code adds the buttons** (muhammad, 2026-11-17). Because the client's template filled
-  by code read as a questionnaire, and its slots and the lines code joined around it fought the model's own text
-  (2026-11-17). The reply sets `action: offer` and `framework`; its text names the belief in their words, says what
-  the questions would help with and asks whether they would like to try, in their style (`mani.md`, with an example
-  per style). Code adds Try it, Tell me more and Keep chatting (`repairs.offer_buttons`) and records the offer on
-  `thread_technique_state`. Tell me more stays the client's: her explanation for their style
-  (`stages.offering.explain`), then "Would you like to try it?" (`greeting.PERMISSION_QUESTION`), with Try it and
-  Keep chatting and no model call (`turn._explained`); the question was lost on 2026-11-18 when the code that rendered
-  the explanation was deleted, and put back the same day. A Keep chatting tap gets Mani's own words, not the client's
-  line. Both overrule the client's documents, recorded in `docs/client/requirements.md`; Lolly has not been told.
-  `test_a_clear_offer_shows_the_three_buttons_and_records_it`,
-  `test_tell_me_more_sends_the_fixed_explanation_with_no_model_call` in `test_turn.py`.
+- **The offer is the client's three steps: a lead-in the model writes, then her five steps, then the choice to
+  start** (muhammad, 2026-11-18). Because the client's sequence document (2026-11-18,
+  `docs/client/messages/2026-11-18-framework-sequences.md`) shows how a framework is meant to run, and the newest client
+  document wins (2026-11-18). The reply sets `action: offer` and `framework`; its text is the lead-in: the belief said
+  back, that a belief can feel true without being a fact, and a question about how they could test it, never naming the
+  set (`mani.md`, an example per style). Code adds Not sure / Show me how / Give me a tool (`repairs.lead_in_buttons`).
+  Any of them sends the client's five steps for their style word for word, with the ready question, and Start ABCDE /
+  I need an example / Talk more first, with no model call (`turn._explained`); I need an example sends the worked
+  example (`stages.offering.example`; ABCDE's from her document, Thought Reframe's ours). A typed answer to the lead-in
+  gets Mani's reply, then the five steps and their buttons (`Decision.show_steps`). Talk more first sets the offer
+  aside for now, so it may come back; only a clear no (`action: stop` on an open offer) declines it. The earlier
+  offer (Mani's own sentence with Try it / Tell me more / Keep chatting) is overruled, recorded in
+  `docs/client/requirements.md`. `test_the_offer_runs_lead_in_steps_example_then_start`,
+  `test_a_typed_reply_to_the_lead_in_gets_the_reply_then_the_steps`,
+  `test_talk_more_first_lets_the_offer_lapse_and_it_may_come_back` in `test_turn.py`.
 - **Retired 2026-10-27 (superseded) and 2026-11-17: one style file per thread in the system prompt** (muhammad,
   2026-10-12). Because one prompt, `mani.md`, carries all three styles, and the facts name the conversation's
   style (2026-11-17).
-- **An offer carries the client's three buttons**, Try it, Tell me more, Keep chatting, set by code
-  (`repairs.offer_buttons`); the model never writes them. Because the client's offer has three choices, two after Tell me more
-  (2026-10-08); after Tell me more it comes back with the other two.
+- **Every button of a framework is the client's, set by code**: Not sure / Show me how / Give me a tool under the
+  lead-in, Start <name> / I need an example / Talk more first under the steps, Stronger / More focused / Still a bit
+  tired after the last stage, Keep Chatting / Go to Library / Finish for Now at the close (`greeting.py`,
+  `repairs.py`); the model never writes them. Because the client's sequence document (2026-11-18) names them, and
+  muhammad kept the closing three (2026-11-18). A tap is matched by its label; Start carries the framework's id, so it
+  starts only the offer still open. `test_the_offer_carries_the_clients_buttons_at_each_step` in `test_repairs.py`.
 - **Retired 2026-11-17: an offer the window allows is never dropped for a question beside it** (muhammad,
   2026-10-12). Because code no longer reads the offer's text; the buttons follow `action: offer` (2026-11-17).
 - **The model writes each stage, and code only holds the order: one stage step per turn, finish only on the last
   stage** (muhammad, 2026-11-17). Because the stage walk owned by code (a store of each stage's status, fallbacks to
   the client's lines, a reply split into its answer, the letter line and the stage's opening) felt like a
   questionnaire, held about 2,000 lines of code, and still asked again what they had said (2026-11-17). The reply's
-  `stage` is the stage whose question it asks; code stores it but never more than one past the stored stage, and on
-  the starting turn it may reach the second stage when the chat already answered the first (`decide.stage_of`). A
-  stage of another framework changes nothing. `action: finish` closes only on the last stage, with Keep Chatting, Go
-  to Library and Finish for Now (`decide.closing_buttons`), and records the set finished; `action: stop` records it
-  declined. A set starts on a tap on Try it for the offer still open (`taps.tap_event`), or on a typed yes when the
-  reply moves to a stage of the offered set. The facts name the stage in force, the next stage's line and the one-step
+  `stage` is the stage whose question it asks; code stores it but never more than one past the stored stage, and the
+  starting turn opens the first stage only, even when the chat touched it, as the client's sequence asks every letter
+  on its own reply (`decide.stage_of`; 2026-11-18). A stage of another framework changes nothing. `action: finish` on
+  the last stage opens the feelings check: Mani acknowledges the new belief and asks how they feel now, with Stronger /
+  More focused / Still a bit tired, and the next answer closes the set with Keep Chatting, Go to Library and Finish for
+  Now and records it finished (phase `feelings_check`, `decide._moved`; 2026-11-18). E ends on the new belief, with no
+  "one thing they'll do" (muhammad, 2026-11-18). `action: stop` records the set declined. A set starts on a tap on
+  Start for the offer still open (`taps.tap_event`), or on a typed yes after its five steps when the reply moves to
+  its first stage. The facts name the stage in force, the next stage's line and the one-step
   rule (`facts._running_line`). Each stage opens with its letter line ("A is for Activating Event."), written by the
   model (muhammad, 2026-11-17); code does not check it at runtime, because that would be code editing text, and the
   evaluation's rule case `rule-stage-line` checks it. How a stage goes (answer what they said first, never ask again
   what they told, never narrate, the new belief in their own words) is `mani.md`'s "Inside the set of questions".
   Their own last reply sent back still gets `greeting.COPIED_BACK` with no model call (R67).
-  `test_a_stage_two_ahead_is_held_to_the_next_one`, `test_the_starting_turn_may_reach_the_second_stage_and_no_further`,
+  `test_a_stage_two_ahead_is_held_to_the_next_one`, `test_the_starting_turn_opens_the_first_stage_only`,
   `test_finish_before_the_last_stage_is_ignored`, `test_stop_records_the_framework_declined` in `test_decide.py`;
-  `test_try_it_then_a_stage_reply_stores_the_stage`, `test_the_last_stage_finished_shows_the_closing_buttons` in
-  `test_turn.py`.
+  `test_after_e_the_feelings_check_then_the_closing_buttons` in `test_turn.py`.
 - **Retired 2026-11-17: a framework walk never skips and helps when they don't know** (muhammad, 2026-10-21).
   Because the walk is gone; `mani.md` holds both (every stage in order, a gentle reading when they don't know),
   and only `action: stop` ends a set (2026-11-17).
@@ -761,9 +784,8 @@ the same change as the work.**
   Because the client's ABCDE document of 2026-10-09 is what we build to, and ABCDE's stages give the questions a
   target (2026-10-09); why the other four are paused: reason unknown, muhammad to confirm. Each stage opens with its
   letter and name ("A is for Activating Event."), as the document shows (muhammad agreed 2026-10-13, R12), and
-  nothing comes before it (the document goes from Try It straight to "A is for"). Tell me more is the numbered five
-  steps in the person's style word for word (`stages.offering.explain`), and the permission question is "Would you
-  like to try it?" in every style. Of each stage the turn reads its line (`intro`), `purpose` and `ready_when`; the
+  nothing but a short acknowledgment in Directive comes before it. The five steps are the client's sequence
+  document's list in the person's style with its ready question, word for word (`stages.offering.explain`). Of each stage the turn reads its line (`intro`), `purpose` and `ready_when`; the
   other stage fields are unread (Open decisions). `tests/unit/test_abcde_content.py`.
 - **Retired 2026-11-17: the stage store** (`thread_technique_state.stages_known`, 2026-10-13). Because the walk
   that wrote it is gone; the column stays, left empty, until muhammad approves dropping it (2026-11-17).
@@ -807,15 +829,13 @@ the same change as the work.**
 - **Retired 2026-11-17: the context block explains itself** (2026-10-09). Because the block is gone; the facts are
   plain sentences sent after their message (`facts.facts`) (2026-11-17).
 - **An open offer is read from the database, not from the buttons on screen.** Because an offer can stay open
-  with no buttons showing, and a typed yes to it then started nothing (2026-10-09). A tap on Try it starts it only
-  while that offer is still open (`taps.tap_event`); a typed yes starts it when the reply moves to a stage of the
-  offered set (`decide.decide`). Tell me more is answered with the client's explanation and the offer's other two
-  buttons. Keep chatting declines it; any other answer lets it lapse (2026-11-17), and a lapsed offer (its row
-  retired, phase null) is no longer open: an old Try it starts nothing and a new offer may come (the final review,
+  with no buttons showing, and a typed yes to it then started nothing (2026-10-09). The offer row stands at the lead-in
+  (`offering`) or the five steps (`steps`); a tap on Start starts it only while it is open (`taps.tap_event`), and a
+  typed yes starts it after the steps when the reply moves to its first stage (`decide.decide`). A lapsed offer (its
+  row retired, phase null) is no longer open: an old button starts nothing and a new offer may come (the final review,
   2026-11-18, `test_an_offer_they_moved_past_is_no_longer_open_and_its_old_button_starts_nothing`).
-  `test_try_it_starts_only_the_framework_on_the_offer_that_is_still_open` in `test_taps.py`,
-  `test_a_typed_yes_that_opens_the_first_stage_starts_the_framework`, `test_any_other_reply_to_an_open_offer_lets_it_lapse`
-  in `test_decide.py`.
+  `test_start_starts_only_the_framework_on_the_offer_that_is_still_open` in `test_taps.py`,
+  `test_a_typed_reply_to_the_lead_in_gets_the_five_steps_and_the_start_buttons` in `test_decide.py`.
 - **Retired 2026-11-17: "It hit me so hard" is not violence** (2026-10-08). Because the phrase screen it corrected
   is gone (2026-11-17).
 - **chat-tester resets a password on the page**: email and new password, set through the Auth Admin API with
@@ -922,8 +942,8 @@ Earlier:
 - Tell the client (2026-10-08): "overwhelming" was removed from the Structured Problem Solving description,
   since every offer showed a feeling the person had not named; Supportive and Reflective questions were
   written for the 26 stages whose three styles were identical (the client's wording is kept as Direct, or as
-  Reflective for ACT `present`); the offer buttons read Try it / Tell me more / Keep chatting, not the
-  specification's "Yes, let's try it" / "I want to keep talking". Have them review the new lines.
+  Reflective for ACT `present`). Have them review the new lines. (The offer buttons are now the client's own, from
+  her sequence document of 2026-11-18.)
 
 - The client's crisis resources and safety wording (point 4 above).
 - Tell the client (2026-11-17) how an offer comes now: once Mani has said the core back and it was not corrected,
@@ -934,8 +954,7 @@ Earlier:
 - Tell the client: when a person asks Mani to pick, it offers one small draft step to accept
   or change, which the Behavioral Activation specification's "must not choose the activity" does not allow
   as written.
-- Tell the client: after Try it Mani no longer asks the first stage's question when the person
-  has already said it, and a person who cannot say what to do is offered up to three options at the first
+- Tell the client: a person who cannot say what to do is offered up to three options at the first
   "I don't know". Both depart from the literal Structured Problem Solving example.
 - Panic with no action in sight: the overview sends it to DBT STOP, the STOP specification is written around an
   action about to be taken. The client's call.

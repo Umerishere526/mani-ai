@@ -71,8 +71,16 @@ async def post(http, settings, body) -> tuple[dict, float]:
     began = time.monotonic()
     attempt = waits = 0
     while True:
-        r = await http.post(f"{settings.openrouter_base_url}/chat/completions", json=body, timeout=180,
-                            headers={"Authorization": f"Bearer {settings.openrouter_api_key}"})
+        try:
+            r = await http.post(f"{settings.openrouter_base_url}/chat/completions", json=body, timeout=180,
+                                headers={"Authorization": f"Bearer {settings.openrouter_api_key}"})
+        except httpx.TransportError as error:
+            # A dropped connection is retried like a failed answer, never allowed to end the run.
+            attempt += 1
+            if attempt == 3:
+                raise RuntimeError(f"{body['model']}: {type(error).__name__}") from error
+            await asyncio.sleep(2 * attempt)
+            continue
         if r.status_code == 200 and r.json().get("choices"):
             return r.json(), time.monotonic() - began
         if r.status_code == 402 and "in_flight" in r.text and waits < IN_FLIGHT_WAITS:

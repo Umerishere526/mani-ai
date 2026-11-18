@@ -12,8 +12,8 @@ from mani.models.rows import TechniqueState
 from mani.prompts import cache, composer
 
 NO_OFFER = "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
-# What a tap on Try it says while the turn is held for safety: the set does not start, so its first line is not said.
-HELD_START = ("They tapped Try it, but this reply is about their safety: the set does not start now and you never "
+# What a tap on Start says while the turn is held for safety: the set does not start, so its first line is not said.
+HELD_START = ("They tapped to start the set, but this reply is about their safety: it does not start now and you never "
               "say its line.")
 
 

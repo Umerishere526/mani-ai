@@ -141,7 +141,7 @@ class Framework(Row):
     phases: list[str]
     display_order: int = 0
     # The activation data (central indication, contraindications) and the per-stage content (intro line, purpose,
-    # when it is answered, the Tell me more explanation). activation_conditions is not read for routing; a flat string
+    # when it is answered, the five steps and the worked example). activation_conditions is not read for routing; a flat string
     # cannot hold either shape.
     activation: dict[str, Any] = Field(default_factory=dict)
     stages: dict[str, Any] = Field(default_factory=dict)

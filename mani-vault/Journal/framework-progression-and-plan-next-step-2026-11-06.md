@@ -3,6 +3,7 @@ type: journal
 date: 2026-11-06
 tags: [journal, framework, walk, follow-through, client-test]
 ---
+> Superseded 2026-11-18 (E's path: E ends on the new belief, then the feelings check) — see [[framework-sequence-from-the-client-2026-11-18]]
 
 # Steps move on when answered; Plan Next Step after the questions (2026-11-06)
 

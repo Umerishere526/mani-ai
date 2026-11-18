@@ -99,7 +99,7 @@ async def run(
     """Run a turn's steps with no connection held while the model thinks.
 
     Read: the steps run in a transaction up to the model call, which records what they ask and rolls back.
-    A turn that never asks (a style button, Tell me more, a duplicate) commits right there. Think: the model is
+    A turn that never asks (a style button, a lead-in button or the example, a duplicate) commits right there. Think: the model is
     called holding nothing. Write: the steps run again in a fresh transaction under the thread's lock, and
     are answered with that reply when the thread is unchanged; otherwise the turn is refused as a conflict.
     `answer_failure`: when no host answers, the write still runs and the turn sends its fixed words; otherwise the
