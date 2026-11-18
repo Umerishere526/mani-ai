@@ -884,7 +884,9 @@ Ordered by what breaks first.
 2. **The one-call turn needs its migrations and seed in the same release.** `supabase db push` for 039 (reshapes every
    thread's record and clears rewind snapshots) and 040 (drops two columns), then `scripts/seed.py`, which seeds the
    `mani` row with its model and hosts and switches the retired prompt rows off; the turn refuses to load without the
-   `mani` row (`cache.REQUIRED_PROMPTS`). Neither has run on a hosted project (2026-11-18).
+   `mani` row (`cache.REQUIRED_PROMPTS`). Neither has run on a hosted project (2026-11-18). 041 (drops the stored
+   per-person memory for good) runs only after the code that no longer reads it is deployed: code from before
+   2026-11-18 selects from `admin.user_memory` on every turn, so 041 ahead of the deploy fails every chat.
 3. **Rate limit and cost ceiling.** `DAILY_MESSAGE_LIMIT` exists and defaults to 0 (off); muhammad sets it in the
    environment. `MINUTE_MESSAGE_LIMIT` is 10, and neither applies while a safety worry is open. There is no per user
    cost ceiling; `llm_calls.spend_since()` is what one would read. A retried send with the same `client_message_id`
