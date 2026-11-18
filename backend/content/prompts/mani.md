@@ -10,7 +10,8 @@ model_parameters:
   # Lower than the default so the same opening gets the same kind of reply from run to run (muhammad, 2026-11-18).
   temperature: 0.3
 routing:
-  only: [inferact-vllm, together, modelrun, fireworks, makora, nebius]
+  # Only the hosts that run MiniMax's reasoning: Inferact vLLM, Together and Nebius answer with none (2026-11-18).
+  only: [modelrun, fireworks, makora]
   zdr: true
 ---
 

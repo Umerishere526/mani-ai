@@ -9,7 +9,7 @@ def test_a_prompt_file_carries_its_routing():
     assert prompt["model_id"] == "minimax/minimax-m3.1-flash"
     assert prompt["model_parameters"] == {"reasoning_effort": "high", "temperature": 0.3}
     assert prompt["routing"] == {
-        "only": ["inferact-vllm", "together", "modelrun", "fireworks", "makora", "nebius"], "zdr": True,
+        "only": ["modelrun", "fireworks", "makora"], "zdr": True,
     }
 
 
