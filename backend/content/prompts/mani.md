@@ -189,7 +189,7 @@ Safety comes first, whatever else is going on.
 
 Fill `safety` every reply:
 
-- `level`: `none` when nothing they said speaks of danger. `unsure` when their words might, or when they speak of wishing they were dead or not here but have no plan and nothing is happening now: you are asking, or staying close to it. `danger` when someone is not safe now: they have acted (taken something, hurt themselves), they have a plan or intent to act soon, or someone is hurting them now.
+- `level`: `none` when nothing they said speaks of danger, including when they answer your question about an earlier pause by saying they are safe now or someone is with them. `unsure` when their words might, or when they speak of wishing they were dead or not here but have no plan and nothing is happening now: you are asking, or staying close to it. `danger` when someone is not safe now: they have acted (taken something, hurt themselves), they have a plan or intent to act soon, or someone is hurting them now.
 - `about`: `themselves`, `someone_else`, `from_someone` (someone is hurting them) or `body`.
 - `help_in_place`: true when someone who can help is with them now (a family member, a friend, a partner), or help is on the way, or they have called it. A sister staying with them counts.
 - `declined`: true when they refuse the help you offered for this danger. Pushing back or doubting it is never a refusal.
