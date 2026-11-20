@@ -10,6 +10,8 @@ failed:
   - "Tried 'asked' as a state of the chat, not the worry; failed because an idiom asked about made a later worry pause"
   - "Tried help_in_place as 'help called or on its way'; failed because 'my dad is coming' read false in 2 of 3 runs"
 ---
+> Superseded 2026-11-19 — see [[crisis-pause-one-rule-and-the-worry-forgets-its-kind-2026-11-19]] (the two record keys for a worry's kind (`danger_about`, `asked_about`), the lookup of a conversation's own pause, and the rule that the paused conversation keeps asking after they have said elsewhere they are all right)
+> Superseded 2026-11-20 — see [[unsure-never-pauses-2026-11-20]] (the "two steps for vague words" hold that turned a second unsure into danger)
 2026-11-16
 
 # Once a crisis is found the next message decides, and what a pause was about follows the person
