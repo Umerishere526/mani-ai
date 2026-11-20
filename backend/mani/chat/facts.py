@@ -7,6 +7,7 @@ from mani.chat import record as rec
 from mani.chat.decide import OFFER_FROM_MESSAGE
 from mani.chat.greeting import style_label
 from mani.chat.pause import ReturnCheck
+from mani.chat.safety import State
 from mani.chat.techniques import FEELINGS, FIRST_STAGE_OPENING, STEPS, Registry, line_of, stages_of
 from mani.db.threads import TurnContext
 from mani.models.rows import TechniqueState
@@ -50,11 +51,11 @@ def system_prompt(config: cache.Config, ctx: TurnContext, *, summary_due: bool) 
 def facts(
     ctx: TurnContext, config: cache.Config, *, record: dict, style: str, running: TechniqueState | None,
     open_offer: TechniqueState | None, event: str | None, wants_title: bool, return_check: ReturnCheck | None,
-    answering_return: str | None, end_check_asked: bool, holding: bool, person_messages: int,
+    answering_return: str | None, end_check_asked: bool, holding: bool, person_messages: int, state: State,
 ) -> str:
     """What this reply needs to know that the conversation does not show. `holding`: the turn is held for safety, so
     code moves, starts and offers nothing, and nothing here invites it."""
-    safety = ctx.thread.safety
+    safety = state.value
     lines = [f"Their style: {style_label(style)}."]
     if notes := record.get(rec.NOTES):
         lines.append(f"Your notes from your last turn: {notes}")

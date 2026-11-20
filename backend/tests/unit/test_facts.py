@@ -6,6 +6,7 @@ import time
 import uuid
 
 from mani.chat.facts import facts, framework_guide, system_prompt
+from mani.chat.safety import State
 from mani.db.threads import TurnContext
 from mani.models.rows import Prompt, Thread
 from mani.prompts.cache import Config
@@ -27,7 +28,8 @@ def ctx(safety: str = "clear") -> TurnContext:
 
 def facts_for(context: TurnContext, **given) -> str:
     base = dict(record={}, style="supportive", running=None, open_offer=None, event=None, wants_title=False,
-                return_check=None, answering_return=None, end_check_asked=False, holding=False, person_messages=5)
+                return_check=None, answering_return=None, end_check_asked=False, holding=False, person_messages=5,
+                state=State(context.thread.safety))
     return facts(context, CONFIG, **{**base, **given})
 
 

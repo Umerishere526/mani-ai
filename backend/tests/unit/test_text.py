@@ -49,3 +49,13 @@ def test_their_message_is_caught_as_manis_last_reply_sent_back_only_when_it_is_o
     assert not copies_last_reply("yes", said)
     assert not copies_last_reply("I'm waiting for them to show they still want the closeness, yes.", said)
     assert not copies_last_reply(said, None), "no reply of Mani's to copy"
+
+
+def test_a_copy_of_manis_reply_with_their_own_words_added_is_an_answer():
+    """The audit of 2026-11-20: a long reply pasted back with "no. i took all my pills an hour ago" added still counted
+    as a copy, so the turn answered with the fixed line and never read the message for safety."""
+    said = ("Setting that boundary and paying for it in loneliness is a real cost, and you're carrying both sides of "
+            "it. When you picture next Thursday alone, what does the day actually look like for you? " * 3)
+    assert copies_last_reply(said, said)
+    assert not copies_last_reply(said + " no. i took all my pills an hour ago", said)
+    assert not copies_last_reply("i took all my pills. " + said, said)
