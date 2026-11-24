@@ -72,9 +72,11 @@ def test_a_typed_yes_that_opens_the_first_stage_starts_the_framework():
     assert d.technique.outcome is TechniqueOutcome.ACCEPTED and d.technique.phase == "activate"
 
 
-def test_finish_before_the_last_stage_is_ignored():
+def test_finish_before_the_last_stage_opens_the_feelings_check():
+    """The client's 2026-11-17 to 11-23 tests: a framework is not continued just because steps remain."""
     d = decided(reply(action="finish", stage="dispute"), running=running("abcde", "dispute"))
-    assert d.finished == [] and d.prompts == [] and not d.retire_technique
+    assert d.technique.phase == "feelings_check" and labels(d) == ["Better", "About the same", "It didn't help"]
+    assert d.finished == [] and not d.retire_technique
 
 
 def test_finish_on_the_last_stage_opens_the_feelings_check_and_finishes_nothing_yet():

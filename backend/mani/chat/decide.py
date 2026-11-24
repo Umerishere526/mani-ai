@@ -116,9 +116,9 @@ def _moved(base: Decision, reply: TurnReply, framework: Framework, running: Tech
     if reply.action == "stop":
         return dataclasses.replace(base, declined=[*base.declined, framework.id], technique=running.model_copy(
             update={"outcome": TechniqueOutcome.DECLINED, "phase": None}))
-    on_last = running.phase == stages_of(framework)[-1]
-    # A turn that reaches decide after the safety question was asked is one whose answer settled it: it closes the set.
-    if on_last and (reply.action == "finish" or end_check_asked):
+    # A finish on any stage opens the feelings check: they may have what they came for before the last one. A turn that
+    # reaches decide after the safety question was asked is one whose answer settled it: it closes the set.
+    if reply.action == "finish" or end_check_asked:
         if end_check_due and not end_check_asked:
             return dataclasses.replace(base, end_check=True)
         return dataclasses.replace(base, technique=running.model_copy(update={"phase": FEELINGS}),

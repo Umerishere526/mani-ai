@@ -172,7 +172,9 @@ def _running_line(framework, phase: str | None, *, held: bool) -> str:
         after = " This reply is about their safety: Stay on this stage and never say another stage's line."
     elif at + 1 < len(stages):
         after = (f" If its purpose is met, move to `{stages[at + 1]}` and say its line: "
-                 f"\"{line_of(framework, stages[at + 1])}\". Never move further than that.")
+                 f"\"{line_of(framework, stages[at + 1])}\". Never move further than that. If they say they already "
+                 "have what they came for, never push on through the steps left: ask how they feel now and set action "
+                 "to finish.")
     else:
         after = (" It is the last stage: when the new belief is said in their own words, acknowledge it, ask how they "
                  "feel now, and set action to finish.")

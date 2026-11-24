@@ -49,6 +49,7 @@ def test_no_offer_is_allowed_while_one_is_open_or_after_a_framework_was_finished
 def test_a_running_framework_names_the_next_stage_line_and_the_one_step_rule():
     text = facts_for(ctx(), style="directive", running=running("abcde", "activate"))
     assert '"B is for Belief."' in text and "Never move further than that." in text
+    assert "never push on through the steps left" in text and "set action to finish" in text
     assert "You cannot offer" in text
 
 

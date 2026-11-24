@@ -1,14 +1,14 @@
 ---
 id: thought_reframe
 name: Thought Reframe
-summary: "These questions help you look closely at one troubling thought, weigh what supports it and what doesn't, and land on either a more balanced thought you can believe or a next step if the thought points to a real problem."
+summary: "These questions help you look closely at one troubling thought, weigh what supports it and what doesn't, and end with either a thought you can believe that fits what you know or a next step if the thought points to a real problem."
 display_order: 2
 phases: [offering, thought, painful, feels_true, alternative, replacement]
 activation:
   central_indication: >-
-    The user is struggling with one specific thought about themselves, another person, or a
-    situation, and that thought is driving a strong feeling such as fear, sadness, guilt, shame
-    or anger.
+    One specific thought about themselves, another person, or a situation keeps troubling the
+    user, and that thought is driving a strong feeling such as fear, sadness, guilt, shame or
+    anger.
   to_find_out:
     - "the exact thought that keeps coming back, in their words"
     - "the situation it's attached to, in one sentence"
@@ -77,17 +77,17 @@ stages:
         2. Name What Makes It Painful: What is the most upsetting thing it might mean?
         3. Explore What Makes the Thought Feel True: What makes it convincing, and is there anything that complicates it?
         4. Consider Another Interpretation: Is there another explanation that could also make sense?
-        5. Create a Believable Replacement Thought: What is a more balanced way to see this that you can believe?
+        5. Create a Believable Replacement Thought: What could you tell yourself instead that you can believe?
 
         Ready to dive into a real life situation?
       supportive: |-
-        The Thought Reframe framework has five steps. Each one helps you understand a thought that is weighing on you and consider a more balanced way to see it.
+        The Thought Reframe framework has five steps. Each one helps you understand a thought that is weighing on you and consider another way to see it.
 
         1. Identify the Thought: What thought has been weighing on you?
         2. Name What Makes It Painful: What feels most upsetting about what it might mean?
         3. Explore What Makes the Thought Feel True: What makes it so convincing, and is there anything that complicates it?
         4. Consider Another Interpretation: Is there another explanation that could also make sense?
-        5. Create a Believable Replacement Thought: What is a more balanced way of seeing this that you could genuinely believe?
+        5. Create a Believable Replacement Thought: What could you tell yourself instead that you could genuinely believe?
 
         Would you like to try diving into a real life situation together?
       reflective: |-
@@ -97,7 +97,7 @@ stages:
         2. Name What Makes It Painful: When you think about what it might mean, what feels most painful?
         3. Explore What Makes the Thought Feel True: What seems to support it, and is there anything that makes you see it a little differently?
         4. Consider Another Interpretation: Given what you know, is there another explanation that could also fit?
-        5. Create a Believable Replacement Thought: What more balanced understanding could you genuinely believe?
+        5. Create a Believable Replacement Thought: Knowing what you've looked at, what could you genuinely believe instead?
 
         Are you ready to dive into a real life situation?
     # Sent when they tap I need an example. Ours until the client supplies hers.
@@ -229,14 +229,14 @@ stages:
     first_gap: [thought, believe, step]
     carries_case: true
     intro: "Step 5 is Create a Believable Replacement Thought."
-    purpose: "Help them decide, from what they've looked at, whether the thought holds up. If it doesn't, help them put into words a more balanced thought they can believe. If it does, and it points to a real problem, help them name one practical step to address it. Sometimes both are needed."
+    purpose: "Help them decide, from what they've looked at, whether the thought holds up. If it doesn't, help them put into words a thought they can believe that fits what they know. If it does, and it points to a real problem, help them name one practical step to address it. Sometimes both are needed."
     # The parts of the experience this stage can open, each only when it adds something (muhammad, 2026-11-06).
     explore:
       - {id: holds_up, about: "whether the thought holds up"}
-      - {id: new_thought, about: "a more balanced thought they can believe"}
+      - {id: new_thought, about: "a thought they can believe that fits what they know"}
       - {id: step, about: "one gentle step from here"}
     reach: "Report replacement as known only where they've given a thought that fits what they know, said they believe it, or concluded the thought is accurate and named one step they'll take. A permission or intention they give themselves, such as 'trust them more', is part of the thought, never the step. A step that is more of what they said the thought makes them do, such as pulling back, waiting or holding back, is not the step yet: it's partial with the gap 'step', once, so your text asks gently about the person or situation it is about. If they offered a thought without saying they believe it, it's partial, with their words and the gap 'believe', so your text asks whether it feels true to them. Another interpretation from Step 4 is the material, never the replacement thought: until they have put a thought into their own words, it's partial with the gap 'thought'. If they concluded the thought is accurate and named no step yet, it's partial with the gap 'step'."
-    listen_for: "A balanced thought, in their own words, that fits what's known and that they find believable. It may be cautious, partial or uncertain, and often keeps the feeling while putting it in proportion ('Even though I feel anxious, it's unlikely that...'). Also listen for whether they've concluded the thought is accurate, which means the upset is pointing to a real problem."
+    listen_for: "A thought, in their own words, that fits what's known and that they find believable. It may be cautious, partial or uncertain, and often keeps the feeling while putting it in proportion ('Even though I feel anxious, it's unlikely that...'). Also listen for whether they've concluded the thought is accurate, which means the upset is pointing to a real problem."
     ready_when: >-
       Either (a) they've given a thought, in their own words, that fits what's known and that they
       say they believe, or (b) they've concluded the original thought is accurate and named one
@@ -244,11 +244,11 @@ stages:
       believe it: "yes", "that feels fairer" and "that's closer" all mean it's done. If it doesn't
       feel true yet, adjust it with them until it does. Check once, plainly, if they haven't said;
       never ask for a number. If they've already arrived at a thought or a step, recognise it and
-      finish without asking them to repeat it. If a balanced thought still leaves a real problem,
+      finish without asking them to repeat it. If their new thought still leaves a real problem,
       one practical step may follow it.
     if_unclear:
       - id: thought
-        when: "they haven't yet put a more balanced thought into their own words"
+        when: "they haven't yet put a thought they can believe into their own words"
         reply: "Knowing what you've looked at, what would you tell yourself now about that thought?"
       - when: 'falsely positive - "Everything is fine, there is nothing to worry about."'
         reply: "You do not know that everything is fine. What thought stays closer to what you know?"

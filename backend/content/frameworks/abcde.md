@@ -1,7 +1,7 @@
 ---
 id: abcde
 name: ABCDE
-summary: "These questions help you see what happened, what you started believing about it, and how that belief has affected how you feel and what you do. Then you look at whether the belief is true and helpful, and find a more realistic way to see it."
+summary: "These questions help you see what happened, what you started believing about it, and how that belief has affected how you feel and what you do. Then you look at whether the belief is true and helpful, and decide what you would tell yourself instead."
 display_order: 1
 phases: [offering, activate, belief, consequence, dispute, effective]
 activation:
@@ -207,20 +207,20 @@ stages:
     carries_case: true
     intro: "E is for Effective New Belief."
     # E ends on the new belief, as the client's sequence document does (muhammad, 2026-11-18): how they feel comes next.
-    purpose: "Help them reach a more realistic and helpful way of seeing it, based on what they've examined, in their own words."
+    purpose: "Ask them plainly what they would tell themselves now instead of the belief from B, keeping what supports it and what challenges it, in their own words."
     # The parts of the experience this stage can open, each only when it adds something (muhammad, 2026-11-06).
     explore:
-      - {id: new_view, about: "a more balanced way to see it, in their words"}
-    reach: "Report effective as known only where they've given, at this stage, a more balanced way to see it in their own words. What they said in D never counts as the new belief: a challenge to the old belief is not yet a new one. If only an action or intention has come, report it as partial with the gap 'belief', so your text asks for the balanced belief behind it. A balanced view already forming in the chat before the framework counts: help them refine it rather than start again."
-    listen_for: "A more realistic and helpful view that separates what they know from what they assumed, usually more flexible than the original belief ('I made a mistake' rather than 'I'm a failure')."
-    ready_when: "They've said, in their own words, a more balanced way to see it, such as 'I don't have to give up my independence to let someone close', or picked one of Mani's suggested wordings as theirs. A plan, an action or a commitment for next time is not the new belief."
+      - {id: new_view, about: "what they would tell themselves now instead, in their words"}
+    reach: "Report effective as known only where they've given, at this stage, what they would tell themselves now instead of the old belief, in their own words. What they said in D never counts as the new belief: a challenge to the old belief is not yet a new one. If only an action or intention has come, report it as partial with the gap 'belief', so your text asks what they would tell themselves about the belief now. A new view already forming in the chat before the framework counts: help them refine it rather than start again."
+    listen_for: "A view that fits what they know and helps them, that separates what they know from what they assumed, usually more flexible than the original belief ('I made a mistake' rather than 'I'm a failure')."
+    ready_when: "They've said, in their own words, what they would tell themselves now instead of the old belief, such as 'I don't have to give up my independence to let someone close', or picked one of Mani's suggested wordings as theirs. A plan, an action or a commitment for next time is not the new belief."
     # Optional follow-ups. One at a time, and only before they have a clear view.
     question_bank:
       - "Saying it that way, how do you feel now?"
       - "Next time something like this happens, what would you like to remind yourself?"
     if_unclear:
       - id: belief
-        when: "they've said an action or intention but not yet a more balanced way to see it"
+        when: "they've said an action or intention but not yet what they would tell themselves instead"
         reply: "Knowing both sides of it, what would you tell yourself now about that thought?"
 ---
 
@@ -239,7 +239,7 @@ an event does.**
 - **B, Belief.** They form a belief or interpretation about it. That belief can be rational
   (flexible, realistic, helpful) or irrational (rigid, absolute, self-defeating).
 - **C, Consequences.** The belief leads to feelings and behaviours. Rational beliefs tend to lead to
-  healthy consequences, and irrational beliefs to unhealthy ones that often add to distress or
+  helpful consequences, and irrational beliefs to harmful ones that often add to distress or
   conflict.
 - **D, Dispute.** They challenge the belief by asking whether it's accurate and whether it's helpful.
   If it's neither, they can look for a different belief.
