@@ -43,6 +43,12 @@ INTENTS = ("situation", "feeling", "belief", "wants", "step")
 FRUSTRATED = "frustrated"
 
 
+def in_open_chat(*, in_play: bool, guarded: bool, action: str) -> bool:
+    """Whether a reply is in the open chat, where it is held to one question: no set or offer is in play before or
+    after it, no safety worry guards the turn, and the reply offers, finishes or stops nothing."""
+    return not in_play and not guarded and action in ("none", "library")
+
+
 def held_to_one(text: str, latest: str) -> tuple[str, str | None]:
     """The reply with the questions the rule refuses taken out, and why: every question when their message is frustrated
     with Mani, otherwise every question but the last. The rest of the text stays exactly as written."""

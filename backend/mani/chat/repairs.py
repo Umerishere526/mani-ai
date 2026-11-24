@@ -1,10 +1,11 @@
-# ABOUTME: The few things code does to a reply's words: dashes replaced, a title tidied, and the client's buttons at
-# ABOUTME: each step of an offer. Everything else the model writes goes out as written.
+# ABOUTME: The few things code does to a reply's words: one question in the open chat, dashes replaced, a title tidied,
+# ABOUTME: and the client's buttons at each step of an offer. Everything else the model writes goes out as written.
 
 from __future__ import annotations
 
 import re
 
+from mani.chat import questions
 from mani.chat.greeting import EXAMPLE_LABEL, FEELINGS_LABELS, LEAD_IN_LABELS, TALK_MORE_FIRST_LABEL, start_label
 from mani.llm.schema import SmartPrompt
 from mani.models.rows import Framework
@@ -28,6 +29,15 @@ def _sentence_after(rest: str) -> bool:
     words before the next stop or the end, with no other dash in between."""
     words = _WORD.findall(re.split(r"[.!?—–]", rest, maxsplit=1)[0])
     return len(words) >= 4 and words[0].lower() in _STARTS_A_SENTENCE
+
+
+def sent_text(text: str, *, open_chat: bool, latest: str) -> tuple[str, str | None]:
+    """The model's words as code sends them: an open-chat reply held to one question (`latest` is their message as the
+    reply reads it), then the dashes replaced. Gives the text and why a question was cut, or None."""
+    cut = None
+    if open_chat:
+        text, cut = questions.held_to_one(text, latest)
+    return without_dashes(text).strip(), cut
 
 
 def without_dashes(text: str) -> str:

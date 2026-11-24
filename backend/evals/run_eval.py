@@ -8,7 +8,6 @@ import asyncio
 import datetime as dt
 import json
 import pathlib
-import re
 import statistics
 import sys
 import time
@@ -19,6 +18,7 @@ import httpx  # noqa: E402
 from openai.lib._pydantic import to_strict_json_schema  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
+from mani.chat import crisis, questions, repairs  # noqa: E402
 from mani.chat.facts import facts_block, framework_guide  # noqa: E402
 from mani.chat.greeting import style_label  # noqa: E402
 from mani.chat.reply import TurnReply  # noqa: E402
@@ -34,7 +34,8 @@ CRITERIA = {
     "understanding": "Shows it understood what is really at stake for them, and adds something they did not say.",
     "no_assumptions": "Invites their story before concluding; never assumes a cause, a feeling or that there is no reason.",
     "ideas": "Gives ideas to explore: a fair perspective, a distinction, something highlighted, permission, both feelings.",
-    "question": "Ends on one good question: open, or options each with a reason. Not a thin either-or, not a fact-check.",
+    "question": ("Asks a question only when it helps, and never more than one: open, or options each with a reason. "
+                 "Not a thin either-or, not a fact-check. A reply that rightly asks nothing is not marked down."),
     "voice": "Warm, plain everyday words, no therapy talk, no lecture, no solutions or advice, no emojis.",
     "overall": "Compared with the reference reply: 5 = as good or better, 3 = clearly weaker, 1 = much worse.",
 }
@@ -101,7 +102,7 @@ async def reply(http, settings, v, system, case) -> dict:
     parameters = v["parameters"]
     body = {"model": v["model"], "messages": [{"role": "system", "content": system},
                                               {"role": "assistant", "content": case["opener"]}]
-            + case["turns"] + [{"role": "system", "content": facts}],
+            + turns(case, settings) + [{"role": "system", "content": facts}],
             "response_format": {"type": "json_schema", "json_schema": {
                 "name": "reply", "strict": True, "schema": to_strict_json_schema(TurnReply)}},
             **chain.sampling(v["model"], parameters.get("temperature", client.DEFAULT_TEMPERATURE),
@@ -110,24 +111,51 @@ async def reply(http, settings, v, system, case) -> dict:
     try:
         raw, took = await post(http, settings, body)
         out = json.loads(raw["choices"][0]["message"]["content"])
-        return {**out, "seconds": round(took, 1), "cost": (raw.get("usage") or {}).get("cost")}
+        sent, cut = received(case, out)
+        return {**out, "sent": sent, "question_cut": cut, "seconds": round(took, 1),
+                "cost": (raw.get("usage") or {}).get("cost")}
     except Exception as error:  # noqa: BLE001
-        return {"error": str(error)[:300], "text": "", "seconds": None, "cost": None}
+        return {"error": str(error)[:300], "text": "", "sent": "", "seconds": None, "cost": None}
+
+
+# The lines code writes in a conversation, which a case names by `fixed` in its turns so that what it shows is what the
+# person was sent under the settings in force.
+FIXED = {
+    "pause": lambda turn, settings: crisis.pause_reply(turn.get("about"), settings.crisis_pause_seconds),
+    "return_check": lambda turn, settings: crisis.RETURN_CHECK_REPLY,
+}
+
+
+def turns(case, settings) -> list[dict]:
+    """The case's conversation, with each line code writes in its words under these settings."""
+    return [{"role": turn["role"], "content": FIXED[turn["fixed"]](turn, settings)} if "fixed" in turn else turn
+            for turn in case["turns"]]
+
+
+def received(case, got) -> tuple[str, str | None]:
+    """The reply's words as the person would receive them, through the turn's own repairs, and why a question was cut.
+    A case whose facts put a set, an offer or a safety worry in play says `open_chat` false; otherwise this reply's own
+    safety judgment guards the turn, as it would out of a clear conversation."""
+    guarded = (got.get("safety") or {}).get("level", "none") != "none"
+    open_chat = case.get("open_chat", True) and questions.in_open_chat(
+        in_play=False, guarded=guarded, action=got.get("action", "none"))
+    return repairs.sent_text(got.get("text") or "", open_chat=open_chat,
+                             latest=(got.get("question") or {}).get("latest", ""))
 
 
 async def judge(http, settings, case, got) -> dict:
-    convo = "\n\n".join(f"{t['role'].upper()}: {t['content']}" for t in case["turns"])
+    convo = "\n\n".join(f"{t['role'].upper()}: {t['content']}" for t in turns(case, settings))
     rubric = "\n".join(f"- {k}: {v}" for k, v in CRITERIA.items())
     if case["reference"] is not None:
         prompt = (f"You are judging a reply from MANI, a supportive chat companion, against a reference reply.\n\n"
                   f"Conversation so far (the person chose the {case['style']} style):\n\n{convo}\n\n"
-                  f"REFERENCE REPLY:\n{case['reference']}\n\nCANDIDATE REPLY:\n{got['text']}\n\n"
+                  f"REFERENCE REPLY:\n{case['reference']}\n\nCANDIDATE REPLY:\n{got['sent']}\n\n"
                   f"Score the candidate 1-5 on each criterion. Judge quality, not similarity of wording. "
                   f"Length alone is neither good nor bad.{SHORT_BY_DESIGN if case['style'] == 'Directive' else ''}"
                   f"\n{rubric}")
         schema = Score
     else:
-        prompt = (f"Conversation so far:\n\n{convo}\n\nREPLY:\n{got['text']}\n\nRule: {case['checks']['judge']}\n"
+        prompt = (f"Conversation so far:\n\n{convo}\n\nREPLY:\n{got['sent']}\n\nRule: {case['checks']['judge']}\n"
                   f"Does the reply pass the rule?")
         schema = RuleVerdict
     return await structured(http, settings, JUDGE_MODEL, [{"role": "user", "content": prompt}], schema)
@@ -151,19 +179,10 @@ SHORT_BY_DESIGN = (" In this style short replies are the aim: never count shortn
 GATED_STYLES = ("Supportive", "Reflective")
 
 
-# A sentence ends at . ? or ! (with any closing quote) when a capital letter or the end of the text follows, so a
-# question quoted inside a sentence ('He said "why me?" and left') does not end it.
-SENTENCE_END = re.compile(r"[.?!]+[\"'”’)]*(?=\s+[\"“‘(]?[A-Z]|\s*$)")
-
-
-def sentences(text: str) -> int:
-    return sum(1 for piece in SENTENCE_END.split(text.strip()) if piece.strip())
-
-
 def rule_checks(case, got) -> list[str]:
-    """What code can check from the reply's fields; empty when it passes."""
-    failed, checks, text = [], case["checks"], got.get("text") or ""
-    if "max_sentences" in checks and (count := sentences(text)) > checks["max_sentences"]:
+    """What code can check from the reply's fields and the words the person receives; empty when it passes."""
+    failed, checks, text = [], case["checks"], got.get("sent") or ""
+    if "max_sentences" in checks and (count := len(questions.sentences(text))) > checks["max_sentences"]:
         failed.append(f"{count} sentences > {checks['max_sentences']}")
     words = len(text.split())
     if "max_words" in checks and words > checks["max_words"]:
@@ -273,7 +292,7 @@ async def main() -> None:
         (out_dir / f"{v['name']}.json").write_text(json.dumps(rows, indent=1, ensure_ascii=False))
         side = [f"# {v['name']}", ""]
         for r in rows:
-            side += [f"## {r['case']} #{r['sample']}", "", r["got"].get("text") or r["got"].get("error", ""), "",
+            side += [f"## {r['case']} #{r['sample']}", "", r["got"].get("sent") or r["got"].get("error", ""), "",
                      f"_verdict: {json.dumps(r['verdict'], ensure_ascii=False)}_", ""]
         (out_dir / f"{v['name']}-replies.md").write_text("\n".join(side))
     (out_dir / "report.md").write_text("\n".join(report))

@@ -17,7 +17,7 @@ from mani.chat import crisis, decide as decide_mod, facts, pause, questions, rec
 from mani.chat.greeting import (
     COPIED_BACK, STYLE_OPTIONS, greeting, openers, resolve_style,
 )
-from mani.chat.repairs import clean_title, start_buttons, without_dashes
+from mani.chat.repairs import clean_title, sent_text, start_buttons
 from mani.chat.reply import TurnReply
 from mani.chat.techniques import FEELINGS, OFFERING, STEPS, example_text, steps_text
 from mani.config import get_settings
@@ -240,12 +240,10 @@ async def _apply(
         text = reply.text
     # The open chat, with no set, offer or safety worry in play: there code holds the reply to one question, and none
     # after frustration, and keeps the question it asked. A stage's question, a lead-in and a safety question are left.
-    open_chat = (running is None and open_offer is None and decision.technique is None and not guarded
-                 and reply.action in ("none", "library"))
-    cut = None
-    if open_chat:
-        text, cut = questions.held_to_one(text, reply.question.latest)
-    text = without_dashes(text).strip()
+    open_chat = questions.in_open_chat(
+        in_play=running is not None or open_offer is not None or decision.technique is not None, guarded=guarded,
+        action=reply.action)
+    text, cut = sent_text(text, open_chat=open_chat, latest=reply.question.latest)
     if not text and not answer_failure:
         raise ServiceError(f"reply on thread {ctx.thread.id} was empty", ErrorCategory.LLM_UNAVAILABLE, retryable=True,
                            user_message="Mani had trouble responding. Please try again.")

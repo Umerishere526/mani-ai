@@ -193,7 +193,9 @@ the same change as the work.**
   Directive is judged with length set aside and reported apart, since its replies are short by design (muhammad,
   2026-11-18). A score from an earlier day is never the comparison. It sends production's request
   (`chain.request_body`, `chain.sampling`; since 2026-11-18, so earlier scores measured a different request), and it
-  runs only from the command line. Before a merge, `evals/check_suite.py` runs the 8 conversations of
+  runs only from the command line. Since 2026-11-24 its rule checks and judge score the text the person is sent
+  (`repairs.sent_text`, shared with the turn), not the raw reply; decide's refusals and the fixed pause and call-now
+  lines need thread state and are not applied (`tests/unit/test_eval_checks.py`). Before a merge, `evals/check_suite.py` runs the 8 conversations of
   `evals/suite.json` through the real stack with a model-played person (`evals/drive.py`, which calls OpenRouter
   directly, never billed as chat) and exits 0 only when every check passes; muhammad reads the rest. Last gate,
   2026-11-18, the client's framework sequence: Supportive and Reflective 3.30 against the baseline's 3.36, rules 32 of
