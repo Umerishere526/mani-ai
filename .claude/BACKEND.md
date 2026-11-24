@@ -26,7 +26,8 @@ python evals/regress.py --scenario TC-11        # one scenario (repeatable)
 python evals/regress.py --only safety|framework|pacing|isolation [--no-judge]
 python evals/regress.py --bench 5 --scenario TC-01   # the selection 5 times, latency only
 # regress.py refuses a non-local DATABASE_URL unless --allow-remote-db (a test project, never production). Exit 1 on any
-# deterministic failure; gaps and judged scores never fail it; --strict-latency also fails a turn over its limit. The report
+# deterministic failure; gaps, pending requirements (the client's, not yet recorded in docs/client and approved) and
+# judged scores never fail it; --strict-latency also fails a turn over its limit. The report
 # is evals/results/regress-latest.md; evals/results/summaries/ is committed so each run is compared with the last.
 # Free plumbing check: run scripts/fake_openrouter.py, set OPENROUTER_BASE_URL to it, and run script-only scenarios with
 # --no-judge (the fake only streams, so the model-played person and the judge cannot use it).

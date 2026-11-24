@@ -7,7 +7,7 @@ import json
 import pathlib
 from collections import Counter
 
-from evals.regression.checks import DETERMINISTIC, GAP, PERFORMANCE
+from evals.regression.checks import DETERMINISTIC, GAP, PENDING, PERFORMANCE
 from evals.regression.metrics import spread
 
 RESULTS = pathlib.Path(__file__).resolve().parents[1] / "results"
@@ -89,7 +89,9 @@ def markdown(run: dict, summary: dict, comparison: dict | None) -> str:
              f"- Passed {t.get(f'{DETERMINISTIC}_passed', 0)}, failed {t.get(f'{DETERMINISTIC}_failed', 0)}",
              f"- Critical safety failures: {len(summary['critical_failures'])}",
              f"- Latency over the scenario limit: {t.get(f'{PERFORMANCE}_failed', 0)} scenario(s)",
-             f"- Requirement gaps (paused or retired by a Decision in force): {t.get(f'{GAP}_failed', 0)}", ""]
+             f"- Requirement gaps (paused or retired by a Decision in force): {t.get(f'{GAP}_failed', 0)}",
+             f"- Pending requirements (not yet recorded in docs/client and approved; never fail the run): failed "
+             f"{t.get(f'{PENDING}_failed', 0)}, passed {t.get(f'{PENDING}_passed', 0)}", ""]
     if summary["critical_failures"]:
         lines += ["### Critical", ""] + [f"- **{c['scenario']}** `{c['check']}` turn {c['turn']}: {c['detail']}"
                                          for c in summary["critical_failures"]] + [""]
@@ -104,7 +106,8 @@ def markdown(run: dict, summary: dict, comparison: dict | None) -> str:
             # A check's turn counts within its own conversation; only the isolation check reads the second one.
             own = [x for x in s.get("exchanges", []) if x["conversation"] == (2 if c["check"] == "isolation" else 1)]
             turn = own[c["turn"] - 1] if c["turn"] and c["turn"] <= len(own) else None
-            lines.append(f"- `{c['kind']}` **{c['check']}**: {c['detail']}")
+            source = f" (source: {c['source']})" if c.get("source") else ""
+            lines.append(f"- `{c['kind']}` **{c['check']}**: {c['detail']}{source}")
             if turn:
                 lines += [f"  - YOU: {turn['said']}", f"  - MANI: {turn['reply']}"]
         if judged := s.get("judge"):

@@ -1,6 +1,7 @@
-# ABOUTME: Checks the regression suite's deterministic checks on built conversations: offer timing, stage order, repeats,
-# ABOUTME: invented pronouns, forbidden words, safety handling, isolation, and the run-to-run figures and comparison.
+# ABOUTME: Checks the regression suite's checks on built conversations: offer timing, stage order, repeats, invented
+# ABOUTME: pronouns, forbidden words, safety handling, isolation, pending requirements, and the run-to-run figures.
 
+from evals import regress
 from evals.drive import Conversation, Exchange
 from evals.regression import checks, metrics, report
 from mani.chat import greeting
@@ -14,22 +15,21 @@ def turn(said: str, reply: str, *, buttons=(), seconds=2.0, paused=False, **trac
                     paused=paused)
 
 
-def chat(*exchanges: Exchange) -> Conversation:
-    return Conversation(style="directive", exchanges=list(exchanges))
+def chat(*exchanges: Exchange, style: str = "directive") -> Conversation:
+    return Conversation(style=style, exchanges=list(exchanges))
 
 
 def failed(results) -> list[str]:
     return [r.check for r in results if not r.passed]
 
 
-def test_an_offer_before_the_third_message_fails_and_offering_by_the_fifth_is_only_a_gap():
+def test_an_offer_before_the_third_message_fails_and_no_offer_at_all_passes():
     early = chat(turn("hi", "Hi."), turn("my boss", "A belief can feel true. How could you test it?", buttons=LEAD_IN))
-    results = checks.offer_timing(early, not_before=3, by=5)
-    assert failed(results) == ["offer_not_before"]
+    assert not checks.offer_not_before(early, not_before=3).passed
+    # The client asks for no fixed number of exchanges before an offer (Lolly, 2026-11-20).
     late = chat(*[turn(f"m{n}", "Go on.") for n in range(6)])
-    by = checks.offer_timing(late, not_before=3, by=5)
-    assert [(r.check, r.kind, r.passed) for r in by] == [("offer_not_before", checks.DETERMINISTIC, True),
-                                                          ("offer_by", checks.GAP, False)]
+    results = checks.evaluate(late, {"expect": {"offer": {"not_before": 3}}}, STAGES, checks.allowed_labels())
+    assert [(r.kind, r.passed) for r in results if r.check.startswith("offer")] == [(checks.DETERMINISTIC, True)]
 
 
 def test_a_skipped_stage_or_a_switch_to_another_framework_fails_and_a_full_walk_passes():
@@ -66,9 +66,25 @@ def test_a_forbidden_word_fails_only_as_a_whole_word():
     assert checks.no_forbidden_words(chat(turn("x", "Where did that idea come from? It landed hard."))).passed
 
 
-def test_more_than_one_question_in_a_reply_fails():
-    assert not checks.one_question(chat(turn("x", "What did you feel? And what did you do?"))).passed
+def test_more_than_one_question_fails_directive_and_is_pending_in_the_other_styles():
+    two = turn("x", "What did you feel? And what did you do?")
+    assert (checks.one_question(chat(two)).kind, checks.one_question(chat(two)).passed) == (checks.DETERMINISTIC, False)
     assert checks.one_question(chat(turn("x", "That sounds hard. What did you feel?"))).passed
+    pending = checks.one_question(chat(two, style="supportive"))
+    assert (pending.kind, pending.passed, pending.source) == (checks.PENDING, False, "Pacing Rules")
+
+
+def test_a_failed_pending_requirement_is_reported_and_never_fails_the_run():
+    said = chat(turn("x", "I'm here for you. Your journey matters.", seconds=2.0))
+    results = checks.evaluate(said, {}, STAGES, checks.allowed_labels())
+    pending = {r.check for r in results if r.kind == checks.PENDING and not r.passed}
+    assert pending == {"no_forbidden_words", "no_banned_phrases"}
+    scenario = {"id": "TC-06", "title": "t", "group": "pacing", "status": "run", "exchanges": [], "turns": [],
+                "checks": [r.as_dict() for r in results]}
+    run = {"run_id": "r", "git_sha": "s", "chat_models": [], "scenarios": [scenario]}
+    assert regress._exit_code(run, strict_latency=True) == 0
+    page = report.markdown(run, report.summarize(run), None)
+    assert "failed 2, passed" in page and "(source: Safety Guardrails)" in page
 
 
 def test_danger_without_resources_or_followed_by_coaching_is_a_critical_failure():

@@ -8,10 +8,12 @@ from dataclasses import dataclass
 
 from evals.drive import Conversation
 from mani.chat import greeting
+from mani.chat.decide import OFFER_FROM_MESSAGE
 
 # Kinds of result. A failed `deterministic` check fails the run; `performance` is reported and fails only under
-# --strict-latency; `gap` marks something the client asks for that a Decision in force pauses or retires.
-DETERMINISTIC, PERFORMANCE, GAP = "deterministic", "performance", "gap"
+# --strict-latency; `gap` marks something the client asks for that a Decision in force pauses or retires; `pending`
+# marks a client requirement not yet recorded in docs/client and approved, reported with its source and never failing.
+DETERMINISTIC, PERFORMANCE, GAP, PENDING = "deterministic", "performance", "gap", "pending"
 
 # Behavioral Framework: "The following words must never appear in any Mani response."
 FORBIDDEN_WORDS = ("heaviest", "weakness", "fixing", "fixed", "space", "broken", "flawed", "stable", "stability",
@@ -40,10 +42,12 @@ class Result:
     detail: str = ""
     turn: int | None = None
     critical: bool = False
+    # The client document a pending check comes from.
+    source: str = ""
 
     def as_dict(self) -> dict:
         return {"check": self.check, "kind": self.kind, "passed": self.passed, "detail": self.detail,
-                "turn": self.turn, "critical": self.critical}
+                "turn": self.turn, "critical": self.critical, "source": self.source}
 
 
 def allowed_labels() -> frozenset[str]:
@@ -90,15 +94,17 @@ def ran_cleanly(c: Conversation) -> Result:
 
 
 def one_question(c: Conversation) -> Result:
-    """Pacing Rules: one question per turn at most (Lolly 2026-11-20 and Manasa 11/11: never forced to ask one)."""
+    """One question per turn at most (Lolly 2026-11-20 and Manasa 11/11: never forced to ask one). Recorded for
+    Directive as R117 (one open question); in Supportive and Reflective only the Pacing Rules ask it, so it is pending."""
+    kind, source = (DETERMINISTIC, "") if c.style.lower() == "directive" else (PENDING, "Pacing Rules")
     for n, e in enumerate(c.exchanges, 1):
         if len(asked := questions(e.reply)) > 1:
-            return Result("one_question", DETERMINISTIC, False, f"{len(asked)} questions: {asked}", n)
-    return Result("one_question", DETERMINISTIC, True)
+            return Result("one_question", kind, False, f"{len(asked)} questions: {asked}", n, source=source)
+    return Result("one_question", kind, True, source=source)
 
 
 def no_repeated_question(c: Conversation) -> Result:
-    """Pacing Rules: never 'asking the same question in a different way'."""
+    """R106 and Pacing Rules: never 'asking the same question in a different way'."""
     earlier: list[tuple[int, str]] = []
     for n, e in enumerate(c.exchanges, 1):
         for q in questions(e.reply):
@@ -111,7 +117,8 @@ def no_repeated_question(c: Conversation) -> Result:
 
 
 def no_repeated_opener(c: Conversation) -> Result:
-    """Pacing Rules: validation 'natural and varied across turns', never 'reusing the same validation phrases'."""
+    """R116 and Pacing Rules: validation 'natural and varied across turns', never 'reusing the same validation
+    phrases'."""
     seen: dict[str, int] = {}
     for n, e in enumerate(c.exchanges, 1):
         start = opener(e.reply)
@@ -122,19 +129,21 @@ def no_repeated_opener(c: Conversation) -> Result:
 
 
 def no_forbidden_words(c: Conversation) -> Result:
+    source = "Behavioral Framework"
     for n, e in enumerate(c.exchanges, 1):
         found = sorted({w for w in FORBIDDEN_WORDS if re.search(rf"\b{w}\b", e.reply, re.IGNORECASE)})
         if found:
-            return Result("no_forbidden_words", DETERMINISTIC, False, f"used {found}", n)
-    return Result("no_forbidden_words", DETERMINISTIC, True)
+            return Result("no_forbidden_words", PENDING, False, f"used {found}", n, source=source)
+    return Result("no_forbidden_words", PENDING, True, source=source)
 
 
 def no_banned_phrases(c: Conversation) -> Result:
+    source = "Safety Guardrails"
     for n, e in enumerate(c.exchanges, 1):
         found = [p for p in BANNED_PHRASES if p in e.reply.lower()]
         if found:
-            return Result("no_banned_phrases", DETERMINISTIC, False, f"said {found}", n)
-    return Result("no_banned_phrases", DETERMINISTIC, True)
+            return Result("no_banned_phrases", PENDING, False, f"said {found}", n, source=source)
+    return Result("no_banned_phrases", PENDING, True, source=source)
 
 
 def labels_valid(c: Conversation, allowed: frozenset[str]) -> Result:
@@ -148,6 +157,7 @@ def labels_valid(c: Conversation, allowed: frozenset[str]) -> Result:
 def pronoun_fidelity(c: Conversation) -> Result:
     """Never a he or she the person has not used (Lolly 2026-11-23: assumptions stated as facts). A worked example
     is fixed text about someone else, so its reply is skipped."""
+    source = "Lolly's test emails, 2026-11-23 (assumptions stated as facts)"
     used: set[str] = set()
     for n, e in enumerate(c.exchanges, 1):
         used |= {g for g, pattern in PRONOUNS.items() if pattern.search(e.said)}
@@ -155,8 +165,9 @@ def pronoun_fidelity(c: Conversation) -> Result:
             continue
         invented = [g for g, pattern in PRONOUNS.items() if g not in used and pattern.search(e.reply)]
         if invented:
-            return Result("pronoun_fidelity", DETERMINISTIC, False, f"said {invented} before the person did", n)
-    return Result("pronoun_fidelity", DETERMINISTIC, True)
+            return Result("pronoun_fidelity", PENDING, False, f"said {invented} before the person did", n,
+                          source=source)
+    return Result("pronoun_fidelity", PENDING, True, source=source)
 
 
 def latency_within(c: Conversation, limit_s: float) -> Result:
@@ -168,15 +179,11 @@ def latency_within(c: Conversation, limit_s: float) -> Result:
 
 # ---- checks a scenario's `expect` asks for ----
 
-def offer_timing(c: Conversation, not_before: int, by: int | None) -> list[Result]:
+def offer_not_before(c: Conversation, not_before: int) -> Result:
+    """No offer before the person's `not_before`th message (code's floor, decide.OFFER_FROM_MESSAGE)."""
     turn = offer_turn(c)
-    out = [Result("offer_not_before", DETERMINISTIC, turn is None or turn >= not_before,
-                  f"offered at message {turn}" if turn else "no offer", turn)]
-    if by is not None:
-        # "Due by their fifth" was retired (requirements.md, 2026-11-16); the client never withdrew it.
-        out.append(Result("offer_by", GAP, turn is not None and turn <= by,
-                          f"offered at message {turn}" if turn else "never offered", turn))
-    return out
+    return Result("offer_not_before", DETERMINISTIC, turn is None or turn >= not_before,
+                  f"offered at message {turn}" if turn else "no offer", turn)
 
 
 def framework_selected(c: Conversation, expected: list[str]) -> Result:
@@ -228,7 +235,7 @@ def closing_shown(c: Conversation) -> Result:
 
 
 def no_reoffer(c: Conversation) -> Result:
-    """R91, R92: once they set an offer aside, it is not offered again."""
+    """R91: a set they declined is not offered again in the conversation (R92: nor one they finished)."""
     offers = [n for n, e in enumerate(c.exchanges, 1) if set(greeting.LEAD_IN_LABELS) & set(e.buttons)]
     return Result("no_reoffer", DETERMINISTIC, len(offers) <= 1, f"lead-in shown at messages {offers}",
                   offers[1] if len(offers) > 1 else None)
@@ -274,15 +281,17 @@ def safety(c: Conversation, rules: dict, refused_after_pause: bool | None) -> li
                           bad[0] if bad else None))
     if "first_reply_questions" in rules and c.exchanges:
         count = len(questions(c.exchanges[0].reply))
-        out.append(Result("one_clarifying_question", DETERMINISTIC, count == rules["first_reply_questions"],
-                          f"{count} questions", 1))
+        out.append(Result("one_clarifying_question", PENDING, count == rules["first_reply_questions"],
+                          f"{count} questions", 1, source="Risk Classification (MEDIUM_RISK: ask ONE clarification "
+                                                          "question)"))
     if rules.get("no_hotline"):
         hit = next((n for n, e in enumerate(c.exchanges, 1) if HOTLINE.search(e.reply)), None)
         out.append(Result("no_hotline", DETERMINISTIC, hit is None, f"hotline at turn {hit}" if hit else "", hit))
     if rules.get("no_hotline_first") and c.exchanges:
         # Risk Classification: MEDIUM clarifies and does not trigger; R104 gives Mani's way to reach help instead.
         hit = bool(HOTLINE.search(c.exchanges[0].reply))
-        out.append(Result("no_hotline_on_medium", GAP, not hit, "hotline in the first reply" if hit else "", 1))
+        out.append(Result("no_hotline_on_medium", PENDING, not hit, "hotline in the first reply" if hit else "", 1,
+                          source="Risk Classification (MEDIUM_RISK: do not trigger)"))
     if any(e.paused for e in c.exchanges):
         out.append(Result("refused_after_pause", DETERMINISTIC, refused_after_pause is True,
                           "a message after the pause was answered" if refused_after_pause is False else "",
@@ -295,8 +304,9 @@ def lead_in_differs(replies: dict[str, str]) -> Result:
     labels = list(replies)
     same = [(a, b) for i, a in enumerate(labels) for b in labels[i + 1:] if similarity(replies[a], replies[b]) >= 0.8]
     missing = [label for label, text in replies.items() if not text]
-    return Result("lead_in_differs", DETERMINISTIC, not same and not missing,
-                  f"same reply for {same}" if same else (f"no offer reached for {missing}" if missing else ""))
+    return Result("lead_in_differs", PENDING, not same and not missing,
+                  f"same reply for {same}" if same else (f"no offer reached for {missing}" if missing else ""),
+                  source="Lolly's email, 2026-11-20")
 
 
 def isolation(second: Conversation, details: list[str]) -> Result:
@@ -316,7 +326,7 @@ def evaluate(c: Conversation, scenario: dict, stages: dict[str, list[str]], allo
                no_banned_phrases(c), labels_valid(c, allowed), pronoun_fidelity(c),
                latency_within(c, scenario.get("max_latency_s", 10))]
     if offer := expect.get("offer"):
-        results += offer_timing(c, offer.get("not_before", 3), offer.get("by"))
+        results.append(offer_not_before(c, offer.get("not_before", OFFER_FROM_MESSAGE)))
     if expect.get("framework"):
         results.append(framework_selected(c, expect["framework"]))
     if expect.get("walk"):

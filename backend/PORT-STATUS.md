@@ -204,10 +204,12 @@ the same change as the work.**
   wish-not-to-wake case in 2 of 3 runs, judged unsure, so code drops them; one Directive close a sentence long); the
   suite passed 8 of 8 both times.
 - **The conversation regression suite (`evals/regress.py`, TC-01 to TC-15) runs by hand only, against a local or
-  dedicated test database; its deterministic checks fail it, its judged scores and requirement gaps never do, and each
+  dedicated test database; its deterministic checks fail it; its judged scores, requirement gaps and pending client requirements (not yet
+  recorded in docs/client and approved, each with its source) never do, and each
   run's summary is committed** (muhammad, 2026-11-24). Because manual testing repeated the same conversations, every
-  live run spends the client's credit, and comparing runs needs the earlier results. Paused frameworks, the deleted
-  body check-in and the retired "offer by the fifth message" are reported as gaps, never asserted. The scenarios are a
+  live run spends the client's credit, and comparing runs needs the earlier results. Paused frameworks and the deleted body check-in
+  are reported as gaps; the offer-by-the-fifth-message check is removed (the client withdrew it, Lolly 2026-11-20:
+  "should not require a fixed number of exchanges"). The scenarios are a
   draft from the client's documents awaiting muhammad's approval, and the suite has not yet made a live run.
   `evals/regression/`, `tests/unit/test_regression_checks.py`, `.github/workflows/regression.yml` (manual dispatch)
   and `backend-unit.yml` (every push), `.gitignore` (`evals/results/summaries/`).
