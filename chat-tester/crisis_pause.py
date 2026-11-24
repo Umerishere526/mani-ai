@@ -30,6 +30,8 @@ GO_TO_LIBRARY = "Go to library"
 # Beside the live timer at the bottom, which the drawing does not show and muhammad kept (2026-11-16). It says only
 # when the chat opens again: "while you reach out" assumed they had (the client's safety test, point 43).
 RESUMES_IN = "Chat resumes in"
+# Above the conversation they can still read after closing the pop-up.
+WHILE_READING = "Chat is paused. You can read your conversation until it resumes."
 
 # The pop-up in the middle of the window (auto margins keep a tall one scrollable from its top), its words centred as
 # drawn.
@@ -91,9 +93,10 @@ def elapsed(pause: Pause, now: datetime) -> float:
 
 
 def length(pause: Pause) -> str:
-    """How long the pause runs, in whole hours when it is a number of them, else in minutes: "15 minutes", "24 hours"."""
-    minutes = max(1, round((pause.ends - pause.began).total_seconds() / 60))
-    count, unit = (minutes // 60, "hour") if minutes % 60 == 0 else (minutes, "minute")
+    """How long the pause runs, in the largest whole unit that holds it: "30 seconds", "15 minutes", "24 hours"."""
+    seconds = max(1, round((pause.ends - pause.began).total_seconds()))
+    unit_seconds, unit = next(((n, name) for n, name in ((3600, "hour"), (60, "minute")) if seconds % n == 0), (1, "second"))
+    count = seconds // unit_seconds
     return f"{count} {unit}" if count == 1 else f"{count} {unit}s"
 
 
@@ -160,8 +163,24 @@ def _show_library() -> None:
     st.session_state.view = "library"
 
 
-@st.dialog(LABEL, on_dismiss=_show_library)
+def _dismiss() -> None:
+    st.session_state.pause_dismissed = st.session_state.pause.ends
+
+
+def dismissed(pause: Pause) -> bool:
+    """Whether the person closed this pause's pop-up with its cross; a later pause shows it again."""
+    return st.session_state.get("pause_dismissed") == pause.ends
+
+
+def banner(pause: Pause) -> None:
+    """What the page shows beside the readable conversation once the pop-up is closed: only when the chat resumes."""
+    st.info(WHILE_READING)
+    _countdown(pause)
+
+
+@st.dialog(LABEL, on_dismiss=_dismiss)
 def render(client: mani.ManiClient, pause: Pause) -> None:
+    # Closing it with the cross leaves the conversation to read, with no way to write in it until the pause ends.
     st.html(STYLE)
     try:
         found = pick(client.crisis_resources())

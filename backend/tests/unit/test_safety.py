@@ -1,5 +1,5 @@
 # ABOUTME: Checks how the model's judgment of each message moves a conversation's safety state: a refusal never
-# ABOUTME: lowers a concern, a person's worry is asked about once, and a body symptom is danger only when happening now.
+# ABOUTME: lowers a concern, only the model raises one to danger, and a body symptom is danger unless it stopped.
 
 from mani.chat.safety import State, after, danger_of
 
@@ -15,19 +15,20 @@ def test_the_models_judgment_moves_the_state():
     assert after(State.UNSURE, None, False) is State.UNSURE, "a reply that judged nothing leaves it as it was"
 
 
-def test_a_concern_about_a_person_is_asked_about_once_and_then_held_as_danger():
-    """muhammad, 2026-11-16: no safety question after safety question (the client's safety test, seven in a row). Once
-    Mani has asked what they meant, an answer that still leaves it unsure is held as danger, so the reply says how to
-    reach help and asks nothing more about it; from there only a judgment of none lowers it. A symptom in the body, or
-    a danger of no known kind, follows the judgment as before."""
+def test_only_the_model_raises_a_concern_about_a_person_to_danger_and_only_none_lowers_it():
+    """Production, 2026-11-20: an answer the model judged unsure was held as danger because Mani had already asked, and
+    the next sad message paused the chat. Unsure stays unsure; danger the model judged about a person is lowered only
+    by a judgment of none of that same worry. A symptom in the body, or a danger of no known kind, follows the
+    judgment."""
     for about in ("themselves", "someone_else", "from_someone"):
-        assert after(State.UNSURE, "unsure", False, about=about, asked=True) is State.DANGER, about
-        assert after(State.DANGER, "unsure", False, about=about) is State.DANGER, about
+        assert after(State.UNSURE, "unsure", False, about=about) is State.UNSURE, about
+        assert after(State.DANGER, "unsure", False, about=about, danger_about=about) is State.DANGER, about
+        assert after(State.DANGER, "unsure", False, about=about) is State.DANGER, "a danger of unknown kind holds"
         assert after(State.DANGER, "none", False, about=about) is State.CLEAR, "a step toward safety settles it"
-        assert after(State.UNSURE, "none", False, about=about, asked=True) is State.CLEAR, "they explained"
-        assert after(State.UNSURE, "unsure", False, about=about) is State.UNSURE, "first sight: Mani has not asked yet"
+        assert after(State.UNSURE, "none", False, about=about) is State.CLEAR, "they explained"
+    assert after(State.DANGER, "unsure", False, about="themselves", danger_about="body") is State.UNSURE, (
+        "chest pain, then \"I wish I weren't here\": the body danger does not hold the new worry")
     for about in ("body", None):
-        assert after(State.UNSURE, "unsure", False, about=about, asked=True) is State.UNSURE, about
         assert after(State.DANGER, "unsure", False, about=about) is State.UNSURE, about
 
 

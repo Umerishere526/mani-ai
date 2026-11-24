@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import asyncpg
 
@@ -215,11 +215,10 @@ class TurnContext:
     # Another of this person's conversations was flagged for crisis recently. Only the fact
     # crosses threads, never what was said in it.
     recent_crisis: bool = False
-    # The pauses this turn may owe the question whether they are all right for (chat/pause.return_check), each the
-    # latest that has run out by the database's clock as the pause gate reads it, within RECENT_CRISIS_DAYS of its
-    # end (an older one owes nothing): this person's, and this conversation's own, each with what it rested on.
+    # The person's latest pause that has run out by the database's clock as the pause gate reads it, within
+    # RECENT_CRISIS_DAYS of its end (an older one owes nothing), with what it rested on: the question whether they are
+    # all right is owed for it (chat/pause.return_check), and their word that they are settles a worry held before it.
     pause: Pause | None = None
-    own_pause: Pause | None = None
 
 
 # How long a crisis in one conversation keeps the next ones gentle, and how long a pause that has run out owes the
@@ -246,11 +245,7 @@ select
      from public.chat_pauses cp
     where cp.user_id = t.user_id and cp.ends_at <= now()
       and cp.ends_at > now() - interval '{RECENT_CRISIS_DAYS} days'
-    order by cp.started_at desc limit 1)          as pause,
-  (select to_jsonb(cp) from public.chat_pauses cp
-    where cp.thread_id = t.id and cp.user_id = t.user_id and cp.ends_at <= now()
-      and cp.ends_at > now() - interval '{RECENT_CRISIS_DAYS} days'
-    order by cp.started_at desc limit 1)          as own_pause
+    order by cp.started_at desc limit 1)          as pause
 from (select {COLUMNS}, understanding, safety from public.threads
        where id = $1 and user_id = $2 and deleted_at is null) t
 """
@@ -271,7 +266,6 @@ async def load_turn_context(
         summary=ThreadSummary.model_validate(row["summary"]) if row["summary"] else None,
         recent_crisis=row["recent_crisis"],
         pause=Pause.model_validate(row["pause"]) if row["pause"] else None,
-        own_pause=Pause.model_validate(row["own_pause"]) if row["own_pause"] else None,
     )
 
 

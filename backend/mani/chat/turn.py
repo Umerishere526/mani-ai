@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import crisis, decide as decide_mod, facts, judged as judged_mod, pause, record as rec, rewind, safety, taps
+from mani.chat import crisis, decide as decide_mod, facts, pause, record as rec, rewind, safety, taps, worry
 from mani.chat.greeting import (
     COPIED_BACK, STYLE_OPTIONS, greeting, openers, resolve_style,
 )
@@ -160,8 +160,9 @@ async def _turn(
     )
     check = pause.return_check(ctx)
     answering = None if check is not None else pause.answering(ctx)
-    before = safety.State(ctx.thread.safety)
-    holding = before is not safety.State.CLEAR or check is not None
+    stood = worry.standing(ctx, check, answering)
+    before = stood.state
+    holding = before is not safety.State.CLEAR or check is not None or answering is not None
     # A held turn (an open worry, or the question owed after a pause) goes to the model, never to a fixed step.
     if tap.explain is not None and not holding:
         return await _explained(conn, ctx, content, tap.explain, style_name, tapped, client_message_id)
@@ -183,7 +184,7 @@ async def _turn(
         ctx, config, record=record, style=style_name, running=running if held or not tap.starting else None,
         open_offer=open_offer if open_offer is None or decide_mod.offer_current(open_offer, ctx.thread.message_count)
         else None, event=facts.HELD_START if held and tap.starting else tap.fact, wants_title=wants_title,
-        return_check=check, answering_return=answering, end_check_asked=end_check_asked, holding=held,
+        return_check=check, answering_return=answering, end_check_asked=end_check_asked, holding=held, state=before,
         person_messages=person_messages,
     )
     model, parameters, routing = composer.model_settings(config, "mani")
@@ -202,7 +203,7 @@ async def _turn(
                                  before=before, tapped=tapped, client_message_id=client_message_id,
                                  needs_summary=_summary_due(ctx, window))
     return await _apply(conn, ctx, call, content=content, tapped=tapped, tap=tap, record=record, running=running,
-                        open_offer=open_offer, check=check, answering=answering, before=before, holding=holding,
+                        open_offer=open_offer, check=check, answering=answering, stood=stood, holding=holding,
                         wants_title=wants_title, end_check_asked=end_check_asked, window=window, config=config,
                         client_message_id=client_message_id, settings=settings, answer_failure=answer_failure,
                         style=style_name, person_messages=person_messages)
@@ -210,16 +211,16 @@ async def _turn(
 
 async def _apply(
     conn, ctx: threads.TurnContext, call: client.Call, *, content, tapped, tap, record, running, open_offer, check,
-    answering, before, holding, wants_title, end_check_asked, window, config, client_message_id, settings,
+    answering, stood, holding, wants_title, end_check_asked, window, config, client_message_id, settings,
     answer_failure, style, person_messages,
 ) -> Turn:
     """What the reply decides, written in this transaction."""
     reply: TurnReply = call.value
-    judgment = judged_mod.judge(before, reply.safety, record, return_check=check, answering_return=answering)
+    judgment = worry.step(stood, reply.safety)
     # A worry open on the thread or found in this message comes before anything the reply asks for, except the
     # answer that settles the safety question after a framework's last stage: that one carries the close.
-    settles_end_check = end_check_asked and judgment.state_after is safety.State.CLEAR
-    guarded = (holding or judgment.state_after is not safety.State.CLEAR) and not settles_end_check
+    settles_end_check = end_check_asked and judgment.state is safety.State.CLEAR
+    guarded = (holding or judgment.state is not safety.State.CLEAR) and not settles_end_check
     decision = decide_mod.decide(
         reply, config.registry, thread_id=ctx.thread.id, running=running, open_offer=open_offer, tap=tap,
         record=record, guarded=guarded,
@@ -227,10 +228,17 @@ async def _apply(
         end_check_due=bool(record.get(rec.DANGER_REACHED)) and rec.end_check(record) != rec.END_CHECK_DONE,
         end_check_asked=end_check_asked, person_messages=person_messages,
     )
-    text = (crisis.pause_reply(judgment.about, settings.crisis_pause_minutes) if judgment.pausing
-            else crisis.END_CHECK if decision.end_check else reply.text)
+    if judgment.pausing:
+        # Mani's own words for this danger come first, then the pause line (muhammad, 2026-11-20).
+        text = "\n\n".join(part for part in (
+            reply.text.strip(), crisis.pause_reply(judgment.about, settings.crisis_pause_seconds)) if part)
+    elif decision.end_check:
+        text = crisis.END_CHECK
+    elif check is not None:
+        text = crisis.RETURN_DANGER_REPLY if reply.safety.level == "danger" else crisis.RETURN_CHECK_REPLY
+    else:
+        text = reply.text
     text = without_dashes(text).strip()
-    answered = bool(text)
     if not text and not answer_failure:
         raise ServiceError(f"reply on thread {ctx.thread.id} was empty", ErrorCategory.LLM_UNAVAILABLE, retryable=True,
                            user_message="Mani had trouble responding. Please try again.")
@@ -238,7 +246,7 @@ async def _apply(
         # An empty reply is answered like no reply at all, with the fixed words; its safety judgment still stands, and
         # nothing else it asked for moves.
         logger.warning("reply on thread %s was empty; sending the fixed reply", ctx.thread.id)
-        text = (crisis.CRISIS_REPLY if holding or judgment.state_after is not safety.State.CLEAR
+        text = (crisis.CRISIS_REPLY if holding or judgment.state is not safety.State.CLEAR
                 else crisis.TROUBLE_REPLY)
         decision = decide_mod.Decision(declined=rec.declined(record), finished=rec.finished(record))
     # Code's own pieces follow the reply only once it says something: the call-now line, and the five steps.
@@ -255,19 +263,19 @@ async def _apply(
         client_message_id=client_message_id,
     )
     await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
-    flagged = await _record_danger(conn, ctx, before, judgment, pair)
+    flagged = await _record_danger(conn, ctx, stood.state, judgment, pair)
     paused = await _pause_writes(conn, ctx, judgment, reply, answering=answering, pair=pair,
-                                 minutes=settings.crisis_pause_minutes)
+                                 seconds=settings.crisis_pause_seconds)
     trace = {key: value for key, value in {
         "action": reply.action, "framework": reply.framework, "stage": reply.stage,
-        "safety": judged_mod.traced(reply.safety), "paused": judgment.pausing or None,
+        "safety": worry.traced(reply.safety), "paused": judgment.pausing or None,
         "body_emergency": (judgment.body_emergency and not judgment.pausing) or None,
         "buttons": [p.label for p in prompts], "latency_ms": call.latency_ms, "refused": decision.refused,
         "notes": reply.notes if settings.ai_debug_mode else None,
     }.items() if value not in (None, "", [], {})}
     return Turn(
         message_id=pair.mani_message_id, content=text, created_at=pair.created_at, prompts=prompts,
-        title=updates.title or ctx.thread.title, crisis_detected=flagged or judgment.state_after is safety.State.DANGER,
+        title=updates.title or ctx.thread.title, crisis_detected=flagged or judgment.state is safety.State.DANGER,
         paused_from=paused.started_at if paused else None, paused_until=paused.ends_at if paused else None,
         was_duplicate=pair.was_duplicate, needs_summary=_summary_due(ctx, window) and not judgment.pausing,
         llm_call_id=call.call_id, understanding=after if settings.ai_debug_mode else None, trace=trace,
@@ -279,16 +287,19 @@ def _updates(ctx, reply: TurnReply, decision, judgment, *, record, check, answer
              wants_title) -> tuple[threads.ThreadUpdates, dict]:
     """The thread's changes and its record after this turn."""
     after = rec.with_outcomes(record, notes=reply.notes, declined=decision.declined, finished=decision.finished)
-    after = judged_mod.safety_record(after, return_check=check, answering_return=answering, judged=judgment,
-                                     read_about=reply.safety.about)
+    after = worry.record_after(after, judgment, check=check, answering=answering)
     updates = threads.ThreadUpdates()
-    if judgment.state_after.value != ctx.thread.safety:
-        updates.safety = judgment.state_after.value
+    if judgment.state.value != ctx.thread.safety:
+        updates.safety = judgment.state.value
     if decision.end_check:
         after[rec.SAFETY_END_CHECK] = rec.END_CHECK_ASKED
         updates.safety = safety.State.UNSURE.value
     elif end_check_asked and decision.technique is not None and decision.technique.phase == FEELINGS:
         after[rec.SAFETY_END_CHECK] = rec.END_CHECK_DONE
+    elif end_check_asked and (decision.retire_technique or (
+            decision.technique is not None and decision.technique.outcome is not TechniqueOutcome.ACCEPTED)):
+        # The set ended another way while the question waited, so no question stays marked as asked.
+        after.pop(rec.SAFETY_END_CHECK)
     elif judgment.settled_now and rec.end_check(after) == rec.END_CHECK_DONE:
         after.pop(rec.SAFETY_END_CHECK)
     if after != record:
@@ -303,21 +314,21 @@ def _updates(ctx, reply: TurnReply, decision, judgment, *, record, check, answer
 
 async def _record_danger(conn, ctx, before: safety.State, judgment, pair) -> bool:
     """The turn that first finds danger is recorded once for review (admin.crisis_events), never with their words."""
-    if pair.was_duplicate or judgment.state_after is not safety.State.DANGER or before is safety.State.DANGER:
+    if pair.was_duplicate or judgment.state is not safety.State.DANGER or before is safety.State.DANGER:
         return False
     logger.warning("thread %s may be in danger (%s)", ctx.thread.id, judgment.about)
     await threads.mark_crisis(conn, ctx.thread.id, f"safety: {judgment.about or 'danger'}", pair.user_message_id)
     return True
 
 
-async def _pause_writes(conn, ctx, judgment, reply: TurnReply, *, answering, pair, minutes):
+async def _pause_writes(conn, ctx, judgment, reply: TurnReply, *, answering, pair, seconds):
     """An answer to the return check that settles it marks that pause checked; a pausing turn starts a pause."""
     if pair.was_duplicate:
         return None
-    if answering is not None and judgment.state_after is safety.State.CLEAR:
+    if answering is not None and judgment.state is safety.State.CLEAR:
         await pauses.mark_checked(conn, answering)
     if judgment.pausing:
-        return await pauses.start(conn, ctx.thread.user_id, ctx.thread.id, minutes, reply.safety.why)
+        return await pauses.start(conn, ctx.thread.user_id, ctx.thread.id, seconds, reply.safety.why)
     return None
 
 
@@ -338,6 +349,14 @@ async def _arrival(conn, claims: Claims, thread_id, client_message_id) -> Turn |
     if str(user_message.thread_id) != str(thread_id):
         raise ServiceError(f"client_message_id {client_message_id} already used in thread {user_message.thread_id}",
                            ErrorCategory.CONFLICT, user_message="That message was already sent in another conversation.")
+    if reply_message is not None and reply_message.content in crisis.UNREAD_REPLIES:
+        # The model never answered this message, so the retry runs the turn instead of repeating the fixed words, from
+        # the state before it. Only the conversation's last turn can be taken back; any other keeps its stored reply.
+        try:
+            await rewind.undo_last_turn(conn, claims.user_id, thread_id, user_message.id)
+            return None
+        except ServiceError:
+            pass
     thread = await threads.get(conn, thread_id, claims.user_id)
     return Turn(
         message_id=reply_message.id if reply_message else None,

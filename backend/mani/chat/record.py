@@ -6,12 +6,14 @@ from __future__ import annotations
 NOTES = "notes"
 DECLINED = "declined"
 FINISHED = "finished"
-# The keys the kept pause rules and the check after a framework read, unchanged from the turn they came from.
+# The safety keys: where the question owed after a pause stands, whether a worry settled and whether danger was reached
+# (each lasts the conversation), and whose danger the open worry is about (only while it is open).
 RETURN_CHECK = "return_check"
 SAFETY_SETTLED = "safety_settled"
 DANGER_REACHED = "danger_reached"
-DANGER_ABOUT = "danger_about"
-ASKED_ABOUT = "asked_about"
+ABOUT = "worry_about"
+# How many messages in a row were read as no concern while an unsure worry stayed open (worry.CALM_TO_CLEAR).
+CALM = "worry_calm"
 SAFETY_END_CHECK = "safety_end_check"
 # Where the safety question after a framework's last stage stands.
 END_CHECK_ASKED = "asked"

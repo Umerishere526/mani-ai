@@ -44,6 +44,9 @@ _CTX_BLOCK = re.compile(r"^\[ctx\].*?\[/ctx\]\s*", re.DOTALL)
 # "okay" or a short phrase of Mani's they repeat is never caught (the friend chat, 2026-11-04).
 COPY_SHARE = 0.9
 COPY_MIN_CHARS = 40
+# Words of their own beyond this many make it an answer however much of Mani's reply came with them, so it is read
+# like any message: a pasted reply with "I took all my pills" added was answered with the fixed line (2026-11-20).
+COPY_ADDED_WORDS = 2
 
 
 def strip(content: str) -> str:
@@ -61,4 +64,9 @@ def copies_last_reply(content: str, last_reply: str | None) -> bool:
     theirs = _plain(content)
     if last_reply is None or len(theirs) < COPY_MIN_CHARS:
         return False
-    return SequenceMatcher(None, theirs, _plain(last_reply)).ratio() >= COPY_SHARE
+    said = _plain(last_reply)
+    if SequenceMatcher(None, theirs, said).ratio() < COPY_SHARE:
+        return False
+    words = theirs.split()
+    shared = sum(block.size for block in SequenceMatcher(None, words, said.split()).get_matching_blocks())
+    return len(words) - shared <= COPY_ADDED_WORDS

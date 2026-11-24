@@ -61,7 +61,7 @@ the same change as the work.**
   4. The reply is `TurnReply` (`chat/reply.py`): `text`, `action` (none, offer, finish, stop, library), `framework`,
      `stage`, `safety` (`level`, `about`, `help_in_place`, `declined`, `symptom_now`, `still_there`, `why`), `notes`
      and `title`.
-  5. Code applies it (`turn._apply`): the safety judgment through the kept pause rules (`judged.judge`), what the reply
+  5. Code applies it (`turn._apply`): the safety judgment through the one safety rule (`worry.step`), what the reply
      may change of the framework and which buttons show (`decide.decide`), the fixed text where a pause or the check
      after a framework requires it (`crisis.pause_reply`, `crisis.END_CHECK`), and dashes replaced
      (`repairs.without_dashes`). Every other word goes out as the model wrote it.
@@ -122,7 +122,8 @@ the same change as the work.**
 ## Decisions in force
 
 - **One model call per turn: the model writes every word Mani says and decides what happens next, and code keeps only
-  the guarantees below, stated to the model in the facts before the call** (muhammad, 2026-11-17). Because the state
+  the guarantees below, stated to the model in the facts before the call** (muhammad, 2026-11-17; the first turn back
+  after a pause is the one reply code writes too, `crisis.RETURN_CHECK_REPLY`, 2026-11-19). Because the state
   machine around one structured call (a 22-field form with the reply last, code stitching a closing question,
   templates and letter lines into the reply, a second call reading the person after it, about 75,000 characters of
   rules) gave replies that missed the core, forgot between turns, ignored corrections and broke grammar where code
@@ -131,18 +132,18 @@ the same change as the work.**
   `mani-vault/Journal/flat-replies-were-the-model-2026-11-17.md`. Code guarantees only:
   - the client's fixed pieces, sent whole: the greeting, the style question and openers, the return opener, the five
     steps per style and the worked example, every button label, `crisis.CRISIS_REPLY`,
-    `crisis.pause_reply`, `crisis.END_CHECK` and `greeting.COPIED_BACK`;
+    `crisis.pause_reply`, `crisis.END_CHECK`, `crisis.RETURN_CHECK_REPLY` and `greeting.COPIED_BACK`;
   - an offer only when it is allowed, as the client's three steps with their buttons (`decide._offer`,
     `decide._answered_offer`);
   - one stage step per turn, and finish only on the last stage (`decide.stage_of`, `decide._moved`);
   - the safety question after a framework when the conversation reached danger (`crisis.END_CHECK`);
   - the declined and finished lists on the thread record (`chat/record.py`);
-  - the pause rules, fed by the reply's `safety` fields (`judged.judge`);
+  - the safety rule, fed by the reply's `safety` fields (`worry.step`);
   - dashes replaced (`repairs.without_dashes`).
   A refused offer is traced (`refused`), never repaired. Tests: `test_a_turn_costs_exactly_one_provider_call_and_
   sends_the_text_as_written`, `test_dashes_are_replaced_and_nothing_else_in_the_text_changes` and
   `test_notes_written_by_one_turn_reach_the_next_turns_facts` in `tests/integration/test_turn.py`;
-  `tests/unit/test_decide.py`, `test_facts.py`, `test_judged.py`, `test_taps.py`, `test_record.py`.
+  `tests/unit/test_decide.py`, `test_facts.py`, `test_worry.py`, `test_taps.py`, `test_record.py`.
 - **A turn held for safety changes no framework state and makes no offer, and its facts invite neither: it stays on
   its stage, a tap on Start does not start the set, and no offer is allowed** (2026-11-18). Because the facts told a
   held turn it might move to the next stage, start an open offer or start a tapped set, which code then refused, so
@@ -338,20 +339,24 @@ the same change as the work.**
     never for pushing back or doubting; `symptom_now` yes, no or unsaid for the body; `still_there` when their message
     itself says the danger goes on; and a line of `why`, never traced and stored only as the reason of a pause it
     starts (`chat_pauses.reason`). What each means is `mani.md`'s Safety section, watched by the evaluation's rule
-    cases. `judged.danger_value` names `danger` as the rules' `now`.
+    cases. `worry._DANGER` names `danger` as the rules' `now`.
   - `threads.safety` is clear, unsure or danger (migration 036). Code applies the judgment with rules of its own
-    (`safety.after`): a refusal never lowers a concern; a concern about a person is asked about once, and an answer
-    that still leaves it unsure is held as danger (`safety.HELD`; muhammad, 2026-11-16, after the client's safety test
-    had seven safety questions in a row); from danger only a judgment of none lowers it. A symptom in the body
+    (`safety.after`): a refusal never lowers a concern; only the model raises a concern about a person to danger, so
+    an answer it judged unsure stays unsure however often Mani asked, and from danger the model judged about a person
+    (`safety.HELD`) only a judgment of none of that same worry lowers it, so an unsure read of another kind is not held
+    by it (`worry_about`; chest pain, then "I wish I weren't here") (muhammad, 2026-11-20, after production paused a
+    person who was lonely and crying after "unsafe with my family" with no danger ever judged; this ends the hold of
+    2026-11-16 that turned a second unsure into danger; `test_worry.py`, "a worry the model only ever judged unsure
+    never pauses"). A symptom in the body
     that they have not said stopped is danger now, and when the model judged it lower code adds the call-now line after
     Mani's text, once per body worry, also on a thread already in danger of another kind (`safety.danger_of`, `crisis.BODY_EMERGENCY`; muhammad, 2026-11-18: a possible medical
     emergency gets "call emergency services now" every time, over-triggering accepted, after MiniMax held chest pain
     with a strange left arm at unsure in 7 of 30 runs; `test_a_body_worry_that_has_not_stopped_is_danger_now`,
     `test_a_body_worry_the_model_held_lower_still_gets_call_now`). Once a concern settled, only their newest message
     reopens a body worry (the stroke chat, replayed 2026-11-11).
-    Mani's question counts as asked only for the kind of danger it was about (`safety.asked_about_this`, the kind
-    kept as `asked_about` while unsure; the held-back run, 2026-11-16). A worry that settles is kept on the record as
-    `safety_settled` (`judged.safety_record`).
+    Mani's question counts as asked only for the kind of danger it was about (`worry.step`, the kind kept as
+    `worry_about` while a worry is open and forgotten when it settles; the held-back run, 2026-11-16). A worry that
+    settles is kept on the record as `safety_settled` (`worry.record_after`).
   - While a worry is open the facts say so, no offer is allowed and the turn changes no framework state (see "A turn
     held for safety"); a running framework waits on its stage. The message limits do not apply while it is open.
     How Mani answers danger (asking plainly what they mean, not asking the same question again, saying how to reach
@@ -359,19 +364,22 @@ the same change as the work.**
   - The first turn judged danger is recorded in `admin.crisis_events` with whose danger it is, never their words
     (`turn._record_danger`, `threads.mark_crisis`). `threads.crisis_at` (migration 037) keeps when it was last flagged,
     and `recent_crisis` counts its 30 days from it. An edit restores the state (`rewind`).
-  - **When danger continues with nothing in place, the chat pauses for `CRISIS_PAUSE_MINUTES` (default 15); a refusal
-    is required only for a symptom in the body; nobody is signed out, every conversation is closed, the Library stays
-    open, and the backend is the whole lock** (muhammad, 2026-11-13, and 2026-11-14 for the refusal; this replaces
+  - **When danger continues with nothing in place, the chat pauses for `CRISIS_PAUSE_SECONDS` (default 30); a refusal
+    is required only for a symptom in the body; nobody is signed out, no conversation takes a message, the Library
+    and every conversation stay readable, and the backend is the whole lock** (muhammad, 2026-11-13, and 2026-11-14 for
+    the refusal; 2026-11-23 for the 30 seconds and for reading the conversation after closing the pop-up; this replaces
     "nothing locks" of 2026-11-06 and "help refused is the only block" of 2026-11-11). Because once a crisis is certain
     Mani must stop rather than go round a loop of "please get help", and the production chat of 2026-11-14 never
     paused in 11 turns: "i want to kill myself", about to act right now, nobody with them, nobody called, every
     question answered honestly and so never `declined` (2026-11-14).
-    The rule is `pause.pauses_now`: the state after is danger, nothing is in place, and the danger went on after Mani
+    The rule is `worry.step`: the state after is danger, nothing is in place, and the danger went on after Mani
     had answered it (the state before was danger) or, once Mani had asked about this kind of worry, the answer says
     it again (muhammad, 2026-11-16: asked, they say "I just want to die", and the help screen comes, "every time").
     Never a pause on the first danger message of a clear conversation: Mani's own reply comes first. A danger about
     the body pauses only when this turn's read has the symptom happening now and they refuse the help (`declined`;
-    the controller's ruling, 2026-11-13, because a doubt paused 5 of 6 body chats live); a danger of no known kind
+    the controller's ruling, 2026-11-13, because a doubt paused 5 of 6 body chats live), at the level code holds it,
+    so a symptom the model judged unsure counts as danger (muhammad, 2026-11-23: refusing an ambulance for chest pain
+    that was still happening never paused when the model said unsure); a danger of no known kind
     needs `declined` too. Accepted: a `help_in_place` misread can pause someone who has help (2026-11-14).
     On the pausing turn a `chat_pauses` row (migration 037: thread, `started_at`, `ends_at`, `reason`, `checked_at`) is
     written in the turn's transaction, the reply is `crisis.pause_reply(about)` in place of the model's text (whom
@@ -383,7 +391,8 @@ the same change as the work.**
     retry or another tab cannot slip past. The profile and the opening carry `chat_paused_from` and
     `chat_paused_until`; reading conversations, the crisis resources and the Library stay open. A pause's reason is
     loaded by the turns of any of the person's conversations (`threads.load_turn_context`), never by the profile, and the person's own role has no SELECT on it. An edit never undoes a pause.
-    **Every conversation asks after a pause, until they say they are all right** (muhammad, 2026-11-13). Because a
+    **Every conversation asks after a pause, until they say they are all right** (muhammad, 2026-11-13; the
+    conversation the pause began in too, 2026-11-19: it stops asking once they have said it in another). Because a
     person who comes back and chats in another conversation, new or older, must not bypass the check (2026-11-13).
     **A pause owes the check only while it ended within `RECENT_CRISIS_DAYS` (30)** (the controller's ruling,
     2026-11-13). Because without a bound every old unchecked pause would make every conversation ask, however long ago
@@ -400,14 +409,16 @@ the same change as the work.**
     other conversations stop asking; see "After a pause" for when an answer pauses again. The chat-tester shows the
     client's blocker as she drew it on 2026-11-16, word for word ("Blocker.", "Chat is temporary unavailable", "For
     your safety, chat is paused for <the pause's own length>.", the Library line, the 988 line, Get help now and Go to
-    library; muhammad: exactly as drawn, the length stays 15 minutes, and the 911 line and the live timer at the bottom
+    library; muhammad: exactly as drawn, with the length the pause has (30 seconds as of 2026-11-23), and the 911 line and the live timer at the bottom
     stay though she did not draw them; the timer says "Chat resumes in", without "while you reach out", her safety
     test, point 43); the numbers come from the resources by `kind`, Get help now calls the support line (our choice),
-    the page runs again at 0:00, and its close opens the Library (`chat-tester/crisis_pause.py`,
+    the page runs again at 0:00, and its cross leaves the person's conversation to read, with the composer, the edit icon
+    and the suggested replies off and a banner with the same timer until the pause ends; Go to library opens the
+    Library (`chat-tester/crisis_pause.py`, `test_closing_the_pop_up_leaves_the_conversation_to_read_with_no_way_to_write`,
     `test_a_paused_chat_shows_only_the_clients_pop_up_and_the_library_still_opens`). The pop-up was not looked at in a
     browser.
-    `config.crisis_pause_minutes`; `chat/pause.py`, `chat/judged.py`, `db/pauses.py`, `routers/threads.py`,
-    `auth/deps.py`; `tests/unit/test_pause.py`, `test_safety.py`, `test_judged.py`, `test_crisis_resources.py`; in
+    `config.crisis_pause_seconds`; `chat/pause.py`, `chat/worry.py`, `db/pauses.py`, `routers/threads.py`,
+    `auth/deps.py`; `tests/unit/test_pause.py`, `test_safety.py`, `test_worry.py`, `test_crisis_resources.py`; in
     `test_turn.py` `test_overdose_on_the_first_message_gets_manis_reply_and_the_next_message_pauses`,
     `test_a_paused_person_is_refused_before_anything_is_paid`,
     `test_a_return_check_answer_that_is_fine_marks_the_pause_checked`; in `test_threads_api.py`
@@ -583,17 +594,46 @@ the same change as the work.**
 - **Retired 2026-11-17: something new and painful holds the move to the set for one reply** (2026-11-16). Because
   the form that held the move is gone; `mani.md` holds an offer while their message brings something new and
   painful (2026-11-17).
-- **After a pause, only a message that itself says the danger is still there pauses again, and the answer to how
-  things are is read literally** (muhammad, 2026-11-16). Because in his local chat a new conversation opened with the
+- **After a pause, only a message that itself says the danger is still there, or that the model reads as danger,
+  pauses again, and the answer to how things are is read literally** (muhammad, 2026-11-16; 2026-11-23 for a danger
+  read: "I took more pills" in answer used to wait one more message when the read did not also mark `still_there`).
+  Because in his local chat a new conversation opened with the
   question about the pause, he answered "fine", the read held the pause's reason against it ("saying you're fine
   doesn't clarify whether you're away from them") and the chat paused again (2026-11-16). The facts give the reason as
   what the pause rested on earlier (`facts._pause_lines`). The first message back never pauses and gets Mani's reply
-  (`is_return_check` in `pause.pauses_now`); the answer to it pauses only when the reply's `safety.still_there` says
-  the danger is still there, and an unclear answer gets Mani's reply and the message after it decides. `mani.md`
+  (`Phase.ASKING` in `worry.step`); the answer to it pauses only when the reply's `safety.still_there` says
+  the danger is still there or its level is danger, with nothing in place, and an unclear answer gets Mani's reply and the message after it decides. `mani.md`
   judges a safe answer to the question about a pause as none (2026-11-17, after the suite's return-check conversation
-  held "i'm ok now, my sister is here and i'm safe" as unsure). `test_the_first_message_back_after_a_pause_never_pauses`,
-  `test_after_the_return_check_only_danger_still_there_pauses` in `test_judged.py`,
+  held "i'm ok now, my sister is here and i'm safe" as unsure). The sequences "the first message back after a pause
+  never pauses, whatever the read reports" and "their answer to how things are pauses only when it says the danger
+  is still there" and "an answer read as danger pauses even when the read does not say it is still there" in
+  `test_worry.py`,
   `test_a_return_check_answer_that_is_fine_marks_the_pause_checked` in `test_turn.py`.
+- **A conversation's safety moves by one rule, a worry's kind lasts only while the worry is open, and their word that
+  they are all right, in any conversation, settles every worry held from before it** (muhammad, 2026-11-19, the
+  redesign of the crisis pause). Because the kind of a worry and the question asked about it sat in two record keys
+  that nothing cleared, so after a settled body worry a later danger with no stated kind was held to the body rule and
+  never paused, and the conversation a pause began in kept its danger, asked again and could pause with no word from
+  Mani after they had said elsewhere that they were all right (2026-11-19). The rule is `worry.step` over `Standing`
+  (the state, the worry's kind in `worry_about`, and the phase: ordinary, asking the return check, answering it);
+  `worry.standing` settles a held worry whose conversation's last message came before the latest pause's
+  `checked_at`; `pause.return_check` is the one rule for who is owed the question. A settled worry's kind is forgotten, so a later
+  danger with no stated kind needs a refusal like any other (muhammad kept this, 2026-11-19). muhammad, 2026-11-20,
+  after an edge-case pass: an unsure worry they never answer closes on the second message in a row read as no
+  concern (`worry.CALM_TO_CLEAR`, record key `worry_calm`; an answer to a question Mani asked directly, the return
+  check or the one after a set, still settles at once), because one calm message can be a changed subject and a
+  worry nobody closes held every later turn; a first message back read as danger gets `crisis.RETURN_DANGER_REPLY`
+  in place of the question; the pausing turn sends Mani's own reply and then the pause line; a retry of a message
+  answered with the fixed words of a failed call runs the turn again from the state before it
+  (`crisis.UNREAD_REPLIES`, `turn._arrival`); a copy of Mani's reply with words of theirs added is read like any
+  message (`text.COPY_ADDED_WORDS`). The prompt lines that go with these have not been through the evaluation.
+  Changes that follow
+  from the redesign and wait for him to keep or overrule them: a conversation asks with the latest pause's reason, whichever conversation the pause began in; the
+  answer to the question a new conversation opens with is a held turn, so no limit refuses it. `test_worry.py` (each
+  sequence was first run through the rules as they stood), `test_pause.py`; in `test_turn.py`
+  `test_the_conversation_paused_in_stops_asking_once_they_said_elsewhere_they_are_all_right` and
+  `test_the_answer_to_the_question_a_new_conversation_opens_with_is_never_refused_for_a_limit`;
+  `test_worry_migration.py`.
 - **Retired 2026-11-16 (superseded) and 2026-11-17: every conversation turns from understanding to helping, and
   code names the turn and the help move** (muhammad, 2026-10-27). Because the state and note lines that carried
   it are gone; `mani.md` says what Mani does when they ask what to do (2026-11-17).
@@ -820,8 +860,9 @@ the same change as the work.**
 - **`threads.understanding` is the thread record: Mani's notes, the sets declined and finished, and the safety keys
   the pause rules read** (muhammad, 2026-11-17). Because the record had grown into a picture, readings and stores that
   code wrote and the model was asked to fill, and it already holds JSON, so reshaping it in place needs no new column
-  (2026-11-17). Shape: `{notes, declined, finished, return_check, safety_settled, danger_reached, danger_about,
-  asked_about, safety_end_check}` (`chat/record.py`). Migration 039 rewrote every row: declined and finished rebuilt
+  (2026-11-17). Shape: `{notes, declined, finished, return_check, safety_settled, danger_reached, worry_about,
+  safety_end_check}` (`chat/record.py`; migration 042, 2026-11-19, folded `danger_about` and `asked_about` into
+  `worry_about`). Migration 039 rewrote every row: declined and finished rebuilt
   from `thread_technique_state`, the safety keys kept, notes empty, every other key dropped, rewind snapshots cleared,
   and a thread left at the body check-in retired and counted finished. A set declined before a later offer replaced
   that row is not recoverable, so such a thread could be offered it once more (accepted 2026-11-17). Written only by
@@ -887,7 +928,11 @@ Ordered by what breaks first.
    `mani` row (`cache.REQUIRED_PROMPTS`). 040 and 041 (drops the stored per-person memory for good) run only after
    the code that no longer reads them is deployed: code from before 2026-11-18 reads `threads.check_at_message_count`
    and selects from `admin.user_memory` on every turn, so either one ahead of the deploy fails every chat. Done on
-   hosted project `aipgficduzufstilndbw` after the PR #58 deploy: 039–041 pushed and seeded (2026-11-18).
+   hosted project `aipgficduzufstilndbw` after the PR #58 deploy: 039–041 pushed and seeded (2026-11-18). 042 (folds
+   two record keys into `worry_about`, clears rewind snapshots) runs only after the code that reads `worry_about`
+   is deployed; until then the code from before it reads `danger_about` and `asked_about`. The library branch's
+   `042_exercise_audio_optional.sql` (`feat/library-descriptions`, stashed) becomes 043 when that branch comes back;
+   muhammad's local dev database already records version 042 for it.
 3. **Rate limit and cost ceiling.** `DAILY_MESSAGE_LIMIT` exists and defaults to 0 (off); muhammad sets it in the
    environment. `MINUTE_MESSAGE_LIMIT` is 10, and neither applies while a safety worry is open. There is no per user
    cost ceiling; `llm_calls.spend_since()` is what one would read. A retried send with the same `client_message_id`

@@ -173,8 +173,8 @@ class Settings(BaseSettings):
     # every request - there is no host where an unset secret should mean "open".
     cron_secret: str = Field(default="", repr=False)
 
-    # Minutes the chat stays paused once someone in danger continues with nothing in place.
-    crisis_pause_minutes: int = Field(default=15, ge=1)
+    # Seconds the chat stays paused once someone in danger continues with nothing in place.
+    crisis_pause_seconds: int = Field(default=30, ge=1)
 
     # Paid replies one person may get in 24 hours. 0 turns it off. muhammad's number is 300,
     # off for now so testing is not capped; set it before real traffic. Only turns that call

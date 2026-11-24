@@ -14,13 +14,13 @@ async def start(
     conn: asyncpg.Connection,
     user_id: uuid.UUID | str,
     thread_id: uuid.UUID | str,
-    minutes: int,
+    seconds: int,
     reason: str | None,
 ) -> Pause:
     record = await conn.fetchrow(
         "insert into public.chat_pauses (user_id, thread_id, ends_at, reason) "
-        "values ($1, $2, now() + make_interval(mins => $3), $4) returning *",
-        user_id, thread_id, minutes, reason,
+        "values ($1, $2, now() + make_interval(secs => $3), $4) returning *",
+        user_id, thread_id, seconds, reason,
     )
     return Pause.model_validate(dict(record))
 

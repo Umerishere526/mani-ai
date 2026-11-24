@@ -31,7 +31,7 @@ def build(**overrides) -> Settings:
 
 def test_defaults_are_the_safe_choice():
     settings = build()
-    assert settings.crisis_pause_minutes == 15
+    assert settings.crisis_pause_seconds == 30
     assert settings.ai_debug_mode is False
     assert settings.openrouter_data_collection == "deny"
 
@@ -194,6 +194,6 @@ def test_a_value_pasted_with_a_trailing_newline_is_trimmed(monkeypatch):
     assert s.supabase_service_role_key == "sb_secret_example"
 
 
-def test_a_pause_of_no_minutes_is_refused():
+def test_a_pause_of_no_seconds_is_refused():
     with pytest.raises(ValidationError):
-        build(crisis_pause_minutes=0)
+        build(crisis_pause_seconds=0)

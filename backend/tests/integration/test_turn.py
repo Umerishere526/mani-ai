@@ -175,7 +175,7 @@ async def test_a_finish_after_danger_sends_the_end_check_then_the_close(alice, m
           said("Good to hear."))
     thread = await start(alice)
     await put_technique(thread.id, "abcde", TechniqueOutcome.ACCEPTED, "effective")
-    await put_record(thread.id, {"danger_reached": True, "danger_about": "themselves"})
+    await put_record(thread.id, {"danger_reached": True})
     first = await send(alice, thread.id, "my new belief is that I'm allowed limits")
     assert first.content == crisis.END_CHECK and first.prompts == []
     check = await send(alice, thread.id, "i'm okay now, my sister is here")
@@ -185,6 +185,20 @@ async def test_a_finish_after_danger_sends_the_end_check_then_the_close(alice, m
     assert [p.label for p in closed.prompts][-1] == "Finish for Now"
 
 
+async def test_a_set_stopped_while_the_end_check_waits_leaves_no_question_marked_as_asked(alice, model):
+    """The audit of 2026-11-20: a stop in answer to the safety question after the last stage left the marker at
+    "asked", so every later turn was told it had just asked that question."""
+    model(said("Warm close.", action="finish", stage="effective"), said("Okay, we can leave it there.", action="stop"))
+    thread = await start(alice)
+    await put_technique(thread.id, "abcde", TechniqueOutcome.ACCEPTED, "effective")
+    await put_record(thread.id, {"danger_reached": True})
+    first = await send(alice, thread.id, "my new belief is that I'm allowed limits")
+    assert first.content == crisis.END_CHECK
+    await send(alice, thread.id, "i'm fine. i don't want to do this exercise anymore")
+    record = (await thread_row(alice, thread.id)).understanding
+    assert "safety_end_check" not in record and record["declined"] == ["abcde"]
+
+
 async def test_overdose_on_the_first_message_gets_manis_reply_and_the_next_message_pauses(alice, model):
     model(said("Call 911 now. Are you alone?", safety=DANGER), said("Please call now.", safety=DANGER))
     thread = await start(alice)
@@ -192,7 +206,7 @@ async def test_overdose_on_the_first_message_gets_manis_reply_and_the_next_messa
     assert first.content == "Call 911 now. Are you alone?" and first.paused_until is None and first.crisis_detected
     second = await send(alice, thread.id, "yes alone. i dont want help")
     assert second.paused_until is not None
-    assert second.content == crisis.pause_reply("themselves", 15)
+    assert second.content == "Please call now.\n\n" + crisis.pause_reply("themselves", 30)
 
 
 async def test_a_paused_person_is_refused_before_anything_is_paid(alice, model):
@@ -203,6 +217,22 @@ async def test_a_paused_person_is_refused_before_anything_is_paid(alice, model):
     with pytest.raises(ServiceError) as refused:
         await send(alice, thread.id, "hello?")
     assert refused.value.category is ErrorCategory.CHAT_PAUSED and scripted.calls == 2
+
+
+async def test_a_retry_of_a_message_no_host_answered_runs_the_turn_again(alice, model, monkeypatch):
+    """The audit of 2026-11-20: the fixed words were stored under the message's id, so a retry of "i took a bunch of
+    pills" returned them for ever and the message was never read."""
+    key = uuid.uuid4()
+    thread = await start(alice)
+    with monkeypatch.context() as down:
+        down.setattr(client, "complete", all_hosts_down)
+        unread = await send(alice, thread.id, "i took a bunch of pills", client_message_id=key)
+    assert unread.content == crisis.TROUBLE_REPLY
+    count = (await thread_row(alice, thread.id)).message_count
+    model(said("Call 911 now. Are you alone?", safety=DANGER))
+    read = await send(alice, thread.id, "i took a bunch of pills", client_message_id=key)
+    assert read.content == "Call 911 now. Are you alone?" and read.crisis_detected and not read.was_duplicate
+    assert (await thread_row(alice, thread.id)).message_count == count, "the unread turn was replaced, not added to"
 
 
 async def test_every_host_failing_on_a_first_danger_message_still_answers(alice, monkeypatch):
@@ -276,6 +306,63 @@ async def test_a_return_check_answer_that_is_fine_marks_the_pause_checked(alice,
     assert checked is True
 
 
+async def _a_pause_that_has_run_out(alice, model_replies, model):
+    """A conversation paused on danger whose pause has since run out, and the scripted model."""
+    from mani.db import pool
+
+    scripted = model(said("Call now.", safety=DANGER), said("Please call.", safety=DANGER), *model_replies)
+    paused_in = await start(alice)
+    await send(alice, paused_in.id, "i took pills")
+    await send(alice, paused_in.id, "alone")
+    async with pool.as_admin() as conn:
+        await conn.execute("update public.chat_pauses set ends_at = now() - interval '1 minute' where user_id = $1",
+                           ALICE)
+    return scripted, paused_in
+
+
+async def test_the_conversation_paused_in_stops_asking_once_they_said_elsewhere_they_are_all_right(alice, model):
+    """muhammad, 2026-11-19: until they say they are all right, in any conversation. The conversation the pause began in
+    went on asking, and kept its danger, so its next message could pause with no word from Mani."""
+    scripted, paused_in = await _a_pause_that_has_run_out(
+        alice, [said("Good to hear it."), said("I'm here with you.", safety=DANGER)], model)
+    elsewhere = await start(alice)
+    await send(alice, elsewhere.id, "i'm okay, my sister is here")
+
+    back = await send(alice, paused_in.id, "i feel awful again")
+
+    assert back.paused_until is None and back.content == "I'm here with you."
+    assert "paused earlier" not in facts_of(scripted)
+
+
+async def test_the_first_message_back_after_a_pause_never_agrees_to_carry_on_whatever_the_model_wrote(alice, model):
+    """The client's blocker test, 2026-11-16: back after the pause, saying the pills were still beside her, she was told
+    "Yes, we can keep talking". The first turn back is code's fixed words, and the model's read still stands: read as
+    danger it gets the way to help (muhammad, 2026-11-20), otherwise the question how things are."""
+    still_there = Safety(level="danger", about="themselves", still_there=True, why="pills beside her")
+    _, paused_in = await _a_pause_that_has_run_out(
+        alice, [said("Yes, we can keep talking.", safety=still_there)], model)
+
+    back = await send(alice, paused_in.id, "the pills are still next to me, can we keep talking?")
+
+    assert back.content == crisis.RETURN_DANGER_REPLY and back.paused_until is None
+    assert (await thread_row(alice, paused_in.id)).safety == "danger"
+
+
+async def test_the_answer_to_the_question_a_new_conversation_opens_with_is_never_refused_for_a_limit(
+    alice, model, monkeypatch
+):
+    """The answer is a safety turn like any other held one: it is answered whatever the limits say."""
+    from mani.config import get_settings
+
+    _, _ = await _a_pause_that_has_run_out(alice, [said("Good to hear it.")], model)
+    elsewhere = await start(alice)
+    monkeypatch.setattr(get_settings(), "minute_message_limit", 1)
+
+    answered = await send(alice, elsewhere.id, "i'm okay, my sister is here")
+
+    assert answered.content == "Good to hear it."
+
+
 CHEST = Safety(level="unsure", about="body", symptom_now="unsaid")
 
 
@@ -298,7 +385,7 @@ async def test_a_body_danger_the_model_judged_itself_goes_out_as_written(alice, 
     assert turn.content == "Call your emergency number now."
 
 
-async def test_a_pausing_body_turn_sends_only_the_pause_reply(alice, model):
+async def test_a_pausing_body_turn_sends_manis_reply_then_the_pause_line_and_no_call_now_line(alice, model):
     now = Safety(level="danger", about="body", symptom_now="yes")
     model(said("Call your emergency number now.", safety=now),
           said("Okay.", safety=now.model_copy(update={"declined": True})))
@@ -306,7 +393,8 @@ async def test_a_pausing_body_turn_sends_only_the_pause_reply(alice, model):
     await send(alice, thread.id, "my chest is crushing right now")
     paused = await send(alice, thread.id, "no im not calling anyone")
     assert paused.paused_until is not None
-    assert paused.content == crisis.pause_reply("body", 15) and crisis.BODY_EMERGENCY not in paused.content
+    assert paused.content == "Okay.\n\n" + crisis.pause_reply("body", 30)
+    assert crisis.BODY_EMERGENCY not in paused.content
 
 
 async def test_an_offer_they_moved_past_is_no_longer_open_and_its_old_button_starts_nothing(alice, model):
@@ -377,7 +465,7 @@ async def test_an_owed_return_check_comes_before_the_five_steps(alice, model):
             "insert into public.chat_pauses (user_id, thread_id, started_at, ends_at, reason) "
             "values ($1, $2, now() - interval '20 minutes', now() - interval '5 minutes', 'took pills')", ALICE, other.id)
     turn = await send(alice, thread.id, "Not sure")
-    assert scripted.calls == 4 and turn.content == "Before that, how are things now?"
+    assert scripted.calls == 4 and turn.content == crisis.RETURN_CHECK_REPLY
 
 
 async def test_an_offer_on_the_persons_second_message_is_refused_and_the_next_may_offer(alice, model):

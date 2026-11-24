@@ -26,12 +26,29 @@ BODY_EMERGENCY = "If this is happening now, please call 911 or get to the neares
 # still reaches the numbers (the design of 2026-11-17). Wording is ours until the client supplies hers.
 TROUBLE_REPLY = f"I'm having trouble replying right now, so please try again in a moment. {IN_DANGER}"
 
+# The fixed words that stand in for a reply the model never gave. A retry of a message answered with one runs the turn
+# again, so a message nobody read gets read (turn._arrival).
+UNREAD_REPLIES = (CRISIS_REPLY, TROUBLE_REPLY)
+
 # What Mani asks after a framework's last stage when a turn of the conversation reached danger
 # (record.DANGER_REACHED), as a reply of its own before the closing choices (muhammad, 2026-11-11). Wording is ours
 # until the client supplies hers.
 END_CHECK = (
     "Thank you for going through that with me. Before we finish, I want to come back to the worry about safety that "
     "came up earlier. How are things with that right now?"
+)
+# What Mani says on the first turn back after a pause, whatever the model wrote: safety comes before anything else, so it
+# can never agree to carry on first (muhammad, 2026-11-19, the client's blocker test: "Yes, we can keep talking"). The
+# model's own read of their message still counts. Wording is ours until the client supplies hers.
+RETURN_CHECK_REPLY = (
+    "Before anything else, I want to ask about what was happening when I paused our chat. How are things with that "
+    f"right now? {IN_DANGER}"
+)
+# What Mani says on the first turn back when that message itself is read as danger: the way to help, with no question
+# about the pause and no agreement to carry on (muhammad, 2026-11-20: "I just took the pills" got the question above and
+# lost Mani's own reply). Wording is ours until the client supplies hers.
+RETURN_DANGER_REPLY = (
+    "I'm worried about what you just told me. Please call 911 now, or call or text 988. Is anyone with you right now?"
 )
 # The reply on the turn that pauses the chat, by whose danger it is (the reply's safety.about): whom Mani worries for, and the
 # help that fits. A body emergency gets no suicide line; a danger of unknown kind keeps it. Wording is ours (muhammad,
@@ -46,11 +63,19 @@ _PAUSE_FOR: dict[str | None, tuple[str, str]] = {
 }
 
 
-def pause_reply(about: str | None, minutes: int) -> str:
+def _length(seconds: int) -> str:
+    """A pause's length in the largest whole unit that holds it: "30 seconds", "15 minutes", "1 hour"."""
+    unit_seconds, unit = next(((n, name) for n, name in ((3600, "hour"), (60, "minute")) if seconds % n == 0),
+                              (1, "second"))
+    count = seconds // unit_seconds
+    return f"{count} {unit}" if count == 1 else f"{count} {unit}s"
+
+
+def pause_reply(about: str | None, seconds: int) -> str:
     """What Mani says on the turn that pauses the chat."""
     who, help_now = _PAUSE_FOR.get(about, _PAUSE_FOR["themselves"])
     return (
-        f"I'm worried about {who}, so I'm pausing our chat for {minutes} minutes. {help_now} "
+        f"I'm worried about {who}, so I'm pausing our chat for {_length(seconds)}. {help_now} "
         "I'll be here when you come back."
     )
 

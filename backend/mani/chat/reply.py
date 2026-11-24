@@ -13,14 +13,14 @@ class Safety(BaseModel):
 
     level: Literal["none", "unsure", "danger"] = Field(description="See Safety in your instructions.")
     about: Literal["themselves", "someone_else", "from_someone", "body"] | None = Field(
-        default=None, description="Whose danger, when there is any."
+        default=None, description="Whose danger. Always filled when level is unsure or danger."
     )
     help_in_place: bool = Field(default=False, description="Someone who can help is with them now, or help is coming.")
     declined: bool = Field(default=False, description="They refused the help you offered for this danger.")
     symptom_now: Literal["yes", "no", "unsaid"] | None = Field(
         default=None, description="With about body: whether the symptom is happening right now."
     )
-    still_there: bool = Field(default=False, description="Their message itself says the danger is still there.")
+    still_there: bool = Field(default=False, description="Their message itself says the danger is still there, or that they are not safe.")
     why: str | None = Field(default=None, description="One short line on what you judged.")
 
 
