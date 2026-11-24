@@ -14,6 +14,9 @@ backend/.eval/
 .env.*
 !.env.example
 
+# Streamlit's local secrets file holds real keys (a hosted copy's Supabase keys among them).
+**/.streamlit/secrets.toml
+
 # Editors
 .vscode/
 .idea/
