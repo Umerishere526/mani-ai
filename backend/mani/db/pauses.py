@@ -51,3 +51,9 @@ async def mark_checked(conn: asyncpg.Connection, pause_id: uuid.UUID | str) -> N
     await conn.execute(
         "update public.chat_pauses set checked_at = now() where id = $1", pause_id
     )
+
+
+async def clear_checked(conn: asyncpg.Connection, pause_id: uuid.UUID | str) -> None:
+    await conn.execute(
+        "update public.chat_pauses set checked_at = null where id = $1", pause_id
+    )

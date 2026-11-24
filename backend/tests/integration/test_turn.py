@@ -352,6 +352,28 @@ async def _a_pause_that_has_run_out(alice, model_replies, model):
     return scripted, paused_in
 
 
+async def test_editing_the_answer_that_marked_a_pause_checked_asks_the_question_again(alice, model):
+    """An answer of "I'm fine" marks the pause checked; edited to something unsure, the mark goes with it, so the pause
+    still owes the question until they say they are all right."""
+    from mani.db import pool
+
+    unsure = Safety(level="unsure", about="themselves")
+    _, thread = await _a_pause_that_has_run_out(
+        alice, [said("How are things now?"), said("Good to hear it."), said("I'm here. What feels shaky?", safety=unsure)],
+        model)
+    await send(alice, thread.id, "back now")
+    await send(alice, thread.id, "i'm fine")
+
+    async def checked() -> bool:
+        async with pool.as_admin() as conn:
+            return await conn.fetchval("select checked_at is not null from public.chat_pauses where user_id = $1", ALICE)
+
+    assert await checked() is True
+    edited = await runner.edit(alice, thread.id, await last_user_message_id(thread.id), "not really, still shaky")
+    assert edited.content == "I'm here. What feels shaky?"
+    assert await checked() is False
+
+
 async def test_the_conversation_paused_in_stops_asking_once_they_said_elsewhere_they_are_all_right(alice, model):
     """muhammad, 2026-11-19: until they say they are all right, in any conversation. The conversation the pause began in
     went on asking, and kept its danger, so its next message could pause with no word from Mani."""

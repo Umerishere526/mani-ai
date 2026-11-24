@@ -340,6 +340,7 @@ async def _pause_writes(conn, ctx, judgment, reply: TurnReply, *, answering, pai
         return None
     if answering is not None and judgment.state is safety.State.CLEAR:
         await pauses.mark_checked(conn, answering)
+        await rewind.note_checked(conn, ctx.thread.id, ctx.thread.user_id, answering)
     if judgment.pausing:
         return await pauses.start(conn, ctx.thread.user_id, ctx.thread.id, seconds, reply.safety.why)
     return None

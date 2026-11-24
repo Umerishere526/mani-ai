@@ -677,6 +677,10 @@ the same change as the work.**
   `Safety._says_whose_danger` (`reply.py`), `worry.step`; `test_a_turn_reply_that_says_danger_without_whose_is_asked_for_again`,
   the `test_worry.py` sequence "a refused danger of no known kind during an open body worry pauses (2026-11-24)",
   `test_a_held_worry_whose_reply_fails_its_check_twice_still_gets_the_crisis_reply`.
+- **An edit of the answer that marked a pause checked takes the mark back** (muhammad, 2026-11-24). Because the edit
+  restored the thread but left `checked_at`, so the pause stopped owing the question. Only an edit of the turn that
+  checked the pause clears it. `rewind.note_checked`, `pauses.clear_checked`;
+  `test_editing_the_answer_that_marked_a_pause_checked_asks_the_question_again`.
 - **Retired 2026-11-16 (superseded) and 2026-11-17: every conversation turns from understanding to helping, and
   code names the turn and the help move** (muhammad, 2026-10-27). Because the state and note lines that carried
   it are gone; `mani.md` says what Mani does when they ask what to do (2026-11-17).
