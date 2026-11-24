@@ -265,19 +265,28 @@ the same change as the work.**
   dead data (2026-11-18). `supabase/migrations/040_drop_unread_columns.sql`; `scripts/test_db.sh` passes. Still kept
   though nothing writes them: `thread_techniques_offered` and `thread_technique_state.physical_response`,
   `conversation_effect` and `stages_known` (Open decisions).
-- **A reply asks a question only when it helps, and never more than one; every open-chat question has a job
-  (situation, feeling, belief, wants or a step toward the core and the set, never advice), chosen before the words
-  and kept with the question, and in the open chat code cuts every question but the last, and every question after
-  a message frustrated with Mani** (muhammad, 2026-11-17; the job, the ledger and the cut, muhammad, 2026-11-24, in
-  all three styles). Because Mani re-asked what it had asked and ran interviews with no memory of why it asked, and
-  a wording rule alone has not held. The cut deletes Mani's own sentences and adds none; a stage's question, a
-  lead-in and a safety question are never cut. `chat/questions.py` (`held_to_one`, `INTENTS`), `TurnReply.question`,
-  `facts.question_lines`; `test_an_open_chat_reply_keeps_one_question_and_the_next_turn_hears_what_it_was_for`.
-  Earlier: because code that
+- **A reply asks a question only when it helps, and never more than one: the model's `question.ask`, sent after
+  `text`; every question has a job chosen before the words, and after a message frustrated with Mani or a wish to stop
+  the open chat asks nothing** (muhammad, 2026-11-17; the job and the ledger, 2026-11-24 in the morning; the question
+  as its own field, muhammad, 2026-11-24, all three styles). Because cutting sentences that end in "?" broke text and
+  missed questions asked as requests ("Tell me about…"), and a wording rule alone has not held. A guarded (safety)
+  turn's words lose nothing; a question the model still writes into `text` against the schema is the one place code
+  still cuts. The replies ledger records the question as sent. `questions.held_to_one`, `questions.last_question`,
+  `repairs.sent_text`, `turn._ledger_entry`;
+  `test_a_reply_reaches_them_with_its_own_question_last_and_every_sentence_whole`.
+  Earlier (2026-11-17): because code that
   held every reply to a closing question in a field of its own joined text the model did not write and broke grammar,
   and muhammad's 2026-11-17 comparisons wanted replies that give something before they ask; this replaces "every chat
   reply ends on one question" (muhammad, 2026-11-10), knowingly. `mani.md` ("when a question helps, ask one question
   that goes deeper", "Never more than one question"); the evaluation scores it. The client has not been told.
+  The 2026-11-24 field differs from that failed one: the model writes the whole question, lead-in included, and code
+  only places it; the evaluation has to confirm it reads naturally before deploy.
+- **The reply's schema is chosen per turn: with no offer code would make, `offer` is not shown and `framework` lists
+  only offerable sets; validation still reads any value** (muhammad, 2026-11-24). Because a refused offer still went
+  out as a lead-in with no buttons. An offer still refused after the call is treated as open chat. Each switch of
+  schema may cost one turn of prompt cache (unchecked: read `cached_input_tokens`). `facts.offerable`,
+  `reply.shaped`, `run_eval.reply_schema`,
+  `test_an_offer_on_the_persons_second_message_is_refused_and_the_next_may_offer`.
 - **Retired 2026-11-17: what is explored stays explored, and a message's length decides nothing** (muhammad,
   2026-11-10). Because the code that kept the explored areas and pressed toward the framework is gone; the model
   reads the whole conversation and keeps its own notes (2026-11-17).
