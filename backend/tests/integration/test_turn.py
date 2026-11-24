@@ -6,7 +6,7 @@ import uuid
 import pytest
 
 from mani.chat import crisis, runner
-from mani.chat.reply import Event, Person, Question, Safety
+from mani.chat.reply import Event, Person, Question, Safety, Said
 from mani.db import threads
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
@@ -186,6 +186,22 @@ async def test_a_declined_framework_is_never_offered_again(alice, model):
     await send(alice, thread.id, "no, i don't want to do any exercise")
     turn = await send(alice, thread.id, "still feel like a pushover")
     assert turn.prompts == [] and turn.trace["refused"] == "offer"
+
+
+async def test_a_question_asked_in_a_set_and_what_the_reply_gave_reach_the_next_turn(alice, model):
+    """Repetition inside a set: the stage's question, the reply's move and its opening words are kept like any other."""
+    scripted = model(
+        said("That's a clear moment. B is for Belief. What went through your mind?", stage="belief",
+             said=Said(move="acknowledge", gist="named the meeting moment")),
+        said("I hear you.", stage="belief"),
+    )
+    thread = await start(alice)
+    await put_technique(thread.id, "abcde", TechniqueOutcome.ACCEPTED, "activate")
+    await send(alice, thread.id, "he yelled at me in the meeting on monday")
+    await send(alice, thread.id, "that i'm useless")
+    told = facts_of(scripted)
+    assert '[belief] "What went through your mind?"' in told
+    assert "acknowledge: named the meeting moment" in told and '"That\'s a clear moment"' in told
 
 
 async def test_after_e_the_feelings_check_then_the_closing_buttons(alice, model):

@@ -1,5 +1,5 @@
 # ABOUTME: The thread record a turn keeps in threads.understanding: Mani's notes, the people and events they spoke of,
-# ABOUTME: its questions, the frameworks declined or finished, and the safety keys the pause rules read. Pure helpers.
+# ABOUTME: what each reply asked and gave, the frameworks declined or finished, and the safety keys. Pure helpers.
 
 from __future__ import annotations
 
@@ -14,9 +14,14 @@ EVENTS_KEPT = 10
 NAME_CHARS = 60
 LINE_CHARS = 200
 WHEN = ("past", "now", "upcoming", "unsaid")
-# Each open-chat reply, oldest first: the question it asked ("" for none) and what that question was for.
-QUESTIONS = "questions"
-QUESTIONS_KEPT = 12
+# Each reply, oldest first: the question it asked ("" for none) and what that question was for, whether it was in the
+# open chat, its move and the gist of what it gave, and its opening words.
+REPLIES = "replies"
+REPLIES_KEPT = 12
+# What a reply mainly does (TurnReply.said.move); anything else is kept as "other".
+MOVES = ("acknowledge", "reflect", "reassure", "highlight", "summarize", "help")
+GIST_CHARS = 80
+OPENING_WORDS = 4
 DECLINED = "declined"
 FINISHED = "finished"
 # The safety keys: where the question owed after a pause stands, whether a worry settled and whether danger was reached
@@ -43,14 +48,23 @@ def finished(record: dict) -> list[str]:
     return list(record.get(FINISHED) or [])
 
 
-def questions(record: dict) -> list[dict]:
-    """The open-chat replies kept, oldest first, each as {"q": the question or "", "intent": what it was for}."""
-    return list(record.get(QUESTIONS) or [])
+def replies(record: dict) -> list[dict]:
+    """The replies kept, oldest first, each as {"q": the question or "", "intent": what it was for, "open_chat": whether
+    it was in the open chat, "move", "gist", "opens": its first words}."""
+    return list(record.get(REPLIES) or [])
 
 
-def with_question(record: dict, question: str, intent: str) -> dict:
-    """The record with this reply's question added, keeping the latest QUESTIONS_KEPT."""
-    return {**record, QUESTIONS: [*questions(record), {"q": question, "intent": intent}][-QUESTIONS_KEPT:]}
+def opening(text: str) -> str:
+    """A reply's first OPENING_WORDS words, without the punctuation that ends them."""
+    return " ".join(text.split()[:OPENING_WORDS]).rstrip(".,!?;:")
+
+
+def with_reply(record: dict, *, question: str, intent: str, open_chat: bool, move: str, gist: str, text: str) -> dict:
+    """The record with this reply added, keeping the latest REPLIES_KEPT."""
+    move = move.strip().lower()
+    entry = {"q": question, "intent": intent, "open_chat": open_chat, "move": move if move in MOVES else "other",
+             "gist": _clip(gist, GIST_CHARS), "opens": opening(text)}
+    return {**record, REPLIES: [*replies(record), entry][-REPLIES_KEPT:]}
 
 
 def return_check(record: dict, pause_id: str, state: str) -> dict:

@@ -13,6 +13,9 @@ from mani.db.threads import TurnContext
 from mani.models.rows import TechniqueState
 from mani.prompts import cache, composer
 
+# How many of the latest replies the facts show what they gave and how they opened.
+SAID_SHOWN = 6
+OPENERS_SHOWN = 4
 NO_OFFER = "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
 # What a tap on Start says while the turn is held for safety: the set does not start, so its first line is not said.
 HELD_START = ("They tapped to start the set, but this reply is about their safety: it does not start now and you never "
@@ -62,8 +65,7 @@ def facts(
     lines += understanding_lines(record)
     if running is not None and (framework := config.registry.get(running.framework_id)):
         lines.append(_running_line(framework, running.phase, held=holding))
-    elif not holding:
-        lines += question_lines(rec.questions(record))
+    lines += ledger_lines(rec.replies(record), open_chat=running is None and not holding)
     if open_offer is not None and not holding and (framework := config.registry.get(open_offer.framework_id)):
         lines.append(_offer_line(framework, open_offer.phase))
     if declined := rec.declined(record):
@@ -99,16 +101,24 @@ def understanding_lines(record: dict) -> list[str]:
     return lines
 
 
-def question_lines(kept: list[dict]) -> list[str]:
-    """What Mani asked in the open chat and what each question was for, and a run of replies that all asked one."""
-    asked = [entry for entry in kept if entry.get("q")]
+def ledger_lines(kept: list[dict], *, open_chat: bool) -> list[str]:
+    """What Mani already asked, and what each was for; what its recent replies gave and how they opened; and in the open
+    chat, a run of replies that all asked."""
     lines = []
-    if asked:
+    if asked := [entry for entry in kept if entry.get("q")]:
         listed = "; ".join(f"[{entry.get('intent') or 'unsaid'}] \"{entry['q']}\"" for entry in asked)
         lines.append(f"The questions you asked in this conversation, oldest first, with what each was for: {listed}. "
                      "Never ask again for something they answered, even in new words.")
-    run = next((i for i, entry in enumerate(reversed(kept)) if not entry.get("q")), len(kept))
-    if run >= 3:
+    if gave := [entry for entry in kept[-SAID_SHOWN:] if entry.get("gist")]:
+        listed = "; ".join(f"{entry.get('move') or 'other'}: {entry['gist']}" for entry in gave)
+        lines.append(f"What your recent replies gave them, oldest first: {listed}. Never give the same again, even in "
+                     "new words.")
+    if opened := [entry["opens"] for entry in kept[-OPENERS_SHOWN:] if entry.get("opens")]:
+        lines.append(f"Your recent replies opened with: {'; '.join(f'\"{words}\"' for words in opened)}. Open this "
+                     "one differently.")
+    run = next((i for i, entry in enumerate(reversed(kept)) if not (entry.get("q") and entry.get("open_chat"))),
+               len(kept))
+    if open_chat and run >= 3:
         lines.append(f"Your last {run} replies each ended on a question. This one gives them something and asks nothing, "
                      "unless its question moves them a step on.")
     return lines

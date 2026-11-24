@@ -1,5 +1,5 @@
-# ABOUTME: The turn's one reply as the model fills it: its plan, the people and events, what Mani says, what happens
-# ABOUTME: next, its safety judgment and its notes. Field descriptions are what the model reads, so they match mani.md.
+# ABOUTME: The turn's one reply as the model fills it: its plan, people and events, what Mani says and gives, what
+# ABOUTME: happens next, its safety judgment and notes. Field descriptions are what the model reads; they match mani.md.
 
 from __future__ import annotations
 
@@ -63,6 +63,15 @@ class Event(BaseModel):
         "they haven't said."))
 
 
+class Said(BaseModel):
+    """What the reply gives them, kept so a later reply does not give it again. Plain text, so an odd move never fails
+    the reply."""
+
+    move: str = Field(default="", description=(
+        "This reply's main move: acknowledge, reflect, reassure, highlight, summarize or help."))
+    gist: str = Field(default="", description="What it gives them, in 8 words or fewer.")
+
+
 class TurnReply(BaseModel):
     question: Question = Field(default_factory=Question, description="Your plan for this reply's question, before you write.")
     people: list[Person] = Field(default_factory=list, description=(
@@ -72,6 +81,7 @@ class TurnReply(BaseModel):
         "What happened, is happening or is coming, as they said it, rewritten whole each turn the same way. An upcoming "
         "event becomes past only when they say it happened. At most 10."))
     text: str = Field(description="What you say to them, exactly as they will read it.")
+    said: Said = Field(default_factory=Said, description="What your text gives them.")
     action: Literal["none", "offer", "finish", "stop", "library"] = Field(
         default="none", description="What happens after this reply."
     )
@@ -79,7 +89,8 @@ class TurnReply(BaseModel):
     stage: str | None = Field(default=None, description="The stage whose question this reply asks, while a set runs.")
     safety: Safety
     notes: str = Field(description=(
-        "Your private working notes for your next turn, under 100 words. People and events go in their own fields."))
+        "Your private working notes for your next turn, under 100 words. People, events and what you said go in their "
+        "own fields."))
     title: str | None = Field(default=None, description="Only when the facts ask for a title.")
     corrected: bool = Field(default=False, description=(
         "True when their latest message corrects something you said or understood about them."))

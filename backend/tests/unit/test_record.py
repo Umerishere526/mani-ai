@@ -1,8 +1,9 @@
 # ABOUTME: The thread record a turn keeps: Mani's notes, the people and events, and the frameworks declined or finished,
-# ABOUTME: merged onto what is there so the safety keys the pause rules read are never lost, and kept within bounds.
+# ABOUTME: and what each reply asked and gave, merged onto what is there so the safety keys are kept, within bounds.
 
 from mani.chat.record import (
-    EVENTS_KEPT, LINE_CHARS, PEOPLE_KEPT, declined, events, finished, people, with_outcomes,
+    EVENTS_KEPT, LINE_CHARS, PEOPLE_KEPT, REPLIES_KEPT, declined, events, finished, people, replies, with_outcomes,
+    with_reply,
 )
 
 
@@ -39,3 +40,19 @@ def test_an_event_keeps_its_when_and_one_with_no_words_or_an_odd_when_is_not_kep
     assert kept == [{"what": "Thanksgiving alone this Thursday", "when": "upcoming"},
                     {"what": "argued with Sam", "when": "unsaid"}]
     assert len(events(with_outcomes({}, notes="n", people=[], events=given, declined=[], finished=[]))) == EVENTS_KEPT
+
+
+def test_each_reply_is_kept_with_its_move_gist_and_opening_words_and_only_the_latest_are_kept():
+    record = {"danger_reached": True}
+    for i in range(REPLIES_KEPT + 2):
+        record = with_reply(record, question=f"Q{i}?", intent="feeling", open_chat=True, move="Reflect",
+                            gist=f"g{i}", text=f"That sounds really hard, {i}. Q{i}?")
+    kept = replies(record)
+    assert len(kept) == REPLIES_KEPT and kept[0]["q"] == "Q2?" and record["danger_reached"] is True
+    assert kept[-1] == {"q": f"Q{REPLIES_KEPT + 1}?", "intent": "feeling", "open_chat": True, "move": "reflect",
+                        "gist": f"g{REPLIES_KEPT + 1}", "opens": "That sounds really hard"}
+
+
+def test_a_move_outside_the_six_is_kept_as_other():
+    after = with_reply({}, question="", intent="none", open_chat=False, move="console", gist="", text="Okay.")
+    assert replies(after)[0]["move"] == "other" and replies(after)[0]["opens"] == "Okay"

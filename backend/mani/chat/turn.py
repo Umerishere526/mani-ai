@@ -244,6 +244,8 @@ async def _apply(
         in_play=running is not None or open_offer is not None or decision.technique is not None, guarded=guarded,
         action=reply.action)
     text, cut = sent_text(text, open_chat=open_chat, latest=reply.question.latest)
+    # What the reply asked and gave, kept before code adds its own pieces; the fixed words for an empty reply give none.
+    entry = _ledger_entry(reply, text, open_chat=open_chat) if text else None
     if not text and not answer_failure:
         raise ServiceError(f"reply on thread {ctx.thread.id} was empty", ErrorCategory.LLM_UNAVAILABLE, retryable=True,
                            user_message="Mani had trouble responding. Please try again.")
@@ -261,8 +263,7 @@ async def _apply(
         text = f"{text}\n\n{steps_text(decision.show_steps, style)}"
     prompts = decision.prompts
     updates, after = _updates(ctx, reply, decision, judgment, record=record, check=check, answering=answering,
-                              end_check_asked=end_check_asked, wants_title=wants_title,
-                              asked=questions.asked_in(text) if open_chat else None)
+                              end_check_asked=end_check_asked, wants_title=wants_title, entry=entry)
     pair = await messages_db.create_pair(
         conn, ctx.thread.id, content, text, selected_prompt=tapped.label if tapped else None,
         prompt_options=[p.model_dump(mode="json", exclude_none=True) for p in prompts] or None,
@@ -291,16 +292,30 @@ async def _apply(
     )
 
 
+def _ledger_entry(reply: TurnReply, text: str, *, open_chat: bool) -> dict:
+    """What the reply asked and gave, as rec.with_reply takes it: its last question with its job (in a set, the stage it
+    asks), whether it was in the open chat, its move and gist, and its text."""
+    asked = questions.asked_in(text)
+    intent = reply.question.intent.strip().lower()
+    if not asked:
+        intent = "none"
+    elif reply.stage and not open_chat:
+        intent = reply.stage
+    elif intent not in questions.INTENTS:
+        intent = "unsaid"
+    return {"question": asked[-1] if asked else "", "intent": intent, "open_chat": open_chat, "move": reply.said.move,
+            "gist": reply.said.gist, "text": text}
+
+
 def _updates(ctx, reply: TurnReply, decision, judgment, *, record, check, answering, end_check_asked,
-             wants_title, asked: list[str] | None) -> tuple[threads.ThreadUpdates, dict]:
-    """The thread's changes and its record after this turn. `asked`: the questions an open-chat reply sent, else None."""
+             wants_title, entry: dict | None) -> tuple[threads.ThreadUpdates, dict]:
+    """The thread's changes and its record after this turn. `entry`: what the reply asked and gave, None when the
+    fixed words went out in its place."""
     after = rec.with_outcomes(record, notes=reply.notes, people=[p.model_dump() for p in reply.people],
                               events=[e.model_dump() for e in reply.events], declined=decision.declined,
                               finished=decision.finished)
-    if asked is not None:
-        intent = reply.question.intent.strip().lower()
-        after = rec.with_question(after, asked[-1] if asked else "",
-                                  (intent if intent in questions.INTENTS else "unsaid") if asked else "none")
+    if entry is not None:
+        after = rec.with_reply(after, **entry)
     after = worry.record_after(after, judgment, check=check, answering=answering)
     updates = threads.ThreadUpdates()
     if judgment.state.value != ctx.thread.safety:

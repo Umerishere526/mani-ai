@@ -75,20 +75,37 @@ def test_the_people_and_events_kept_are_handed_back_with_their_relation_and_when
     assert "people they spoke of" not in facts_for(ctx()) and "[upcoming]" not in facts_for(ctx())
 
 
-def test_the_open_chat_is_told_each_question_asked_and_what_it_was_for():
-    record = {"questions": [{"q": "What does a normal week look like?", "intent": "situation"},
-                            {"q": "", "intent": "none"},
-                            {"q": "What comes up when you picture saying no?", "intent": "feeling"}]}
-    text = facts_for(ctx(), record=record)
-    assert ('[situation] "What does a normal week look like?"; [feeling] "What comes up when you picture saying no?"'
-            in text) and "ended on a question" not in text
-    assert "[situation]" not in facts_for(ctx(), record=record, running=running("abcde", "activate"))
+def reply(q: str = "", intent: str = "none", *, open_chat: bool = True, move: str = "reflect", gist: str = "",
+          opens: str = "") -> dict:
+    return {"q": q, "intent": intent, "open_chat": open_chat, "move": move, "gist": gist, "opens": opens}
+
+
+def test_each_question_asked_is_told_with_what_it_was_for_in_the_chat_and_in_a_set():
+    record = {"replies": [reply("What does a normal week look like?", "situation"), reply(),
+                          reply("What happened?", "activate", open_chat=False)]}
+    listed = '[situation] "What does a normal week look like?"; [activate] "What happened?"'
+    assert listed in facts_for(ctx(), record=record)
+    assert listed in facts_for(ctx(), record=record, running=running("abcde", "belief"))
 
 
 def test_three_replies_in_a_row_that_asked_tell_the_next_to_give_something_instead():
-    asked = {"q": "Why?", "intent": "feeling"}
-    assert "Your last 3 replies each ended on a question" in facts_for(ctx(), record={"questions": [asked] * 3})
-    assert "ended on a question" not in facts_for(ctx(), record={"questions": [asked, {"q": "", "intent": "none"}, asked]})
+    asked = reply("Why?", "feeling")
+    assert "Your last 3 replies each ended on a question" in facts_for(ctx(), record={"replies": [asked] * 3})
+    assert "ended on a question" not in facts_for(ctx(), record={"replies": [asked, reply(), asked]})
+
+
+def test_a_set_s_questions_neither_count_toward_nor_are_told_the_open_chat_run():
+    in_set = reply("What happened?", "activate", open_chat=False)
+    assert "ended on a question" not in facts_for(ctx(), record={"replies": [in_set] * 3})
+    asked = {"replies": [reply("Why?", "feeling")] * 3}
+    assert "ended on a question" not in facts_for(ctx(), record=asked, running=running("abcde", "activate"))
+
+
+def test_only_the_recent_replies_tell_what_they_gave_and_how_they_opened():
+    kept = [reply(move="reassure", gist=f"gist {i}", opens=f"opener {i}") for i in range(10)]
+    text = facts_for(ctx(), record={"replies": kept})
+    assert "reassure: gist 4; reassure: gist 5" in text and "gist 3" not in text
+    assert 'opened with: "opener 6"; "opener 7"; "opener 8"; "opener 9"' in text and "opener 5" not in text
 
 
 def test_a_settled_answer_to_the_check_after_a_framework_leads_to_how_they_feel():
