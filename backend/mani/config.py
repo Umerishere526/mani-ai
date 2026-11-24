@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     # special-category health data, so upstream training use is refused here
     # rather than relying on a provider's default terms.
     openrouter_data_collection: Literal["deny", "allow"] = "deny"
+    # Only endpoints that keep no copy of a prompt or its reply may serve a call. Refusing training use
+    # does not stop a provider retaining what it was sent for its own review.
+    openrouter_zdr: bool = True
 
     # The only companies a conversation may go to. Without this OpenRouter may route it to any
     # provider serving the model, under whatever terms that provider applies. A base slug
@@ -123,6 +126,10 @@ class Settings(BaseSettings):
     # Background calls always use the default tier. `default` turns it off with no change to code.
     openrouter_chat_service_tier: Literal["priority", "default"] = "priority"
 
+    def data_policy(self) -> dict:
+        """What OpenRouter is told about keeping and using what a call sends, on every call."""
+        return {"data_collection": self.openrouter_data_collection, "zdr": self.openrouter_zdr}
+
     def routing(self, overrides: dict | None = None, *, priority: bool = False) -> dict:
         """OpenRouter `provider` options for a call, with per-prompt overrides applied.
 
@@ -135,8 +142,7 @@ class Settings(BaseSettings):
             "only": self.openrouter_providers,
             "sort": self.openrouter_sort,
             "allow_fallbacks": self.openrouter_allow_fallbacks,
-            "data_collection": self.openrouter_data_collection,
-        } | (overrides or {})
+        } | self.data_policy() | (overrides or {})
         if priority:
             provider["only"] = [*provider["only"], *(f"{slug}/priority" for slug in provider["only"])]
         return provider

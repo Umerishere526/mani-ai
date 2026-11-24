@@ -160,6 +160,15 @@ def test_a_prompt_can_override_routing_without_losing_the_data_policy():
     assert routing["sort"] == "throughput"
     assert routing["only"] == ["openai"]
     assert routing["data_collection"] == "deny"
+    assert routing["zdr"] is True
+
+
+def test_every_call_goes_only_to_endpoints_that_keep_no_data_unless_a_prompt_says_otherwise():
+    """A prompt with no routing of its own, the summary's, gets the default. Refusing training use does not stop a
+    provider keeping what it was sent, so zero data retention is asked for on every call, not only the chat's."""
+    for routing in (build().routing(), build().routing(priority=True), build().routing({"only": ["deepinfra"]})):
+        assert routing["zdr"] is True
+    assert build().routing({"zdr": False})["zdr"] is False
 
 
 def test_secrets_never_appear_when_the_settings_are_printed():

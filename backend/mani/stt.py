@@ -114,6 +114,8 @@ async def transcribe(
         result = await client.audio.transcriptions.create(
             model=settings.whisper_model,
             file=(filename, audio_bytes),
+            # The recording is what they said: kept by no provider and used for no training.
+            extra_body={"provider": settings.data_policy()},
         )
     except openai.RateLimitError as exc:
         raise ServiceError(

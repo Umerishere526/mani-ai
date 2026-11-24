@@ -568,11 +568,12 @@ async def test_only_the_chat_reply_asks_for_the_priority_tier_and_each_purpose_k
     assert chat["service_tier"] == "priority"
     assert chat["provider"] == {
         "only": ["openai", "openai/priority"], "sort": "latency", "allow_fallbacks": True,
-        "data_collection": "deny",
+        "data_collection": "deny", "zdr": True,
     }
     for purpose, body in zip(purposes[1:], background, strict=True):
         assert "service_tier" not in body, purpose
         assert body["provider"]["only"] == ["openai"], purpose
+        assert body["provider"]["zdr"] is True, purpose
         assert body["session_id"] == body["prompt_cache_key"] == f"{THREAD}:{purpose.value}"
 
 

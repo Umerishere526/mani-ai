@@ -21,7 +21,7 @@ the same change as the work.**
   `sail-research` then `deepinfra`, sorted by price, with `zdr: true` (muhammad, 2026-11-22), as the `mani` prompt row names them (`content/prompts/mani.md` frontmatter, seeded into
   `admin.prompts`; see Decisions in force). Summaries run on `openai/gpt-6-luna` at `high`, routed
   only to OpenAI (`mani/config.py` and their prompt rows), and so does the voice transcription in `mani/stt.py`. Every
-  endpoint keeps `data_collection: deny`, so training use stays refused. Effort is billed: measured against Azure,
+  call keeps `data_collection: deny` and `zdr: true`, so training use and retention stay refused. Effort is billed: measured against Azure,
   `high` spent 26 reasoning tokens where `low` spent 0, about three times the cost of the same call.
 - Every call to OpenRouter carries its providers, data policy and reasoning effort from `chain.request_body`; a prompt
   row's own `routing` replaces the settings' default provider list (`Settings.routing`). The voice translation in
@@ -690,6 +690,11 @@ the same change as the work.**
   plain-text 500. It logs only the exception type; Sentry still captures it. Crisis numbers in error replies wait for
   the client's wording. This 500 leaves from the outermost middleware, outside CORS. `unhandled_error_handler`
   (`main.py`), `test_an_unanticipated_fault_gets_the_same_error_shape_and_is_logged`.
+- **Every model call, transcription included, asks for zero-data-retention endpoints by default** (muhammad,
+  2026-11-24). Because refusing training use does not stop a provider keeping the transcripts it was sent.
+  `Settings.data_policy` (`OPENROUTER_ZDR`),
+  `test_every_call_goes_only_to_endpoints_that_keep_no_data_unless_a_prompt_says_otherwise`,
+  `test_a_recording_goes_only_to_endpoints_that_keep_no_data`. Release list item 0 before deploying.
 - **Retired 2026-11-16 (superseded) and 2026-11-17: every conversation turns from understanding to helping, and
   code names the turn and the help move** (muhammad, 2026-10-27). Because the state and note lines that carried
   it are gone; `mani.md` says what Mani does when they ask what to do (2026-11-17).
@@ -772,7 +777,8 @@ the same change as the work.**
   `openai/priority` and `openai/fast` as one endpoint). OpenRouter tries the priority endpoints first and falls back to
   the default ones in the list, so a turn is never failed for want of priority capacity and is billed at the endpoint
   that served it; the explicit slug is there because a base slug never matches a tier endpoint, and nothing else is
-  allowed, so never Azure, Bedrock or flex; `data_collection: deny` stays; no `provider.order`, which turns off sticky
+  allowed, so never Azure, Bedrock or flex; `data_collection: deny` stays; `zdr: true` on every call by default (`Settings.data_policy`, `OPENROUTER_ZDR`;
+  2026-11-24); no `provider.order`, which turns off sticky
   routing. `summarize` stays on the default tier. `OPENROUTER_CHAT_SERVICE_TIER=default`
   turns it off with no change to code. Evidence after deploy: `service_tier` is `priority` on `GET /api/v1/generation`
   for chat generation ids (`scripts/llm_call_providers.py` prints the endpoint; see the report's section 7 for the
@@ -972,6 +978,10 @@ the same change as the work.**
 
 Ordered by what breaks first.
 
+0. **Zero data retention for summaries and transcription (2026-11-24).** Every call now asks for ZDR endpoints. Before
+   deploying, confirm on OpenRouter that `openai/gpt-6-luna` and `openai/whisper-large-v3` have ZDR endpoints and that
+   the transcription form fields `provider[zdr]` are accepted; otherwise every summary fails. `OPENROUTER_ZDR=false`
+   turns it off without a code change.
 1. **Hosted Data API settings.** `supabase/config.toml` configures local development only. On a hosted
    project set `auto_expose_new_tables` off and the exposed schemas to `public` and `graphql_public` by hand;
    `db push` does not carry them. Run `scripts/test_db.sh --local` against the hosted database first, or a

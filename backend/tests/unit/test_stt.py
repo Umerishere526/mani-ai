@@ -45,6 +45,28 @@ async def test_a_transcript_goes_only_to_the_providers_chat_may_use(monkeypatch)
     provider = (await translate(monkeypatch))["extra_body"]["provider"]
     assert provider["only"] == settings().openrouter_providers
     assert provider["data_collection"] == "deny"
+    assert provider["zdr"] is True
+
+
+class FakeTranscriptions:
+    """The OpenAI SDK's audio.transcriptions, keeping what it was asked to send."""
+
+    def __init__(self) -> None:
+        self.sent: list[dict] = []
+
+    async def create(self, **request):
+        self.sent.append(request)
+        return SimpleNamespace(text="Hi, I'm tired.")
+
+
+async def test_a_recording_goes_only_to_endpoints_that_keep_no_data(monkeypatch):
+    """The recording is what they said, sent before any translation, so it carries the same data policy."""
+    transcriptions = FakeTranscriptions()
+    monkeypatch.setattr(stt, "_http", lambda _: SimpleNamespace(
+        audio=SimpleNamespace(transcriptions=transcriptions), chat=SimpleNamespace(completions=FakeCompletions()),
+    ))
+    assert await stt.transcribe(b"audio", "clip.webm", settings=settings()) == "Hi, I'm tired."
+    assert transcriptions.sent[0]["extra_body"]["provider"] == {"data_collection": "deny", "zdr": True}
 
 
 async def test_the_translation_says_how_hard_to_think(monkeypatch):
