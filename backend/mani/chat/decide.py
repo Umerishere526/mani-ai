@@ -8,6 +8,7 @@ import uuid
 from dataclasses import dataclass, field
 
 from mani.chat import record as rec
+from mani.chat.questions import WANTS_TO_STOP
 from mani.chat.greeting import CONTINUE_CHATTING_LABEL, FINISH_LABEL, VISIT_LIBRARY_LABEL
 from mani.chat.repairs import feelings_buttons, lead_in_buttons, start_buttons
 from mani.chat.reply import TurnReply
@@ -54,10 +55,11 @@ def offer_current(open_offer: TechniqueState, message_count: int) -> bool:
     return open_offer.phase != OFFERING or open_offer.at_message_count == message_count
 
 
-def closing_buttons() -> list[SmartPrompt]:
-    return [SmartPrompt(label=CONTINUE_CHATTING_LABEL),
-            SmartPrompt(label=VISIT_LIBRARY_LABEL, library=LibrarySection.HOME.value),
-            SmartPrompt(label=FINISH_LABEL)]
+def closing_buttons(*, with_finish: bool = True) -> list[SmartPrompt]:
+    """The close: Continue chatting and Visit library, and Finish for Now unless they already said they are done."""
+    buttons = [SmartPrompt(label=CONTINUE_CHATTING_LABEL),
+               SmartPrompt(label=VISIT_LIBRARY_LABEL, library=LibrarySection.HOME.value)]
+    return [*buttons, SmartPrompt(label=FINISH_LABEL)] if with_finish else buttons
 
 
 def decide(
@@ -66,10 +68,14 @@ def decide(
     end_check_due: bool, end_check_asked: bool, person_messages: int,
 ) -> Decision:
     """The spec's guarantees, in order: a start, a running framework's move, an open offer's answer, a new offer, and
-    the library. A guarded turn (a safety worry open or found) changes no framework state and makes no offer."""
+    the library. A guarded turn (a safety worry open or found) changes no framework state and makes no offer. When they
+    want to stop, a running or offered set stops too, and the close follows a reply that asks nothing (R95)."""
     base = Decision(declined=rec.declined(record), finished=rec.finished(record))
     if guarded:
         return dataclasses.replace(base, refused="offer" if reply.action == "offer" else None)
+    stopping = reply.question.latest.strip().lower() == WANTS_TO_STOP
+    if stopping:
+        reply = reply.model_copy(update={"action": "stop", "stage": None})
     if tap.starting is not None:
         decision = _started(base, reply, tap.starting, thread_id, count_after)
     elif (open_offer is not None and open_offer.phase == STEPS and (offered := registry.get(open_offer.framework_id))
@@ -89,6 +95,8 @@ def decide(
     if reply.action == "library" and not decision.prompts:
         decision = dataclasses.replace(decision, prompts=[
             SmartPrompt(label=VISIT_LIBRARY_LABEL, library=LibrarySection.HOME.value)])
+    if stopping:
+        decision = dataclasses.replace(decision, prompts=closing_buttons(with_finish=False))
     return decision
 
 

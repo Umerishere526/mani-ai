@@ -38,8 +38,12 @@ def last_question(text: str) -> str:
 # What an open-chat question can be for (TurnReply.question.intent): what happened, what it does to them, what they
 # tell themselves about it, what they want, or a step on toward the core and the set of questions.
 INTENTS = ("situation", "feeling", "belief", "wants", "step")
-# What their latest message is, as the reply reads it (TurnReply.question.latest), when it gets no question at all.
+# What their latest message is, as the reply reads it (TurnReply.question.latest), when it gets no question at all:
+# frustration with Mani in the open chat, or a wish to stop wherever no safety worry guards the turn (R95).
 FRUSTRATED = "frustrated"
+WANTS_TO_STOP = "wants_to_stop"
+# Why a reply's questions were left out, by what their message was.
+_SILENCED_WHY = {FRUSTRATED: "question after frustration", WANTS_TO_STOP: "question after a wish to stop"}
 
 
 def in_open_chat(*, in_play: bool, guarded: bool, action: str) -> bool:
@@ -49,16 +53,25 @@ def in_open_chat(*, in_play: bool, guarded: bool, action: str) -> bool:
     return not in_play and not guarded and action in ("none", "library")
 
 
-def held_to_one(text: str, ask: str, *, frustrated: bool) -> tuple[str, str, str | None]:
+def silenced_by(latest: str, *, open_chat: bool) -> str | None:
+    """What their message was (`latest`, as the reply reads it) when the reply asks nothing at all: a wish to stop on
+    any turn this is asked of, frustration with Mani only in the open chat. Otherwise None."""
+    latest = latest.strip().lower()
+    if latest == WANTS_TO_STOP or (open_chat and latest == FRUSTRATED):
+        return latest
+    return None
+
+
+def held_to_one(text: str, ask: str, *, silenced: str | None) -> tuple[str, str, str | None]:
     """The reply as sent, the one question it asks, and why a question was left out (None when none was). The question
     the reply chose (`ask`) goes after the text, on its own line. A question the text asks as well is taken out, and
-    with no `ask` the text keeps its last one where it stands. After frustration with Mani (`frustrated`) it asks
-    nothing. Text that asks nothing goes out exactly as written."""
+    with no `ask` the text keeps its last one where it stands. After frustration with Mani or a wish to stop
+    (`silenced`, from `silenced_by`) it asks nothing. Text that asks nothing goes out exactly as written."""
     ask = ask.strip()
     pieces = _pieces(text)
     asking = [i for i, piece in enumerate(pieces) if piece.strip() and _asks(piece.strip())]
-    if frustrated:
-        cut, ask, why = asking, "", "question after frustration" if asking or ask else None
+    if silenced:
+        cut, ask, why = asking, "", _SILENCED_WHY[silenced] if asking or ask else None
     elif ask:
         cut, why = asking, "question in the text" if asking else None
     else:
@@ -70,4 +83,4 @@ def held_to_one(text: str, ask: str, *, frustrated: bool) -> tuple[str, str, str
         text = re.sub(r"\n{3,}", "\n\n", "\n".join(line.rstrip() for line in text.split("\n"))).strip()
     if ask:
         return "\n\n".join(part for part in (text.strip(), ask) if part), ask, why
-    return text, "" if frustrated else last_question(text), why
+    return text, "" if silenced else last_question(text), why

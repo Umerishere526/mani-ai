@@ -295,6 +295,17 @@ async def test_after_e_the_feelings_check_then_the_closing_buttons(alice, model)
     assert (await thread_row(alice, thread.id)).understanding["finished"] == ["abcde"]
 
 
+async def test_a_typed_wish_to_stop_gets_a_goodbye_with_no_question_and_the_close(alice, model):
+    """R95, the 2026-11-16 relationship test: "Yes, I'm done for now." got another question."""
+    model(said("Of course. Take good care tonight.",
+               question=Question(latest="wants_to_stop", ask="Would you like to come back to this another time?")))
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "Yes, I'm done for now.")
+    assert turn.content == "Of course. Take good care tonight."
+    assert [p.label for p in turn.prompts] == ["Continue chatting", "Visit library"]
+    assert turn.trace["question_cut"] == "question after a wish to stop"
+
+
 async def test_a_finish_after_danger_sends_the_end_check_then_the_close(alice, model):
     model(said("Warm close.", action="finish", stage="effective"),
           said("Glad you're safe. How are you feeling now?", action="finish", stage="effective"),

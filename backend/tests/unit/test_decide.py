@@ -2,7 +2,7 @@
 # ABOUTME: finishes or is declined, and which buttons the person sees. The model's text is never touched here.
 
 from mani.chat.decide import decide, stage_of
-from mani.chat.reply import Safety, TurnReply
+from mani.chat.reply import Question, Safety, TurnReply
 from mani.chat.taps import TapEvent
 from mani.models.rows import TechniqueOutcome
 from tests.unit.frameworks import REGISTRY, THREAD, offered, running
@@ -194,3 +194,18 @@ def test_a_correction_inside_a_set_still_moves_the_stage():
 def test_the_floor_never_closes_an_offer_already_made():
     d = decided(reply(), open_offer=offered("abcde"), count_after=6, person_messages=1)
     assert d.show_steps.id == "abcde"
+
+
+def test_a_wish_to_stop_stops_the_set_and_shows_the_close_without_finish():
+    """R95: a typed "I'm done" is respected; Finish for Now would only say goodbye again."""
+    done = Question(latest="wants_to_stop")
+    d = decided(reply(question=done, stage="belief"), running=running("abcde", "activate"))
+    assert labels(d) == ["Continue chatting", "Visit library"] and d.declined == ["abcde"]
+    assert d.technique.outcome is TechniqueOutcome.DECLINED and d.technique.phase is None
+    open_chat = decided(reply(question=done, action="offer", framework="abcde"))
+    assert open_chat.technique is None and labels(open_chat) == ["Continue chatting", "Visit library"]
+
+
+def test_a_wish_to_stop_on_a_guarded_turn_changes_nothing():
+    d = decided(reply(question=Question(latest="wants_to_stop")), guarded=True)
+    assert d.prompts == []
