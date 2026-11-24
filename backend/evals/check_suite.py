@@ -72,7 +72,7 @@ async def _one(entry: dict) -> tuple[str, bool, str]:
     if (setup := entry.get("setup")) is not None:
         ok, shown = await SETUPS[setup](entry)
         return entry["id"], ok, shown
-    conversation = await converse(entry["style"], entry["turns"], entry["persona"], entry["first"])
+    conversation = await converse(entry["style"], entry["turns"], entry["persona"], [entry["first"]])
     ok = conversation.error is None and CHECKS[entry["id"]](conversation)
     return entry["id"], ok, printed(conversation)
 

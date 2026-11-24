@@ -8,6 +8,7 @@ import pathlib
 import sys
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -56,6 +57,8 @@ class Conversation:
     style: str
     exchanges: list[Exchange] = field(default_factory=list)
     error: str | None = None
+    claims: Claims | None = None
+    thread_id: uuid.UUID | None = None
 
 
 async def new_person(tag: str) -> tuple[Claims, uuid.UUID]:
@@ -69,17 +72,29 @@ async def new_person(tag: str) -> tuple[Claims, uuid.UUID]:
     return claims, thread_id
 
 
-async def converse(style: str, turns: int, persona: str, first: str | None = None) -> Conversation:
-    """A whole conversation as a new person. The style is tapped first."""
-    claims, thread_id = await new_person("drive")
+async def converse(style: str, turns: int, persona: str, script: list[str] | None = None,
+                   person: tuple[Claims, uuid.UUID] | None = None,
+                   until: Callable[[Exchange], bool] | None = None) -> Conversation:
+    """A whole conversation, as a new person unless `person` names one and its open conversation. The style is tapped
+    first. The person sends `script` in order (a button's exact label taps it), then the model-played persona writes
+    the rest; with no persona the conversation ends with the script. It also ends after an exchange `until` accepts."""
+    claims, thread_id = person or await new_person("drive")
+    script = script or []
     opened = await runner.send(claims, thread_id, style.capitalize())
     shown = [("MANI", opened.content, [])]
-    record = Conversation(style=style)
+    record = Conversation(style=style, claims=claims, thread_id=thread_id)
+    buttons: list[str] = []
     for n in range(turns):
-        nxt = Next(message=first) if n == 0 and first else await _next(persona, shown)
+        if n < len(script):
+            nxt = Next(message=script[n])
+        elif persona:
+            nxt = await _next(persona, shown)
+        else:
+            break
         if nxt.done and not nxt.tap and not nxt.message:
             break
         said = nxt.tap or nxt.message
+        tapped = bool(nxt.tap) or said in buttons
         started = time.monotonic()
         try:
             got = await runner.send(claims, thread_id, said, uuid.uuid4())
@@ -87,11 +102,11 @@ async def converse(style: str, turns: int, persona: str, first: str | None = Non
             record.error = f"{type(error).__name__}: {error}"
             break
         buttons = [p.label for p in got.prompts]
-        record.exchanges.append(Exchange(said=said, tapped=bool(nxt.tap), reply=got.content, buttons=buttons,
+        record.exchanges.append(Exchange(said=said, tapped=tapped, reply=got.content, buttons=buttons,
                                          trace=got.trace or {}, seconds=time.monotonic() - started,
                                          paused=got.paused_until is not None))
         shown += [("YOU", said, []), ("MANI", got.content, buttons)]
-        if got.paused_until is not None or nxt.done:
+        if got.paused_until is not None or nxt.done or (until is not None and until(record.exchanges[-1])):
             break
     return record
 
@@ -123,7 +138,7 @@ async def _main() -> None:
     style, turns, persona, *first = sys.argv[1:]
     await pool.open_pool()
     try:
-        print(printed(await converse(style, int(turns), persona, first[0] if first else None)))
+        print(printed(await converse(style, int(turns), persona, first[:1])))
     finally:
         await pool.close_pool()
 
