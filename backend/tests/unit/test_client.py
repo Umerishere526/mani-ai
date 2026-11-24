@@ -655,3 +655,26 @@ def test_a_provider_error_is_stored_without_the_body_that_can_quote_their_messag
 
     assert words not in described
     assert described == "PermissionDeniedError: 403"
+
+
+async def test_an_empty_reply_is_retried_like_any_reply_that_does_not_parse(monkeypatch, recorded):
+    """2026-11-23: a host answered with reasoning tokens and no content. LangChain raises a plain ValueError for that,
+    which no retry caught, so a person who wrote "i want to talk about thanksgiving" got the fixed reply with a crisis
+    line. An empty reply is a reply that does not parse: it gets the same one retry. LangChain keeps no completion on
+    that error, so the empty attempt's id is not known."""
+    over_openrouter(
+        monkeypatch,
+        openrouter_stream("", "gen-empty"),
+        openrouter_stream('{"text": "second try"}', "gen-answered"),
+    )
+
+    call = await client.complete(
+        [{"role": "user", "content": "hi"}], Said, model="openai/gpt-6-luna",
+        purpose=llm_calls.Purpose.CHAT, settings=settings(),
+    )
+
+    assert call.value.text == "second try"
+    assert [(r["outcome"], r["generation_id"]) for r in recorded] == [
+        (llm_calls.Outcome.SCHEMA_INVALID, None),
+        (llm_calls.Outcome.OK, "gen-answered"),
+    ]

@@ -6,7 +6,7 @@ import uuid
 import pytest
 
 from mani.chat import crisis, runner
-from mani.chat.reply import Safety
+from mani.chat.reply import Question, Safety
 from mani.db import threads
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
@@ -67,6 +67,21 @@ async def test_notes_written_by_one_turn_reach_the_next_turns_facts(alice, model
     await send(alice, thread.id, "my boss keeps piling work on me")
     await send(alice, thread.id, "yeah")
     assert "Your notes from your last turn: boss piles work; feels like a pushover" in facts_of(scripted)
+
+
+async def test_an_open_chat_reply_keeps_one_question_and_the_next_turn_hears_what_it_was_for(alice, model):
+    scripted = model(
+        said("You keep saying yes. Why is that?\n\nWhat do you tell yourself would happen if you said no?",
+             question=Question(latest="answer", intent="Belief")),
+        said("Fair. I've been asking a lot. What would help?", question=Question(latest="frustrated", intent="wants")),
+        said("I hear you."),
+    )
+    thread = await start(alice)
+    first = await send(alice, thread.id, "i always say yes to my sister")
+    assert first.content == "You keep saying yes.\n\nWhat do you tell yourself would happen if you said no?"
+    assert (await send(alice, thread.id, "stop asking me things")).content == "Fair. I've been asking a lot."
+    await send(alice, thread.id, "ok")
+    assert '[belief] "What do you tell yourself would happen if you said no?".' in facts_of(scripted)
 
 
 # Two ordinary exchanges first: an offer may come with the person's 3rd message at the earliest.
@@ -162,9 +177,9 @@ async def test_after_e_the_feelings_check_then_the_closing_buttons(alice, model)
     thread = await start(alice)
     await put_technique(thread.id, "abcde", TechniqueOutcome.ACCEPTED, "effective")
     check = await send(alice, thread.id, "I can be a team player and still say no")
-    assert [p.label for p in check.prompts] == ["Stronger", "More focused", "Still a bit tired"]
+    assert [p.label for p in check.prompts] == ["Feel stronger", "Feel more focused", "I'm not sure yet"]
     assert "abcde" not in ((await thread_row(alice, thread.id)).understanding.get("finished") or [])
-    closed = await send(alice, thread.id, "More focused")
+    closed = await send(alice, thread.id, "Feel more focused")
     assert [p.label for p in closed.prompts] == ["Keep Chatting", "Go to Library", "Finish for Now"]
     assert (await thread_row(alice, thread.id)).understanding["finished"] == ["abcde"]
 
@@ -179,9 +194,9 @@ async def test_a_finish_after_danger_sends_the_end_check_then_the_close(alice, m
     first = await send(alice, thread.id, "my new belief is that I'm allowed limits")
     assert first.content == crisis.END_CHECK and first.prompts == []
     check = await send(alice, thread.id, "i'm okay now, my sister is here")
-    assert [p.label for p in check.prompts] == ["Stronger", "More focused", "Still a bit tired"]
+    assert [p.label for p in check.prompts] == ["Feel stronger", "Feel more focused", "I'm not sure yet"]
     assert (await thread_row(alice, thread.id)).understanding["safety_end_check"] == "done"
-    closed = await send(alice, thread.id, "Stronger")
+    closed = await send(alice, thread.id, "Feel stronger")
     assert [p.label for p in closed.prompts][-1] == "Finish for Now"
 
 

@@ -17,8 +17,8 @@ the same change as the work.**
   the same data (2026-11-06): `heqenombgkihfeggrxqc` (muhammad's org, ca-central-1, the Hobby deployment's database)
   and `aipgficduzufstilndbw` "mani-app" (the Mani org, us-east-1, for the Vercel Pro deployment). Migration 037 has
   run only on this machine's databases (2026-11-13), and 039 and 040 likewise (2026-11-18).
-- Models: the chat turn runs on `minimax/minimax-m3.1-flash` at reasoning effort `high`, routed only to the three
-  zero-data-retention hosts that run its reasoning (`modelrun`, `fireworks`, `makora`, with `zdr: true`), as the `mani` prompt row names them (`content/prompts/mani.md` frontmatter, seeded into
+- Models: the chat turn runs on `deepseek/deepseek-v4.1-flash-1017` at reasoning effort `high`, routed only to
+  `sail-research` then `deepinfra`, sorted by price, with `zdr: true` (muhammad, 2026-11-22), as the `mani` prompt row names them (`content/prompts/mani.md` frontmatter, seeded into
   `admin.prompts`; see Decisions in force). Summaries run on `openai/gpt-6-luna` at `high`, routed
   only to OpenAI (`mani/config.py` and their prompt rows), and so does the voice transcription in `mani/stt.py`. Every
   endpoint keeps `data_collection: deny`, so training use stays refused. Effort is billed: measured against Azure,
@@ -153,7 +153,15 @@ the same change as the work.**
   during a safety turn taps again once safe (accepted 2026-11-17). `facts.HELD_START`;
   `test_a_held_turn_never_invites_a_move_a_start_or_an_offer_that_code_would_refuse` in `tests/unit/test_facts.py`,
   `test_a_guarded_turn_changes_no_framework_state` in `tests/unit/test_decide.py`.
-- **The chat turn runs on MiniMax M3.1 Flash at reasoning effort `high`, only on zero-data-retention hosts that run
+- **The chat turn runs on DeepSeek V4.1 Flash (1017) at reasoning effort `high`, on the cheapest zero-data-retention
+  host (Sail Research) with the most reliable (DeepInfra) as its fallback, within $0.002 a turn, and an empty reply
+  gets the one retry any reply that does not parse gets** (muhammad, 2026-11-22; back on this model 2026-11-24 for
+  `fixing-directive-in-chat`; effort high, 2026-11-18). Because the acceptance run of 2026-11-22 passed none of its 36
+  chats on MiniMax M3.1 Flash, and the gate run of that day had DeepSeek ahead on Supportive and Reflective (4.19
+  against 3.82) and Directive (3.78 against 3.22) at $0.00011 a reply against $0.00053, with 2 of 158 calls coming back
+  empty (all reasoning), which the client now retries once (`client.NO_CONTENT`;
+  `test_an_empty_reply_is_retried_like_any_reply_that_does_not_parse`). Not re-measured on this branch's prompt.
+  Earlier, on MiniMax M3.1 Flash at reasoning effort `high`, only on zero-data-retention hosts that run
   its reasoning, within $0.002 a turn** (muhammad, 2026-11-17; effort high and the reasoning hosts, 2026-11-18). Because on the real stack, 20 cases with three runs each, it scored 3.57
   against ChatGPT as 5 for about $0.00045 a turn and a median of 3.8 s, where `openai/gpt-chat-latest` scored 4.07 at
   $0.016 (over budget) and DeepSeek V4.1 Flash scored 3.64 but judged chest pain with arm symptoms `unsure` in 4 of 9
@@ -193,8 +201,12 @@ the same change as the work.**
   stock phrases: 3.42, none of the phrases in 75 replies, rules 30 of 33 (the model suggested answers on the passive
   wish-not-to-wake case in 2 of 3 runs, judged unsure, so code drops them; one Directive close a sentence long); the
   suite passed 8 of 8 both times.
-- **Directive replies are short: three or four short sentences at most, one or two points then one open question
-  (never a pick-from-several), and A asks for one specific recent event** (muhammad, 2026-11-18). Because the
+- **Directive replies are short and human: two or three short sentences, at most one point and not every reply, a
+  few of their own words to show it heard them, then it stays or asks the one question that moves them on (never a
+  pick-from-several), never going back over what was said, never saying sorry (it says what they are trying to say
+  instead, muhammad, 2026-11-24), and A asks for one specific recent event** (muhammad,
+  2026-11-18; two or three sentences and the human voice, muhammad, 2026-11-24, because replies still read long and
+  scripted). Because the
   client's sequence document shows Directive's short acknowledgments, and her review of the promotion chat
   (2026-11-18) found Directive stacking four or five points, a three-option question, and an A that bundled the whole
   pattern. The first rule, sentences only, was ignored in every reply: the prompt's other lines (two or three moves a
@@ -238,7 +250,15 @@ the same change as the work.**
   dead data (2026-11-18). `supabase/migrations/040_drop_unread_columns.sql`; `scripts/test_db.sh` passes. Still kept
   though nothing writes them: `thread_techniques_offered` and `thread_technique_state.physical_response`,
   `conversation_effect` and `stages_known` (Open decisions).
-- **A reply asks a question only when it helps, and never more than one** (muhammad, 2026-11-17). Because code that
+- **A reply asks a question only when it helps, and never more than one; every open-chat question has a job
+  (situation, feeling, belief, wants or a step toward the core and the set, never advice), chosen before the words
+  and kept with the question, and in the open chat code cuts every question but the last, and every question after
+  a message frustrated with Mani** (muhammad, 2026-11-17; the job, the ledger and the cut, muhammad, 2026-11-24, in
+  all three styles). Because Mani re-asked what it had asked and ran interviews with no memory of why it asked, and
+  a wording rule alone has not held. The cut deletes Mani's own sentences and adds none; a stage's question, a
+  lead-in and a safety question are never cut. `chat/questions.py` (`held_to_one`, `INTENTS`), `TurnReply.question`,
+  `facts.question_lines`; `test_an_open_chat_reply_keeps_one_question_and_the_next_turn_hears_what_it_was_for`.
+  Earlier: because code that
   held every reply to a closing question in a field of its own joined text the model did not write and broke grammar,
   and muhammad's 2026-11-17 comparisons wanted replies that give something before they ask; this replaces "every chat
   reply ends on one question" (muhammad, 2026-11-10), knowingly. `mani.md` ("when a question helps, ask one question
@@ -818,8 +838,9 @@ the same change as the work.**
   `stage` is the stage whose question it asks; code stores it but never more than one past the stored stage, and the
   starting turn opens the first stage only, even when the chat touched it, as the client's sequence asks every letter
   on its own reply (`decide.stage_of`; 2026-11-18). A stage of another framework changes nothing. `action: finish` on
-  the last stage opens the feelings check: Mani acknowledges the new belief and asks how they feel now, with Stronger /
-  More focused / Still a bit tired, and the next answer closes the set with Keep Chatting, Go to Library and Finish for
+  the last stage opens the feelings check: Mani acknowledges the new belief and asks how they feel now, with Feel stronger /
+  Feel more focused / I'm not sure yet (the words changed 2026-11-24, muhammad: "Still a bit tired" put a feeling in their
+  mouth), and the next answer closes the set with Keep Chatting, Go to Library and Finish for
   Now and records it finished (phase `feelings_check`, `decide._moved`; 2026-11-18). The closing reply answers warmly
   and asks whether they want to think about a practical next step, since feeling better is not the situation solved
   (the client's promotion-chat review; muhammad, 2026-11-18; `facts._running_line`). E ends on the new belief, with no
@@ -860,7 +881,7 @@ the same change as the work.**
 - **`threads.understanding` is the thread record: Mani's notes, the sets declined and finished, and the safety keys
   the pause rules read** (muhammad, 2026-11-17). Because the record had grown into a picture, readings and stores that
   code wrote and the model was asked to fill, and it already holds JSON, so reshaping it in place needs no new column
-  (2026-11-17). Shape: `{notes, declined, finished, return_check, safety_settled, danger_reached, worry_about,
+  (2026-11-17). Shape: `{notes, questions, declined, finished, return_check, safety_settled, danger_reached, worry_about,
   safety_end_check}` (`chat/record.py`; migration 042, 2026-11-19, folded `danger_about` and `asked_about` into
   `worry_about`). Migration 039 rewrote every row: declined and finished rebuilt
   from `thread_technique_state`, the safety keys kept, notes empty, every other key dropped, rewind snapshots cleared,
@@ -930,7 +951,8 @@ Ordered by what breaks first.
    and selects from `admin.user_memory` on every turn, so either one ahead of the deploy fails every chat. Done on
    hosted project `aipgficduzufstilndbw` after the PR #58 deploy: 039–041 pushed and seeded (2026-11-18). 042 (folds
    two record keys into `worry_about`, clears rewind snapshots) runs only after the code that reads `worry_about`
-   is deployed; until then the code from before it reads `danger_about` and `asked_about`. The library branch's
+   is deployed; until then the code from before it reads `danger_about` and `asked_about`. 042 is on hosted
+   (muhammad confirmed 2026-11-24). The library branch's
    `042_exercise_audio_optional.sql` (`feat/library-descriptions`, stashed) becomes 043 when that branch comes back;
    muhammad's local dev database already records version 042 for it.
 3. **Rate limit and cost ceiling.** `DAILY_MESSAGE_LIMIT` exists and defaults to 0 (off); muhammad sets it in the

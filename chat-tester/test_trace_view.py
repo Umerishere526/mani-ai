@@ -10,9 +10,12 @@ def test_every_decision_the_turn_writes_gets_a_labelled_line():
     trace = {
         "action": "offer", "framework": "abcde", "stage": "belief", "safety": {"level": "none"}, "paused": True,
         "refused": "offer", "unanswered": True, "buttons": ["Try it"], "latency_ms": 900, "notes": "pushover",
+        "question": {"latest": "answer", "intent": "belief", "why_now": "feeling known"},
+        "question_cut": "more than one question",
     }
     shown = "\n".join(trace_view.lines(trace))
     for label in ("Action", "Framework", "Stage", "Safety", "Chat paused", "Code refused", "No host answered",
+                  "Question plan", "Question cut",
                   "Buttons", "Model time (ms)", "Mani's notes"):
         assert f"**{label}:**" in shown, label
     assert "**Safety:** level none" in shown

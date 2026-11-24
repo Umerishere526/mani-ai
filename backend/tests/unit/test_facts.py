@@ -67,6 +67,22 @@ def test_the_notes_from_the_last_turn_are_handed_back():
     assert "Your notes from your last turn: boss, pushover" in facts_for(ctx(), record={"notes": "boss, pushover"})
 
 
+def test_the_open_chat_is_told_each_question_asked_and_what_it_was_for():
+    record = {"questions": [{"q": "What does a normal week look like?", "intent": "situation"},
+                            {"q": "", "intent": "none"},
+                            {"q": "What comes up when you picture saying no?", "intent": "feeling"}]}
+    text = facts_for(ctx(), record=record)
+    assert ('[situation] "What does a normal week look like?"; [feeling] "What comes up when you picture saying no?"'
+            in text) and "ended on a question" not in text
+    assert "[situation]" not in facts_for(ctx(), record=record, running=running("abcde", "activate"))
+
+
+def test_three_replies_in_a_row_that_asked_tell_the_next_to_give_something_instead():
+    asked = {"q": "Why?", "intent": "feeling"}
+    assert "Your last 3 replies each ended on a question" in facts_for(ctx(), record={"questions": [asked] * 3})
+    assert "ended on a question" not in facts_for(ctx(), record={"questions": [asked, {"q": "", "intent": "none"}, asked]})
+
+
 def test_a_settled_answer_to_the_check_after_a_framework_leads_to_how_they_feel():
     """The final review, 2026-11-18: the line said to close the set, while code opens the feelings check."""
     told = facts_for(ctx(), end_check_asked=True)

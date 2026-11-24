@@ -8,5 +8,5 @@ from mani.chat.reply import TurnReply
 
 def test_the_reply_schema_is_accepted_as_a_strict_json_schema():
     schema = to_strict_json_schema(TurnReply)
-    assert set(schema["properties"]) == {"text", "action", "framework", "stage", "safety", "notes", "title", "corrected"}
+    assert set(schema["properties"]) == {"question", "text", "action", "framework", "stage", "safety", "notes", "title", "corrected"}
 

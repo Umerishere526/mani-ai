@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import crisis, decide as decide_mod, facts, pause, record as rec, rewind, safety, taps, worry
+from mani.chat import crisis, decide as decide_mod, facts, pause, questions, record as rec, rewind, safety, taps, worry
 from mani.chat.greeting import (
     COPIED_BACK, STYLE_OPTIONS, greeting, openers, resolve_style,
 )
@@ -238,6 +238,13 @@ async def _apply(
         text = crisis.RETURN_DANGER_REPLY if reply.safety.level == "danger" else crisis.RETURN_CHECK_REPLY
     else:
         text = reply.text
+    # The open chat, with no set, offer or safety worry in play: there code holds the reply to one question, and none
+    # after frustration, and keeps the question it asked. A stage's question, a lead-in and a safety question are left.
+    open_chat = (running is None and open_offer is None and decision.technique is None and not guarded
+                 and reply.action in ("none", "library"))
+    cut = None
+    if open_chat:
+        text, cut = questions.held_to_one(text, reply.question.latest)
     text = without_dashes(text).strip()
     if not text and not answer_failure:
         raise ServiceError(f"reply on thread {ctx.thread.id} was empty", ErrorCategory.LLM_UNAVAILABLE, retryable=True,
@@ -256,7 +263,8 @@ async def _apply(
         text = f"{text}\n\n{steps_text(decision.show_steps, style)}"
     prompts = decision.prompts
     updates, after = _updates(ctx, reply, decision, judgment, record=record, check=check, answering=answering,
-                              end_check_asked=end_check_asked, wants_title=wants_title)
+                              end_check_asked=end_check_asked, wants_title=wants_title,
+                              asked=questions.asked_in(text) if open_chat else None)
     pair = await messages_db.create_pair(
         conn, ctx.thread.id, content, text, selected_prompt=tapped.label if tapped else None,
         prompt_options=[p.model_dump(mode="json", exclude_none=True) for p in prompts] or None,
@@ -271,6 +279,7 @@ async def _apply(
         "safety": worry.traced(reply.safety), "paused": judgment.pausing or None,
         "body_emergency": (judgment.body_emergency and not judgment.pausing) or None,
         "buttons": [p.label for p in prompts], "latency_ms": call.latency_ms, "refused": decision.refused,
+        "question_cut": cut, "question": reply.question.model_dump() if open_chat and settings.ai_debug_mode else None,
         "notes": reply.notes if settings.ai_debug_mode else None,
     }.items() if value not in (None, "", [], {})}
     return Turn(
@@ -284,9 +293,13 @@ async def _apply(
 
 
 def _updates(ctx, reply: TurnReply, decision, judgment, *, record, check, answering, end_check_asked,
-             wants_title) -> tuple[threads.ThreadUpdates, dict]:
-    """The thread's changes and its record after this turn."""
+             wants_title, asked: list[str] | None) -> tuple[threads.ThreadUpdates, dict]:
+    """The thread's changes and its record after this turn. `asked`: the questions an open-chat reply sent, else None."""
     after = rec.with_outcomes(record, notes=reply.notes, declined=decision.declined, finished=decision.finished)
+    if asked is not None:
+        intent = reply.question.intent.strip().lower()
+        after = rec.with_question(after, asked[-1] if asked else "",
+                                  (intent if intent in questions.INTENTS else "unsaid") if asked else "none")
     after = worry.record_after(after, judgment, check=check, answering=answering)
     updates = threads.ThreadUpdates()
     if judgment.state.value != ctx.thread.safety:

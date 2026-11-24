@@ -50,6 +50,11 @@ class Call[T: BaseModel]:
 _TRANSIENT = (openai.InternalServerError, openai.APIConnectionError)
 TRANSIENT_RETRY_DELAY_SECONDS = 1.0
 
+# LangChain's words for a reply with no content and no refusal (a host that spent the call on reasoning). It raises a
+# plain ValueError for it, so the message is the only mark; the client tests run the installed LangChain against an empty
+# reply, so a version that words it differently fails there, not in a chat.
+NO_CONTENT = "does not have a 'parsed' field nor a 'refusal' field"
+
 _SCHEMA_FAILURES = (
     openai.LengthFinishReasonError,
     openai.ContentFilterFinishReasonError,
@@ -344,6 +349,14 @@ async def complete[T: BaseModel](
                     result = {"raw": None, "parsed": None, "parsing_error": exc}
                     usage = _usage_of(exc)
                     generation_id = _generation_id_of(exc)
+                except ValueError as exc:
+                    if NO_CONTENT not in str(exc):
+                        raise
+                    # An empty reply is a reply that does not parse: the same one retry. LangChain keeps no
+                    # completion on this error, so the attempt's tokens and id are not known.
+                    result = {"raw": None, "parsed": None, "parsing_error": exc}
+                    usage = chain.usage_from(None)
+                    generation_id = None
                 else:
                     usage = chain.usage_from(result.get("raw"))
                     generation_id = chain.generation_id_from(result.get("raw"))
