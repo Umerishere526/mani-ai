@@ -229,12 +229,17 @@ class Settings(BaseSettings):
             raise ValueError(f"production requires: {', '.join(missing)}")
         return self
 
+    @property
+    def jwt_issuer(self) -> str:
+        """The `iss` Supabase Auth puts on every token it issues: the project's API URL with /auth/v1."""
+        return f"{self.supabase_url.rstrip('/')}/auth/v1"
+
     @computed_field
     @property
     def jwks_url(self) -> str:
         if self.supabase_jwks_url:
             return self.supabase_jwks_url
-        return f"{self.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+        return f"{self.jwt_issuer}/.well-known/jwks.json"
 
     @computed_field
     @property

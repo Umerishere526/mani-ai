@@ -695,6 +695,10 @@ the same change as the work.**
   `Settings.data_policy` (`OPENROUTER_ZDR`),
   `test_every_call_goes_only_to_endpoints_that_keep_no_data_unless_a_prompt_says_otherwise`,
   `test_a_recording_goes_only_to_endpoints_that_keep_no_data`. Release list item 0 before deploying.
+- **A token must carry `iss` equal to `SUPABASE_URL` + `/auth/v1`, on the HS256 and JWKS paths** (muhammad,
+  2026-11-24). Because without it a token from any issuer holding a trusted key was accepted. If production
+  `SUPABASE_URL` is a custom domain, check it matches the issuer on real tokens before deploying. `Settings.jwt_issuer`,
+  `tests/unit/test_auth.py`.
 - **Retired 2026-11-16 (superseded) and 2026-11-17: every conversation turns from understanding to helping, and
   code names the turn and the help move** (muhammad, 2026-10-27). Because the state and note lines that carried
   it are gone; `mani.md` says what Mani does when they ask what to do (2026-11-17).

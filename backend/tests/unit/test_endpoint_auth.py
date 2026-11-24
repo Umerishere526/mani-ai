@@ -33,6 +33,7 @@ def _token(secret: str, **claims) -> str:
         "sub": USER,
         "aud": AUDIENCE,
         "role": AUDIENCE,
+        "iss": get_settings().jwt_issuer,
         "exp": dt.datetime.now(dt.UTC) + dt.timedelta(hours=1),
     } | claims
     return jwt.encode(payload, secret, algorithm="HS256")

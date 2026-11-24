@@ -56,7 +56,7 @@ def _signing_key() -> tuple[str, jwt.PyJWK]:
 
 async def create(count: int, out: pathlib.Path) -> None:
     kid, key = _signing_key()
-    issuer = f"{get_settings().supabase_url}/auth/v1"
+    issuer = get_settings().jwt_issuer
     now = int(time.time())
     users = [(uuid.uuid4(), f"load-{i}-{uuid.uuid4().hex[:8]}@{DOMAIN}") for i in range(count)]
     conn = await asyncpg.connect(_local_url())
