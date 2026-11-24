@@ -1,5 +1,5 @@
 # ABOUTME: The library page: every exercise from the backend on one page, grouped by topic,
-# ABOUTME: each with a player and a 👍/👎 row. Reached from a Go to Library button or the sidebar.
+# ABOUTME: each with a player and a 👍/👎 row. Reached from a Visit library button or the sidebar.
 
 from __future__ import annotations
 

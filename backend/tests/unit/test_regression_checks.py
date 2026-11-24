@@ -163,7 +163,7 @@ def test_give_me_a_tool_must_open_a_stage_in_its_reply():
 
 
 def test_an_invented_button_label_fails():
-    assert checks.labels_valid(chat(turn("x", "y", buttons=["Feel stronger"])), checks.allowed_labels()).passed
+    assert checks.labels_valid(chat(turn("x", "y", buttons=["It didn't help"])), checks.allowed_labels()).passed
     assert not checks.labels_valid(chat(turn("x", "y", buttons=["Feel calmer now"])), checks.allowed_labels()).passed
 
 

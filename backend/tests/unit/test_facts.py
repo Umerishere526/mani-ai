@@ -149,11 +149,12 @@ def test_the_open_offer_line_says_which_step_is_showing():
     assert "from the whole story to one moment" in steps
 
 
-def test_the_last_stage_asks_how_they_feel_and_the_check_in_forces_no_next_step():
+def test_the_last_stage_asks_how_they_feel_and_the_check_in_presumes_no_success():
     last = facts_for(ctx(), running=running("abcde", "effective"))
     assert "ask how they feel now" in last and "set action to finish" in last
     check_in = facts_for(ctx(), running=running("abcde", "feelings_check"))
-    assert "how they feel" in check_in and "force no question" in check_in and "is for" not in check_in
+    assert "never calling the set a success" in check_in and "force no question" in check_in
+    assert "if it didn't help" in check_in and "only if one would clearly help" in check_in and "is for" not in check_in
 
 
 def test_a_held_feelings_check_is_about_their_safety_and_promises_no_close():

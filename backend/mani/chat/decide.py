@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass, field
 
 from mani.chat import record as rec
-from mani.chat.greeting import CLOSING_KEEP_CHATTING_LABEL, FINISH_LABEL, GO_TO_LIBRARY_LABEL
+from mani.chat.greeting import CONTINUE_CHATTING_LABEL, FINISH_LABEL, VISIT_LIBRARY_LABEL
 from mani.chat.repairs import feelings_buttons, lead_in_buttons, start_buttons
 from mani.chat.reply import TurnReply
 from mani.chat.taps import TapEvent
@@ -55,8 +55,8 @@ def offer_current(open_offer: TechniqueState, message_count: int) -> bool:
 
 
 def closing_buttons() -> list[SmartPrompt]:
-    return [SmartPrompt(label=CLOSING_KEEP_CHATTING_LABEL),
-            SmartPrompt(label=GO_TO_LIBRARY_LABEL, library=LibrarySection.HOME.value),
+    return [SmartPrompt(label=CONTINUE_CHATTING_LABEL),
+            SmartPrompt(label=VISIT_LIBRARY_LABEL, library=LibrarySection.HOME.value),
             SmartPrompt(label=FINISH_LABEL)]
 
 
@@ -88,7 +88,7 @@ def decide(
                                or person_messages < OFFER_FROM_MESSAGE))
     if reply.action == "library" and not decision.prompts:
         decision = dataclasses.replace(decision, prompts=[
-            SmartPrompt(label=GO_TO_LIBRARY_LABEL, library=LibrarySection.HOME.value)])
+            SmartPrompt(label=VISIT_LIBRARY_LABEL, library=LibrarySection.HOME.value)])
     return decision
 
 

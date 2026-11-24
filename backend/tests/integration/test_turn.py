@@ -282,15 +282,16 @@ async def test_a_question_asked_in_a_set_and_what_the_reply_gave_reach_the_next_
 
 
 async def test_after_e_the_feelings_check_then_the_closing_buttons(alice, model):
-    model(said("That's a strong shift. How are you feeling now?", action="finish", stage="effective"),
-          said("Excellent. You found a path forward."))
+    scripted = model(said("That's a strong shift. How are you feeling now?", action="finish", stage="effective"),
+                     said("Thanks for saying so. What do you still need?"))
     thread = await start(alice)
     await put_technique(thread.id, "abcde", TechniqueOutcome.ACCEPTED, "effective")
     check = await send(alice, thread.id, "I can be a team player and still say no")
-    assert [p.label for p in check.prompts] == ["Feel stronger", "Feel more focused", "I'm not sure yet"]
+    assert [p.label for p in check.prompts] == ["Better", "About the same", "It didn't help"]
     assert "abcde" not in ((await thread_row(alice, thread.id)).understanding.get("finished") or [])
-    closed = await send(alice, thread.id, "Feel more focused")
-    assert [p.label for p in closed.prompts] == ["Keep Chatting", "Go to Library", "Finish for Now"]
+    closed = await send(alice, thread.id, "It didn't help")
+    assert "They tapped the button \"It didn't help\"" in facts_of(scripted)
+    assert [p.label for p in closed.prompts] == ["Continue chatting", "Visit library", "Finish for Now"]
     assert (await thread_row(alice, thread.id)).understanding["finished"] == ["abcde"]
 
 
@@ -304,9 +305,9 @@ async def test_a_finish_after_danger_sends_the_end_check_then_the_close(alice, m
     first = await send(alice, thread.id, "my new belief is that I'm allowed limits")
     assert first.content == crisis.END_CHECK and first.prompts == []
     check = await send(alice, thread.id, "i'm okay now, my sister is here")
-    assert [p.label for p in check.prompts] == ["Feel stronger", "Feel more focused", "I'm not sure yet"]
+    assert [p.label for p in check.prompts] == ["Better", "About the same", "It didn't help"]
     assert (await thread_row(alice, thread.id)).understanding["safety_end_check"] == "done"
-    closed = await send(alice, thread.id, "Feel stronger")
+    closed = await send(alice, thread.id, "Better")
     assert [p.label for p in closed.prompts][-1] == "Finish for Now"
 
 

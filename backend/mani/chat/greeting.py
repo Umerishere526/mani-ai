@@ -60,12 +60,13 @@ GIVE_ME_A_TOOL_LABEL = "Give me a tool"
 LEAD_IN_LABELS = (NOT_SURE_LABEL, SHOW_ME_HOW_LABEL, GIVE_ME_A_TOOL_LABEL)
 EXAMPLE_LABEL = "I need an example"
 TALK_MORE_FIRST_LABEL = "Talk more first"
-# How they feel after a framework's last stage, asked before the close (the client's sequence document, 2026-11-18;
-# the words changed by muhammad, 2026-11-24: "Still a bit tired" put a feeling in their mouth).
-FEELINGS_LABELS = ("Feel stronger", "Feel more focused", "I'm not sure yet")
-# The three choices after a framework's last stage, in the client's words.
-CLOSING_KEEP_CHATTING_LABEL = "Keep Chatting"
-GO_TO_LIBRARY_LABEL = "Go to Library"
+# How they feel after a framework's last stage, asked before the close (the client's sequence document, 2026-11-18).
+# Neutral, so none presumes it helped and one says it didn't (Lolly, 2026-11-23: "The options must allow users to
+# indicate that something has not helped").
+FEELINGS_LABELS = ("Better", "About the same", "It didn't help")
+# The close, in the client's words (Lolly, 2026-11-20: "CONTINUE CHATTING OR VISIT LIBRARY"), and Finish for Now.
+CONTINUE_CHATTING_LABEL = "Continue chatting"
+VISIT_LIBRARY_LABEL = "Visit library"
 FINISH_LABEL = "Finish for Now"
 
 
