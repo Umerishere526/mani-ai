@@ -257,6 +257,23 @@ async def test_every_host_failing_on_a_first_danger_message_still_answers(alice,
     assert turn.content == crisis.TROUBLE_REPLY
 
 
+async def test_a_held_worry_whose_reply_fails_its_check_twice_still_gets_the_crisis_reply(alice, model, monkeypatch):
+    """A reply that says danger without whose fails its check; when the one retry fails too, complete raises, and a
+    conversation holding a worry gets the crisis words with its danger kept."""
+    model(said("Call 911 now. Are you alone?", safety=DANGER))
+    thread = await start(alice)
+    await send(alice, thread.id, "i took a bunch of pills")
+
+    async def no_reply_fits(*_, **__):
+        raise ServiceError("model returned no parseable reply after 2 attempts", ErrorCategory.LLM_UNAVAILABLE,
+                           retryable=True)
+
+    monkeypatch.setattr(client, "complete", no_reply_fits)
+    turn = await send(alice, thread.id, "i don't want help")
+    assert turn.content == crisis.CRISIS_REPLY and turn.crisis_detected and turn.paused_until is None
+    assert (await thread_row(alice, thread.id)).safety == "danger"
+
+
 async def test_a_fallback_reply_keeps_the_notes_and_moves_no_state(alice, model, monkeypatch):
     model(said("Go on.", notes="kept notes"))
     thread = await start(alice)

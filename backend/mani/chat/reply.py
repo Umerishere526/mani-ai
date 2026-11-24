@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Safety(BaseModel):
@@ -22,6 +22,13 @@ class Safety(BaseModel):
     )
     still_there: bool = Field(default=False, description="Their message itself says the danger is still there, or that they are not safe.")
     why: str | None = Field(default=None, description="One short line on what you judged.")
+
+    @model_validator(mode="after")
+    def _says_whose_danger(self) -> Safety:
+        """A worry with no kind could not be held to its kind's pause rule, so the reply fails and is asked for again."""
+        if self.level != "none" and self.about is None:
+            raise ValueError("about is required when level is unsure or danger")
+        return self
 
 
 class Question(BaseModel):

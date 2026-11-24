@@ -335,7 +335,7 @@ def openrouter_stream(content: str, generation_id: str, finish_reason: str = "st
     return stream
 
 
-def over_openrouter(monkeypatch, *streams, chunk_timeout: float = 5.0) -> list:
+def over_openrouter(monkeypatch, *streams, chunk_timeout: float = 5.0, schema: type[BaseModel] = Said) -> list:
     """The real LangChain model and OpenAI SDK, with only the HTTP replies scripted. Returns the requests
     that reached the network."""
     import httpx
@@ -352,7 +352,7 @@ def over_openrouter(monkeypatch, *streams, chunk_timeout: float = 5.0) -> list:
         api_key="sk-test-not-a-real-key", max_retries=0, stream_chunk_timeout=chunk_timeout,
         http_async_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
     )
-    install(monkeypatch, model.with_structured_output(Said, method="json_schema", include_raw=True))
+    install(monkeypatch, model.with_structured_output(schema, method="json_schema", include_raw=True))
     return requests
 
 
@@ -375,6 +375,30 @@ async def test_each_call_records_the_generation_that_served_it(monkeypatch, reco
         (llm_calls.Outcome.SCHEMA_INVALID, "gen-cut-off"),
         (llm_calls.Outcome.OK, "gen-answered"),
     ]
+
+
+async def test_a_turn_reply_that_says_danger_without_whose_is_asked_for_again(monkeypatch, recorded):
+    """A danger with no kind could not be held to its kind's pause rule; the reply's own check fails it inside the
+    real chain, and the one schema retry asks again."""
+    from mani.chat.reply import TurnReply
+
+    def reply(safety: dict) -> str:
+        return json.dumps({"text": "I'm here.", "safety": {"level": "danger", **safety}, "notes": ""})
+
+    over_openrouter(
+        monkeypatch,
+        openrouter_stream(reply({}), "gen-no-kind"),
+        openrouter_stream(reply({"about": "themselves"}), "gen-answered"),
+        schema=TurnReply,
+    )
+
+    call = await client.complete(
+        [{"role": "user", "content": "hi"}], TurnReply, model="openai/gpt-6-luna",
+        purpose=llm_calls.Purpose.CHAT, settings=settings(),
+    )
+
+    assert call.value.safety.about == "themselves"
+    assert [r["outcome"] for r in recorded] == [llm_calls.Outcome.SCHEMA_INVALID, llm_calls.Outcome.OK]
 
 
 async def test_a_streamed_reply_records_its_usage_and_generation(monkeypatch, recorded):

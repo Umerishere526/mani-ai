@@ -669,6 +669,14 @@ the same change as the work.**
   `test_the_conversation_paused_in_stops_asking_once_they_said_elsewhere_they_are_all_right` and
   `test_the_answer_to_the_question_a_new_conversation_opens_with_is_never_refused_for_a_limit`;
   `test_worry_migration.py`.
+- **An unsure or danger read must say whose danger it is, and a danger of no known kind needs a refusal even while a
+  body worry is open** (muhammad, 2026-11-24). Because a read with no kind inherited the open body worry's kind and its
+  refusal never paused, and nothing enforced the field the model was told to fill. A reply missing it fails its schema
+  check and is asked for again once; if that fails too, a held worry still gets `crisis.CRISIS_REPLY`. A first danger
+  message whose two attempts both fail gets the fixed trouble reply and records no danger, as when no host answers.
+  `Safety._says_whose_danger` (`reply.py`), `worry.step`; `test_a_turn_reply_that_says_danger_without_whose_is_asked_for_again`,
+  the `test_worry.py` sequence "a refused danger of no known kind during an open body worry pauses (2026-11-24)",
+  `test_a_held_worry_whose_reply_fails_its_check_twice_still_gets_the_crisis_reply`.
 - **Retired 2026-11-16 (superseded) and 2026-11-17: every conversation turns from understanding to helping, and
   code names the turn and the help move** (muhammad, 2026-10-27). Because the state and note lines that carried
   it are gone; `mani.md` says what Mani does when they ask what to do (2026-11-17).

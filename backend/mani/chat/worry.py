@@ -91,7 +91,7 @@ def step(stood: Standing, read: Safety) -> Outcome:
     Danger to themselves, to someone else or from someone pauses without a refusal. A danger about a symptom in the
     body pauses only when this turn's read has the symptom happening now and they refuse the help for it, at the level
     code holds it (a symptom the model judged unsure counts as danger), and a danger
-    of no known kind needs a refusal too, so a read without `about` never pauses a body chat."""
+    of no known kind needs a refusal too, even while a body worry is open."""
     start = State.UNSURE if stood.phase is Phase.ASKING and stood.state is State.CLEAR else stood.state
     danger = _DANGER[read.level]
     about = read.about or stood.about
@@ -108,7 +108,10 @@ def step(stood: Standing, read: Safety) -> Outcome:
              and after is State.CLEAR and stood.calm + 1 < CALM_TO_CLEAR)
     if waits:
         after = State.UNSURE
-    if about == "body":
+    if about == "body" and read.about is None and danger != "none":
+        # A danger of no known kind while a body worry is open is not held to the body's rule: it needs a refusal.
+        kind_pauses = read.declined
+    elif about == "body":
         kind_pauses = read.declined and held == "now" and read.symptom_now == "yes"
     else:
         kind_pauses = read.declined or about is not None

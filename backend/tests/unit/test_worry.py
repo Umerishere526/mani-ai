@@ -17,11 +17,19 @@ from mani.models.rows import Pause, Thread
 
 
 def D(**read) -> Safety:
-    return Safety(level="danger", **read)
+    return _read("danger", read)
 
 
 def U(**read) -> Safety:
-    return Safety(level="unsure", **read)
+    return _read("unsure", read)
+
+
+def _read(level: str, read: dict) -> Safety:
+    """A worry with no kind fails the reply's own check, so the model never sends one; worry.step must still hold it
+    to the right rule, so such a read is built without that check."""
+    if read.get("about") is None:
+        return Safety.model_construct(level=level, **read)
+    return Safety(level=level, **read)
 
 
 def N(**read) -> Safety:
@@ -102,6 +110,11 @@ SEQUENCES = {
     "a danger of no known kind after a settled body worry pauses on a refusal": (
         [(ORD, U(about="body", symptom_now="unsaid")), (ORD, N()), (ORD, D(declined=True)), (ORD, D(declined=True))],
         [(DANGER, F, F, T, "body"), (CLEAR, F, T, F, None), (DANGER, F, F, F, None), (DANGER, T, F, F, None)]),
+    # muhammad, 2026-11-24: during an open body worry a danger of no known kind took the body's kind, so its refusal
+    # never paused; the body's rule holds only a read about the body.
+    "a refused danger of no known kind during an open body worry pauses (2026-11-24)": (
+        [(ORD, U(about="body", symptom_now="unsaid")), (ORD, D(declined=True)), (ORD, D(declined=True))],
+        [(DANGER, F, F, T, "body"), (DANGER, T, F, F, "body"), (DANGER, T, F, F, "body")]),
     "a danger of no known kind after a settled worry needs a refusal like any other": (
         [(ORD, D(about="themselves")), (ORD, N()), (ORD, D()), (ORD, D())],
         [(DANGER, F, F, F, "themselves"), (CLEAR, F, T, F, None), (DANGER, F, F, F, None),
@@ -228,10 +241,13 @@ def test_the_record_keeps_where_the_return_check_stands():
     ("body", U(about="body", symptom_now="yes", declined=True), True),
     ("body", D(about="body", symptom_now="unsaid", declined=True), False),
     ("body", N(declined=True), False),
+    ("body", D(), False),
+    ("body", D(declined=True), True),
 ], ids=["themselves", "someone else", "from someone", "someone else, refused", "someone is with them",
         "someone is with them and they refuse", "no known kind", "no known kind, refused", "a doubt about a symptom",
         "refusing help for a symptom now (2026-11-13)",
-        "refusing help for a symptom now the model judged unsure (2026-11-23)", "a symptom not said to be happening", "declined and nothing else"])
+        "refusing help for a symptom now the model judged unsure (2026-11-23)", "a symptom not said to be happening", "declined and nothing else",
+        "no known kind in a body worry", "no known kind in a body worry, refused (2026-11-24)"])
 def test_danger_that_goes_on_pauses_for_these_kinds_and_reads(about, read, pauses):
     """muhammad, 2026-11-14: a person about to act, alone, who answered every question honestly never paused, so danger to
     themselves, to someone else or from someone pauses without a refusal; a body symptom needs one for a symptom
