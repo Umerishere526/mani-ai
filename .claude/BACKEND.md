@@ -106,9 +106,10 @@ Things a reviewer will check for.
 
 Things a reviewer will check for, and where they are.
 
-- **One error shape, everywhere.** `{"error": {category, message, retryable}}`. Both the
-  `ServiceError` and the validation handlers in `main.py` produce it, so a client has one
-  branch rather than two. FastAPI's default `{"detail": [...]}` is overridden.
+- **One error shape, everywhere.** `{"error": {category, message, retryable}}`. The
+  `ServiceError`, validation and unhandled-exception handlers in `main.py` all produce it, so a
+  client has one branch rather than two. FastAPI's default `{"detail": [...]}` and Starlette's
+  plain-text 500 are overridden.
 - **401 and 403 are distinct.** No usable token is `unauthenticated` → 401, so a client
   refreshes. Authenticated but not permitted is `forbidden` → 403.
 - **4xx does not log a stack trace.** Expired tokens are routine; a traceback each would

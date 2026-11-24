@@ -41,6 +41,14 @@ def error_body(category: ErrorCategory, message: str, retryable: bool, details: 
     return {"error": body}
 
 
+def error_response(exc: ServiceError) -> JSONResponse:
+    """A ServiceError as the response a client receives: its category's status, its safe sentence."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=error_body(exc.category, exc.user_message, exc.retryable, exc.details),
+    )
+
+
 def _what_to_fix(errors: list) -> str | None:
     """What to tell the person when the message itself was the problem: nothing to send, or too long."""
     for error in errors:
@@ -122,10 +130,18 @@ def create_app() -> FastAPI:
             # incident. Logging a stack trace for each would bury real faults under
             # routine noise and spend the Sentry quota on it.
             logger.warning("%s: %s", exc.category, exc)
-        return JSONResponse(
-            status_code=exc.status_code,
-            content=error_body(exc.category, exc.user_message, exc.retryable, exc.details),
-        )
+        return error_response(exc)
+
+    @app.exception_handler(Exception)
+    async def unhandled_error_handler(_: Request, exc: Exception) -> JSONResponse:
+        """Give a fault nothing anticipated the same error shape, not Starlette's plain-text 500.
+
+        Starlette re-raises the exception once this response is sent, so Sentry still reports it.
+        Only the type is logged beside the traceback: the message of an exception nobody wrote
+        could carry anything, and the client is told only the generic sentence.
+        """
+        logger.error("unhandled %s", type(exc).__name__, exc_info=exc)
+        return error_response(ServiceError(f"unhandled {type(exc).__name__}"))
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(

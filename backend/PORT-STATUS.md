@@ -685,6 +685,11 @@ the same change as the work.**
   restored the thread but left `checked_at`, so the pause stopped owing the question. Only an edit of the turn that
   checked the pause clears it. `rewind.note_checked`, `pauses.clear_checked`;
   `test_editing_the_answer_that_marked_a_pause_checked_asks_the_question_again`.
+- **An exception nothing handled answers 500 in the one error shape (`unknown`, the generic sentence), never
+  Starlette's plain text** (muhammad, 2026-11-24). Because a client branching on `error.category` could not read a
+  plain-text 500. It logs only the exception type; Sentry still captures it. Crisis numbers in error replies wait for
+  the client's wording. This 500 leaves from the outermost middleware, outside CORS. `unhandled_error_handler`
+  (`main.py`), `test_an_unanticipated_fault_gets_the_same_error_shape_and_is_logged`.
 - **Retired 2026-11-16 (superseded) and 2026-11-17: every conversation turns from understanding to helping, and
   code names the turn and the help move** (muhammad, 2026-10-27). Because the state and note lines that carried
   it are gone; `mani.md` says what Mani does when they ask what to do (2026-11-17).
