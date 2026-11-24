@@ -10,11 +10,10 @@ from pydantic import BaseModel
 # A plain, non-clinical acknowledgement that stays on screen while the resource panel opens, so at the most
 # important moment in the product the person never sees nothing.
 CRISIS_REPLY = (
-    "I'm really glad you told me that, and I want to be honest with you: what you're "
-    "carrying is heavier than I can hold on my own.\n\n"
+    "I'm really glad you told me that, and I want to be honest with you: this is more than "
+    "I can help with on my own.\n\n"
     "You deserve to talk to a person who can stay with you properly. If you're in "
-    "immediate danger, please contact your local emergency number now.\n\n"
-    "I'm not going anywhere."
+    "immediate danger, please contact your local emergency number now."
 )
 # Where to get help, said wherever a message goes out unread for safety: an outage, or a refusal for a limit.
 IN_DANGER = "If you're in danger or thinking about hurting yourself, call 911 now, or call or text 988."
@@ -76,7 +75,7 @@ def pause_reply(about: str | None, seconds: int) -> str:
     who, help_now = _PAUSE_FOR.get(about, _PAUSE_FOR["themselves"])
     return (
         f"I'm worried about {who}, so I'm pausing our chat for {_length(seconds)}. {help_now} "
-        "I'll be here when you come back."
+        "We can talk again when you come back."
     )
 
 

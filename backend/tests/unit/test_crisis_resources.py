@@ -56,4 +56,4 @@ def test_the_pause_reply_fits_whose_danger_it_is():
     assert "your health" in body and "911" in body and "988" not in body
     assert crisis.pause_reply(None, 30) == themselves, "an unknown danger keeps the suicide line"
     for about in ("themselves", "someone_else", "from_someone", "body"):
-        assert crisis.pause_reply(about, 30).endswith("I'll be here when you come back."), about
+        assert crisis.pause_reply(about, 30).endswith("We can talk again when you come back."), about
