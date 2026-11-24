@@ -123,11 +123,15 @@ def _moved(base: Decision, reply: TurnReply, framework: Framework, running: Tech
 
 def _answered_offer(base: Decision, open_offer: TechniqueState, offered: Framework | None, tap: TapEvent,
                     reply: TurnReply) -> Decision:
-    """A clear no declines the offer. Talk more first sets it aside for now. A typed answer to the lead-in gets the five
-    steps after the reply (muhammad, 2026-11-18); any other answer after the steps lets the offer lapse."""
+    """A clear no declines the offer. Talk more first sets it aside for now. Show me how is the reply's walk through the
+    steps on their own situation, then the choice to start. A typed answer to the lead-in gets the five steps after the
+    reply (muhammad, 2026-11-18); any other answer after the steps lets the offer lapse."""
     if reply.action == "stop":
         return dataclasses.replace(base, declined=[*base.declined, open_offer.framework_id], technique=open_offer.model_copy(
             update={"outcome": TechniqueOutcome.DECLINED, "phase": None}))
+    if offered is not None and tap.demonstrate is not None:
+        return dataclasses.replace(base, prompts=start_buttons(offered, with_example=False),
+                                   technique=open_offer.model_copy(update={"phase": STEPS}))
     if offered is not None and open_offer.phase == OFFERING and not tap.set_aside:
         return dataclasses.replace(base, show_steps=offered, prompts=start_buttons(offered, with_example=True),
                                    technique=open_offer.model_copy(update={"phase": STEPS}))

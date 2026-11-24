@@ -6,13 +6,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from mani.chat.greeting import (
-    CLOSING_KEEP_CHATTING_LABEL, EXAMPLE_LABEL, FINISH_LABEL, LEAD_IN_LABELS, TALK_MORE_FIRST_LABEL,
+    CLOSING_KEEP_CHATTING_LABEL, EXAMPLE_LABEL, FINISH_LABEL, GIVE_ME_A_TOOL_LABEL, NOT_SURE_LABEL, SHOW_ME_HOW_LABEL,
+    TALK_MORE_FIRST_LABEL,
 )
 from mani.chat.techniques import FIRST_STAGE_OPENING, Registry, line_of, stages_of
 from mani.llm.schema import SmartPrompt
 from mani.models.rows import Framework, Message, MessageRole, SupportStyle, TechniqueState
 
-LEAD_IN = {label.lower() for label in LEAD_IN_LABELS}
+NOT_SURE = NOT_SURE_LABEL.lower()
+SHOW_ME_HOW = SHOW_ME_HOW_LABEL.lower()
+GIVE_ME_A_TOOL = GIVE_ME_A_TOOL_LABEL.lower()
 EXAMPLE = EXAMPLE_LABEL.lower()
 TALK_MORE_FIRST = TALK_MORE_FIRST_LABEL.lower()
 FINISH = FINISH_LABEL.lower()
@@ -27,6 +30,7 @@ class TapEvent:
     starting: Framework | None = None
     explain: Framework | None = None
     example: Framework | None = None
+    demonstrate: Framework | None = None
     set_aside: bool = False
 
 
@@ -80,8 +84,22 @@ def tap_event(tapped: SmartPrompt | None, registry: Registry, open_offer: Techni
         return TapEvent(set_aside=True, fact=(
             f"They chose to keep talking instead of trying {offered.name}. Carry on with them; you may offer it again "
             "later when it fits."))
-    if offered is not None and label in LEAD_IN:
+    if offered is not None and label == NOT_SURE:
         return TapEvent(explain=offered)
+    if offered is not None and label == SHOW_ME_HOW:
+        return TapEvent(demonstrate=offered, fact=(
+            f"They tapped Show me how. Show briefly how {offered.name}'s five steps would go on their own situation: "
+            "one short line for each step, in order, using only what they have told you, in their words. Where they "
+            "have not said what a step needs, say that step is theirs to fill in instead of filling it in; never "
+            "invent a detail, a belief or a feeling. This reply does not start the set: its question invites them to "
+            "try it themselves, and the app shows the button to start."))
+    if offered is not None and label == GIVE_ME_A_TOOL:
+        first = stages_of(offered)[0]
+        return TapEvent(starting=offered, fact=(
+            f"They tapped Give me a tool, so {offered.name} starts now. Your reply opens its first stage, `{first}`, "
+            f"with its line (\"{line_of(offered, first)}\"). If they have already told you what that stage asks, say it "
+            "back in a sentence, in their words, and ask only whether it is right or what is missing; otherwise ask "
+            "that stage's question."))
     if offered is not None and label == EXAMPLE:
         return TapEvent(example=offered)
     if offered is not None and label == TALK_MORE_FIRST:

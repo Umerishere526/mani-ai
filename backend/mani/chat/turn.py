@@ -183,9 +183,12 @@ async def _turn(
     told_running = running if held or not tap.starting else None
     told_offer = (open_offer if open_offer is None or decide_mod.offer_current(open_offer, ctx.thread.message_count)
                   else None)
+    # Show me how's own fact replaces what the lead-in says comes next; on a held turn the tap's fact is not said.
     told = facts.facts(
-        ctx, config, record=record, style=style_name, running=told_running, open_offer=told_offer,
-        event=facts.HELD_START if held and tap.starting else tap.fact, wants_title=wants_title,
+        ctx, config, record=record, style=style_name, running=told_running,
+        open_offer=told_offer if tap.demonstrate is None else None,
+        event=(facts.HELD_START if tap.starting else None) if held and (tap.starting or tap.demonstrate) else tap.fact,
+        wants_title=wants_title,
         return_check=check, answering_return=answering, end_check_asked=end_check_asked, holding=held, state=before,
         person_messages=person_messages,
     )
@@ -407,8 +410,8 @@ async def _arrival(conn, claims: Claims, thread_id, client_message_id) -> Turn |
 
 
 async def _explained(conn, ctx, content, framework: Framework, style: str, tapped, client_message_id) -> Turn:
-    """A lead-in button: the client's five steps for their style, word for word, with no model call. The offer moves
-    to its steps, where the next answer starts it, sets it aside or lets it lapse."""
+    """Not sure: the client's five steps for their style, word for word, with no model call. The offer moves to its
+    steps, where the next answer starts it, sets it aside or lets it lapse."""
     turn = await _fixed_step(conn, ctx, content, steps_text(framework, style),
                              start_buttons(framework, with_example=True), tapped, client_message_id)
     if not turn.was_duplicate and ctx.technique is not None:

@@ -1,5 +1,5 @@
-# ABOUTME: What a tapped button means for the turn: which framework starts, when the five steps or the example are
-# ABOUTME: due, when an offer is set aside, and what the reply is told; a tap on a stale button means nothing.
+# ABOUTME: What a tapped button means for the turn: which framework starts, when the five steps, the walk-through or
+# ABOUTME: the example are due, when an offer is set aside, and what the reply is told; a stale button means nothing.
 
 from mani.chat.taps import tap_event
 from mani.chat.techniques import stages_of
@@ -22,10 +22,23 @@ def test_start_tells_the_reply_the_first_stage_only():
     assert "from the whole story to one moment" in fact
 
 
-def test_each_lead_in_button_asks_for_the_five_steps():
+def test_the_three_lead_in_buttons_are_three_different_experiences():
+    """Lolly, 2026-11-20: Not sure explains, Show me how demonstrates on their situation, Give me a tool begins."""
+    not_sure = tap_event(SmartPrompt(label="Not sure"), REGISTRY, offered("abcde"))
+    assert not_sure.explain.id == "abcde" and not_sure.starting is None and not_sure.demonstrate is None
+    show = tap_event(SmartPrompt(label="Show me how"), REGISTRY, offered("abcde"))
+    assert show.demonstrate.id == "abcde" and show.starting is None and show.explain is None
+    assert "only what they have told you" in show.fact and "never invent" in show.fact
+    assert "theirs to fill in" in show.fact
+    tool = tap_event(SmartPrompt(label="Give me a tool"), REGISTRY, offered("abcde"))
+    assert tool.starting.id == "abcde" and tool.explain is None
+    assert '"A is for Activating Event."' in tool.fact and "B is for" not in tool.fact
+
+
+def test_a_lead_in_button_with_no_offer_open_means_nothing_to_the_offer():
     for label in ("Not sure", "Show me how", "Give me a tool"):
-        assert tap_event(SmartPrompt(label=label), REGISTRY, offered("abcde")).explain.id == "abcde", label
-        assert tap_event(SmartPrompt(label=label), REGISTRY, None).explain is None
+        event = tap_event(SmartPrompt(label=label), REGISTRY, None)
+        assert (event.explain, event.demonstrate, event.starting) == (None, None, None), label
 
 
 def test_i_need_an_example_asks_for_the_worked_example():

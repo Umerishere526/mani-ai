@@ -190,6 +190,44 @@ async def test_the_offer_runs_lead_in_steps_example_then_start(alice, model):
     assert technique.outcome is TechniqueOutcome.ACCEPTED and technique.phase == "belief"
 
 
+async def test_show_me_how_walks_the_steps_on_their_situation_then_offers_the_start(alice, model):
+    """Lolly, 2026-11-20: Show me how demonstrates the five steps on the person's own situation, inventing nothing,
+    then invites them to try it; it is the model's reply, never the fixed five steps."""
+    walk = "A: your boss keeps adding things. B: what you tell yourself then is yours to fill in."
+    scripted = model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"),
+                     said(walk, question=Question(ask="Want to try it on your own?")),
+                     said("A is for Activating Event. What happened?", stage="activate"))
+    thread = await start(alice)
+    await warm_up(alice, thread.id)
+    await send(alice, thread.id, "i feel like a pushover")
+    shown = await send(alice, thread.id, "Show me how")
+    assert scripted.calls == 4 and shown.content == f"{walk}\n\nWant to try it on your own?"
+    told = facts_of(scripted)
+    assert "They tapped Show me how" in told and "only what they have told you" in told
+    assert "lead-in to ABCDE" not in told, "the lead-in's next step is not what happens"
+    assert [p.label for p in shown.prompts] == ["Start ABCDE", "Talk more first"]
+    assert (await technique_of(alice, thread.id)).phase == "steps"
+    await send(alice, thread.id, "Start ABCDE")
+    technique = await technique_of(alice, thread.id)
+    assert technique.outcome is TechniqueOutcome.ACCEPTED and technique.phase == "activate"
+
+
+async def test_give_me_a_tool_starts_the_first_stage_at_once(alice, model):
+    """Lolly, 2026-11-20: Give me a tool begins the exercise immediately, prefilling what it can."""
+    scripted = model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"),
+                     said("A is for Activating Event. Your boss keeps adding things. Is that the situation?",
+                          stage="activate"))
+    thread = await start(alice)
+    await warm_up(alice, thread.id)
+    await send(alice, thread.id, "i feel like a pushover")
+    turn = await send(alice, thread.id, "Give me a tool")
+    assert scripted.calls == 4 and turn.prompts == []
+    told = facts_of(scripted)
+    assert "They tapped Give me a tool" in told and "ask only whether it is right or what is missing" in told
+    technique = await technique_of(alice, thread.id)
+    assert technique.outcome is TechniqueOutcome.ACCEPTED and technique.phase == "activate"
+
+
 async def test_a_typed_reply_to_the_lead_in_gets_the_reply_then_the_steps(alice, model):
     model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"), said("That's a fair way to start."))
     thread = await start(alice)
@@ -207,7 +245,7 @@ async def test_talk_more_first_lets_the_offer_lapse_and_it_may_come_back(alice, 
     thread = await start(alice)
     await warm_up(alice, thread.id)
     await send(alice, thread.id, "i feel like a pushover")
-    await send(alice, thread.id, "Show me how")
+    await send(alice, thread.id, "Not sure")
     await send(alice, thread.id, "Talk more first")
     technique = await technique_of(alice, thread.id)
     assert technique.outcome is TechniqueOutcome.OFFERED and technique.phase is None, "set aside, not declined"

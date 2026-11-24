@@ -51,9 +51,13 @@ def greeting(nickname: str | None, returning: bool) -> str:
 # 2026-11-04: a pasted reply was taken as an answer and the offer followed). Fixed, so it costs no model call.
 COPIED_BACK = "It looks like you've sent my last message back to me. What did you want to say?"
 
-# The client's buttons at each step of an offer (her sequence document, 2026-11-18), always set by code. Any of the
-# lead-in's three shows the five steps; Talk more first sets the offer aside for now.
-LEAD_IN_LABELS = ("Not sure", "Show me how", "Give me a tool")
+# The client's buttons at each step of an offer (her sequence document, 2026-11-18), always set by code. The lead-in's
+# three are three different experiences (Lolly, 2026-11-20): Not sure explains the five steps, Show me how walks them
+# on the person's own situation, Give me a tool starts the first stage. Talk more first sets the offer aside for now.
+NOT_SURE_LABEL = "Not sure"
+SHOW_ME_HOW_LABEL = "Show me how"
+GIVE_ME_A_TOOL_LABEL = "Give me a tool"
+LEAD_IN_LABELS = (NOT_SURE_LABEL, SHOW_ME_HOW_LABEL, GIVE_ME_A_TOOL_LABEL)
 EXAMPLE_LABEL = "I need an example"
 TALK_MORE_FIRST_LABEL = "Talk more first"
 # How they feel after a framework's last stage, asked before the close (the client's sequence document, 2026-11-18;
