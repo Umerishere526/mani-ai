@@ -40,13 +40,33 @@ def test_the_checks_read_an_open_chat_reply_as_the_turn_sends_it():
     assert run_eval.rule_checks({"checks": {"max_sentences": 3, "text_excludes": ["—"]}}, reply) == []
 
 
-def test_a_reply_outside_the_open_chat_keeps_its_questions_and_loses_its_dashes():
+def test_a_guarded_reply_keeps_its_questions_and_loses_its_dashes_and_any_other_keeps_one():
     text = "That sounds frightening — I'm here. Are you safe right now? Is anyone with you?"
     kept = "That sounds frightening, I'm here. Are you safe right now? Is anyone with you?"
     assert got(text, level="unsure")["sent"] == kept
-    assert got(text, action="offer")["sent"] == kept
     reply = {"text": text, "action": "none", "safety": {"level": "none"}, "question": {"latest": "answer"}}
-    assert run_eval.received({"open_chat": False}, reply) == (kept, None)
+    held = {"open_chat": False, "facts": ["A safety worry is open in this conversation (unsure). Judge their message "
+                                          "for it first."]}
+    assert run_eval.received(held, reply) == (kept, None)
+    assert got(text, action="offer")["sent"] == "That sounds frightening, I'm here. Is anyone with you?"
+
+
+def test_the_reply_s_own_question_is_sent_after_its_text():
+    reply = {"text": "Your sister leans on you.", "safety": {"level": "none"},
+             "question": {"latest": "answer", "ask": "Tell me about the last time she asked."}}
+    assert run_eval.received({}, reply) == ("Your sister leans on you.\n\nTell me about the last time she asked.", None)
+
+
+def test_the_eval_shows_the_model_the_schema_the_turn_would_choose():
+    from mani.chat.facts import NO_OFFER
+
+    def offers(facts: list[str]) -> list[str] | None:
+        properties = run_eval.reply_schema({"facts": facts}, ("abcde", "thought_reframe")).model_json_schema()["properties"]
+        return properties["framework"]["anyOf"][0]["enum"] if "offer" in properties["action"]["enum"] else None
+
+    assert offers([NO_OFFER]) is None
+    assert offers(["They declined in this conversation: abcde. Never offer these again."]) == ["thought_reframe"]
+    assert offers([]) == ["abcde", "thought_reframe"]
 
 
 def test_the_pause_line_in_a_case_follows_the_configured_length():

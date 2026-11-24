@@ -20,9 +20,9 @@ from pydantic import BaseModel, Field  # noqa: E402
 
 from evals import reply_rules  # noqa: E402
 from mani.chat import crisis, questions, repairs  # noqa: E402
-from mani.chat.facts import facts_block, framework_guide  # noqa: E402
+from mani.chat.facts import NO_OFFER, facts_block, framework_guide  # noqa: E402
 from mani.chat.greeting import style_label  # noqa: E402
-from mani.chat.reply import TurnReply  # noqa: E402
+from mani.chat.reply import shaped  # noqa: E402
 from mani.config import get_settings  # noqa: E402
 from mani.llm import chain, client  # noqa: E402
 from mani.db import pool  # noqa: E402
@@ -96,16 +96,25 @@ async def post(http, settings, body) -> tuple[dict, float]:
         await asyncio.sleep(2 * attempt)
 
 
-async def reply(http, settings, v, system, case) -> dict:
-    """One reply, sent as the turn sends it: the same request fields beside the messages (chain.request_body and
-    chain.sampling), and the facts in the turn's own format."""
+def reply_schema(case, offers: tuple[str, ...]) -> type:
+    """The reply's schema as the turn chooses it from the case's facts: no offer when they say none may be made,
+    otherwise the active sets (`offers`) they name no decline of."""
+    if NO_OFFER in case["facts"]:
+        return shaped(())
+    declined = " ".join(fact for fact in case["facts"] if fact.startswith("They declined"))
+    return shaped(tuple(framework_id for framework_id in offers if framework_id not in declined))
+
+
+async def reply(http, settings, v, system, case, offers: tuple[str, ...]) -> dict:
+    """One reply, sent as the turn sends it: the same request fields and reply schema beside the messages
+    (chain.request_body, chain.sampling and reply_schema), and the facts in the turn's own format."""
     facts = facts_block([f"Their style: {style_label(case['style'])}.", *case["facts"]])
     parameters = v["parameters"]
     body = {"model": v["model"], "messages": [{"role": "system", "content": system},
                                               {"role": "assistant", "content": case["opener"]}]
             + turns(case, settings) + [{"role": "system", "content": facts}],
             "response_format": {"type": "json_schema", "json_schema": {
-                "name": "reply", "strict": True, "schema": to_strict_json_schema(TurnReply)}},
+                "name": "reply", "strict": True, "schema": to_strict_json_schema(reply_schema(case, offers))}},
             **chain.sampling(v["model"], parameters.get("temperature", client.DEFAULT_TEMPERATURE),
                              parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS)),
             **chain.request_body(v["model"], settings, v["routing"], v["effort"])}
@@ -133,15 +142,22 @@ def turns(case, settings) -> list[dict]:
             for turn in case["turns"]]
 
 
+# How the facts say a safety worry is open (facts.facts), which holds the turn.
+SAFETY_WORRY_OPEN = "A safety worry is open in this conversation"
+
+
 def received(case, got) -> tuple[str, str | None]:
     """The reply's words as the person would receive them, through the turn's own repairs, and why a question was cut.
-    A case whose facts put a set, an offer or a safety worry in play says `open_chat` false; otherwise this reply's own
-    safety judgment guards the turn, as it would out of a clear conversation."""
-    guarded = (got.get("safety") or {}).get("level", "none") != "none"
+    A case whose facts put a set, an offer or a safety worry in play says `open_chat` false. A safety worry open in its
+    facts guards the turn, and so does this reply's own safety judgment, as it would out of a clear conversation."""
+    guarded = (any(fact.startswith(SAFETY_WORRY_OPEN) for fact in case.get("facts", []))
+               or (got.get("safety") or {}).get("level", "none") != "none")
     open_chat = case.get("open_chat", True) and questions.in_open_chat(
         in_play=False, guarded=guarded, action=got.get("action", "none"))
-    return repairs.sent_text(got.get("text") or "", open_chat=open_chat,
-                             latest=(got.get("question") or {}).get("latest", ""))
+    question = got.get("question") or {}
+    sent, _asked, cut = repairs.sent_text(got.get("text") or "", question.get("ask", ""), guarded=guarded,
+                                          open_chat=open_chat, latest=question.get("latest", ""))
+    return sent, cut
 
 
 async def judge(http, settings, case, got) -> dict:
@@ -218,10 +234,10 @@ def rule_checks(case, got) -> list[str]:
     return failed
 
 
-async def run_variant(http, settings, system, v, cases, samples, gate) -> list[dict]:
+async def run_variant(http, settings, system, v, cases, samples, gate, offers) -> list[dict]:
     async def one(case, n):
         async with gate:
-            got = await reply(http, settings, v, system, case)
+            got = await reply(http, settings, v, system, case, offers)
             if got.get("error"):
                 return {"case": case["id"], "style": case["style"], "sample": n, "got": got, "verdict": None,
                         "code_fails": ["call failed"]}
@@ -295,7 +311,8 @@ async def main() -> None:
     report = [f"# Eval {args.label}", "", f"Prompt: `{args.prompt}`. Samples per case: {args.samples}. "
               f"Judge: `{JUDGE_MODEL}`.", ""]
     async with httpx.AsyncClient() as http:
-        results = await asyncio.gather(*(run_variant(http, settings, system, v, every, args.samples, gate)
+        results = await asyncio.gather(*(run_variant(http, settings, system, v, every, args.samples, gate,
+                                                     tuple(config.registry.ids))
                                          for v in args.variant))
     for v, rows in zip(args.variant, results):
         report += summarise(f"{v['name']} (`{v['model']}`, effort {v['effort']})", rows)
