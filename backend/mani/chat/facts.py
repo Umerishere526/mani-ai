@@ -61,6 +61,8 @@ def facts(
         lines.append(f"Your notes from your last turn: {notes}")
     if running is not None and (framework := config.registry.get(running.framework_id)):
         lines.append(_running_line(framework, running.phase, held=holding))
+    elif not holding:
+        lines += question_lines(rec.questions(record))
     if open_offer is not None and not holding and (framework := config.registry.get(open_offer.framework_id)):
         lines.append(_offer_line(framework, open_offer.phase))
     if declined := rec.declined(record):
@@ -81,6 +83,21 @@ def facts(
     if wants_title:
         lines.append("Give this conversation a title.")
     return facts_block(lines)
+
+
+def question_lines(kept: list[dict]) -> list[str]:
+    """What Mani asked in the open chat and what each question was for, and a run of replies that all asked one."""
+    asked = [entry for entry in kept if entry.get("q")]
+    lines = []
+    if asked:
+        listed = "; ".join(f"[{entry.get('intent') or 'unsaid'}] \"{entry['q']}\"" for entry in asked)
+        lines.append(f"The questions you asked in this conversation, oldest first, with what each was for: {listed}. "
+                     "Never ask again for something they answered, even in new words.")
+    run = next((i for i, entry in enumerate(reversed(kept)) if not entry.get("q")), len(kept))
+    if run >= 3:
+        lines.append(f"Your last {run} replies each ended on a question. This one gives them something and asks nothing, "
+                     "unless its question moves them a step on.")
+    return lines
 
 
 def facts_block(lines: list[str]) -> str:

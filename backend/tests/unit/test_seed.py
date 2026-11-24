@@ -6,11 +6,9 @@ from scripts.seed import PROMPTS_DIR, parse_prompt
 
 def test_a_prompt_file_carries_its_routing():
     prompt = parse_prompt(PROMPTS_DIR / "mani.md")
-    assert prompt["model_id"] == "minimax/minimax-m3.1-flash"
+    assert prompt["model_id"] == "deepseek/deepseek-v4.1-flash-1017"
     assert prompt["model_parameters"] == {"reasoning_effort": "high", "temperature": 0.3}
-    assert prompt["routing"] == {
-        "only": ["modelrun", "fireworks", "makora"], "zdr": True,
-    }
+    assert prompt["routing"] == {"only": ["sail-research", "deepinfra"], "sort": "price", "zdr": True}
 
 
 def test_a_prompt_file_without_routing_has_none():

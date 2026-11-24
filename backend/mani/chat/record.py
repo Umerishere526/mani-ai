@@ -1,9 +1,12 @@
-# ABOUTME: The thread record a turn keeps in threads.understanding: Mani's notes, the frameworks declined or finished,
-# ABOUTME: and the safety keys the pause rules read. Pure helpers; the turn writes the result.
+# ABOUTME: The thread record a turn keeps in threads.understanding: Mani's notes, its questions, the frameworks declined
+# ABOUTME: or finished, and the safety keys the pause rules read. Pure helpers; the turn writes the result.
 
 from __future__ import annotations
 
 NOTES = "notes"
+# Each open-chat reply, oldest first: the question it asked ("" for none) and what that question was for.
+QUESTIONS = "questions"
+QUESTIONS_KEPT = 12
 DECLINED = "declined"
 FINISHED = "finished"
 # The safety keys: where the question owed after a pause stands, whether a worry settled and whether danger was reached
@@ -28,6 +31,16 @@ def declined(record: dict) -> list[str]:
 def finished(record: dict) -> list[str]:
     """The frameworks finished in this conversation, after which no framework is offered."""
     return list(record.get(FINISHED) or [])
+
+
+def questions(record: dict) -> list[dict]:
+    """The open-chat replies kept, oldest first, each as {"q": the question or "", "intent": what it was for}."""
+    return list(record.get(QUESTIONS) or [])
+
+
+def with_question(record: dict, question: str, intent: str) -> dict:
+    """The record with this reply's question added, keeping the latest QUESTIONS_KEPT."""
+    return {**record, QUESTIONS: [*questions(record), {"q": question, "intent": intent}][-QUESTIONS_KEPT:]}
 
 
 def return_check(record: dict, pause_id: str, state: str) -> dict:
