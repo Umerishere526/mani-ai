@@ -206,7 +206,7 @@ async def test_overdose_on_the_first_message_gets_manis_reply_and_the_next_messa
     assert first.content == "Call 911 now. Are you alone?" and first.paused_until is None and first.crisis_detected
     second = await send(alice, thread.id, "yes alone. i dont want help")
     assert second.paused_until is not None
-    assert second.content == "Please call now.\n\n" + crisis.pause_reply("themselves", 15)
+    assert second.content == "Please call now.\n\n" + crisis.pause_reply("themselves", 30)
 
 
 async def test_a_paused_person_is_refused_before_anything_is_paid(alice, model):
@@ -393,7 +393,7 @@ async def test_a_pausing_body_turn_sends_manis_reply_then_the_pause_line_and_no_
     await send(alice, thread.id, "my chest is crushing right now")
     paused = await send(alice, thread.id, "no im not calling anyone")
     assert paused.paused_until is not None
-    assert paused.content == "Okay.\n\n" + crisis.pause_reply("body", 15)
+    assert paused.content == "Okay.\n\n" + crisis.pause_reply("body", 30)
     assert crisis.BODY_EMERGENCY not in paused.content
 
 

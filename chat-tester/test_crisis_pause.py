@@ -58,6 +58,7 @@ def test_how_far_the_pause_has_run_stays_between_none_and_all_of_it():
 
 def test_the_pop_up_says_how_long_the_pause_itself_runs():
     """muhammad, 2026-11-16: the drawing says 24 hours and the pause is 15 minutes, so the words follow the pause."""
+    assert crisis_pause.length(crisis_pause.Pause(NOW, NOW + timedelta(seconds=30))) == "30 seconds"
     assert crisis_pause.length(crisis_pause.Pause(NOW, NOW + timedelta(minutes=15))) == "15 minutes"
     assert crisis_pause.length(crisis_pause.Pause(NOW, NOW + timedelta(hours=24))) == "24 hours"
     assert crisis_pause.length(crisis_pause.Pause(NOW, NOW + timedelta(hours=1))) == "1 hour"
@@ -75,13 +76,14 @@ def test_the_help_is_picked_by_kind_and_a_missing_kind_is_none():
 
 
 class PausedBackend(mani.ManiClient):
-    """Answers the routes the page opens with; the profile says the chat is paused for 30 minutes from now."""
+    """Answers the routes the page opens with; the profile says the chat is paused for 30 seconds from now,
+    and the one conversation is T, with a message Mani sent."""
 
     def __init__(self, resources: list[dict] = RESOURCES) -> None:
         token = "h." + base64.urlsafe_b64encode(b'{"role":"authenticated"}').decode().rstrip("=") + ".s"
         super().__init__(session=mani.Session("00000000-0000-0000-0000-000000000001", token, "refresh"))
         now = datetime.now(timezone.utc)
-        self.began, self.until = now.isoformat(), (now + timedelta(minutes=30)).isoformat()
+        self.began, self.until = now.isoformat(), (now + timedelta(seconds=30)).isoformat()
         self.resources = resources
         self.calls: list[tuple] = []
 
@@ -93,6 +95,13 @@ class PausedBackend(mani.ManiClient):
             return self.resources
         if path == "/v1/threads":
             return {"threads": []}
+        if path == "/v1/threads/current":
+            return {"thread": {"id": "T", "title": None, "message_count": 3, "crisis_detected": True,
+                               "conversation_style": "supportive"},
+                    "messages": [{"id": "g", "role": "mani", "content": "I hear you", "prompts": [{"label": "Tap me"}]}]}
+        if path == "/v1/threads/T/messages" and method == "GET":
+            return {"messages": [{"id": "g", "role": "mani", "content": "I hear you", "prompts": [{"label": "Tap me"}]}],
+                    "next_cursor": None}
         if path == "/v1/exercises":
             return []
         raise AssertionError(f"unexpected {method} {path}")
@@ -111,8 +120,6 @@ class OpenThreadBackend(PausedBackend):
                   "conversation_style": "supportive"}
         if path == "/v1/threads/current":
             return {"thread": thread, "messages": []}
-        if path == "/v1/threads/T/messages" and method == "GET":
-            return {"messages": [{"id": "g", "role": "mani", "content": "Hi", "prompts": []}], "next_cursor": None}
         if (method, path) == ("POST", "/v1/threads/T/messages"):
             if isinstance(self.answer, Exception):
                 raise self.answer
@@ -138,9 +145,10 @@ def _shown(app: AppTest) -> str:
     return " ".join(m.value for m in app.markdown)
 
 
-def _resumes_in_minutes(app: AppTest) -> int:
-    """The minutes of the m:ss the live timer at the bottom says the chat resumes in."""
-    return int(re.search(r"Chat resumes in\D*(\d+):\d{2}", _shown(app)).group(1))
+def _resumes_in_seconds(app: AppTest) -> int:
+    """The seconds of the m:ss the live timer says the chat resumes in."""
+    minutes, seconds = re.search(r"Chat resumes in\D*(\d+):(\d{2})", _shown(app)).groups()
+    return int(minutes) * 60 + int(seconds)
 
 
 def test_a_paused_chat_shows_only_the_clients_pop_up_and_the_library_still_opens():
@@ -152,22 +160,37 @@ def test_a_paused_chat_shows_only_the_clients_pop_up_and_the_library_still_opens
 
     shown = _shown(app)
     assert "<h2>Chat is temporary unavailable</h2>" in shown
-    assert "For your safety, chat is paused for 30 minutes." in shown
+    assert "For your safety, chat is paused for 30 seconds." in shown
     assert "You can still access our Library resources." in shown
     assert ('If you are thinking about suicide or you need immediate support call or text <a href="tel:988">988</a> '
             "to connect with a trained crisis counselor") in shown
     assert 'If you are in immediate danger, call <a href="tel:911">911</a>.' in shown
     assert "741741" not in shown and "while you reach out" not in shown and "everyone is safe" not in shown
-    assert _resumes_in_minutes(app) in (29, 30)
+    assert 28 <= _resumes_in_seconds(app) <= 30
     assert [b.label for b in app.button if b.label == "Go to library"] == ["Go to library"]
-    assert not app.chat_input
+    assert app.chat_input[0].disabled
     assert [b for b in app.sidebar.button if "New conversation" in b.label][0].disabled
     assert ("GET", "/v1/threads/opening") not in backend.calls
-    assert ("GET", "/v1/threads/current") not in backend.calls
 
     next(b for b in app.button if b.label == "Go to library").click().run()
     assert not app.exception
     assert app.title[0].value == "📚 Library"
+
+
+def test_closing_the_pop_up_leaves_the_conversation_to_read_with_no_way_to_write():
+    """The cross closes the pop-up (what its on_dismiss records); the conversation shows, read-only, until the pause ends."""
+    app = _open(PausedBackend())
+    app.session_state["pause_dismissed"] = app.session_state["pause"].ends
+    app.run()
+    assert not app.exception
+
+    shown = _shown(app)
+    assert "I hear you" in shown and "Chat is paused. You can read your conversation until it resumes." in "".join(
+        i.value for i in app.info)
+    assert "Chat is temporary unavailable" not in shown and _resumes_in_seconds(app) <= 30
+    assert app.chat_input[0].disabled
+    assert not [b for b in app.button if b.label == "Tap me"], "a suggested reply would send a message"
+    assert not [b for b in app.button if b.key == "edit_last"]
 
 
 def test_the_pop_up_leaves_out_the_help_it_was_not_given():
@@ -175,14 +198,14 @@ def test_the_pop_up_leaves_out_the_help_it_was_not_given():
 
     shown = _shown(app)
     assert "call or text" not in shown and "immediate danger" not in shown
-    assert "For your safety, chat is paused for 30 minutes." in shown and "Library resources" in shown
+    assert "For your safety, chat is paused for 30 seconds." in shown and "Library resources" in shown
 
 
 def test_the_chat_opens_once_the_pause_has_run_out():
     backend = OpenThreadBackend({})
     backend.began, backend.until = NOW.isoformat(), (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
     app = _open(backend)
-    assert not app.chat_input
+    assert app.chat_input[0].disabled
 
     # What the countdown's rerun at 0:00 finds: the stored pause has run out and the backend no longer has one.
     backend.began = backend.until = None
@@ -190,7 +213,7 @@ def test_the_chat_opens_once_the_pause_has_run_out():
     app.run()
 
     assert not app.exception
-    assert app.chat_input
+    assert not app.chat_input[0].disabled
     assert "chat is paused" not in _shown(app) and "Chat resumes in" not in _shown(app)
 
 
@@ -203,9 +226,9 @@ def test_a_turn_that_pauses_the_chat_shows_the_pop_up_on_the_next_run():
     app.chat_input[0].set_value("I don't want help").run()
 
     assert not app.exception
-    assert not app.chat_input
+    assert app.chat_input[0].disabled
     assert "For your safety, chat is paused for 10 minutes." in _shown(app)
-    assert _resumes_in_minutes(app) in (9, 10)
+    assert 9 * 60 <= _resumes_in_seconds(app) <= 10 * 60
 
 
 def test_a_send_refused_because_the_chat_is_paused_shows_the_pop_up_and_queues_no_error():
@@ -217,7 +240,7 @@ def test_a_send_refused_because_the_chat_is_paused_shows_the_pop_up_and_queues_n
     app.chat_input[0].set_value("hello").run()
 
     assert not app.exception
-    assert not app.chat_input
+    assert app.chat_input[0].disabled
     assert "For your safety, chat is paused for 20 minutes." in _shown(app)
     assert "send_error" not in app.session_state
     assert "notice" not in app.session_state

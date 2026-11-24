@@ -115,8 +115,13 @@ SEQUENCES = {
     "an answer that is fine settles it": (
         [(ASK, D(about="themselves")), (ANS, N())],
         [(DANGER, F, F, F, "themselves"), (CLEAR, F, T, F, None)]),
-    "an answer of danger that does not say it is still there never pauses (2026-11-16)": (
+    # muhammad, 2026-11-23: "I took more pills" in answer to how things are used to wait one more message for the
+    # pause when the model did not also mark it still there.
+    "an answer read as danger pauses even when the read does not say it is still there": (
         [(ASK, N()), (ANS, D(about="themselves"))],
+        [(CLEAR, F, F, F, None), (DANGER, T, F, F, "themselves")]),
+    "an answer read as danger with someone with them does not pause": (
+        [(ASK, N()), (ANS, D(about="themselves", help_in_place=True))],
         [(CLEAR, F, F, F, None), (DANGER, F, F, F, "themselves")]),
     "a first message back that is read as no worry and a refusal keeps the question open": (
         [(ASK, N(declined=True))],
@@ -220,11 +225,13 @@ def test_the_record_keeps_where_the_return_check_stands():
     (None, D(declined=True), True),
     ("body", D(about="body", symptom_now="yes"), False),
     ("body", D(about="body", symptom_now="yes", declined=True), True),
+    ("body", U(about="body", symptom_now="yes", declined=True), True),
     ("body", D(about="body", symptom_now="unsaid", declined=True), False),
     ("body", N(declined=True), False),
 ], ids=["themselves", "someone else", "from someone", "someone else, refused", "someone is with them",
         "someone is with them and they refuse", "no known kind", "no known kind, refused", "a doubt about a symptom",
-        "refusing help for a symptom now (2026-11-13)", "a symptom not said to be happening", "declined and nothing else"])
+        "refusing help for a symptom now (2026-11-13)",
+        "refusing help for a symptom now the model judged unsure (2026-11-23)", "a symptom not said to be happening", "declined and nothing else"])
 def test_danger_that_goes_on_pauses_for_these_kinds_and_reads(about, read, pauses):
     """muhammad, 2026-11-14: a person about to act, alone, who answered every question honestly never paused, so danger to
     themselves, to someone else or from someone pauses without a refusal; a body symptom needs one for a symptom

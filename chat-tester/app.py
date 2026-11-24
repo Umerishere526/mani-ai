@@ -196,10 +196,10 @@ if st.session_state.get("view") == "library":
     render_library(client)
     st.stop()
 
-# While the pause runs the chat page is only the pop-up: no composer, no conversations, no new one.
-if paused is not None:
+# While the pause runs the pop-up opens over the conversation, which can be read but not written in: closing the
+# pop-up with its cross leaves it. The composer, the edit icon and the suggested replies stay off until it ends.
+if paused is not None and not crisis_pause.dismissed(paused):
     crisis_pause.render(client, paused)
-    st.stop()
 
 if "thread" not in st.session_state:
     try:
@@ -216,6 +216,8 @@ thread = st.session_state.thread
 thread_id = (thread or {}).get("id")
 
 st.title("🧠 Mani chat tester")
+if paused is not None and crisis_pause.dismissed(paused):
+    crisis_pause.banner(paused)
 if developer:
     st.caption(f"user: {st.session_state.email}  ·  thread: {thread_id[:8] + '…' if thread_id else 'not started'}")
 
@@ -349,6 +351,7 @@ editable_at = (
     and len(messages) - 2 >= opening
     and (messages[-2]["role"], messages[-1]["role"]) == ("user", "mani")
     and not st.session_state.get("pending")
+    and paused is None
     else None
 )
 for index, message in enumerate(messages):
@@ -485,7 +488,7 @@ if send_error:
 latest = next((m for m in reversed(st.session_state.messages) if m["role"] == "mani"), None)
 # Hidden while a message is on its way: they answer the reply before it.
 buttons = (latest or {}).get("prompts") or []
-if buttons and not pending:
+if buttons and not pending and paused is None:
     cols = st.columns(len(buttons))
     for index, (col, button) in enumerate(zip(cols, buttons)):
         if col.button(button["label"], use_container_width=True, key=f"tap_{index}_{len(st.session_state.messages)}"):
@@ -506,7 +509,7 @@ if buttons and not pending:
 # same as if it had been typed. Only sending text calls send() - one trigger, same as a
 # typed message, no parallel path.
 # -----------------------------------------------------------------------
-if st.session_state.composer_draft is not None:
+if st.session_state.composer_draft is not None and paused is None:
     st.session_state.composer = st.session_state.composer_draft
     st.session_state.composer_draft = None
 
@@ -516,7 +519,7 @@ submitted = st.chat_input(
     "Type, or tap the mic and edit before sending…",
     key="composer",
     accept_audio=True,
-    disabled=bool(pending),
+    disabled=bool(pending) or paused is not None,
 )
 
 if submitted and submitted.audio:

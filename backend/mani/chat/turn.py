@@ -231,7 +231,7 @@ async def _apply(
     if judgment.pausing:
         # Mani's own words for this danger come first, then the pause line (muhammad, 2026-11-20).
         text = "\n\n".join(part for part in (
-            reply.text.strip(), crisis.pause_reply(judgment.about, settings.crisis_pause_minutes)) if part)
+            reply.text.strip(), crisis.pause_reply(judgment.about, settings.crisis_pause_seconds)) if part)
     elif decision.end_check:
         text = crisis.END_CHECK
     elif check is not None:
@@ -265,7 +265,7 @@ async def _apply(
     await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
     flagged = await _record_danger(conn, ctx, stood.state, judgment, pair)
     paused = await _pause_writes(conn, ctx, judgment, reply, answering=answering, pair=pair,
-                                 minutes=settings.crisis_pause_minutes)
+                                 seconds=settings.crisis_pause_seconds)
     trace = {key: value for key, value in {
         "action": reply.action, "framework": reply.framework, "stage": reply.stage,
         "safety": worry.traced(reply.safety), "paused": judgment.pausing or None,
@@ -321,14 +321,14 @@ async def _record_danger(conn, ctx, before: safety.State, judgment, pair) -> boo
     return True
 
 
-async def _pause_writes(conn, ctx, judgment, reply: TurnReply, *, answering, pair, minutes):
+async def _pause_writes(conn, ctx, judgment, reply: TurnReply, *, answering, pair, seconds):
     """An answer to the return check that settles it marks that pause checked; a pausing turn starts a pause."""
     if pair.was_duplicate:
         return None
     if answering is not None and judgment.state is safety.State.CLEAR:
         await pauses.mark_checked(conn, answering)
     if judgment.pausing:
-        return await pauses.start(conn, ctx.thread.user_id, ctx.thread.id, minutes, reply.safety.why)
+        return await pauses.start(conn, ctx.thread.user_id, ctx.thread.id, seconds, reply.safety.why)
     return None
 
 

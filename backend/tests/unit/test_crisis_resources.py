@@ -38,21 +38,22 @@ def test_the_helpline_directory_is_listed_for_every_country():
 def test_every_number_the_pause_reply_names_is_a_listed_resource():
     listed = {number for r in crisis.RESOURCES for number in (r.phone, r.sms) if number}
     for about in ("themselves", "someone_else", "from_someone", "body", None):
-        named = set(re.findall(r"\d{3,}", crisis.pause_reply(about, 15)))
+        named = set(re.findall(r"\d{3,}", crisis.pause_reply(about, 30)))
         assert "911" in named and named <= listed, about
 
 
 def test_the_pause_reply_fits_whose_danger_it_is():
     """The live replays of 2026-11-13: one reply went out for chest pain, a bee sting, a stroke and a friend's overdose,
     saying "your safety" and offering suicide lines for a body emergency."""
-    themselves = crisis.pause_reply("themselves", 15)
-    assert "your safety" in themselves and "988" in themselves and "15 minutes" in themselves
-    assert "everyone's safety" in crisis.pause_reply("someone_else", 15)
-    assert "your safety" in crisis.pause_reply("from_someone", 15), "the danger is to them"
+    themselves = crisis.pause_reply("themselves", 30)
+    assert "your safety" in themselves and "988" in themselves and "30 seconds" in themselves
+    assert "pausing our chat for 15 minutes." in crisis.pause_reply("themselves", 900)
+    assert "everyone's safety" in crisis.pause_reply("someone_else", 30)
+    assert "your safety" in crisis.pause_reply("from_someone", 30), "the danger is to them"
     for other in ("someone_else", "from_someone"):
-        assert "988" not in crisis.pause_reply(other, 15)
-    body = crisis.pause_reply("body", 15)
+        assert "988" not in crisis.pause_reply(other, 30)
+    body = crisis.pause_reply("body", 30)
     assert "your health" in body and "911" in body and "988" not in body
-    assert crisis.pause_reply(None, 15) == themselves, "an unknown danger keeps the suicide line"
+    assert crisis.pause_reply(None, 30) == themselves, "an unknown danger keeps the suicide line"
     for about in ("themselves", "someone_else", "from_someone", "body"):
-        assert crisis.pause_reply(about, 15).endswith("I'll be here when you come back."), about
+        assert crisis.pause_reply(about, 30).endswith("I'll be here when you come back."), about

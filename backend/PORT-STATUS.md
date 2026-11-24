@@ -364,9 +364,10 @@ the same change as the work.**
   - The first turn judged danger is recorded in `admin.crisis_events` with whose danger it is, never their words
     (`turn._record_danger`, `threads.mark_crisis`). `threads.crisis_at` (migration 037) keeps when it was last flagged,
     and `recent_crisis` counts its 30 days from it. An edit restores the state (`rewind`).
-  - **When danger continues with nothing in place, the chat pauses for `CRISIS_PAUSE_MINUTES` (default 15); a refusal
-    is required only for a symptom in the body; nobody is signed out, every conversation is closed, the Library stays
-    open, and the backend is the whole lock** (muhammad, 2026-11-13, and 2026-11-14 for the refusal; this replaces
+  - **When danger continues with nothing in place, the chat pauses for `CRISIS_PAUSE_SECONDS` (default 30); a refusal
+    is required only for a symptom in the body; nobody is signed out, no conversation takes a message, the Library
+    and every conversation stay readable, and the backend is the whole lock** (muhammad, 2026-11-13, and 2026-11-14 for
+    the refusal; 2026-11-23 for the 30 seconds and for reading the conversation after closing the pop-up; this replaces
     "nothing locks" of 2026-11-06 and "help refused is the only block" of 2026-11-11). Because once a crisis is certain
     Mani must stop rather than go round a loop of "please get help", and the production chat of 2026-11-14 never
     paused in 11 turns: "i want to kill myself", about to act right now, nobody with them, nobody called, every
@@ -376,7 +377,9 @@ the same change as the work.**
     it again (muhammad, 2026-11-16: asked, they say "I just want to die", and the help screen comes, "every time").
     Never a pause on the first danger message of a clear conversation: Mani's own reply comes first. A danger about
     the body pauses only when this turn's read has the symptom happening now and they refuse the help (`declined`;
-    the controller's ruling, 2026-11-13, because a doubt paused 5 of 6 body chats live); a danger of no known kind
+    the controller's ruling, 2026-11-13, because a doubt paused 5 of 6 body chats live), at the level code holds it,
+    so a symptom the model judged unsure counts as danger (muhammad, 2026-11-23: refusing an ambulance for chest pain
+    that was still happening never paused when the model said unsure); a danger of no known kind
     needs `declined` too. Accepted: a `help_in_place` misread can pause someone who has help (2026-11-14).
     On the pausing turn a `chat_pauses` row (migration 037: thread, `started_at`, `ends_at`, `reason`, `checked_at`) is
     written in the turn's transaction, the reply is `crisis.pause_reply(about)` in place of the model's text (whom
@@ -406,13 +409,15 @@ the same change as the work.**
     other conversations stop asking; see "After a pause" for when an answer pauses again. The chat-tester shows the
     client's blocker as she drew it on 2026-11-16, word for word ("Blocker.", "Chat is temporary unavailable", "For
     your safety, chat is paused for <the pause's own length>.", the Library line, the 988 line, Get help now and Go to
-    library; muhammad: exactly as drawn, the length stays 15 minutes, and the 911 line and the live timer at the bottom
+    library; muhammad: exactly as drawn, with the length the pause has (30 seconds as of 2026-11-23), and the 911 line and the live timer at the bottom
     stay though she did not draw them; the timer says "Chat resumes in", without "while you reach out", her safety
     test, point 43); the numbers come from the resources by `kind`, Get help now calls the support line (our choice),
-    the page runs again at 0:00, and its close opens the Library (`chat-tester/crisis_pause.py`,
+    the page runs again at 0:00, and its cross leaves the person's conversation to read, with the composer, the edit icon
+    and the suggested replies off and a banner with the same timer until the pause ends; Go to library opens the
+    Library (`chat-tester/crisis_pause.py`, `test_closing_the_pop_up_leaves_the_conversation_to_read_with_no_way_to_write`,
     `test_a_paused_chat_shows_only_the_clients_pop_up_and_the_library_still_opens`). The pop-up was not looked at in a
     browser.
-    `config.crisis_pause_minutes`; `chat/pause.py`, `chat/worry.py`, `db/pauses.py`, `routers/threads.py`,
+    `config.crisis_pause_seconds`; `chat/pause.py`, `chat/worry.py`, `db/pauses.py`, `routers/threads.py`,
     `auth/deps.py`; `tests/unit/test_pause.py`, `test_safety.py`, `test_worry.py`, `test_crisis_resources.py`; in
     `test_turn.py` `test_overdose_on_the_first_message_gets_manis_reply_and_the_next_message_pauses`,
     `test_a_paused_person_is_refused_before_anything_is_paid`,
@@ -589,17 +594,20 @@ the same change as the work.**
 - **Retired 2026-11-17: something new and painful holds the move to the set for one reply** (2026-11-16). Because
   the form that held the move is gone; `mani.md` holds an offer while their message brings something new and
   painful (2026-11-17).
-- **After a pause, only a message that itself says the danger is still there pauses again, and the answer to how
-  things are is read literally** (muhammad, 2026-11-16). Because in his local chat a new conversation opened with the
+- **After a pause, only a message that itself says the danger is still there, or that the model reads as danger,
+  pauses again, and the answer to how things are is read literally** (muhammad, 2026-11-16; 2026-11-23 for a danger
+  read: "I took more pills" in answer used to wait one more message when the read did not also mark `still_there`).
+  Because in his local chat a new conversation opened with the
   question about the pause, he answered "fine", the read held the pause's reason against it ("saying you're fine
   doesn't clarify whether you're away from them") and the chat paused again (2026-11-16). The facts give the reason as
   what the pause rested on earlier (`facts._pause_lines`). The first message back never pauses and gets Mani's reply
   (`Phase.ASKING` in `worry.step`); the answer to it pauses only when the reply's `safety.still_there` says
-  the danger is still there, and an unclear answer gets Mani's reply and the message after it decides. `mani.md`
+  the danger is still there or its level is danger, with nothing in place, and an unclear answer gets Mani's reply and the message after it decides. `mani.md`
   judges a safe answer to the question about a pause as none (2026-11-17, after the suite's return-check conversation
   held "i'm ok now, my sister is here and i'm safe" as unsure). The sequences "the first message back after a pause
   never pauses, whatever the read reports" and "their answer to how things are pauses only when it says the danger
-  is still there" in `test_worry.py`,
+  is still there" and "an answer read as danger pauses even when the read does not say it is still there" in
+  `test_worry.py`,
   `test_a_return_check_answer_that_is_fine_marks_the_pause_checked` in `test_turn.py`.
 - **A conversation's safety moves by one rule, a worry's kind lasts only while the worry is open, and their word that
   they are all right, in any conversation, settles every worry held from before it** (muhammad, 2026-11-19, the

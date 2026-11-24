@@ -85,10 +85,12 @@ def step(stood: Standing, read: Safety) -> Outcome:
     established until they answer. Their answer pauses only when it says the danger is still there. Otherwise danger
     pauses the chat when nothing is in place and the danger went on after Mani had answered it (the state before was
     danger), or after Mani had asked what they meant about this kind of worry and the answer says it again. A first
-    danger message out of a clear conversation gets Mani's reply first.
+    danger message out of a clear conversation gets Mani's reply first. An answer after a pause that the model reads
+    as danger says the danger is still there, whether or not it marked `still_there`.
 
     Danger to themselves, to someone else or from someone pauses without a refusal. A danger about a symptom in the
-    body pauses only when this turn's read has the symptom happening now and they refuse the help for it, and a danger
+    body pauses only when this turn's read has the symptom happening now and they refuse the help for it, at the level
+    code holds it (a symptom the model judged unsure counts as danger), and a danger
     of no known kind needs a refusal too, so a read without `about` never pauses a body chat."""
     start = State.UNSURE if stood.phase is Phase.ASKING and stood.state is State.CLEAR else stood.state
     danger = _DANGER[read.level]
@@ -98,21 +100,22 @@ def step(stood: Standing, read: Safety) -> Outcome:
     # I just want to disappear for good" and was paused with no word from Mani). A kind unknown on either side counts.
     asked = stood.state is State.UNSURE and (stood.about is None or read.about is None or stood.about == read.about)
     reopening = stood.settled and start is State.CLEAR
-    after = safety.after(start, safety.danger_of(danger, read.about, read.symptom_now, reopening=reopening),
-                         read.declined, about=about, danger_about=stood.about)
+    # The danger as code holds it: a body symptom the model judged lower that has not stopped is danger now.
+    held = safety.danger_of(danger, read.about, read.symptom_now, reopening=reopening)
+    after = safety.after(start, held, read.declined, about=about, danger_about=stood.about)
     # Unsure with no question of Mani's being answered: the first message read as no concern leaves the worry open.
     waits = (stood.state is State.UNSURE and stood.phase is Phase.ORDINARY and not stood.end_check
              and after is State.CLEAR and stood.calm + 1 < CALM_TO_CLEAR)
     if waits:
         after = State.UNSURE
     if about == "body":
-        kind_pauses = read.declined and danger == "now" and read.symptom_now == "yes"
+        kind_pauses = read.declined and held == "now" and read.symptom_now == "yes"
     else:
         kind_pauses = read.declined or about is not None
     if stood.phase is Phase.ASKING:
         goes_on = False
     elif stood.phase is Phase.ANSWERING:
-        goes_on = read.still_there
+        goes_on = read.still_there or danger == "now"
     elif stood.state is State.UNSURE:
         goes_on = asked and danger == "now"
     else:

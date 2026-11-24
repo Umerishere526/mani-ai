@@ -63,11 +63,19 @@ _PAUSE_FOR: dict[str | None, tuple[str, str]] = {
 }
 
 
-def pause_reply(about: str | None, minutes: int) -> str:
+def _length(seconds: int) -> str:
+    """A pause's length in the largest whole unit that holds it: "30 seconds", "15 minutes", "1 hour"."""
+    unit_seconds, unit = next(((n, name) for n, name in ((3600, "hour"), (60, "minute")) if seconds % n == 0),
+                              (1, "second"))
+    count = seconds // unit_seconds
+    return f"{count} {unit}" if count == 1 else f"{count} {unit}s"
+
+
+def pause_reply(about: str | None, seconds: int) -> str:
     """What Mani says on the turn that pauses the chat."""
     who, help_now = _PAUSE_FOR.get(about, _PAUSE_FOR["themselves"])
     return (
-        f"I'm worried about {who}, so I'm pausing our chat for {minutes} minutes. {help_now} "
+        f"I'm worried about {who}, so I'm pausing our chat for {_length(seconds)}. {help_now} "
         "I'll be here when you come back."
     )
 
