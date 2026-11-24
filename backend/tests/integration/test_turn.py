@@ -114,6 +114,31 @@ async def test_a_question_their_next_message_answers_is_told_as_already_answered
     assert '[situation] "What did he say?" (already answered: "called me lazy")' in facts_of(scripted)
 
 
+async def test_a_reply_reaches_them_with_its_own_question_last_and_every_sentence_whole(alice, model):
+    """At most one question per reply in every style: the one the reply chose, in any form, after its text. A question
+    the text slipped in is taken out whole; a guarded turn's words lose nothing."""
+    scripted = model(
+        said("Your sister leans on you a lot. Why do you think that is?",
+             question=Question(latest="answer", intent="situation", ask="Tell me about the last time she asked.")),
+        said("Okay.", question=Question(latest="answer", intent="wants", ask="What would you want her to hear?")),
+        said("B is for Belief. What went through your mind?", stage="belief",
+             question=Question(ask="What did you tell yourself about it?")),
+        said("That sounds frightening. Are you hurt?", level="unsure", safety=Safety(level="unsure", about="themselves"),
+             question=Question(ask="Is anyone with you right now?")),
+    )
+    thread = await start(alice, style="Directive")
+    first = await send(alice, thread.id, "my sister always asks me for money")
+    assert first.content == "Your sister leans on you a lot.\n\nTell me about the last time she asked."
+    assert first.trace["question_cut"] == "question in the text"
+    await send(alice, thread.id, "last week, again")
+    assert '[situation] "Tell me about the last time she asked."' in facts_of(scripted)
+    await put_technique(thread.id, "abcde", TechniqueOutcome.ACCEPTED, "activate")
+    stage = await send(alice, thread.id, "she called friday and i said yes")
+    assert stage.content == "B is for Belief.\n\nWhat did you tell yourself about it?"
+    guarded = await send(alice, thread.id, "i don't want to be here anymore")
+    assert guarded.content == "That sounds frightening. Are you hurt?\n\nIs anyone with you right now?"
+
+
 # Two ordinary exchanges first: an offer may come with the person's 3rd message at the earliest.
 WARM_UP = (said("Go on."), said("Tell me more."))
 

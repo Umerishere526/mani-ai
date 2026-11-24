@@ -1,4 +1,4 @@
-# ABOUTME: The few things code does to a reply's words: one question in the open chat, dashes replaced, a title tidied,
+# ABOUTME: The few things code does to a reply's words: its one question last, dashes replaced, a title tidied,
 # ABOUTME: and the client's buttons at each step of an offer. Everything else the model writes goes out as written.
 
 from __future__ import annotations
@@ -31,13 +31,18 @@ def _sentence_after(rest: str) -> bool:
     return len(words) >= 4 and words[0].lower() in _STARTS_A_SENTENCE
 
 
-def sent_text(text: str, *, open_chat: bool, latest: str) -> tuple[str, str | None]:
-    """The model's words as code sends them: an open-chat reply held to one question (`latest` is their message as the
-    reply reads it), then the dashes replaced. Gives the text and why a question was cut, or None."""
-    cut = None
-    if open_chat:
-        text, cut = questions.held_to_one(text, latest)
-    return without_dashes(text).strip(), cut
+def sent_text(text: str, ask: str, *, guarded: bool, open_chat: bool, latest: str) -> tuple[str, str, str | None]:
+    """The model's words as code sends them: the text, then its question (`ask`), held to that one question, and none
+    in the open chat after frustration with Mani (`latest` is their message as the reply reads it); then the dashes
+    replaced. A guarded turn's words lose nothing, so a safety question is never taken out. Gives the text, the
+    question it asks, and why a question was left out, or None."""
+    if guarded:
+        text, asked, cut = "\n\n".join(part for part in (text.strip(), ask.strip()) if part), "", None
+        asked = ask.strip() or questions.last_question(text)
+    else:
+        frustrated = open_chat and latest.strip().lower() == questions.FRUSTRATED
+        text, asked, cut = questions.held_to_one(text, ask, frustrated=frustrated)
+    return without_dashes(text).strip(), without_dashes(asked).strip(), cut
 
 
 def without_dashes(text: str) -> str:

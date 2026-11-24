@@ -1,5 +1,5 @@
-# ABOUTME: The turn's one reply as the model fills it: its plan, people and events, what Mani says and gives, what
-# ABOUTME: happens next, its safety judgment and notes. Field descriptions are what the model reads; they match mani.md.
+# ABOUTME: The turn's one reply as the model fills it: its question and plan, people and events, what Mani says and
+# ABOUTME: gives, what happens next, its safety judgment and notes. Field descriptions are what the model reads; they match mani.md.
 
 from __future__ import annotations
 
@@ -34,8 +34,9 @@ class Safety(BaseModel):
 
 
 class Question(BaseModel):
-    """What the reply's question is for, decided before the words. Plain text, so an odd value never fails the reply;
-    code reads `latest`, keeps `intent` beside the question it asked and `answered` beside the one before."""
+    """The reply's one question and what it is for, decided before the words. Plain text, so an odd value never fails
+    the reply; code reads `latest`, sends `ask` after the text, keeps `intent` beside it and `answered` beside the one
+    before."""
 
     latest: str = Field(default="", description=(
         "Their latest message, in one word: answer, adds_more, asks_mani, frustrated (with you), wants_to_stop or other."))
@@ -46,6 +47,10 @@ class Question(BaseModel):
         "What this reply's question is for: situation, feeling, belief, wants or step. none when it asks nothing."))
     why_now: str = Field(default="", description=(
         "One short line: why this question fits here, from what they just said and what you already know, or why "
+        "this reply asks nothing."))
+    ask: str = Field(default="", description=(
+        "The one question this reply asks, exactly as they will read it, with the short line that leads into it if you "
+        "use one. Asking them to tell or describe something is a question too. Code puts it after your text. Empty when "
         "this reply asks nothing."))
 
 
@@ -81,14 +86,16 @@ Action = Literal["none", "offer", "finish", "stop", "library"]
 
 
 class TurnReply(BaseModel):
-    question: Question = Field(default_factory=Question, description="Your plan for this reply's question, before you write.")
+    question: Question = Field(default_factory=Question, description="This reply's question and your plan for it, before you write.")
     people: list[Person] = Field(default_factory=list, description=(
         "Everyone they have spoken of in this conversation, rewritten whole each turn from the list in the facts and "
         "their latest message. Change an entry only when they add to it or correct it. At most 8."))
     events: list[Event] = Field(default_factory=list, description=(
         "What happened, is happening or is coming, as they said it, rewritten whole each turn the same way. An upcoming "
         "event becomes past only when they say it happened. At most 10."))
-    text: str = Field(description="What you say to them, exactly as they will read it.")
+    text: str = Field(description=(
+        "What you say to them before your question, exactly as they will read it. It never asks anything: your one "
+        "question goes only in question.ask."))
     said: Said = Field(default_factory=Said, description="What your text gives them.")
     action: Action = Field(
         default="none", description="What happens after this reply."

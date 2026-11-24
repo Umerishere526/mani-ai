@@ -233,25 +233,27 @@ async def _apply(
         end_check_due=bool(record.get(rec.DANGER_REACHED)) and rec.end_check(record) != rec.END_CHECK_DONE,
         end_check_asked=end_check_asked, person_messages=person_messages,
     )
+    ask = ""
     if judgment.pausing:
         # Mani's own words for this danger come first, then the pause line (muhammad, 2026-11-20).
         text = "\n\n".join(part for part in (
-            reply.text.strip(), crisis.pause_reply(judgment.about, settings.crisis_pause_seconds)) if part)
+            reply.text.strip(), reply.question.ask.strip(),
+            crisis.pause_reply(judgment.about, settings.crisis_pause_seconds)) if part)
     elif decision.end_check:
         text = crisis.END_CHECK
     elif check is not None:
         text = crisis.RETURN_DANGER_REPLY if reply.safety.level == "danger" else crisis.RETURN_CHECK_REPLY
     else:
-        text = reply.text
-    # The open chat, with no set, offer or safety worry in play: there code holds the reply to one question, and none
-    # after frustration, and keeps the question it asked. A stage's question, a lead-in and a safety question are left.
+        text, ask = reply.text, reply.question.ask
+    # Every reply asks one question at most, its own, after its text; a guarded turn's words lose nothing. The open
+    # chat, with no set, offer or safety worry in play, asks none after frustration and keeps the question it asked.
     # An offer code refused leaves the reply in the open chat: no buttons follow its lead-in.
     open_chat = questions.in_open_chat(
         in_play=running is not None or open_offer is not None or decision.technique is not None, guarded=guarded,
         action="none" if decision.refused == "offer" else reply.action)
-    text, cut = sent_text(text, open_chat=open_chat, latest=reply.question.latest)
+    text, asked, cut = sent_text(text, ask, guarded=guarded, open_chat=open_chat, latest=reply.question.latest)
     # What the reply asked and gave, kept before code adds its own pieces; the fixed words for an empty reply give none.
-    entry = _ledger_entry(reply, text, open_chat=open_chat) if text else None
+    entry = _ledger_entry(reply, text, asked, open_chat=open_chat) if text else None
     if not text and not answer_failure:
         raise ServiceError(f"reply on thread {ctx.thread.id} was empty", ErrorCategory.LLM_UNAVAILABLE, retryable=True,
                            user_message="Mani had trouble responding. Please try again.")
@@ -298,10 +300,9 @@ async def _apply(
     )
 
 
-def _ledger_entry(reply: TurnReply, text: str, *, open_chat: bool) -> dict:
-    """What the reply asked and gave, as rec.with_reply takes it: its last question with its job (in a set, the stage it
-    asks), whether it was in the open chat, its move and gist, and its text."""
-    asked = questions.asked_in(text)
+def _ledger_entry(reply: TurnReply, text: str, asked: str, *, open_chat: bool) -> dict:
+    """What the reply asked and gave, as rec.with_reply takes it: the question it sent with its job (in a set, the stage
+    it asks), whether it was in the open chat, its move and gist, and its text."""
     intent = reply.question.intent.strip().lower()
     if not asked:
         intent = "none"
@@ -309,7 +310,7 @@ def _ledger_entry(reply: TurnReply, text: str, *, open_chat: bool) -> dict:
         intent = reply.stage
     elif intent not in questions.INTENTS:
         intent = "unsaid"
-    return {"question": asked[-1] if asked else "", "intent": intent, "open_chat": open_chat, "move": reply.said.move,
+    return {"question": asked, "intent": intent, "open_chat": open_chat, "move": reply.said.move,
             "gist": reply.said.gist, "text": text}
 
 
