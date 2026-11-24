@@ -214,7 +214,8 @@ the same change as the work.**
   draft from the client's documents awaiting muhammad's approval, and the suite has not yet made a live run.
   `evals/regression/`, `tests/unit/test_regression_checks.py`, `.github/workflows/regression.yml` (manual dispatch)
   and `backend-unit.yml` (every push), `.gitignore` (`evals/results/summaries/`).
-- **Directive replies are short and human: two or three short sentences, at most one point and not every reply, a
+- **Directive replies are short and human: two or three short sentences in the chat and inside the set (where it
+  says back no summary; what it understood goes into its question), at most one point and not every reply, a
   few of their own words to show it heard them, then it stays or asks the one question that moves them on (never a
   pick-from-several), never going back over what was said, never saying sorry (it says what they are trying to say
   instead, muhammad, 2026-11-24), and A asks for one specific recent event** (muhammad,
@@ -227,8 +228,9 @@ the same change as the work.**
   which keep their own length (see the build-up entry below), their possibilities questions and their A. If the eval still finds long Directive replies,
   the next step is code counting sentences and asking once more, not another line. `mani.md`; eval
   `rule-directive-short`, `rule-directive-open-question`, `max_sentences`.
-- **Every reading is a possibility, each point is made once, and no causal claim the person hasn't made** (muhammad,
-  2026-11-18). Because the client's promotion-chat review found readings stated as fact ("That is the core of it"),
+- **Mani says only what they said, in their tense, about the person they said it of, and assumes no gender; every
+  reading is a possibility, each point is made once, and no causal claim the person hasn't made** (muhammad,
+  2026-11-18; fidelity added 2026-11-24 from Lolly's and manasa's tests of 11/17-11/23). Because the client's promotion-chat review found readings stated as fact ("That is the core of it"),
   the same reassurance four times, and "That silence probably reinforced the feeling", which blamed the person. All
   styles. `mani.md` ("What a good reply gives").
 - **Inside a set the belief is never argued with before D, and the set opens with one bridge sentence before "A is for
@@ -700,6 +702,15 @@ the same change as the work.**
   2026-11-24). Because without it a token from any issuer holding a trusted key was accepted. If production
   `SUPABASE_URL` is a custom domain, check it matches the issuer on real tokens before deploying. `Settings.jwt_issuer`,
   `tests/unit/test_auth.py`.
+- **Mani never uses the Behavioral Framework's 21 forbidden words or the Safety Guardrails' comfort lines and their
+  close variants, in the prompt or in fixed text** (muhammad, 2026-11-24). Because the client's specifications forbid
+  them and the prompt and `crisis.py` taught some of them ("I'm not going anywhere", "I'll be here when you come
+  back"). `mani.md` "How you sound", `crisis.CRISIS_REPLY`, `crisis.pause_reply`; `evals/reply_rules.py` checks them.
+- **Every style gives the practical help asked for (ideas, guidance, a reminder, practice) in that reply, and
+  Directive moves toward solutions sooner** (muhammad, 2026-11-24). Because of Lolly's 2026-11-20 answers, which
+  supersede the 2026-11-17 overrule of R94 and R105 (the chat gave no solutions). A practice request is answered with
+  the library; Mani still writes no exercise of its own. `mani.md` "How you listen"; eval `rule-help-when-asked`,
+  `rule-ideas-*`.
 - **Each model call's cost is OpenRouter's billed `usage.cost`, stored in `admin.llm_calls.cost_usd`; nothing reads
   `/generation` for cost** (muhammad, 2026-11-24). Because the usage block already carries it, and fetching each call
   afterwards was slow and could lag. The exact digits OpenRouter sent are stored (a float would store its binary
@@ -821,7 +832,8 @@ the same change as the work.**
   too late or never (on 2026-11-16 muhammad's Directive chat had to type "framework?" at its 23rd message), while the
   spike's live tests showed sensible timing with the rule in the prompt (2026-11-17); and because manasa's tests of
   2026-11-16 had ABCDE offered again two replies after she turned it down and again after she finished it (R91, R92).
-  `mani.md` "Offering the set of questions": offer once the core was said back in an earlier reply and not corrected,
+  `mani.md` "Offering the set of questions": offer once the core is clear and they want help with something it stands in the way of, in the
+  reply that answers them, a belief alone never being enough (Lolly 2026-11-20, approved by muhammad 2026-11-24),
   and their latest message does not correct, ask, show frustration or bring something new and painful; never as a way
   out of frustration. Retired with it (approved by muhammad, 2026-11-17; the prompt holds both): "an offer only after
   Mani has said the core back", with the stored count of the last check (dropped by migration 040), and "code never
@@ -893,8 +905,8 @@ the same change as the work.**
   Feel more focused / I'm not sure yet (the words changed 2026-11-24, muhammad: "Still a bit tired" put a feeling in their
   mouth), and the next answer closes the set with Keep Chatting, Go to Library and Finish for
   Now and records it finished (phase `feelings_check`, `decide._moved`; 2026-11-18). The closing reply answers warmly
-  and asks whether they want to think about a practical next step, since feeling better is not the situation solved
-  (the client's promotion-chat review; muhammad, 2026-11-18; `facts._running_line`). E ends on the new belief, with no
+  and forces no question: a next step only when useful, a check only when it is unclear they got what they came for
+  (Lolly 2026-11-20, approved by muhammad 2026-11-24, superseding R120; `facts._running_line`). E ends on the new belief, with no
   "one thing they'll do" (muhammad, 2026-11-18). `action: stop` records the set declined. A set starts on a tap on
   Start for the offer still open (`taps.tap_event`), or on a typed yes after its five steps when the reply moves to
   its first stage. The facts name the stage in force, the next stage's line and the one-step
