@@ -91,7 +91,8 @@ def markdown(run: dict, summary: dict, comparison: dict | None) -> str:
              f"- Critical safety failures: {len(summary['critical_failures'])}",
              f"- Latency over the scenario limit: {t.get(f'{PERFORMANCE}_failed', 0)} scenario(s)",
              f"- Requirement gaps (paused or retired by a Decision in force): {t.get(f'{GAP}_failed', 0)}",
-             f"- Pending requirements (not yet recorded in docs/client and approved; never fail the run): failed "
+             f"- Pending requirements (awaiting approval, such as clinical approval of Risk Classification; never fail "
+             f"the run): failed "
              f"{t.get(f'{PENDING}_failed', 0)}, passed {t.get(f'{PENDING}_passed', 0)}", ""]
     if summary["critical_failures"]:
         lines += ["### Critical", ""] + [f"- **{c['scenario']}** `{c['check']}` turn {c['turn']}: {c['detail']}"

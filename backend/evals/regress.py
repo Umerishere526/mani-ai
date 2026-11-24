@@ -129,7 +129,8 @@ async def main(argv: list[str]) -> int:
         status = "GAP " if s["status"] == "gap" else ("FAIL" if failed else "PASS")
         print(f"{status}  {s['id']:<8} {', '.join(failed)}{f'  pending: {", ".join(pending)}' if pending else ''}")
     totals = report.summarize(run)["totals"]
-    print(f"\nPending requirements, never failing the run: {totals.get(f'{checks.PENDING}_failed', 0)} failed, "
+    print(f"\nPending requirements (awaiting approval), never failing the run: "
+          f"{totals.get(f'{checks.PENDING}_failed', 0)} failed, "
           f"{totals.get(f'{checks.PENDING}_passed', 0)} passed.")
     print(f"Report: {out}")
     return _exit_code(run, args.strict_latency)

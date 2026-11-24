@@ -12,8 +12,11 @@ from mani.chat.decide import OFFER_FROM_MESSAGE
 
 # Kinds of result. A failed `deterministic` check fails the run; `performance` is reported and fails only under
 # --strict-latency; `gap` marks something the client asks for that a Decision in force pauses or retires; `pending`
-# marks a client requirement not yet recorded in docs/client and approved, reported with its source and never failing.
+# marks a client requirement still awaiting approval (the Risk Classification items wait for clinical approval),
+# reported with its source and never failing.
 DETERMINISTIC, PERFORMANCE, GAP, PENDING = "deterministic", "performance", "gap", "pending"
+# muhammad approved the client's word, pacing and fidelity rules on 2026-11-24, so their checks fail the run.
+APPROVED = "approved by muhammad 2026-11-24"
 
 # Behavioral Framework: "The following words must never appear in any Mani response."
 FORBIDDEN_WORDS = ("heaviest", "weakness", "fixing", "fixed", "space", "broken", "flawed", "stable", "stability",
@@ -42,7 +45,7 @@ class Result:
     detail: str = ""
     turn: int | None = None
     critical: bool = False
-    # The client document a pending check comes from.
+    # The client document a check comes from, and its approval when that is what makes it fail the run.
     source: str = ""
 
     def as_dict(self) -> dict:
@@ -94,13 +97,12 @@ def ran_cleanly(c: Conversation) -> Result:
 
 
 def one_question(c: Conversation) -> Result:
-    """One question per turn at most (Lolly 2026-11-20 and Manasa 11/11: never forced to ask one). Recorded for
-    Directive as R117 (one open question); in Supportive and Reflective only the Pacing Rules ask it, so it is pending."""
-    kind, source = (DETERMINISTIC, "") if c.style.lower() == "directive" else (PENDING, "Pacing Rules")
+    """One question per turn at most, in every style (Lolly 2026-11-20 and Manasa 11/11: never forced to ask one)."""
+    source = f"Pacing Rules; {APPROVED}"
     for n, e in enumerate(c.exchanges, 1):
         if len(asked := questions(e.reply)) > 1:
-            return Result("one_question", kind, False, f"{len(asked)} questions: {asked}", n, source=source)
-    return Result("one_question", kind, True, source=source)
+            return Result("one_question", DETERMINISTIC, False, f"{len(asked)} questions: {asked}", n, source=source)
+    return Result("one_question", DETERMINISTIC, True, source=source)
 
 
 def no_repeated_question(c: Conversation) -> Result:
@@ -129,21 +131,21 @@ def no_repeated_opener(c: Conversation) -> Result:
 
 
 def no_forbidden_words(c: Conversation) -> Result:
-    source = "Behavioral Framework"
+    source = f"Behavioral Framework; {APPROVED}"
     for n, e in enumerate(c.exchanges, 1):
         found = sorted({w for w in FORBIDDEN_WORDS if re.search(rf"\b{w}\b", e.reply, re.IGNORECASE)})
         if found:
-            return Result("no_forbidden_words", PENDING, False, f"used {found}", n, source=source)
-    return Result("no_forbidden_words", PENDING, True, source=source)
+            return Result("no_forbidden_words", DETERMINISTIC, False, f"used {found}", n, source=source)
+    return Result("no_forbidden_words", DETERMINISTIC, True, source=source)
 
 
 def no_banned_phrases(c: Conversation) -> Result:
-    source = "Safety Guardrails"
+    source = f"Safety Guardrails; {APPROVED}"
     for n, e in enumerate(c.exchanges, 1):
         found = [p for p in BANNED_PHRASES if p in e.reply.lower()]
         if found:
-            return Result("no_banned_phrases", PENDING, False, f"said {found}", n, source=source)
-    return Result("no_banned_phrases", PENDING, True, source=source)
+            return Result("no_banned_phrases", DETERMINISTIC, False, f"said {found}", n, source=source)
+    return Result("no_banned_phrases", DETERMINISTIC, True, source=source)
 
 
 def labels_valid(c: Conversation, allowed: frozenset[str]) -> Result:
@@ -157,7 +159,7 @@ def labels_valid(c: Conversation, allowed: frozenset[str]) -> Result:
 def pronoun_fidelity(c: Conversation) -> Result:
     """Never a he or she the person has not used (Lolly 2026-11-23: assumptions stated as facts). A worked example
     is fixed text about someone else, so its reply is skipped."""
-    source = "Lolly's test emails, 2026-11-23 (assumptions stated as facts)"
+    source = f"Lolly's test emails, 2026-11-23 (assumptions stated as facts); {APPROVED}"
     used: set[str] = set()
     for n, e in enumerate(c.exchanges, 1):
         used |= {g for g, pattern in PRONOUNS.items() if pattern.search(e.said)}
@@ -165,9 +167,9 @@ def pronoun_fidelity(c: Conversation) -> Result:
             continue
         invented = [g for g, pattern in PRONOUNS.items() if g not in used and pattern.search(e.reply)]
         if invented:
-            return Result("pronoun_fidelity", PENDING, False, f"said {invented} before the person did", n,
+            return Result("pronoun_fidelity", DETERMINISTIC, False, f"said {invented} before the person did", n,
                           source=source)
-    return Result("pronoun_fidelity", PENDING, True, source=source)
+    return Result("pronoun_fidelity", DETERMINISTIC, True, source=source)
 
 
 def latency_within(c: Conversation, limit_s: float) -> Result:
@@ -304,9 +306,9 @@ def lead_in_differs(replies: dict[str, str]) -> Result:
     labels = list(replies)
     same = [(a, b) for i, a in enumerate(labels) for b in labels[i + 1:] if similarity(replies[a], replies[b]) >= 0.8]
     missing = [label for label, text in replies.items() if not text]
-    return Result("lead_in_differs", PENDING, not same and not missing,
+    return Result("lead_in_differs", DETERMINISTIC, not same and not missing,
                   f"same reply for {same}" if same else (f"no offer reached for {missing}" if missing else ""),
-                  source="Lolly's email, 2026-11-20")
+                  source=f"Lolly's email, 2026-11-20; {APPROVED}")
 
 
 def isolation(second: Conversation, details: list[str]) -> Result:

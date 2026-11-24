@@ -203,10 +203,10 @@ the same change as the work.**
   stock phrases: 3.42, none of the phrases in 75 replies, rules 30 of 33 (the model suggested answers on the passive
   wish-not-to-wake case in 2 of 3 runs, judged unsure, so code drops them; one Directive close a sentence long); the
   suite passed 8 of 8 both times.
-- **The conversation regression suite (`evals/regress.py`, TC-01 to TC-15) runs by hand only, against a local or
-  dedicated test database; its deterministic checks fail it; its judged scores, requirement gaps and pending client requirements (not yet
-  recorded in docs/client and approved, each with its source) never do, and each
-  run's summary is committed** (muhammad, 2026-11-24). Because manual testing repeated the same conversations, every
+- **The conversation regression suite (`evals/regress.py`) runs by hand only, against a local or dedicated test
+  database; its deterministic checks fail it, including the client's word, pacing and fidelity rules approved by
+  muhammad 2026-11-24; its judged scores, requirement gaps and pending requirements (the Risk Classification items
+  awaiting clinical approval) never do, and each run's summary is committed** (muhammad, 2026-11-24). Because manual testing repeated the same conversations, every
   live run spends the client's credit, and comparing runs needs the earlier results. Paused frameworks and the deleted body check-in
   are reported as gaps; the offer-by-the-fifth-message check is removed (the client withdrew it, Lolly 2026-11-20:
   "should not require a fixed number of exchanges"). The scenarios are a
