@@ -1,5 +1,5 @@
-# ABOUTME: Latency, token, retry and cost figures for the regression suite: wall time per turn from the driver, the
-# ABOUTME: model's side from admin.llm_calls, and each call's cost from OpenRouter's generation record when asked.
+# ABOUTME: Latency, token, retry and cost figures for the regression suite: wall time per turn from the driver, and the
+# ABOUTME: model's side, each call's billed cost included, from admin.llm_calls.
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import math
 import uuid
 
 import asyncpg
-import httpx
 
 from evals.drive import Conversation
 from mani.db.llm_calls import Outcome
@@ -30,20 +29,9 @@ async def chat_calls(conn: asyncpg.Connection, thread_ids: list[uuid.UUID]) -> l
     """Every chat attempt the threads made, a retry being its own row."""
     rows = await conn.fetch(
         "select message_id, model, latency_ms, input_tokens, output_tokens, cached_input_tokens, reasoning_tokens, "
-        "outcome::text as outcome, generation_id from admin.llm_calls "
+        "outcome::text as outcome, cost_usd from admin.llm_calls "
         "where thread_id = any($1::uuid[]) and purpose = 'chat' order by created_at", thread_ids)
     return [dict(r) for r in rows]
-
-
-async def generation_cost(http: httpx.AsyncClient, base_url: str, api_key: str, generation_id: str) -> float | None:
-    """OpenRouter's billed cost for one generation, or None when it cannot be read (it can lag a few seconds)."""
-    try:
-        r = await http.get(f"{base_url}/generation", params={"id": generation_id}, timeout=20,
-                           headers={"Authorization": f"Bearer {api_key}"})
-        r.raise_for_status()
-        return (r.json().get("data") or {}).get("total_cost")
-    except (httpx.HTTPError, ValueError):
-        return None
 
 
 def turn_figures(conversation: Conversation) -> list[dict]:
@@ -58,10 +46,10 @@ def turn_figures(conversation: Conversation) -> list[dict]:
     return out
 
 
-def usage(calls: list[dict], model_turns: int, costs: list[float | None]) -> dict:
-    """Tokens and retries across a scenario's chat calls; cost only when every call's cost was read."""
-    known = [c for c in costs if c is not None]
-    total_cost = sum(known) if costs and len(known) == len(costs) else None
+def usage(calls: list[dict], model_turns: int) -> dict:
+    """Tokens and retries across a scenario's chat calls; cost only when every call recorded one."""
+    costs = [c["cost_usd"] for c in calls]
+    total_cost = float(sum(costs)) if costs and all(c is not None for c in costs) else None
     return {
         "calls": len(calls),
         "retries": max(0, len(calls) - model_turns),

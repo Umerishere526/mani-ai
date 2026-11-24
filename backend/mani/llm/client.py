@@ -116,7 +116,7 @@ def _generation_id_of(exc: BaseException) -> str | None:
 
 
 def _usage_of(exc: BaseException) -> llm_calls.Usage:
-    """The tokens a failed attempt was billed for, when the SDK kept the completion."""
+    """The tokens a failed attempt was billed for, and what it cost, when the SDK kept the completion."""
     usage = getattr(getattr(exc, "completion", None), "usage", None)
     if usage is None:
         return llm_calls.Usage()
@@ -127,6 +127,8 @@ def _usage_of(exc: BaseException) -> llm_calls.Usage:
         reasoning_tokens=(
             getattr(usage.completion_tokens_details, "reasoning_tokens", None) or 0
         ),
+        # OpenRouter's own field; the SDK keeps fields it does not declare as attributes.
+        cost_usd=getattr(usage, "cost", None),
     )
 
 

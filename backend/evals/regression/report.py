@@ -126,7 +126,7 @@ def markdown(run: dict, summary: dict, comparison: dict | None) -> str:
         d = lat[key]
         lines.append(f"| {name} | {d['n']} | {fmt(d['p50'])} | {fmt(d['p95'])} | {fmt(d['p99'])} | {fmt(d['max'])} |")
     lines += ["", f"p99 over {lat['end_to_end_s']['n']} turns is indicative only.", "",
-              f"Cost: {'$' + format(summary['cost_usd'], '.5f') if summary['cost_usd'] is not None else 'unknown (needs --cost, and every call’s cost readable from OpenRouter)'}", ""]
+              f"Cost: {'$' + format(summary['cost_usd'], '.5f') if summary['cost_usd'] is not None else 'unknown (a chat call recorded no cost)'}", ""]
     if comparison:
         lines += [f"## Against {comparison['previous_run']}", "",
                   f"- Newly failing: {', '.join(comparison['newly_failing']) or 'none'}",

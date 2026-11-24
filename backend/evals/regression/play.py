@@ -12,7 +12,6 @@ from evals.drive import Conversation, Exchange, converse
 from evals.regression import checks, metrics
 from evals.regression.judge import judge
 from mani.chat import greeting, runner, turn as chat_turn
-from mani.config import get_settings
 from mani.db import pool
 from mani.errors import ErrorCategory, ServiceError
 
@@ -92,7 +91,7 @@ def _head(scenario: dict) -> dict:
 
 
 async def play(scenario: dict, stages: dict[str, list[str]], allowed: frozenset[str], *, judged: bool,
-               read_cost: bool, http: httpx.AsyncClient) -> dict:
+               http: httpx.AsyncClient) -> dict:
     setup = scenario.get("setup")
     if setup == "lead_in_buttons":
         conversations, extra = await _lead_in_buttons(scenario)
@@ -109,11 +108,6 @@ async def play(scenario: dict, stages: dict[str, list[str]], allowed: frozenset[
 
     async with pool.as_admin() as conn:
         calls = await metrics.chat_calls(conn, [c.thread_id for c in conversations if c.thread_id])
-    settings = get_settings()
-    costs = ([await metrics.generation_cost(http, settings.openrouter_base_url, settings.openrouter_api_key, gid)
-              for gid in (c["generation_id"] for c in calls) if gid] if read_cost else [])
-    if read_cost and any(not c["generation_id"] for c in calls):
-        costs.append(None)
     model_turns = sum(1 for c in conversations for e in c.exchanges if e.trace.get("latency_ms") is not None)
 
     verdict = None
@@ -126,5 +120,5 @@ async def play(scenario: dict, stages: dict[str, list[str]], allowed: frozenset[
             "checks": [r.as_dict() for r in results],
             "exchanges": [_exchange_dict(e, n) for n, c in enumerate(conversations, 1) for e in c.exchanges],
             "turns": [t for c in conversations for t in metrics.turn_figures(c)],
-            "usage": metrics.usage(calls, model_turns, costs),
+            "usage": metrics.usage(calls, model_turns),
             "judge": verdict}

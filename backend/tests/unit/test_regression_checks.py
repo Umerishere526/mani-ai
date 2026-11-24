@@ -1,6 +1,8 @@
 # ABOUTME: Checks the regression suite's checks on built conversations: offer timing, stage order, repeats, invented
 # ABOUTME: pronouns, forbidden words, safety handling, isolation, pending requirements, and the run-to-run figures.
 
+from decimal import Decimal
+
 from evals import regress
 from evals.drive import Conversation, Exchange
 from evals.regression import checks, metrics, report
@@ -132,9 +134,18 @@ def test_percentiles_are_nearest_rank_and_retries_are_calls_beyond_the_turns():
     assert metrics.percentile([1.0, 2.0, 3.0, 4.0], 99) == 4.0
     assert metrics.percentile([], 50) is None
     call = {"model": "m", "outcome": "ok", "input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 5,
-            "reasoning_tokens": 0}
-    figures = metrics.usage([call, {**call, "outcome": "timeout"}, call], model_turns=2, costs=[0.1, None, 0.1])
+            "reasoning_tokens": 0, "cost_usd": Decimal("0.1")}
+    figures = metrics.usage([call, {**call, "outcome": "timeout", "cost_usd": None}, call], model_turns=2)
     assert (figures["retries"], figures["failed_calls"], figures["cost_usd"]) == (1, 1, None)
+
+
+def test_a_scenarios_cost_is_the_sum_of_its_stored_call_costs():
+    call = {"model": "m", "outcome": "ok", "input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 5,
+            "reasoning_tokens": 0}
+    figures = metrics.usage([{**call, "cost_usd": Decimal("0.0042")}, {**call, "cost_usd": Decimal("0.0018")}],
+                            model_turns=2)
+    assert figures["cost_usd"] == 0.006
+    assert figures["cost_per_turn_usd"] == 0.003
 
 
 def test_the_comparison_names_checks_that_changed_outcome():

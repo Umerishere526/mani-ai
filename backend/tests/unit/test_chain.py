@@ -107,11 +107,32 @@ def test_usage_falls_back_to_the_providers_own_shape():
     assert usage.reasoning_tokens == 12
 
 
+def test_the_billed_cost_is_read_from_openrouters_usage_block():
+    """LangChain copies only the token counts into usage_metadata; OpenRouter's `cost` stays in the usage block it
+    keeps whole under response_metadata, which is where a streamed reply's final chunk leaves it."""
+    raw = SimpleNamespace(
+        usage_metadata={"input_tokens": 7000, "output_tokens": 300, "input_token_details": {"cache_read": 4096}},
+        response_metadata={
+            "model_provider": "openai", "finish_reason": "stop", "id": "gen-1760400000-abc",
+            "token_usage": {
+                "prompt_tokens": 7000, "completion_tokens": 300, "total_tokens": 7300,
+                "prompt_tokens_details": {"cached_tokens": 4096, "audio_tokens": None},
+                "completion_tokens_details": None,
+                "cost": 0.00184215, "is_byok": False, "cost_details": {"upstream_inference_cost": None},
+            },
+        },
+    )
+    usage = chain.usage_from(raw)
+    assert (usage.input_tokens, usage.cached_input_tokens) == (7000, 4096)
+    assert usage.cost_usd == 0.00184215
+
+
 def test_a_missing_response_costs_nothing_rather_than_raising():
     """A failed call still writes its admin.llm_calls row; it must not fail on the way."""
     empty = chain.usage_from(None)
     assert (empty.input_tokens, empty.output_tokens, empty.cached_input_tokens) == (0, 0, 0)
     assert empty.reasoning_tokens == 0
+    assert empty.cost_usd is None
 
 
 def test_a_reasoning_model_is_not_sent_a_temperature():

@@ -150,7 +150,7 @@ async def test_a_provider_error_is_not_retried_by_the_schema_loop(monkeypatch, r
     assert [c["outcome"] for c in recorded] == [llm_calls.Outcome.PROVIDER_ERROR]
 
 
-def cut_off(output_tokens: int = 2048, reasoning: int = 0) -> openai.LengthFinishReasonError:
+def cut_off(output_tokens: int = 2048, reasoning: int = 0, cost: float | None = None) -> openai.LengthFinishReasonError:
     """What the SDK raises from inside the model step when the reply hits max_tokens.
 
     Raised, not returned: with a response_format LangChain calls the SDK's parse(), which
@@ -165,13 +165,14 @@ def cut_off(output_tokens: int = 2048, reasoning: int = 0) -> openai.LengthFinis
                 total_tokens=100 + output_tokens,
                 prompt_tokens_details={"cached_tokens": 60},
                 completion_tokens_details={"reasoning_tokens": reasoning},
+                cost=cost,
             ),
         )
     )
 
 
 async def test_a_reply_cut_off_by_the_token_limit_is_retried(monkeypatch, recorded):
-    runnable = FakeRunnable(cut_off(reasoning=1955), valid("second try"))
+    runnable = FakeRunnable(cut_off(reasoning=1955, cost=0.0061), valid("second try"))
     install(monkeypatch, runnable)
 
     call = await client.complete(
@@ -188,6 +189,7 @@ async def test_a_reply_cut_off_by_the_token_limit_is_retried(monkeypatch, record
     assert failed["usage"].output_tokens == 2048
     assert failed["usage"].reasoning_tokens == 1955
     assert failed["usage"].cached_input_tokens == 60
+    assert failed["usage"].cost_usd == 0.0061
 
 
 async def test_a_failed_second_attempt_does_not_repeat_the_first_attempts_tokens(
@@ -328,7 +330,8 @@ def openrouter_stream(content: str, generation_id: str, finish_reason: str = "st
             delta = {"role": "assistant", "content": piece}
             yield f"data: {json.dumps({**base, 'choices': [{'index': 0, 'delta': delta, 'finish_reason': None}]})}\n\n".encode()
         yield f"data: {json.dumps({**base, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': finish_reason}]})}\n\n".encode()
-        usage = {"prompt_tokens": 7000, "completion_tokens": 300, "total_tokens": 7300}
+        usage = {"prompt_tokens": 7000, "completion_tokens": 300, "total_tokens": 7300, "cost": 0.0042, "is_byok": False,
+                 "prompt_tokens_details": {"cached_tokens": 0}, "cost_details": {"upstream_inference_cost": None}}
         yield f"data: {json.dumps({**base, 'choices': [], 'usage': usage})}\n\n".encode()
         yield b"data: [DONE]\n\n"
 
@@ -411,6 +414,7 @@ async def test_a_streamed_reply_records_its_usage_and_generation(monkeypatch, re
 
     assert call.value.text == "hello"
     assert (call.usage.input_tokens, call.usage.output_tokens) == (7000, 300)
+    assert call.usage.cost_usd == 0.0042, "OpenRouter's billed cost survives LangChain's stream"
     assert [(r["outcome"], r["generation_id"]) for r in recorded] == [(llm_calls.Outcome.OK, "gen-streamed")]
 
 

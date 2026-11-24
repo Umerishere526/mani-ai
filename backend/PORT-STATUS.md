@@ -699,6 +699,10 @@ the same change as the work.**
   2026-11-24). Because without it a token from any issuer holding a trusted key was accepted. If production
   `SUPABASE_URL` is a custom domain, check it matches the issuer on real tokens before deploying. `Settings.jwt_issuer`,
   `tests/unit/test_auth.py`.
+- **Each model call's cost is OpenRouter's billed `usage.cost`, stored in `admin.llm_calls.cost_usd`; nothing reads
+  `/generation` for cost** (muhammad, 2026-11-24). Because the usage block already carries it, and fetching each call
+  afterwards was slow and could lag. The exact digits OpenRouter sent are stored (a float would store its binary
+  expansion). `chain.usage_from`, `tests/unit/test_chain.py`, `tests/integration/test_queries.py`, migration 044.
 - **Retired 2026-11-16 (superseded) and 2026-11-17: every conversation turns from understanding to helping, and
   code names the turn and the help move** (muhammad, 2026-10-27). Because the state and note lines that carried
   it are gone; `mani.md` says what Mani does when they ask what to do (2026-11-17).
@@ -1004,7 +1008,7 @@ Ordered by what breaks first.
    muhammad's local dev database already records version 042 for it.
 3. **Rate limit and cost ceiling.** `DAILY_MESSAGE_LIMIT` exists and defaults to 0 (off); muhammad sets it in the
    environment. `MINUTE_MESSAGE_LIMIT` is 10, and neither applies while a safety worry is open. There is no per user
-   cost ceiling; `llm_calls.spend_since()` is what one would read. A retried send with the same `client_message_id`
+   cost ceiling; `admin.llm_calls.cost_usd` (migration 044) is what one would sum. A retried send with the same `client_message_id`
    returns the first reply for free.
 4. **Crisis resources are reference numbers, US only.** `crisis.RESOURCES` holds 911, the 988 Suicide & Crisis
    Lifeline and Crisis Text Line (muhammad, 2026-11-13); `crisis.pause_reply` names 911, and 988 for themselves or an
@@ -1016,7 +1020,8 @@ Ordered by what breaks first.
 5. **The OpenRouter balance and the chat's hosts.** The chat runs only on six zero-data-retention hosts; when none
    answers, every turn gets the fixed reply. A low balance limits parallel calls and returns 402: keep the account
    topped up and watch for 402 errors (the design's risks, 2026-11-17).
-6. **Migrations are not run by anything.** `supabase db push` is manual.
+6. **Migrations are not run by anything.** `supabase db push` is manual. Migration 044 (`llm_calls.cost_usd`) must be pushed before or with the
+   deploy that records it: the code writes the column on every model call (2026-11-24).
 7. **The catch-up cron needs Vercel Pro.** `backend/vercel.json` calls `/internal/cron/catch-up` every 5 minutes,
    with `CRON_SECRET` set on the project. Vercel Hobby refuses to deploy a cron that runs more than once a day, so the
    file must not reach a branch a Hobby project deploys from.

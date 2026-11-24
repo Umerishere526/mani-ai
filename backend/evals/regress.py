@@ -38,7 +38,6 @@ def _args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--only", choices=["framework", "pacing", "safety", "isolation"], help="Run one group.")
     p.add_argument("--list", action="store_true", help="List the scenarios and gaps, then exit. No calls.")
     p.add_argument("--no-judge", action="store_true", help="Skip the judged quality layer.")
-    p.add_argument("--cost", action="store_true", help="Read each chat call's billed cost from OpenRouter.")
     p.add_argument("--bench", type=int, metavar="N", help="Play the selection N times for latency only (no judge).")
     p.add_argument("--strict-latency", action="store_true", help="Fail the run when a turn exceeds its limit.")
     p.add_argument("--allow-remote-db", action="store_true",
@@ -90,8 +89,7 @@ async def _run(args: argparse.Namespace, scenarios: list[dict]) -> dict:
             async with gate:
                 print(f"… {scenario['id']}{f' #{n}' if args.bench else ''}", flush=True)
                 try:
-                    record = await play(scenario, stages, allowed, judged=not (args.no_judge or args.bench),
-                                        read_cost=args.cost, http=http)
+                    record = await play(scenario, stages, allowed, judged=not (args.no_judge or args.bench), http=http)
                 except Exception as error:  # noqa: BLE001 - one scenario's failure never loses the others
                     record = error_record(scenario, error)
             return {**record, "id": f"{record['id']}#{n}" if args.bench else record["id"]}
