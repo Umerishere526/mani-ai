@@ -711,6 +711,18 @@ the same change as the work.**
   supersede the 2026-11-17 overrule of R94 and R105 (the chat gave no solutions). A practice request is answered with
   the library; Mani still writes no exercise of its own. `mani.md` "How you listen"; eval `rule-help-when-asked`,
   `rule-ideas-*`.
+- **The reply rewrites the conversation's people and events each turn, kept as they said them (who, relation, what
+  they said; what happened, is happening or is coming), and code caps them in `understanding`** (muhammad,
+  2026-11-24). Because the client failed a test for assumptions stated as facts, past and upcoming swapped and details
+  moved to the wrong person (11/23). They live only in this conversation's record. `record.bounded_people`,
+  `record.bounded_events`, `reply.Person`, `reply.Event`; the `test_turn.py` test that people and events carry to the
+  next turn and a new conversation starts empty.
+- **Every model reply adds one `replies` ledger entry (its question and job, its move, a gist, its opening words, and
+  the answer once they give it), and the facts show recent ones so Mani does not repeat itself** (muhammad,
+  2026-11-24). Because repetition was tracked only for open-chat questions while the client saw repeated summaries,
+  openers and in-set questions. It replaces the open-chat `questions` key; a conversation open at deploy loses its
+  stored questions. `record.with_reply`, `record.with_answer`, `facts.ledger_lines`; the `test_turn.py` tests that a
+  question asked in a set and an answered question reach the next turn.
 - **Each model call's cost is OpenRouter's billed `usage.cost`, stored in `admin.llm_calls.cost_usd`; nothing reads
   `/generation` for cost** (muhammad, 2026-11-24). Because the usage block already carries it, and fetching each call
   afterwards was slow and could lag. The exact digits OpenRouter sent are stored (a float would store its binary
