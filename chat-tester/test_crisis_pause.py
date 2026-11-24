@@ -245,3 +245,49 @@ def test_a_send_refused_because_the_chat_is_paused_shows_the_pop_up_and_queues_n
     assert "send_error" not in app.session_state
     assert "notice" not in app.session_state
     assert app.session_state.composer_draft == "hello"
+
+
+class UnreachableBackend(PausedBackend):
+    """PausedBackend, except that the routes in `unreachable` go over the network to an address where nothing
+    listens, as when the backend is down."""
+
+    def __init__(self, *unreachable: str) -> None:
+        super().__init__()
+        self.base_url = "http://127.0.0.1:9"
+        self.unreachable = unreachable
+
+    def _call(self, method, path, **kwargs):
+        if path in self.unreachable:
+            return mani.ManiClient._call(self, method, path, **kwargs)
+        return super()._call(method, path, **kwargs)
+
+
+def test_a_backend_that_does_not_answer_is_a_handled_error():
+    with pytest.raises(mani.BackendUnreachable):
+        UnreachableBackend("/v1/crisis/resources").crisis_resources()
+
+
+def test_the_pop_up_names_the_us_lines_when_the_help_numbers_cannot_be_loaded():
+    """A pop-up with no number to call is the worst thing it could show someone in danger."""
+    app = _open(UnreachableBackend("/v1/crisis/resources"))
+
+    shown = _shown(app)
+    assert "For your safety, chat is paused for 30 seconds." in shown
+    assert ('If you are thinking about suicide or you need immediate support call or text <a href="tel:988">988</a> '
+            "to connect with a trained crisis counselor") in shown
+    assert 'If you are in immediate danger, call <a href="tel:911">911</a>.' in shown
+    assert [b.url for b in app.get("link_button")] == ["tel:988"]
+    assert any(c.value.startswith("Could not load the help numbers, so these are the US lines:") for c in app.caption)
+
+
+def test_the_page_opens_when_the_pause_cannot_be_checked_and_asks_again_on_the_next_run():
+    backend = UnreachableBackend("/v1/profile")
+    app = _open(backend)
+
+    assert any(c.value.startswith("Could not check whether the chat is paused:") for c in app.sidebar.caption)
+    assert "Chat is temporary unavailable" not in _shown(app)
+
+    backend.unreachable = ()
+    app.run()
+    assert not app.exception
+    assert "Chat is temporary unavailable" in _shown(app)

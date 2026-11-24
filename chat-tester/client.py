@@ -51,6 +51,16 @@ class ApiError(Exception):
             super().__init__(f"{status}: {body.get('raw', 'no body')}")
 
 
+class BackendUnreachable(ApiError):
+    """No answer from the backend at all: not reachable, or nothing within the request timeout. A request that
+    timed out may still finish on the backend."""
+
+    def __init__(self, cause: requests.RequestException) -> None:
+        self.status = 0
+        self.body: dict[str, Any] = {}
+        Exception.__init__(self, f"The backend did not answer: {cause}")
+
+
 @dataclass
 class Session:
     user_id: str
@@ -208,9 +218,12 @@ class ManiClient:
             "Authorization": f"Bearer {self.session.access_token}",
             "Content-Type": "application/json",
         }
-        return requests.request(
-            method, f"{self.base_url}{path}", headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs
-        )
+        try:
+            return requests.request(
+                method, f"{self.base_url}{path}", headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs
+            )
+        except requests.RequestException as exc:
+            raise BackendUnreachable(exc) from exc
 
     def _call(self, method: str, path: str, **kwargs) -> dict[str, Any]:
         response = self._request(method, path, **kwargs)
@@ -365,22 +378,21 @@ class ManiClient:
     def transcribe_audio(self, audio_bytes: bytes, filename: str = "recording.wav") -> str:
         """POST /v1/audio/transcriptions - voice in, text out. Not JSON: a multipart
         upload, so _call's json-only _request is skipped in favour of files=."""
-        headers = {"Authorization": f"Bearer {self.session.access_token}"}
-        response = requests.post(
-            f"{self.base_url}/v1/audio/transcriptions",
-            headers=headers,
-            files={"file": (filename, audio_bytes, "audio/wav")},
-            timeout=60,
-        )
+        def post() -> requests.Response:
+            try:
+                return requests.post(
+                    f"{self.base_url}/v1/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {self.session.access_token}"},
+                    files={"file": (filename, audio_bytes, "audio/wav")},
+                    timeout=60,
+                )
+            except requests.RequestException as exc:
+                raise BackendUnreachable(exc) from exc
+
+        response = post()
         if response.status_code == 401:
             self.session = refresh(self.session)
-            headers = {"Authorization": f"Bearer {self.session.access_token}"}
-            response = requests.post(
-                f"{self.base_url}/v1/audio/transcriptions",
-                headers=headers,
-                files={"file": (filename, audio_bytes, "audio/wav")},
-                timeout=60,
-            )
+            response = post()
         if not response.ok:
             try:
                 body = response.json()

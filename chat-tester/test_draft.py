@@ -58,7 +58,7 @@ class DraftBackend(mani.ManiClient):
         if (method, path) == ("POST", "/v1/threads"):
             if self.creates_timing_out:
                 self.creates_timing_out -= 1
-                raise requests.exceptions.ReadTimeout("no reply")
+                raise mani.BackendUnreachable(requests.exceptions.ReadTimeout("no reply"))
             self._store(kwargs["json"])
             return {"thread": THREAD, "turn": {"id": "r1", "content": REPLY, "prompts": [], "follow_up_pending": False}}
         if (method, path) == ("GET", "/v1/threads/T/messages"):

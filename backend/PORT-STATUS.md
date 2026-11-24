@@ -294,6 +294,12 @@ the same change as the work.**
   account's password and read that person's conversations, and create accounts that spend model calls. Accepted for
   test accounts only; before any real person signs up, remove the Forgot password tab and the secret key from the
   hosted copy (sign-up works with the publishable key alone, since mani-app auto-confirms) and make the app private.
+- **When the chat-tester cannot read `GET /v1/crisis/resources`, the pause pop-up names the backend's US reference
+  lines (988, 911) instead of no number** (muhammad, 2026-11-24). Because a crisis pop-up with no number to call is
+  worse than a fallback list, and the backend's US lines are long-standing public services. Every network failure
+  reaches callers as `ApiError` (`BackendUnreachable`), so the pop-up and the pause check never crash the page.
+  `chat-tester/crisis_pause.py` `FALLBACK_RESOURCES` (kept in step with `backend/mani/chat/crisis.py` `RESOURCES`),
+  `test_the_pop_up_names_the_us_lines_when_the_help_numbers_cannot_be_loaded`.
 - **`content/exercises/exercises.json` is production's library, its 30 rows; the audio stays off GitHub, and
   `seed_exercises.py` checks categories against its own `ExerciseCategory`, not `LibrarySection`** (muhammad,
   2026-11-13). Because a local setup could not play the library, the recordings are client content that should not

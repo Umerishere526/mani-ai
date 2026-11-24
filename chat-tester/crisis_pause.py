@@ -27,6 +27,16 @@ SUPPORT = (
 EMERGENCY = "If you are in immediate danger, call {number}."
 GET_HELP = "Get help now"
 GO_TO_LIBRARY = "Go to library"
+# The help the pop-up names when GET /v1/crisis/resources cannot be read, so it never shows no number at all: the
+# backend's US reference lines (RESOURCES in backend/mani/chat/crisis.py), as that route lists them.
+FALLBACK_RESOURCES = [
+    {"country": "US", "kind": "emergency", "name": "Emergency services",
+     "description": "For immediate danger to you or someone else.", "phone": "911", "sms": None, "url": None,
+     "hours": None},
+    {"country": "US", "kind": "support", "name": "988 Suicide & Crisis Lifeline",
+     "description": "Call, text or chat with a trained counselor.", "phone": "988", "sms": "988",
+     "url": "https://988lifeline.org", "hours": "24/7"},
+]
 # Beside the live timer at the bottom, which the drawing does not show and muhammad kept (2026-11-16). It says only
 # when the chat opens again: "while you reach out" assumed they had (the client's safety test, point 43).
 RESUMES_IN = "Chat resumes in"
@@ -123,7 +133,13 @@ def active(client: mani.ManiClient) -> Pause | None:
     now = datetime.now(timezone.utc)
     stored = st.session_state.get("pause", "unread")
     if stored == "unread" or (stored is not None and stored.ends <= now):
-        st.session_state.pause = pause_in(client.get_profile())
+        try:
+            st.session_state.pause = pause_in(client.get_profile())
+        except mani.ApiError as exc:
+            # Asked again on the next run. Meanwhile the backend still refuses a message while the chat is paused,
+            # and that refusal shows the pop-up.
+            st.caption(f"Could not check whether the chat is paused: {exc}")
+            return None
     pause = st.session_state.pause
     return pause if pause is not None and pause.ends > now else None
 
@@ -185,8 +201,8 @@ def render(client: mani.ManiClient, pause: Pause) -> None:
     try:
         found = pick(client.crisis_resources())
     except mani.ApiError as exc:
-        found = Help(call=None, emergency=None)
-        st.caption(f"Could not load the help numbers: {exc}")
+        found = pick(FALLBACK_RESOURCES)
+        st.caption(f"Could not load the help numbers, so these are the US lines: {exc}")
     st.markdown(words(pause, found), unsafe_allow_html=True)
     help_line = found.call or found.emergency
     get_help, library = st.columns(2)

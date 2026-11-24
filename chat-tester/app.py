@@ -8,7 +8,6 @@ import json
 import os
 import uuid
 
-import requests
 import streamlit as st
 
 import client as mani
@@ -277,15 +276,15 @@ def edit_last(content: str) -> None:
     try:
         message_id = client.last_user_message_id(thread_id)
         turn = client.edit_message(thread_id, message_id, content)
-    except mani.ApiError as exc:
-        if not crisis_pause.note(exc.body):
-            notify(refusal_text(exc))
-        return
-    except requests.exceptions.RequestException:
+    except mani.BackendUnreachable:
         notify(
             f"No reply within {mani.REQUEST_TIMEOUT_SECONDS} seconds, or the backend is not reachable. "
             "Reopen the chat to see whether the edit went through before trying again."
         )
+        return
+    except mani.ApiError as exc:
+        if not crisis_pause.note(exc.body):
+            notify(refusal_text(exc))
         return
     st.session_state.editing = False
     st.session_state.pop("edit_text", None)
@@ -418,7 +417,7 @@ def show_started(content: str, started: dict) -> None:
     # from what was just sent instead: asking again would make a second conversation.
     try:
         history = client.full_history(started["thread"]["id"])
-    except (mani.ApiError, requests.exceptions.RequestException):
+    except mani.ApiError:
         reset_thread_state(started["thread"], st.session_state.messages)
         record_turn(content, started["turn"])
         return
@@ -445,6 +444,14 @@ def deliver(content: str) -> None:
             started = client.start_thread(content, st.session_state.draft_style, first_message_id(content))
         else:
             turn = client.send_message(thread_id, content)
+    except mani.BackendUnreachable:
+        # No answer at all within the request timeout, or the backend unreachable. The turn may still
+        # finish on the backend, so reopening the chat can show its reply.
+        st.session_state.send_error = (
+            f"No reply within {mani.REQUEST_TIMEOUT_SECONDS} seconds, or the backend is not reachable. "
+            "Reopen the chat to see whether the reply arrived before sending again."
+        )
+        return
     except mani.ApiError as exc:
         # A pause is shown by the pop-up on the next run, so there is no error to queue for it.
         if not crisis_pause.note(exc.body):
@@ -454,14 +461,6 @@ def deliver(content: str) -> None:
         # The message was not stored, so it goes back into the composer to send again rather than vanishing from
         # the chat (Lolly, 2026-11-03: "it deleted my answer").
         st.session_state.composer_draft = content
-        return
-    except requests.exceptions.RequestException:
-        # No answer at all within the request timeout, or the backend unreachable. The turn may still
-        # finish on the backend, so reopening the chat can show its reply.
-        st.session_state.send_error = (
-            f"No reply within {mani.REQUEST_TIMEOUT_SECONDS} seconds, or the backend is not reachable. "
-            "Reopen the chat to see whether the reply arrived before sending again."
-        )
         return
     if thread is None:
         show_started(content, started)

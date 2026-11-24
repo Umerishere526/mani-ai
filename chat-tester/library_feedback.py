@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import requests
 import streamlit as st
 
 import client as mani
@@ -27,8 +26,8 @@ def _reason_key(exercise: dict[str, Any]) -> str:
     return f"library_reason_{exercise['id']}"
 
 
-def _refused(exc: Exception) -> str:
-    error = (exc.body.get("error") or {}) if isinstance(exc, mani.ApiError) else {}
+def _refused(exc: mani.ApiError) -> str:
+    error = exc.body.get("error") or {}
     return error.get("message") or NOT_SAVED
 
 
@@ -43,7 +42,7 @@ def _changed(client: mani.ManiClient, exercise: dict[str, Any]) -> None:
         else:
             exercise["feedback"] = client.rate_exercise(exercise["id"], RATINGS[choice])
         st.session_state.pop(_reason_key(exercise), None)
-    except (mani.ApiError, requests.exceptions.RequestException) as exc:
+    except mani.ApiError as exc:
         stored = exercise.get("feedback")
         st.session_state[_thumb_key(exercise)] = RATINGS.index(stored["rating"]) if stored else None
         st.toast(_refused(exc))
@@ -54,7 +53,7 @@ def _submit(client: mani.ManiClient, exercise: dict[str, Any]) -> None:
     reason = st.session_state.get(_reason_key(exercise)) or None
     try:
         exercise["feedback"] = client.rate_exercise(exercise["id"], exercise["feedback"]["rating"], reason)
-    except (mani.ApiError, requests.exceptions.RequestException) as exc:
+    except mani.ApiError as exc:
         st.toast(_refused(exc))
     else:
         st.toast(THANKS)
