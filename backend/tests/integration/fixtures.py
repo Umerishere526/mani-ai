@@ -48,6 +48,7 @@ class ScriptedModel:
         return client.Call(
             value=schema.model_validate(reply.model_dump()), model="test/model",
             usage=llm_calls.Usage(input_tokens=100, output_tokens=20), latency_ms=1, call_id=uuid.uuid4(),
+            first_token_ms=1,
         )
 
 

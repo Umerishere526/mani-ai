@@ -3,13 +3,14 @@
 
 import asyncio
 import uuid
+from dataclasses import replace
 
 import pytest
 
 from mani.chat import runner, turn
 from mani.chat.reply import TurnReply
 from mani.config import get_settings
-from mani.db import pool
+from mani.db import pool, turn_traces
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
 from mani.prompts import cache
@@ -63,6 +64,23 @@ async def test_no_connection_is_held_while_the_model_thinks_on_a_send_or_an_edit
     assert thinking.calls == 2
     assert thinking.held_while_thinking == [0, 0]
     assert await _user_messages(thread.id) == ["Supportive", "work has been hard this year"]
+
+
+async def test_a_turns_recorded_trace_carries_how_long_each_stage_took(alice, model):
+    """Only the model's time was traced, so a slow turn could not say whether the database passes or the model
+    made it slow. The trace keeps each pass, the first chunk's wait and the whole turn, in milliseconds."""
+    model(said("What has been the hardest part?"))
+    thread = await start(alice)
+
+    sent = await runner.send(alice, thread.id, "work has been hard lately")
+    # The scripted model's call has no admin.llm_calls row to link to.
+    await turn.record_trace(replace(sent, llm_call_id=None), thread.id)
+
+    async with pool.as_admin() as conn:
+        recorded = (await turn_traces.for_thread(conn, thread.id))[str(sent.message_id)]["trace"]
+    timings = {key: recorded[key] for key in ("read_ms", "write_ms", "total_ms", "first_token_ms", "latency_ms")}
+    assert all(isinstance(ms, int) and ms >= 0 for ms in timings.values()), timings
+    assert timings["total_ms"] >= timings["read_ms"] + timings["write_ms"]
 
 
 async def test_the_same_message_on_two_instances_at_once_stores_one_turn(alice, monkeypatch):

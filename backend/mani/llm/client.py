@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import openai
+from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.exceptions import OutputParserException
 from langchain_openai import StreamChunkTimeoutError
 from pydantic import BaseModel, ValidationError
@@ -43,6 +44,8 @@ class Call[T: BaseModel]:
     usage: llm_calls.Usage
     latency_ms: int
     call_id: uuid.UUID | None
+    # From the answering attempt's start to its first streamed chunk; None when none arrived.
+    first_token_ms: int | None = None
 
 
 # A provider that is briefly down or unreachable. APITimeoutError is a subclass of
@@ -130,6 +133,18 @@ def _usage_of(exc: BaseException) -> llm_calls.Usage:
         # OpenRouter's own field; the SDK keeps fields it does not declare as attributes.
         cost_usd=getattr(usage, "cost", None),
     )
+
+
+class _FirstChunk(AsyncCallbackHandler):
+    """Notes when an attempt's first streamed chunk arrives. The structured stream hands back the reply whole at the
+    end, so the model's own per-chunk callback is the only place the first one shows."""
+
+    def __init__(self) -> None:
+        self.at: float | None = None
+
+    async def on_llm_new_token(self, token: str, **kwargs: Any) -> None:
+        if self.at is None:
+            self.at = time.perf_counter()
 
 
 async def _folded(stream) -> dict:
@@ -304,6 +319,8 @@ async def complete[T: BaseModel](
                 # the attempts and the retry pause before it.
                 usage = llm_calls.Usage()
                 generation_id = None
+                first_chunk = _FirstChunk()
+                watched = {"callbacks": [first_chunk]}
                 started = time.perf_counter()
                 try:
                     # A chat reply has a deadline for the whole call; the per read timeout alone let one
@@ -312,10 +329,10 @@ async def complete[T: BaseModel](
                     if chat:
                         left = settings.chat_budget_seconds - (time.perf_counter() - began)
                         result = await asyncio.wait_for(
-                            _folded(runnable.astream(messages)), min(settings.chat_deadline_seconds, left)
+                            _folded(runnable.astream(messages, watched)), min(settings.chat_deadline_seconds, left)
                         )
                     else:
-                        result = await _folded(runnable.astream(messages))
+                        result = await _folded(runnable.astream(messages, watched))
                 except StreamChunkTimeoutError as exc:
                     if attempt == MAX_SCHEMA_ATTEMPTS:
                         raise
@@ -404,11 +421,13 @@ async def complete[T: BaseModel](
             raise error from (None if isinstance(exc, _QUOTES_THE_REPLY + _QUOTES_THEIR_WORDS) else exc)
 
         latency_ms = int((time.perf_counter() - started) * 1000)
+        first_token_ms = int((first_chunk.at - started) * 1000) if first_chunk.at is not None else None
         call_id = await _record(
             purpose=purpose, model=model, outcome=llm_calls.Outcome.OK, usage=usage,
             latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
             prompt_version_id=prompt_version_id, error_message=None, generation_id=generation_id,
         )
         return Call(
-            value=parsed, model=model, usage=usage, latency_ms=latency_ms, call_id=call_id
+            value=parsed, model=model, usage=usage, latency_ms=latency_ms, call_id=call_id,
+            first_token_ms=first_token_ms,
         )

@@ -34,15 +34,23 @@ async def chat_calls(conn: asyncpg.Connection, thread_ids: list[uuid.UUID]) -> l
     return [dict(r) for r in rows]
 
 
+def _seconds(ms: int | None) -> float | None:
+    return round(ms / 1000, 3) if ms is not None else None
+
+
 def turn_figures(conversation: Conversation) -> list[dict]:
-    """Per answered turn: end-to-end seconds around runner.send, the model's milliseconds from the trace, and what is
-    left over (database passes, prompt building, decide), which no stage logs on its own."""
+    """Per answered turn: end-to-end seconds around runner.send, and from the trace the model's time, its wait for the
+    first chunk and the read and write passes, each None when the trace does not carry it. `backend_s` is end to end
+    less the model, which no single stage covers."""
     out = []
     for e in conversation.exchanges:
         model_ms = e.trace.get("latency_ms")
         out.append({"end_to_end_s": round(e.seconds, 3),
-                    "model_s": round(model_ms / 1000, 3) if model_ms is not None else None,
-                    "backend_s": round(e.seconds - model_ms / 1000, 3) if model_ms is not None else None})
+                    "model_s": _seconds(model_ms),
+                    "backend_s": round(e.seconds - model_ms / 1000, 3) if model_ms is not None else None,
+                    "first_token_s": _seconds(e.trace.get("first_token_ms")),
+                    "read_s": _seconds(e.trace.get("read_ms")),
+                    "write_s": _seconds(e.trace.get("write_ms"))})
     return out
 
 

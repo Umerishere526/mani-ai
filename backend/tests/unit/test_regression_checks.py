@@ -148,6 +148,33 @@ def test_a_scenarios_cost_is_the_sum_of_its_stored_call_costs():
     assert figures["cost_per_turn_usd"] == 0.003
 
 
+def test_a_turns_stage_timings_reach_the_reports_latency_table():
+    traced = turn("x", "y", seconds=4.0, latency_ms=3000, first_token_ms=1200, read_ms=40, write_ms=60, total_ms=3900)
+    untraced = turn("x", "y", seconds=1.0)
+    figures = metrics.turn_figures(chat(traced, untraced))
+    assert figures[0] == {"end_to_end_s": 4.0, "model_s": 3.0, "backend_s": 1.0, "first_token_s": 1.2, "read_s": 0.04,
+                          "write_s": 0.06}
+    assert figures[1]["read_s"] is figures[1]["first_token_s"] is None
+
+    run = {"run_id": "r", "git_sha": "abc", "chat_models": ["m"],
+           "scenarios": [{"id": "TC-01", "title": "t", "group": "pacing", "status": "run", "checks": [],
+                          "turns": figures, "exchanges": []}]}
+    summary = report.summarize(run)
+    assert (summary["latency"]["read_s"]["n"], summary["latency"]["end_to_end_s"]["n"]) == (1, 2)
+    table = report.markdown(run, summary, None)
+    assert "| Model, to first chunk | 1 | 1.20 |" in table
+    assert "| Read pass | 1 | 0.04 |" in table and "| Write pass | 1 | 0.06 |" in table
+
+
+def test_a_run_whose_traces_carry_no_stage_timings_reports_no_rows_for_them():
+    run = {"run_id": "r", "git_sha": "abc", "chat_models": ["m"],
+           "scenarios": [{"id": "TC-01", "title": "t", "group": "pacing", "status": "run", "checks": [],
+                          "turns": metrics.turn_figures(chat(turn("x", "y", latency_ms=1500))), "exchanges": []}]}
+    table = report.markdown(run, report.summarize(run), None)
+    assert "| Model | 1 |" in table
+    assert "Read pass" not in table and "first chunk" not in table
+
+
 def test_the_comparison_names_checks_that_changed_outcome():
     def summary(run_id, passed):
         return {"run_id": run_id, "cost_usd": None, "latency": {"end_to_end_s": {"p50": 3.0}},

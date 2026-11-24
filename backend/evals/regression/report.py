@@ -5,28 +5,29 @@ from __future__ import annotations
 
 import json
 import pathlib
-from collections import Counter
+from collections import Counter, defaultdict
 
 from evals.regression.checks import DETERMINISTIC, GAP, PENDING, PERFORMANCE
 from evals.regression.metrics import spread
 
 RESULTS = pathlib.Path(__file__).resolve().parents[1] / "results"
 SUMMARIES = RESULTS / "summaries"
+# Each stage of a turn the latency table reports, by its key in a turn's figures, in the table's order.
+STAGES = (("End to end", "end_to_end_s"), ("Model", "model_s"), ("Model, to first chunk", "first_token_s"),
+          ("Read pass", "read_s"), ("Write pass", "write_s"), ("Backend (end to end − model)", "backend_s"))
 
 
 def summarize(run: dict) -> dict:
     """What is kept in git: every check's outcome and the figures, never a full transcript."""
-    scenarios, totals = [], Counter()
-    e2e, model, backend = [], [], []
+    scenarios, totals, seconds = [], Counter(), defaultdict(list)
     for s in run["scenarios"]:
         checks = s.get("checks", [])
         for c in checks:
             totals[f"{c['kind']}_{'passed' if c['passed'] else 'failed'}"] += 1
         for t in s.get("turns", []):
-            e2e.append(t["end_to_end_s"])
-            if t["model_s"] is not None:
-                model.append(t["model_s"])
-                backend.append(t["backend_s"])
+            for _, key in STAGES:
+                if t.get(key) is not None:
+                    seconds[key].append(t[key])
         scenarios.append({
             "id": s["id"], "title": s["title"], "group": s["group"], "status": s["status"],
             "gap_reason": s.get("gap_reason"),
@@ -41,7 +42,7 @@ def summarize(run: dict) -> dict:
         "scenarios": scenarios,
         "totals": dict(totals),
         "critical_failures": [{"scenario": sid, **c} for sid, c in failed if c["critical"]],
-        "latency": {"end_to_end_s": spread(e2e), "model_s": spread(model), "backend_s": spread(backend)},
+        "latency": {key: spread(seconds[key]) for _, key in STAGES},
         "cost_usd": _sum([(s.get("usage") or {}).get("cost_usd") for s in run["scenarios"] if s.get("usage")]),
     }
 
@@ -122,8 +123,10 @@ def markdown(run: dict, summary: dict, comparison: dict | None) -> str:
     if patterns := repeated_patterns(run):
         lines += ["## Repeated questions and openers", ""] + [f"- {p}" for p in patterns] + [""]
     lines += ["## Latency (seconds)", "", "| | n | p50 | p95 | p99 | max |", "|---|---|---|---|---|---|"]
-    for name, key in (("End to end", "end_to_end_s"), ("Model", "model_s"), ("Backend (end to end − model)", "backend_s")):
+    for name, key in STAGES:
         d = lat[key]
+        if not d["n"] and key != "end_to_end_s":
+            continue
         lines.append(f"| {name} | {d['n']} | {fmt(d['p50'])} | {fmt(d['p95'])} | {fmt(d['p99'])} | {fmt(d['max'])} |")
     lines += ["", f"p99 over {lat['end_to_end_s']['n']} turns is indicative only.", "",
               f"Cost: {'$' + format(summary['cost_usd'], '.5f') if summary['cost_usd'] is not None else 'unknown (a chat call recorded no cost)'}", ""]

@@ -50,7 +50,7 @@ class FakeRunnable:
             raise result
         return result
 
-    async def astream(self, messages: list[dict]):
+    async def astream(self, messages: list[dict], config=None):
         for key, value in (await self.scripted(messages)).items():
             yield {key: value}
 
@@ -297,7 +297,7 @@ async def test_a_chat_reply_past_its_deadline_fails_as_too_slow_and_is_recorded(
     class Stalled:
         calls = 0
 
-        async def astream(self, messages):
+        async def astream(self, messages, config=None):
             Stalled.calls += 1
             await asyncio.sleep(10)
             yield {}
@@ -415,6 +415,19 @@ async def test_a_streamed_reply_records_its_usage_and_generation(monkeypatch, re
     assert call.value.text == "hello"
     assert (call.usage.input_tokens, call.usage.output_tokens) == (7000, 300)
     assert call.usage.cost_usd == 0.0042, "OpenRouter's billed cost survives LangChain's stream"
+
+
+async def test_a_streamed_reply_records_when_its_first_chunk_arrived(monkeypatch, recorded):
+    """The reply is parsed whole at the end, so the time to its first chunk, the model thinking, is measured apart
+    from the whole call."""
+    over_openrouter(monkeypatch, openrouter_stream('{"text": "hello"}', "gen-streamed", wait=0.2))
+
+    call = await client.complete(
+        [{"role": "user", "content": "hi"}], Said, model="openai/gpt-6-luna",
+        purpose=llm_calls.Purpose.CHAT, settings=settings(),
+    )
+
+    assert 200 <= call.first_token_ms <= call.latency_ms
     assert [(r["outcome"], r["generation_id"]) for r in recorded] == [(llm_calls.Outcome.OK, "gen-streamed")]
 
 

@@ -276,7 +276,8 @@ async def _apply(
         "action": reply.action, "framework": reply.framework, "stage": reply.stage,
         "safety": worry.traced(reply.safety), "paused": judgment.pausing or None,
         "body_emergency": (judgment.body_emergency and not judgment.pausing) or None,
-        "buttons": [p.label for p in prompts], "latency_ms": call.latency_ms, "refused": decision.refused,
+        "buttons": [p.label for p in prompts], "latency_ms": call.latency_ms, "first_token_ms": call.first_token_ms,
+        "refused": decision.refused,
         "question_cut": cut, "question": reply.question.model_dump() if open_chat and settings.ai_debug_mode else None,
         "notes": reply.notes if settings.ai_debug_mode else None,
     }.items() if value not in (None, "", [], {})}

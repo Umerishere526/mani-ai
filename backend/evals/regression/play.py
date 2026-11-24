@@ -67,7 +67,8 @@ async def _isolation(scenario: dict) -> tuple[list[Conversation], list[checks.Re
 
 
 def _exchange_dict(e: Exchange, conversation: int) -> dict:
-    keep = ("action", "framework", "stage", "safety", "paused", "refused", "question_cut", "latency_ms")
+    keep = ("action", "framework", "stage", "safety", "paused", "refused", "question_cut", "latency_ms", "first_token_ms",
+            "read_ms", "write_ms", "total_ms")
     return {"conversation": conversation, "said": e.said, "tapped": e.tapped, "reply": e.reply, "buttons": e.buttons,
             "trace": {k: e.trace[k] for k in keep if k in e.trace}, "seconds": round(e.seconds, 3), "paused": e.paused}
 
