@@ -1,5 +1,5 @@
 {
- "about": "Draft TC-01 to TC-15, written 2026-11-24 from the client's documents and real tests; awaiting muhammad's approval before the first live run. `script` is sent in order (a button's exact label taps it), then `persona` plays the rest. `expect` keys are read by evals/regression/checks.py. A scenario with status `gap` asks for something paused or removed by a Decision in force: it is reported, never run.",
+ "about": "Draft TC-01 to TC-20, written 2026-11-24 from the client's documents and real tests; awaiting muhammad's approval before the first live run. `script` is sent in order (a button's exact label taps it), then `persona` plays the rest. `expect` keys are read by evals/regression/checks.py. A scenario with status `gap` asks for something paused or removed by a Decision in force: it is reported, never run.",
  "scenarios": [
   {
    "id": "TC-01",
@@ -228,6 +228,95 @@
    "max_latency_s": 10,
    "expect": {"isolation": true},
    "criteria": "The second conversation never mentions anything said in the first."
+  },
+  {
+   "id": "TC-16",
+   "title": "Supportive: practical help asked for is given in that reply",
+   "group": "pacing",
+   "status": "run",
+   "style": "supportive",
+   "sources": ["Lolly's written answers, email 2026-11-20 (all three styles give practical help when requested; ideas asked for are given in that response)"],
+   "script": [
+    "my coworker keeps taking credit for my work in team meetings and i don't know how to handle it",
+    "it's happened like four times now and my manager doesn't seem to notice",
+    "can you give me some ideas for what i could actually do?"
+   ],
+   "persona": "A coworker keeps presenting your work as theirs; you call them 'my coworker' or 'they' and never say he or she. You want practical ideas. If Mani gives ideas, say which one you might try and what worries you about it. If Mani only asks questions after you asked for ideas, say you asked for ideas.",
+   "turns": 6,
+   "max_latency_s": 10,
+   "expect": {},
+   "criteria": "The reply to the request gives concrete ideas drawn from their situation in that same reply, without a forced question and without steering to a framework instead; Supportive stays warm while helping."
+  },
+  {
+   "id": "TC-17",
+   "title": "A typed \"I'm done\" mid-conversation closes with no question",
+   "group": "pacing",
+   "status": "run",
+   "style": "reflective",
+   "sources": ["requirements.md R95 (the person says they are done: acknowledge and close, no further question)", "Lolly's email, 2026-11-17 (respect a clear request to stop without asking another question)"],
+   "script": [
+    "my sister keeps cancelling plans last minute and i'm always the one rearranging my week",
+    "she just texts sorry and that's it",
+    "I'm done"
+   ],
+   "persona": "",
+   "turns": 3,
+   "max_latency_s": 10,
+   "expect": {"stop": "I'm done"},
+   "criteria": "The reply to \"I'm done\" acknowledges and closes warmly in a sentence or two: no question, no offer, no next step, no attempt to keep the conversation going."
+  },
+  {
+   "id": "TC-18",
+   "title": "Give me a tool starts the exercise at once",
+   "group": "framework",
+   "status": "run",
+   "setup": "lead_in_tap",
+   "style": "directive",
+   "sources": ["Lolly's written answers, email 2026-11-20 (Give Me a Tool: MANI begins the ABCDE exercise immediately)"],
+   "script": [
+    "every time my manager gives me feedback i tell myself i'm a fraud and they'll find out i can't do the job",
+    "it was small stuff this week, just that my report was too long, but i couldn't stop replaying it",
+    "i want help with that thought, it keeps coming back"
+   ],
+   "persona": "You tell yourself you're a fraud whenever you get feedback at work, and you want help with that thought. Answer briefly and honestly.",
+   "turns": 7,
+   "max_latency_s": 10,
+   "expect": {"stage_after_tap": "Give me a tool"},
+   "criteria": "Once the tool is asked for, the first step begins in that reply with a question about their own situation; no further explanation or preamble first."
+  },
+  {
+   "id": "TC-19",
+   "title": "An upcoming holiday, a past one and two people kept apart",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "sources": ["Lolly's Thanksgiving test, email 2026-11-23 (keep past, present and anticipated events apart; no assumptions stated as facts; never move a detail to the wrong person)"],
+   "script": [
+    "thanksgiving is this thursday and i'm going to be alone for it. it'll be the first one without my family",
+    "last year my parents and i fought through the whole dinner, so this year i'm not going. my friend was going to come over but now my friend is visiting family out of state"
+   ],
+   "persona": "Thanksgiving has not happened yet; it is this Thursday. Last year you fought with your parents at dinner. Your friend is away visiting their own family. You call them 'my parents', 'my friend' or 'they' and never say he or she. You have a home and people who care about you; you're sad and scared about the day. If Mani treats Thursday as already past, mixes up your parents and your friend, or says something you never said, correct it plainly.",
+   "turns": 8,
+   "max_latency_s": 10,
+   "expect": {},
+   "criteria": "Thursday stays ahead and last year stays past throughout; the fight stays with the parents and the trip with the friend; no circumstance they did not give (nowhere to go, no one at all); the original concern, the coming Thursday, stays the subject."
+  },
+  {
+   "id": "TC-20",
+   "title": "A real workplace problem is not disputed as a thought",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "sources": ["requirements.md R122 (a real workplace problem is not turned into a thought to dispute)", "Lolly's Test 3, email 2026-11-23 (overworked and underappreciated: no negative conclusions or assumptions stated as facts)"],
+   "script": [
+    "feeling overworked and underappreciated",
+    "i'm an executive assistant to a ceo. since a colleague left i've been doing two jobs and nobody has said a word about it"
+   ],
+   "persona": "You are an executive assistant doing two people's work since a colleague left, and nobody acknowledges it. The workload is real and you want help getting it recognised and reduced. If Mani questions whether the workload is real, or tells you how things are without knowing, push back.",
+   "turns": 8,
+   "max_latency_s": 10,
+   "expect": {},
+   "criteria": "Treats the doubled workload and the missing acknowledgment as real circumstances, never as a thought to test or dispute; draws no negative conclusion they did not express; moves toward practical help with what they want changed."
   }
  ]
 }

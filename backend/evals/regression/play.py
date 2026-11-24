@@ -45,13 +45,18 @@ def _offered(exchange: Exchange) -> bool:
     return bool(set(greeting.LEAD_IN_LABELS) & set(exchange.buttons))
 
 
+async def _tap_lead_in(scenario: dict, label: str) -> tuple[Conversation, str]:
+    """The scenario's opening until the offer shows, then a tap on `label`; its reply, or "" when no offer came."""
+    c = await converse(scenario["style"], scenario["turns"], scenario.get("persona", ""), scenario["script"],
+                       until=_offered)
+    return c, (await _send(c, label)).reply if c.exchanges and _offered(c.exchanges[-1]) else ""
+
+
 async def _lead_in_buttons(scenario: dict) -> tuple[list[Conversation], list[checks.Result]]:
     """The same opening three times, each tapping a different lead-in button once the offer shows."""
     conversations, replies = [], {}
     for label in greeting.LEAD_IN_LABELS:
-        c = await converse(scenario["style"], scenario["turns"], scenario.get("persona", ""), scenario["script"],
-                           until=_offered)
-        replies[label] = (await _send(c, label)).reply if c.exchanges and _offered(c.exchanges[-1]) else ""
+        c, replies[label] = await _tap_lead_in(scenario, label)
         conversations.append(c)
     return conversations, [checks.lead_in_differs(replies)]
 
@@ -96,6 +101,10 @@ async def play(scenario: dict, stages: dict[str, list[str]], allowed: frozenset[
     setup = scenario.get("setup")
     if setup == "lead_in_buttons":
         conversations, extra = await _lead_in_buttons(scenario)
+    elif setup == "lead_in_tap":
+        # A label that is not a lead-in button is tapped as typed words, and stage_after_tap reports it never tapped.
+        name = scenario["expect"]["stage_after_tap"]
+        conversations, extra = [(await _tap_lead_in(scenario, checks.lead_in_label(name) or name))[0]], []
     elif setup == "isolation":
         conversations, extra = await _isolation(scenario)
     else:

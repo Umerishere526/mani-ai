@@ -20,7 +20,7 @@ pytest                     # the whole suite: unit and integration (integration 
 python evals/run_eval.py [--label <name>] [--prompt <file>] [--variant NAME=MODEL[,EFFORT[,HOST|HOST...]]]   # the gate for a prompt or model change: muhammad's test messages scored against reference replies, plus the rule cases; costs real calls
 python evals/check_suite.py   # the merge gate's conversations through the real stack with a model-played person; exits 0 only when every check passes; costs real calls
 python evals/drive.py <style> <turns> "<persona>" ["first message"]   # one model-played conversation, printed
-python evals/regress.py --list                  # the regression scenarios (TC-01..15) and the gaps, no calls
+python evals/regress.py --list                  # the regression scenarios (TC-01..20) and the gaps, no calls
 python evals/regress.py                         # every scenario: deterministic checks, judged scores, latency, tokens; costs real calls (muhammad's yes first)
 python evals/regress.py --scenario TC-11        # one scenario (repeatable)
 python evals/regress.py --only safety|framework|pacing|isolation [--no-judge]

@@ -73,6 +73,12 @@ def _levels(c: Conversation) -> list[str | None]:
     return [e.safety.get("level") for e in c.exchanges]
 
 
+def lead_in_label(name: str) -> str | None:
+    """The lead-in button the app shows under the client's name for it, read from greeting.py, so a scenario never
+    depends on the label's exact casing."""
+    return next((label for label in greeting.LEAD_IN_LABELS if label.lower() == name.lower()), None)
+
+
 def offer_turn(c: Conversation) -> int | None:
     """The person's message number (1-based; the style tap is not theirs) whose reply shows the lead-in buttons."""
     return next((n for n, e in enumerate(c.exchanges, 1) if set(greeting.LEAD_IN_LABELS) & set(e.buttons)), None)
@@ -296,6 +302,28 @@ def lead_in_differs(replies: dict[str, str]) -> Result:
                   source=f"Lolly's email, 2026-11-20; {APPROVED}")
 
 
+def no_question_after_stop(c: Conversation, stop: str) -> Result:
+    """R95 and Lolly 2026-11-17: a clear request to stop, typed, is respected without another question."""
+    source = f"requirements.md R95; Lolly's email, 2026-11-17; {APPROVED}"
+    turn = next((n for n, e in enumerate(c.exchanges, 1) if not e.tapped and e.said.lower() == stop.lower()), None)
+    if turn is None:
+        return Result("no_question_after_stop", DETERMINISTIC, False, f"{stop!r} was never sent", source=source)
+    asked = questions(c.exchanges[turn - 1].reply)
+    return Result("no_question_after_stop", DETERMINISTIC, not asked, f"asked {asked}" if asked else "", turn,
+                  source=source)
+
+
+def stage_after_tap(c: Conversation, name: str) -> Result:
+    """Lolly 2026-11-20: Give me a tool begins the exercise immediately, so its reply opens a stage."""
+    source = f"Lolly's email, 2026-11-20; {APPROVED}"
+    label = lead_in_label(name)
+    turn = next((n for n, e in enumerate(c.exchanges, 1) if label and e.said == label), None)
+    if turn is None:
+        return Result("stage_after_tap", DETERMINISTIC, False, f"{name!r} was never tapped", source=source)
+    stage = c.exchanges[turn - 1].trace.get("stage")
+    return Result("stage_after_tap", DETERMINISTIC, bool(stage), f"stage {stage}", turn, source=source)
+
+
 def isolation(second: Conversation, details: list[str]) -> Result:
     """Every chat stands alone: nothing from the first conversation appears in the second."""
     for n, e in enumerate(second.exchanges, 1):
@@ -324,6 +352,10 @@ def evaluate(c: Conversation, scenario: dict, stages: dict[str, list[str]], allo
         results.append(no_reoffer(c))
     if expect.get("somatic"):
         results.append(somatic_check_in(c))
+    if stop := expect.get("stop"):
+        results.append(no_question_after_stop(c, stop))
+    if name := expect.get("stage_after_tap"):
+        results.append(stage_after_tap(c, name))
     if rules := expect.get("safety"):
         results += safety(c, rules, refused_after_pause)
     return results

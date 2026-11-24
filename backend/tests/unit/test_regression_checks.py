@@ -1,5 +1,5 @@
 # ABOUTME: Checks the regression suite's checks on built conversations: offer timing, stage order, repeats, invented
-# ABOUTME: pronouns, forbidden words, safety handling, isolation, pending requirements, and the run-to-run figures.
+# ABOUTME: pronouns, forbidden words, safety handling, isolation, stops, lead-in taps, pending requirements and figures.
 
 from decimal import Decimal
 
@@ -138,6 +138,28 @@ def test_lead_in_buttons_that_give_the_same_reply_fail():
     distinct = {LEAD_IN[0]: "ABCDE is a way to test a thought.", LEAD_IN[1]: "Take yesterday's project as A.",
                 LEAD_IN[2]: "A is for Activating Event. What happened?"}
     assert checks.lead_in_differs(distinct).passed
+
+
+def test_a_question_after_a_typed_stop_fails():
+    # R95 and Lolly 2026-11-17: TC-17.
+    asked = chat(turn("my sister cancels", "What happens then?"), turn("I'm done", "Okay. Come back another time?"))
+    results = checks.evaluate(asked, {"expect": {"stop": "I'm done"}}, STAGES, checks.allowed_labels())
+    stop = next(r for r in results if r.check == "no_question_after_stop")
+    assert (stop.kind, stop.passed, stop.turn) == (checks.DETERMINISTIC, False, 2)
+    assert checks.no_question_after_stop(chat(turn("i'm done", "Okay. Take care tonight.")), "I'm done").passed
+    assert not checks.no_question_after_stop(chat(turn("hi", "Hi.")), "I'm done").passed
+
+
+def test_give_me_a_tool_must_open_a_stage_in_its_reply():
+    # Lolly 2026-11-20: TC-18. The scenario names the button as the client writes it; the label comes from greeting.py.
+    tool = checks.lead_in_label("give me a TOOL")
+    assert tool in greeting.LEAD_IN_LABELS
+    started = chat(turn("x", "y", buttons=LEAD_IN), turn(tool, "A is for Activating Event. What happened?",
+                                                         stage="activate"))
+    assert checks.stage_after_tap(started, "Give me a tool").passed
+    explained = chat(turn("x", "y", buttons=LEAD_IN), turn(tool, "ABCDE has five steps."))
+    assert checks.stage_after_tap(explained, "Give me a tool").detail == "stage None"
+    assert checks.stage_after_tap(chat(turn("x", "y")), "Give me a tool").detail == "'Give me a tool' was never tapped"
 
 
 def test_an_invented_button_label_fails():
