@@ -6,7 +6,7 @@ import uuid
 import pytest
 
 from mani.chat import crisis, runner
-from mani.chat.reply import Question, Safety
+from mani.chat.reply import Event, Person, Question, Safety
 from mani.db import threads
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
@@ -67,6 +67,23 @@ async def test_notes_written_by_one_turn_reach_the_next_turns_facts(alice, model
     await send(alice, thread.id, "my boss keeps piling work on me")
     await send(alice, thread.id, "yeah")
     assert "Your notes from your last turn: boss piles work; feels like a pushover" in facts_of(scripted)
+
+
+async def test_people_and_events_carry_to_the_next_turn_and_a_new_conversation_starts_without_them(alice, model):
+    """Each conversation stands alone: what one learned of their people and events never reaches another."""
+    scripted = model(
+        said("That's soon.", people=[Person(called="my sister", relation="sister", told="won't be there")],
+             events=[Event(what="Thanksgiving alone this Thursday", when="upcoming")]),
+        said("I hear you."),
+    )
+    thread = await start(alice)
+    await send(alice, thread.id, "thanksgiving is thursday and my sister won't be there")
+    await send(alice, thread.id, "yeah")
+    assert ("my sister (sister): won't be there" in facts_of(scripted)
+            and "[upcoming] Thanksgiving alone this Thursday" in facts_of(scripted))
+    other = await start(alice)
+    await send(alice, other.id, "hi")
+    assert "my sister" not in facts_of(scripted) and "Thanksgiving" not in facts_of(scripted)
 
 
 async def test_an_open_chat_reply_keeps_one_question_and_the_next_turn_hears_what_it_was_for(alice, model):

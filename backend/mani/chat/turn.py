@@ -294,7 +294,9 @@ async def _apply(
 def _updates(ctx, reply: TurnReply, decision, judgment, *, record, check, answering, end_check_asked,
              wants_title, asked: list[str] | None) -> tuple[threads.ThreadUpdates, dict]:
     """The thread's changes and its record after this turn. `asked`: the questions an open-chat reply sent, else None."""
-    after = rec.with_outcomes(record, notes=reply.notes, declined=decision.declined, finished=decision.finished)
+    after = rec.with_outcomes(record, notes=reply.notes, people=[p.model_dump() for p in reply.people],
+                              events=[e.model_dump() for e in reply.events], declined=decision.declined,
+                              finished=decision.finished)
     if asked is not None:
         intent = reply.question.intent.strip().lower()
         after = rec.with_question(after, asked[-1] if asked else "",

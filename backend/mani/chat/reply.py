@@ -1,5 +1,5 @@
-# ABOUTME: The turn's one reply as the model fills it: its plan for the question, what Mani says, what happens next,
-# ABOUTME: its safety judgment and its own notes. Field descriptions are what the model reads, so they match mani.md's last section.
+# ABOUTME: The turn's one reply as the model fills it: its plan, the people and events, what Mani says, what happens
+# ABOUTME: next, its safety judgment and its notes. Field descriptions are what the model reads, so they match mani.md.
 
 from __future__ import annotations
 
@@ -44,8 +44,33 @@ class Question(BaseModel):
         "this reply asks nothing."))
 
 
+class Person(BaseModel):
+    """Someone they spoke of in this conversation, kept as they put it so no detail moves to someone else."""
+
+    called: str = Field(description="How they name this person, in their words.")
+    relation: str = Field(description=(
+        "Who this person is to them, only as they said it; unsaid when they haven't said."))
+    told: str = Field(description=(
+        "What they said about this person, in their words, under 25 words. Never your reading."))
+
+
+class Event(BaseModel):
+    """Something that happened, is happening or is coming, kept as they said it so past and upcoming never swap."""
+
+    what: str = Field(description="What happened or will happen, in their words, under 20 words.")
+    when: Literal["past", "now", "upcoming", "unsaid"] = Field(description=(
+        "past when it already happened, now when it is going on, upcoming when it has not happened yet, unsaid when "
+        "they haven't said."))
+
+
 class TurnReply(BaseModel):
     question: Question = Field(default_factory=Question, description="Your plan for this reply's question, before you write.")
+    people: list[Person] = Field(default_factory=list, description=(
+        "Everyone they have spoken of in this conversation, rewritten whole each turn from the list in the facts and "
+        "their latest message. Change an entry only when they add to it or correct it. At most 8."))
+    events: list[Event] = Field(default_factory=list, description=(
+        "What happened, is happening or is coming, as they said it, rewritten whole each turn the same way. An upcoming "
+        "event becomes past only when they say it happened. At most 10."))
     text: str = Field(description="What you say to them, exactly as they will read it.")
     action: Literal["none", "offer", "finish", "stop", "library"] = Field(
         default="none", description="What happens after this reply."
@@ -53,7 +78,8 @@ class TurnReply(BaseModel):
     framework: str | None = Field(default=None, description="The id of the set you offer, only with action offer.")
     stage: str | None = Field(default=None, description="The stage whose question this reply asks, while a set runs.")
     safety: Safety
-    notes: str = Field(description="Your private working notes for your next turn, under 150 words.")
+    notes: str = Field(description=(
+        "Your private working notes for your next turn, under 100 words. People and events go in their own fields."))
     title: str | None = Field(default=None, description="Only when the facts ask for a title.")
     corrected: bool = Field(default=False, description=(
         "True when their latest message corrects something you said or understood about them."))

@@ -67,6 +67,14 @@ def test_the_notes_from_the_last_turn_are_handed_back():
     assert "Your notes from your last turn: boss, pushover" in facts_for(ctx(), record={"notes": "boss, pushover"})
 
 
+def test_the_people_and_events_kept_are_handed_back_with_their_relation_and_when():
+    record = {"people": [{"called": "Sam", "relation": "unsaid", "told": "stopped calling"}],
+              "events": [{"what": "Thanksgiving alone this Thursday", "when": "upcoming"}]}
+    text = facts_for(ctx(), record=record)
+    assert "Sam (unsaid): stopped calling" in text and "[upcoming] Thanksgiving alone this Thursday" in text
+    assert "people they spoke of" not in facts_for(ctx()) and "[upcoming]" not in facts_for(ctx())
+
+
 def test_the_open_chat_is_told_each_question_asked_and_what_it_was_for():
     record = {"questions": [{"q": "What does a normal week look like?", "intent": "situation"},
                             {"q": "", "intent": "none"},

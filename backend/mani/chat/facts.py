@@ -59,6 +59,7 @@ def facts(
     lines = [f"Their style: {style_label(style)}."]
     if notes := record.get(rec.NOTES):
         lines.append(f"Your notes from your last turn: {notes}")
+    lines += understanding_lines(record)
     if running is not None and (framework := config.registry.get(running.framework_id)):
         lines.append(_running_line(framework, running.phase, held=holding))
     elif not holding:
@@ -83,6 +84,19 @@ def facts(
     if wants_title:
         lines.append("Give this conversation a title.")
     return facts_block(lines)
+
+
+def understanding_lines(record: dict) -> list[str]:
+    """The people and events kept from your last turn, as they said them, for this reply to carry forward."""
+    lines = []
+    if people := rec.people(record):
+        listed = "; ".join(f"{p['called']} ({p['relation'] or 'unsaid'}): {p['told'] or 'nothing yet'}" for p in people)
+        lines.append(f"The people they spoke of, as they put them: {listed}. Each detail belongs to its person only.")
+    if events := rec.events(record):
+        listed = "; ".join(f"[{e['when']}] {e['what']}" for e in events)
+        lines.append(f"What they told you happened or is coming, as they said it: {listed}. Never speak of an upcoming "
+                     "event as past, and never state as fact what they have not said.")
+    return lines
 
 
 def question_lines(kept: list[dict]) -> list[str]:
