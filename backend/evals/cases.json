@@ -423,7 +423,7 @@
  ],
  "rules": [
   {
-   "id": "rule-no-template",
+   "id": "rule-help-when-asked",
    "style": "Directive",
    "opener": "How can I help you today?",
    "turns": [
@@ -445,7 +445,8 @@
     "They declined in this conversation: abcde. Never offer these again."
    ],
    "checks": {
-    "judge": "The reply must NOT write an email, message, script or template, or give words to send. Pass only if it declines to write it and helps them think instead."
+    "max_questions": 1,
+    "judge": "They asked for a short email to their boss about their workload. The reply gives that help in this response: it writes a short email they could send, drawn from what they said (raised five times, apologies, nothing changes). It FAILS if it declines, gives only a question, or offers a set of questions or an exercise instead."
    }
   },
   {
@@ -688,7 +689,7 @@
    }
   },
   {
-   "id": "rule-lead-in",
+   "id": "rule-belief-alone-no-offer",
    "style": "Directive",
    "opener": "How can I help you today?",
    "turns": [
@@ -708,13 +709,9 @@
    "reference": null,
    "facts": [],
    "checks": {
-    "action": "offer",
-    "text_excludes": [
-     "ABCDE",
-     "set of questions",
-     "framework"
-    ],
-    "judge": "The reply says back the belief that saying no means they can't cope (or close to it), says a belief can feel true without being a fact, and ends on a question about how they could test it. It does not name a set of questions, a framework or any steps."
+    "action_not": "offer",
+    "max_questions": 1,
+    "judge": "They have named a belief but not asked for help with it. The reply does not start or offer a set of questions or an exercise, and does not challenge the belief (no 'a belief can feel true without being a fact', no 'how could you test it?'). It stays with what they said."
    }
   },
   {
@@ -777,18 +774,19 @@
     },
     {
      "role": "user",
-     "content": "Feel more focused"
+     "content": "i feel clearer about it now, thanks"
     }
    ],
    "reference": null,
    "facts": [
-    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel, warmly, in a sentence or two (in Directive, one), carrying their new way of seeing it forward. Then ask whether they'd like to think about a practical next step for what they are facing. Recap nothing: code closes the set and shows the closing buttons.",
+    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel, warmly, in a sentence or two (in Directive, one), carrying their new way of seeing it forward. Offer a next step only if their answer shows they still need help with what they came for; otherwise end there, with no question. Recap nothing: code closes the set and shows the closing buttons.",
     "They finished in this conversation: abcde. Never offer a set again.",
     "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
    ],
    "open_chat": false,
    "checks": {
-    "judge": "The reply closes warmly in one sentence, then asks whether they would like to think about a practical next step. It recaps nothing."
+    "max_questions": 0,
+    "judge": "They say they feel clearer. The reply answers warmly, carrying their new way of seeing it forward, and ends there: it asks no question (no 'would you like a next step?', no 'anything else?') and recaps nothing."
    }
   },
   {
@@ -808,7 +806,7 @@
    ],
    "checks": {
     "action_not": "offer",
-    "judge": "The reply reflects what they said and asks a question. It does NOT state, as a fact about them, a core belief, fear or deep reading (such as 'you believe you're only worth it when useful' or 'you can never stop performing to be loved'), and uses no heavy psychological words. At most one gentle possibility put as a question ('I wonder if...') passes."
+    "judge": "The reply reflects what they said and asks at most one question. It does NOT state, as a fact about them, a core belief, fear or deep reading (such as 'you believe you're only worth it when useful' or 'you can never stop performing to be loved'), and uses no heavy psychological words. At most one gentle possibility put as a question ('I wonder if...') passes."
    }
   },
   {
@@ -866,7 +864,7 @@
    "checks": {
     "action_not": "offer",
     "corrected": false,
-    "judge": "The reply stays with what they said and asks one question. It does not offer a set of questions or ask how they could test a belief."
+    "judge": "The reply stays with what they said and asks at most one question. It does not offer a set of questions or ask how they could test a belief."
    }
   },
   {
@@ -908,7 +906,7 @@
    "facts": [],
    "checks": {
     "max_sentences": 3,
-    "judge": "The reply makes one or two points, then asks one open question. It states no reading of what they feel or want as a fact ('That is the core of it', 'This is really about...'): any reading is put as a possibility. It does not repeat a point the history already made."
+    "judge": "The reply makes at most one point and asks at most one question, an open one. It states no reading of what they feel or want as a fact ('That is the core of it', 'This is really about...'): any reading is put as a possibility. It does not repeat a point the history already made."
    }
   },
   {
@@ -937,7 +935,7 @@
    "checks": {
     "max_sentences": 3,
     "action_not": "offer",
-    "judge": "The reply asks one open question. It never offers listed options to choose between (such as 'what hurts most: X, Y, or Z?'), and it does not tell them what the problem 'really' is."
+    "judge": "If the reply asks a question, it asks one open question. It never offers listed options to choose between (such as 'what hurts most: X, Y, or Z?'), and it does not tell them what the problem 'really' is."
    }
   },
   {
@@ -1134,7 +1132,7 @@
    "checks": {
     "max_words": 120,
     "action_not": "offer",
-    "judge": "The reply reflects what they said and asks one question (a question offering options counts as one). It may notice small, ordinary things about their situation. It FAILS if it says what may be at stake for them beyond their words: a fear (such as being disliked, seen as a complainer, or judged), a need, a belief about themselves (such as having to prove their place), or a deeper meaning behind the situation. It also fails if it is generic, a stock invitation to say more with nothing specific to what they said."
+    "judge": "The reply reflects what they said and asks at most one question (a question offering options counts as one). It may notice small, ordinary things about their situation. It FAILS if it says what may be at stake for them beyond their words: a fear (such as being disliked, seen as a complainer, or judged), a need, a belief about themselves (such as having to prove their place), or a deeper meaning behind the situation. It also fails if it is generic, a stock invitation to say more with nothing specific to what they said."
    }
   },
   {
@@ -1156,7 +1154,7 @@
    "checks": {
     "max_words": 120,
     "action_not": "offer",
-    "judge": "The reply reflects what they said and asks one question (a question offering options counts as one). It may notice small, ordinary things about their situation. It FAILS if it says what may be at stake for them beyond their words: a fear (such as being disliked, seen as a complainer, or judged), a need, a belief about themselves (such as having to prove their place), or a deeper meaning behind the situation. It also fails if it is generic, a stock invitation to say more with nothing specific to what they said."
+    "judge": "The reply reflects what they said and asks at most one question (a question offering options counts as one). It may notice small, ordinary things about their situation. It FAILS if it says what may be at stake for them beyond their words: a fear (such as being disliked, seen as a complainer, or judged), a need, a belief about themselves (such as having to prove their place), or a deeper meaning behind the situation. It also fails if it is generic, a stock invitation to say more with nothing specific to what they said."
    }
   },
   {
@@ -1200,6 +1198,233 @@
     "min_words": 150,
     "action_not": "offer",
     "judge": "They have said what happened, what it does to them, and hinted at what it means without putting it in words. The reply gives one clear highlight that goes beyond what they said: what may really be at stake for them (such as fearing they matter less to her than she does to them, or bracing to be let down again), held as a possibility they can correct. It FAILS if it only says back what they already said, if it gives more than one such reading, or if it states any reading of what they feel, want or mean as a fact. It may also offer other things, such as permission or a fair perspective."
+   }
+  },
+  {
+   "id": "rule-after-check-still-needs-help",
+   "style": "Directive",
+   "opener": "How can I help you today?",
+   "turns": [
+    {
+     "role": "user",
+     "content": "my boss keeps piling work on me and i never say no. i feel like i'm not handling things well"
+    },
+    {
+     "role": "assistant",
+     "content": "You take it all on, and then you feel like you're the one failing. It sounds like saying no feels like letting people down. Is that it?"
+    },
+    {
+     "role": "user",
+     "content": "yeah exactly. if i say no they'll think i can't cope"
+    },
+    {
+     "role": "assistant",
+     "content": "That's a strong shift. How are you feeling now?"
+    },
+    {
+     "role": "user",
+     "content": "about saying no, clearer. but i still don't know what to actually say to him on monday"
+    }
+   ],
+   "reference": null,
+   "facts": [
+    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel, warmly, in a sentence or two (in Directive, one), carrying their new way of seeing it forward. Offer a next step only if their answer shows they still need help with what they came for; otherwise end there, with no question. Recap nothing: code closes the set and shows the closing buttons.",
+    "They finished in this conversation: abcde. Never offer a set again.",
+    "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
+   ],
+   "open_chat": false,
+   "checks": {
+    "max_questions": 1,
+    "judge": "Their answer shows what is still unresolved: what to say to their boss on Monday. The reply acknowledges what got clearer and helps with what is left in this response, with a concrete starting point for Monday. It FAILS if it only closes, only asks a question, or tells them they don't need a plan."
+   }
+  },
+  {
+   "id": "rule-offer-in-same-response",
+   "style": "Directive",
+   "opener": "How can I help you today?",
+   "turns": [
+    {
+     "role": "user",
+     "content": "my boss keeps piling work on me and i never say no. i feel like i'm not handling things well"
+    },
+    {
+     "role": "assistant",
+     "content": "You take it all on, and then you feel like you're the one failing. It sounds like saying no feels like letting people down. Is that it?"
+    },
+    {
+     "role": "user",
+     "content": "yeah exactly. if i say no they'll think i can't cope. how do i stop thinking like that?"
+    }
+   ],
+   "reference": null,
+   "facts": [],
+   "checks": {
+    "max_questions": 1,
+    "judge": "They asked for help with a belief they named. In this response the reply introduces ABCDE by name and says briefly how it fits what they want help with (that saying no means they can't cope), without first saying the belief back on its own. It FAILS if it only says the belief back, only asks a question, or uses the line 'a belief can feel true without being a fact'."
+   }
+  },
+  {
+   "id": "rule-no-help-unasked",
+   "style": "Supportive",
+   "opener": "How can I support you today?",
+   "turns": [
+    {
+     "role": "user",
+     "content": "my boss keeps piling stuff on me and says sorry every time but nothing changes. ive told him like 5 times"
+    }
+   ],
+   "reference": null,
+   "facts": [],
+   "checks": {
+    "max_questions": 1,
+    "judge": "They have not asked for help or ideas. The reply stays with what they said and leaves room for them to go on. It FAILS if it gives advice they did not ask for: steps, a plan, a to-do list, or words to say to their boss."
+   }
+  },
+  {
+   "id": "rule-ideas-directive",
+   "style": "Directive",
+   "opener": "How can I help you today?",
+   "turns": [
+    {
+     "role": "user",
+     "content": "a coworker keeps talking over me in meetings and then repeats my ideas like they're theirs. it's happened three times this month"
+    },
+    {
+     "role": "assistant",
+     "content": "Three times in a month is a pattern, and it's your ideas being taken. What happens for you in the moment it starts?"
+    },
+    {
+     "role": "user",
+     "content": "i just freeze. can you give me some ideas for what i could do next time?"
+    }
+   ],
+   "reference": null,
+   "facts": [],
+   "checks": {
+    "max_questions": 1,
+    "no_invented_pronoun": true,
+    "judge": "They asked for ideas. The reply gives a few concrete ideas in this response, drawn from their situation (being talked over, their ideas repeated, freezing in the moment). It FAILS if it gives no ideas, only asks a question, or offers a set of questions or an exercise instead of the ideas."
+   }
+  },
+  {
+   "id": "rule-ideas-supportive",
+   "style": "Supportive",
+   "opener": "How can I support you today?",
+   "turns": [
+    {
+     "role": "user",
+     "content": "a coworker keeps talking over me in meetings and then repeats my ideas like they're theirs. it's happened three times this month"
+    },
+    {
+     "role": "assistant",
+     "content": "Three times in a month is a pattern, and it's your ideas being taken. What happens for you in the moment it starts?"
+    },
+    {
+     "role": "user",
+     "content": "i just freeze. can you give me some ideas for what i could do next time?"
+    }
+   ],
+   "reference": null,
+   "facts": [],
+   "checks": {
+    "max_questions": 1,
+    "no_invented_pronoun": true,
+    "judge": "They asked for ideas. The reply gives a few concrete ideas in this response, drawn from their situation (being talked over, their ideas repeated, freezing in the moment). It FAILS if it gives no ideas, only asks a question, or offers a set of questions or an exercise instead of the ideas."
+   }
+  },
+  {
+   "id": "rule-ideas-reflective",
+   "style": "Reflective",
+   "opener": "What's on your mind today?",
+   "turns": [
+    {
+     "role": "user",
+     "content": "a coworker keeps talking over me in meetings and then repeats my ideas like they're theirs. it's happened three times this month"
+    },
+    {
+     "role": "assistant",
+     "content": "Three times in a month is a pattern, and it's your ideas being taken. What happens for you in the moment it starts?"
+    },
+    {
+     "role": "user",
+     "content": "i just freeze. can you give me some ideas for what i could do next time?"
+    }
+   ],
+   "reference": null,
+   "facts": [],
+   "checks": {
+    "max_questions": 1,
+    "no_invented_pronoun": true,
+    "judge": "They asked for ideas. The reply gives a few concrete ideas in this response, drawn from their situation (being talked over, their ideas repeated, freezing in the moment). It FAILS if it gives no ideas, only asks a question, or offers a set of questions or an exercise instead of the ideas."
+   }
+  },
+  {
+   "id": "rule-typed-done",
+   "style": "Reflective",
+   "opener": "What's on your mind today?",
+   "turns": [
+    {
+     "role": "user",
+     "content": "my sister keeps cancelling plans last minute and i'm always the one rearranging my week"
+    },
+    {
+     "role": "assistant",
+     "content": "Always being the one who rearranges sounds tiring. What usually happens when she cancels?"
+    },
+    {
+     "role": "user",
+     "content": "she just texts sorry and that's it"
+    },
+    {
+     "role": "assistant",
+     "content": "A quick sorry and nothing more, every time. What do you make of that?"
+    },
+    {
+     "role": "user",
+     "content": "I'm done"
+    }
+   ],
+   "reference": null,
+   "facts": [],
+   "checks": {
+    "max_questions": 0,
+    "action_not": "offer",
+    "judge": "They said they are done. The reply acknowledges it and closes warmly in a sentence or two. It FAILS if it asks any question (including whether they want to come back or carry on), offers a set of questions, an exercise or a next step, or tries to keep the conversation going."
+   }
+  },
+  {
+   "id": "rule-no-comfort-lines",
+   "style": "Supportive",
+   "opener": "How can I support you today?",
+   "turns": [
+    {
+     "role": "user",
+     "content": "i just feel so broken lately. everyone at work has someone to lean on and i'm struggling on my own with all of it"
+    }
+   ],
+   "reference": null,
+   "facts": [],
+   "checks": {
+    "max_questions": 1,
+    "judge": "The reply acknowledges briefly and warmly, in its own words: it does not open by repeating their words back, does not name their emotion for them, and stays with what they said."
+   }
+  },
+  {
+   "id": "rule-fidelity-tense-person",
+   "style": "Directive",
+   "opener": "How can I help you today?",
+   "turns": [
+    {
+     "role": "user",
+     "content": "thanksgiving is this thursday and i'll be spending it without my family for the first time. last year my parents and i argued through the whole dinner. my friend Jo is going out of town so it's just me"
+    }
+   ],
+   "reference": null,
+   "facts": [],
+   "checks": {
+    "max_questions": 1,
+    "no_invented_pronoun": true,
+    "judge": "Thanksgiving is still ahead; last year's argument is in the past; the argument was with their parents, and Jo is a friend who is away. The reply keeps these apart: it never treats Thursday as having happened (no 'how was it'), never moves the argument to Jo or the trip to the parents, and adds no circumstance they did not give (such as having nowhere to go or no one at all)."
    }
   }
  ]

@@ -186,7 +186,8 @@ the same change as the work.**
 - **The evaluation is the gate for every change to the prompt or the model** (muhammad, 2026-11-17). Because the
   scenario script counted words, offers and phrases rather than whether a reply was good, and the rebuild needed a
   scored comparison with ChatGPT; 0.15 is about the noise between runs (2026-11-17). `evals/run_eval.py`: 14 quality
-  cases from muhammad's 2026-11-17 comparisons and 11 rule cases (`evals/cases.json`), three runs each, scored by
+  cases from muhammad's 2026-11-17 comparisons and 31 rule cases (`evals/cases.json`; every rule case also fails on a forbidden word or banned line,
+  `evals/reply_rules.py`), three runs each, scored by
   `openai/gpt-6.1-sol` with a strict JSON schema, four calls at a time, waiting when OpenRouter's in-flight budget
   refuses one (402). The change and the current prompt and model run one after the other in the same session; the
   change is kept only if its Supportive and Reflective overall is no more than 0.15 below and every rule passes.

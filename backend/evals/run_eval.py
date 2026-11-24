@@ -18,6 +18,7 @@ import httpx  # noqa: E402
 from openai.lib._pydantic import to_strict_json_schema  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
+from evals import reply_rules  # noqa: E402
 from mani.chat import crisis, questions, repairs  # noqa: E402
 from mani.chat.facts import facts_block, framework_guide  # noqa: E402
 from mani.chat.greeting import style_label  # noqa: E402
@@ -36,7 +37,7 @@ CRITERIA = {
     "ideas": "Gives ideas to explore: a fair perspective, a distinction, something highlighted, permission, both feelings.",
     "question": ("Asks a question only when it helps, and never more than one: open, or options each with a reason. "
                  "Not a thin either-or, not a fact-check. A reply that rightly asks nothing is not marked down."),
-    "voice": "Warm, plain everyday words, no therapy talk, no lecture, no solutions or advice, no emojis.",
+    "voice": "Warm, plain everyday words, no therapy talk, no lecture, no advice they did not ask for, no emojis.",
     "overall": "Compared with the reference reply: 5 = as good or better, 3 = clearly weaker, 1 = much worse.",
 }
 
@@ -180,8 +181,17 @@ GATED_STYLES = ("Supportive", "Reflective")
 
 
 def rule_checks(case, got) -> list[str]:
-    """What code can check from the reply's fields and the words the person receives; empty when it passes."""
+    """What code can check from the reply's fields and the words the person receives; empty when it passes. The client's
+    forbidden words and banned lines are checked on every rule case (approved by muhammad, 2026-11-24)."""
     failed, checks, text = [], case["checks"], got.get("sent") or ""
+    failed += [f"used forbidden {word!r}" for word in reply_rules.forbidden_words(text)]
+    failed += [f"said banned {line!r}" for line in reply_rules.banned_phrases(text)]
+    if "max_questions" in checks and (count := len(reply_rules.questions(text))) > checks["max_questions"]:
+        failed.append(f"{count} questions > {checks['max_questions']}")
+    if checks.get("no_invented_pronoun"):
+        said = " ".join(t.get("content", "") for t in case["turns"] if t["role"] == "user")
+        failed += [f"said {g!r} before the person did"
+                   for g in sorted(reply_rules.pronouns(text) - reply_rules.pronouns(said))]
     if "max_sentences" in checks and (count := len(questions.sentences(text))) > checks["max_sentences"]:
         failed.append(f"{count} sentences > {checks['max_sentences']}")
     words = len(text.split())
