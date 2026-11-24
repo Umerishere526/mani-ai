@@ -33,10 +33,13 @@ class Safety(BaseModel):
 
 class Question(BaseModel):
     """What the reply's question is for, decided before the words. Plain text, so an odd value never fails the reply;
-    code reads `latest` and keeps `intent` beside the question it asked."""
+    code reads `latest`, keeps `intent` beside the question it asked and `answered` beside the one before."""
 
     latest: str = Field(default="", description=(
         "Their latest message, in one word: answer, adds_more, asks_mani, frustrated (with you), wants_to_stop or other."))
+    answered: str = Field(default="", description=(
+        "When their latest message answers your last question: that answer in 8 words or fewer, in their words. Empty "
+        "otherwise."))
     intent: str = Field(default="", description=(
         "What this reply's question is for: situation, feeling, belief, wants or step. none when it asks nothing."))
     why_now: str = Field(default="", description=(

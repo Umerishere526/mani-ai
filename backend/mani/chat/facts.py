@@ -106,7 +106,9 @@ def ledger_lines(kept: list[dict], *, open_chat: bool) -> list[str]:
     chat, a run of replies that all asked."""
     lines = []
     if asked := [entry for entry in kept if entry.get("q")]:
-        listed = "; ".join(f"[{entry.get('intent') or 'unsaid'}] \"{entry['q']}\"" for entry in asked)
+        listed = "; ".join(f"[{entry.get('intent') or 'unsaid'}] \"{entry['q']}\""
+                           + (f" (already answered: \"{entry['answer']}\")" if entry.get("answer") else "")
+                           for entry in asked)
         lines.append(f"The questions you asked in this conversation, oldest first, with what each was for: {listed}. "
                      "Never ask again for something they answered, even in new words.")
     if gave := [entry for entry in kept[-SAID_SHOWN:] if entry.get("gist")]:

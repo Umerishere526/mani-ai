@@ -101,6 +101,19 @@ async def test_an_open_chat_reply_keeps_one_question_and_the_next_turn_hears_wha
     assert '[belief] "What do you tell yourself would happen if you said no?".' in facts_of(scripted)
 
 
+async def test_a_question_their_next_message_answers_is_told_as_already_answered(alice, model):
+    scripted = model(
+        said("That stings.\n\nWhat did he say?", question=Question(intent="situation")),
+        said("Lazy is a hard word to hear.", question=Question(latest="answer", answered="called me lazy")),
+        said("I hear you."),
+    )
+    thread = await start(alice)
+    await send(alice, thread.id, "my boss had a go at me")
+    await send(alice, thread.id, "he called me lazy in front of everyone")
+    await send(alice, thread.id, "yeah")
+    assert '[situation] "What did he say?" (already answered: "called me lazy")' in facts_of(scripted)
+
+
 # Two ordinary exchanges first: an offer may come with the person's 3rd message at the earliest.
 WARM_UP = (said("Go on."), said("Tell me more."))
 

@@ -88,6 +88,11 @@ def test_each_question_asked_is_told_with_what_it_was_for_in_the_chat_and_in_a_s
     assert listed in facts_for(ctx(), record=record, running=running("abcde", "belief"))
 
 
+def test_an_answered_question_is_told_as_already_answered():
+    record = {"replies": [{**reply("What did he say?", "situation"), "answer": "said I'm lazy"}]}
+    assert '[situation] "What did he say?" (already answered: "said I\'m lazy")' in facts_for(ctx(), record=record)
+
+
 def test_three_replies_in_a_row_that_asked_tell_the_next_to_give_something_instead():
     asked = reply("Why?", "feeling")
     assert "Your last 3 replies each ended on a question" in facts_for(ctx(), record={"replies": [asked] * 3})

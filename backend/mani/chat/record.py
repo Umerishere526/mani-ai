@@ -15,7 +15,8 @@ NAME_CHARS = 60
 LINE_CHARS = 200
 WHEN = ("past", "now", "upcoming", "unsaid")
 # Each reply, oldest first: the question it asked ("" for none) and what that question was for, whether it was in the
-# open chat, its move and the gist of what it gave, and its opening words.
+# open chat, its move and the gist of what it gave, its opening words, and once their next message answers its
+# question, the gist of that answer.
 REPLIES = "replies"
 REPLIES_KEPT = 12
 # What a reply mainly does (TurnReply.said.move); anything else is kept as "other".
@@ -50,13 +51,24 @@ def finished(record: dict) -> list[str]:
 
 def replies(record: dict) -> list[dict]:
     """The replies kept, oldest first, each as {"q": the question or "", "intent": what it was for, "open_chat": whether
-    it was in the open chat, "move", "gist", "opens": its first words}."""
+    it was in the open chat, "move", "gist", "opens": its first words}, with "answer" once their next message answered
+    the question."""
     return list(record.get(REPLIES) or [])
 
 
 def opening(text: str) -> str:
     """A reply's first OPENING_WORDS words, without the punctuation that ends them."""
     return " ".join(text.split()[:OPENING_WORDS]).rstrip(".,!?;:")
+
+
+def with_answer(record: dict, answer: str) -> dict:
+    """The record with the gist of their answer set on the last reply's question, when it asked one not yet answered;
+    otherwise the record as it was."""
+    kept = replies(record)
+    answer = _clip(answer, GIST_CHARS)
+    if not answer or not kept or not kept[-1].get("q") or kept[-1].get("answer"):
+        return record
+    return {**record, REPLIES: [*kept[:-1], {**kept[-1], "answer": answer}]}
 
 
 def with_reply(record: dict, *, question: str, intent: str, open_chat: bool, move: str, gist: str, text: str) -> dict:

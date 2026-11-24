@@ -3,7 +3,7 @@
 
 from mani.chat.record import (
     EVENTS_KEPT, LINE_CHARS, PEOPLE_KEPT, REPLIES_KEPT, declined, events, finished, people, replies, with_outcomes,
-    with_reply,
+    with_answer, with_reply,
 )
 
 
@@ -56,3 +56,14 @@ def test_each_reply_is_kept_with_its_move_gist_and_opening_words_and_only_the_la
 def test_a_move_outside_the_six_is_kept_as_other():
     after = with_reply({}, question="", intent="none", open_chat=False, move="console", gist="", text="Okay.")
     assert replies(after)[0]["move"] == "other" and replies(after)[0]["opens"] == "Okay"
+
+
+def test_an_answer_lands_on_the_last_reply_s_question_once_and_never_on_a_reply_that_asked_nothing():
+    asked = with_reply({}, question="What did he say?", intent="situation", open_chat=True, move="reflect", gist="",
+                       text="What did he say?")
+    answered = with_answer(asked, "said I'm lazy")
+    assert replies(answered)[-1]["answer"] == "said I'm lazy"
+    assert replies(with_answer(answered, "something else"))[-1]["answer"] == "said I'm lazy"
+    assert with_answer(asked, "") == asked
+    silent = with_reply({}, question="", intent="none", open_chat=True, move="reassure", gist="", text="Okay.")
+    assert with_answer(silent, "yes") == silent

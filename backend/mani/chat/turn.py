@@ -314,6 +314,7 @@ def _updates(ctx, reply: TurnReply, decision, judgment, *, record, check, answer
     after = rec.with_outcomes(record, notes=reply.notes, people=[p.model_dump() for p in reply.people],
                               events=[e.model_dump() for e in reply.events], declined=decision.declined,
                               finished=decision.finished)
+    after = rec.with_answer(after, reply.question.answered)
     if entry is not None:
         after = rec.with_reply(after, **entry)
     after = worry.record_after(after, judgment, check=check, answering=answering)
