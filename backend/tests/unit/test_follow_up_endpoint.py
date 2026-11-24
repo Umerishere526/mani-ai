@@ -5,8 +5,11 @@ import datetime as dt
 import uuid
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from mani.auth.deps import Participant, require_chat_open
+from mani.auth.jwt import Claims
 from mani.chat import turn as chat_turn
 from mani.routers import messages as messages_router
 from main import create_app
@@ -14,6 +17,17 @@ from tests.unit.test_endpoint_auth import USER, _token, secret  # noqa: F401 - s
 
 THREAD = uuid.uuid4()
 REPLY = uuid.uuid4()
+
+
+async def _no_pause(user: Participant) -> Claims:
+    """The chat-open check with no pause on record, so the wiring is checked without a database."""
+    return user
+
+
+def _app() -> FastAPI:
+    app = create_app()
+    app.dependency_overrides[require_chat_open] = _no_pause
+    return app
 
 
 def _turn(needs_summary: bool = False, was_duplicate: bool = False) -> chat_turn.Turn:
@@ -48,7 +62,7 @@ def _send(monkeypatch, headers, turn) -> dict:
         return turn
 
     monkeypatch.setattr(messages_router.runner, "send", send)
-    with TestClient(create_app()) as client:
+    with TestClient(_app()) as client:
         response = client.post(f"/v1/threads/{THREAD}/messages", json={"content": "my brother never calls"},
                                headers=headers)
     assert response.status_code == 201
@@ -74,7 +88,7 @@ def test_the_call_link_and_the_trace_are_written_before_the_response(wired, monk
 
 def test_the_follow_up_endpoint_reports_read_false_and_summarizes(wired):
     seen, headers = wired
-    with TestClient(create_app()) as client:
+    with TestClient(_app()) as client:
         response = client.post(f"/v1/threads/{THREAD}/messages/{REPLY}/follow-up", headers=headers)
 
     assert response.status_code == 200
@@ -86,6 +100,6 @@ def test_the_follow_up_endpoint_reports_read_false_and_summarizes(wired):
 
 def test_the_follow_up_endpoint_needs_a_token(wired):
     seen, _ = wired
-    with TestClient(create_app()) as client:
+    with TestClient(_app()) as client:
         assert client.post(f"/v1/threads/{THREAD}/messages/{REPLY}/follow-up").status_code == 401
     assert seen["follow_ups"] == []
