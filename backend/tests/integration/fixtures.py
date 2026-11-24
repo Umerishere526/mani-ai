@@ -28,12 +28,14 @@ def said(text: str, *, level: str = "none", notes: str = "", **fields) -> TurnRe
 
 
 class ScriptedModel:
-    """A model that answers from a script, in order, and keeps what each call was sent."""
+    """A model that answers from a script, in order, and keeps what each call was sent and the schema it was given.
+    A scripted reply is read through that schema as the provider's reply is, so it may do what the schema did not show."""
 
     def __init__(self, *replies: TurnReply) -> None:
         self._replies = list(replies)
         self.calls = 0
         self.sent: list[list[dict]] = []
+        self.schemas: list[type] = []
         self.kwargs: dict = {}
 
     @property
@@ -43,6 +45,7 @@ class ScriptedModel:
     async def __call__(self, messages, schema, **kwargs):
         self.calls += 1
         self.sent.append(messages)
+        self.schemas.append(schema)
         self.kwargs = kwargs
         reply = self._replies[min(self.calls - 1, len(self._replies) - 1)]
         return client.Call(

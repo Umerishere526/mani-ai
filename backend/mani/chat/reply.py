@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from functools import lru_cache
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, create_model, model_validator
+from pydantic.json_schema import SkipJsonSchema, WithJsonSchema
 
 
 class Safety(BaseModel):
@@ -75,6 +77,9 @@ class Said(BaseModel):
     gist: str = Field(default="", description="What it gives them, in 8 words or fewer.")
 
 
+Action = Literal["none", "offer", "finish", "stop", "library"]
+
+
 class TurnReply(BaseModel):
     question: Question = Field(default_factory=Question, description="Your plan for this reply's question, before you write.")
     people: list[Person] = Field(default_factory=list, description=(
@@ -85,7 +90,7 @@ class TurnReply(BaseModel):
         "event becomes past only when they say it happened. At most 10."))
     text: str = Field(description="What you say to them, exactly as they will read it.")
     said: Said = Field(default_factory=Said, description="What your text gives them.")
-    action: Literal["none", "offer", "finish", "stop", "library"] = Field(
+    action: Action = Field(
         default="none", description="What happens after this reply."
     )
     framework: str | None = Field(default=None, description="The id of the set you offer, only with action offer.")
@@ -97,3 +102,22 @@ class TurnReply(BaseModel):
     title: str | None = Field(default=None, description="Only when the facts ask for a title.")
     corrected: bool = Field(default=False, description=(
         "True when their latest message corrects something you said or understood about them."))
+
+
+@lru_cache
+def shaped(offerable: tuple[str, ...]) -> type[TurnReply]:
+    """The reply's schema for one turn: `framework` lists only the sets code would show, and with none `offer` is
+    not an action and `framework` is left out. Only what the model is shown narrows; the reply still reads any action
+    and id, so one code refuses after the call is refused, not failed. One class per distinct `offerable`, so a
+    conversation sends a few schemas and each stays the same from turn to turn."""
+    fields = TurnReply.model_fields
+    if not offerable:
+        actions = [action for action in Action.__args__ if action != "offer"]
+        return create_model(
+            TurnReply.__name__, __base__=TurnReply,
+            action=(Annotated[Action, WithJsonSchema({"type": "string", "enum": actions})], fields["action"]),
+            framework=(SkipJsonSchema[str | None], fields["framework"]),
+        )
+    ids = {"anyOf": [{"type": "string", "enum": list(offerable)}, {"type": "null"}]}
+    return create_model(TurnReply.__name__, __base__=TurnReply,
+                        framework=(Annotated[str | None, WithJsonSchema(ids)], fields["framework"]))

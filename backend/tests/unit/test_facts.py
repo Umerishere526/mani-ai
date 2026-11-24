@@ -5,7 +5,7 @@ import datetime as dt
 import time
 import uuid
 
-from mani.chat.facts import facts, framework_guide, system_prompt
+from mani.chat.facts import facts, framework_guide, offerable, system_prompt
 from mani.chat.safety import State
 from mani.db.threads import TurnContext
 from mani.models.rows import Prompt, Thread
@@ -166,3 +166,21 @@ def test_a_held_feelings_check_is_about_their_safety_and_promises_no_close():
 def test_no_offer_is_allowed_before_their_third_message():
     assert "You cannot offer" in facts_for(ctx(), person_messages=2)
     assert "You cannot offer" not in facts_for(ctx(), person_messages=3)
+
+
+def offerable_for(**given) -> tuple[str, ...]:
+    base = dict(record={}, running=None, open_offer=None, holding=False, person_messages=5, state=State.CLEAR)
+    return offerable(CONFIG, **{**base, **given})
+
+
+def test_the_sets_a_reply_may_offer_are_the_active_ones_not_declined():
+    assert offerable_for() == ("abcde", "thought_reframe")
+    assert offerable_for(record={"declined": ["abcde"]}) == ("thought_reframe",)
+
+
+def test_nothing_may_be_offered_when_code_would_refuse_it_and_the_facts_say_so():
+    for refused in (dict(person_messages=2), dict(record={"finished": ["abcde"]}), dict(holding=True),
+                    dict(state=State.UNSURE), dict(open_offer=offered("abcde")),
+                    dict(record={"declined": ["abcde", "thought_reframe"]})):
+        assert offerable_for(**refused) == (), refused
+    assert "You cannot offer" in facts_for(ctx(), record={"declined": ["abcde", "thought_reframe"]})

@@ -18,7 +18,7 @@ from mani.chat.greeting import (
     COPIED_BACK, STYLE_OPTIONS, greeting, openers, resolve_style,
 )
 from mani.chat.repairs import clean_title, sent_text, start_buttons
-from mani.chat.reply import TurnReply
+from mani.chat.reply import TurnReply, shaped
 from mani.chat.techniques import FEELINGS, OFFERING, STEPS, example_text, steps_text
 from mani.config import get_settings
 from mani.text import copies_last_reply
@@ -180,19 +180,24 @@ async def _turn(
     end_check_asked = rec.end_check(record) == rec.END_CHECK_ASKED
     # The question after a framework's last stage holds the turn too, but its answer may close the set.
     held = holding and not end_check_asked
+    told_running = running if held or not tap.starting else None
+    told_offer = (open_offer if open_offer is None or decide_mod.offer_current(open_offer, ctx.thread.message_count)
+                  else None)
     told = facts.facts(
-        ctx, config, record=record, style=style_name, running=running if held or not tap.starting else None,
-        open_offer=open_offer if open_offer is None or decide_mod.offer_current(open_offer, ctx.thread.message_count)
-        else None, event=facts.HELD_START if held and tap.starting else tap.fact, wants_title=wants_title,
+        ctx, config, record=record, style=style_name, running=told_running, open_offer=told_offer,
+        event=facts.HELD_START if held and tap.starting else tap.fact, wants_title=wants_title,
         return_check=check, answering_return=answering, end_check_asked=end_check_asked, holding=held, state=before,
         person_messages=person_messages,
     )
+    # The schema offers only what the facts allow, so a reply code already knows it would refuse is never written.
+    shape = shaped(facts.offerable(config, record=record, running=told_running, open_offer=told_offer, holding=held,
+                                   person_messages=person_messages, state=before))
     model, parameters, routing = composer.model_settings(config, "mani")
     call = await ask(
         [{"role": "system", "content": facts.system_prompt(config, ctx, summary_due=bool(window.dropped))}]
         + conversation(history)
         + [{"role": "user", "content": content}, {"role": "system", "content": told}],
-        TurnReply, model=model, purpose=llm_calls.Purpose.CHAT,
+        shape, model=model, purpose=llm_calls.Purpose.CHAT,
         temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
         max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
         reasoning_effort=parameters.get("reasoning_effort"), routing=routing, user_id=claims.user_id,
@@ -240,9 +245,10 @@ async def _apply(
         text = reply.text
     # The open chat, with no set, offer or safety worry in play: there code holds the reply to one question, and none
     # after frustration, and keeps the question it asked. A stage's question, a lead-in and a safety question are left.
+    # An offer code refused leaves the reply in the open chat: no buttons follow its lead-in.
     open_chat = questions.in_open_chat(
         in_play=running is not None or open_offer is not None or decision.technique is not None, guarded=guarded,
-        action=reply.action)
+        action="none" if decision.refused == "offer" else reply.action)
     text, cut = sent_text(text, open_chat=open_chat, latest=reply.question.latest)
     # What the reply asked and gave, kept before code adds its own pieces; the fixed words for an empty reply give none.
     entry = _ledger_entry(reply, text, open_chat=open_chat) if text else None

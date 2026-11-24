@@ -74,8 +74,8 @@ def facts(
         lines.append(f"They finished in this conversation: {', '.join(finished)}. Never offer a set again.")
     if safety != "clear":
         lines.append(f"A safety worry is open in this conversation ({safety}). Judge their message for it first.")
-    if (running is not None or open_offer is not None or finished or holding or safety != "clear"
-            or person_messages < OFFER_FROM_MESSAGE):
+    if not offerable(config, record=record, running=running, open_offer=open_offer, holding=holding,
+                     person_messages=person_messages, state=state):
         lines.append(NO_OFFER)
     lines += _pause_lines(ctx, return_check, answering_return)
     if end_check_asked:
@@ -86,6 +86,20 @@ def facts(
     if wants_title:
         lines.append("Give this conversation a title.")
     return facts_block(lines)
+
+
+def offerable(
+    config: cache.Config, *, record: dict, running: TechniqueState | None, open_offer: TechniqueState | None,
+    holding: bool, person_messages: int, state: State,
+) -> tuple[str, ...]:
+    """The sets this reply may offer, as code knows before the call: none while a set runs or is offered, after one
+    was finished, while a safety worry is open or the turn is held, or before their 3rd message; else every active set
+    they have not declined."""
+    if (running is not None or open_offer is not None or rec.finished(record) or holding or state is not State.CLEAR
+            or person_messages < OFFER_FROM_MESSAGE):
+        return ()
+    declined = rec.declined(record)
+    return tuple(framework_id for framework_id in config.registry.ids if framework_id not in declined)
 
 
 def understanding_lines(record: dict) -> list[str]:

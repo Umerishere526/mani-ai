@@ -191,13 +191,14 @@ async def test_talk_more_first_lets_the_offer_lapse_and_it_may_come_back(alice, 
 
 
 async def test_a_declined_framework_is_never_offered_again(alice, model):
-    model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"), said("Okay, we'll leave it.", action="stop"),
+    scripted = model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"), said("Okay, we'll leave it.", action="stop"),
           said("Offer again.", action="offer", framework="abcde"))
     thread = await start(alice)
     await warm_up(alice, thread.id)
     await send(alice, thread.id, "i feel like a pushover")
     await send(alice, thread.id, "no, i don't want to do any exercise")
     turn = await send(alice, thread.id, "still feel like a pushover")
+    assert offers_in(scripted.schemas[-1]) == ["thought_reframe"]
     assert turn.prompts == [] and turn.trace["refused"] == "offer"
 
 
@@ -568,14 +569,30 @@ async def test_an_owed_return_check_comes_before_the_five_steps(alice, model):
     assert scripted.calls == 4 and turn.content == crisis.RETURN_CHECK_REPLY
 
 
+def offers_in(schema: type) -> list[str] | None:
+    """The sets the reply's schema lets the model offer, or None when `offer` is not an action at all."""
+    properties = schema.model_json_schema()["properties"]
+    if "offer" not in properties["action"]["enum"]:
+        return None
+    return properties["framework"]["anyOf"][0]["enum"]
+
+
 async def test_an_offer_on_the_persons_second_message_is_refused_and_the_next_may_offer(alice, model):
-    """The style tap is not one of their messages; their 2nd message gets no offer, their 3rd may."""
-    model(said("Go on."), said("Lead-in.", action="offer", framework="abcde"),
-          said("Lead-in.", action="offer", framework="abcde"))
+    """The style tap is not one of their messages; their 2nd message is not shown `offer` at all, their 3rd may offer.
+    A 2nd reply that offers anyway is open chat: no buttons, one question, and the question kept for the next turn."""
+    scripted = model(
+        said("Go on."),
+        said("Nobody asks. Why do you think that is? How could you test that thought?", action="offer",
+             framework="abcde", question=Question(latest="adds_more", intent="belief")),
+        said("Lead-in.", action="offer", framework="abcde"))
     thread = await start(alice)
     await send(alice, thread.id, "i'm tired of always being the understanding friend")
     second = await send(alice, thread.id, "nobody checks in on me")
+    assert offers_in(scripted.schemas[-1]) is None
     assert second.prompts == [] and second.trace["refused"] == "offer"
+    assert second.content == "Nobody asks. How could you test that thought?"
     assert await technique_of(alice, thread.id) is None
     third = await send(alice, thread.id, "i don't think they'd help")
+    assert offers_in(scripted.schemas[-1]) == ["abcde", "thought_reframe"]
+    assert '[belief] "How could you test that thought?"' in facts_of(scripted)
     assert [p.label for p in third.prompts] == ["Not sure", "Show me how", "Give me a tool"]
