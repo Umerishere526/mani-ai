@@ -20,16 +20,14 @@ endpoint (a conversation's first message through `POST /v1/threads`, which creat
   each player 👍/👎 saves the person's rating at once, then an optional reason and Submit; an admin
   reviews every rating under **Library feedback**, filtered by email. Go to Library opens it rather
   than sending a message, as the apps navigate there.
-- **Real, too:** sign-in, sign-up and forgot-password, through Supabase Auth with an email and
-  password. The backend verifies the token exactly as it will a phone's, and it is refreshed when
-  it expires. Each account sees only its own conversations - the backend scopes every thread to
-  the signed-in user. A forgotten password is reset on the page itself: email plus a new
-  password, no email or code involved.
-- **Open, on purpose:** anyone who can reach the page can create an account. Sign-up goes
-  through the Admin API (created confirmed, no email sent), so it uses the service role key and
-  every new account can spend model credit. For the same reason, anyone who can reach the page can
-  reset any ordinary account's password and read its conversations. An admin account's password is refused
-  there. Don't put a link to this tool anywhere public.
+- **Real, too:** sign-in and sign-up, through Supabase Auth with an email and password and the
+  publishable (anon) key alone. The backend verifies the token exactly as it will a phone's, and it is
+  refreshed when it expires. Each account sees only its own conversations - the backend scopes every
+  thread to the signed-in user. There is no password reset on the page: a forgotten password is reset
+  from the Supabase dashboard (or the Auth Admin API).
+- **Open, on purpose:** anyone who can reach the page can create an account, through Supabase Auth's
+  public signup, and every new account can spend model credit. Don't put a link to this tool anywhere
+  public.
 
 ## Admin: reading everyone's conversations
 
@@ -48,8 +46,7 @@ source .venv/bin/activate && python scripts/grant_admin.py admin@example.com
 ```
 
 It takes effect at the account's next sign-in (or a reload, which refreshes the token). `--revoke` undoes it.
-Several admins are fine; each is granted the same way. The on-page password reset refuses an admin account,
-so an admin who forgets their password needs the Supabase dashboard (or the Auth Admin API) to reset it.
+Several admins are fine; each is granted the same way.
 
 ## Deploying this
 
@@ -75,9 +72,9 @@ cp .env.example .env
 ```
 
 Fill in `.env` from `supabase status -o env`, into the names `.env.example` uses: `SUPABASE_URL`
-(from `API_URL`), `SUPABASE_ANON_KEY` (from `ANON_KEY`), `SUPABASE_SERVICE_ROLE_KEY` (from
-`SERVICE_ROLE_KEY`) and `DATABASE_URL` (from `DB_URL`), plus `API_BASE_URL` for the backend. None of
-them is a secret for local Supabase. Use the ports `supabase status` prints: `.env.example` says
+(from `API_URL`), `SUPABASE_ANON_KEY` (from `ANON_KEY`) and `DATABASE_URL` (from `DB_URL`), plus
+`API_BASE_URL` for the backend. None of them is a secret for local Supabase. No service role key is
+needed. Use the ports `supabase status` prints: `.env.example` says
 `5434x` (what `backend/supabase/config.toml` asks for), and a local instance may answer on
 `54321`/`54322` instead.
 
@@ -101,8 +98,10 @@ cd chat-tester && source .venv/bin/activate && streamlit run app.py
 
 The app opens on a **Sign in** / **Sign up** screen. Sign up takes an email, a password and an
 optional nickname the greeting uses; after that, the same email and password sign back in to the
-same conversations. **Forgot password** takes the account's email and a new password (twice) and,
-on submit, sets that password and signs you in. Refreshing the browser tab keeps you
+same conversations. A project that confirms accounts itself (the hosted mani-app) signs you straight
+in. Local Supabase emails a confirmation link first (`enable_confirmations` in
+`backend/supabase/config.toml`), so the page says to open it; the email lands in the local mail
+catcher (`[local_smtp]`, http://127.0.0.1:54344), and the nickname is then set from the sidebar. Refreshing the browser tab keeps you
 signed in - the session is remembered for seven days. The sidebar's **Nickname** field changes
 the name the greeting uses, from the next new conversation. Every message has a copy icon under it,
 in the chat and in the admin viewer. **Sign out** switches
@@ -122,8 +121,9 @@ cd chat-tester && source .venv/bin/activate && pip install -r requirements-dev.t
 pytest
 ```
 
-They sign up, reset and delete real accounts on the local Supabase in `.env`, and skip when it is
-not running. Never point them at a hosted project.
+`test_sign_up.py` signs up and deletes real accounts on the local Supabase in `.env`, and skips when it
+is not running. Never point it at a hosted project. Every other test runs against fakes and needs no
+service, not even the backend.
 
 ## What to look at
 

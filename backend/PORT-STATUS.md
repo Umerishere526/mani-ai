@@ -288,12 +288,13 @@ the same change as the work.**
   summary while its thread had a message in `summarize.CATCH_UP_FOR` (1 day); past that a summary waits for the
   thread's next turn. Work a request has claimed is passed over. Tests: `test_follow_up.py`, `test_queries.py`
   (`due_for_summary`), `test_catch_up.py`, `test_cron.py`.
-- **The hosted chat-tester runs as it does locally, Forgot password included, for testing only** (muhammad,
-  2026-11-06). Because testers need it now and the safe flow can wait. It is a public Streamlit Community Cloud app
-  from the public repo, holding mani-app's Supabase secret key, so anyone with the link can reset any non-admin
-  account's password and read that person's conversations, and create accounts that spend model calls. Accepted for
-  test accounts only; before any real person signs up, remove the Forgot password tab and the secret key from the
-  hosted copy (sign-up works with the publishable key alone, since mani-app auto-confirms) and make the app private.
+- **The chat-tester has no password reset and signs up through GoTrue's public signup with the publishable key
+  alone; it holds no service role key** (muhammad, 2026-11-24). Because the on-page reset let anyone who could reach
+  the hosted page take over any ordinary account and read their conversations, and real distress content was already
+  in production (R104, R124). `chat-tester/client.py` `sign_up` (None means a confirmation email was sent, as local
+  Supabase does; mani-app auto-confirms and returns a session), `chat-tester/test_sign_up.py`. A forgotten password
+  is reset from the Supabase dashboard. Hosted: remove the secret key from the Streamlit secrets, rotate it, and make
+  the app private (muhammad's dashboard steps).
 - **When the chat-tester cannot read `GET /v1/crisis/resources`, the pause pop-up names the backend's US reference
   lines (988, 911) instead of no number** (muhammad, 2026-11-24). Because a crisis pop-up with no number to call is
   worse than a fallback list, and the backend's US lines are long-standing public services. Every network failure
@@ -931,10 +932,7 @@ the same change as the work.**
   `test_a_typed_reply_to_the_lead_in_gets_the_five_steps_and_the_start_buttons` in `test_decide.py`.
 - **Retired 2026-11-17: "It hit me so hard" is not violence** (2026-10-08). Because the phrase screen it corrected
   is gone (2026-11-17).
-- **chat-tester resets a password on the page**: email and new password, set through the Auth Admin API with
-  no email. Because the test tool should need no mail setup, accepting that the page stays non-public
-  (2026-10-07); the seven day session: reason unknown, muhammad to confirm. Anyone who can reach the page can reset any ordinary account, so it stays non-public; an admin account is refused, because it reads every conversation (2026-10-26). A browser session
-  is remembered for seven days.
+- **A chat-tester browser session is remembered for seven days**: reason unknown, muhammad to confirm.
 - **Also settled: OpenRouter only, asyncpg not PostgREST, the `public` and `admin` split, the `mani_service` role,
   three security definer write functions, no streaming.** Settled with them: the deterministic safety screen as the
   only thing that locks a thread (superseded 2026-11-06, when nothing locked, and 2026-11-13: no phrase locks, and
