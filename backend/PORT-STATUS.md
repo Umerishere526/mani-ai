@@ -376,6 +376,12 @@ the same change as the work.**
   `reply_check` (migration 050); trace `reply_checked` lists what was found. `mani/chat/check.py`
   (`problems`, `acceptable`), `enforce.FIGURATIVE_PHRASES`, `INTERPRETIVE_PATTERNS`; `tests/unit/test_check.py`,
   `tests/integration/test_reply_check.py`. Release: 050 before the deploy. Not yet measured live.
+- **When it is unclear who did something or who is expected to do it, Mani asks who before building on it; with one
+  side of a conflict heard, it never concludes who was right or that they are not respected; once they have said what
+  they want from someone, Directive offers two or three concrete next steps with their costs, the choice theirs**
+  (muhammad, 2026-11-25). Because his tester's family-conflict chat (TC-17 review, 3/5) read "my parent want me the
+  ask him for apology" as the person being sent to apologize, leaned toward "they don't respect you", and stayed
+  exploratory in Directive. `mani.md`. Not yet eval-gated.
 - **Code takes out a statement Mani already said earlier in the conversation, word for word or nearly (five words or
   more, eight in ten words shared), unless it is a question, a stage's line, wording written for them, a guarded turn
   or the reply's only statement** (muhammad's brief of 2026-11-25). Because the root-cause count on the v15 run found
