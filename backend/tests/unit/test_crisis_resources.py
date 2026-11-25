@@ -121,14 +121,17 @@ def test_no_fixed_safety_text_says_a_banned_line_or_a_forbidden_word():
         assert not enforce.banned_phrases(text) and not enforce.forbidden_words(text), text
 
 
-def test_a_reply_that_names_the_numbers_but_not_the_outside_us_line_still_needs_the_help_line():
+def test_a_reply_that_names_the_numbers_but_not_the_outside_us_line_gets_only_that_line():
     """muhammad's local test of "honestly I wish I were dead" (2026-11-25): the reply named 988 and 911 but not
-    findahelpline.com, so code added nothing and someone outside the US had no line (S9 to S11). PROVISIONAL: clinician
+    findahelpline.com, so code added nothing and someone outside the US had no line (S9 to S11); the next test of TC-S3
+    then said 911 and 988 twice when the whole line was added for the directory alone. PROVISIONAL: clinician
     sign-off required before deploy."""
     reply = ("That's a lot to be carrying, and I'm glad you said it to me.\n\nI take that seriously. Please call or text "
              "988 right now, it's free and open any time. If you feel like you might act on this, call 911.\n\nYou don't "
              "have to sit with this on your own tonight.\n\nIs there someone who could be with you right now?")
     assert not crisis.names_help(reply, "themselves")
+    assert crisis.help_missing(reply, "themselves") == crisis.OUTSIDE_US
+    assert crisis.help_missing("Please call 911.", "themselves") == crisis.resources_line("themselves")
     for about in ("themselves", "someone_else", "from_someone", "body", None):
         assert crisis.names_help(crisis.resources_line(about), about), about
 

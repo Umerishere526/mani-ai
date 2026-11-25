@@ -53,7 +53,17 @@ _NEEDED = {"themselves": ("911", "988", DIRECTORY), "someone_else": ("911", DIRE
 
 def names_help(text: str, about: str | None) -> bool:
     """Whether the reply already names everything its kind of danger needs."""
-    return all(needed in text.lower() for needed in _NEEDED.get(about or "themselves", _NEEDED["themselves"]))
+    return help_missing(text, about) is None
+
+
+def help_missing(text: str, about: str | None) -> str | None:
+    """What code adds after a reply so it names everything its kind of danger needs: nothing when it does, only the
+    outside-US line when that alone is missing (so a reply that already named the numbers does not say them twice), and
+    the kind's whole line otherwise."""
+    missing = [needed for needed in _NEEDED.get(about or "themselves", _NEEDED["themselves"]) if needed not in text.lower()]
+    if not missing:
+        return None
+    return OUTSIDE_US if missing == [DIRECTORY] else resources_line(about)
 # What goes out when no host answered and no safety worry was open, so a first message about danger during an outage
 # still reaches the numbers (the design of 2026-11-17). Wording is ours until the client supplies hers.
 TROUBLE_REPLY = f"I'm having trouble replying right now, so please try again in a moment. {IN_DANGER}"

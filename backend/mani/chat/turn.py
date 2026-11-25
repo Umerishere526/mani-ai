@@ -301,9 +301,10 @@ async def _apply(
         decision = decide_mod.Decision(declined=rec.declined(record), finished=rec.finished(record))
     # Code's own pieces follow the reply only once it says something: where to get help, and the five steps. The first
     # danger of a kind always names its numbers (S2, S7). PROVISIONAL: clinician sign-off required before deploy.
-    resources_added = judgment.resources_due and not crisis.names_help(text, judgment.about)
+    added_help = crisis.help_missing(text, judgment.about) if judgment.resources_due else None
+    resources_added = added_help is not None
     if resources_added:
-        text = f"{text}\n\n{crisis.resources_line(judgment.about)}"
+        text = f"{text}\n\n{added_help}"
     if decision.show_steps is not None:
         text = f"{text}\n\n{steps_text(decision.show_steps, style)}"
     prompts = decision.prompts
