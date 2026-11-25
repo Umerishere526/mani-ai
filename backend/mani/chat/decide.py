@@ -19,7 +19,9 @@ from mani.models.rows import Framework, TechniqueOutcome, TechniqueState
 
 
 # The person's message an offer may come with at the earliest; the style tap is not one of theirs. The same opening
-# offered on the 2nd message in one run and the 3rd in the next (muhammad, 2026-11-18).
+# offered on the 2nd message in one run and the 3rd in the next (muhammad, 2026-11-18). Kept as a floor against
+# premature offers, the client's most repeated complaint, though her spec sets no fixed number of exchanges
+# (PORT-STATUS, Decisions in force, provisional decision P3 of 2026-11-25).
 OFFER_FROM_MESSAGE = 3
 
 
