@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import math
+
 import streamlit as st
 
 import client as mani
@@ -28,7 +30,9 @@ STORY = "Story"
 def _duration(minutes: float | None) -> str:
     if minutes is None:
         return ""
-    seconds = max(30, 30 * round(minutes * 2))  # to the nearest 30 seconds, and never 0:00
+    # To the nearest 30 seconds with halves rounded up, as the apps round it (Python's round() would take 1.25 minutes
+    # down to 1:00), and never 0:00.
+    seconds = max(30, 30 * math.floor(minutes * 2 + 0.5))
     return f"{seconds // 60}:{seconds % 60:02d}"
 
 

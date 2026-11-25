@@ -47,4 +47,7 @@ def test_an_exercises_length_is_shown_to_the_nearest_half_minute():
     assert library._duration(4.8) == "5:00"
     assert library._duration(0.3) == "0:30", "a short one is never shown as 0:00"
     assert library._duration(10) == "10:00"
+    # Halves round up, as the apps show them.
+    assert library._duration(1.25) == "1:30"
+    assert library._duration(2.75) == "3:00"
     assert library._duration(None) == ""
