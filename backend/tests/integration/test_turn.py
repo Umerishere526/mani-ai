@@ -607,15 +607,18 @@ async def test_the_first_message_back_in_the_paused_conversation_is_asked_about_
     alice, model
 ):
     """muhammad, 2026-11-25: the conversation the pause began in still reads the first message back for safety, with
-    code's question, and their answer that they are safe settles that conversation."""
-    scripted, paused_in = await _a_pause_that_has_run_out(alice, [said("How are things now?"), said("Good to hear it.")],
-                                                          model)
+    code's question, and their answer that they are safe settles that conversation. S12 (PROVISIONAL: clinician sign-off
+    required before deploy): "I'm fine" is accepted with one gentle follow-up about who they can reach (R151), code's
+    question in place of the model's, and no second pause."""
+    scripted, paused_in = await _a_pause_that_has_run_out(
+        alice, [said("How are things now?"), said("Good to hear it.", question=Question(ask="Anything else?"))], model)
     asked = await send(alice, paused_in.id, "back now")
     assert asked.content == crisis.RETURN_CHECK_REPLY and asked.paused_until is None
     assert "Their chat was paused earlier because of a safety worry (took pills)" in facts_of(scripted)
 
     answered = await send(alice, paused_in.id, "i'm okay, my sister is here")
-    assert answered.content == "Good to hear it." and answered.paused_until is None
+    assert answered.content == "Good to hear it.\n\n" + crisis.AFTER_PAUSE_FOLLOW_UP and answered.paused_until is None
+    assert "code adds one question about who they could reach" in facts_of(scripted)
     assert "This message answers it: judge it for safety." in facts_of(scripted)
     assert (await thread_row(alice, paused_in.id)).safety == "clear"
 

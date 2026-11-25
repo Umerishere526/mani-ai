@@ -190,7 +190,8 @@ def _pause_lines(ctx: TurnContext, return_check: ReturnCheck | None, answering_r
     if answering_return is not None:
         reason = ctx.pause.reason if ctx.pause is not None else None
         return [f"Your last reply asked how they are after a pause for a safety worry ({reason or 'no reason kept'}). "
-                "This message answers it: judge it for safety."]
+                "This message answers it: judge it for safety. If they say they are all right, accept it warmly in a "
+                "sentence and ask nothing: code adds one question about who they could reach."]
     if ctx.recent_crisis:
         return ["Another conversation of theirs raised a safety worry recently. Go gently; never mention it."]
     return []

@@ -82,6 +82,10 @@ RETURN_DANGER_REPLY = (
     f"I'm worried about what you just told me. Please call 911 now, or call or text 988. {OUTSIDE_US} "
     "Is anyone with you right now?"
 )
+# The one question after their answer to RETURN_CHECK_REPLY says they are all right: "I'm fine" is taken at its word,
+# with one gentle follow-up about who they can reach, never a second pause (S12, R151). Wording is ours until the
+# client supplies hers. PROVISIONAL: clinician sign-off required before deploy.
+AFTER_PAUSE_FOLLOW_UP = "If things get hard again, who is someone you could reach out to?"
 # Whom Mani worries for on the turn that pauses the chat, by whose danger it is (muhammad, 2026-11-13).
 _WORRIED_FOR = {"themselves": "your safety", "someone_else": "everyone's safety", "from_someone": "your safety",
                 "body": "your health"}

@@ -264,6 +264,10 @@ async def _apply(
         text = crisis.END_CHECK
     elif check is not None:
         text = crisis.RETURN_DANGER_REPLY if reply.safety.level == "danger" else crisis.RETURN_CHECK_REPLY
+    elif answering is not None and judgment.state is safety.State.CLEAR:
+        # Their answer that they are all right gets code's one follow-up in place of the reply's question (S12).
+        # PROVISIONAL: clinician sign-off required before deploy.
+        text, ask = reply.text, crisis.AFTER_PAUSE_FOLLOW_UP
     else:
         text, ask = reply.text, reply.question.ask
     # Every reply asks one question at most, its own, after its text; a guarded turn's words lose nothing. The open
