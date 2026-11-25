@@ -285,7 +285,7 @@ the same change as the work.**
   the next step is code counting sentences and asking once more, not another line. `mani.md`; eval
   `rule-directive-short`, `rule-directive-open-question`, `max_sentences`.
 - **A practical problem is understood before options: what they want, what can't change, and, when several causes
-  could explain it, where it breaks down, asked in one plain question; no step with big consequences (replacing
+  could explain it, where it goes wrong, asked in one plain question; no step with big consequences (replacing
   someone, ending a job or relationship, money) before the cause is known; once known and they have said what they
   want to change, the set that fits is offered (Structured Problem Solving for a practical problem) before any options
   of Mani's own; options with a reason and their cost come directly only when they ask for an answer now, decline or
@@ -294,7 +294,7 @@ the same change as the work.**
   oriented" with "no framework coming", and the paid run's TC-10 offered none). Because the tester's business-owner chat got "it's him… hand the
   job to someone else" after one sentence of context; the cause was the rule "start with two or three concrete
   options" (CQ-7, 2026-11-25), which this replaces. Directive help replies take the room they need (the code trim
-  already skips `move: help`). `mani.md`; regression TC-28 to TC-34 on the judge's coach rubric
+  already skips `move: help`). One rule in `mani.md` "How you listen"; the offer section and Directive point to it rather than restating it. Regression TC-28 to TC-34 on the judge's coach rubric
   (`judge.COACH_CRITERIA`), checks `no_advice_before`, `wording_at`, `helps_at`. Not yet eval-gated.
 - **In Directive a fear or feeling they name about a choice is said back and asked about once before options; a
   choice made on a condition is never their decision; "I can't decide" before the core is clear is not a want for a
