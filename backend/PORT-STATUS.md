@@ -323,6 +323,12 @@ the same change as the work.**
   his tester's friend-conflict chat (6.5/10) ran ABCDE on "I looked stupid" instead of the offered belief, asked C
   twice after "I told you" and "you know", said "That's not much to ask of a friend", and left the dilemma of reaching
   out first untouched. `mani.md` ("How you listen", "Inside the set of questions"). Not yet eval-gated.
+- **Which question comes first follows the style: Directive asks for the concrete (one recent example, what they want
+  to change), Reflective asks about meaning, Supportive often asks nothing early and asks gently about how they are;
+  every style looks past the event to what it may mean and names one possibility gently** (muhammad, 2026-11-25).
+  Because his tester's three-mode chats opened all three styles with nearly the same question, chosen by the shared
+  question jobs with no style order. `mani.md` ("Your question", "How you listen", "Your style"); regression TC-44 to
+  TC-46. Not yet eval-gated.
 - **Simple English in every style; before any question Mani checks the whole chat and asks only what is still
   unknown; a stage the chat already answered is said back in a sentence and only what is missing is asked; "didn't we
   already cover that?" is agreed with and used** (muhammad, 2026-11-25). Because his tester's Reflective fiancé chat

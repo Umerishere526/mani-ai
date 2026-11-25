@@ -1,5 +1,5 @@
 {
- "about": "Draft TC-01 to TC-20, written 2026-11-24, TC-21 to TC-27, written 2026-11-25 for the provisional decisions, TC-28 to TC-34, written 2026-11-25 for Directive as a decision-making coach (scored on the judge's coach rubric), TC-35 to TC-39 for the framework handoff, TC-40 for emotional understanding, TC-41 for simple English and remembering what was said, and TC-42 and TC-43 for the same scenario in the other two styles, from the client's documents and real tests; awaiting muhammad's approval. `script` is sent in order (a button's exact label taps it), then `persona` plays the rest. `expect` keys are read by evals/regression/checks.py. A scenario with status `gap` asks for something paused or removed by a Decision in force: it is reported, never run.",
+ "about": "Draft TC-01 to TC-20, written 2026-11-24, TC-21 to TC-27, written 2026-11-25 for the provisional decisions, TC-28 to TC-34, written 2026-11-25 for Directive as a decision-making coach (scored on the judge's coach rubric), TC-35 to TC-39 for the framework handoff, TC-40 for emotional understanding, TC-41 for simple English and remembering what was said, TC-42 and TC-43 for the same scenario in the other two styles, and TC-44 to TC-46 for one emotional scenario in each style, from the client's documents and real tests; awaiting muhammad's approval. `script` is sent in order (a button's exact label taps it), then `persona` plays the rest. `expect` keys are read by evals/regression/checks.py. A scenario with status `gap` asks for something paused or removed by a Decision in force: it is reported, never run.",
  "scenarios": [
   {
    "id": "TC-01",
@@ -778,6 +778,59 @@
    "max_latency_s": 15,
    "expect": {},
    "criteria": "Simple everyday English with no abstract or literary sentences; never asks what was already answered (what going would mean about them as a partner, how she'd react); connects their two meanings of the trip rather than repeating them; tentative readings only; never recommends the trip or the birthday; if a set runs, A and B use what they already said and ask only what is missing. Keeps its own style: clear, practical, helps decide next steps, warm, never controlling."
+  },
+  {
+   "id": "TC-44",
+   "title": "Reflective: a family that keeps forgetting them, in this style's own way",
+   "group": "pacing",
+   "status": "run",
+   "style": "reflective",
+   "rubric": "coach",
+   "sources": ["muhammad's mode-differentiation brief and his tester's three-mode chats, 2026-11-25"],
+   "script": [
+    "my family keeps forgetting me, if there is anything good or bad in the family, im the last one who knows"
+   ],
+   "persona": "You're always the last in your family to hear news, good or bad. It makes you feel unimportant and a bit invisible, though you haven't said that yet. Answer naturally and briefly.",
+   "turns": 5,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Looks past the event to what it may mean (left out, unimportant, overlooked) and offers it tentatively; plain English; no assumption about the family's intentions; explores what being forgotten means to them; observations and meaningful questions; no rush to solutions."
+  }
+ ,
+  {
+   "id": "TC-45",
+   "title": "Supportive: a family that keeps forgetting them, in this style's own way",
+   "group": "pacing",
+   "status": "run",
+   "style": "supportive",
+   "rubric": "coach",
+   "sources": ["muhammad's mode-differentiation brief and his tester's three-mode chats, 2026-11-25"],
+   "script": [
+    "my family keeps forgetting me, if there is anything good or bad in the family, im the last one who knows"
+   ],
+   "persona": "You're always the last in your family to hear news, good or bad. It makes you feel unimportant and a bit invisible, though you haven't said that yet. Answer naturally and briefly.",
+   "turns": 5,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Looks past the event to what it may mean (left out, unimportant, overlooked) and offers it tentatively; plain English; no assumption about the family's intentions; warmth and presence first; often no question; never an investigation."
+  }
+ ,
+  {
+   "id": "TC-46",
+   "title": "Directive: a family that keeps forgetting them, in this style's own way",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's mode-differentiation brief and his tester's three-mode chats, 2026-11-25"],
+   "script": [
+    "my family keeps forgetting me, if there is anything good or bad in the family, im the last one who knows"
+   ],
+   "persona": "You're always the last in your family to hear news, good or bad. It makes you feel unimportant and a bit invisible, though you haven't said that yet. Answer naturally and briefly.",
+   "turns": 5,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Looks past the event to what it may mean (left out, unimportant, overlooked) and offers it tentatively; plain English; no assumption about the family's intentions; helps them see the pattern and consider options and a next step; empathetic, never controlling."
   }
  
  ]
