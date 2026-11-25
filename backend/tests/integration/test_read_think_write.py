@@ -140,6 +140,23 @@ async def test_a_failed_edit_leaves_the_original_exchange_in_place(alice, monkey
     assert (after.message_count, after.understanding) == (before.message_count, before.understanding)
 
 
+async def test_a_turn_that_never_asks_the_model_can_still_be_edited_back_to_its_own_starting_state(alice, model):
+    """The state an edit puts back is saved by the pass that keeps the turn: the write for a turn that asks the model,
+    the only pass for one that does not (here, Mani's reply copied back). The title the turn before set survives."""
+    asked = "Tell me more about what happens on the days it gets to be too much for you."
+    scripted = model(said("Go on."), said(asked, title="Work pressure"), said("What about them?"))
+    thread = await start(alice)
+    await send(alice, thread.id, "work is a lot")
+    await send(alice, thread.id, "my boss")
+    await send(alice, thread.id, asked)
+    assert scripted.calls == 2, "the copied reply never reached the model"
+
+    await runner.edit(alice, thread.id, await _last_user_message_id(thread.id), "the deadlines")
+
+    assert (await _thread_row(alice, thread.id)).title == "Work pressure"
+    assert (await _mani_messages(thread.id))[-1] == "What about them?"
+
+
 async def test_past_the_minute_limit_a_turn_is_refused_with_where_to_get_help(alice, model, monkeypatch):
     scripted = model(said("What has been the hardest part?"))
     monkeypatch.setattr(get_settings(), "minute_message_limit", 2)

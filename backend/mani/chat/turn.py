@@ -135,7 +135,19 @@ async def _turn(
     if ctx is None:
         raise ServiceError(f"thread {thread_id} not found for user {claims.user_id}", ErrorCategory.NOT_FOUND,
                            user_message="That conversation is not available.")
+    turn = await _respond(conn, claims, ctx, content, client_message_id, ask=ask, config=config,
+                          answer_failure=answer_failure, settings=settings)
+    # Saved once the turn is written, from the context it started on. A turn that asks the model ends its read at
+    # the ask and rolls back, so the snapshot is written only by the pass that keeps it.
     await rewind.save(conn, ctx, claims.user_id)
+    return turn
+
+
+async def _respond(
+    conn: asyncpg.Connection, claims: Claims, ctx, content: str, client_message_id, *, ask: Ask,
+    config: cache.Config, answer_failure: bool, settings,
+) -> Turn:
+    thread_id = ctx.thread.id
     window = await messages_db.for_context(conn, thread_id, claims.user_id,
                                            budget_chars=settings.context_budget_chars)
     history = window.messages
