@@ -28,6 +28,9 @@ class Safety(BaseModel):
     symptom_now: Literal["yes", "no", "unsaid"] | None = Field(
         default=None, description="With about body: whether the symptom is happening right now."
     )
+    immediacy_said: bool = Field(default=False, description=(
+        "Their message says whether they are in immediate danger: whether they are alone right now, have a plan or the "
+        "means, or might act tonight."))
     still_there: bool = Field(default=False, description="Their message itself says the danger is still there, or that they are not safe.")
     why: str | None = Field(default=None, description="One short line on what you judged.")
 

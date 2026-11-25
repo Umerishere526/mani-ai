@@ -16,6 +16,7 @@ from tests.integration.fixtures import ALICE, ScriptedModel, last_user_message_i
 DANGER = Safety(level="danger", about="themselves", why="took pills")
 # A reply to a first danger message that names the numbers it needs and the line for outside the US, so code adds no
 # line after it (S2, S11).
+OVERWHELMED = "Are you thinking about hurting yourself, or are you feeling overwhelmed?"
 FIRST_REPLY = "Call 911 now, or call or text 988. Outside the US: findahelpline.com. Are you alone?"
 
 
@@ -441,6 +442,28 @@ async def test_a_turn_that_pauses_sends_the_pause_words_and_nothing_that_invites
     assert paused.paused_until is not None
     assert paused.content == crisis.pause_reply("themselves", 900)
     assert "work" not in paused.content and "?" not in paused.content
+
+
+async def test_confirmed_thoughts_get_the_question_of_immediate_danger_until_they_answer_it(alice, model):
+    """CR-1 (PROVISIONAL: clinician sign-off required before deploy): manasa's crisis test (2026-11-25). Once she
+    confirmed the thoughts, Mani never asked whether she was in immediate danger and went back to reflective questions.
+    Each turn from the confirmation until her answer tells the model to ask it before anything else."""
+    unsure = Safety(level="unsure", about="themselves")
+    scripted = model(
+        said("That's a lot.", question=Question(ask=OVERWHELMED), safety=unsure),
+        said("Thank you for telling me.", safety=unsure),
+        said("Being scared of how they'd react makes sense.", safety=unsure),
+        said("Please call 911 now.", safety=DANGER.model_copy(update={"immediacy_said": True})))
+    thread = await start(alice)
+    await send(alice, thread.id, "I'm exhausted and I don't know how much longer I can keep doing this.")
+    await send(alice, thread.id, "A bit of both, I guess. It would be easier if I just wasn't here anymore.")
+    assert "If their message confirms" in facts_of(scripted)
+    assert (await thread_row(alice, thread.id)).understanding["worry_immediacy"] == "open"
+    await send(alice, thread.id, "I don't really want to talk to anyone I know about this.")
+    assert "you do not yet know whether they are in immediate danger" in facts_of(scripted)
+    await send(alice, thread.id, "I'm alone right now and I'm scared I'm going to hurt myself tonight.")
+    assert "you do not yet know whether they are in immediate danger" in facts_of(scripted)
+    assert (await thread_row(alice, thread.id)).understanding["worry_immediacy"] == "answered"
 
 
 async def test_a_change_of_subject_after_danger_keeps_the_worry_open(alice, model):

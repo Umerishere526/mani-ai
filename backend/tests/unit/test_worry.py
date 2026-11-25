@@ -204,7 +204,7 @@ def test_the_phase_is_the_owed_check_then_the_question_it_asked_then_neither():
 def test_the_record_keeps_one_kind_while_a_worry_is_open_and_forgets_it_when_it_settles():
     opened = worry.step(worry.Standing(state=State.CLEAR, about=None, phase=ORD), D(about="themselves"))
     record = worry.record_after({}, opened, check=None, answering=None)
-    assert record == {rec.ABOUT: "themselves", rec.DANGER_REACHED: True}
+    assert record == {rec.ABOUT: "themselves", rec.DANGER_REACHED: True, rec.IMMEDIACY: rec.IMMEDIACY_OPEN}
     settled = worry.step(worry.Standing(state=State.DANGER, about="themselves", phase=ORD), N(says_safe=True))
     after = worry.record_after(record, settled, check=None, answering=None)
     assert after == {rec.DANGER_REACHED: True, rec.SAFETY_SETTLED: True}
@@ -308,3 +308,42 @@ def test_a_pause_after_an_overdose_is_for_an_overdose_whatever_the_pausing_messa
     assert other.pausing and other.paused_for == "from_someone"
     settled = worry.step(held, N(says_safe=True))
     assert rec.OVERDOSE not in worry.record_after(record, settled, check=None, answering=None)
+
+
+def _walk(turns: list[tuple[Phase, Safety]], message: str = "") -> list[worry.Outcome]:
+    """Each turn's outcome, the standing carried from one to the next as the record would carry it."""
+    standing, outcomes = worry.Standing(state=State.CLEAR, about=None, phase=ORD), []
+    for phase, read in turns:
+        standing = standing.model_copy(update={"phase": phase})
+        outcome = worry.step(standing, read, message)
+        outcomes.append(outcome)
+        standing = worry.Standing(state=outcome.state, about=outcome.about, phase=phase, calm=outcome.calm,
+                                  immediacy=outcome.immediacy)
+    return outcomes
+
+
+def test_confirmed_thoughts_of_not_being_here_open_the_question_of_immediate_danger_until_answered():
+    """CR-1 (PROVISIONAL: clinician sign-off required before deploy): manasa's crisis test (2026-11-25) confirmed
+    suicidal thoughts, and Mani never asked whether she was in immediate danger; it went back to reflective questions
+    until she said she was alone and afraid of acting tonight. Once thoughts about themselves are confirmed (asked and
+    still unsure, or danger), immediacy is open, and only their answer closes it."""
+    asked, confirmed, deflected, answered = _walk([
+        (ORD, U(about="themselves")), (ORD, U(about="themselves")), (ORD, U(about="themselves")),
+        (ORD, D(about="themselves", immediacy_said=True))])
+    assert asked.immediacy is None, "the first unsure read gets the clarifying question (S5), not this one"
+    assert confirmed.immediacy == "open" and deflected.immediacy == "open"
+    assert answered.immediacy == "answered"
+    first_danger = _walk([(ORD, D(about="themselves"))])[0]
+    assert first_danger.immediacy == "open"
+    floored = _walk([(ORD, N())], "I want to die")[0]
+    assert floored.immediacy == "open"
+    assert _walk([(ORD, D(about="someone_else"))])[0].immediacy is None, "the question is about danger to themselves"
+
+
+def test_the_record_keeps_where_immediacy_stands_only_while_the_worry_is_open():
+    opened = worry.step(worry.Standing(state=State.CLEAR, about=None, phase=ORD), D(about="themselves"))
+    record = worry.record_after({}, opened, check=None, answering=None)
+    assert record[rec.IMMEDIACY] == "open"
+    settled = worry.step(worry.Standing(state=State.DANGER, about="themselves", phase=ORD, immediacy="open"),
+                         N(says_safe=True))
+    assert rec.IMMEDIACY not in worry.record_after(record, settled, check=None, answering=None)

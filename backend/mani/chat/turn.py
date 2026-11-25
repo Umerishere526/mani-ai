@@ -197,7 +197,7 @@ async def _respond(
         open_offer=told_offer if tap.demonstrate is None else None,
         event=(facts.HELD_START if tap.starting else None) if held and (tap.starting or tap.demonstrate) else tap.fact,
         wants_title=wants_title,
-        return_check=check, answering_return=answering, end_check_asked=end_check_asked, holding=held, state=before,
+        return_check=check, answering_return=answering, end_check_asked=end_check_asked, holding=held, stood=stood,
         person_messages=person_messages,
     )
     # The schema offers only what the facts allow, so a reply code already knows it would refuse is never written.

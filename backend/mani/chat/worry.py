@@ -36,7 +36,8 @@ class Standing(BaseModel):
     nothing is open. `settled`: a worry of theirs settled earlier in this conversation. `calm`: how many messages in a
     row were read as no concern while the worry, unsure or danger, stayed open. `end_check`: Mani's last reply asked the safety question
     after a framework's last stage, so this message answers it. `overdose`: the open worry is about an overdose or a
-    poisoning."""
+    poisoning. `immediacy`: whether they said if a worry about themselves is immediate (rec.IMMEDIACY_OPEN or
+    rec.IMMEDIACY_ANSWERED), None before they confirmed the thoughts."""
 
     model_config = {"frozen": True}
 
@@ -47,6 +48,7 @@ class Standing(BaseModel):
     calm: int = 0
     end_check: bool = False
     overdose: bool = False
+    immediacy: str | None = None
 
 
 @dataclass(frozen=True)
@@ -66,6 +68,8 @@ class Outcome:
     raised: bool = False
     # The open worry is about an overdose or a poisoning, as the model marked it on this message or an earlier one.
     overdose: bool = False
+    # Where the question of immediate danger to themselves stands after this message (CR-1).
+    immediacy: str | None = None
 
     @property
     def paused_for(self) -> str | None:
@@ -80,7 +84,8 @@ def standing(ctx: TurnContext, check: ReturnCheck | None, answering: str | None)
     phase = Phase.ASKING if check is not None else Phase.ANSWERING if answering is not None else Phase.ORDINARY
     return Standing(state=State(ctx.thread.safety), about=record.get(rec.ABOUT), phase=phase,
                     settled=bool(record.get(rec.SAFETY_SETTLED)), calm=record.get(rec.CALM, 0),
-                    end_check=rec.end_check(record) == rec.END_CHECK_ASKED, overdose=bool(record.get(rec.OVERDOSE)))
+                    end_check=rec.end_check(record) == rec.END_CHECK_ASKED, overdose=bool(record.get(rec.OVERDOSE)),
+                    immediacy=record.get(rec.IMMEDIACY))
 
 
 def step(stood: Standing, read: Safety, message: str = "") -> Outcome:
@@ -147,6 +152,7 @@ def step(stood: Standing, read: Safety, message: str = "") -> Outcome:
     resources_due = (after is State.DANGER and not pausing
                      and (first_of_kind or (about != "body" and not read.help_in_place)))
     return Outcome(
+        immediacy=_immediacy(stood, read, after, about, safe_said),
         state=after, about=about if after is not State.CLEAR else None, pausing=pausing,
         settled_now=stood.state is not State.CLEAR and after is State.CLEAR,
         resources_due=resources_due, calm=stood.calm + 1 if waits else 0, raised=floored,
@@ -154,13 +160,30 @@ def step(stood: Standing, read: Safety, message: str = "") -> Outcome:
     )
 
 
+def _immediacy(stood: Standing, read: Safety, after: State, about: str | None, safe_said: bool) -> str | None:
+    """Where the question of immediate danger to themselves stands after this message: open once they confirm thoughts
+    of not being here or of hurting themselves (a danger read, or an unsure one after Mani asked about this worry), and
+    answered once their message says whether it is immediate or that they are safe. CR-1, PROVISIONAL: clinician
+    sign-off required before deploy."""
+    if after is State.CLEAR or about != "themselves":
+        return None
+    if stood.immediacy == rec.IMMEDIACY_ANSWERED or read.immediacy_said or safe_said:
+        return rec.IMMEDIACY_ANSWERED
+    asked = stood.state is not State.CLEAR and stood.about in (None, "themselves")
+    confirmed = read.about == "themselves" and (read.level == "danger" or (read.level == "unsure" and asked))
+    return rec.IMMEDIACY_OPEN if confirmed or stood.immediacy == rec.IMMEDIACY_OPEN else None
+
+
 def record_after(record: dict, outcome: Outcome, *, check: ReturnCheck | None, answering: str | None) -> dict:
     """The record with where the return check stands, whose danger the open worry is about and whether it is an overdose
     (both forgotten when it settles), how many calm messages an open worry has had, whether this conversation reached
     danger, and whether a worry settled."""
-    after = {key: value for key, value in record.items() if key not in (rec.ABOUT, rec.CALM, rec.OVERDOSE)}
+    after = {key: value for key, value in record.items()
+             if key not in (rec.ABOUT, rec.CALM, rec.OVERDOSE, rec.IMMEDIACY)}
     if outcome.about:
         after[rec.ABOUT] = outcome.about
+    if outcome.immediacy:
+        after[rec.IMMEDIACY] = outcome.immediacy
     if outcome.overdose:
         after[rec.OVERDOSE] = True
     if outcome.calm:
@@ -181,6 +204,6 @@ def traced(read: Safety) -> dict:
     return {key: value for key, value in {
         "level": read.level, "about": read.about, "declined": read.declined or None, "symptom_now": read.symptom_now,
         "help_in_place": read.help_in_place or None, "says_safe": read.says_safe or None,
-        "overdose": read.overdose or None,
+        "overdose": read.overdose or None, "immediacy_said": read.immediacy_said or None,
         "still_there": read.still_there or None,
     }.items() if value is not None}
