@@ -79,7 +79,11 @@ class Settings(BaseSettings):
 
     # Connections one instance holds to the database, through Supabase's transaction pooler. No turn
     # holds one across a model call, so a few serve many turns; every instance multiplies the max.
-    db_pool_min_size: int = Field(default=0, ge=0)
+    # The minimum is opened when the app starts, so the first turn on an instance finds a connection already made
+    # rather than paying the connect and TLS handshake itself. Where an instance starts for the request that wakes it
+    # (Vercel), that wait moves into the start rather than going away; where instances start ahead of traffic it is
+    # gone. asyncpg closes a connection idle for 300 s, minimum included, so a quiet instance connects again.
+    db_pool_min_size: int = Field(default=1, ge=0)
     db_pool_max_size: int = Field(default=5, ge=1)
     # How long a request waits for a free connection before it is refused as busy, never left hanging.
     db_acquire_timeout_seconds: float = 5.0
