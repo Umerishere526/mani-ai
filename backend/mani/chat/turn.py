@@ -237,7 +237,7 @@ async def _apply(
 ) -> Turn:
     """What the reply decides, written in this transaction."""
     reply: TurnReply = call.value
-    judgment = worry.step(stood, reply.safety)
+    judgment = worry.step(stood, reply.safety, content)
     # A worry open on the thread or found in this message comes before anything the reply asks for, except the
     # answer that settles the safety question after a framework's last stage: that one carries the close.
     settles_end_check = end_check_asked and judgment.state is safety.State.CLEAR
@@ -312,7 +312,7 @@ async def _apply(
     trace = {key: value for key, value in {
         "action": reply.action, "framework": reply.framework, "stage": reply.stage,
         "safety": worry.traced(reply.safety), "paused": judgment.pausing or None,
-        "resources_added": resources_added or None,
+        "resources_added": resources_added or None, "raised_by_phrase": judgment.raised or None,
         "buttons": [p.label for p in prompts], "latency_ms": call.latency_ms, "first_token_ms": call.first_token_ms,
         "refused": decision.refused,
         "question_cut": cut, "enforced": enforced, "question": reply.question.model_dump() if open_chat and settings.ai_debug_mode else None,

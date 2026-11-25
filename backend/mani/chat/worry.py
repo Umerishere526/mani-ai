@@ -59,6 +59,8 @@ class Outcome:
     # with them (S7). PROVISIONAL: clinician sign-off required before deploy.
     resources_due: bool = False
     calm: int = 0
+    # Code raised the model's read to danger on a high-risk phrase (S4).
+    raised: bool = False
 
 
 def standing(ctx: TurnContext, check: ReturnCheck | None, answering: str | None) -> Standing:
@@ -70,7 +72,7 @@ def standing(ctx: TurnContext, check: ReturnCheck | None, answering: str | None)
                     end_check=rec.end_check(record) == rec.END_CHECK_ASKED)
 
 
-def step(stood: Standing, read: Safety) -> Outcome:
+def step(stood: Standing, read: Safety, message: str = "") -> Outcome:
     """The state after their message, and whether the chat pauses.
 
     A question owed after a pause makes this a safety turn that never pauses, which starts from unsure: safety is not
@@ -83,7 +85,14 @@ def step(stood: Standing, read: Safety) -> Outcome:
     Danger to themselves, to someone else or from someone pauses without a refusal. A danger about a symptom in the
     body pauses only when this turn's read has the symptom happening now and they refuse the help for it, at the level
     code holds it (a symptom the model judged unsure counts as danger), and a danger
-    of no known kind needs a refusal too, even while a body worry is open."""
+    of no known kind needs a refusal too, even while a body worry is open.
+
+    A message holding one of the client's high-risk phrases that the model read below danger is danger about
+    themselves, with the help due and no pause on that message (S4). PROVISIONAL: clinician sign-off required before
+    deploy."""
+    floored = read.level != "danger" and safety.high_risk(message)
+    if floored:
+        read = read.model_copy(update={"level": "danger", "about": "themselves"})
     start = State.UNSURE if stood.phase is Phase.ASKING and stood.state is State.CLEAR else stood.state
     danger = _DANGER[read.level]
     about = read.about or stood.about
@@ -119,14 +128,14 @@ def step(stood: Standing, read: Safety) -> Outcome:
     else:
         goes_on = stood.state is State.DANGER
     # Danger held only by the count of calm messages is not danger going on, so it never pauses.
-    pausing = after is State.DANGER and not waits and kind_pauses and not read.help_in_place and goes_on
+    pausing = after is State.DANGER and not waits and not floored and kind_pauses and not read.help_in_place and goes_on
     # Once per kind of danger: a conversation already in danger of this kind has had the help; another kind has not.
     resources_due = (after is State.DANGER and not pausing
                      and (stood.state is not State.DANGER or stood.about != about))
     return Outcome(
         state=after, about=about if after is not State.CLEAR else None, pausing=pausing,
         settled_now=stood.state is not State.CLEAR and after is State.CLEAR,
-        resources_due=resources_due, calm=stood.calm + 1 if waits else 0,
+        resources_due=resources_due, calm=stood.calm + 1 if waits else 0, raised=floored,
     )
 
 

@@ -436,6 +436,17 @@ async def test_a_change_of_subject_after_danger_keeps_the_worry_open(alice, mode
     assert (await thread_row(alice, thread.id)).safety == "clear"
 
 
+async def test_a_high_risk_phrase_the_model_read_as_none_is_danger_with_help_and_no_pause(alice, model):
+    """S3 and S4 (PROVISIONAL: clinician sign-off required before deploy): "I wish I were dead" is HIGH in the client's
+    Risk Classification; read lower by the model, code raises it, records it and adds the help line, with no lockout."""
+    model(said("That sounds so heavy. What's been happening?"))
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "honestly i wish i were dead")
+    assert turn.crisis_detected and turn.paused_until is None and turn.trace["raised_by_phrase"]
+    assert turn.content.endswith("\n\n" + crisis.resources_line("themselves"))
+    assert (await thread_row(alice, thread.id)).safety == "danger"
+
+
 async def test_a_paused_person_is_refused_before_anything_is_paid(alice, model):
     scripted = model(said("Call now.", safety=DANGER), said("Please.", safety=DANGER), said("unused"))
     thread = await start(alice)

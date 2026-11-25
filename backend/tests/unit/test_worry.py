@@ -249,3 +249,32 @@ def test_danger_that_goes_on_pauses_for_these_kinds_and_reads(about, read, pause
     themselves, to someone else or from someone pauses without a refusal; a body symptom needs one for a symptom
     happening now (2026-11-13), and so does a danger of no known kind."""
     assert worry.step(worry.Standing(state=State.DANGER, about=about, phase=ORD), read).pausing is pauses
+
+
+@pytest.mark.parametrize("message", [
+    "I want to die", "i don't want to live anymore", "Sometimes I wish I were dead", "I want to hurt myself",
+    "I feel like ending it", "honestly I might kill myself", "I have a plan", "This is my last message",
+    "everyone is better off without me", "I gave my things away last week", "I wrote letters to all of them",
+    "I DON’T WANT TO LIVE",
+])
+def test_a_high_risk_phrase_the_model_read_lower_is_raised_to_danger_with_help_and_no_pause(message):
+    """S3 and S4 (PROVISIONAL: clinician sign-off required before deploy): the client's Risk Classification makes each
+    of these HIGH, and "I wish I were dead" was read as unsure. Code raises a read below danger to danger about
+    themselves, so the help line is due, and never pauses on that message, even with danger already open."""
+    for stood, read in ((worry.Standing(state=State.CLEAR, about=None, phase=ORD), N()),
+                        (worry.Standing(state=State.CLEAR, about=None, phase=ORD), U(about="themselves")),
+                        (worry.Standing(state=State.DANGER, about="themselves", phase=ORD), U(about="themselves"))):
+        outcome = worry.step(stood, read, message)
+        assert outcome.state is State.DANGER and outcome.about == "themselves" and not outcome.pausing, (stood, read)
+    first = worry.step(worry.Standing(state=State.CLEAR, about=None, phase=ORD), N(), message)
+    assert first.resources_due
+
+
+def test_the_phrase_floor_only_raises_and_ignores_messages_without_a_listed_phrase():
+    """S4: the floor never lowers a read, and words near a phrase are not it."""
+    clear = worry.Standing(state=State.CLEAR, about=None, phase=ORD)
+    assert worry.step(clear, N(), "I'm dying to see that film").state is State.CLEAR
+    assert worry.step(clear, N(), "my grandfather died and I miss him").state is State.CLEAR
+    held = worry.step(worry.Standing(state=State.DANGER, about="themselves", phase=ORD), D(about="themselves"),
+                      "I want to die")
+    assert held.pausing, "a danger the model read itself goes on and pauses as before"
