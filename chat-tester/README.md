@@ -105,8 +105,8 @@ catcher (`[local_smtp]`, http://127.0.0.1:54344), and the nickname is then set f
 signed in - the session is remembered for seven days. The sidebar's **Nickname** field changes
 the name the greeting uses, from the next new conversation. Every message has a copy icon under it,
 in the chat and in the admin viewer. **Sign out** switches
-accounts, and **New conversation** shows a fresh opening for the signed-in user: Mani's greeting and the three
-style buttons. Nothing is stored until the first message sent, which creates the conversation (with the style
+accounts, and **New conversation** shows a fresh opening for the signed-in user: Mani's greeting, with "I'm MANI, an AI
+companion, not a therapist." under it, and the three style buttons. Nothing is stored until the first message sent, which creates the conversation (with the style
 tapped, if any), so an opening nobody wrote in never appears in the list, and a reload opens the latest conversation
 instead of it. Under it,
 **Conversations** lists that user's threads, most recently active first (the latest 20, titled once a

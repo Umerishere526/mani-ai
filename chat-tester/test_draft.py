@@ -219,3 +219,17 @@ def test_a_changed_first_message_gets_a_new_id():
 
     ids = _create_ids(backend)
     assert len(ids) == 2 and ids[0] != ids[1]
+
+
+def test_the_ai_disclosure_shows_under_the_greeting_of_a_draft_and_of_a_stored_conversation():
+    """S15: every conversation opens saying Mani is an AI companion, not a therapist."""
+    disclosure = "I'm MANI, an AI companion, not a therapist."
+    stored = DraftBackend(earlier=True)
+    stored.stored = list(EARLIER)
+    for backend in (DraftBackend(), stored):
+        app = _open(backend)
+        greeting, *rest = app.get("chat_message")
+        assert greeting.markdown[0].value == GREETING
+        assert [c.value for c in greeting.caption] == [disclosure]
+        assert all(disclosure not in c.value for m in rest for c in m.caption)
+    assert len(rest) == 2, "the stored conversation's tap and opener follow the greeting"
