@@ -466,6 +466,20 @@ async def test_confirmed_thoughts_get_the_question_of_immediate_danger_until_the
     assert (await thread_row(alice, thread.id)).understanding["worry_immediacy"] == "answered"
 
 
+async def test_a_turn_held_for_safety_thinks_at_low_effort_and_others_at_the_prompts(alice, model):
+    """CR-4 (PROVISIONAL: clinician sign-off required before deploy): manasa's crisis test (2026-11-25) found the
+    replies slow when speed mattered most. A turn held for safety asks the model at worry.HELD_REASONING_EFFORT; every
+    other turn at the effort its prompt row names."""
+    from mani.chat import worry
+
+    scripted = model(said(FIRST_REPLY, safety=DANGER), said("Please call now.", safety=Safety(level="none")))
+    thread = await start(alice)
+    await send(alice, thread.id, "i have pills and i'm going to take them")
+    assert scripted.kwargs["reasoning_effort"] != worry.HELD_REASONING_EFFORT
+    await send(alice, thread.id, "i don't know")
+    assert scripted.kwargs["reasoning_effort"] == worry.HELD_REASONING_EFFORT == "low"
+
+
 async def test_a_change_of_subject_after_danger_keeps_the_worry_open(alice, model):
     """S1 (PROVISIONAL: clinician sign-off required before deploy): "I took pills" then "can we talk about work" ended
     the danger on the model's read of none. Danger holds through one calm message; the second closes it."""

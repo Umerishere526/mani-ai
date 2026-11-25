@@ -21,6 +21,10 @@ _DANGER = {"none": "none", "unsure": "unsure", "danger": "now"}
 # closes the same way, counted from Mani's reply to it, which asked about their safety, unless they say they are safe
 # or someone is with them (S1). PROVISIONAL: clinician sign-off required before deploy.
 CALM_TO_CLEAR = 2
+# How hard the model thinks on a turn held for safety, in place of the prompt row's effort: a crisis reply must come
+# fast (manasa's crisis test, 2026-11-25). Safety judgment at this effort is unmeasured until the safety eval cases and
+# the recall set run at it. CR-4, PROVISIONAL: clinician sign-off required before deploy.
+HELD_REASONING_EFFORT = "low"
 
 
 class Phase(StrEnum):

@@ -212,7 +212,8 @@ async def _respond(
             shape, model=model, purpose=llm_calls.Purpose.CHAT,
             temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
             max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
-            reasoning_effort=parameters.get("reasoning_effort"), routing=routing, user_id=claims.user_id,
+            reasoning_effort=worry.HELD_REASONING_EFFORT if holding else parameters.get("reasoning_effort"),
+            routing=routing, user_id=claims.user_id,
             thread_id=ctx.thread.id, prompt_version_id=None,
         )
         if call is None:
