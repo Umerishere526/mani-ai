@@ -86,3 +86,4 @@ conflict under "Conflicts" in [requirements.md](requirements.md) and update the 
 | 2026-11-23 | Lolly | [Directive, workload and a boss who breaks promises: 3/10](messages/2026-11-23-workload-and-boss-test.md) |
 | 2026-11-23 | Lolly | [Directive, overworked and underappreciated: 0/10](messages/2026-11-23-overworked-underappreciated-test.md) |
 | 2026-11-23 | manasa | [Lolly writes the standard conversations: five Directive ones by November 30, and every build says what is ready](messages/2026-11-23-directive-examples-and-build-notes.md) |
+| 2026-11-25 | Lolly | [Directive chat: a new conversation opened with a question about a pause she never had](messages/2026-11-25-directive-chat-return-check.md) |

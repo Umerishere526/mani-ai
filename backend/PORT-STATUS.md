@@ -57,7 +57,7 @@ the same change as the work.**
      window (`facts.system_prompt`). Then the transcript, their message, and a system message of facts
      (`facts.facts`): their style, Mani's notes from its last turn, the framework running and its next stage, an open
      offer, what was declined or finished, an open safety worry, what code would refuse (`facts.NO_OFFER`), the
-     return check after a pause, a recent crisis elsewhere, a tapped button, and a title when one is due.
+     return check in the conversation a pause began in, a recent crisis elsewhere, a tapped button, and a title when one is due.
   4. The reply is `TurnReply` (`chat/reply.py`): `text`, `action` (none, offer, finish, stop, library), `framework`,
      `stage`, `safety` (`level`, `about`, `help_in_place`, `declined`, `symptom_now`, `still_there`, `why`), `notes`
      and `title`.
@@ -78,8 +78,8 @@ the same change as the work.**
   Library and Finish for Now. The body check-in (the client's "SOMATIC SECTION OF MANI", paused since 2026-11-05) was
   deleted on 2026-11-17 with its code, script and phases; migration 039 retired any thread left in it, and the
   client's script stays in `docs/client/`.
-- **Memory**: none across chats. Each chat stands alone; only the safety check after a pause crosses chats
-  (Decisions in force).
+- **Memory**: none across chats. Each chat stands alone; only the "go gently" line after a recent crisis elsewhere
+  crosses chats (Decisions in force).
 - **Exercises**: catalog, completions and signed URLs (`mani/storage.py`). Nothing picks an exercise for a person:
   the pick by a second model call was deleted with the 2026-10-02 flow. `GET /v1/exercises` is the whole catalog, and responses never carry the storage path.
 - **Admin**: prompt CRUD with versioning, exercise CRUD, crisis event review, and every
@@ -87,7 +87,7 @@ the same change as the work.**
   message (`Participant` in `mani/auth/deps.py`). `scripts/grant_admin.py <email>` grants or `--revoke`s it.
 - **Account deletion**: `DELETE /v1/account` removes the user and everything they own.
 - **Evaluation** (`evals/`): `run_eval.py` scores the turn's replies against ChatGPT's on 14 quality cases and checks
-  7 rule cases (`cases.json`), three runs each, judged by `openai/gpt-6.1-sol`; `check_suite.py` runs the 8
+  7 rule cases (`cases.json`), three runs each, judged by `openai/gpt-6.1-sol`; `check_suite.py` runs the 7
   conversations of `suite.json` through the real stack with a model-played person (`drive.py`) and exits 0 only when
   every check passes. See "The evaluation is the gate" in Decisions in force.
 
@@ -196,7 +196,7 @@ the same change as the work.**
   (`chain.request_body`, `chain.sampling`; since 2026-11-18, so earlier scores measured a different request), and it
   runs only from the command line. Since 2026-11-24 its rule checks and judge score the text the person is sent
   (`repairs.sent_text`, shared with the turn), not the raw reply; decide's refusals and the fixed pause and call-now
-  lines need thread state and are not applied (`tests/unit/test_eval_checks.py`). Before a merge, `evals/check_suite.py` runs the 8 conversations of
+  lines need thread state and are not applied (`tests/unit/test_eval_checks.py`). Before a merge, `evals/check_suite.py` runs the 7 conversations of
   `evals/suite.json` through the real stack with a model-played person (`evals/drive.py`, which calls OpenRouter
   directly, never billed as chat) and exits 0 only when every check passes; muhammad reads the rest. Last gate,
   2026-11-18, the client's framework sequence: Supportive and Reflective 3.30 against the baseline's 3.36, rules 32 of
@@ -441,23 +441,24 @@ the same change as the work.**
     follow-up, and the turn checks again under the message lock before its duplicate lookup (`turn._arrival`), so a
     retry or another tab cannot slip past. The profile and the opening carry `chat_paused_from` and
     `chat_paused_until`; reading conversations, the crisis resources and the Library stay open. A pause's reason is
-    loaded by the turns of any of the person's conversations (`threads.load_turn_context`), never by the profile, and the person's own role has no SELECT on it. An edit never undoes a pause.
-    **Every conversation asks after a pause, until they say they are all right** (muhammad, 2026-11-13; the
-    conversation the pause began in too, 2026-11-19: it stops asking once they have said it in another). Because a
-    person who comes back and chats in another conversation, new or older, must not bypass the check (2026-11-13).
+    loaded only by the turns of the conversation it began in (`threads.load_turn_context`), never by the profile, and the person's own role has no SELECT on it. An edit never undoes a pause.
+    **Retired 2026-11-25: every conversation asks after a pause, until they say they are all right** (muhammad,
+    2026-11-13 and 2026-11-19). Because Lolly, 2026-11-25: "I do not want my chat's to start this way. Get rid of it." A new chat opened with a question about a pause she never had.
+    **A new conversation opens normally and never raises a past pause or crisis; only the conversation a pause began
+    in asks how things are, on its first message back** (muhammad, 2026-11-25). Because Lolly, 2026-11-25: "I do not want my chat's to start this way. Get rid of it." (2026-11-25); the
+    pause pop-up already gives the help numbers. The turn loads only its own conversation's latest pause that has run
+    out (`threads.load_turn_context`), so `pause.return_check` never fires anywhere else, and the opening and the style
+    tap give each style's own opener. `test_a_new_conversation_after_a_pause_opens_normally_and_never_raises_it`,
+    `test_the_first_message_back_in_the_paused_conversation_is_asked_about_and_a_safe_answer_settles_it` in
+    `test_turn.py`; `test_the_opening_after_a_pause_ran_out_is_the_greeting_and_the_style_buttons` in
+    `test_threads_api.py`; `test_a_new_chat_carries_nothing_from_an_earlier_one_not_even_its_pause` in `test_queries.py`.
     **A pause owes the check only while it ended within `RECENT_CRISIS_DAYS` (30)** (the controller's ruling,
     2026-11-13). Because without a bound every old unchecked pause would make every conversation ask, however long ago
     (2026-11-13).
-    **Wherever they come back, Mani asks about what they faced, with what the pause rested on** (muhammad,
-    2026-11-16). Because someone who came back in a new conversation was met by the style's opener and a question with
-    no details, and the client's blocker test had Mani agree to keep talking before safety was established
-    (2026-11-16). The return check is for the person's latest pause that has run out (`pause.return_check`); the facts
-    give its reason and tell Mani to ask how things are with it before anything else (`facts._pause_lines`). In a new
-    conversation the question is the opening: `GET /v1/threads/opening` gives `greeting.RETURN_OPENER` for every style
-    while a pause is owed (`pauses.owed`), the style tap is answered with it at no model call (`turn._open_in_style`),
-    and their first message is its answer. Each conversation asks once per pause (`return_check` on the record). An
-    answer judged none clears that conversation and marks the pause checked (`pauses.mark_checked`), after which the
-    other conversations stop asking; see "After a pause" for when an answer pauses again. The chat-tester shows the
+    **Retired 2026-11-25: wherever they come back, Mani asks about what they faced, with what the pause rested on**
+    (muhammad, 2026-11-16, R103). Because Lolly, 2026-11-25: "I do not want my chat's to start this way. Get rid of it." In the conversation the pause began in, the facts still give
+    the pause's reason and tell Mani to ask how things are with it before anything else (`facts._pause_lines`), once
+    per pause (`return_check` on the record); see "After a pause" for when an answer pauses again. The chat-tester shows the
     client's blocker as she drew it on 2026-11-16, word for word ("Blocker.", "Chat is temporary unavailable", "For
     your safety, chat is paused for <the pause's own length>.", the Library line, the 988 line, Get help now and Go to
     library; muhammad: exactly as drawn, with the length the pause has (30 seconds as of 2026-11-23), and the 911 line and the live timer at the bottom
@@ -472,9 +473,9 @@ the same change as the work.**
     `auth/deps.py`; `tests/unit/test_pause.py`, `test_safety.py`, `test_worry.py`, `test_crisis_resources.py`; in
     `test_turn.py` `test_overdose_on_the_first_message_gets_manis_reply_and_the_next_message_pauses`,
     `test_a_paused_person_is_refused_before_anything_is_paid`,
-    `test_a_return_check_answer_that_is_fine_marks_the_pause_checked`; in `test_threads_api.py`
-    `test_every_chat_route_refuses_while_paused`, `test_the_library_and_profile_stay_open_while_paused`,
-    `test_the_opening_asks_about_a_pause_that_ran_out_until_they_have_answered`.
+    `test_the_first_message_back_in_the_paused_conversation_is_asked_about_and_a_safe_answer_settles_it`; in
+    `test_threads_api.py` `test_every_chat_route_refuses_while_paused`, `test_the_library_and_profile_stay_open_while_paused`,
+    `test_the_opening_after_a_pause_ran_out_is_the_greeting_and_the_style_buttons`.
   - After a framework's last stage, a conversation that reached danger asks about safety once, as a reply of its own
     (`crisis.END_CHECK`), before the closing choices; their answer is a safety turn, and the reply that settles it
     carries the close and the choices, whatever action the model chose (muhammad, 2026-11-11; the final review,
@@ -487,9 +488,9 @@ the same change as the work.**
   - Still the client's: the approved safety wording and resources (`crisis.RESOURCES` holds three US reference
     numbers and the Find A Helpline directory until then, and `pause_reply` names only numbers from it), and whether
     anything alerts a person.
-  - `declined`, `symptom_now` and `still_there` on MiniMax are held by the suite's overdose, chest, dodge and
-    return-check conversations (`evals/suite.json`); the return check needed one sentence in `mani.md`, that a safe
-    answer to the question about a pause judges none (2026-11-17).
+  - `declined`, `symptom_now` and `still_there` on MiniMax are held by the suite's overdose, chest and dodge
+    conversations (`evals/suite.json`) and the rule case `rule-not-safe-after-pause` (`evals/cases.json`); the return
+    check needed one sentence in `mani.md`, that a safe answer to the question about a pause judges none (2026-11-17).
 
 - **Retired 2026-11-17: the body check-in, paused since 2026-11-05** (muhammad, 2026-11-05: "chat -> framework
   (not somatic)"). Because it was deleted with its code, script and phases rather than kept paused beside a turn
@@ -659,16 +660,17 @@ the same change as the work.**
   never pauses, whatever the read reports" and "their answer to how things are pauses only when it says the danger
   is still there" and "an answer read as danger pauses even when the read does not say it is still there" in
   `test_worry.py`,
-  `test_a_return_check_answer_that_is_fine_marks_the_pause_checked` in `test_turn.py`.
-- **A conversation's safety moves by one rule, a worry's kind lasts only while the worry is open, and their word that
-  they are all right, in any conversation, settles every worry held from before it** (muhammad, 2026-11-19, the
-  redesign of the crisis pause). Because the kind of a worry and the question asked about it sat in two record keys
+  `test_the_first_message_back_in_the_paused_conversation_is_asked_about_and_a_safe_answer_settles_it` in `test_turn.py`.
+- **A conversation's safety moves by one rule, and a worry's kind lasts only while the worry is open** (muhammad,
+  2026-11-19, the redesign of the crisis pause). Because the kind of a worry and the question asked about it sat in two record keys
   that nothing cleared, so after a settled body worry a later danger with no stated kind was held to the body rule and
   never paused, and the conversation a pause began in kept its danger, asked again and could pause with no word from
-  Mani after they had said elsewhere that they were all right (2026-11-19). The rule is `worry.step` over `Standing`
+  Mani after they had said elsewhere that they were all right (2026-11-19). Retired 2026-11-25: their word that they
+  are all right, in any conversation, settles every worry held from before it. Because Lolly, 2026-11-25: "I do not want my chat's to start this way. Get rid of it." Only the
+  conversation a pause began in asks, and its own answer settles it. The rule is `worry.step` over `Standing`
   (the state, the worry's kind in `worry_about`, and the phase: ordinary, asking the return check, answering it);
-  `worry.standing` settles a held worry whose conversation's last message came before the latest pause's
-  `checked_at`; `pause.return_check` is the one rule for who is owed the question. A settled worry's kind is forgotten, so a later
+  `pause.return_check` decides when the conversation a pause began in asks (retired 2026-11-25: it was the one rule for
+  who is owed the question in every conversation, because Lolly, 2026-11-25: "I do not want my chat's to start this way. Get rid of it."). A settled worry's kind is forgotten, so a later
   danger with no stated kind needs a refusal like any other (muhammad kept this, 2026-11-19). muhammad, 2026-11-20,
   after an edge-case pass: an unsure worry they never answer closes on the second message in a row read as no
   concern (`worry.CALM_TO_CLEAR`, record key `worry_calm`; an answer to a question Mani asked directly, the return
@@ -678,13 +680,9 @@ the same change as the work.**
   answered with the fixed words of a failed call runs the turn again from the state before it
   (`crisis.UNREAD_REPLIES`, `turn._arrival`); a copy of Mani's reply with words of theirs added is read like any
   message (`text.COPY_ADDED_WORDS`). The prompt lines that go with these have not been through the evaluation.
-  Changes that follow
-  from the redesign and wait for him to keep or overrule them: a conversation asks with the latest pause's reason, whichever conversation the pause began in; the
-  answer to the question a new conversation opens with is a held turn, so no limit refuses it. `test_worry.py` (each
-  sequence was first run through the rules as they stood), `test_pause.py`; in `test_turn.py`
-  `test_the_conversation_paused_in_stops_asking_once_they_said_elsewhere_they_are_all_right` and
-  `test_the_answer_to_the_question_a_new_conversation_opens_with_is_never_refused_for_a_limit`;
-  `test_worry_migration.py`.
+  Retired 2026-11-25: a conversation asks with the latest pause's reason, whichever conversation the pause began in,
+  and the answer to the question a new conversation opens with is a held turn. Because Lolly, 2026-11-25: "I do not want my chat's to start this way. Get rid of it." `test_worry.py`
+  (each sequence was first run through the rules as they stood), `test_pause.py`; `test_worry_migration.py`.
 - **An unsure or danger read must say whose danger it is, and a danger of no known kind needs a refusal even while a
   body worry is open** (muhammad, 2026-11-24). Because a read with no kind inherited the open body worry's kind and its
   refusal never paused, and nothing enforced the field the model was told to fill. A reply missing it fails its schema
@@ -693,10 +691,10 @@ the same change as the work.**
   `Safety._says_whose_danger` (`reply.py`), `worry.step`; `test_a_turn_reply_that_says_danger_without_whose_is_asked_for_again`,
   the `test_worry.py` sequence "a refused danger of no known kind during an open body worry pauses (2026-11-24)",
   `test_a_held_worry_whose_reply_fails_its_check_twice_still_gets_the_crisis_reply`.
-- **An edit of the answer that marked a pause checked takes the mark back** (muhammad, 2026-11-24). Because the edit
-  restored the thread but left `checked_at`, so the pause stopped owing the question. Only an edit of the turn that
-  checked the pause clears it. `rewind.note_checked`, `pauses.clear_checked`;
-  `test_editing_the_answer_that_marked_a_pause_checked_asks_the_question_again`.
+- **Retired 2026-11-25: an edit of the answer that marked a pause checked takes the mark back** (muhammad,
+  2026-11-24). Because Lolly, 2026-11-25: "I do not want my chat's to start this way. Get rid of it." Nothing marks a pause checked any more: the conversation a pause began in keeps
+  where its question stands on its own record, which an edit restores
+  (`test_an_edited_answer_to_the_question_after_a_pause_is_read_as_the_answer_again`).
 - **An exception nothing handled answers 500 in the one error shape (`unknown`, the generic sentence), never
   Starlette's plain text** (muhammad, 2026-11-24). Because a client branching on `error.category` could not read a
   plain-text 500. It logs only the exception type; Sentry still captures it. Crisis numbers in error replies wait for
@@ -881,13 +879,15 @@ the same change as the work.**
   bringing one back is a content change. `facts.framework_guide`;
   `test_the_guide_says_when_never_to_offer_each_framework` in `test_facts.py`,
   `test_a_framework_stage_without_its_purpose_cannot_be_seeded_active` in `test_seed.py`.
-- **Every chat stands alone: nothing from an earlier chat reaches a new one except the safety check after a pause**
+- **Every chat stands alone: nothing from an earlier chat reaches a new one except the "go gently" line after a recent
+  crisis**
   (muhammad, 2026-11-18). Because a tester's memory held every scenario tested and pulled old themes and loops into
   new chats, and muhammad wants each chat separate even when the person returns with the same issue (2026-11-18). The
-  safety check is the return question after a pause and the "go gently" line for a recent worry
-  (`chat/pause.return_check`, `TurnContext.recent_crisis`); the onboarding profile is not a chat. No chat call opts into
+  "go gently" line for a crisis in another conversation in the last 30 days (`TurnContext.recent_crisis`) tells the
+  model never to mention it; the question after a pause stays in the conversation the pause began in (2026-11-25).
+  The onboarding profile is not a chat. No chat call opts into
   OpenRouter's response cache, and its prompt-cache key is that chat's own. Migration `041`;
-  `test_a_new_chat_carries_nothing_from_an_earlier_one_but_the_safety_check` in `tests/integration/test_queries.py`,
+  `test_a_new_chat_carries_nothing_from_an_earlier_one_not_even_its_pause` in `tests/integration/test_queries.py`,
   `test_a_chat_call_never_opts_into_openrouters_response_cache` in `tests/unit/test_client.py`.
 - **The offer is the client's three steps: a lead-in the model writes, then her five steps, then the choice to
   start** (muhammad, 2026-11-18). Because the client's sequence document (2026-11-18,
@@ -1138,6 +1138,10 @@ Earlier:
 
 ## Open engineering
 
+- **`chat_pauses.checked_at` is unused** (2026-11-25): nothing reads or writes it now that only the paused
+  conversation asks after a pause, and the `chat_pauses_update` policy, `mani_service`'s UPDATE grant and the
+  person's SELECT on  the column exist only for it (migration 037; `tests/sql/test_grants.sql` still checks the SELECT). Dropping them is a
+  migration for muhammad to approve.
 - **Re-gate the evaluation after the 2026-11-18 changes:** the guide's contraindications (a longer prompt), MiniMax's
   effort now sent, and `run_eval` building production's request. The last gate (3.62, all 21 rules, 2026-11-17)
   measured a different request, so a shift may come from the request, not the code.
