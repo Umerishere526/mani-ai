@@ -7,7 +7,7 @@ the same change as the work.**
 ## Status, 2026-11-25
 
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
-- Tests: `pytest` runs 493 tests, all passing against the local database (2026-11-25); the tests that mint a
+- Tests: `pytest` runs 599 tests, all passing against the local database (2026-11-25, after the fix wave); the tests that mint a
   symmetric token skip on a JWKS-configured project. `scripts/test_db.sh` runs the schema, RLS and privilege suites.
 - Database: 42 migrations (000 to 010, 018 to 042, 044 to 049; 043 is held by a stashed branch), 20 tables
   (10 `public`, 10 `admin`), 3 active frameworks and 2 active prompts seeded (`mani`, `summarization`).
