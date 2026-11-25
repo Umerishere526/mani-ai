@@ -55,7 +55,7 @@ activation:
       want to examine the thought.
 stages:
   offering:
-    purpose: "Once the thought is clear and the user wants a brief process, say the thought back and ask one permission question."
+    purpose: "Once the thought is clear and the user wants a brief process, offer it in a brief lead-in that names Thought Reframe and says how it would help with what they want, asking nothing after it: the app shows the buttons."
     if_unclear:
       - when: "the user declines"
         reply: "You do not want to use a framework. What would be most helpful to talk through?"

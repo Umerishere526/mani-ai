@@ -51,7 +51,7 @@ activation:
       want to be heard rather than decide, or are not ready to consider action.
 stages:
   offering:
-    purpose: "Mirror the identified problem and ask one permission question, once the problem and the wish for a plan are understood."
+    purpose: "Once the problem and the wish for a plan are understood, offer it in a brief lead-in that names Structured Problem Solving and says how it would help with what they want, asking nothing after it: the app shows the buttons."
     boundaries:
       - "must not define the problem without the user"
       - "must not decide what outcome the user should want"
