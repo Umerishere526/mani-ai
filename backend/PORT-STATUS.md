@@ -1328,8 +1328,12 @@ the same change as the work.**
 
 ## Before it takes real traffic
 
-Ordered by what breaks first. Release order for the fix wave of 2026-11-25: migrations 045 → 046 → 047 → 048 → 049,
-then deploy, `scripts/seed.py`, `scripts/seed_exercises.py`, upload the MP3s.
+Ordered by what breaks first. Release order for the fix wave of 2026-11-25 (full checklist:
+`docs/release/2026-11-25-release-checklist.md`): migrations 044 → 047, 049, 050 (all additive), then deploy,
+`scripts/seed.py`; once the new code is live, `supabase/after-deploy/051_drop_unused_pause_and_pacing_columns.sql`
+(the code before it reads `chat_pauses.checked_at` on every turn, so this drop was 048 and moved out of the release);
+`scripts/seed_exercises.py` and the MP3s when the recordings are available (until then the library's topics are the
+existing categories).
 
 0. **Zero data retention for summaries and transcription (2026-11-24).** Every call now asks for ZDR endpoints. Before
    deploying, confirm on OpenRouter that `openai/gpt-6-luna` and `openai/whisper-large-v3` have ZDR endpoints and that
