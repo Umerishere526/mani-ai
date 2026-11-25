@@ -84,7 +84,7 @@ do $$
 declare
   c text;
 begin
-  foreach c in array array['understanding', 'rewind_snapshot', 'pending_follow_up', 'vague_streak']
+  foreach c in array array['understanding', 'rewind_snapshot', 'pending_follow_up']
   loop
     if has_column_privilege('authenticated', 'public.threads', c, 'SELECT') then
       raise exception 'FAIL: a user can read threads.% with their own token', c;
@@ -174,18 +174,10 @@ select pg_temp.want('a user cannot rewrite their own message count',
 select pg_temp.want('a user cannot reassign a thread to someone else',
   has_column_privilege('authenticated', 'public.threads', 'user_id', 'UPDATE'), false);
 
--- The two columns migration 002 added, and the line between them: how Mani speaks is the
--- person's to choose, the pacing counter behind the vague-reply pivot is not. A user who
--- could write it could reset their own counter and never be moved off a vague loop.
+-- How Mani speaks is the person's to choose (migration 002).
 select pg_temp.want('a user can choose their conversation style',
   has_column_privilege('authenticated', 'public.threads', 'conversation_style', 'UPDATE'),
   true);
-
-select pg_temp.want('a user cannot reset their own vague streak',
-  has_column_privilege('authenticated', 'public.threads', 'vague_streak', 'UPDATE'), false);
-
-select pg_temp.want('the backend can move the vague streak',
-  has_column_privilege('mani_service', 'public.threads', 'vague_streak', 'UPDATE'), true);
 
 -- Migration 022: what Mani understands so far is sent back in [ctx] every turn, so a user who
 -- could write it could write their own context block.
@@ -505,8 +497,7 @@ select pg_temp.want('a user reads their own pauses',
   and has_column_privilege('authenticated', 'public.chat_pauses', 'user_id', 'SELECT')
   and has_column_privilege('authenticated', 'public.chat_pauses', 'thread_id', 'SELECT')
   and has_column_privilege('authenticated', 'public.chat_pauses', 'started_at', 'SELECT')
-  and has_column_privilege('authenticated', 'public.chat_pauses', 'ends_at', 'SELECT')
-  and has_column_privilege('authenticated', 'public.chat_pauses', 'checked_at', 'SELECT'), true);
+  and has_column_privilege('authenticated', 'public.chat_pauses', 'ends_at', 'SELECT'), true);
 
 -- Why a pause started is the model's line of why, which can carry their words: only the backend's role reads it.
 select pg_temp.want('a user cannot read why their pause started',
@@ -515,9 +506,13 @@ select pg_temp.want('a user cannot read why their pause started',
 select pg_temp.want('the backend reads why a pause started',
   has_column_privilege('mani_service', 'public.chat_pauses', 'reason', 'SELECT'), true);
 
-select pg_temp.want('the backend starts and ends pauses',
-  has_table_privilege('mani_service', 'public.chat_pauses', 'INSERT')
-  and has_table_privilege('mani_service', 'public.chat_pauses', 'UPDATE'), true);
+select pg_temp.want('the backend starts pauses',
+  has_table_privilege('mani_service', 'public.chat_pauses', 'INSERT'), true);
+
+-- A pause runs to its end: nothing changes one once it has started (migration 048).
+select pg_temp.want('the backend never changes a pause once started',
+  has_table_privilege('mani_service', 'public.chat_pauses', 'UPDATE')
+  or has_any_column_privilege('mani_service', 'public.chat_pauses', 'UPDATE'), false);
 
 -- When a crisis happened is the backend's record: only the backend's role reads it.
 select pg_temp.want('a user cannot read when their thread''s crisis happened',

@@ -353,7 +353,7 @@ the same change as the work.**
   hand: built from the migrations, "mani-app" let any signed-in person call `create_message_pair` and forge Mani's
   reply. `000_supabase_defaults_off.sql` turns the defaults off before 001; `034_backend_only_state.sql` pins the
   definer functions to `mani_service`, hides `threads.understanding`, `rewind_snapshot`, `pending_follow_up`,
-  `vague_streak`, a column migration 040 dropped since, and `memory_folded_at`, which 041 dropped, from
+  `vague_streak`, a column migration 048 dropped since, and `memory_folded_at`, which 041 dropped, from
   `authenticated` (they were readable through the Data API with the person's own token), and moves `admin` schema
   usage with `admin.exercises` and `admin.frameworks` from `authenticated` to `mani_service`. `035` takes `public`
   away from PUBLIC and names each role that uses it, `supabase_auth_admin` included: the hosted project had lost
@@ -432,7 +432,7 @@ the same change as the work.**
     so a symptom the model judged unsure counts as danger (muhammad, 2026-11-23: refusing an ambulance for chest pain
     that was still happening never paused when the model said unsure); a danger of no known kind
     needs `declined` too. Accepted: a `help_in_place` misread can pause someone who has help (2026-11-14).
-    On the pausing turn a `chat_pauses` row (migration 037: thread, `started_at`, `ends_at`, `reason`, `checked_at`) is
+    On the pausing turn a `chat_pauses` row (migration 037: thread, `started_at`, `ends_at`, `reason`) is
     written in the turn's transaction, the reply is `crisis.pause_reply(about)` in place of the model's text (whom
     Mani worries for and the help that fits: 911 and 988 for themselves or an unknown kind, 911 for someone else, from
     someone and the body; Crisis Text Line stays in `RESOURCES` for the API), the response carries `paused_from` and
@@ -1138,10 +1138,6 @@ Earlier:
 
 ## Open engineering
 
-- **`chat_pauses.checked_at` is unused** (2026-11-25): nothing reads or writes it now that only the paused
-  conversation asks after a pause, and the `chat_pauses_update` policy, `mani_service`'s UPDATE grant and the
-  person's SELECT on  the column exist only for it (migration 037; `tests/sql/test_grants.sql` still checks the SELECT). Dropping them is a
-  migration for muhammad to approve.
 - **Re-gate the evaluation after the 2026-11-18 changes:** the guide's contraindications (a longer prompt), MiniMax's
   effort now sent, and `run_eval` building production's request. The last gate (3.62, all 21 rules, 2026-11-17)
   measured a different request, so a shift may come from the request, not the code.
@@ -1185,8 +1181,6 @@ Earlier:
 - **A `busy` 503 or a slot 429 logs at ERROR or WARNING per request**, and 5xx goes to Sentry with a traceback. Under
   load that is one report per refused request; consider logging them without `exc_info`.
 - **`GET /v1/admin/models`**, which the prompt editor's model dropdown needs.
-- **`threads.vague_streak`** is granted to the backend and written by nothing; the pacing it belongs to is
-  designed, not built.
 - **`appropriate_when` and `not_when`** in the framework files are read by nothing (each file says so).
 
 ## Latest measurements

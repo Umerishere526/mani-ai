@@ -420,10 +420,13 @@ async def test_the_active_pause_is_the_users_own_and_the_latest(alice):
     thread = await threads.create(alice, ALICE)
     older = await pauses.start(alice, ALICE, thread.id, 30, "first")
     newer = await pauses.start(alice, ALICE, thread.id, 30, "second")
-    # now() is fixed inside the fixture's transaction, so set the order explicitly.
+    # now() is fixed inside the fixture's transaction, so set the order explicitly, as the owner: the backend's role
+    # never changes a pause.
+    await alice.execute("reset role")
     await alice.execute(
         "update public.chat_pauses set started_at = now() - interval '10 minutes' where id = $1",
         older.id)
+    await alice.execute("set local role mani_service")
     assert (await pauses.active(alice, ALICE)).id == newer.id
 
     # Another person's pause is invisible to the first, and the first has none of their own after theirs ends.
