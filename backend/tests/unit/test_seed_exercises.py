@@ -10,8 +10,8 @@ from scripts.seed_exercises import ExerciseCategory, ManifestEntry, load_manifes
 def test_every_manifest_entry_has_its_own_file_and_a_known_category():
     entries = load_manifest()
 
-    assert len(entries) == 30
-    assert len({e.id for e in entries}) == len({e.filename for e in entries}) == 30
+    assert len(entries) == 31
+    assert len({e.id for e in entries}) == len({e.filename for e in entries}) == 31
     for entry in entries:
         assert entry.category in set(ExerciseCategory)
         assert entry.duration_minutes > 0

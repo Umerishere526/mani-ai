@@ -183,6 +183,18 @@
       "durationMinutes": 6.56
     },
     {
+      "id": "eee7850b-9dac-4df3-90ca-e6a6d3c16296",
+      "filename": "the-gardeners-shed.mp3",
+      "title": "The Gardener’s Shed",
+      "subtitle": null,
+      "description": "The Gardener’s Shed is a reflective story that helps you understand how patience and consistent effort contribute to lasting progress, even when results are not immediate.",
+      "type": "Story",
+      "category": "BuildingHabits",
+      "displayOrder": 3,
+      "showOnHomeScreen": false,
+      "durationMinutes": 19.15
+    },
+    {
       "id": "811a28d4-2bbc-4009-9479-44d75ce2f3c9",
       "filename": "the-caretakers-cottage.mp3",
       "title": "The Caretaker’s Cottage",
