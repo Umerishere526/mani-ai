@@ -447,6 +447,28 @@ async def test_a_high_risk_phrase_the_model_read_as_none_is_danger_with_help_and
     assert (await thread_row(alice, thread.id)).safety == "danger"
 
 
+async def test_an_edited_first_danger_message_is_danger_going_on_and_an_edit_never_lowers_it(alice, model):
+    """S8 (PROVISIONAL: clinician sign-off required before deploy): rewriting a first danger message replayed it as the
+    first each time, so it never paused. The danger survives the edit, so the rewrite is danger going on; and an edit
+    to something calm keeps the danger open."""
+    model(said(FIRST_REPLY, safety=DANGER), said("Please call now.", safety=DANGER))
+    thread = await start(alice)
+    await send(alice, thread.id, "i took a bunch of pills")
+    edited = await runner.edit(alice, thread.id, await last_user_message_id(thread.id), "i took all of them")
+    assert edited.paused_until is not None
+
+    from mani.db import pool
+
+    async with pool.as_admin() as conn:
+        await conn.execute("delete from public.chat_pauses where user_id = $1", ALICE)
+    model(said(FIRST_REPLY, safety=DANGER), said("Okay, what's on your mind?"))
+    other = await start(alice)
+    await send(alice, other.id, "i took a bunch of pills")
+    await runner.edit(alice, other.id, await last_user_message_id(other.id), "never mind, forget it")
+    row = await thread_row(alice, other.id)
+    assert row.safety == "danger" and row.understanding["danger_reached"]
+
+
 async def test_a_paused_person_is_refused_before_anything_is_paid(alice, model):
     scripted = model(said("Call now.", safety=DANGER), said("Please.", safety=DANGER), said("unused"))
     thread = await start(alice)
