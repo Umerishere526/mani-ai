@@ -1,5 +1,5 @@
 // ABOUTME: Breathing sphere image used as the app's ambient branding element (home hero,
-// ABOUTME: onboarding). Animates a gentle scale pulse on the UI thread via Reanimated.
+// ABOUTME: onboarding). Pulses gently on the UI thread unless the system asks for reduced motion.
 
 import { useEffect } from 'react';
 import { Image } from 'expo-image';
@@ -10,6 +10,7 @@ import Animated, {
   withTiming,
   interpolate,
   Easing,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import en from '@/dictionaries/en.json';
 
@@ -22,9 +23,10 @@ const BREATH_DURATION = 6000;
 
 export function GradientSphere({ size = 250, animated = true }: GradientSphereProps) {
   const breath = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    if (!animated) {
+    if (!animated || reduceMotion) {
       breath.value = 0;
       return;
     }
@@ -36,7 +38,7 @@ export function GradientSphere({ size = 250, animated = true }: GradientSpherePr
       -1,
       false,
     );
-  }, [animated, breath]);
+  }, [animated, reduceMotion, breath]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: interpolate(breath.value, [0, 0.5, 1], [1, 1.08, 1]) }],
