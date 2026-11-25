@@ -326,3 +326,10 @@ def test_a_practical_problem_offered_a_belief_framework_fails():
     helped = chat(turn("three reports and a presentation", "You could ask to move one report to Monday.",
                        framework=None))
     assert checks.no_belief_framework(helped, belief).passed
+
+
+def test_a_reading_said_as_fact_is_a_counted_gap_never_a_failure():
+    """manasa and muhammad's tester (2026-11-25): assumptions presented as facts."""
+    said = checks.no_reading_as_fact(chat(turn("x", "This weekend is the second kind."), turn("y", "Fair enough.")))
+    assert (said.kind, said.passed) == (checks.GAP, False) and said.detail == "turn 1: this weekend is the second kind"
+    assert checks.no_reading_as_fact(chat(turn("x", "The promise keeps coming up."))).passed

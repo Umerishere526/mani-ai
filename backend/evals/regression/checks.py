@@ -10,7 +10,7 @@ from evals.drive import Conversation
 from evals.reply_rules import genders_named, pronouns, questions
 from mani.chat import greeting
 from mani.chat.crisis import UNREAD_REPLIES
-from mani.chat.enforce import banned_phrases, forbidden_words
+from mani.chat.enforce import banned_phrases, forbidden_words, interpretive
 from mani.chat.decide import OFFER_FROM_MESSAGE
 
 # Kinds of result. A failed `deterministic` check fails the run; `performance` is reported and fails only under
@@ -148,6 +148,13 @@ def no_forbidden_words(c: Conversation) -> Result:
         if found := forbidden_words(e.reply):
             return Result("no_forbidden_words", DETERMINISTIC, False, f"used {found}", n, source=source)
     return Result("no_forbidden_words", DETERMINISTIC, True, source=source)
+
+
+def no_reading_as_fact(c: Conversation) -> Result:
+    """Readings said as fact, counted across the conversation (manasa and muhammad's tester, 2026-11-25). A gap, not a
+    failure: the phrases are a heuristic, and the judge scores unsupported interpretation."""
+    found = [f"turn {n}: {event.split(':', 1)[1]}" for n, e in enumerate(c.exchanges, 1) for event in interpretive(e.reply)]
+    return Result("no_reading_as_fact", GAP, not found, "; ".join(found), source="manasa, 2026-11-25 (R181)")
 
 
 def no_banned_phrases(c: Conversation) -> Result:
@@ -431,7 +438,7 @@ def evaluate(c: Conversation, scenario: dict, stages: dict[str, list[str]], allo
     framework's id to its name."""
     expect = scenario.get("expect", {})
     results = [ran_cleanly(c), one_question(c), no_repeated_question(c), no_repeated_opener(c), no_forbidden_words(c),
-               no_banned_phrases(c), labels_valid(c, allowed), pronoun_fidelity(c),
+               no_banned_phrases(c), no_reading_as_fact(c), labels_valid(c, allowed), pronoun_fidelity(c),
                latency_within(c, scenario.get("max_latency_s", 10))]
     if offer_turn(c) is not None:
         results.append(offer_names_framework(c, names or {}))

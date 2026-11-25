@@ -195,6 +195,26 @@ def test_a_figurative_phrase_is_recorded_and_the_text_goes_out_as_written():
     assert sent("Not knowing why is hard.").enforced == []
 
 
+@pytest.mark.parametrize("written", [
+    "This weekend is the second kind.",
+    "That's the part with the weight in it, not the weekend itself.",
+    "Then the belief stands on what you've seen.",
+    "You're not deciding between a trip and a birthday.",
+    "This is really about being left out.",
+])
+def test_a_reading_said_as_fact_is_recorded_and_the_text_goes_out_as_written(written):
+    """manasa (2026-11-25) and muhammad's tester: assumptions presented as facts. Each is one of muhammad's local test
+    replies; code counts them for the eval and the trace, and the prompt is the fix."""
+    reply = sent(written)
+    assert reply.text == written
+    assert any(event.startswith(f"{enforce.INTERPRETIVE}:") for event in reply.enforced)
+
+
+def test_a_reading_put_as_the_question_or_their_own_words_pointed_back_is_not_recorded():
+    reply = sent("The promise you made her keeps coming up.", "How much of this is about feeling left out?")
+    assert not any(event.startswith(f"{enforce.INTERPRETIVE}:") for event in reply.enforced)
+
+
 def test_every_stage_line_of_every_set_is_read_as_one():
     for framework_id in REGISTRY.ids:
         framework = REGISTRY.get(framework_id)

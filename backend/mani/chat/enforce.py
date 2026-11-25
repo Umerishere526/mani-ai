@@ -74,8 +74,23 @@ STAGE_LINE = re.compile(r"^[\"'“‘(]?(?:Step \w+ is|[A-E] is for)\b")
 
 # Figurative phrases the client flagged as constructed rather than conversational (Manasa, 2026-11-25). Only recorded
 # with the phrase, never rewritten: a phrase can be literal ("the loop" of a running track), and the prompt is the fix.
-FIGURATIVE_PHRASES = ("its own kind of", "a strange shape", "nice shape", "holding the thread", "cast in", "the loop")
+FIGURATIVE_PHRASES = ("its own kind of", "a strange shape", "nice shape", "holding the thread", "cast in", "the loop",
+                      # muhammad's local tests (2026-11-25).
+                      "the weight in it", "weighing on", "holding that", "sitting between us", "a lot to be carrying")
 _FIGURATIVE = re.compile(rf"\b(?:{'|'.join(re.escape(phrase) for phrase in FIGURATIVE_PHRASES)})\b", re.IGNORECASE)
+# Statements that tell them what their situation is, means or is about, or that their belief holds: readings said as
+# fact, which the client's testers flagged most (manasa 2026-11-25; muhammad's tester the same day). Only recorded with
+# the phrase, never rewritten, so the eval and the trace can count them; the prompt is the fix.
+INTERPRETIVE_PATTERNS = (
+    r"(?:this|that|it)(?:'s| is) (?:really |actually |all |just )?about",
+    r"(?:this|that|it)(?:'s| is) (?:the|where the) (?:part|real|core|heart|crux)",
+    r"(?:this|that) (?:\w+ )?is the (?:first|second|other) kind",
+    r"the (?:belief|thought|fear) (?:stands|holds)",
+    r"you(?:'re| are) not (?:really )?(?:deciding|choosing|asking|worried|upset|angry)",
+    r"what you(?:'re| are) really",
+    r"the real (?:issue|problem|question|fear) is",
+)
+_INTERPRETIVE = re.compile(rf"\b(?:{'|'.join(INTERPRETIVE_PATTERNS)})", re.IGNORECASE)
 
 # Enforcement events, as the turn trace records them under `enforced`. A word swap is recorded with its word.
 REPEATED_QUESTION = "repeated_question"
@@ -90,6 +105,7 @@ FORBIDDEN_WORD = "forbidden_word"
 BANNED_LINE_REMOVED = "banned_line_removed"
 BANNED_LINE_KEPT = "banned_line_kept"
 FIGURATIVE = "figurative"
+INTERPRETIVE = "interpretive"
 STAGE_IN_OFFER = "stage_in_offer"
 STAGE_IN_OFFER_KEPT = "stage_in_offer_kept"
 
@@ -118,6 +134,13 @@ def banned_phrases(text: str) -> list[str]:
     """The banned lines the text says, with a typographic apostrophe read as a plain one."""
     plain = text.lower().replace("’", "'")
     return [p for p in BANNED_PHRASES if p in plain]
+
+
+def interpretive(text: str) -> list[str]:
+    """The events for the readings the text states as fact, one per phrase, recorded with it; the text is unchanged. A
+    reading put as a question is what the prompt asks for, so questions are left out."""
+    statements = " ".join(sentence for sentence in questions.sentences(text) if not questions.asks(sentence))
+    return [f"{INTERPRETIVE}:{phrase}" for phrase in sorted({m.lower() for m in _INTERPRETIVE.findall(statements)})]
 
 
 def figurative(text: str) -> list[str]:
@@ -314,5 +337,5 @@ def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, la
         enforced += trimmed
     text, opened = fresh_opener(text, openers, guarded=guarded)
     enforced += opened
-    enforced += figurative(text)
+    enforced += figurative(text) + interpretive(text)
     return Sent(text, asked, cut, enforced)
