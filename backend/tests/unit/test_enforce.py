@@ -4,13 +4,16 @@
 import pytest
 
 from mani.chat import crisis, enforce
+from mani.chat.techniques import line_of, stages_of
+from tests.unit.frameworks import REGISTRY
 
 
 def sent(text: str, ask: str = "", *, fixed: bool = False, guarded: bool = False, open_chat: bool = True,
          latest: str = "answer", directive: bool = False, helping: bool = False,
-         openers: tuple[str, ...] = ()) -> enforce.Sent:
+         openers: tuple[str, ...] = (), offered: str | None = None, stage: str | None = None) -> enforce.Sent:
     return enforce.sent(text, ask, fixed=fixed, guarded=guarded, open_chat=open_chat, latest=latest,
-                        directive=directive, helping=helping, openers=list(openers))
+                        directive=directive, helping=helping, openers=list(openers),
+                        offered=REGISTRY.get(offered), stage=stage)
 
 
 def test_a_guarded_reply_whose_text_already_asks_its_question_asks_it_once():
@@ -169,3 +172,30 @@ def test_a_figurative_phrase_is_recorded_and_the_text_goes_out_as_written():
     assert reply.text == written
     assert reply.enforced == ["figurative:its own kind of", "figurative:the loop"]
     assert sent("Not knowing why is hard.").enforced == []
+
+
+def test_every_stage_line_of_every_set_is_read_as_one():
+    for framework_id in REGISTRY.ids:
+        framework = REGISTRY.get(framework_id)
+        for stage in stages_of(framework):
+            assert enforce.STAGE_LINE.match(line_of(framework, stage)), (framework_id, stage)
+
+
+def test_a_reply_at_the_offer_loses_the_stage_it_began_and_its_question():
+    """Manasa's Reflective Chat 2 (2026-11-25): Step 1 came with the steps, and again after she said yes."""
+    reply = sent("That's clearer. Step 1 is Identify the Thought. What goes through your head as you text her?",
+                 "What goes through your head?", open_chat=False, offered="thought_reframe")
+    assert reply.text == "That's clearer." and reply.asked == ""
+    assert reply.enforced == [enforce.STAGE_IN_OFFER]
+    staged = sent("Let's look at one moment.", "What happened the last time?", open_chat=False, offered="abcde",
+                  stage="activate")
+    assert staged.text == "Let's look at one moment." and staged.enforced == [enforce.STAGE_IN_OFFER]
+
+
+def test_an_offer_that_begins_no_stage_goes_out_as_written_and_a_stage_alone_is_kept():
+    lead_in = sent("ABCDE could help you walk into the review calmer.", open_chat=False, offered="abcde")
+    assert lead_in.text == "ABCDE could help you walk into the review calmer." and lead_in.enforced == []
+    alone = sent("A is for Activating Event.", open_chat=False, offered="abcde")
+    assert alone.text == "A is for Activating Event." and alone.enforced == [enforce.STAGE_IN_OFFER_KEPT]
+    running = sent("A is for Activating Event.", "What happened?", open_chat=False, stage="activate")
+    assert running.asked == "What happened?" and running.enforced == []

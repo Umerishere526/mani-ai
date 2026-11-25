@@ -10,6 +10,8 @@ from difflib import SequenceMatcher
 from mani.chat import questions, record as rec
 from mani.chat.repairs import sent_text
 from mani.chat.reply import TurnReply
+from mani.chat.techniques import stages_of
+from mani.models.rows import Framework
 
 # Behavioral Framework: "The following words must never appear in any Mani response."
 FORBIDDEN_WORDS = ("heaviest", "weakness", "fixing", "fixed", "space", "broken", "flawed", "stable", "stability",
@@ -52,6 +54,9 @@ _LEANS_BACK = ("and", "but", "so", "because", "which", "then", "or", "also", "th
 # follows it still stands.
 STOCK_OPENING_WORDS = 6
 
+# How every framework's stage line opens ("A is for Activating Event.", "Step 1 is Identify the Thought.").
+STAGE_LINE = re.compile(r"^[\"'“‘(]?(?:Step \w+ is|[A-E] is for)\b")
+
 # Figurative phrases the client flagged as constructed rather than conversational (Manasa, 2026-11-25). Only recorded
 # with the phrase, never rewritten: a phrase can be literal ("the loop" of a running track), and the prompt is the fix.
 FIGURATIVE_PHRASES = ("its own kind of", "a strange shape", "nice shape", "holding the thread", "cast in", "the loop")
@@ -70,6 +75,8 @@ FORBIDDEN_WORD = "forbidden_word"
 BANNED_LINE_REMOVED = "banned_line_removed"
 BANNED_LINE_KEPT = "banned_line_kept"
 FIGURATIVE = "figurative"
+STAGE_IN_OFFER = "stage_in_offer"
+STAGE_IN_OFFER_KEPT = "stage_in_offer_kept"
 
 # How alike two questions may be, word for word, before the second is the first asked again.
 SAME_QUESTION_RATIO = 0.85
@@ -101,6 +108,20 @@ def banned_phrases(text: str) -> list[str]:
 def figurative(text: str) -> list[str]:
     """The events for the figurative phrases the text uses, one per phrase, recorded with it; the text is unchanged."""
     return [f"{FIGURATIVE}:{phrase}" for phrase in sorted({match.lower() for match in _FIGURATIVE.findall(text)})]
+
+
+def without_stage(text: str, ask: str, *, offered: Framework, stage: str | None) -> tuple[str, str, list[str]]:
+    """A reply at the offer of `offered` without the stage it began, and the event: the stage begins only after they
+    accept (Manasa, 2026-11-25: Step 1 came before the steps, then again after her yes). Its stage lines go and, with
+    them or when the reply names one of the set's stages (`stage`), its questions, the one it chose (`ask`) included.
+    When nothing would be left, it goes out as written, recorded as kept."""
+    lines = [sentence for sentence in questions.sentences(text) if STAGE_LINE.match(sentence)]
+    if not lines and stage not in stages_of(offered):
+        return text, ask, []
+    cut = questions.kept(text, lambda _, sentence: not STAGE_LINE.match(sentence) and not questions.asks(sentence))
+    if not cut:
+        return text, ask, [STAGE_IN_OFFER_KEPT]
+    return cut, "", [STAGE_IN_OFFER]
 
 
 def _swapped(match: re.Match) -> str:
@@ -248,11 +269,12 @@ def repeats(text: str, ask: str) -> bool:
 
 
 def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, latest: str, directive: bool,
-         helping: bool, openers: list[str]) -> Sent:
+         helping: bool, openers: list[str], offered: Framework | None, stage: str | None) -> Sent:
     """The model's words as the person receives them (repairs.sent_text), with the client's rules enforced: each
     forbidden word swapped for a plain one, each banned line taken out, and a Directive reply in the open chat that
     gives no help (`helping`) held to DIRECTIVE_SENTENCES, and a stock opening that repeats one of the conversation's
-    `openers` dropped; a second question left in it is taken out; a figurative phrase is recorded. A guarded turn keeps every sentence and
+    `openers` dropped; a second question left in it is taken out; a figurative phrase is recorded; and a reply at the
+    offer of a set (`offered`: its lead-in, or the reply its five steps follow) begins none of its stages. A guarded turn keeps every sentence and
     every question its text asks, so a question it chose that the text already asks is not asked twice. Text that
     carries code's fixed safety words (`fixed`) goes out with no rule applied to it."""
     enforced: list[str] = []
@@ -263,6 +285,9 @@ def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, la
     enforced += sorted({*swapped, *swapped_in_ask})
     text, banned = without_banned_lines(text, ask, guarded=guarded)
     enforced += banned
+    if offered is not None and not guarded:
+        text, ask, staged = without_stage(text, ask, offered=offered, stage=stage)
+        enforced += staged
     if guarded and repeats(text, ask):
         ask = ""
         enforced.append(REPEATED_QUESTION)

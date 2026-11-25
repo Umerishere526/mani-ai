@@ -845,3 +845,20 @@ async def test_an_offer_on_the_persons_second_message_is_refused_and_the_next_ma
     assert offers_in(scripted.schemas[-1]) == ["abcde", "thought_reframe"]
     assert '[belief] "How could you test that thought?"' in facts_of(scripted)
     assert [p.label for p in third.prompts] == ["Not sure", "Show me how", "Give me a tool"]
+
+
+async def test_the_reply_the_steps_follow_begins_no_stage(alice, model):
+    """Manasa's Reflective Chat 2 (2026-11-25): Step 1 came before the steps, then again once she said yes."""
+    scripted = model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"),
+                     said("That's clearer. A is for Activating Event. What happened the last time?",
+                          question=Question(ask="What happened the last time?"), stage="activate"),
+                     said("A is for Activating Event. What happened the last time?", stage="activate"))
+    thread = await start(alice)
+    await warm_up(alice, thread.id)
+    await send(alice, thread.id, "i feel like a pushover")
+    steps = await send(alice, thread.id, "i just want to stop saying yes to everything")
+    assert steps.content == "That's clearer.\n\n" + await abcde_steps()
+    assert "stage_in_offer" in steps.trace["enforced"]
+    assert (await technique_of(alice, thread.id)).phase == "steps"
+    await send(alice, thread.id, "Start ABCDE")
+    assert scripted.calls == 5 and (await technique_of(alice, thread.id)).phase == "activate"
