@@ -13,11 +13,11 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import crisis, decide as decide_mod, facts, pause, questions, record as rec, rewind, safety, taps, worry
+from mani.chat import crisis, decide as decide_mod, enforce, facts, pause, questions, record as rec, rewind, safety, taps, worry
 from mani.chat.greeting import (
     COPIED_BACK, OPENERS, STYLE_OPTIONS, greeting, resolve_style,
 )
-from mani.chat.repairs import clean_title, sent_text, start_buttons
+from mani.chat.repairs import clean_title, start_buttons
 from mani.chat.reply import TurnReply, shaped
 from mani.chat.techniques import FEELINGS, OFFERING, STEPS, steps_text
 from mani.config import get_settings
@@ -242,11 +242,14 @@ async def _apply(
         end_check_due=bool(record.get(rec.DANGER_REACHED)) and rec.end_check(record) != rec.END_CHECK_DONE,
         end_check_asked=end_check_asked, person_messages=person_messages,
     )
-    ask = ""
+    ask, enforced = "", []
     if judgment.pausing:
-        # Mani's own words for this danger come first, then the pause line (muhammad, 2026-11-20).
+        # Mani's own words for this danger come first, then the pause line (muhammad, 2026-11-20). A question it chose
+        # that its text already asks is not asked twice.
+        repeated = enforce.repeats(reply.text, reply.question.ask)
+        enforced += [enforce.REPEATED_QUESTION] if repeated else []
         text = "\n\n".join(part for part in (
-            reply.text.strip(), reply.question.ask.strip(),
+            reply.text.strip(), "" if repeated else reply.question.ask.strip(),
             crisis.pause_reply(judgment.about, settings.crisis_pause_seconds)) if part)
     elif decision.end_check:
         text = crisis.END_CHECK
@@ -260,7 +263,9 @@ async def _apply(
     open_chat = questions.in_open_chat(
         in_play=running is not None or open_offer is not None or decision.technique is not None, guarded=guarded,
         action="none" if decision.refused == "offer" else reply.action)
-    text, asked, cut = sent_text(text, ask, guarded=guarded, open_chat=open_chat, latest=reply.question.latest)
+    sent = enforce.sent(text, ask, guarded=guarded, open_chat=open_chat, latest=reply.question.latest)
+    text, asked, cut = sent.text, sent.asked, sent.cut
+    enforced += sent.enforced
     # What the reply asked and gave, kept before code adds its own pieces; the fixed words for an empty reply give none.
     entry = _ledger_entry(reply, text, asked, open_chat=open_chat) if text else None
     if not text and not answer_failure:
@@ -296,7 +301,7 @@ async def _apply(
         "body_emergency": (judgment.body_emergency and not judgment.pausing) or None,
         "buttons": [p.label for p in prompts], "latency_ms": call.latency_ms, "first_token_ms": call.first_token_ms,
         "refused": decision.refused,
-        "question_cut": cut, "question": reply.question.model_dump() if open_chat and settings.ai_debug_mode else None,
+        "question_cut": cut, "enforced": enforced, "question": reply.question.model_dump() if open_chat and settings.ai_debug_mode else None,
         "notes": reply.notes if settings.ai_debug_mode else None,
     }.items() if value not in (None, "", [], {})}
     return Turn(

@@ -139,6 +139,19 @@ async def test_a_reply_reaches_them_with_its_own_question_last_and_every_sentenc
     assert guarded.content == "That sounds frightening. Are you hurt?\n\nIs anyone with you right now?"
 
 
+async def test_a_held_worry_whose_text_already_asks_its_question_asks_it_once(alice, model):
+    """TC-13 (2026-11-25): with a worry held, the text and the chosen question both carried the same question, and the
+    person read it twice."""
+    question = "How long has it been like this for you?"
+    model(said("Okay. That's clear.", level="unsure", safety=Safety(level="unsure", about="themselves")),
+          said(f"So it's exhaustion more than anything.\n\n{question}", question=Question(latest="answer", ask=question)))
+    thread = await start(alice)
+    await send(alice, thread.id, "i feel numb lately. i wish i could disappear")
+    turn = await send(alice, thread.id, "no, i'd never hurt myself. i'm just exhausted")
+    assert turn.content == f"So it's exhaustion more than anything.\n\n{question}"
+    assert turn.trace["enforced"] == ["repeated_question"]
+
+
 # Two ordinary exchanges first: an offer may come with the person's 3rd message at the earliest.
 WARM_UP = (said("Go on."), said("Tell me more."))
 
