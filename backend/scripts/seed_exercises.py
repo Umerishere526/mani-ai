@@ -140,7 +140,7 @@ def main() -> None:
         # The audio is client content and stays off GitHub, so a fresh clone has none of it.
         sys.exit(
             f"missing audio in {EXERCISES_DIR}: {', '.join(missing)}. The files are not in git; copy them from "
-            "the production `exercises` bucket first."
+            "the production `exercises` bucket, or convert the client's recording with scripts/convert_audio.sh."
         )
     settings = get_settings()
     key = settings.supabase_service_role_key
