@@ -2,7 +2,7 @@
 // ABOUTME: guarded route stack inside the app-wide providers and the global drawer.
 
 import * as SplashScreen from "expo-splash-screen";
-import { DrawerProvider, OnboardingProvider } from "@/providers";
+import { ChatSafetyProvider, DrawerProvider, OnboardingProvider } from "@/providers";
 import { GlobalDrawer } from "@/components/global-drawer";
 import { RootStack } from "@/components/navigation";
 import "../global.css";
@@ -13,8 +13,10 @@ export default function RootLayout() {
   return (
     <OnboardingProvider>
       <DrawerProvider>
-        <RootStack />
-        <GlobalDrawer />
+        <ChatSafetyProvider>
+          <RootStack />
+          <GlobalDrawer />
+        </ChatSafetyProvider>
       </DrawerProvider>
     </OnboardingProvider>
   );

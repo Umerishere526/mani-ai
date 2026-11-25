@@ -223,7 +223,7 @@
     "messagesListLabel": "Chat messages",
     "crisisBannerText": "Chat is paused. Tap to view support resources.",
     "crisisBannerLabel": "View crisis resources",
-    "crisisBannerHint": "Opens a drawer with safety support information and helpline resources"
+    "crisisBannerHint": "Opens the safety screen with helplines"
   },
   "crisis": {
     "buttonLabel": "I need support",
@@ -249,13 +249,39 @@
         "body": "Use one of the helplines below. These are confidential and available at all hours."
       }
     ],
-    "actions": [
-      "Grounding support",
-      "Create a safety plan",
-      "Crisis helplines",
-      "Child helplines"
-    ],
-    "disclaimer": "Mani offers emotional support and simple tools to help you sort what you're feeling. It does not replace medical, psychiatric, or crisis intervention services."
+    "disclaimer": "Mani offers emotional support and simple tools to help you sort what you're feeling. It does not replace medical, psychiatric, or crisis intervention services.",
+    "help": {
+      "supportLine": "If you are thinking about suicide or you need immediate support call or text {number} to connect with a trained crisis counselor",
+      "emergencyLine": "If you are in immediate danger, call {number}.",
+      "call": "Call {number}",
+      "text": "Text {number}",
+      "directory": "Outside the US: {site}",
+      "linkHint": "Opens your phone or browser"
+    },
+    "pause": {
+      "label": "Blocker.",
+      "title": "Chat is temporary unavailable",
+      "library": "You can still access our Library resources.",
+      "getHelpNow": "Get help now",
+      "goToLibrary": "Go to library",
+      "closeLabel": "Close safety screen",
+      "pausedFor": "For your safety, chat is paused for {length}.",
+      "opensAt": "Chat opens again at {time}.",
+      "units": {
+        "hour": {
+          "one": "{count} hour",
+          "other": "{count} hours"
+        },
+        "minute": {
+          "one": "{count} minute",
+          "other": "{count} minutes"
+        },
+        "second": {
+          "one": "{count} second",
+          "other": "{count} seconds"
+        }
+      }
+    }
   },
   "disclosure": {
     "aiCompanion": "MANI is an AI companion, not a therapist."

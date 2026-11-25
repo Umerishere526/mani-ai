@@ -14,12 +14,12 @@ import type { Message, SmartPrompt } from '@/types/chat';
 export interface ChatConversationProps {
   messages: Message[];
   isWaitingForReply: boolean;
-  crisisDetected: boolean;
+  paused: boolean;
   inputValue: string;
   onChangeInput: (text: string) => void;
   onSend: () => void;
   onPromptPress: (prompt: SmartPrompt) => void;
-  onCrisisPress: () => void;
+  onPausedPress: () => void;
   chatInputRef: React.RefObject<ChatInputBarRef | null>;
 }
 
@@ -29,12 +29,12 @@ const keyExtractor = (item: Message) => item.id;
 export function ChatConversation({
   messages,
   isWaitingForReply,
-  crisisDetected,
+  paused,
   inputValue,
   onChangeInput,
   onSend,
   onPromptPress,
-  onCrisisPress,
+  onPausedPress,
   chatInputRef,
 }: ChatConversationProps) {
   const displayMessages = [...messages].reverse();
@@ -59,8 +59,8 @@ export function ChatConversation({
         accessibilityLabel={en.chat.messagesListLabel}
       />
 
-      {crisisDetected ? (
-        <CrisisBanner onPress={onCrisisPress} />
+      {paused ? (
+        <CrisisBanner onPress={onPausedPress} />
       ) : (
         <ChatInputBar
           ref={chatInputRef}

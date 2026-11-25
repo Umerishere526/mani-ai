@@ -7,7 +7,12 @@ import { followUp, sendMessage, startThread } from '@/lib/api/threads';
 import { errorText, messageFromTurn, type ChatAction, type ChatState, type PendingSend } from '@/lib/chat';
 import type { TurnOut } from '@/types/chat-api';
 
-export function useChatSend(state: ChatState, dispatch: Dispatch<ChatAction>, onTurn?: (turn: TurnOut) => void) {
+export interface ChatSendEvents {
+  onTurn?: (turn: TurnOut, threadId: string) => void;
+  onSendError?: (error: unknown) => void;
+}
+
+export function useChatSend(state: ChatState, dispatch: Dispatch<ChatAction>, { onTurn, onSendError }: ChatSendEvents) {
   const deliver = async ({ content, clientMessageId }: PendingSend) => {
     const body = { content, client_message_id: clientMessageId };
     try {
@@ -21,13 +26,14 @@ export function useChatSend(state: ChatState, dispatch: Dispatch<ChatAction>, on
         turn = started.turn;
       }
       dispatch({ type: 'replied', clientMessageId, threadId, reply: messageFromTurn(turn, threadId, randomUUID()) });
-      onTurn?.(turn);
+      onTurn?.(turn, threadId);
       if (turn.follow_up_pending && turn.id) {
         // Fire and forget: work that fails stays pending on the backend and runs on the next request.
         followUp(threadId, turn.id).catch(() => undefined);
       }
     } catch (error) {
       dispatch({ type: 'sendFailed', clientMessageId, error: errorText(error) });
+      onSendError?.(error);
     }
   };
 

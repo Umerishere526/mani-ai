@@ -1,17 +1,16 @@
 // ABOUTME: One conversation against the backend: an existing thread's messages, or the opening (greeting and styles)
-// ABOUTME: for a new one, then sending. Reports each reply so the screen can react to a crisis or a pause.
+// ABOUTME: for a new one, then sending. Reports each reply and failure so the app can react to a crisis or a pause.
 
 import { useEffect, useReducer } from 'react';
 import { randomUUID } from 'expo-crypto';
 import { getProfile } from '@/lib/api/profile';
 import { getMessages, getOpening } from '@/lib/api/threads';
 import { chatReducer, hasStarted, initialChatState, messagesFromWire } from '@/lib/chat';
-import type { TurnOut } from '@/types/chat-api';
 import type { ConversationStyle } from '@/types/chat';
-import { useChatSend } from './useChatSend';
+import { useChatSend, type ChatSendEvents } from './useChatSend';
 import { useLoad } from './useLoad';
 
-export function useChat(initialThreadId: string | undefined, onTurn?: (turn: TurnOut) => void) {
+export function useChat(initialThreadId: string | undefined, events: ChatSendEvents) {
   const [state, dispatch] = useReducer(chatReducer, initialThreadId ?? null, initialChatState);
   const started = hasStarted(state);
 
@@ -26,7 +25,7 @@ export function useChat(initialThreadId: string | undefined, onTurn?: (turn: Tur
   );
   const opening = useLoad(started ? null : 'opening', getOpening);
   const profile = useLoad(started ? null : 'opening', getProfile);
-  const { send, retry } = useChatSend(state, dispatch, onTurn);
+  const { send, retry } = useChatSend(state, dispatch, events);
 
   const chooseStyle = (style: ConversationStyle) => {
     const opener = opening.data?.openers?.[style];

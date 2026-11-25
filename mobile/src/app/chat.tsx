@@ -4,16 +4,17 @@ import { useLocalSearchParams, router } from "expo-router";
 import { AppHeader } from "@/components/shared";
 import { ChatConversation, ChatOpening, LoadFailed, type ChatInputBarRef } from "@/components/chat";
 import { useChat } from "@/hooks/useChat";
-import { useDrawer } from "@/providers";
+import { useChatSafety } from "@/providers";
 import type { SmartPrompt } from "@/types/chat";
 
 export default function ChatScreen() {
   const params = useLocalSearchParams<{ threadId?: string; requestNewThread?: string }>();
-  const { openCrisisDrawer } = useDrawer();
+  const safety = useChatSafety();
   const chatInputRef = useRef<ChatInputBarRef>(null);
   const [inputValue, setInputValue] = useState("");
-  const [crisisDetected, setCrisisDetected] = useState(false);
-  const chat = useChat(params.threadId, (turn) => setCrisisDetected(turn.crisis_detected ?? false));
+  // The pause is account-wide: a new chat or another thread starts paused too.
+  const paused = safety.pause !== null;
+  const chat = useChat(params.threadId, { onTurn: safety.noteTurn, onSendError: safety.noteSendError });
   const isWaitingForReply = chat.state.sending !== null;
 
   useEffect(() => {
@@ -25,13 +26,13 @@ export default function ChatScreen() {
   }, [params.requestNewThread]);
 
   const handleSend = () => {
-    if (!inputValue.trim() || isWaitingForReply || crisisDetected) return;
+    if (!inputValue.trim() || isWaitingForReply || paused) return;
     chat.send(inputValue);
     setInputValue("");
   };
 
   const handlePromptPress = (prompt: SmartPrompt) => {
-    if (crisisDetected) return;
+    if (paused) return;
     chat.send(prompt.label);
   };
 
@@ -58,12 +59,12 @@ export default function ChatScreen() {
       <ChatConversation
         messages={chat.state.messages}
         isWaitingForReply={isWaitingForReply}
-        crisisDetected={crisisDetected}
+        paused={paused}
         inputValue={inputValue}
         onChangeInput={setInputValue}
         onSend={handleSend}
         onPromptPress={handlePromptPress}
-        onCrisisPress={openCrisisDrawer}
+        onPausedPress={safety.openScreen}
         chatInputRef={chatInputRef}
       />
     );

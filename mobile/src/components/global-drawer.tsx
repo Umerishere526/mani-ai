@@ -1,9 +1,9 @@
-// ABOUTME: Renders the two global overlay drawers (nav menu, crisis support) above the
-// ABOUTME: route stack. Lives in the root layout so any screen can trigger them via useDrawer.
+// ABOUTME: Renders the global overlays (nav menu, crisis support drawer, crisis screen) above the
+// ABOUTME: route stack. Lives in the root layout so any screen can trigger them.
 
 import { router } from 'expo-router';
 import { ChatDrawer } from '@/components/chat';
-import { CrisisDrawer } from '@/components/crisis';
+import { CrisisDrawer, CrisisScreen } from '@/components/crisis';
 import { useDrawer } from '@/providers';
 import { useThreadList } from '@/hooks/useThreadList';
 
@@ -42,6 +42,7 @@ export function GlobalDrawer() {
         }}
       />
       <CrisisDrawer visible={isCrisisDrawerVisible} onClose={closeCrisisDrawer} />
+      <CrisisScreen />
     </>
   );
 }

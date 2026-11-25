@@ -56,6 +56,8 @@ export interface TurnOut {
   crisis_detected?: boolean;
   paused_from?: string | null;
   paused_until?: string | null;
+  // What the pause is for, set with paused_*; "overdose" puts emergency services first (R90).
+  paused_for?: string | null;
   follow_up_pending?: boolean;
 }
 
@@ -75,6 +77,7 @@ export interface OpeningOut {
   openers: Partial<Record<ConversationStyle, string>>;
   chat_paused_from?: string | null;
   chat_paused_until?: string | null;
+  chat_paused_for?: string | null;
 }
 
 export interface CrisisResource {
