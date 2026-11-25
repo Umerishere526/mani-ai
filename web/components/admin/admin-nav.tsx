@@ -60,7 +60,9 @@ export function AdminNav({ email }: AdminNavProps) {
       <div className="border-b border-white/8 px-5 py-6">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-mani-accent">
-            <span className="text-sm font-semibold text-white">M</span>
+            <span className="text-sm font-semibold text-white" aria-hidden="true">
+              {NAV_STRINGS.brandMark}
+            </span>
           </div>
           <h1 className="text-base font-semibold tracking-tight text-white">
             {NAV_STRINGS.brand}

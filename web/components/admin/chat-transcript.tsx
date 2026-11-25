@@ -16,14 +16,14 @@ export function ChatTranscript({ messages }: ChatTranscriptProps) {
   }
 
   return (
-    <div className="space-y-6 py-6" role="log" aria-label="Conversation transcript">
+    <div className="space-y-6 py-6" role="log" aria-label={STRINGS.transcriptLabel}>
       {messages.map((message) => {
         const isUser = message.role === "user";
         return (
           <article
             key={message.id}
             className={`flex ${isUser ? "justify-end" : "justify-start"}`}
-            aria-label={`Message from ${isUser ? "user" : "Mani"}`}
+            aria-label={isUser ? STRINGS.messageFromUser : STRINGS.messageFromMani}
           >
             <div
               className={`max-w-[75%] rounded-2xl px-4 py-3 text-mani-text ${

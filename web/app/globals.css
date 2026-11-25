@@ -1,3 +1,6 @@
+/* ABOUTME: Global styles: Tailwind v4, the Mani design tokens, and the theme mapping them to utilities. */
+/* ABOUTME: Light-only; the admin has no dark theme. */
+
 @import "tailwindcss";
 
 :root {

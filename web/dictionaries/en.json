@@ -11,6 +11,7 @@
     },
     "nav": {
       "brand": "Mani Admin",
+      "brandMark": "M",
       "prompts": "Prompts",
       "exercises": "Exercises",
       "chats": "Chats",
@@ -46,7 +47,15 @@
         "changeSummaryPlaceholder": "Adjusted temperature for more consistent responses",
         "changeSummaryHelper": "Describe what changed (saved in version history)",
         "createSubmit": "Create Prompt",
-        "editSubmit": "Save Changes"
+        "editSubmit": "Save Changes",
+        "errors": {
+          "nameRequired": "Name is required",
+          "nameTooLong": "Name must be 100 characters or fewer",
+          "descriptionTooLong": "Description must be 500 characters or fewer",
+          "contentRequired": "Content is required",
+          "modelParametersInvalid": "Must be a JSON object, such as {\"temperature\": 0.7}",
+          "changeSummaryTooLong": "Change summary must be 500 characters or fewer"
+        }
       },
       "exercise": {
         "titleLabel": "Title",
@@ -171,7 +180,8 @@
           "editButton": "Edit",
           "saveButton": "Save",
           "cancelButton": "Cancel",
-          "deleteButton": "Delete"
+          "deleteButton": "Delete",
+          "orderTitle": "Edit display order"
         },
         "actions": {
           "edit": "Edit",
@@ -212,7 +222,10 @@
         "emptyTranscript": "No messages in this conversation",
         "roleUser": "User",
         "roleMani": "Mani",
-        "olderLink": "Older conversations"
+        "olderLink": "Older conversations",
+        "transcriptLabel": "Conversation transcript",
+        "messageFromUser": "Message from the user",
+        "messageFromMani": "Message from Mani"
       },
       "crisisEvents": {
         "title": "Crisis events",

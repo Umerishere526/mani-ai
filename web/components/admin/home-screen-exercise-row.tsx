@@ -96,7 +96,7 @@ export function HomeScreenExerciseRow({ exercise, position }: HomeScreenExercise
             <button
               onClick={() => setIsEditing(true)}
               disabled={isPending}
-              title="Edit display order"
+              title={STRINGS.orderTitle}
               className={SECONDARY_BUTTON}
             >
               {STRINGS.orderPrefix}
