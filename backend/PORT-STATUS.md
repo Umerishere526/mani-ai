@@ -316,6 +316,13 @@ the same change as the work.**
   beyond what was said, repeated acknowledgments and restated feelings (whole conversations 2.41 of 5), yes or no
   checks, belief work before practical help, and questions after a typed stop (CQ-4, CQ-10, CQ-8, CQ-7, CQ-2).
   `mani.md`. Not yet eval-gated.
+- **Inside a set: the set works on the belief the offer named, and when another appears Mani asks which one to look
+  at; C starts from the feelings already said, and "I told you" or "you know" are taken as already said; a question
+  they can't answer is asked once more with possibilities from their words; a partial result is named and the open
+  dilemma asked about. Feelings are taken as real, never a verdict on someone else** (muhammad, 2026-11-25). Because
+  his tester's friend-conflict chat (6.5/10) ran ABCDE on "I looked stupid" instead of the offered belief, asked C
+  twice after "I told you" and "you know", said "That's not much to ask of a friend", and left the dilemma of reaching
+  out first untouched. `mani.md` ("How you listen", "Inside the set of questions"). Not yet eval-gated.
 - **Code takes out a short verdict line on what they feel or what is going on ("That's what hurts.", "…, that's what
   stings.", "Betrayed fits.", "That's the part that's hard to get past."), unless it is all the reply says, the turn
   is guarded, or it is wording written for them to send; most Directive replies are a few of their words and one open
