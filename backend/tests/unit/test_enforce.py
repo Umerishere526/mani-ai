@@ -160,3 +160,12 @@ def test_a_guarded_turn_keeps_both_its_questions_and_records_them():
                  open_chat=False)
     assert reply.text == "That sounds frightening. Are you hurt?\n\nIs anyone with you right now?"
     assert reply.enforced == [enforce.SECOND_QUESTION_KEPT]
+
+
+def test_a_figurative_phrase_is_recorded_and_the_text_goes_out_as_written():
+    """Manasa, 2026-11-25: "its own kind of ache", "a strange shape" and "the loop" read as constructed, not talked."""
+    written = "Not knowing is its own kind of ache. And The Loop is complete then."
+    reply = sent(written)
+    assert reply.text == written
+    assert reply.enforced == ["figurative:its own kind of", "figurative:the loop"]
+    assert sent("Not knowing why is hard.").enforced == []

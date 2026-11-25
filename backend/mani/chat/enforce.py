@@ -52,6 +52,11 @@ _LEANS_BACK = ("and", "but", "so", "because", "which", "then", "or", "also", "th
 # follows it still stands.
 STOCK_OPENING_WORDS = 6
 
+# Figurative phrases the client flagged as constructed rather than conversational (Manasa, 2026-11-25). Only recorded
+# with the phrase, never rewritten: a phrase can be literal ("the loop" of a running track), and the prompt is the fix.
+FIGURATIVE_PHRASES = ("its own kind of", "a strange shape", "nice shape", "holding the thread", "cast in", "the loop")
+_FIGURATIVE = re.compile(rf"\b(?:{'|'.join(re.escape(phrase) for phrase in FIGURATIVE_PHRASES)})\b", re.IGNORECASE)
+
 # Enforcement events, as the turn trace records them under `enforced`. A word swap is recorded with its word.
 REPEATED_QUESTION = "repeated_question"
 TYPED_STOP = "typed_stop"
@@ -64,6 +69,7 @@ OPENER_REPEATED_KEPT = "opener_repeated_kept"
 FORBIDDEN_WORD = "forbidden_word"
 BANNED_LINE_REMOVED = "banned_line_removed"
 BANNED_LINE_KEPT = "banned_line_kept"
+FIGURATIVE = "figurative"
 
 # How alike two questions may be, word for word, before the second is the first asked again.
 SAME_QUESTION_RATIO = 0.85
@@ -90,6 +96,11 @@ def banned_phrases(text: str) -> list[str]:
     """The banned lines the text says, with a typographic apostrophe read as a plain one."""
     plain = text.lower().replace("’", "'")
     return [p for p in BANNED_PHRASES if p in plain]
+
+
+def figurative(text: str) -> list[str]:
+    """The events for the figurative phrases the text uses, one per phrase, recorded with it; the text is unchanged."""
+    return [f"{FIGURATIVE}:{phrase}" for phrase in sorted({match.lower() for match in _FIGURATIVE.findall(text)})]
 
 
 def _swapped(match: re.Match) -> str:
@@ -241,7 +252,7 @@ def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, la
     """The model's words as the person receives them (repairs.sent_text), with the client's rules enforced: each
     forbidden word swapped for a plain one, each banned line taken out, and a Directive reply in the open chat that
     gives no help (`helping`) held to DIRECTIVE_SENTENCES, and a stock opening that repeats one of the conversation's
-    `openers` dropped; a second question left in it is taken out. A guarded turn keeps every sentence and
+    `openers` dropped; a second question left in it is taken out; a figurative phrase is recorded. A guarded turn keeps every sentence and
     every question its text asks, so a question it chose that the text already asks is not asked twice. Text that
     carries code's fixed safety words (`fixed`) goes out with no rule applied to it."""
     enforced: list[str] = []
@@ -263,4 +274,5 @@ def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, la
         enforced += trimmed
     text, opened = fresh_opener(text, openers, guarded=guarded)
     enforced += opened
+    enforced += figurative(text)
     return Sent(text, asked, cut, enforced)
