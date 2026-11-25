@@ -69,7 +69,7 @@ def test_a_forbidden_word_fails_only_as_a_whole_word():
 
 
 def test_more_than_one_question_fails_in_every_style():
-    two = turn("x", "What did you feel? And what did you do?")
+    two = turn("x", "What did you feel? And what did you do?", latency_ms=900)
     for style in ("directive", "supportive", "reflective"):
         result = checks.one_question(chat(two, style=style))
         assert (result.kind, result.passed) == (checks.DETERMINISTIC, False)
@@ -165,6 +165,26 @@ def test_give_me_a_tool_must_open_a_stage_in_its_reply():
 def test_an_invented_button_label_fails():
     assert checks.labels_valid(chat(turn("x", "y", buttons=["It didn't help"])), checks.allowed_labels()).passed
     assert not checks.labels_valid(chat(turn("x", "y", buttons=["Feel calmer now"])), checks.allowed_labels()).passed
+
+
+def test_an_active_frameworks_start_button_is_a_real_label():
+    """2026-11-25 run: "Start ABCDE" was reported invented because start buttons are built from the framework's name."""
+    started = chat(turn("Show me how", "A is the event.", buttons=["Start ABCDE"]))
+    assert checks.labels_valid(started, checks.allowed_labels(("ABCDE",))).passed
+    assert not checks.labels_valid(started, checks.allowed_labels()).passed
+
+
+def test_the_clients_five_steps_are_not_held_to_one_question_but_a_model_reply_is():
+    """The five steps are the client's fixed text with a question per step; only a reply the model wrote is held."""
+    steps = "1. What happened? 2. What did you think? 3. What did you feel?"
+    assert checks.one_question(chat(turn("Not sure", steps))).passed
+    assert not checks.one_question(chat(turn("x", steps, latency_ms=900))).passed
+
+
+def test_she_after_they_named_their_sister_is_not_invented():
+    """2026-11-25 run: "my sister" then "she" was reported as an assumption; the person had already said it."""
+    assert checks.pronoun_fidelity(chat(turn("my sister keeps borrowing money", "What does she say?"))).passed
+    assert not checks.pronoun_fidelity(chat(turn("my manager keeps adding tasks", "What does she say?"))).passed
 
 
 def test_percentiles_are_nearest_rank_and_retries_are_calls_beyond_the_turns():

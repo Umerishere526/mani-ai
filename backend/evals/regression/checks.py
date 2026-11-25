@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 
 from evals.drive import Conversation
-from evals.reply_rules import banned_phrases, forbidden_words, pronouns, questions
+from evals.reply_rules import banned_phrases, forbidden_words, genders_named, pronouns, questions
 from mani.chat import greeting
 from mani.chat.decide import OFFER_FROM_MESSAGE
 
@@ -45,9 +45,10 @@ class Result:
                 "turn": self.turn, "critical": self.critical, "source": self.source}
 
 
-def allowed_labels() -> frozenset[str]:
-    """Every button label the app defines (greeting.py's *_LABEL and *_LABELS), so a label outside it is invented."""
-    labels: set[str] = set()
+def allowed_labels(framework_names: tuple[str, ...] = ()) -> frozenset[str]:
+    """Every button label the app defines (greeting.py's *_LABEL and *_LABELS, and each active framework's start
+    button), so a label outside it is invented."""
+    labels: set[str] = {greeting.start_label(name) for name in framework_names}
     for name, value in vars(greeting).items():
         if name.endswith("_LABEL") and isinstance(value, str):
             labels.add(value)
@@ -91,10 +92,12 @@ def ran_cleanly(c: Conversation) -> Result:
 
 
 def one_question(c: Conversation) -> Result:
-    """One question per turn at most, in every style (Lolly 2026-11-20 and Manasa 11/11: never forced to ask one)."""
+    """One question per turn at most, in every style (Lolly 2026-11-20 and Manasa 11/11: never forced to ask one). Only
+    a reply the model wrote is held to it: fixed text such as the client's five steps, which lists a question per
+    step word for word, is hers, not Mani's (a fixed reply makes no model call, so its trace has no latency)."""
     source = f"Pacing Rules; {APPROVED}"
     for n, e in enumerate(c.exchanges, 1):
-        if len(asked := questions(e.reply)) > 1:
+        if e.trace.get("latency_ms") is not None and len(asked := questions(e.reply)) > 1:
             return Result("one_question", DETERMINISTIC, False, f"{len(asked)} questions: {asked}", n, source=source)
     return Result("one_question", DETERMINISTIC, True, source=source)
 
@@ -154,7 +157,7 @@ def pronoun_fidelity(c: Conversation) -> Result:
     source = f"Lolly's test emails, 2026-11-23 (assumptions stated as facts); {APPROVED}"
     used: set[str] = set()
     for n, e in enumerate(c.exchanges, 1):
-        used |= pronouns(e.said)
+        used |= genders_named(e.said)
         if e.said == greeting.EXAMPLE_LABEL:
             continue
         if invented := sorted(pronouns(e.reply) - used):

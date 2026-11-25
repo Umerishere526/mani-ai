@@ -207,7 +207,7 @@ def rule_checks(case, got) -> list[str]:
     if checks.get("no_invented_pronoun"):
         said = " ".join(t.get("content", "") for t in case["turns"] if t["role"] == "user")
         failed += [f"said {g!r} before the person did"
-                   for g in sorted(reply_rules.pronouns(text) - reply_rules.pronouns(said))]
+                   for g in sorted(reply_rules.pronouns(text) - reply_rules.genders_named(said))]
     if "max_sentences" in checks and (count := len(questions.sentences(text))) > checks["max_sentences"]:
         failed.append(f"{count} sentences > {checks['max_sentences']}")
     words = len(text.split())

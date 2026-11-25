@@ -65,10 +65,11 @@ def _git_sha() -> str:
         return "unknown"
 
 
-async def _registry() -> dict[str, list[str]]:
-    """Each active framework's stages, from the same table the chat reads."""
+async def _registry() -> tuple[dict[str, list[str]], tuple[str, ...]]:
+    """Each active framework's stages, and their names, from the same table the chat reads."""
     async with pool.as_admin() as conn:
-        return {f.id: stages_of(f) for f in await config_tables.list_active_frameworks(conn)}
+        frameworks = await config_tables.list_active_frameworks(conn)
+    return {f.id: stages_of(f) for f in frameworks}, tuple(f.name for f in frameworks)
 
 
 def _runnable(scenario: dict, stages: dict[str, list[str]]) -> bool:
@@ -79,7 +80,8 @@ def _runnable(scenario: dict, stages: dict[str, list[str]]) -> bool:
 
 
 async def _run(args: argparse.Namespace, scenarios: list[dict]) -> dict:
-    stages, allowed = await _registry(), checks.allowed_labels()
+    stages, names = await _registry()
+    allowed = checks.allowed_labels(names)
     rounds = args.bench or 1
     gate = asyncio.Semaphore(CONCURRENCY)
     async with httpx.AsyncClient() as http:
