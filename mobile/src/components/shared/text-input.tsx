@@ -1,8 +1,9 @@
-// ABOUTME: Base text input — disables font scaling and applies the app's default type
-// ABOUTME: family, matching the Text component's defaults for a consistent baseline.
+// ABOUTME: Base text input — follows the system text size up to a capped multiplier and applies
+// ABOUTME: the app's default type family, matching the Text component's defaults.
 
 import { forwardRef } from 'react';
 import { TextInput as RNTextInput, type TextInputProps as RNTextInputProps } from 'react-native';
+import { MAX_FONT_SIZE_MULTIPLIER } from '@/lib/font-scaling';
 import { cn } from '@/lib/utils';
 
 export interface TextInputProps extends RNTextInputProps {
@@ -16,7 +17,7 @@ export const TextInput = forwardRef<RNTextInput, TextInputProps>(function TextIn
   return (
     <RNTextInput
       ref={ref}
-      allowFontScaling={false}
+      maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}
       className={cn('font-sans text-secondary-500', className)}
       style={style}
       {...props}

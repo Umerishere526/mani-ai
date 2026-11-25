@@ -1,16 +1,22 @@
-// ABOUTME: react-native-marked renderer that disables font scaling on every text node it
-// ABOUTME: produces — the library renders via RN's own Text, bypassing our Text wrapper.
+// ABOUTME: react-native-marked renderer that caps font scaling on every text node it produces,
+// ABOUTME: since the library renders via RN's own Text and so bypasses our Text wrapper's cap.
 
 import { Linking, Text as RNText, View, type TextStyle, type ViewStyle } from 'react-native';
 import { Renderer } from 'react-native-marked';
 import type { ReactNode } from 'react';
+import { MAX_FONT_SIZE_MULTIPLIER } from '@/lib/font-scaling';
 
-export class NoScaleRenderer extends Renderer {
+export class ScaledTextRenderer extends Renderer {
   private textKeyCounter = 0;
 
   private createTextNode(children: string | ReactNode[], styles?: TextStyle): ReactNode {
     return (
-      <RNText key={`no-scale-${this.textKeyCounter++}`} selectable allowFontScaling={false} style={styles}>
+      <RNText
+        key={`scaled-${this.textKeyCounter++}`}
+        selectable
+        maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}
+        style={styles}
+      >
         {children}
       </RNText>
     );
@@ -55,9 +61,9 @@ export class NoScaleRenderer extends Renderer {
   link(children: string | ReactNode[], href: string, styles?: TextStyle): ReactNode {
     return (
       <RNText
-        key={`no-scale-link-${this.textKeyCounter++}`}
+        key={`scaled-link-${this.textKeyCounter++}`}
         selectable
-        allowFontScaling={false}
+        maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}
         accessibilityRole="link"
         style={styles}
         onPress={() => Linking.openURL(href)}
@@ -69,7 +75,7 @@ export class NoScaleRenderer extends Renderer {
 
   paragraph(children: ReactNode[], styles?: ViewStyle): ReactNode {
     return (
-      <View key={`no-scale-p-${this.textKeyCounter++}`} style={styles}>
+      <View key={`scaled-p-${this.textKeyCounter++}`} style={styles}>
         {children}
       </View>
     );
@@ -77,7 +83,7 @@ export class NoScaleRenderer extends Renderer {
 
   listItem(children: ReactNode[], styles?: ViewStyle): ReactNode {
     return (
-      <View key={`no-scale-li-${this.textKeyCounter++}`} style={styles}>
+      <View key={`scaled-li-${this.textKeyCounter++}`} style={styles}>
         {children}
       </View>
     );
@@ -85,7 +91,7 @@ export class NoScaleRenderer extends Renderer {
 
   blockquote(children: ReactNode[], styles?: ViewStyle): ReactNode {
     return (
-      <View key={`no-scale-bq-${this.textKeyCounter++}`} style={styles}>
+      <View key={`scaled-bq-${this.textKeyCounter++}`} style={styles}>
         {children}
       </View>
     );

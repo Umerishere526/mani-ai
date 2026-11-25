@@ -64,7 +64,7 @@ export const ChatInputBar = forwardRef<ChatInputBarRef, ChatInputBarProps>(funct
         {onGetHelp && (
           <Pressable
             onPress={onGetHelp}
-            className="h-12 justify-center rounded-full bg-primary-600 px-5 opacity-90 active:opacity-70"
+            className="min-h-12 justify-center rounded-full bg-primary-600 px-5 opacity-90 active:opacity-70"
             accessibilityLabel={en.chat.getHelpLabel}
             accessibilityRole="button"
           >

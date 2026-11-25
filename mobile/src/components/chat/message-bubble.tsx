@@ -13,7 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { Message } from '@/types/chat';
 import { Text } from '@/components/shared';
-import { NoScaleRenderer } from './no-scale-renderer';
+import { ScaledTextRenderer } from './scaled-text-renderer';
 import { markdownStyles } from './markdown-styles';
 
 export interface MessageBubbleProps {
@@ -27,7 +27,7 @@ const DURATION_MANI = 300;
 export function MessageBubble({ message, animate = true }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const progress = useSharedValue(animate ? 0 : 1);
-  const renderer = useMemo(() => new NoScaleRenderer(), []);
+  const renderer = useMemo(() => new ScaledTextRenderer(), []);
 
   useEffect(() => {
     if (!animate) return;
