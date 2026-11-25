@@ -1,8 +1,7 @@
 // ABOUTME: Admin Crisis events — every crisis no admin has resolved yet, newest first, each with a resolve form.
 // ABOUTME: Reads from the backend on each request; the conversation link opens the logged transcript.
 
-import Link from "next/link";
-import { EmptyState, PageHeader, TableCard, TableCell, TableHeadCell } from "@/components/shared";
+import { ActionLink, EmptyState, PageHeader, TableCard, TableCell, TableHeadCell } from "@/components/shared";
 import { ResolveCrisisForm } from "@/components/admin/resolve-crisis-form";
 import { listUnresolvedCrisisEvents } from "@/lib/api/crisis-events";
 import dictionary from "@/dictionaries/en.json";
@@ -37,9 +36,7 @@ export default async function CrisisEventsPage() {
                 </TableCell>
                 <TableCell className="text-sm text-mani-text">{event.reason}</TableCell>
                 <TableCell>
-                  <Link href={`/admin/chats/${event.threadId}`} className="text-sm font-medium">
-                    {STRINGS.viewConversation}
-                  </Link>
+                  <ActionLink href={`/admin/chats/${event.threadId}`}>{STRINGS.viewConversation}</ActionLink>
                 </TableCell>
                 <TableCell className="text-right">
                   <ResolveCrisisForm eventId={event.id} />
