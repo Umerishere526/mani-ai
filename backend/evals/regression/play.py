@@ -107,7 +107,7 @@ def gap_record(scenario: dict) -> dict:
 
 
 def _head(scenario: dict) -> dict:
-    return {"id": scenario["id"], "title": scenario["title"], "group": scenario["group"],
+    return {"id": scenario["id"], "title": scenario["title"], "group": scenario["group"], "style": scenario["style"],
             "gap_reason": scenario.get("gap_reason"), "status": "run"}
 
 

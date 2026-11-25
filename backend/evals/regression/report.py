@@ -29,7 +29,7 @@ def summarize(run: dict) -> dict:
                 if t.get(key) is not None:
                     seconds[key].append(t[key])
         scenarios.append({
-            "id": s["id"], "title": s["title"], "group": s["group"], "status": s["status"],
+            "id": s["id"], "title": s["title"], "group": s["group"], "style": s.get("style"), "status": s["status"],
             "gap_reason": s.get("gap_reason"),
             "checks": checks,
             "judge": {k: v["score"] for k, v in (s.get("judge") or {}).get("scores", {}).items()} or None,
@@ -39,12 +39,38 @@ def summarize(run: dict) -> dict:
     failed = [(s["id"], c) for s in run["scenarios"] for c in s.get("checks", []) if not c["passed"]]
     return {
         "run_id": run["run_id"], "git_sha": run["git_sha"], "chat_models": run["chat_models"],
+        "experiment": run.get("experiment"), "rejudged_from": run.get("rejudged_from"),
         "scenarios": scenarios,
+        "quality": quality(run),
+        "modes": [{k: m.get(k) for k in ("triplet", "styles", "score", "explanation", "error")} for m in run.get("modes", [])],
         "totals": dict(totals),
         "critical_failures": [{"scenario": sid, **c} for sid, c in failed if c["critical"]],
         "latency": {key: spread(seconds[key]) for _, key in STAGES},
         "cost_usd": _sum([(s.get("usage") or {}).get("cost_usd") for s in run["scenarios"] if s.get("usage")]),
     }
+
+
+def quality(run: dict) -> dict | None:
+    """The judged scores gathered: each dimension's mean, the mean of every conversation's own mean overall and by
+    style, and how differently the styles handled the same opening. None when nothing was judged."""
+    dimensions, styles, conversations = defaultdict(list), defaultdict(list), []
+    for s in run["scenarios"]:
+        scores = [(name, scored["score"]) for name, scored in ((s.get("judge") or {}).get("scores") or {}).items()]
+        if not scores:
+            continue
+        own = sum(score for _, score in scores) / len(scores)
+        conversations.append(own)
+        styles[s.get("style") or "unknown"].append(own)
+        for name, score in scores:
+            dimensions[name].append(score)
+    if not conversations:
+        return None
+    mean = lambda values: round(sum(values) / len(values), 2)  # noqa: E731
+    modes = [m["score"] for m in run.get("modes", []) if m.get("score")]
+    return {"conversations": len(conversations), "overall": mean(conversations),
+            "dimensions": {name: mean(values) for name, values in dimensions.items()},
+            "styles": {style: mean(values) for style, values in sorted(styles.items())},
+            "mode_differentiation": mean(modes) if modes else None}
 
 
 def _sum(values: list[float | None]) -> float | None:
@@ -91,6 +117,15 @@ def markdown(run: dict, summary: dict, comparison: dict | None) -> str:
              f"- Critical safety failures: {len(summary['critical_failures'])}",
              f"- Latency over the scenario limit: {t.get(f'{PERFORMANCE}_failed', 0)} scenario(s)",
              f"- Requirement gaps (paused or retired by a Decision in force): {t.get(f'{GAP}_failed', 0)}", ""]
+    if judged := summary["quality"]:
+        lines += ["## Judged quality (1 to 5, higher is better)", "",
+                  f"- Whole-conversation quality: **{judged['overall']:.2f}** over {judged['conversations']} conversations",
+                  f"- By style: {', '.join(f'{style} {value:.2f}' for style, value in judged['styles'].items())}",
+                  f"- Mode differentiation: {fmt(judged['mode_differentiation'])}", "",
+                  "| Dimension | Mean |", "|---|---|"]
+        lines += [f"| {name} | {value:.2f} |" for name, value in sorted(judged["dimensions"].items(), key=lambda kv: kv[1])]
+        lines += [""] + [f"- Styles on `{m['triplet']}`: {m.get('score') or m.get('error')}. {m.get('explanation') or ''}"
+                         for m in summary["modes"]] + [""]
     if summary["critical_failures"]:
         lines += ["### Critical", ""] + [f"- **{c['scenario']}** `{c['check']}` turn {c['turn']}: {c['detail']}"
                                          for c in summary["critical_failures"]] + [""]

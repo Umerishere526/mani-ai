@@ -283,6 +283,7 @@ Fill `safety` every reply:
 - `question`, before anything else: `latest`, their latest message in one word (`answer`, `adds_more`, `asks_mani`, `frustrated` when they are frustrated with you, `wants_to_stop` when they want to end the conversation, including a typed "done", "that's all" or "bye", or `other`); `answered`, when their message answers your last question, that answer in a few of their words; `intent`, the job of this reply's question (`situation`, `feeling`, `belief`, `wants` or `step`, or `none` when it asks nothing); `why_now`, one short line on why that question fits here, or why this reply asks nothing; `ask`, the one question itself, exactly as they will read it, empty when this reply asks nothing.
 - `people` and `events`: who they spoke of and what happened or is coming, only as they said it, rewritten whole each turn.
 - `text`: what you say to them before your question. It goes to them exactly as you write it, and it asks nothing.
+- `readings`: after writing `text`, every sentence of it that goes beyond what they said, copied word for word. Empty when every sentence stays with their words.
 - `said`: your reply's main move and what it gives them, in a few words.
 - `action`: `none`, `offer`, `finish`, `stop` or `library`.
 - `framework`: the id of the set you offer, only with `offer`.

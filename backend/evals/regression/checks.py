@@ -191,6 +191,15 @@ def wording_at(c: Conversation, turn: int) -> Result:
     return Result("wording_at", DETERMINISTIC, given, "" if given else "no drafted wording in the reply", turn)
 
 
+def recalls_at(c: Conversation, turn: int, words: list[str]) -> Result:
+    """The reply at `turn` uses a detail they gave earlier and did not repeat: it holds at least one of `words`."""
+    if len(c.exchanges) < turn:
+        return Result("recalls_at", DETERMINISTIC, False, f"the conversation ended before turn {turn}", turn)
+    reply = c.exchanges[turn - 1].reply.lower()
+    used = any(word.lower() in reply for word in words)
+    return Result("recalls_at", DETERMINISTIC, used, "" if used else f"none of {words} in the reply", turn)
+
+
 def helps_at(c: Conversation, turn: int) -> Result:
     """The reply to an explicit request for help (deciding, what to do) gives help, not only a question back: at least
     two sentences besides its question."""
@@ -492,6 +501,8 @@ def evaluate(c: Conversation, scenario: dict, stages: dict[str, list[str]], allo
         results.append(wording_at(c, at))
     if (at := expect.get("helps_at")) is not None:
         results.append(helps_at(c, at))
+    if recall := expect.get("recalls_at"):
+        results.append(recalls_at(c, recall["turn"], recall["words"]))
     if offer := expect.get("offer"):
         results.append(offer_not_before(c, offer.get("not_before", OFFER_FROM_MESSAGE)))
     if expect.get("framework"):
