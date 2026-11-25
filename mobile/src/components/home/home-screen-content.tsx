@@ -73,7 +73,7 @@ export function HomeScreenContent({
           accessibilityHint={en.home.libraryLinkHint}
         >
           <View className="flex-row items-center gap-1">
-            <Text className="font-sans-medium text-base">{en.home.libraryLink}</Text>
+            <Text className="shrink text-center font-sans-medium text-base">{en.home.libraryLink}</Text>
             <Feather name="chevron-right" size={18} color={colors.secondary[500]} />
           </View>
         </Pressable>
