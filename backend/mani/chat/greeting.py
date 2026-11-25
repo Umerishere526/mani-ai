@@ -45,7 +45,6 @@ NOT_SURE_LABEL = "Not sure"
 SHOW_ME_HOW_LABEL = "Show me how"
 GIVE_ME_A_TOOL_LABEL = "Give me a tool"
 LEAD_IN_LABELS = (NOT_SURE_LABEL, SHOW_ME_HOW_LABEL, GIVE_ME_A_TOOL_LABEL)
-EXAMPLE_LABEL = "I need an example"
 TALK_MORE_FIRST_LABEL = "Talk more first"
 # How they feel after a framework's last stage, asked before the close (the client's sequence document, 2026-11-18).
 # Neutral, so none presumes it helped and one says it didn't (Lolly, 2026-11-23: "The options must allow users to

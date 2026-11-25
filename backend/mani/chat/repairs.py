@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 
 from mani.chat import questions
-from mani.chat.greeting import EXAMPLE_LABEL, FEELINGS_LABELS, LEAD_IN_LABELS, TALK_MORE_FIRST_LABEL, start_label
+from mani.chat.greeting import FEELINGS_LABELS, LEAD_IN_LABELS, TALK_MORE_FIRST_LABEL, start_label
 from mani.llm.schema import SmartPrompt
 from mani.models.rows import Framework
 
@@ -85,10 +85,8 @@ def feelings_buttons() -> list[SmartPrompt]:
     return [SmartPrompt(label=label) for label in FEELINGS_LABELS]
 
 
-def start_buttons(framework: Framework, *, with_example: bool) -> list[SmartPrompt]:
-    """The buttons under the five steps, and under the example without its own button. Start carries the framework's
-    id, so it starts only the offer still open."""
-    buttons = [SmartPrompt(label=start_label(framework.name), technique=framework.id)]
-    if with_example:
-        buttons.append(SmartPrompt(label=EXAMPLE_LABEL))
-    return [*buttons, SmartPrompt(label=TALK_MORE_FIRST_LABEL)]
+def start_buttons(framework: Framework) -> list[SmartPrompt]:
+    """The buttons under the five steps: Start, carrying the framework's id so it starts only the offer still open,
+    and Talk more first."""
+    return [SmartPrompt(label=start_label(framework.name), technique=framework.id),
+            SmartPrompt(label=TALK_MORE_FIRST_LABEL)]

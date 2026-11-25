@@ -17,15 +17,14 @@ def test_a_long_title_is_trimmed_not_rejected():
 
 
 def test_the_offer_carries_the_clients_buttons_at_each_step():
-    """The client's sequence document (2026-11-18): the lead-in's three, then Start, the example and Talk more first."""
+    """The client's sequence document (2026-11-18): the lead-in's three, then Start and Talk more first."""
     from tests.unit.frameworks import REGISTRY
 
     assert [p.label for p in repairs.lead_in_buttons()] == ["Not sure", "Show me how", "Give me a tool"]
     abcde = REGISTRY.get("abcde")
-    assert [(p.label, p.technique) for p in repairs.start_buttons(abcde, with_example=True)] == [
-        ("Start ABCDE", "abcde"), ("I need an example", None), ("Talk more first", None),
+    assert [(p.label, p.technique) for p in repairs.start_buttons(abcde)] == [
+        ("Start ABCDE", "abcde"), ("Talk more first", None),
     ]
-    assert [p.label for p in repairs.start_buttons(abcde, with_example=False)] == ["Start ABCDE", "Talk more first"]
 
 
 @pytest.mark.parametrize(("draft", "sent"), [
