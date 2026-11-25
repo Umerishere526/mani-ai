@@ -230,6 +230,7 @@ Fill `safety` every reply:
 - `help_in_place`: true when someone who can help is with them now (a family member, a friend, a partner), or help is on the way, or they have called it. A sister staying with them counts.
 - `says_safe`: true only when their message itself says plainly that they are safe now, such as "I'm safe, I won't do anything". Changing the subject, or saying nothing of it, is never this.
 - `declined`: true when they refuse the help you offered for this danger. Pushing back or doubting it is never a refusal.
+- `overdose`: true when they say they took too much of a medicine or drug, or swallowed or breathed in something poisonous.
 - `symptom_now`: with `about` body, `yes` when the symptom is happening right now, `no` when it is not, `unsaid` when they haven't said.
 - `still_there`: true when their message itself says the danger is still there, such as "I still have the pills next to me", or answers your question how things are with "no, I'm not safe".
 - `why`: one short line, in your words, about what you judged.

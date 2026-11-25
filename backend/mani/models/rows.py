@@ -108,6 +108,8 @@ class Pause(Row):
     started_at: dt.datetime
     ends_at: dt.datetime
     reason: str | None = None
+    # What it is for: overdose, or whose danger (worry.Outcome.paused_for); null for a pause from before it was kept.
+    paused_for: str | None = None
 
 
 class TechniqueTried(BaseModel):

@@ -278,3 +278,20 @@ def test_the_phrase_floor_only_raises_and_ignores_messages_without_a_listed_phra
     held = worry.step(worry.Standing(state=State.DANGER, about="themselves", phase=ORD), D(about="themselves"),
                       "I want to die")
     assert held.pausing, "a danger the model read itself goes on and pauses as before"
+
+
+def test_a_pause_after_an_overdose_is_for_an_overdose_whatever_the_pausing_message_says():
+    """S6 and R90 (PROVISIONAL: clinician sign-off required before deploy): after an overdose emergency services lead
+    and 911 is the most prominent action. The model marks the overdose (safety.overdose); the worry keeps it until it
+    closes, so the pause on a later message ("alone, I don't want help") is still for an overdose."""
+    clear = worry.Standing(state=State.CLEAR, about=None, phase=ORD)
+    took = worry.step(clear, D(about="themselves", overdose=True))
+    record = worry.record_after({}, took, check=None, answering=None)
+    assert record[rec.OVERDOSE] is True
+    held = worry.Standing(state=took.state, about=took.about, phase=ORD, overdose=True)
+    paused = worry.step(held, D(about="themselves"))
+    assert paused.pausing and paused.paused_for == "overdose"
+    other = worry.step(worry.Standing(state=State.DANGER, about="from_someone", phase=ORD), D(about="from_someone"))
+    assert other.pausing and other.paused_for == "from_someone"
+    settled = worry.step(held, N(says_safe=True))
+    assert rec.OVERDOSE not in worry.record_after(record, settled, check=None, answering=None)

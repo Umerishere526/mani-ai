@@ -37,10 +37,12 @@ def answering(ctx: TurnContext) -> str | None:
 
 def paused_error(pause: Pause) -> ServiceError:
     """The refusal every chat route gives while a person is paused, naming where to get help (S9; PROVISIONAL:
-    clinician sign-off required before deploy); the client shows the pause from `paused_from` to `paused_until`."""
+    clinician sign-off required before deploy); the client shows the pause from `paused_from` to `paused_until`, and
+    leads with 911 when `paused_for` is overdose."""
     return ServiceError(
         f"chat for user {pause.user_id} is paused until {pause.ends_at.isoformat()}",
         ErrorCategory.CHAT_PAUSED,
         user_message=f"Your chat with Mani is paused for now. {crisis.IN_DANGER}",
-        details={"paused_from": pause.started_at.isoformat(), "paused_until": pause.ends_at.isoformat()},
+        details={"paused_from": pause.started_at.isoformat(), "paused_until": pause.ends_at.isoformat(),
+                 "paused_for": pause.paused_for},
     )

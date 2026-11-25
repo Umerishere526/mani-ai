@@ -35,7 +35,8 @@ class Standing(BaseModel):
     """Where safety stands before their message. `about` is whose danger the open worry is about, and is None while
     nothing is open. `settled`: a worry of theirs settled earlier in this conversation. `calm`: how many messages in a
     row were read as no concern while the worry, unsure or danger, stayed open. `end_check`: Mani's last reply asked the safety question
-    after a framework's last stage, so this message answers it."""
+    after a framework's last stage, so this message answers it. `overdose`: the open worry is about an overdose or a
+    poisoning."""
 
     model_config = {"frozen": True}
 
@@ -45,6 +46,7 @@ class Standing(BaseModel):
     settled: bool = False
     calm: int = 0
     end_check: bool = False
+    overdose: bool = False
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,14 @@ class Outcome:
     calm: int = 0
     # Code raised the model's read to danger on a high-risk phrase (S4).
     raised: bool = False
+    # The open worry is about an overdose or a poisoning, as the model marked it on this message or an earlier one.
+    overdose: bool = False
+
+    @property
+    def paused_for(self) -> str | None:
+        """What a pause is for, so a client can lead with 911 after an overdose (R90): overdose, or whose danger it is.
+        PROVISIONAL: clinician sign-off required before deploy."""
+        return "overdose" if self.overdose else self.about
 
 
 def standing(ctx: TurnContext, check: ReturnCheck | None, answering: str | None) -> Standing:
@@ -69,7 +79,7 @@ def standing(ctx: TurnContext, check: ReturnCheck | None, answering: str | None)
     phase = Phase.ASKING if check is not None else Phase.ANSWERING if answering is not None else Phase.ORDINARY
     return Standing(state=State(ctx.thread.safety), about=record.get(rec.ABOUT), phase=phase,
                     settled=bool(record.get(rec.SAFETY_SETTLED)), calm=record.get(rec.CALM, 0),
-                    end_check=rec.end_check(record) == rec.END_CHECK_ASKED)
+                    end_check=rec.end_check(record) == rec.END_CHECK_ASKED, overdose=bool(record.get(rec.OVERDOSE)))
 
 
 def step(stood: Standing, read: Safety, message: str = "") -> Outcome:
@@ -136,16 +146,19 @@ def step(stood: Standing, read: Safety, message: str = "") -> Outcome:
         state=after, about=about if after is not State.CLEAR else None, pausing=pausing,
         settled_now=stood.state is not State.CLEAR and after is State.CLEAR,
         resources_due=resources_due, calm=stood.calm + 1 if waits else 0, raised=floored,
+        overdose=after is not State.CLEAR and (read.overdose or stood.overdose),
     )
 
 
 def record_after(record: dict, outcome: Outcome, *, check: ReturnCheck | None, answering: str | None) -> dict:
-    """The record with where the return check stands, whose danger the open worry is about (forgotten when it settles),
-    how many calm messages an open worry has had, whether this conversation reached danger, and whether a worry
-    settled."""
-    after = {key: value for key, value in record.items() if key not in (rec.ABOUT, rec.CALM)}
+    """The record with where the return check stands, whose danger the open worry is about and whether it is an overdose
+    (both forgotten when it settles), how many calm messages an open worry has had, whether this conversation reached
+    danger, and whether a worry settled."""
+    after = {key: value for key, value in record.items() if key not in (rec.ABOUT, rec.CALM, rec.OVERDOSE)}
     if outcome.about:
         after[rec.ABOUT] = outcome.about
+    if outcome.overdose:
+        after[rec.OVERDOSE] = True
     if outcome.calm:
         after[rec.CALM] = outcome.calm
     if check is not None:
@@ -164,5 +177,6 @@ def traced(read: Safety) -> dict:
     return {key: value for key, value in {
         "level": read.level, "about": read.about, "declined": read.declined or None, "symptom_now": read.symptom_now,
         "help_in_place": read.help_in_place or None, "says_safe": read.says_safe or None,
+        "overdose": read.overdose or None,
         "still_there": read.still_there or None,
     }.items() if value is not None}

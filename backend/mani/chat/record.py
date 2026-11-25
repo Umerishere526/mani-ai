@@ -33,6 +33,8 @@ RETURN_CHECK = "return_check"
 SAFETY_SETTLED = "safety_settled"
 DANGER_REACHED = "danger_reached"
 ABOUT = "worry_about"
+# Whether the open worry is about an overdose or a poisoning, kept only while it is open, so its pause leads with 911.
+OVERDOSE = "worry_overdose"
 # How many messages in a row were read as no concern while an unsure worry stayed open (worry.CALM_TO_CLEAR).
 CALM = "worry_calm"
 SAFETY_END_CHECK = "safety_end_check"

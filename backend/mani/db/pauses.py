@@ -16,11 +16,12 @@ async def start(
     thread_id: uuid.UUID | str,
     seconds: int,
     reason: str | None,
+    paused_for: str | None = None,
 ) -> Pause:
     record = await conn.fetchrow(
-        "insert into public.chat_pauses (user_id, thread_id, ends_at, reason) "
-        "values ($1, $2, now() + make_interval(secs => $3), $4) returning *",
-        user_id, thread_id, seconds, reason,
+        "insert into public.chat_pauses (user_id, thread_id, ends_at, reason, paused_for) "
+        "values ($1, $2, now() + make_interval(secs => $3), $4, $5) returning *",
+        user_id, thread_id, seconds, reason, paused_for,
     )
     return Pause.model_validate(dict(record))
 
@@ -28,7 +29,7 @@ async def start(
 async def active(conn: asyncpg.Connection, user_id: uuid.UUID | str) -> Pause | None:
     return Pause.from_record(await conn.fetchrow(
         # No reason: it is read only by the turns of the conversation the pause began in (threads.load_turn_context).
-        "select id, user_id, thread_id, started_at, ends_at from public.chat_pauses "
+        "select id, user_id, thread_id, started_at, ends_at, paused_for from public.chat_pauses "
         "where user_id = $1 and ends_at > now() "
         "order by started_at desc limit 1",
         user_id,

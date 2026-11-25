@@ -50,6 +50,8 @@ class Turn:
     crisis_detected: bool = False
     paused_from: dt.datetime | None = None
     paused_until: dt.datetime | None = None
+    # What the pause this turn started is for: overdose, or whose danger it is (R90).
+    paused_for: str | None = None
     was_duplicate: bool = False
     needs_summary: bool = False
     llm_call_id: uuid.UUID | None = None
@@ -326,6 +328,7 @@ async def _apply(
         message_id=pair.mani_message_id, content=text, created_at=pair.created_at, prompts=prompts,
         title=updates.title or ctx.thread.title, crisis_detected=flagged or judgment.state is safety.State.DANGER,
         paused_from=paused.started_at if paused else None, paused_until=paused.ends_at if paused else None,
+        paused_for=paused.paused_for if paused else None,
         was_duplicate=pair.was_duplicate, needs_summary=_summary_due(ctx, window) and not judgment.pausing,
         llm_call_id=call.call_id, understanding=after if settings.ai_debug_mode else None, trace=trace,
         raw_reply=call.value.model_dump(mode="json") if settings.ai_debug_mode else None,
@@ -395,7 +398,8 @@ async def _pause_writes(conn, ctx, judgment, reply: TurnReply, *, pair, seconds)
     if pair.was_duplicate:
         return None
     if judgment.pausing:
-        return await pauses.start(conn, ctx.thread.user_id, ctx.thread.id, seconds, reply.safety.why)
+        return await pauses.start(conn, ctx.thread.user_id, ctx.thread.id, seconds, reply.safety.why,
+                                  judgment.paused_for)
     return None
 
 

@@ -23,6 +23,8 @@ class Safety(BaseModel):
     says_safe: bool = Field(default=False, description=(
         "Their message itself says plainly that they are safe now. Changing the subject never is."))
     declined: bool = Field(default=False, description="They refused the help you offered for this danger.")
+    overdose: bool = Field(default=False, description=(
+        "They say they took too much of a medicine or drug, or swallowed or breathed in something poisonous."))
     symptom_now: Literal["yes", "no", "unsaid"] | None = Field(
         default=None, description="With about body: whether the symptom is happening right now."
     )

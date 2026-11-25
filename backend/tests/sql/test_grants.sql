@@ -507,7 +507,8 @@ select pg_temp.want('a user reads their own pauses',
   and has_column_privilege('authenticated', 'public.chat_pauses', 'user_id', 'SELECT')
   and has_column_privilege('authenticated', 'public.chat_pauses', 'thread_id', 'SELECT')
   and has_column_privilege('authenticated', 'public.chat_pauses', 'started_at', 'SELECT')
-  and has_column_privilege('authenticated', 'public.chat_pauses', 'ends_at', 'SELECT'), true);
+  and has_column_privilege('authenticated', 'public.chat_pauses', 'ends_at', 'SELECT')
+  and has_column_privilege('authenticated', 'public.chat_pauses', 'paused_for', 'SELECT'), true);
 
 -- Why a pause started is the model's line of why, which can carry their words: only the backend's role reads it.
 select pg_temp.want('a user cannot read why their pause started',

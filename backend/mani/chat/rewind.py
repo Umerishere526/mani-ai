@@ -42,8 +42,7 @@ def held(snapshot: dict, left: TurnContext) -> dict:
     if left.thread.safety == "danger" and safety != "danger":
         safety = "danger"
         understanding.pop(rec.CALM, None)
-        if now.get(rec.ABOUT):
-            understanding[rec.ABOUT] = now[rec.ABOUT]
+        understanding.update({key: now[key] for key in (rec.ABOUT, rec.OVERDOSE) if now.get(key)})
     return {**snapshot, "understanding": understanding, "safety": safety}
 
 

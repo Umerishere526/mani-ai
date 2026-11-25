@@ -50,6 +50,7 @@ async def opening(user: CurrentUser, conn: UserConn) -> OpeningOut:
     return OpeningOut(
         chat_paused_from=pause.started_at if pause else None,
         chat_paused_until=pause.ends_at if pause else None,
+        chat_paused_for=pause.paused_for if pause else None,
         greeting=await chat_turn.opening_greeting(conn, user.user_id),
         style_options=greeting.STYLE_OPTIONS,
         openers=greeting.OPENERS,

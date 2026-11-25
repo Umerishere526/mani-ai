@@ -469,6 +469,28 @@ async def test_an_edited_first_danger_message_is_danger_going_on_and_an_edit_nev
     assert row.safety == "danger" and row.understanding["danger_reached"]
 
 
+async def test_a_pause_after_an_overdose_says_so_everywhere_a_client_reads_the_pause(alice, model):
+    """S6 and R90 (PROVISIONAL: clinician sign-off required before deploy): after an overdose a client leads with 911,
+    so the kind of danger goes with every pause: the turn, the refusal while paused, the profile and the opening."""
+    from mani.chat import pause
+    from mani.db import pauses, pool
+    from mani.routers import serializers
+    from mani.routers import threads as threads_routes
+
+    took = DANGER.model_copy(update={"overdose": True})
+    model(said(FIRST_REPLY, safety=took), said("Please call now.", safety=DANGER))
+    thread = await start(alice)
+    await send(alice, thread.id, "i took a bunch of my sleeping pills")
+    paused = await send(alice, thread.id, "alone. i dont want help")
+    assert paused.paused_for == "overdose" and serializers.to_turn(paused).paused_for == "overdose"
+    async with pool.as_user(alice) as conn:
+        active = await pauses.active(conn, ALICE)
+        opened = await threads_routes.opening(alice, conn)
+    assert active.paused_for == "overdose" and opened.chat_paused_for == "overdose"
+    assert pause.paused_error(active).details["paused_for"] == "overdose"
+    assert serializers.to_profile(None, active).chat_paused_for == "overdose"
+
+
 async def test_a_paused_person_is_refused_in_every_conversation_before_anything_is_paid(alice, model):
     """S18 (PROVISIONAL: clinician sign-off required before deploy): a pause still blocks all of the person's
     conversations, an earlier one and a new one alike, so a new chat is no way around it."""
