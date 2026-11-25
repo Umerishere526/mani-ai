@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
 # A sentence ends at . ? or ! (with any closing quote) when a capital letter or the end of the text follows, so a
 # question quoted inside a sentence ('He said "why me?" and left') does not end it.
@@ -26,13 +27,30 @@ def sentences(text: str) -> list[str]:
     return [folded for piece in _pieces(text) if (folded := " ".join(piece.split()))]
 
 
-def _asks(sentence: str) -> bool:
+def asks(sentence: str) -> bool:
+    """Whether a sentence ends on a question mark, past any closing quote."""
     return sentence.rstrip(_CLOSING).endswith("?")
+
+
+def kept(text: str, keep: Callable[[int, str], bool]) -> str:
+    """The text with only the sentences `keep` accepts, given each sentence's place among them and its folded words;
+    a kept sentence stays exactly as written, and the blank lines left behind are tidied."""
+    out, place = [], 0
+    for piece in _pieces(text):
+        folded = " ".join(piece.split())
+        if not folded or keep(place, folded):
+            out.append(piece)
+        place += bool(folded)
+    return _tidied("".join(out))
+
+
+def _tidied(text: str) -> str:
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(line.rstrip() for line in text.split("\n"))).strip()
 
 
 def last_question(text: str) -> str:
     """The text's last sentence that ends on a question mark, folded to one line, or empty when it asks nothing."""
-    return next((sentence for sentence in reversed(sentences(text)) if _asks(sentence)), "")
+    return next((sentence for sentence in reversed(sentences(text)) if asks(sentence)), "")
 
 
 # What an open-chat question can be for (TurnReply.question.intent): what happened, what it does to them, what they
@@ -69,7 +87,7 @@ def held_to_one(text: str, ask: str, *, silenced: str | None) -> tuple[str, str,
     (`silenced`, from `silenced_by`) it asks nothing. Text that asks nothing goes out exactly as written."""
     ask = ask.strip()
     pieces = _pieces(text)
-    asking = [i for i, piece in enumerate(pieces) if piece.strip() and _asks(piece.strip())]
+    asking = [i for i, piece in enumerate(pieces) if piece.strip() and asks(piece.strip())]
     if silenced:
         cut, ask, why = asking, "", _SILENCED_WHY[silenced] if asking or ask else None
     elif ask:
@@ -77,10 +95,9 @@ def held_to_one(text: str, ask: str, *, silenced: str | None) -> tuple[str, str,
     else:
         cut, why = asking[:-1], "more than one question" if len(asking) > 1 else None
     if cut:
-        text = "".join(piece for i, piece in enumerate(pieces) if i not in cut)
         # ponytail: a short "I'd like to understand..." line before a cut question can be left standing; drop it too
         # if muhammad sees it in chats.
-        text = re.sub(r"\n{3,}", "\n\n", "\n".join(line.rstrip() for line in text.split("\n"))).strip()
+        text = _tidied("".join(piece for i, piece in enumerate(pieces) if i not in cut))
     if ask:
         return "\n\n".join(part for part in (text.strip(), ask) if part), ask, why
     return text, "" if silenced else last_question(text), why

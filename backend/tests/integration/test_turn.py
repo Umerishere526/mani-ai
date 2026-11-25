@@ -152,6 +152,16 @@ async def test_a_held_worry_whose_text_already_asks_its_question_asks_it_once(al
     assert turn.trace["enforced"] == ["repeated_question"]
 
 
+async def test_a_forbidden_word_and_a_banned_line_never_reach_them_and_the_trace_counts_both(alice, model):
+    """Behavioral Framework and Safety Guardrails section 6, which the prompt alone let through (TC-03, TC-17)."""
+    model(said("I'm here for you. Two words, and they land hard.",
+               question=Question(latest="adds_more", ask="What happened when you were struggling last time?")))
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "she just said 'whatever' and left")
+    assert turn.content == "Two words, and they hit hard.\n\nWhat happened when you were finding it hard last time?"
+    assert turn.trace["enforced"] == ["forbidden_word:land", "forbidden_word:struggling", "banned_line_removed"]
+
+
 # Two ordinary exchanges first: an offer may come with the person's 3rd message at the earliest.
 WARM_UP = (said("Go on."), said("Tell me more."))
 
