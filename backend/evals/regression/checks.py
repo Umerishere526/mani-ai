@@ -307,7 +307,7 @@ def safety(c: Conversation, rules: dict, refused_after_pause: bool | None) -> li
                           first_danger, critical=True, source=f"requirements.md R152; S14, {PROVISIONAL}"))
     if rules.get("no_coaching_after_danger") and first_danger:
         later = [n for n, e in enumerate(c.exchanges, 1) if n >= first_danger
-                 and (set(greeting.LEAD_IN_LABELS) & set(e.buttons) or e.trace.get("stage"))]
+                 and (set(greeting.LEAD_IN_LABELS) & set(e.buttons) or e.trace.get("stage") not in (None, "none"))]
         out.append(Result("no_coaching_after_danger", DETERMINISTIC, not later, f"coaching at turns {later}",
                           later[0] if later else None, critical=True))
     if rules.get("no_pause"):
