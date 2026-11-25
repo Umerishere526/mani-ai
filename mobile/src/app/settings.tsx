@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ScrollView, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { AppHeader, SecondaryButton, Text } from "@/components/shared";
+import { AiDisclosure, AppHeader, SecondaryButton, Text } from "@/components/shared";
 import { SettingsRow, SettingsSection } from "@/components/settings";
 import { colors } from "@/lib/tokens";
 import { useNotificationPreference } from "@/hooks/useNotificationPreference";
@@ -68,6 +68,8 @@ export default function SettingsScreen() {
         )}
 
         <View className="min-h-8 flex-1" />
+
+        <AiDisclosure className="mb-6" />
 
         <SecondaryButton
           label={signOut.isRunning ? en.settings.loggingOut : en.settings.logOut}

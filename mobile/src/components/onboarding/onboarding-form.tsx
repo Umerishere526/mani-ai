@@ -4,7 +4,7 @@
 import { View } from 'react-native';
 import { ConversationStyleOption } from '@/components/chat';
 import { FormError, LabeledField } from '@/components/auth';
-import { Text, TextInput } from '@/components/shared';
+import { AiDisclosure, Text, TextInput } from '@/components/shared';
 import en from '@/dictionaries/en.json';
 import type { ConversationStyle } from '@/types/chat';
 
@@ -51,6 +51,8 @@ export function OnboardingForm({ nickname, onNicknameChange, onStyleSelect, isSa
           <ConversationStyleOption key={style} style={style} onPress={onStyleSelect} />
         ))}
       </View>
+
+      <AiDisclosure className="mt-6" />
 
       <View className="mt-4">
         {isSaving ? <Text className="text-sm text-secondary-500/80">{en.onboarding.saving}</Text> : null}

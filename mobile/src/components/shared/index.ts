@@ -10,3 +10,4 @@ export { CardGradient } from './card-gradient';
 export { CircularProgressButton, type CircularProgressButtonProps } from './circular-progress-button';
 export { GradientSphere, type GradientSphereProps } from './gradient-sphere';
 export { AppHeader, type AppHeaderProps } from './app-header';
+export { AiDisclosure, type AiDisclosureProps } from './ai-disclosure';

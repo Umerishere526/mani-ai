@@ -261,5 +261,8 @@
       "Child helplines"
     ],
     "disclaimer": "Mani offers emotional support and simple tools to help you sort what you're feeling. It does not replace medical, psychiatric, or crisis intervention services."
+  },
+  "disclosure": {
+    "aiCompanion": "MANI is an AI companion, not a therapist."
   }
 }
