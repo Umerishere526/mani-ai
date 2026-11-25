@@ -422,7 +422,25 @@ async def test_overdose_on_the_first_message_gets_manis_reply_and_the_next_messa
     assert first.content == FIRST_REPLY and first.paused_until is None and first.crisis_detected
     second = await send(alice, thread.id, "yes alone. i dont want help")
     assert second.paused_until is not None
-    assert second.content == "Please call now.\n\n" + crisis.pause_reply("themselves", 900)
+    assert second.content == crisis.pause_reply("themselves", 900)
+
+
+async def test_a_turn_that_pauses_sends_the_pause_words_and_nothing_that_invites_more(alice, model):
+    """CR-7 (PROVISIONAL: clinician sign-off required before deploy): muhammad's TC-S3 run (2026-11-25). The model
+    writes before code decides to pause, so its reply to "anyway can we talk about work" agreed to talk about work and
+    asked a work question, and code then paused the chat under it. A pausing turn sends code's pause words alone:
+    where to get help first, then the pause."""
+    model(said(FIRST_REPLY, safety=DANGER),
+          said("Okay. Let's talk about work. I haven't dropped what you told me, and it's still sitting between us. If "
+               "work is what you can talk about right now, I'll go there with you.",
+               question=Question(ask="What's going on at work right now?"),
+               safety=Safety(level="unsure", about="themselves")))
+    thread = await start(alice)
+    await send(alice, thread.id, "I have pills saved up and I'm going to take them tonight")
+    paused = await send(alice, thread.id, "anyway can we talk about work")
+    assert paused.paused_until is not None
+    assert paused.content == crisis.pause_reply("themselves", 900)
+    assert "work" not in paused.content and "?" not in paused.content
 
 
 async def test_a_change_of_subject_after_danger_keeps_the_worry_open(alice, model):
@@ -767,7 +785,7 @@ async def test_a_first_danger_message_always_carries_where_to_get_help_even_with
     assert again.content == "I'm glad she is with you.", "the help is said once"
 
 
-async def test_a_pausing_body_turn_sends_manis_reply_then_the_pause_line_and_no_call_now_line(alice, model):
+async def test_a_pausing_body_turn_sends_the_pause_line_and_its_call_now_line_once(alice, model):
     """S13 (PROVISIONAL: clinician sign-off required before deploy): the pause line leads with the body's own help line,
     so the call-now line is said once, by the pause."""
     now = Safety(level="danger", about="body", symptom_now="yes")
@@ -777,7 +795,7 @@ async def test_a_pausing_body_turn_sends_manis_reply_then_the_pause_line_and_no_
     await send(alice, thread.id, "my chest is crushing right now")
     paused = await send(alice, thread.id, "no im not calling anyone")
     assert paused.paused_until is not None
-    assert paused.content == "Okay.\n\n" + crisis.pause_reply("body", 900)
+    assert paused.content == crisis.pause_reply("body", 900)
     assert paused.content.count(crisis.resources_line("body")) == 1
 
 

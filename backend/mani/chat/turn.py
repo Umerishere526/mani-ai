@@ -255,13 +255,10 @@ async def _apply(
     )
     ask = ""
     if judgment.pausing:
-        # Mani's own words for this danger come first, then the pause line (muhammad, 2026-11-20). A question it chose
-        # that its text already asks is not asked twice.
-        repeated = enforce.repeats(reply.text, reply.question.ask)
-        enforced += [enforce.REPEATED_QUESTION] if repeated else []
-        text = "\n\n".join(part for part in (
-            reply.text.strip(), "" if repeated else reply.question.ask.strip(),
-            crisis.pause_reply(judgment.about, settings.crisis_pause_seconds)) if part)
+        # The model wrote its reply before code decided to pause, so its words can invite more conversation the pause
+        # then blocks (TC-S3, 2026-11-25: a work question under the pause). A pausing turn says only code's pause words,
+        # where to get help first. CR-7, PROVISIONAL: clinician sign-off required before deploy.
+        text = crisis.pause_reply(judgment.about, settings.crisis_pause_seconds)
     elif decision.end_check:
         text = crisis.END_CHECK
     elif check is not None:
