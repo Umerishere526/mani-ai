@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 
-from mani.chat import questions
+from mani.chat import questions, record as rec
 from mani.chat.repairs import sent_text
 from mani.chat.reply import TurnReply
 
@@ -48,11 +48,17 @@ _LIST_LINE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s", re.MULTILINE)
 # Words that open a sentence leaning on the one before it, so it cannot follow a cut: "So what would you try?"
 _LEANS_BACK = ("and", "but", "so", "because", "which", "then", "or", "also", "that's why", "this is why")
 
+# A first sentence this short that repeats an opener is a stock opening ("That makes sense."), which can go when what
+# follows it still stands.
+STOCK_OPENING_WORDS = 6
+
 # Enforcement events, as the turn trace records them under `enforced`. A word swap is recorded with its word.
 REPEATED_QUESTION = "repeated_question"
 TYPED_STOP = "typed_stop"
 DIRECTIVE_TRIMMED = "directive_trimmed"
 DIRECTIVE_LONG_KEPT = "directive_long_kept"
+OPENER_DROPPED = "opener_dropped"
+OPENER_REPEATED_KEPT = "opener_repeated_kept"
 FORBIDDEN_WORD = "forbidden_word"
 BANNED_LINE_REMOVED = "banned_line_removed"
 BANNED_LINE_KEPT = "banned_line_kept"
@@ -177,6 +183,30 @@ def directive_trimmed(text: str, asked: str) -> tuple[str, list[str]]:
     return f"{trimmed}{question}", [DIRECTIVE_TRIMMED]
 
 
+def _opener(text: str) -> str:
+    """A reply's first rec.OPENING_WORDS words, lowercased without punctuation, or "" when it has fewer."""
+    words = _WORDS.findall(text.lower().replace("’", "'"))
+    return " ".join(words[: rec.OPENING_WORDS]) if len(words) >= rec.OPENING_WORDS else ""
+
+
+def fresh_opener(text: str, openers: list[str], *, guarded: bool) -> tuple[str, list[str]]:
+    """The reply without a short stock first sentence when it opens as an earlier reply in this conversation opened
+    (`openers`, the replies ledger's "opens"), and the event. The sentence goes only when it asks nothing, the next one
+    is a statement that does not lean on it, and the reply then opens afresh; a guarded turn keeps every word. A repeat
+    that stays is recorded as kept."""
+    used = {_opener(opens) for opens in openers} - {""}
+    if _opener(text) not in used:
+        return text, []
+    sentences = questions.sentences(text)
+    first, after = sentences[0], sentences[1] if len(sentences) > 1 else ""
+    droppable = (not guarded and after and len(_WORDS.findall(first.lower())) <= STOCK_OPENING_WORDS
+                 and not questions.asks(first) and not questions.asks(after) and not _leans_back(after))
+    dropped = questions.kept(text, lambda place, _: place > 0) if droppable else ""
+    if not dropped or _opener(dropped) in used:
+        return text, [OPENER_REPEATED_KEPT]
+    return dropped[0].upper() + dropped[1:], [OPENER_DROPPED]
+
+
 def _plain(sentence: str) -> str:
     return " ".join(_WORDS.findall(sentence.lower().replace("’", "'")))
 
@@ -191,10 +221,11 @@ def repeats(text: str, ask: str) -> bool:
 
 
 def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, latest: str, directive: bool,
-         helping: bool) -> Sent:
+         helping: bool, openers: list[str]) -> Sent:
     """The model's words as the person receives them (repairs.sent_text), with the client's rules enforced: each
     forbidden word swapped for a plain one, each banned line taken out, and a Directive reply in the open chat that
-    gives no help (`helping`) held to DIRECTIVE_SENTENCES. A guarded turn keeps every sentence and
+    gives no help (`helping`) held to DIRECTIVE_SENTENCES, and a stock opening that repeats one of the conversation's
+    `openers` dropped. A guarded turn keeps every sentence and
     every question its text asks, so a question it chose that the text already asks is not asked twice. Text that
     carries code's fixed safety words (`fixed`) goes out with no rule applied to it."""
     enforced: list[str] = []
@@ -212,4 +243,6 @@ def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, la
     if directive and open_chat and not guarded and not helping:
         text, trimmed = directive_trimmed(text, asked)
         enforced += trimmed
+    text, opened = fresh_opener(text, openers, guarded=guarded)
+    enforced += opened
     return Sent(text, asked, cut, enforced)

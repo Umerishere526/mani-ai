@@ -7,9 +7,10 @@ from mani.chat import crisis, enforce
 
 
 def sent(text: str, ask: str = "", *, fixed: bool = False, guarded: bool = False, open_chat: bool = True,
-         latest: str = "answer", directive: bool = False, helping: bool = False) -> enforce.Sent:
+         latest: str = "answer", directive: bool = False, helping: bool = False,
+         openers: tuple[str, ...] = ()) -> enforce.Sent:
     return enforce.sent(text, ask, fixed=fixed, guarded=guarded, open_chat=open_chat, latest=latest,
-                        directive=directive, helping=helping)
+                        directive=directive, helping=helping, openers=list(openers))
 
 
 def test_a_guarded_reply_whose_text_already_asks_its_question_asks_it_once():
@@ -119,3 +120,29 @@ def test_the_directive_cap_leaves_help_other_styles_sets_and_guarded_turns_alone
     for kept in (sent(long, directive=True, helping=True), sent(long), sent(long, directive=True, open_chat=False),
                  sent(long, directive=True, guarded=True, open_chat=False)):
         assert kept.text == long and kept.enforced == []
+
+
+def test_a_repeated_stock_opening_is_dropped_when_what_follows_still_stands():
+    """Pacing Rules and R116: validation varied across turns, never the same phrases (the 'parrot' feel)."""
+    reply = sent("That makes sense. The week piled up on you.", "What happened on Friday?",
+                 openers=("That makes sense. The",))
+    assert reply.text == "The week piled up on you.\n\nWhat happened on Friday?"
+    assert reply.enforced == [enforce.OPENER_DROPPED]
+
+
+@pytest.mark.parametrize(("text", "guarded"), [
+    ("That makes sense to me, given how long you've waited for this.", False),   # too long to be a stock opening
+    ("That makes sense. So you left early.", False),                            # the next one leans on it
+    ("That really makes sense.", False),                                        # nothing follows it
+    ("That makes sense. Please call 988 now.", True),                           # a guarded turn keeps every word
+])
+def test_a_repeated_opening_that_cannot_go_safely_stays_and_is_recorded(text, guarded):
+    reply = sent(text, guarded=guarded, open_chat=not guarded,
+                 openers=("Okay.", "That makes sense to", "That makes sense. So", "That really makes sense",
+                          "That makes sense. Please"))
+    assert reply.text == text and reply.enforced == [enforce.OPENER_REPEATED_KEPT]
+
+
+def test_an_opening_used_before_only_in_part_is_not_a_repeat():
+    reply = sent("That makes sense. The week piled up.", openers=("That makes things worse",))
+    assert reply.enforced == []

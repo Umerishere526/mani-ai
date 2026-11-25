@@ -267,7 +267,8 @@ async def _apply(
         action="none" if decision.refused == "offer" else reply.action)
     sent = enforce.sent(text, ask, fixed=judgment.pausing or decision.end_check or check is not None,
                         guarded=guarded, open_chat=open_chat, latest=reply.question.latest,
-                        directive=style == SupportStyle.DIRECTIVE, helping=reply.said.move.strip().lower() == "help")
+                        directive=style == SupportStyle.DIRECTIVE, helping=reply.said.move.strip().lower() == "help",
+                        openers=[entry.get("opens", "") for entry in rec.replies(record)])
     text, asked, cut = sent.text, sent.asked, sent.cut
     enforced += sent.enforced
     # What the reply asked and gave, kept before code adds its own pieces; the fixed words for an empty reply give none.

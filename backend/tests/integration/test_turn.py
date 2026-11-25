@@ -173,6 +173,17 @@ async def test_a_long_directive_reply_reaches_them_as_three_sentences(alice, mod
     assert turn.trace["enforced"] == ["directive_trimmed"]
 
 
+async def test_an_opening_this_conversation_already_used_is_dropped_when_the_rest_stands(alice, model):
+    """Pacing Rules and R116: the openers ledger was shown to the model, but nothing enforced it (CQ-5)."""
+    model(said("That makes sense. The work kept coming.", question=Question(latest="answer", ask="What came first?")),
+          said("That makes sense. The evenings went too.", question=Question(latest="answer", ask="When did that start?")))
+    thread = await start(alice)
+    await send(alice, thread.id, "work has been a lot")
+    turn = await send(alice, thread.id, "and now my evenings are gone")
+    assert turn.content == "The evenings went too.\n\nWhen did that start?"
+    assert turn.trace["enforced"] == ["opener_dropped"]
+
+
 # Two ordinary exchanges first: an offer may come with the person's 3rd message at the earliest.
 WARM_UP = (said("Go on."), said("Tell me more."))
 
