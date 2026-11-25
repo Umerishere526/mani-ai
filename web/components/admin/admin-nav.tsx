@@ -6,7 +6,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, MessageSquare } from "lucide-react";
+import { BookOpen, MessageSquare, ShieldAlert, ThumbsUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOutAdmin } from "@/lib/actions/auth";
 import dictionary from "@/dictionaries/en.json";
@@ -35,6 +35,16 @@ const NAV_ITEMS: NavItem[] = [
     label: NAV_STRINGS.chats,
     href: "/admin/chats",
     icon: <MessageSquare size={18} strokeWidth={1.75} />,
+  },
+  {
+    label: NAV_STRINGS.crisisEvents,
+    href: "/admin/crisis-events",
+    icon: <ShieldAlert size={18} strokeWidth={1.75} />,
+  },
+  {
+    label: NAV_STRINGS.feedback,
+    href: "/admin/feedback",
+    icon: <ThumbsUp size={18} strokeWidth={1.75} />,
   },
 ];
 

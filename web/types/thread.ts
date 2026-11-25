@@ -1,5 +1,5 @@
 // ABOUTME: Types for the admin Chats section — user conversation threads and messages.
-// ABOUTME: Ported from mani-app's AdminThreadWithUser/AdminMessage shapes (admin/actions.ts).
+// ABOUTME: The shapes the backend's /v1/admin/threads endpoints return, in camelCase.
 
 export interface AdminThread {
   id: string;
@@ -18,4 +18,9 @@ export interface AdminMessage {
   role: "user" | "mani";
   content: string;
   createdAt: string;
+}
+
+export interface AdminThreadPage {
+  threads: AdminThread[];
+  nextCursor: string | null;
 }

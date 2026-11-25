@@ -1,27 +1,18 @@
 // ABOUTME: Types for the admin Exercises section — guided audio exercises.
-// ABOUTME: Ported from mani-app's lib/db/exercises.ts AdminExercise shape.
-
-export type ExerciseType = "Breathing" | "Meditation" | "Visualization";
-
-export type ExerciseCategory =
-  | "EmotionalIntelligence"
-  | "NarcissisticDynamics"
-  | "BuildingHabits"
-  | "Boundaries"
-  | "Anxiety"
-  | "Burnout";
+// ABOUTME: The shape the backend's /v1/admin/exercises endpoints return, in camelCase.
 
 export interface AdminExercise {
   id: string;
   title: string;
-  description: string;
   subtitle: string | null;
-  type: ExerciseType;
-  category: ExerciseCategory | null;
-  durationMinutes: number;
-  audioUrl: string | null;
+  description: string;
+  type: string | null;
+  category: string;
+  audioPath: string;
+  durationMinutes: number | null;
   displayOrder: number;
   showOnHomeScreen: boolean;
+  frameworkId: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

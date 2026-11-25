@@ -1,11 +1,12 @@
 // ABOUTME: One row in the Home Screen section — edit link, inline display-order editor, remove.
-// ABOUTME: Split out from HomeScreenSection.tsx (source nested this as a function in the same file).
+// ABOUTME: Order and removal run through the updateExerciseFields server action.
 
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Badge } from "@/components/shared";
+import { updateExerciseFields } from "@/lib/actions/exercises";
 import type { AdminExercise } from "@/types";
 import dictionary from "@/dictionaries/en.json";
 
@@ -22,7 +23,6 @@ interface HomeScreenExerciseRowProps {
 }
 
 export function HomeScreenExerciseRow({ exercise, position }: HomeScreenExerciseRowProps) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -31,13 +31,8 @@ export function HomeScreenExerciseRow({ exercise, position }: HomeScreenExercise
   const handleRemove = () => {
     setError(null);
     startTransition(async () => {
-      try {
-        // No backend yet — placeholder data doesn't persist this change.
-        console.log("remove from home screen", exercise.id);
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : STRINGS.removeError);
-      }
+      const result = await updateExerciseFields(exercise.id, { showOnHomeScreen: false });
+      setError(result.error);
     });
   };
 
@@ -50,14 +45,9 @@ export function HomeScreenExerciseRow({ exercise, position }: HomeScreenExercise
 
     setError(null);
     startTransition(async () => {
-      try {
-        // No backend yet — placeholder data doesn't persist this change.
-        console.log("update display order", exercise.id, newOrder);
-        router.refresh();
-        setIsEditing(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : STRINGS.updateError);
-      }
+      const result = await updateExerciseFields(exercise.id, { displayOrder: newOrder });
+      setError(result.error);
+      if (!result.error) setIsEditing(false);
     });
   };
 
@@ -73,9 +63,9 @@ export function HomeScreenExerciseRow({ exercise, position }: HomeScreenExercise
       </div>
 
       <div className="flex flex-shrink-0 items-center justify-end gap-2">
-        <a href={`/admin/exercises/${exercise.id}`} className={SECONDARY_BUTTON}>
+        <Link href={`/admin/exercises/${exercise.id}`} className={SECONDARY_BUTTON}>
           {STRINGS.editButton}
-        </a>
+        </Link>
 
         {isEditing ? (
           <>

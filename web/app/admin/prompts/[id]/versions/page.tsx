@@ -1,10 +1,10 @@
 // ABOUTME: Admin page showing a prompt's version history with rollback.
-// ABOUTME: Ported from mani-app's app/admin/prompts/[id]/versions/page.tsx.
+// ABOUTME: Reads the prompt and its versions from the backend in parallel.
 
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/shared";
 import { RollbackButton } from "@/components/admin/rollback-button";
-import { getPromptById, getPromptVersions } from "@/lib/placeholder-prompts";
+import { getPrompt, listPromptVersions } from "@/lib/api/prompts";
 import dictionary from "@/dictionaries/en.json";
 
 const PROMPTS_STRINGS = dictionary.admin.pages.prompts;
@@ -16,8 +16,7 @@ interface VersionsPageProps {
 
 export default async function VersionsPage({ params }: VersionsPageProps) {
   const { id } = await params;
-  const prompt = getPromptById(id);
-  const versions = getPromptVersions(id);
+  const [prompt, versions] = await Promise.all([getPrompt(id), listPromptVersions(id)]);
 
   if (!prompt) {
     notFound();
@@ -55,7 +54,7 @@ export default async function VersionsPage({ params }: VersionsPageProps) {
                       {STRINGS.versionLabel.replace("{version}", String(version.version))}
                     </span>
                     <p className="text-sm text-mani-text-muted">
-                      {version.createdAt ? new Date(version.createdAt).toLocaleString() : "Unknown"}
+                      {new Date(version.createdAt).toLocaleString()}
                     </p>
                     {version.changeSummary && (
                       <p className="mt-1 text-sm text-mani-text-muted">{version.changeSummary}</p>
@@ -67,7 +66,7 @@ export default async function VersionsPage({ params }: VersionsPageProps) {
                 <div className="mb-4 grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-mani-text-light">{STRINGS.modelLabel}</span>{" "}
-                    <span className="font-medium">{version.modelId}</span>
+                    <span className="font-medium">{version.modelId ?? PROMPTS_STRINGS.defaultModel}</span>
                   </div>
                   <div>
                     <span className="text-mani-text-light">{STRINGS.parametersLabel}</span>{" "}

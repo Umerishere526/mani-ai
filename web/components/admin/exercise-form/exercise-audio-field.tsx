@@ -9,7 +9,7 @@ const STRINGS = dictionary.admin.forms.exercise;
 
 interface ExerciseAudioFieldProps {
   exercise?: AdminExercise;
-  audioUrl: string | null;
+  audioPath: string | null;
   durationMinutes: number | null;
   fileName: string | null;
   isUploading: boolean;
@@ -19,7 +19,7 @@ interface ExerciseAudioFieldProps {
 
 export function ExerciseAudioField({
   exercise,
-  audioUrl,
+  audioPath,
   durationMinutes,
   fileName,
   isUploading,
@@ -30,11 +30,11 @@ export function ExerciseAudioField({
     <div>
       <label className={FORM_LABEL_CLASSES}>{STRINGS.audioLabel}</label>
 
-      {audioUrl && (
+      {audioPath && (
         <div className="mb-2 rounded-mani-sm border border-mani-border bg-mani-bg-card p-3">
           <p className="text-sm text-mani-text">
             {STRINGS.audioCurrentPrefix}
-            {fileName ?? audioUrl.split("/").pop()}
+            {fileName ?? audioPath.split("/").pop()}
           </p>
           <p className="text-sm text-mani-text-muted">
             {STRINGS.audioDurationPrefix}
@@ -57,7 +57,7 @@ export function ExerciseAudioField({
 
       {isUploading && <p className="mt-1 text-sm text-mani-text-muted">{STRINGS.audioUploading}</p>}
       {uploadError && <p className="mt-1 text-sm text-mani-error">{uploadError}</p>}
-      {!exercise && !audioUrl && (
+      {!exercise && !audioPath && (
         <p className="mt-1 text-xs text-mani-text-muted">{STRINGS.audioHelper}</p>
       )}
     </div>

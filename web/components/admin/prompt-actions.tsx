@@ -1,11 +1,11 @@
-// ABOUTME: Row actions for a prompt in the Prompts list — edit, history, activate/deactivate, delete.
-// ABOUTME: Ported from mani-app's app/admin/prompts/PromptActions.tsx, restyled to Tailwind.
+// ABOUTME: Row actions for a prompt in the Prompts list — edit, history, activate/deactivate.
+// ABOUTME: Activation runs through the setPromptActive server action.
 
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import { ActionLink } from "@/components/shared";
+import { setPromptActive } from "@/lib/actions/prompts";
 import type { Prompt } from "@/types";
 import dictionary from "@/dictionaries/en.json";
 
@@ -16,38 +16,15 @@ interface PromptActionsProps {
 }
 
 export function PromptActions({ prompt }: PromptActionsProps) {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const handleToggleActive = async () => {
-    setLoading(true);
+  const handleToggleActive = () => {
     setError(null);
-    try {
-      // No backend yet — placeholder data doesn't persist this toggle.
-      console.log("toggle prompt active", prompt.id, !prompt.isActive);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : STRINGS.toggleError);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!window.confirm(STRINGS.deleteConfirm.replace("{name}", prompt.name))) return;
-
-    setLoading(true);
-    setError(null);
-    try {
-      // No backend yet — placeholder data doesn't persist this delete.
-      console.log("delete prompt", prompt.id);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : STRINGS.deleteError);
-    } finally {
-      setLoading(false);
-    }
+    startTransition(async () => {
+      const result = await setPromptActive(prompt.id, !prompt.isActive);
+      setError(result.error);
+    });
   };
 
   return (
@@ -57,11 +34,8 @@ export function PromptActions({ prompt }: PromptActionsProps) {
       <ActionLink variant="muted" href={`/admin/prompts/${prompt.id}/versions`}>
         {STRINGS.history}
       </ActionLink>
-      <ActionLink variant="muted" onClick={handleToggleActive} disabled={loading}>
+      <ActionLink variant="muted" onClick={handleToggleActive} disabled={isPending}>
         {prompt.isActive ? STRINGS.deactivate : STRINGS.activate}
-      </ActionLink>
-      <ActionLink variant="danger" onClick={handleDelete} disabled={loading}>
-        {STRINGS.delete}
       </ActionLink>
     </div>
   );

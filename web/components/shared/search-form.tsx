@@ -1,5 +1,5 @@
-// ABOUTME: Search form for the Chats list — filters threads by user email or ID.
-// ABOUTME: Ported from mani-app's app/admin/chats/ChatSearchForm.tsx, restyled to Tailwind.
+// ABOUTME: Search box for an admin list page; puts the term in the page's ?search= query.
+// ABOUTME: The page itself reads the query and asks the backend for the matching rows.
 
 "use client";
 
@@ -8,13 +8,15 @@ import { useState, useTransition, type SubmitEvent } from "react";
 import { Search } from "lucide-react";
 import dictionary from "@/dictionaries/en.json";
 
-const STRINGS = dictionary.admin.pages.chats;
+const STRINGS = dictionary.admin.search;
 
-interface ChatSearchFormProps {
+interface SearchFormProps {
+  basePath: string;
+  placeholder: string;
   initialSearch?: string;
 }
 
-export function ChatSearchForm({ initialSearch = "" }: ChatSearchFormProps) {
+export function SearchForm({ basePath, placeholder, initialSearch = "" }: SearchFormProps) {
   const router = useRouter();
   const [search, setSearch] = useState(initialSearch);
   const [isPending, startTransition] = useTransition();
@@ -26,26 +28,27 @@ export function ChatSearchForm({ initialSearch = "" }: ChatSearchFormProps) {
       if (search.trim()) {
         params.set("search", search.trim());
       }
-      router.push(`/admin/chats?${params.toString()}`);
+      router.push(`${basePath}?${params.toString()}`);
     });
   };
 
   const handleClear = () => {
     setSearch("");
     startTransition(() => {
-      router.push("/admin/chats");
+      router.push(basePath);
     });
   };
 
   return (
     <form onSubmit={handleSubmit} className="flex gap-3">
       <div className="relative max-w-md flex-1">
-        <Search size={18} className="absolute top-1/2 left-3 -translate-y-1/2 text-mani-text-light" />
+        <Search size={18} aria-hidden="true" className="absolute top-1/2 left-3 -translate-y-1/2 text-mani-text-light" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={STRINGS.searchPlaceholder}
+          placeholder={placeholder}
+          aria-label={placeholder}
           className="w-full rounded-mani-md border border-mani-border bg-mani-bg-card py-2.5 pr-3.5 pl-10 text-[0.9375rem] text-mani-text focus:border-mani-accent focus:ring-3 focus:ring-mani-accent-light focus:outline-none"
         />
       </div>

@@ -1,10 +1,11 @@
 // ABOUTME: Create/edit form for a guided exercise — basic info, category, audio upload, status.
-// ABOUTME: Ported from mani-app's components/admin/ExerciseForm.tsx, restyled to Tailwind.
+// ABOUTME: Saving runs the saveExercise server action, which creates or updates it in the backend.
 
 "use client";
 
 import { useState, useTransition, type SubmitEvent } from "react";
 import { useRouter } from "next/navigation";
+import { saveExercise } from "@/lib/actions/exercises";
 import type { AdminExercise } from "@/types";
 import dictionary from "@/dictionaries/en.json";
 import { ExerciseBasicFields } from "./exercise-basic-fields";
@@ -15,23 +16,21 @@ const COMMON = dictionary.admin.forms;
 
 interface ExerciseFormProps {
   exercise?: AdminExercise;
-  onSubmit: (formData: FormData) => Promise<AdminExercise>;
   submitLabel?: string;
 }
 
-export function ExerciseForm({ exercise, onSubmit, submitLabel = STRINGS.defaultSubmit }: ExerciseFormProps) {
+export function ExerciseForm({ exercise, submitLabel = STRINGS.defaultSubmit }: ExerciseFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showOnHomeScreen, setShowOnHomeScreen] = useState(exercise?.showOnHomeScreen ?? false);
-  const [audioUrl, setAudioUrl] = useState<string | null>(exercise?.audioUrl ?? null);
+  const [audioPath, setAudioPath] = useState<string | null>(exercise?.audioPath ?? null);
   const [durationMinutes, setDurationMinutes] = useState<number | null>(
     exercise?.durationMinutes ?? null,
   );
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
-
-  const isLibraryExercise = !showOnHomeScreen;
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleFileChange = (file: File) => {
     setIsUploading(true);
@@ -40,7 +39,7 @@ export function ExerciseForm({ exercise, onSubmit, submitLabel = STRINGS.default
     // No backend yet — a real upload extracts duration via music-metadata server-side.
     // Fakes a plausible result so the form flow is reachable end-to-end.
     window.setTimeout(() => {
-      setAudioUrl(`https://cdn.example.com/audio/${encodeURIComponent(file.name)}`);
+      setAudioPath(`exercises/${encodeURIComponent(file.name)}`);
       setDurationMinutes(Math.round((3 + Math.random() * 5) * 10) / 10);
       setFileName(file.name);
       setIsUploading(false);
@@ -51,9 +50,14 @@ export function ExerciseForm({ exercise, onSubmit, submitLabel = STRINGS.default
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
+    setSubmitError(null);
     startTransition(async () => {
-      const result = await onSubmit(formData);
-      router.push(`/admin/exercises/${result.id}`);
+      const result = await saveExercise(exercise?.id ?? null, formData);
+      if (result.error) {
+        setSubmitError(result.error);
+        return;
+      }
+      router.push(`/admin/exercises/${result.exerciseId}`);
     });
   };
 
@@ -63,23 +67,20 @@ export function ExerciseForm({ exercise, onSubmit, submitLabel = STRINGS.default
         exercise={exercise}
         showOnHomeScreen={showOnHomeScreen}
         onShowOnHomeScreenChange={setShowOnHomeScreen}
-        isLibraryExercise={isLibraryExercise}
       />
 
-      {isLibraryExercise && (
-        <ExerciseAudioField
-          exercise={exercise}
-          audioUrl={audioUrl}
-          durationMinutes={durationMinutes}
-          fileName={fileName}
-          isUploading={isUploading}
-          uploadError={uploadError}
-          onFileChange={handleFileChange}
-        />
-      )}
+      <ExerciseAudioField
+        exercise={exercise}
+        audioPath={audioPath}
+        durationMinutes={durationMinutes}
+        fileName={fileName}
+        isUploading={isUploading}
+        uploadError={uploadError}
+        onFileChange={handleFileChange}
+      />
 
-      <input type="hidden" name="audioUrl" value={audioUrl ?? ""} />
-      <input type="hidden" name="durationMinutes" value={durationMinutes ?? "0"} />
+      <input type="hidden" name="audioPath" value={audioPath ?? ""} />
+      <input type="hidden" name="durationMinutes" value={durationMinutes ?? ""} />
 
       <div>
         <label className="flex items-center gap-2">
@@ -97,10 +98,16 @@ export function ExerciseForm({ exercise, onSubmit, submitLabel = STRINGS.default
         <p className="mt-1 text-xs text-mani-text-muted">{STRINGS.activeHelper}</p>
       </div>
 
+      {submitError && (
+        <div role="alert" className="rounded-mani-md bg-mani-error-light p-3 text-sm text-mani-error">
+          {submitError}
+        </div>
+      )}
+
       <div className="flex items-center gap-3 pt-4">
         <button
           type="submit"
-          disabled={isPending || isUploading || (!exercise && isLibraryExercise && !audioUrl)}
+          disabled={isPending || isUploading || !audioPath}
           className="inline-flex items-center justify-center gap-2 rounded-mani-md bg-mani-accent px-5 py-2.5 text-[0.9375rem] font-medium text-white shadow-mani-sm transition-colors duration-200 hover:bg-mani-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isPending ? COMMON.saving : submitLabel}

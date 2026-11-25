@@ -1,11 +1,11 @@
 // ABOUTME: Row actions for an exercise in the Exercises library — edit, activate/deactivate, delete.
-// ABOUTME: Ported from mani-app's app/admin/exercises/ExerciseActions.tsx, restyled to Tailwind.
+// ABOUTME: Activation and deletion run through the exercise server actions.
 
 "use client";
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { deleteExercise, updateExerciseFields } from "@/lib/actions/exercises";
 import type { AdminExercise } from "@/types";
 import dictionary from "@/dictionaries/en.json";
 
@@ -21,29 +21,30 @@ const DANGER_BUTTON =
   "rounded-mani-md border border-mani-border px-3 py-1.5 text-sm font-medium text-mani-error transition-colors duration-200 hover:border-mani-text-light hover:bg-mani-bg disabled:cursor-not-allowed disabled:opacity-50";
 
 export function ExerciseActions({ exercise }: ExerciseActionsProps) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleToggleActive = () => {
+    setError(null);
     startTransition(async () => {
-      // No backend yet — placeholder data doesn't persist this toggle.
-      console.log("toggle exercise active", exercise.id, !exercise.isActive);
-      router.refresh();
+      const result = await updateExerciseFields(exercise.id, { isActive: !exercise.isActive });
+      setError(result.error);
     });
   };
 
   const handleDelete = () => {
+    setError(null);
     startTransition(async () => {
-      // No backend yet — placeholder data doesn't persist this delete.
-      console.log("delete exercise", exercise.id);
+      const result = await deleteExercise(exercise.id);
+      setError(result.error);
       setShowDeleteConfirm(false);
-      router.refresh();
     });
   };
 
   return (
     <div className="flex items-center justify-end gap-2">
+      {error && <span className="text-sm text-mani-error">{error}</span>}
       <Link href={`/admin/exercises/${exercise.id}`} className={SECONDARY_BUTTON}>
         {STRINGS.edit}
       </Link>

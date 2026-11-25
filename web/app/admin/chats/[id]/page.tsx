@@ -1,10 +1,10 @@
 // ABOUTME: Admin page showing one chat thread's header info and full transcript.
-// ABOUTME: Ported from mani-app's app/admin/chats/[id]/page.tsx.
+// ABOUTME: Reads the transcript from the backend, which logs every read.
 
 import { notFound } from "next/navigation";
 import { BackLink, Badge } from "@/components/shared";
 import { ChatTranscript } from "@/components/admin/chat-transcript";
-import { getThreadById, getThreadMessages } from "@/lib/placeholder-threads";
+import { getTranscript } from "@/lib/api/threads";
 import dictionary from "@/dictionaries/en.json";
 
 const STRINGS = dictionary.admin.pages.chats;
@@ -15,12 +15,12 @@ interface ChatDetailPageProps {
 
 export default async function ChatDetailPage({ params }: ChatDetailPageProps) {
   const { id } = await params;
-  const thread = getThreadById(id);
-  const messages = getThreadMessages(id);
+  const transcript = await getTranscript(id);
 
-  if (!thread) {
+  if (!transcript) {
     notFound();
   }
+  const { thread, messages } = transcript;
 
   return (
     <div>

@@ -3,11 +3,8 @@
 
 import { z } from "zod";
 
-const PROMPT_TYPES = ["system", "user", "assistant", "function"] as const;
-
 export const promptFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
-  type: z.enum(PROMPT_TYPES),
   description: z.string().max(500).optional(),
   content: z.string().min(1, "Content is required"),
   modelId: z.string().optional(),

@@ -1,20 +1,16 @@
 // ABOUTME: Types for the admin Prompts section — a prompt and its version history.
-// ABOUTME: Ported from mani-app's lib/schema/prompts.ts, narrowed to what the UI renders.
-
-export type PromptType = "system" | "user" | "assistant" | "function";
+// ABOUTME: The shapes the backend's /v1/admin/prompts endpoints return, in camelCase.
 
 export interface Prompt {
   id: string;
   name: string;
-  type: PromptType;
-  description: string | null;
+  description: string;
   content: string;
   modelId: string | null;
   modelParameters: Record<string, unknown>;
+  routing: Record<string, unknown>;
   version: number;
   isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface PromptVersion {
@@ -24,6 +20,7 @@ export interface PromptVersion {
   content: string;
   modelId: string | null;
   modelParameters: Record<string, unknown>;
+  routing: Record<string, unknown>;
   changeSummary: string | null;
   createdAt: string;
 }

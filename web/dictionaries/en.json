@@ -14,13 +14,19 @@
       "prompts": "Prompts",
       "exercises": "Exercises",
       "chats": "Chats",
+      "crisisEvents": "Crisis events",
+      "feedback": "Feedback",
       "adminBadge": "Admin",
       "signOut": "Sign out"
+    },
+    "search": {
+      "searchButton": "Search",
+      "searching": "Searching...",
+      "clearButton": "Clear"
     },
     "forms": {
       "cancel": "Cancel",
       "saving": "Saving...",
-      "genericError": "An error occurred",
       "prompt": {
         "nameLabel": "Name",
         "namePlaceholder": "mani_system",
@@ -48,7 +54,7 @@
         "descriptionLabel": "Description",
         "descriptionPlaceholder": "A brief description of what this exercise does...",
         "showOnHomeScreenLabel": "Show on Home Screen",
-        "showOnHomeScreenHelper": "Home screen exercises appear as quick-action cards. They don't require audio or a category.",
+        "showOnHomeScreenHelper": "Home screen exercises appear as quick-action cards on the mobile app home screen.",
         "categoryLabel": "Category",
         "displayOrderLabel": "Display Order",
         "displayOrderHelper": "Lower numbers appear first within the category",
@@ -61,7 +67,8 @@
         "audioHelper": "Upload an MP3 file. Duration will be extracted automatically.",
         "activeLabel": "Active",
         "activeHelper": "Inactive exercises are hidden from users",
-        "defaultSubmit": "Save Exercise"
+        "defaultSubmit": "Save Exercise",
+        "invalidInput": "Title, category and an uploaded audio file are required."
       },
       "categories": {
         "EmotionalIntelligence": "Emotional Intelligence",
@@ -90,23 +97,18 @@
         "colModel": "Model",
         "colVersion": "Version",
         "colStatus": "Status",
-        "colUpdated": "Updated",
         "colActions": "Actions",
         "versionPrefix": "v",
         "backToPrompts": "Back to Prompts",
         "backToPromptPrefix": "Back to ",
         "viewHistory": "View History",
         "createNewTitle": "Create New Prompt",
-        "editSubtitle": "Version {version} • Last updated {date}",
+        "editSubtitle": "Version {version}",
         "actions": {
           "edit": "Edit",
           "history": "History",
           "deactivate": "Deactivate",
-          "activate": "Activate",
-          "delete": "Delete",
-          "toggleError": "Failed to toggle status",
-          "deleteError": "Failed to delete prompt",
-          "deleteConfirm": "Are you sure you want to delete \"{name}\"?"
+          "activate": "Activate"
         },
         "versions": {
           "title": "Version History",
@@ -119,8 +121,11 @@
           "rollbackButton": "Rollback to this version",
           "rollbackConfirm": "Are you sure you want to rollback to version {version}? This will create a new version ({nextVersion}) with the content from version {version}.",
           "rollbackError": "Failed to rollback",
-          "rollingBack": "Rolling back..."
-        }
+          "rollingBack": "Rolling back...",
+          "rollbackSummary": "Rolled back to version {version}"
+        },
+        "defaultModel": "Backend default",
+        "invalidInput": "Check the highlighted fields and try again."
       },
       "exercises": {
         "title": "Exercises",
@@ -151,9 +156,7 @@
           "editButton": "Edit",
           "saveButton": "Save",
           "cancelButton": "Cancel",
-          "deleteButton": "Delete",
-          "removeError": "Failed to remove",
-          "updateError": "Failed to update"
+          "deleteButton": "Delete"
         },
         "actions": {
           "edit": "Edit",
@@ -168,9 +171,6 @@
         "title": "Chat Threads",
         "description": "View user conversations for customer support. Search by user email or ID.",
         "searchPlaceholder": "Search by email or user ID...",
-        "searchButton": "Search",
-        "searching": "Searching...",
-        "clearButton": "Clear",
         "empty": "No chat threads yet",
         "emptySearch": "No threads found matching \"{search}\"",
         "colUser": "User",
@@ -196,7 +196,38 @@
         "startedPrefix": "Started ",
         "emptyTranscript": "No messages in this conversation",
         "roleUser": "User",
-        "roleMani": "Mani"
+        "roleMani": "Mani",
+        "olderLink": "Older conversations"
+      },
+      "crisisEvents": {
+        "title": "Crisis events",
+        "description": "Crisis moments no admin has resolved yet, newest first. Read the conversation, then record what was done.",
+        "empty": "No unresolved crisis events",
+        "colDetected": "Detected",
+        "colReason": "Reason",
+        "colConversation": "Conversation",
+        "colResolve": "Resolve",
+        "viewConversation": "Read conversation",
+        "resolutionLabel": "What was done",
+        "resolutionPlaceholder": "What was done",
+        "resolutionRequired": "Describe what was done before resolving.",
+        "resolveButton": "Resolve",
+        "resolving": "Resolving..."
+      },
+      "feedback": {
+        "title": "Exercise feedback",
+        "description": "How people rated library exercises, most recently changed first. Search by email.",
+        "searchPlaceholder": "Search by email...",
+        "empty": "No exercise feedback yet",
+        "emptySearch": "No feedback found matching \"{search}\"",
+        "colUser": "User",
+        "colExercise": "Exercise",
+        "colRating": "Rating",
+        "colReason": "Reason",
+        "colUpdated": "Updated",
+        "ratingUp": "Helpful",
+        "ratingDown": "Not helpful",
+        "noReason": "No reason given"
       },
       "login": {
         "title": "Mani Admin",

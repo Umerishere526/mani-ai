@@ -14,14 +14,12 @@ interface ExerciseBasicFieldsProps {
   exercise?: AdminExercise;
   showOnHomeScreen: boolean;
   onShowOnHomeScreenChange: (value: boolean) => void;
-  isLibraryExercise: boolean;
 }
 
 export function ExerciseBasicFields({
   exercise,
   showOnHomeScreen,
   onShowOnHomeScreenChange,
-  isLibraryExercise,
 }: ExerciseBasicFieldsProps) {
   return (
     <>
@@ -72,26 +70,24 @@ export function ExerciseBasicFields({
         <p className={FORM_HELPER_CLASSES}>{STRINGS.showOnHomeScreenHelper}</p>
       </div>
 
-      {isLibraryExercise && (
-        <div>
-          <label htmlFor="category" className={FORM_LABEL_CLASSES}>
-            {STRINGS.categoryLabel}
-          </label>
-          <select
-            id="category"
-            name="category"
-            required={isLibraryExercise}
-            defaultValue={exercise?.category ?? "Anxiety"}
-            className={FORM_INPUT_CLASSES}
-          >
-            {CATEGORIES.map((cat) => (
-              <option key={cat.value} value={cat.value}>
-                {cat.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      <div>
+        <label htmlFor="category" className={FORM_LABEL_CLASSES}>
+          {STRINGS.categoryLabel}
+        </label>
+        <select
+          id="category"
+          name="category"
+          required
+          defaultValue={exercise?.category ?? "Anxiety"}
+          className={FORM_INPUT_CLASSES}
+        >
+          {CATEGORIES.map((cat) => (
+            <option key={cat.value} value={cat.value}>
+              {cat.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
       <div>
         <label htmlFor="displayOrder" className={FORM_LABEL_CLASSES}>

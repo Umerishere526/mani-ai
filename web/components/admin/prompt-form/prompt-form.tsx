@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { promptFormSchema, type PromptFormValues } from "@/lib/schema";
+import { createPrompt, updatePrompt } from "@/lib/actions/prompts";
 import type { Prompt } from "@/types";
 import dictionary from "@/dictionaries/en.json";
 import { isModelPrompt } from "./is-model-prompt";
@@ -37,7 +38,6 @@ export function PromptForm({ prompt, mode }: PromptFormProps) {
     resolver: zodResolver(promptFormSchema),
     defaultValues: {
       name: prompt?.name ?? "",
-      type: prompt?.type ?? "system",
       description: prompt?.description ?? "",
       content: prompt?.content ?? "",
       modelId: prompt?.modelId ?? "",
@@ -51,16 +51,12 @@ export function PromptForm({ prompt, mode }: PromptFormProps) {
 
   const onSubmit = async (data: PromptFormValues) => {
     setSubmitError(null);
-
-    try {
-      // No backend yet — see Stage 4 plan in the mani-mobile-ui-port journal precedent.
-      console.log("prompt form submit", { mode, promptId: prompt?.id, data });
-
-      router.push("/admin/prompts");
-      router.refresh();
-    } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : STRINGS.genericError);
+    const result = mode === "create" ? await createPrompt(data) : await updatePrompt(prompt?.id ?? "", data);
+    if (result.error) {
+      setSubmitError(result.error);
+      return;
     }
+    router.push("/admin/prompts");
   };
 
   return (
