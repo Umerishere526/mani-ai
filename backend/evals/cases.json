@@ -779,14 +779,52 @@
    ],
    "reference": null,
    "facts": [
-    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel, warmly, in a sentence or two (in Directive, one), carrying their new way of seeing it forward. Offer a next step only if their answer shows they still need help with what they came for; otherwise end there, with no question. Recap nothing: code closes the set and shows the closing buttons.",
+    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel, warmly, in a sentence or two (in Directive, one), never calling the set a success. Recap nothing and force no question: if it didn't help or they feel the same, ask what they still need; otherwise offer a next step only if one would clearly help, or check they got what they came for only if that is unclear. Code closes the set and shows the closing buttons.",
     "They finished in this conversation: abcde. Never offer a set again.",
     "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
    ],
    "open_chat": false,
    "checks": {
     "max_questions": 0,
-    "judge": "They say they feel clearer. The reply answers warmly, carrying their new way of seeing it forward, and ends there: it asks no question (no 'would you like a next step?', no 'anything else?') and recaps nothing."
+    "judge": "They say they feel clearer. The reply answers warmly and ends there: it never calls the set a success, asks no question (no 'would you like a next step?', no 'anything else?') and recaps nothing."
+   }
+  },
+  {
+   "id": "rule-after-check-didnt-help",
+   "style": "Directive",
+   "opener": "How can I help you today?",
+   "turns": [
+    {
+     "role": "user",
+     "content": "my boss keeps piling work on me and i never say no. i feel like i'm not handling things well"
+    },
+    {
+     "role": "assistant",
+     "content": "You take it all on, and then you feel like you're the one failing. It sounds like saying no feels like letting people down. Is that it?"
+    },
+    {
+     "role": "user",
+     "content": "yeah exactly. if i say no they'll think i can't cope"
+    },
+    {
+     "role": "assistant",
+     "content": "That's a strong shift. How are you feeling now?"
+    },
+    {
+     "role": "user",
+     "content": "It didn't help"
+    }
+   ],
+   "reference": null,
+   "facts": [
+    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel, warmly, in a sentence or two (in Directive, one), never calling the set a success. Recap nothing and force no question: if it didn't help or they feel the same, ask what they still need; otherwise offer a next step only if one would clearly help, or check they got what they came for only if that is unclear. Code closes the set and shows the closing buttons.",
+    "They finished in this conversation: abcde. Never offer a set again.",
+    "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
+   ],
+   "open_chat": false,
+   "checks": {
+    "max_questions": 1,
+    "judge": "They tapped It didn't help (Lolly, 2026-11-23: the options must let them say something has not helped). The reply takes that plainly, never calls the set a success or says they made progress, and asks at most one question, about what they still need. It FAILS if it presents the exercise as having worked, argues that it helped, or closes without checking what they still need."
    }
   },
   {
@@ -1100,7 +1138,7 @@
     }
    ],
    "facts": [
-    "ABCDE is running. You are on stage `belief` (its line, already said: \"B is for Belief.\"). Stay on it while it helps. If its purpose is met, move to `consequence` and say its line: \"C is for Consequences.\". Never move further than that.",
+    "ABCDE is running. You are on stage `belief` (its line, already said: \"B is for Belief.\"). Stay on it while it helps. If its purpose is met, move to `consequence` and say its line: \"C is for Consequences.\". Never move further than that. If they say they already have what they came for, never push on through the steps left: ask how they feel now and set action to finish.",
     "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
    ],
    "open_chat": false,
@@ -1228,7 +1266,7 @@
    ],
    "reference": null,
    "facts": [
-    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel, warmly, in a sentence or two (in Directive, one), carrying their new way of seeing it forward. Offer a next step only if their answer shows they still need help with what they came for; otherwise end there, with no question. Recap nothing: code closes the set and shows the closing buttons.",
+    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel, warmly, in a sentence or two (in Directive, one), never calling the set a success. Recap nothing and force no question: if it didn't help or they feel the same, ask what they still need; otherwise offer a next step only if one would clearly help, or check they got what they came for only if that is unclear. Code closes the set and shows the closing buttons.",
     "They finished in this conversation: abcde. Never offer a set again.",
     "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
    ],
