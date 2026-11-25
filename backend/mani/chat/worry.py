@@ -31,10 +31,9 @@ class Phase(StrEnum):
 
 class Standing(BaseModel):
     """Where safety stands before their message. `about` is whose danger the open worry is about, and is None while
-    nothing is open. `settled`: a worry of theirs settled earlier in this conversation. `reset`: the worry the
-    conversation held was settled by their word elsewhere that they are all right. `calm`: how many messages in a row
-    were read as no concern while the worry stayed open. `end_check`: Mani's last reply asked the safety question after
-    a framework's last stage, so this message answers it."""
+    nothing is open. `settled`: a worry of theirs settled earlier in this conversation. `calm`: how many messages in a
+    row were read as no concern while the worry stayed open. `end_check`: Mani's last reply asked the safety question
+    after a framework's last stage, so this message answers it."""
 
     model_config = {"frozen": True}
 
@@ -42,7 +41,6 @@ class Standing(BaseModel):
     about: str | None
     phase: Phase
     settled: bool = False
-    reset: bool = False
     calm: int = 0
     end_check: bool = False
 
@@ -62,19 +60,11 @@ class Outcome:
 
 
 def standing(ctx: TurnContext, check: ReturnCheck | None, answering: str | None) -> Standing:
-    """Where the conversation stands as this turn begins. A conversation still holding a worry that began before they
-    said, in any conversation, that they are all right stands settled: the pause began in one that was never answered
-    in, and its next message used to pause with no word from Mani."""
+    """Where the conversation stands as this turn begins."""
     record = ctx.thread.understanding or {}
-    state, about = State(ctx.thread.safety), record.get(rec.ABOUT)
-    latest = ctx.pause
-    reset = (state is not State.CLEAR and latest is not None and latest.checked_at is not None
-             and latest.checked_at > ctx.thread.last_message_at)
-    if reset:
-        state, about = State.CLEAR, None
     phase = Phase.ASKING if check is not None else Phase.ANSWERING if answering is not None else Phase.ORDINARY
-    return Standing(state=state, about=about, phase=phase, settled=bool(record.get(rec.SAFETY_SETTLED)), reset=reset,
-                    calm=0 if reset else record.get(rec.CALM, 0),
+    return Standing(state=State(ctx.thread.safety), about=record.get(rec.ABOUT), phase=phase,
+                    settled=bool(record.get(rec.SAFETY_SETTLED)), calm=record.get(rec.CALM, 0),
                     end_check=rec.end_check(record) == rec.END_CHECK_ASKED)
 
 
@@ -129,7 +119,7 @@ def step(stood: Standing, read: Safety) -> Outcome:
     return Outcome(
         state=after, about=about if after is not State.CLEAR else None,
         pausing=after is State.DANGER and kind_pauses and not read.help_in_place and goes_on,
-        settled_now=stood.reset or (stood.state is not State.CLEAR and after is State.CLEAR),
+        settled_now=stood.state is not State.CLEAR and after is State.CLEAR,
         body_emergency=body_emergency, calm=stood.calm + 1 if waits else 0,
     )
 

@@ -47,14 +47,12 @@ async def opening(user: CurrentUser, conn: UserConn) -> OpeningOut:
     """What a new conversation opens with, for a client to show before the person has written anything. Writes
     nothing: the conversation is created by their first message (`start`)."""
     pause = await pauses.active(conn, user.user_id)
-    # A pause that has run out and was never answered is asked about first, in place of the style's opener.
-    owed = await pauses.owed(conn, user.user_id, threads.RECENT_CRISIS_DAYS)
     return OpeningOut(
         chat_paused_from=pause.started_at if pause else None,
         chat_paused_until=pause.ends_at if pause else None,
         greeting=await chat_turn.opening_greeting(conn, user.user_id),
         style_options=greeting.STYLE_OPTIONS,
-        openers=greeting.openers(owed is not None),
+        openers=greeting.OPENERS,
     )
 
 

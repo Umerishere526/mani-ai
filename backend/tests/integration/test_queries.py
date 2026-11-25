@@ -413,10 +413,7 @@ async def test_a_pause_is_active_until_it_ends(alice):
 
     started = await pauses.start(alice, ALICE, thread.id, 30, "crisis")
     found = await pauses.active(alice, ALICE)
-    assert found is not None and found.id == started.id and found.checked_at is None
-
-    await pauses.mark_checked(alice, started.id)
-    assert (await pauses.active(alice, ALICE)).checked_at is not None
+    assert found is not None and found.id == started.id
 
 
 async def test_the_active_pause_is_the_users_own_and_the_latest(alice):
@@ -439,12 +436,12 @@ async def test_the_active_pause_is_the_users_own_and_the_latest(alice):
     assert await pauses.active(alice, ALICE) is None
 
 
-async def test_a_new_chat_carries_nothing_from_an_earlier_one_but_the_safety_check(alice):
-    """Each chat stands alone, even when the person comes back with the same issue (muhammad, 2026-11-18). Only the
-    safety check after a pause crosses over."""
+async def test_a_new_chat_carries_nothing_from_an_earlier_one_not_even_its_pause(alice):
+    """Each chat stands alone, even when the person comes back with the same issue (muhammad, 2026-11-18), and a pause
+    in an earlier chat is asked about only there (muhammad, 2026-11-25)."""
     earlier = await threads.create(alice, ALICE)
     await messages.create_pair(alice, earlier.id, "my flatmate never cleans and i'm so done", "That sounds tiring.")
-    # A pause of no minutes ends the moment it starts, so the next chat owes the check whether they are all right.
+    # A pause of no minutes ends the moment it starts, so the earlier chat owes the check whether they are all right.
     await pauses.start(alice, ALICE, earlier.id, 0, "crisis")
 
     later = await threads.create(alice, ALICE)
@@ -454,4 +451,5 @@ async def test_a_new_chat_carries_nothing_from_an_earlier_one_but_the_safety_che
                                  ctx, summary_due=False)
 
     assert "flatmate" not in system.lower()
-    assert pause.return_check(ctx) is not None
+    assert ctx.pause is None and pause.return_check(ctx) is None
+    assert (await threads.load_turn_context(alice, earlier.id, ALICE)).pause is not None

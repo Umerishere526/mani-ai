@@ -1,5 +1,5 @@
-# ABOUTME: Saves the thread state a turn is about to overwrite and the pause it marks checked, and puts both back when
-# ABOUTME: that turn's message is edited. One turn back only: the snapshot is replaced by every turn and cleared once used.
+# ABOUTME: Saves the thread state a turn is about to overwrite, and puts it back when that turn's message is edited.
+# ABOUTME: One turn back only: the snapshot is replaced by every turn and cleared once used.
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import uuid
 import asyncpg
 
 from mani.chat.greeting import OPENING_MESSAGES
-from mani.db import pauses, threads
+from mani.db import threads
 from mani.db.threads import TurnContext, load_turn_context
 from mani.errors import ErrorCategory, ServiceError
 from mani.models.rows import TechniqueState
@@ -18,10 +18,6 @@ _REFUSALS = {
     "tapped": (ErrorCategory.CONFLICT, "A message sent by tapping an option cannot be edited."),
     "not_last": (ErrorCategory.CONFLICT, "Only your last message can be edited."),
 }
-
-# The snapshot's key for the pause the turn marked checked, written after the turn reads the answer.
-_CHECKED_PAUSE = "checked_pause"
-
 
 def snapshot_of(ctx: TurnContext) -> dict:
     """What the turn about to run will overwrite, as JSON."""
@@ -37,17 +33,6 @@ async def save(conn: asyncpg.Connection, ctx: TurnContext, user_id: uuid.UUID | 
     await conn.execute(
         "update public.threads set rewind_snapshot = $1::jsonb where id = $2 and user_id = $3",
         snapshot_of(ctx), ctx.thread.id, user_id,
-    )
-
-
-async def note_checked(
-    conn: asyncpg.Connection, thread_id: uuid.UUID | str, user_id: uuid.UUID | str, pause_id: uuid.UUID | str
-) -> None:
-    """Keep in the snapshot the pause this turn marked checked, so an edit of the turn asks how things are again."""
-    await conn.execute(
-        "update public.threads set rewind_snapshot = rewind_snapshot || jsonb_build_object($1::text, $2::text) "
-        "where id = $3 and user_id = $4",
-        _CHECKED_PAUSE, str(pause_id), thread_id, user_id,
     )
 
 
@@ -93,8 +78,6 @@ async def _restore(conn: asyncpg.Connection, user_id, thread_id, snapshot: dict)
         snapshot["understanding"], thread_id, user_id,
     )
     await threads.set_safety(conn, thread_id, user_id, snapshot.get("safety") or "clear")
-    if (checked := snapshot.get(_CHECKED_PAUSE)) is not None:
-        await pauses.clear_checked(conn, checked)
     if snapshot["technique"] is None:
         await conn.execute("delete from public.thread_technique_state where thread_id = $1", thread_id)
     else:

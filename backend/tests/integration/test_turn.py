@@ -441,25 +441,6 @@ async def test_editing_after_a_finishing_turn_restores_the_framework_state(alice
     assert technique.phase == "effective" and "abcde" not in (row.understanding.get("finished") or [])
 
 
-async def test_a_return_check_answer_that_is_fine_marks_the_pause_checked(alice, model):
-    model(said("Call now.", safety=DANGER), said("Please call.", safety=DANGER), said("How are things now?"),
-          said("Good to hear it."))
-    thread = await start(alice)
-    await send(alice, thread.id, "i took pills")
-    await send(alice, thread.id, "alone")
-    from mani.db import pool
-
-    async with pool.as_admin() as conn:
-        await conn.execute("update public.chat_pauses set ends_at = now() - interval '1 minute' where user_id = $1",
-                           ALICE)
-    asked = await send(alice, thread.id, "back now")
-    assert asked.paused_until is None
-    await send(alice, thread.id, "i'm okay, my sister is here")
-    async with pool.as_admin() as conn:
-        checked = await conn.fetchval("select checked_at is not null from public.chat_pauses where user_id = $1", ALICE)
-    assert checked is True
-
-
 async def _a_pause_that_has_run_out(alice, model_replies, model):
     """A conversation paused on danger whose pause has since run out, and the scripted model."""
     from mani.db import pool
@@ -474,40 +455,57 @@ async def _a_pause_that_has_run_out(alice, model_replies, model):
     return scripted, paused_in
 
 
-async def test_editing_the_answer_that_marked_a_pause_checked_asks_the_question_again(alice, model):
-    """An answer of "I'm fine" marks the pause checked; edited to something unsure, the mark goes with it, so the pause
-    still owes the question until they say they are all right."""
-    from mani.db import pool
+async def test_the_first_message_back_in_the_paused_conversation_is_asked_about_and_a_safe_answer_settles_it(
+    alice, model
+):
+    """muhammad, 2026-11-25: the conversation the pause began in still reads the first message back for safety, with
+    code's question, and their answer that they are safe settles that conversation."""
+    scripted, paused_in = await _a_pause_that_has_run_out(alice, [said("How are things now?"), said("Good to hear it.")],
+                                                          model)
+    asked = await send(alice, paused_in.id, "back now")
+    assert asked.content == crisis.RETURN_CHECK_REPLY and asked.paused_until is None
+    assert "Their chat was paused earlier because of a safety worry (took pills)" in facts_of(scripted)
 
+    answered = await send(alice, paused_in.id, "i'm okay, my sister is here")
+    assert answered.content == "Good to hear it." and answered.paused_until is None
+    assert "This message answers it: judge it for safety." in facts_of(scripted)
+    assert (await thread_row(alice, paused_in.id)).safety == "clear"
+
+
+async def test_an_edited_answer_to_the_question_after_a_pause_is_read_as_the_answer_again(alice, model):
+    """An edit restores the conversation to Mani's question, so the edited message is judged as its answer."""
     unsure = Safety(level="unsure", about="themselves")
-    _, thread = await _a_pause_that_has_run_out(
+    scripted, thread = await _a_pause_that_has_run_out(
         alice, [said("How are things now?"), said("Good to hear it."), said("I'm here. What feels shaky?", safety=unsure)],
         model)
     await send(alice, thread.id, "back now")
     await send(alice, thread.id, "i'm fine")
 
-    async def checked() -> bool:
-        async with pool.as_admin() as conn:
-            return await conn.fetchval("select checked_at is not null from public.chat_pauses where user_id = $1", ALICE)
-
-    assert await checked() is True
     edited = await runner.edit(alice, thread.id, await last_user_message_id(thread.id), "not really, still shaky")
+
     assert edited.content == "I'm here. What feels shaky?"
-    assert await checked() is False
+    assert "This message answers it: judge it for safety." in facts_of(scripted)
 
 
-async def test_the_conversation_paused_in_stops_asking_once_they_said_elsewhere_they_are_all_right(alice, model):
-    """muhammad, 2026-11-19: until they say they are all right, in any conversation. The conversation the pause began in
-    went on asking, and kept its danger, so its next message could pause with no word from Mani."""
-    scripted, paused_in = await _a_pause_that_has_run_out(
-        alice, [said("Good to hear it."), said("I'm here with you.", safety=DANGER)], model)
-    elsewhere = await start(alice)
-    await send(alice, elsewhere.id, "i'm okay, my sister is here")
+async def test_a_new_conversation_after_a_pause_opens_normally_and_never_raises_it(alice, model):
+    """Lolly, 2026-11-25: a new chat opened with the question about a pause, then told her what Mani had been worried
+    about. A new conversation opens with the style's own opener, answers their first message as written, and nothing
+    of the pause reaches its facts."""
+    from mani.chat.greeting import OPENERS
+    from mani.chat.record import RETURN_CHECK
 
-    back = await send(alice, paused_in.id, "i feel awful again")
+    scripted, _ = await _a_pause_that_has_run_out(alice, [said("What would help most today?")], model)
+    fresh = await start(alice, style=None)
 
-    assert back.paused_until is None and back.content == "I'm here with you."
-    assert "paused earlier" not in facts_of(scripted)
+    opened = await send(alice, fresh.id, "Directive")
+    answered = await send(alice, fresh.id, "work has been a lot this week")
+
+    assert opened.content == OPENERS["directive"] and scripted.calls == 3
+    assert answered.content == "What would help most today?" and answered.paused_until is None
+    facts = facts_of(scripted)
+    assert "paus" not in facts and "took pills" not in facts and "answers it" not in facts
+    row = await thread_row(alice, fresh.id)
+    assert row.safety == "clear" and RETURN_CHECK not in (row.understanding or {})
 
 
 async def test_the_first_message_back_after_a_pause_never_agrees_to_carry_on_whatever_the_model_wrote(alice, model):
@@ -522,21 +520,6 @@ async def test_the_first_message_back_after_a_pause_never_agrees_to_carry_on_wha
 
     assert back.content == crisis.RETURN_DANGER_REPLY and back.paused_until is None
     assert (await thread_row(alice, paused_in.id)).safety == "danger"
-
-
-async def test_the_answer_to_the_question_a_new_conversation_opens_with_is_never_refused_for_a_limit(
-    alice, model, monkeypatch
-):
-    """The answer is a safety turn like any other held one: it is answered whatever the limits say."""
-    from mani.config import get_settings
-
-    _, _ = await _a_pause_that_has_run_out(alice, [said("Good to hear it.")], model)
-    elsewhere = await start(alice)
-    monkeypatch.setattr(get_settings(), "minute_message_limit", 1)
-
-    answered = await send(alice, elsewhere.id, "i'm okay, my sister is here")
-
-    assert answered.content == "Good to hear it."
 
 
 CHEST = Safety(level="unsure", about="body", symptom_now="unsaid")
@@ -625,23 +608,6 @@ async def test_an_empty_reply_to_the_lead_in_gets_the_fixed_reply_not_the_steps_
     turn = await send(alice, thread.id, "maybe look at what i've managed")
     assert turn.content == crisis.TROUBLE_REPLY and turn.prompts == []
     assert (await technique_of(alice, thread.id)).phase == "offering"
-
-
-async def test_an_owed_return_check_comes_before_the_five_steps(alice, model):
-    """A pause elsewhere that has run out owes the question how things are; a lead-in tap does not jump it."""
-    from mani.db import pool
-
-    scripted = model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"), said("Before that, how are things now?"))
-    thread = await start(alice)
-    await warm_up(alice, thread.id)
-    await send(alice, thread.id, "i feel like a pushover")
-    other = await start(alice)
-    async with pool.as_admin() as conn:
-        await conn.execute(
-            "insert into public.chat_pauses (user_id, thread_id, started_at, ends_at, reason) "
-            "values ($1, $2, now() - interval '20 minutes', now() - interval '5 minutes', 'took pills')", ALICE, other.id)
-    turn = await send(alice, thread.id, "Not sure")
-    assert scripted.calls == 4 and turn.content == crisis.RETURN_CHECK_REPLY
 
 
 def offers_in(schema: type) -> list[str] | None:

@@ -15,7 +15,7 @@ import asyncpg
 from mani.auth.jwt import Claims
 from mani.chat import crisis, decide as decide_mod, facts, pause, questions, record as rec, rewind, safety, taps, worry
 from mani.chat.greeting import (
-    COPIED_BACK, STYLE_OPTIONS, greeting, openers, resolve_style,
+    COPIED_BACK, OPENERS, STYLE_OPTIONS, greeting, resolve_style,
 )
 from mani.chat.repairs import clean_title, sent_text, start_buttons
 from mani.chat.reply import TurnReply, shaped
@@ -282,7 +282,7 @@ async def _apply(
     )
     await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
     flagged = await _record_danger(conn, ctx, stood.state, judgment, pair)
-    paused = await _pause_writes(conn, ctx, judgment, reply, answering=answering, pair=pair,
+    paused = await _pause_writes(conn, ctx, judgment, reply, pair=pair,
                                  seconds=settings.crisis_pause_seconds)
     trace = {key: value for key, value in {
         "action": reply.action, "framework": reply.framework, "stage": reply.stage,
@@ -361,13 +361,10 @@ async def _record_danger(conn, ctx, before: safety.State, judgment, pair) -> boo
     return True
 
 
-async def _pause_writes(conn, ctx, judgment, reply: TurnReply, *, answering, pair, seconds):
-    """An answer to the return check that settles it marks that pause checked; a pausing turn starts a pause."""
+async def _pause_writes(conn, ctx, judgment, reply: TurnReply, *, pair, seconds):
+    """A pausing turn starts a pause."""
     if pair.was_duplicate:
         return None
-    if answering is not None and judgment.state is safety.State.CLEAR:
-        await pauses.mark_checked(conn, answering)
-        await rewind.note_checked(conn, ctx.thread.id, ctx.thread.user_id, answering)
     if judgment.pausing:
         return await pauses.start(conn, ctx.thread.user_id, ctx.thread.id, seconds, reply.safety.why)
     return None
@@ -432,16 +429,11 @@ async def _fixed_step(conn, ctx, content, text: str, prompts: list[SmartPrompt],
 
 
 async def _open_in_style(conn, ctx, content: str, style: SupportStyle, client_message_id) -> Turn:
-    """The chosen style, with that style's fixed opener and no model call. While a pause that has run out still owes
-    the question how things are, that question is the opener, and it is recorded as asked."""
-    check = pause.return_check(ctx)
-    reply = openers(check is not None)[style.value]
+    """The chosen style, with that style's fixed opener and no model call."""
+    reply = OPENERS[style.value]
     pair = await messages_db.create_pair(conn, ctx.thread.id, content, reply, selected_prompt=content.strip(),
                                          client_message_id=client_message_id)
-    updates = threads.ThreadUpdates(conversation_style=style)
-    if check is not None and not pair.was_duplicate:
-        updates.understanding = rec.return_check(ctx.thread.understanding or {}, str(check.pause_id), "asked")
-    await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
+    await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, threads.ThreadUpdates(conversation_style=style))
     return Turn(message_id=pair.mani_message_id, content=reply, created_at=pair.created_at, title=ctx.thread.title)
 
 

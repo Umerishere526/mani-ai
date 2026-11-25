@@ -181,11 +181,10 @@ async def _a_thread() -> uuid.UUID:
         return (await turn.start_thread(conn, claims_for(ALICE))).id
 
 
-async def test_the_opening_asks_about_a_pause_that_ran_out_until_they_have_answered(api):
-    """muhammad, 2026-11-16: back after a pause, a new conversation opens with the question about the pause in every
-    style, in place of the style's opener, until they have said they are all right. Reading the opening writes
-    nothing."""
-    from mani.chat.greeting import OPENERS, RETURN_OPENER
+async def test_the_opening_after_a_pause_ran_out_is_the_greeting_and_the_style_buttons(api):
+    """Lolly, 2026-11-25: "I do not want my chat's to start this way. Get rid of it." Back after a pause, a new
+    conversation opens with the greeting, the style buttons and each style's own opener, never a question about it."""
+    from mani.chat.greeting import OPENERS, STYLE_OPTIONS, STYLE_QUESTION
 
     thread_id = await _a_thread()
     async with pool.as_admin() as conn:
@@ -196,12 +195,8 @@ async def test_the_opening_asks_about_a_pause_that_ran_out_until_they_have_answe
         )
 
     opening = (await api.get("/v1/threads/opening")).json()
-    assert opening["openers"] == dict.fromkeys(OPENERS, RETURN_OPENER)
-    assert opening["chat_paused_until"] is None
-
-    async with pool.as_admin() as conn:
-        await conn.execute("update public.chat_pauses set checked_at = now() where user_id = $1", ALICE)
-    assert (await api.get("/v1/threads/opening")).json()["openers"] == OPENERS
+    assert opening["openers"] == OPENERS and opening["style_options"] == STYLE_OPTIONS
+    assert opening["greeting"].endswith(STYLE_QUESTION) and opening["chat_paused_until"] is None
 
 
 async def test_every_chat_route_refuses_while_paused(api, model):  # noqa: F811

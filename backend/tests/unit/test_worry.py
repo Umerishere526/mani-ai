@@ -13,7 +13,7 @@ from mani.chat.reply import Safety
 from mani.chat.safety import State
 from mani.chat.worry import Phase
 from mani.db.threads import TurnContext
-from mani.models.rows import Pause, Thread
+from mani.models.rows import Thread
 
 
 def D(**read) -> Safety:
@@ -165,38 +165,17 @@ def test_an_answer_to_the_safety_question_after_a_set_settles_it_at_once():
 USER = uuid.UUID("a0000000-0000-4000-8000-0000000000f1")
 THREAD = uuid.UUID("b0000000-0000-4000-8000-0000000000f1")
 SAID = dt.datetime(2026, 11, 13, 12, 0, tzinfo=dt.UTC)
-CHECKED = SAID + dt.timedelta(hours=1)
 CHECK = ReturnCheck(pause_id=uuid.UUID("c0000000-0000-4000-8000-0000000000f1"), reason="pills")
 
 
-def _ctx(*, safety: str, latest_checked_at: dt.datetime | None, understanding: dict | None = None) -> TurnContext:
+def _ctx(*, safety: str) -> TurnContext:
     thread = Thread(id=THREAD, user_id=USER, created_at=SAID, last_message_at=SAID, safety=safety,
-                    understanding=understanding or {rec.ABOUT: "themselves"})
-    latest = Pause(id=CHECK.pause_id, user_id=USER, thread_id=THREAD, started_at=SAID,
-                   ends_at=SAID + dt.timedelta(minutes=15), reason="pills", checked_at=latest_checked_at)
-    return TurnContext(thread=thread, profile=None, technique=None, pause=latest)
-
-
-def test_a_conversation_held_in_danger_is_settled_once_they_have_said_elsewhere_they_are_all_right():
-    """muhammad, 2026-11-19: until they say they are all right, in any conversation, and no longer. The conversation the
-    pause began in kept its danger, so its next message paused with no word from Mani."""
-    after = worry.standing(_ctx(safety="danger", latest_checked_at=CHECKED), None, None)
-    assert (after.state, after.about, after.reset) == (State.CLEAR, None, True)
-    out = worry.step(after, D(about="themselves"))
-    assert (out.state, out.pausing, out.settled_now) == (State.DANGER, False, True), (
-        "a new danger there is a new worry: Mani answers first, it is held, and it is not wiped on every later load")
-
-
-@pytest.mark.parametrize(("safety", "checked_at"), [
-    ("danger", None), ("clear", CHECKED), ("danger", SAID - dt.timedelta(minutes=1)),
-], ids=["not checked yet", "nothing was open", "they said it before the last message here"])
-def test_a_conversation_stays_where_it_was_unless_a_check_came_after_its_last_message(safety, checked_at):
-    after = worry.standing(_ctx(safety=safety, latest_checked_at=checked_at), None, None)
-    assert (after.state.value, after.reset) == (safety, False)
+                    understanding={rec.ABOUT: "themselves"})
+    return TurnContext(thread=thread, profile=None, technique=None)
 
 
 def test_the_phase_is_the_owed_check_then_the_question_it_asked_then_neither():
-    ctx = _ctx(safety="clear", latest_checked_at=None)
+    ctx = _ctx(safety="clear")
     assert worry.standing(ctx, CHECK, None).phase is Phase.ASKING
     assert worry.standing(ctx, None, str(CHECK.pause_id)).phase is Phase.ANSWERING
     assert worry.standing(ctx, None, None).phase is Phase.ORDINARY
