@@ -27,7 +27,7 @@ export function CrisisHelpLink({ label, url, prominent = false }: CrisisHelpLink
       accessibilityLabel={label}
       accessibilityHint={en.crisis.help.linkHint}
     >
-      <Text className={cn('font-sans-semibold text-base', prominent ? 'text-primary-700' : 'text-secondary-500')}>{label}</Text>
+      <Text className={cn('text-center font-sans-semibold text-base', prominent ? 'text-primary-700' : 'text-secondary-500')}>{label}</Text>
     </Pressable>
   );
 }
