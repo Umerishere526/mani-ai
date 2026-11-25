@@ -1,7 +1,6 @@
 # ABOUTME: The exercise catalog and its topics, a user's completions, and their 👍/👎 on each exercise.
 # ABOUTME: Audio paths never leave the backend; clients get a short-lived signed link.
 
-import asyncio
 import uuid
 
 import asyncpg
@@ -21,16 +20,16 @@ from mani.models.api import (
     TopicOut,
 )
 from mani.routers.serializers import to_completion, to_exercise
-from mani.storage import signed_audio_url
+from mani.storage import signed_audio_urls
 
 router = APIRouter(prefix="/v1/exercises", tags=["exercises"])
 
 
 async def _with_urls(conn: asyncpg.Connection, user_id: str, rows: list) -> list[ExerciseOut]:
-    """Each exercise with its signed link and the caller's own rating of it."""
-    urls = await asyncio.gather(*(signed_audio_url(e.audio_path) for e in rows))
+    """Each exercise with its signed link, all signed in one request, and the caller's own rating of it."""
+    urls = await signed_audio_urls([e.audio_path for e in rows if e.audio_path is not None])
     rated = await feedback_db.for_user(conn, user_id)
-    return [to_exercise(e, url, rated.get(e.id)) for e, url in zip(rows, urls, strict=True)]
+    return [to_exercise(e, urls.get(e.audio_path), rated.get(e.id)) for e in rows]
 
 
 @router.get("", response_model=list[ExerciseOut])
@@ -77,8 +76,7 @@ async def get_exercise(
             ErrorCategory.NOT_FOUND,
             user_message="That exercise is not available.",
         )
-    rated = await feedback_db.for_user(conn, user.user_id)
-    return to_exercise(exercise, await signed_audio_url(exercise.audio_path), rated.get(exercise.id))
+    return (await _with_urls(conn, user.user_id, [exercise]))[0]
 
 
 @router.put("/{exercise_id}/feedback", response_model=FeedbackOut)

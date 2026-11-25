@@ -223,11 +223,11 @@ async def test_every_chat_route_refuses_while_paused(api, model):  # noqa: F811
 
 
 async def test_the_library_and_profile_stay_open_while_paused(api, monkeypatch):
-    async def unsigned(path):
-        return None
+    async def unsigned(paths):
+        return {}
 
     # The library's route is under test, not Supabase Storage.
-    monkeypatch.setattr("mani.routers.exercises.signed_audio_url", unsigned)
+    monkeypatch.setattr("mani.routers.exercises.signed_audio_urls", unsigned)
     thread_id = await _a_thread()
     await _paused(thread_id)
 
