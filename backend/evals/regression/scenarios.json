@@ -1,5 +1,5 @@
 {
- "about": "Draft TC-01 to TC-20, written 2026-11-24, TC-21 to TC-27, written 2026-11-25 for the provisional decisions, TC-28 to TC-34, written 2026-11-25 for Directive as a decision-making coach (scored on the judge's coach rubric), TC-35 to TC-39 for the framework handoff, TC-40 for emotional understanding, and TC-41 for simple English and remembering what was said, from the client's documents and real tests; awaiting muhammad's approval. `script` is sent in order (a button's exact label taps it), then `persona` plays the rest. `expect` keys are read by evals/regression/checks.py. A scenario with status `gap` asks for something paused or removed by a Decision in force: it is reported, never run.",
+ "about": "Draft TC-01 to TC-20, written 2026-11-24, TC-21 to TC-27, written 2026-11-25 for the provisional decisions, TC-28 to TC-34, written 2026-11-25 for Directive as a decision-making coach (scored on the judge's coach rubric), TC-35 to TC-39 for the framework handoff, TC-40 for emotional understanding, TC-41 for simple English and remembering what was said, and TC-42 and TC-43 for the same scenario in the other two styles, from the client's documents and real tests; awaiting muhammad's approval. `script` is sent in order (a button's exact label taps it), then `persona` plays the rest. `expect` keys are read by evals/regression/checks.py. A scenario with status `gap` asks for something paused or removed by a Decision in force: it is reported, never run.",
  "scenarios": [
   {
    "id": "TC-01",
@@ -733,6 +733,51 @@
    "max_latency_s": 15,
    "expect": {},
    "criteria": "Simple everyday English with no abstract or literary sentences; never asks what was already answered (what going would mean about them as a partner, how she'd react); connects their two meanings of the trip rather than repeating them; tentative readings only; never recommends the trip or the birthday; if a set runs, A and B use what they already said and ask only what is missing."
+  },
+  {
+   "id": "TC-42",
+   "title": "Supportive: the same fiancé's birthday and work trip, held to the same global rules",
+   "group": "pacing",
+   "status": "run",
+   "style": "supportive",
+   "rubric": "coach",
+   "sources": ["muhammad's global-rules brief (all three modes, same scenarios), 2026-11-25"],
+   "script": [
+    "my fiance's birthday and my work trip is on the same day. and i dont know which one to be at because both of those are very important to me.",
+    "i imagine she will get emotional and she might get mad but i know her, she will understand if i do not show up, she knows how serious i am on my business.",
+    "that subconciously even if she forgives me there can still be something in her mind that makes her think that i am not a good partner.",
+    "that her thought wont be wrong",
+    "i was thinking it means that i am priortising my work over being there for my partner on such a special day like her birthday but then i also think it means i am working towards giving her the lifesyle she deserves",
+    "quite a bit of it"
+   ],
+   "persona": "You're torn between your fiancée's birthday and an important work trip. You've said what going would mean about you as a partner. If Mani offers a set of questions, accept. If Mani asks something you already answered, say 'didn't we already cover that?'.",
+   "turns": 12,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Simple everyday English with no abstract or literary sentences; never asks what was already answered (what going would mean about them as a partner, how she'd react); connects their two meanings of the trip rather than repeating them; tentative readings only; never recommends the trip or the birthday; if a set runs, A and B use what they already said and ask only what is missing. Keeps its own style: warm, room to talk, often no question, no forced positivity."
+  }
+ ,
+  {
+   "id": "TC-43",
+   "title": "Directive: the same fiancé's birthday and work trip, held to the same global rules",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's global-rules brief (all three modes, same scenarios), 2026-11-25"],
+   "script": [
+    "my fiance's birthday and my work trip is on the same day. and i dont know which one to be at because both of those are very important to me.",
+    "i imagine she will get emotional and she might get mad but i know her, she will understand if i do not show up, she knows how serious i am on my business.",
+    "that subconciously even if she forgives me there can still be something in her mind that makes her think that i am not a good partner.",
+    "that her thought wont be wrong",
+    "i was thinking it means that i am priortising my work over being there for my partner on such a special day like her birthday but then i also think it means i am working towards giving her the lifesyle she deserves",
+    "quite a bit of it"
+   ],
+   "persona": "You're torn between your fiancée's birthday and an important work trip. You've said what going would mean about you as a partner. If Mani offers a set of questions, accept. If Mani asks something you already answered, say 'didn't we already cover that?'.",
+   "turns": 12,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Simple everyday English with no abstract or literary sentences; never asks what was already answered (what going would mean about them as a partner, how she'd react); connects their two meanings of the trip rather than repeating them; tentative readings only; never recommends the trip or the birthday; if a set runs, A and B use what they already said and ask only what is missing. Keeps its own style: clear, practical, helps decide next steps, warm, never controlling."
   }
  
  ]

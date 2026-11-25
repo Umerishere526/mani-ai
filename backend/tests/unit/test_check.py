@@ -17,7 +17,7 @@ def reply(text: str, ask: str = "", level: str = "none") -> TurnReply:
     # muhammad's tester, 2026-11-25.
     ("Lost her.", "What does losing her mean: that she died, or that you aren't together anymore?", "a choice"),
     ("You told me about the trip.", "Is that something you've wondered about yourself too?", "yes or no"),
-    ("Understanding and being upset can sit in the same person.", "What comes up for you?", "figure of speech"),
+    ("Understanding and being upset can sit in the same person.", "How did that make you feel?", "figure of speech"),
     ("That's the part with the weight in it.", "", "figure of speech"),
     ("You're not stuck on information.", "What matters most to you?", "reading said as fact"),
     ("She hasn't reached out.", "When a stretch goes by and she hasn't reached out, what happens in you?", "odd"),
@@ -28,7 +28,7 @@ def test_a_broken_rule_code_can_find_is_named_with_its_exact_words(text, ask, fo
 
 
 def test_a_clean_reply_and_a_drafted_message_are_left_alone():
-    assert check.problems(reply("You told me about the trip and her birthday.", "What comes up for you?")) == []
+    assert check.problems(reply("You told me about the trip and her birthday.", "How did that make you feel?")) == []
     draft = 'Send this: "Hi Sam, is the heating fixed yet, or should I call someone?"'
     assert check.problems(reply(draft, "How does that sound to you?")) == []
 
