@@ -1,23 +1,21 @@
-// ABOUTME: Root layout — the route stack (header hidden), the drawer provider, and the
-// ABOUTME: global drawers drawn above every screen; also loads the Tailwind stylesheet.
+// ABOUTME: Root layout: holds the splash screen until the session is known, then renders the
+// ABOUTME: guarded route stack inside the app-wide providers and the global drawer.
 
-import { Stack } from "expo-router";
-import { DrawerProvider } from "@/providers";
+import * as SplashScreen from "expo-splash-screen";
+import { DrawerProvider, OnboardingProvider } from "@/providers";
 import { GlobalDrawer } from "@/components/global-drawer";
+import { RootStack } from "@/components/navigation";
 import "../global.css";
+
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   return (
-    <DrawerProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="chat" />
-        <Stack.Screen name="settings" />
-        <Stack.Screen name="exercises" />
-        <Stack.Screen name="change-password" options={{ presentation: "modal" }} />
-        <Stack.Screen name="change-email" options={{ presentation: "modal" }} />
-      </Stack>
-      <GlobalDrawer />
-    </DrawerProvider>
+    <OnboardingProvider>
+      <DrawerProvider>
+        <RootStack />
+        <GlobalDrawer />
+      </DrawerProvider>
+    </OnboardingProvider>
   );
 }

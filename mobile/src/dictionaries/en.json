@@ -4,6 +4,45 @@
     "error": "Something went wrong",
     "retry": "Try again"
   },
+  "auth": {
+    "signInTitle": "Sign In",
+    "signInIntro": "Welcome back. Sign in with your email and password.",
+    "signIn": "Sign In",
+    "signingIn": "Signing in...",
+    "toSignUp": "New here? Create an account",
+    "signUpTitle": "Create Account",
+    "signUpIntro": "Create an account with your email and a password of at least 8 characters.",
+    "signUp": "Create Account",
+    "signingUp": "Creating account...",
+    "toSignIn": "Already have an account? Sign in",
+    "confirmEmailTitle": "Check Your Email",
+    "confirmEmailIntro": "We sent a confirmation link to the address below. Open it, then come back and sign in.",
+    "emailLabel": "Email",
+    "emailPlaceholder": "you@example.com",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "passwordHintSignIn": "Enter your password",
+    "passwordHintSignUp": "Choose a password of at least 8 characters"
+  },
+  "onboarding": {
+    "title": "Welcome to MANI",
+    "intro": "A couple of quick choices so Mani can talk with you the way you like. You can change them later.",
+    "nicknameLabel": "What should Mani call you? (optional)",
+    "nicknamePlaceholder": "Your name or a nickname",
+    "nicknameHint": "Mani uses this name when talking with you",
+    "stylePrompt": "How would you like Mani to speak with you?",
+    "saving": "Saving...",
+    "profileLoadFailed": "We couldn't load your profile. Check your connection and try again."
+  },
+  "errors": {
+    "invalidCredentials": "That email and password don't match an account.",
+    "emailNotConfirmed": "Please confirm your email first, using the link we sent you.",
+    "userAlreadyExists": "An account with this email already exists. Try signing in.",
+    "weakPassword": "Please choose a stronger password.",
+    "rateLimited": "Too many attempts. Please wait a moment and try again.",
+    "network": "Can't reach MANI right now. Check your connection and try again.",
+    "timeout": "This is taking longer than it should. Please try again."
+  },
   "home": {
     "greeting": "Support starts here",
     "loadingExercisesLabel": "Loading exercises",

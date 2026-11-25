@@ -1,5 +1,5 @@
-// ABOUTME: Shared shell for the account-modification screens (change email, change
-// ABOUTME: password) — dark background, noise overlay, back-button header, fade-in form.
+// ABOUTME: Shared shell for the auth and account screens (sign-in, onboarding, change email,
+// ABOUTME: change password) — dark background, noise overlay, titled header, fade-in form.
 
 import { useEffect, type ReactNode } from "react";
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
@@ -11,8 +11,9 @@ import { Text } from "@/components/shared";
 
 export interface AuthScreenShellProps {
   title: string;
-  onBack: () => void;
-  backAccessibilityLabel: string;
+  // Leave both out on a screen with nowhere to go back to, like sign-in.
+  onBack?: () => void;
+  backAccessibilityLabel?: string;
   children: ReactNode;
 }
 
@@ -38,16 +39,22 @@ export function AuthScreenShell({ title, onBack, backAccessibilityLabel, childre
       </View>
 
       <View className="flex-row items-center px-4 pb-4" style={{ paddingTop: insets.top + 8 }}>
-        <Pressable
-          onPress={onBack}
-          className="h-11 w-11 items-center justify-center"
-          hitSlop={12}
-          accessibilityLabel={backAccessibilityLabel}
-          accessibilityRole="button"
-        >
-          <Ionicons name="chevron-back" size={28} color={colors.secondary[500]} />
-        </Pressable>
-        <Text className="flex-1 text-center font-sans-semibold text-lg">{title}</Text>
+        {onBack ? (
+          <Pressable
+            onPress={onBack}
+            className="h-11 w-11 items-center justify-center"
+            hitSlop={12}
+            accessibilityLabel={backAccessibilityLabel}
+            accessibilityRole="button"
+          >
+            <Ionicons name="chevron-back" size={28} color={colors.secondary[500]} />
+          </Pressable>
+        ) : (
+          <View className="w-11" />
+        )}
+        <Text className="flex-1 text-center font-sans-semibold text-lg" accessibilityRole="header">
+          {title}
+        </Text>
         <View className="w-11" />
       </View>
 

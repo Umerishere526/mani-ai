@@ -1,7 +1,6 @@
 // ABOUTME: Settings screen — notification preference, account rows (password, email)
-// ABOUTME: and Log Out; sign-out is simulated until auth is wired up.
+// ABOUTME: and Log Out, which ends the session so the route guard returns to sign-in.
 
-import { useState } from "react";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ScrollView, View } from "react-native";
@@ -11,22 +10,16 @@ import { SettingsRow, SettingsSection } from "@/components/settings";
 import { colors } from "@/lib/tokens";
 import { useNotificationPreference } from "@/hooks/useNotificationPreference";
 import { useStatusBarStyle } from "@/hooks/useStatusBarStyle";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { sessionManager } from "@/lib/api";
 import en from "@/dictionaries/en.json";
 
 export default function SettingsScreen() {
   const { isEnabled: notificationsEnabled, toggle: toggleNotifications } = useNotificationPreference();
-  const [isSigningOut, setIsSigningOut] = useState(false);
+  const signOut = useAsyncAction(() => sessionManager.signOut());
   const isAnonymous = false;
 
   useStatusBarStyle("light");
-
-  const handleSignOut = () => {
-    setIsSigningOut(true);
-    setTimeout(() => {
-      setIsSigningOut(false);
-      router.replace("/");
-    }, 400);
-  };
 
   return (
     <View className="flex-1">
@@ -71,9 +64,9 @@ export default function SettingsScreen() {
         <View className="min-h-8 flex-1" />
 
         <SecondaryButton
-          label={isSigningOut ? en.settings.loggingOut : en.settings.logOut}
-          onPress={handleSignOut}
-          disabled={isSigningOut}
+          label={signOut.isRunning ? en.settings.loggingOut : en.settings.logOut}
+          onPress={() => signOut.run()}
+          disabled={signOut.isRunning}
         />
       </ScrollView>
 

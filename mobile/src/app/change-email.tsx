@@ -6,13 +6,10 @@ import { router } from "expo-router";
 import { Alert } from "react-native";
 import { AuthScreenShell, ChangeEmailForm, VerifyOtpForm } from "@/components/auth";
 import en from "@/dictionaries/en.json";
+import { isValidEmail } from "@/lib/utils";
 
 type Phase = "enter_email" | "verify_otp";
 const CURRENT_EMAIL = "you@example.com";
-
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
 
 export default function ChangeEmailScreen() {
   const [phase, setPhase] = useState<Phase>("enter_email");
