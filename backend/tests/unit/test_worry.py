@@ -71,9 +71,21 @@ SEQUENCES = {
     "the worry said again between two calm messages starts the count over": (
         [(ORD, U(about="themselves")), (ORD, N()), (ORD, U(about="themselves")), (ORD, N())],
         [(UNSURE, F, F, F, "themselves")] * 4),
-    "danger they step away from settles on that message": (
-        [(ORD, D(about="themselves")), (ORD, N())],
+    # S1 (PROVISIONAL: clinician sign-off required before deploy): danger cleared on one message read as no concern, so
+    # "I took pills" then "can we talk about work" ended it. A change of subject is not safety: danger clears on their
+    # word that they are safe or someone is with them, or on the second calm message after Mani's reply asked.
+    "a change of subject never clears danger, and the second calm message does (S1)": (
+        [(ORD, D(about="themselves")), (ORD, N()), (ORD, N())],
+        [(DANGER, F, F, T, "themselves"), (DANGER, F, F, F, "themselves"), (CLEAR, F, T, F, None)]),
+    "their word that they are safe clears danger at once (S1)": (
+        [(ORD, D(about="themselves")), (ORD, N(says_safe=True))],
         [(DANGER, F, F, T, "themselves"), (CLEAR, F, T, F, None)]),
+    "someone with them clears danger at once (S1)": (
+        [(ORD, D(about="themselves")), (ORD, N(help_in_place=True))],
+        [(DANGER, F, F, T, "themselves"), (CLEAR, F, T, F, None)]),
+    "a calm message held as danger never pauses, and danger said after it does (S1)": (
+        [(ORD, D(about="themselves")), (ORD, N()), (ORD, D(about="themselves"))],
+        [(DANGER, F, F, T, "themselves"), (DANGER, F, F, F, "themselves"), (DANGER, T, F, F, "themselves")]),
     "danger of one kind never holds an unsure read of another (the review of 2026-11-20)": (
         [(ORD, U(about="body", symptom_now="unsaid")), (ORD, U(about="themselves"))],
         [(DANGER, F, F, T, "body"), (UNSURE, F, F, F, "themselves")]),
@@ -93,10 +105,11 @@ SEQUENCES = {
     "the kind changes inside one open worry and the call-now line comes once (2026-11-18)": (
         [(ORD, D(about="themselves")), (ORD, U(about="body", symptom_now="unsaid"))],
         [(DANGER, F, F, T, "themselves"), (DANGER, F, F, T, "body")]),
-    "a settled symptom reopens only on their newest word that it is happening (2026-11-11)": (
-        [(ORD, U(about="body", symptom_now="unsaid")), (ORD, N()), (ORD, U(about="body", symptom_now="unsaid")),
+    "a settled symptom reopens only on their newest word that it is happening (2026-11-11; S1 settles it on two)": (
+        [(ORD, U(about="body", symptom_now="unsaid")), (ORD, N()), (ORD, N()), (ORD, U(about="body", symptom_now="unsaid")),
          (ORD, D(about="body", symptom_now="yes"))],
-        [(DANGER, F, F, T, "body"), (CLEAR, F, T, F, None), (CLEAR, F, F, F, None), (DANGER, F, F, T, "body")]),
+        [(DANGER, F, F, T, "body"), (DANGER, F, F, F, "body"), (CLEAR, F, T, F, None), (CLEAR, F, F, F, None),
+         (DANGER, F, F, T, "body")]),
     "a refusal never settles a concern": (
         [(ORD, D(about="themselves")), (ORD, N(declined=True))],
         [(DANGER, F, F, T, "themselves"), (DANGER, T, F, F, "themselves")]),
@@ -104,13 +117,15 @@ SEQUENCES = {
         [(ORD, D(about="themselves")), (ORD, U(about="themselves")), (ORD, D(about="themselves"))],
         [(DANGER, F, F, T, "themselves"), (DANGER, T, F, F, "themselves"), (DANGER, T, F, F, "themselves")]),
     "a worry that settled and a new one starts over: the first danger message gets Mani's reply": (
-        [(ORD, D(about="themselves")), (ORD, N()), (ORD, D(about="themselves")), (ORD, D(about="themselves"))],
+        [(ORD, D(about="themselves")), (ORD, N(says_safe=True)), (ORD, D(about="themselves")),
+         (ORD, D(about="themselves"))],
         [(DANGER, F, F, T, "themselves"), (CLEAR, F, T, F, None), (DANGER, F, F, T, "themselves"),
          (DANGER, T, F, F, "themselves")]),
     # After a settled worry its kind is forgotten. Before, a later danger the model gave no kind inherited the old one:
     # after a body worry it could not pause with a refusal, and after a worry about themselves it paused with none.
     "a danger of no known kind after a settled body worry pauses on a refusal": (
-        [(ORD, U(about="body", symptom_now="unsaid")), (ORD, N()), (ORD, D(declined=True)), (ORD, D(declined=True))],
+        [(ORD, U(about="body", symptom_now="unsaid")), (ORD, N(says_safe=True)), (ORD, D(declined=True)),
+         (ORD, D(declined=True))],
         [(DANGER, F, F, T, "body"), (CLEAR, F, T, F, None), (DANGER, F, F, T, None), (DANGER, T, F, F, None)]),
     # muhammad, 2026-11-24: during an open body worry a danger of no known kind took the body's kind, so its refusal
     # never paused; the body's rule holds only a read about the body.
@@ -118,7 +133,7 @@ SEQUENCES = {
         [(ORD, U(about="body", symptom_now="unsaid")), (ORD, D(declined=True)), (ORD, D(declined=True))],
         [(DANGER, F, F, T, "body"), (DANGER, T, F, F, "body"), (DANGER, T, F, F, "body")]),
     "a danger of no known kind after a settled worry needs a refusal like any other": (
-        [(ORD, D(about="themselves")), (ORD, N()), (ORD, D()), (ORD, D())],
+        [(ORD, D(about="themselves")), (ORD, N(says_safe=True)), (ORD, D()), (ORD, D())],
         [(DANGER, F, F, T, "themselves"), (CLEAR, F, T, F, None), (DANGER, F, F, T, None),
          (DANGER, F, F, F, None)]),
     "the first message back after a pause never pauses, whatever the read reports": (
@@ -187,7 +202,7 @@ def test_the_record_keeps_one_kind_while_a_worry_is_open_and_forgets_it_when_it_
     opened = worry.step(worry.Standing(state=State.CLEAR, about=None, phase=ORD), D(about="themselves"))
     record = worry.record_after({}, opened, check=None, answering=None)
     assert record == {rec.ABOUT: "themselves", rec.DANGER_REACHED: True}
-    settled = worry.step(worry.Standing(state=State.DANGER, about="themselves", phase=ORD), N())
+    settled = worry.step(worry.Standing(state=State.DANGER, about="themselves", phase=ORD), N(says_safe=True))
     after = worry.record_after(record, settled, check=None, answering=None)
     assert after == {rec.DANGER_REACHED: True, rec.SAFETY_SETTLED: True}
 

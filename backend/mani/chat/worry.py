@@ -17,7 +17,9 @@ from mani.db.threads import TurnContext
 
 _DANGER = {"none": "none", "unsure": "unsure", "danger": "now"}
 # An unsure worry they never answered closes once this many messages in a row are read as no concern (muhammad,
-# 2026-11-20): one such message can be a changed subject, and a worry nobody closes holds every later turn.
+# 2026-11-20): one such message can be a changed subject, and a worry nobody closes holds every later turn. Danger
+# closes the same way, counted from Mani's reply to it, which asked about their safety, unless they say they are safe
+# or someone is with them (S1). PROVISIONAL: clinician sign-off required before deploy.
 CALM_TO_CLEAR = 2
 
 
@@ -32,7 +34,7 @@ class Phase(StrEnum):
 class Standing(BaseModel):
     """Where safety stands before their message. `about` is whose danger the open worry is about, and is None while
     nothing is open. `settled`: a worry of theirs settled earlier in this conversation. `calm`: how many messages in a
-    row were read as no concern while the worry stayed open. `end_check`: Mani's last reply asked the safety question
+    row were read as no concern while the worry, unsure or danger, stayed open. `end_check`: Mani's last reply asked the safety question
     after a framework's last stage, so this message answers it."""
 
     model_config = {"frozen": True}
@@ -93,11 +95,14 @@ def step(stood: Standing, read: Safety) -> Outcome:
     # The danger as code holds it: a body symptom the model judged lower that has not stopped is danger now.
     held = safety.danger_of(danger, read.about, read.symptom_now, reopening=reopening)
     after = safety.after(start, held, read.declined, about=about, danger_about=stood.about)
-    # Unsure with no question of Mani's being answered: the first message read as no concern leaves the worry open.
-    waits = (stood.state is State.UNSURE and stood.phase is Phase.ORDINARY and not stood.end_check
+    # With no question of Mani's being answered, the first message read as no concern leaves the worry where it was:
+    # unsure, or danger unless they said they are safe or someone is with them (S1).
+    safe_said = read.says_safe or read.help_in_place
+    waits = ((stood.state is State.UNSURE or (stood.state is State.DANGER and not safe_said))
+             and stood.phase is Phase.ORDINARY and not stood.end_check
              and after is State.CLEAR and stood.calm + 1 < CALM_TO_CLEAR)
     if waits:
-        after = State.UNSURE
+        after = stood.state
     if about == "body" and read.about is None and danger != "none":
         # A danger of no known kind while a body worry is open is not held to the body's rule: it needs a refusal.
         kind_pauses = read.declined
@@ -113,7 +118,8 @@ def step(stood: Standing, read: Safety) -> Outcome:
         goes_on = asked and danger == "now"
     else:
         goes_on = stood.state is State.DANGER
-    pausing = after is State.DANGER and kind_pauses and not read.help_in_place and goes_on
+    # Danger held only by the count of calm messages is not danger going on, so it never pauses.
+    pausing = after is State.DANGER and not waits and kind_pauses and not read.help_in_place and goes_on
     # Once per kind of danger: a conversation already in danger of this kind has had the help; another kind has not.
     resources_due = (after is State.DANGER and not pausing
                      and (stood.state is not State.DANGER or stood.about != about))
@@ -148,5 +154,6 @@ def traced(read: Safety) -> dict:
     """The judgment as the turn's trace keeps it: closed values only, never its line of why."""
     return {key: value for key, value in {
         "level": read.level, "about": read.about, "declined": read.declined or None, "symptom_now": read.symptom_now,
-        "help_in_place": read.help_in_place or None, "still_there": read.still_there or None,
+        "help_in_place": read.help_in_place or None, "says_safe": read.says_safe or None,
+        "still_there": read.still_there or None,
     }.items() if value is not None}

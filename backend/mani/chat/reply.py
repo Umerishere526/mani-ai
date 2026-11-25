@@ -20,6 +20,8 @@ class Safety(BaseModel):
         default=None, description="Whose danger. Always filled when level is unsure or danger."
     )
     help_in_place: bool = Field(default=False, description="Someone who can help is with them now, or help is coming.")
+    says_safe: bool = Field(default=False, description=(
+        "Their message itself says plainly that they are safe now. Changing the subject never is."))
     declined: bool = Field(default=False, description="They refused the help you offered for this danger.")
     symptom_now: Literal["yes", "no", "unsaid"] | None = Field(
         default=None, description="With about body: whether the symptom is happening right now."

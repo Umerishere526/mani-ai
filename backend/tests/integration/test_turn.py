@@ -424,6 +424,18 @@ async def test_overdose_on_the_first_message_gets_manis_reply_and_the_next_messa
     assert second.content == "Please call now.\n\n" + crisis.pause_reply("themselves", 900)
 
 
+async def test_a_change_of_subject_after_danger_keeps_the_worry_open(alice, model):
+    """S1 (PROVISIONAL: clinician sign-off required before deploy): "I took pills" then "can we talk about work" ended
+    the danger on the model's read of none. Danger holds through one calm message; the second closes it."""
+    model(said(FIRST_REPLY, safety=DANGER), said("Sure, tell me about work."), said("That sounds like a lot."))
+    thread = await start(alice)
+    await send(alice, thread.id, "i took a bunch of pills")
+    changed = await send(alice, thread.id, "can we talk about work")
+    assert changed.paused_until is None and (await thread_row(alice, thread.id)).safety == "danger"
+    await send(alice, thread.id, "my boss keeps piling it on")
+    assert (await thread_row(alice, thread.id)).safety == "clear"
+
+
 async def test_a_paused_person_is_refused_before_anything_is_paid(alice, model):
     scripted = model(said("Call now.", safety=DANGER), said("Please.", safety=DANGER), said("unused"))
     thread = await start(alice)
