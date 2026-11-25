@@ -134,6 +134,7 @@ OPENER_REPEATED_KEPT = "opener_repeated_kept"
 FORBIDDEN_WORD = "forbidden_word"
 BANNED_LINE_REMOVED = "banned_line_removed"
 VERDICT_REMOVED = "verdict_removed"
+OWN_REPEAT_REMOVED = "own_repeat_removed"
 BANNED_LINE_KEPT = "banned_line_kept"
 FIGURATIVE = "figurative"
 INTERPRETIVE = "interpretive"
@@ -143,6 +144,9 @@ STAGE_IN_OFFER_KEPT = "stage_in_offer_kept"
 # How alike two questions may be, word for word, before the second is the first asked again.
 SAME_QUESTION_RATIO = 0.85
 _WORDS = re.compile(r"[a-z0-9']+")
+# A statement is a line Mani already said when this share of the two sentences' words is common to both, and only a
+# line of this many words or more is looked at: "Okay." and "That makes sense." are not lines anyone remembers.
+SAME_LINE, OWN_LINE_WORDS = 0.8, 5
 
 
 @dataclass(frozen=True)
@@ -218,6 +222,32 @@ def without_verdicts(text: str, *, guarded: bool) -> tuple[str, list[str]]:
     cut = questions.kept(text, lambda _, sentence: not _VERDICT.match(sentence)
                          or any(sentence in text[a:b] for a, b in spans))
     return (cut, [VERDICT_REMOVED]) if cut and cut != text else (text, [])
+
+
+def _line(sentence: str) -> frozenset[str]:
+    return frozenset(_WORDS.findall(sentence.lower().replace("’", "'")))
+
+
+def without_own_repeats(text: str, earlier: list[str], *, guarded: bool) -> tuple[str, list[str]]:
+    """The text without a statement Mani already said in this conversation (`earlier`, its replies so far), word for
+    word or nearly, and the event. The run of 2026-11-25 found Mani repeating its own line in 21 of 38 conversations,
+    more than any other kind of repetition. A question, a stage's line, a short line, wording written for them to send,
+    a guarded turn and a reply this would leave with no statement keep every word."""
+    if guarded or not earlier:
+        return text, []
+    said = [line for reply in earlier for sentence in questions.sentences(reply)
+            if not questions.asks(sentence) and len(line := _line(sentence)) >= OWN_LINE_WORDS]
+    spans = questions.drafted(text)
+
+    def again(sentence: str) -> bool:
+        if questions.asks(sentence) or STAGE_LINE.match(sentence) or any(sentence in text[a:b] for a, b in spans):
+            return False
+        words = _line(sentence)
+        return len(words) >= OWN_LINE_WORDS and any(len(words & line) / len(words | line) >= SAME_LINE for line in said)
+
+    cut = questions.kept(text, lambda _, sentence: not again(sentence))
+    left = [sentence for sentence in questions.sentences(cut) if not questions.asks(sentence)]
+    return (cut, [OWN_REPEAT_REMOVED]) if left and cut != text else (text, [])
 
 
 def in_plain_words(text: str) -> tuple[str, list[str]]:
@@ -362,7 +392,8 @@ def repeats(text: str, ask: str) -> bool:
 
 
 def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, latest: str, directive: bool,
-         helping: bool, openers: list[str], offered: Framework | None, stage: str | None) -> Sent:
+         helping: bool, openers: list[str], offered: Framework | None, stage: str | None,
+         earlier: list[str]) -> Sent:
     """The model's words as the person receives them (repairs.sent_text), with the client's rules enforced: each
     forbidden word swapped for a plain one, each banned line taken out, and a Directive reply in the open chat that
     gives no help (`helping`) held to DIRECTIVE_SENTENCES, and a stock opening that repeats one of the conversation's
@@ -380,6 +411,8 @@ def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, la
     enforced += banned
     text, verdicts = without_verdicts(text, guarded=guarded)
     enforced += verdicts
+    text, repeated = without_own_repeats(text, earlier, guarded=guarded)
+    enforced += repeated
     if offered is not None and not guarded:
         text, ask, staged = without_stage(text, ask, offered=offered, stage=stage)
         enforced += staged

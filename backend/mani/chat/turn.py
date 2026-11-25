@@ -284,7 +284,7 @@ async def _apply(
                         guarded=guarded, open_chat=open_chat, latest=reply.question.latest,
                         directive=style == SupportStyle.DIRECTIVE, helping=reply.said.move.strip().lower() == "help",
                         openers=[entry.get("opens", "") for entry in rec.replies(record)], offered=offered,
-                        stage=reply.stage)
+                        stage=reply.stage, earlier=[m.content for m in window.messages if m.role is MessageRole.MANI])
     text, asked, cut = sent.text, sent.asked, sent.cut
     enforced += sent.enforced
     # What the reply asked and gave, kept before code adds its own pieces; the fixed words for an empty reply give none.

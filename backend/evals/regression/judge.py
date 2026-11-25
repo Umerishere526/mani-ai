@@ -85,8 +85,9 @@ STANDARD = (
     "using its definition; higher is always better, and 2 and 4 are for "
     "what falls between the anchors. Judge the whole conversation as the person experienced it, and the scenario's "
     "own 'What it should show'. Do not mark down what the product fixes: button labels, the client's own text for an "
-    "exercise's steps (with its closing 'Ready to dive into a real life situation?'), the fixed safety questions and "
-    "help lines, and a pause the app imposes for safety. Quote the exact MANI lines behind every score below 5. Be "
+    "exercise's steps (with its closing 'Ready to dive into a real life situation?'), each step's line ('A is for "
+    "Activating Event.'), the fixed safety questions and help lines, said again on every reply while a danger is "
+    "open, and a pause the app imposes for safety. Quote the exact MANI lines behind every score below 5. Be "
     "strict and fair: a pleasant conversation that misreads the person scores low, and a rule followed in a way "
     "that makes the conversation worse earns no credit."
 )

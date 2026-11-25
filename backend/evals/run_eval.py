@@ -71,6 +71,10 @@ def variant(spec: str) -> dict:
 IN_FLIGHT_WAITS = 6
 
 
+class OutOfCredits(RuntimeError):
+    """OpenRouter refused a call because the account's credit cannot cover it."""
+
+
 async def post(http, settings, body) -> tuple[dict, float]:
     began = time.monotonic()
     attempt = waits = 0
@@ -91,6 +95,9 @@ async def post(http, settings, body) -> tuple[dict, float]:
             waits += 1
             await asyncio.sleep(float(r.headers.get("retry-after") or 5))
             continue
+        if r.status_code == 402:
+            # The account's credit is spent: every further call would fail the same way, so the run ends here.
+            raise OutOfCredits(f"{body['model']}: {r.text[:200]}")
         attempt += 1
         if attempt == 3:
             raise RuntimeError(f"{body['model']}: {r.status_code} {r.text[:300]}")

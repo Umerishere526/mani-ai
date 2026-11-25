@@ -7,12 +7,14 @@ import argparse
 import json
 import uuid
 
+import pytest
 from openai.lib._pydantic import to_strict_json_schema
 
-from evals import regress
+from evals import regress, run_eval
 from evals.regression import checks, judge, report
 from evals.drive import Conversation, Exchange
 from mani.chat.techniques import Registry
+from mani.config import get_settings
 from mani.models.rows import Prompt
 from mani.prompts import cache, composer
 
@@ -121,3 +123,24 @@ def test_a_detail_given_earlier_and_not_repeated_is_looked_for_in_the_reply():
     assert checks.recalls_at(chat, 2, ["dana", "friday"]).passed
     assert not checks.recalls_at(chat, 1, ["thursday"]).passed
     assert not checks.recalls_at(chat, 3, ["dana"]).passed
+
+
+async def test_a_call_refused_for_lack_of_credit_ends_the_run_at_once():
+    """2026-11-25: with the account's credit spent, a run went on playing conversations it could no longer judge."""
+    class Refused:
+        status_code, text, headers = 402, '{"error":{"message":"maximum cost exceeds your available credits"}}', {}
+
+        def json(self) -> dict:
+            return {}
+
+    class Http:
+        calls = 0
+
+        async def post(self, *args, **kwargs) -> Refused:
+            self.calls += 1
+            return Refused()
+
+    http = Http()
+    with pytest.raises(run_eval.OutOfCredits):
+        await run_eval.post(http, get_settings(), {"model": "judge/model"})
+    assert http.calls == 1

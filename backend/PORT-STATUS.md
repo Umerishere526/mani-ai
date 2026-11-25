@@ -256,9 +256,22 @@ the same change as the work.**
   live run spends the client's credit, and comparing runs needs the earlier results. Paused frameworks and the deleted body check-in
   are reported as gaps; the offer-by-the-fifth-message check is removed (the client withdrew it, Lolly 2026-11-20:
   "should not require a fixed number of exchanges"). The scenarios are a
-  draft from the client's documents awaiting muhammad's approval, and the suite has not yet made a live run.
+  draft from the client's documents awaiting muhammad's approval.
   `evals/regression/`, `tests/unit/test_regression_checks.py`, `.github/workflows/regression.yml` (manual dispatch)
   and `backend-unit.yml` (every push), `.gitignore` (`evals/results/summaries/`).
+- **Conversations are judged on one fixed score sheet: emotional understanding, unsupported interpretation,
+  naturalness, repetition, context retention, question quality, mode fit, practical helpfulness, conversation
+  continuity, and safety only where a scenario is about safety; each 1 to 5, higher always better, with anchors at 5,
+  3 and 1. Whole-conversation quality is the mean of each conversation's own mean. Mode differentiation is judged per
+  triplet (one opening in the three styles). A change of score sheet is followed by `regress.py --rejudge` on the saved
+  baseline, so before and after compare like for like. `holdout.json` is played with `--holdout` for measuring only:
+  its transcripts are never read to write prompt rules or examples** (muhammad's brief of 2026-11-25, target 4.5).
+  Because the run reported as 2.97 was scored on eighteen criteria where ten were meant (like for like 2.41 to 2.91),
+  the judge marked down what the product fixes (the pause, the help lines, the stage lines, the buttons), and
+  examples taken from test scenarios were copied by the model. `judge.DIMENSIONS`, `judge.STANDARD`,
+  `regress.experiment` (`--model`, `--effort`, `--prompt-file` swap the chat model or prompt for one run and never
+  touch the prompt row), `run_eval.OutOfCredits` (a run stops at once when OpenRouter's credit is spent);
+  `tests/unit/test_regression_judge.py`.
 - **The hotline check follows the Risk Classification: no hotline on LOW only, whether from the first message or from
   the answer that downgrades a MEDIUM** (muhammad, 2026-11-25). Because the RC shows resources on MEDIUM and HIGH, and
   a check that failed any hotline in a non-crisis case contradicted it. `evals/regression/checks.py` (`HOTLINE`);
@@ -363,6 +376,17 @@ the same change as the work.**
   `reply_check` (migration 050); trace `reply_checked` lists what was found. `mani/chat/check.py`
   (`problems`, `acceptable`), `enforce.FIGURATIVE_PHRASES`, `INTERPRETIVE_PATTERNS`; `tests/unit/test_check.py`,
   `tests/integration/test_reply_check.py`. Release: 050 before the deploy. Not yet measured live.
+- **Code takes out a statement Mani already said earlier in the conversation, word for word or nearly (five words or
+  more, eight in ten words shared), unless it is a question, a stage's line, wording written for them, a guarded turn
+  or the reply's only statement** (muhammad's brief of 2026-11-25). Because the root-cause count on the v15 run found
+  Mani repeating its own line in 21 of 38 conversations, the largest kind of repetition, with the prompt's "say each
+  point once" already in place. `enforce.without_own_repeats`, trace `own_repeat_removed`; `test_enforce.py`.
+- **Directive shows in one short plain line that it took in what hurts, never a clever contrast or a maxim; a request
+  for a technique is never refused (the set that fits is offered as the tool, or the library); what something says
+  about them is asked once; a plan they have is theirs and is not tested or argued with** (muhammad's brief of
+  2026-11-25). Because the same count found blunt or missing acknowledgment in 15 conversations (13 Directive), help
+  refused or replaced by a framework in 11, belief-fishing questions in 10, and questions after a plan in 6.
+  `mani.md`. Not yet eval-gated.
 - **Code takes out a short verdict line on what they feel or what is going on ("That's what hurts.", "…, that's what
   stings.", "Betrayed fits.", "That's the part that's hard to get past."), unless it is all the reply says, the turn
   is guarded, or it is wording written for them to send; most Directive replies are a short line that adds something (never their sentence repeated back, changed the same day after the acceptance test parroted every reply) and one open

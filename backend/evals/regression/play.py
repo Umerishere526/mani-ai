@@ -11,6 +11,7 @@ import httpx
 from evals.drive import Conversation, Exchange, converse, new_person
 from evals.regression import checks, metrics
 from evals.regression.judge import judge
+from evals.run_eval import OutOfCredits
 from mani.chat import greeting, runner, turn as chat_turn
 from mani.db import pool
 from mani.errors import ErrorCategory, ServiceError
@@ -86,8 +87,8 @@ async def _after_past_pause(scenario: dict) -> tuple[list[Conversation], list[ch
 
 
 def _exchange_dict(e: Exchange, conversation: int) -> dict:
-    keep = ("action", "framework", "stage", "safety", "paused", "refused", "question_cut", "latency_ms", "first_token_ms",
-            "read_ms", "write_ms", "total_ms")
+    keep = ("action", "framework", "stage", "safety", "paused", "refused", "question_cut", "enforced", "reply_checked",
+            "latency_ms", "first_token_ms", "read_ms", "write_ms", "total_ms")
     return {"conversation": conversation, "said": e.said, "tapped": e.tapped, "reply": e.reply, "buttons": e.buttons,
             "trace": {k: e.trace[k] for k in keep if k in e.trace}, "seconds": round(e.seconds, 3), "paused": e.paused,
             "crisis": e.crisis}
@@ -141,6 +142,8 @@ async def play(scenario: dict, stages: dict[str, list[str]], names: dict[str, st
     if judged:
         try:
             verdict = await judge(http, main, scenario)
+        except OutOfCredits:
+            raise
         except Exception as error:  # noqa: BLE001 - a failed judge call is reported, never allowed to end the run
             verdict = {"error": f"{type(error).__name__}: {error}"}
     return {**_head(scenario),

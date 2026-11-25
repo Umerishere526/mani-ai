@@ -10,10 +10,11 @@ from tests.unit.frameworks import REGISTRY
 
 def sent(text: str, ask: str = "", *, fixed: bool = False, guarded: bool = False, open_chat: bool = True,
          latest: str = "answer", directive: bool = False, helping: bool = False,
-         openers: tuple[str, ...] = (), offered: str | None = None, stage: str | None = None) -> enforce.Sent:
+         openers: tuple[str, ...] = (), offered: str | None = None, stage: str | None = None,
+         earlier: tuple[str, ...] = ()) -> enforce.Sent:
     return enforce.sent(text, ask, fixed=fixed, guarded=guarded, open_chat=open_chat, latest=latest,
                         directive=directive, helping=helping, openers=list(openers),
-                        offered=REGISTRY.get(offered), stage=stage)
+                        offered=REGISTRY.get(offered), stage=stage, earlier=list(earlier))
 
 
 def test_a_guarded_reply_whose_text_already_asks_its_question_asks_it_once():
@@ -299,3 +300,24 @@ def test_a_line_that_is_all_the_reply_says_or_is_advice_is_not_a_verdict(kept):
     assert sent(kept).text == kept
     assert sent("You're not alone in this? That's what hurts.", guarded=True, open_chat=False).enforced.count(
         enforce.VERDICT_REMOVED) == 0
+
+
+def test_a_line_mani_already_said_in_the_conversation_is_not_said_again():
+    """The run of 2026-11-25: Mani repeated its own line in 21 of 38 conversations."""
+    earlier = ("You want to say what you can realistically take on. What would you tell your manager?",)
+    reply = sent("You want to say what you can realistically take on. That takes one clear sentence to her.",
+                 "When could you say it?", earlier=earlier)
+    assert reply.text == "That takes one clear sentence to her.\n\nWhen could you say it?"
+    assert enforce.OWN_REPEAT_REMOVED in reply.enforced
+
+
+def test_a_question_a_stage_line_a_short_line_or_all_the_reply_says_is_never_taken_as_a_repeat():
+    earlier = ("That makes sense. A is for Activating Event. What happened the last time he asked?",
+               "You want to say what you can realistically take on.")
+    assert sent("That makes sense. A is for Activating Event.", "What happened the last time he asked?",
+                earlier=earlier, open_chat=False).enforced == []
+    alone = sent("You want to say what you can realistically take on.", "When could you say it?", earlier=earlier)
+    assert alone.text.startswith("You want to say what you can realistically take on.") and alone.enforced == []
+    guarded = sent("You want to say what you can realistically take on. Please call 988 now.", guarded=True,
+                   open_chat=False, earlier=earlier)
+    assert enforce.OWN_REPEAT_REMOVED not in guarded.enforced

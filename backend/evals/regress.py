@@ -25,6 +25,7 @@ from evals.drive import remote_database_refusal  # noqa: E402
 from evals.regression import checks, report  # noqa: E402
 from evals.regression.judge import conversation_of, judge, judge_modes  # noqa: E402
 from evals.regression.play import error_record, gap_record, play  # noqa: E402
+from evals.run_eval import OutOfCredits  # noqa: E402
 from mani.db import config_tables, pool  # noqa: E402
 from mani.chat.techniques import stages_of  # noqa: E402
 from mani.prompts import cache, composer  # noqa: E402
@@ -39,6 +40,7 @@ CONCURRENCY = 3
 # A judge call holds no chat request, so more of them run at once when a saved run is judged again.
 REJUDGE_CONCURRENCY = 6
 STYLES = 3
+OUT_OF_CREDIT = "Stopped: OpenRouter's credit is spent. Add credit and run again; nothing was written."
 
 
 def _args(argv: list[str]) -> argparse.Namespace:
@@ -146,6 +148,8 @@ async def modes(http: httpx.AsyncClient, records: list[dict], scenarios: list[di
             continue
         try:
             verdicts.append(await judge_modes(http, name, conversations))
+        except OutOfCredits:
+            raise
         except Exception as error:  # noqa: BLE001 - a failed judge call is reported, never allowed to end the run
             verdicts.append({"triplet": name, "styles": sorted(conversations), "error": f"{type(error).__name__}: {error}"})
     return verdicts
@@ -165,6 +169,8 @@ async def _run(args: argparse.Namespace, scenarios: list[dict], swapped: dict | 
                 print(f"… {scenario['id']}{f' #{n}' if args.bench else ''}", flush=True)
                 try:
                     record = await play(scenario, stages, names, allowed, judged=judged, http=http)
+                except OutOfCredits:
+                    raise
                 except Exception as error:  # noqa: BLE001 - one scenario's failure never loses the others
                     record = error_record(scenario, error)
             return {**record, "id": f"{record['id']}#{n}" if args.bench else record["id"]}
@@ -191,6 +197,8 @@ async def rejudge(path: pathlib.Path) -> dict:
             async with gate:
                 try:
                     verdict = await judge(http, conversation_of(record, scenario["style"]), scenario)
+                except OutOfCredits:
+                    raise
                 except Exception as error:  # noqa: BLE001 - a failed judge call is reported, never allowed to end the run
                     verdict = {"error": f"{type(error).__name__}: {error}"}
             return {**record, "style": scenario["style"], "judge": verdict}
@@ -208,7 +216,11 @@ def _exit_code(run: dict, strict_latency: bool) -> int:
 async def main(argv: list[str]) -> int:
     args = _args(argv)
     if args.rejudge:
-        out = report.write(await rejudge(pathlib.Path(args.rejudge)))
+        try:
+            out = report.write(await rejudge(pathlib.Path(args.rejudge)))
+        except OutOfCredits as error:
+            print(f"{OUT_OF_CREDIT} ({error})")
+            return 3
         print(f"Report: {out}")
         return 0
     scenarios = _selected(args)
@@ -223,6 +235,9 @@ async def main(argv: list[str]) -> int:
     await pool.open_pool()
     try:
         run = await _run(args, scenarios, swapped)
+    except OutOfCredits as error:
+        print(f"{OUT_OF_CREDIT} ({error})")
+        return 3
     finally:
         await pool.close_pool()
     out = report.write(run)
