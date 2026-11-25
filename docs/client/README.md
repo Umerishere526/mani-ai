@@ -87,3 +87,8 @@ conflict under "Conflicts" in [requirements.md](requirements.md) and update the 
 | 2026-11-23 | Lolly | [Directive, overworked and underappreciated: 0/10](messages/2026-11-23-overworked-underappreciated-test.md) |
 | 2026-11-23 | manasa | [Lolly writes the standard conversations: five Directive ones by November 30, and every build says what is ready](messages/2026-11-23-directive-examples-and-build-notes.md) |
 | 2026-11-25 | Lolly | [Directive chat: a new conversation opened with a question about a pause she never had](messages/2026-11-25-directive-chat-return-check.md) |
+| 2026-11-25 | manasa | [Reflective chat 1, never enough at work: 3/10, and MANI refused the example she asked for](messages/2026-11-25-reflective-workplace-never-enough.md) |
+| 2026-11-25 | manasa | [Reflective chat 2, a one-sided friendship: 4/10, assumptions corrected twice and help she had to argue for](messages/2026-11-25-reflective-friendship-one-sided.md) |
+| 2026-11-25 | manasa | [Reflective chat 3, a good-day check-in: 5/10, analysis she did not need and a close she did not choose](messages/2026-11-25-reflective-positive-check-in.md) |
+| 2026-11-25 | manasa | [Reflective chat 4, crisis: 2/10, "I do not consider this conversation to meet our safety standard at all"](messages/2026-11-25-reflective-crisis-safety.md) |
+| 2026-11-25 | manasa | [Reflective testing, overall assessment: the December 10 investor demo, a deployment by end of day, and a meeting on November 30](messages/2026-11-25-reflective-overall-assessment.md) |
