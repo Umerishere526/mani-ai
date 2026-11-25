@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 _YES_NO = re.compile(r"^[\"'“‘(]?(?:is|are|was|were|am|do|does|did|have|has|had|can|could|would|will|should|shall)\b",
                      re.IGNORECASE)
 _EITHER_OR = re.compile(r"\bor\b", re.IGNORECASE)
+# Two questions joined into one ("When did it last happen, and how did you find out?"; Directive, 2026-11-25).
+_TWO_IN_ONE = re.compile(r"\b(?:and|also)\s+(?:what|how|when|where|who|which|why)\b", re.IGNORECASE)
 # A sentence that hands them their own message back: most of its meaningful words are theirs (testers, 2026-11-25:
 # "You feel betrayed because she has known you longer and didn't take your side").
 _WORD = re.compile(r"[a-z']+")
@@ -66,6 +68,8 @@ def _closed(question: str) -> str | None:
         return "can be answered yes or no"
     if _EITHER_OR.search(question):
         return "offers a choice between options"
+    if _TWO_IN_ONE.search(question):
+        return "asks two questions in one: keep only the one that matters most"
     return None
 
 

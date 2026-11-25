@@ -21,6 +21,7 @@ def reply(text: str, ask: str = "", level: str = "none") -> TurnReply:
     ("That's the part with the weight in it.", "", "figure of speech"),
     ("You're not stuck on information.", "What matters most to you?", "reading said as fact"),
     ("She hasn't reached out.", "When a stretch goes by and she hasn't reached out, what happens in you?", "odd"),
+    ("Last to hear, every time.", "When did it last happen, and how did you find out?", "two questions in one"),
 ])
 def test_a_broken_rule_code_can_find_is_named_with_its_exact_words(text, ask, found):
     named = check.problems(reply(text, ask))
