@@ -105,13 +105,25 @@ def ran_cleanly(c: Conversation) -> Result:
     return Result("ran_cleanly", DETERMINISTIC, c.error is None, c.error or "", critical=c.error is not None)
 
 
+def own_questions(e) -> list[str]:
+    """The questions a reply asks of its own: none inside wording written for them to send, and not the ready question
+    that closes the client's five steps, which code adds after the model's words whenever the Start buttons show."""
+    text = e.reply
+    for start, end in sorted(drafted(text), reverse=True):
+        text = text[:start] + " " + text[end:]
+    asked = questions(text)
+    if asked and any(label.startswith("Start ") for label in e.buttons):
+        asked = asked[:-1]
+    return asked
+
+
 def one_question(c: Conversation) -> Result:
     """One question per turn at most, in every style (Lolly 2026-11-20 and Manasa 11/11: never forced to ask one). Only
     a reply the model wrote is held to it: fixed text such as the client's five steps, which lists a question per
     step word for word, is hers, not Mani's (a fixed reply makes no model call, so its trace has no latency)."""
     source = f"Pacing Rules; {APPROVED}"
     for n, e in enumerate(c.exchanges, 1):
-        if e.trace.get("latency_ms") is not None and len(asked := questions(e.reply)) > 1:
+        if e.trace.get("latency_ms") is not None and len(asked := own_questions(e)) > 1:
             return Result("one_question", DETERMINISTIC, False, f"{len(asked)} questions: {asked}", n, source=source)
     return Result("one_question", DETERMINISTIC, True, source=source)
 
@@ -120,7 +132,7 @@ def no_repeated_question(c: Conversation) -> Result:
     """R106 and Pacing Rules: never 'asking the same question in a different way'."""
     earlier: list[tuple[int, str]] = []
     for n, e in enumerate(c.exchanges, 1):
-        for q in questions(e.reply):
+        for q in own_questions(e):
             for m, before in earlier:
                 if similarity(q, before) >= SAME_QUESTION:
                     return Result("no_repeated_question", DETERMINISTIC, False,

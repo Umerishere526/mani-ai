@@ -363,3 +363,16 @@ def test_an_explicit_request_is_answered_in_that_reply():
     assert checks.helps_at(helped, 1).passed
     assert not checks.helps_at(chat(turn("help me decide", "What matters most to you?")), 1).passed
     assert not checks.helps_at(chat(turn("hi", "Okay.")), 2).passed
+
+
+def test_questions_in_a_draft_or_closing_the_five_steps_are_not_manis_own():
+    """The 2026-11-25 Directive run: TC-31's script to the manager ends "Which do you want?" and TC-35's steps end
+    "Ready to dive into a real life situation?"; neither is a second question of Mani's."""
+    scripted = turn("what do i say?", 'Say this: "I can do this by morning if the other thing waits. Which do you want?"\n\n'
+                    "What has she said before?", latency_ms=900)
+    assert checks.one_question(chat(scripted)).passed
+    steps = Exchange(said="ok", tapped=False, reply="What do you mean by disappear?\n\nA, B, C, D, E.\n\nReady to dive into a "
+                     "real life situation?", buttons=["Start ABCDE", "Talk more first"], trace={"latency_ms": 900},
+                     seconds=1.0, paused=False, crisis=False)
+    assert checks.one_question(chat(steps)).passed
+    assert not checks.one_question(chat(turn("x", "What happened? How did you feel?", latency_ms=900))).passed
