@@ -1,4 +1,5 @@
-// ABOUTME: Groups a set of SettingsRow items under an uppercase section label.
+// ABOUTME: Groups a set of SettingsRow items under an uppercase section label, with
+// ABOUTME: consistent spacing between sections.
 
 import type { ReactNode } from 'react';
 import { View } from 'react-native';

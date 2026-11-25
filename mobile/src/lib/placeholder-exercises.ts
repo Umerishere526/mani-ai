@@ -1,5 +1,5 @@
-// ABOUTME: Placeholder exercise data standing in for the exercises tRPC router, which
-// ABOUTME: doesn't exist in this app yet — replace with a real fetch once the backend lands.
+// ABOUTME: Placeholder exercise data for the home and library screens, which do not yet
+// ABOUTME: fetch the library from the FastAPI backend's /v1/exercises routes.
 
 import type { Exercise } from '@/types/exercise';
 

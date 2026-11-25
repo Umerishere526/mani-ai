@@ -1,3 +1,6 @@
+/* ABOUTME: Tailwind v4 + NativeWind entry stylesheet — imports the Tailwind layers and */
+/* ABOUTME: defines the app's theme tokens (mirrored by hand in src/lib/tokens.ts). */
+
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css";

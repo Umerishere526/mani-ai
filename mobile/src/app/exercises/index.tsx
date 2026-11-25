@@ -1,3 +1,6 @@
+// ABOUTME: Library screen — the exercise categories as gradient cards in a fixed order,
+// ABOUTME: each opening its category's exercise list.
+
 import { useState } from "react";
 import { router } from "expo-router";
 import { Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";

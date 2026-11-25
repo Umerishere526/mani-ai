@@ -1,3 +1,6 @@
+// ABOUTME: Change-email screen — enter a new address, then verify it with a 6-digit code;
+// ABOUTME: sending and verifying are simulated until the account API is wired up.
+
 import { useState } from "react";
 import { router } from "expo-router";
 import { Alert } from "react-native";

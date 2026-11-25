@@ -142,6 +142,10 @@
     "startNewConversation": "Start New Conversation",
     "openSettingsLabel": "Open settings",
     "goBackLabel": "Go back",
+    "userMessageLabel": "You: {message}",
+    "maniMessageLabel": "Mani: {message}",
+    "threadLabel": "Conversation: {title}",
+    "profileFallbackName": "User",
     "newConversationFallbackTitle": "New conversation",
     "dateGroups": {
       "today": "Today",
@@ -184,7 +188,7 @@
     "intro": [
       "You deserve support that keeps you safe.",
       "If you are in immediate danger or feel at risk, you need real human help right now.",
-      "Mani cannot provide emergency care — but Mani can guide you to the right place."
+      "Mani cannot provide emergency care, but Mani can guide you to the right place."
     ],
     "guidance": [
       {

@@ -1,8 +1,9 @@
-// ABOUTME: The scrollable, date-grouped conversation history inside ChatDrawer.
+// ABOUTME: The scrollable, date-grouped conversation history inside ChatDrawer, one row
+// ABOUTME: per thread under Today / Yesterday / Older headers.
 
 import { FlatList, View } from 'react-native';
 import type { ThreadListItem } from '@/types/chat';
-import { groupThreadsByDate, type GroupedThreadRow } from '@/lib/utils';
+import { fillTemplate, groupThreadsByDate, type GroupedThreadRow } from '@/lib/utils';
 import en from '@/dictionaries/en.json';
 import { Text } from '@/components/shared';
 import { DrawerActionRow } from './drawer-action-row';
@@ -28,7 +29,7 @@ function renderRow(item: GroupedThreadRow, onThreadPress: (threadId: string) => 
   return (
     <DrawerActionRow
       onPress={() => onThreadPress(item.thread.id)}
-      accessibilityLabel={`Thread: ${title}`}
+      accessibilityLabel={fillTemplate(en.chat.threadLabel, { title })}
       className="mb-1"
     >
       <Text className="text-sm" numberOfLines={1}>

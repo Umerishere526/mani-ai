@@ -13,6 +13,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { Message } from '@/types/chat';
 import { Text } from '@/components/shared';
+import { fillTemplate } from '@/lib/utils';
+import en from '@/dictionaries/en.json';
 import { ScaledTextRenderer } from './scaled-text-renderer';
 import { markdownStyles } from './markdown-styles';
 
@@ -53,7 +55,7 @@ export function MessageBubble({ message, animate = true }: MessageBubbleProps) {
           style={animatedStyle}
           accessible
           accessibilityRole="text"
-          accessibilityLabel={`You: ${message.content}`}
+          accessibilityLabel={fillTemplate(en.chat.userMessageLabel, { message: message.content })}
         >
           <Text className="text-base leading-6">{message.content}</Text>
         </Animated.View>
@@ -67,7 +69,7 @@ export function MessageBubble({ message, animate = true }: MessageBubbleProps) {
       style={animatedStyle}
       accessible
       accessibilityRole="text"
-      accessibilityLabel={`Mani: ${message.content}`}
+      accessibilityLabel={fillTemplate(en.chat.maniMessageLabel, { message: message.content })}
     >
       <Markdown
         value={message.content}

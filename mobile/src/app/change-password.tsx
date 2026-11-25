@@ -1,3 +1,6 @@
+// ABOUTME: Change-password screen — new and confirm fields with show/hide toggles and
+// ABOUTME: length/match checks; the update itself is simulated until the account API is wired up.
+
 import { useRef, useState } from "react";
 import { router } from "expo-router";
 import { Alert, Pressable, View, type TextInput as RNTextInput } from "react-native";

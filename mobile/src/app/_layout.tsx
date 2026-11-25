@@ -1,3 +1,6 @@
+// ABOUTME: Root layout — the route stack (header hidden), the drawer provider, and the
+// ABOUTME: global drawers drawn above every screen; also loads the Tailwind stylesheet.
+
 import { Stack } from "expo-router";
 import { DrawerProvider } from "@/providers";
 import { GlobalDrawer } from "@/components/global-drawer";

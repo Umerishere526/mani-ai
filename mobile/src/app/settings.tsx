@@ -1,3 +1,6 @@
+// ABOUTME: Settings screen — notification preference, account rows (password, email)
+// ABOUTME: and Log Out; sign-out is simulated until auth is wired up.
+
 import { useState } from "react";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";

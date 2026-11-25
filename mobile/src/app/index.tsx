@@ -1,3 +1,6 @@
+// ABOUTME: Home screen route — featured exercises, the library link and the new-chat
+// ABOUTME: action, rendered by HomeScreenContent.
+
 import { useState } from "react";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";

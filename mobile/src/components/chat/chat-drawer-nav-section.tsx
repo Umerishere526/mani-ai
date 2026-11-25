@@ -1,4 +1,5 @@
-// ABOUTME: The three top-level nav links inside ChatDrawer — Home, Library, Get Help Now.
+// ABOUTME: The three top-level nav links inside ChatDrawer — Home, Library, Get Help Now —
+// ABOUTME: each a DrawerActionRow with an icon.
 
 import { View } from 'react-native';
 import { Feather, type FeatherIconName } from '@react-native-vector-icons/feather';

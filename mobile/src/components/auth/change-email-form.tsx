@@ -1,4 +1,5 @@
-// ABOUTME: The "enter a new email address" phase of ChangeEmailScreen.
+// ABOUTME: The "enter a new email address" phase of ChangeEmailScreen — the current
+// ABOUTME: address read-only, the new-address field, and the Send Code button.
 
 import { View } from "react-native";
 import { PrimaryButton, Text, TextInput } from "@/components/shared";

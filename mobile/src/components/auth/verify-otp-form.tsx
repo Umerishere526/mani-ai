@@ -1,4 +1,5 @@
-// ABOUTME: The "verify the code we sent" phase of ChangeEmailScreen.
+// ABOUTME: The "verify the code we sent" phase of ChangeEmailScreen — the 6-digit code
+// ABOUTME: field, Verify, and the resend / wrong-email links.
 
 import { useRef } from "react";
 import { Pressable, View, type TextInput as RNTextInput } from "react-native";

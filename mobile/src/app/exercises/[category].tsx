@@ -1,3 +1,6 @@
+// ABOUTME: Library category screen — lists the exercises in one category, each row
+// ABOUTME: showing duration, type and title, and opens the player when tapped.
+
 import { useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import {
