@@ -1,4 +1,4 @@
-# ABOUTME: The exercise catalog, a user's completions, and their 👍/👎 on each exercise.
+# ABOUTME: The exercise catalog and its topics, a user's completions, and their 👍/👎 on each exercise.
 # ABOUTME: Audio paths never leave the backend; clients get a short-lived signed link.
 
 import asyncio
@@ -18,6 +18,7 @@ from mani.models.api import (
     ExerciseOut,
     FeedbackIn,
     FeedbackOut,
+    TopicOut,
 )
 from mani.routers.serializers import to_completion, to_exercise
 from mani.storage import signed_audio_url
@@ -42,6 +43,12 @@ async def list_exercises(
 @router.get("/home", response_model=list[ExerciseOut])
 async def home_screen(user: CurrentUser, conn: UserConn) -> list[ExerciseOut]:
     return await _with_urls(conn, user.user_id, await exercises_db.list_active(conn, home_screen=True))
+
+
+@router.get("/topics", response_model=list[TopicOut])
+async def list_topics(user: CurrentUser, conn: UserConn) -> list[TopicOut]:
+    """The library's topics in the client's order, each with its blurb."""
+    return [TopicOut(**t.model_dump()) for t in await exercises_db.list_topics(conn)]
 
 
 @router.get("/completions", response_model=list[CompletionOut])

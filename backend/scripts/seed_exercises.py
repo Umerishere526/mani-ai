@@ -1,4 +1,4 @@
-# ABOUTME: Uploads the exercise audio to the private storage bucket and seeds admin.exercises.
+# ABOUTME: Uploads the exercise audio to the private storage bucket and seeds admin.library_topics and admin.exercises.
 # ABOUTME: Idempotent: creates the bucket if missing, upserts every file and every row by id.
 
 import asyncio
@@ -40,6 +40,15 @@ class ExerciseCategory(StrEnum):
     SLEEP = "Sleep"
 
 
+class ManifestTopic(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    id: ExerciseCategory
+    title: str
+    blurb: str
+    display_order: int = Field(alias="displayOrder")
+
+
 class ManifestEntry(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -60,6 +69,11 @@ def load_manifest() -> list[ManifestEntry]:
     return [ManifestEntry.model_validate(entry) for entry in raw]
 
 
+def load_topics() -> list[ManifestTopic]:
+    raw = json.loads(MANIFEST.read_text())["topics"]
+    return [ManifestTopic.model_validate(topic) for topic in raw]
+
+
 def _ensure_bucket(http: httpx.Client) -> None:
     """Create the private bucket once. A bucket that already exists is left as it is."""
     if http.get(f"/bucket/{BUCKET}").status_code == 200:
@@ -77,10 +91,22 @@ def _upload(http: httpx.Client, entry: ManifestEntry) -> None:
     response.raise_for_status()
 
 
-async def _upsert_rows(entries: list[ManifestEntry]) -> None:
+async def _upsert_rows(topics: list[ManifestTopic], entries: list[ManifestEntry]) -> None:
     conn = await asyncpg.connect(get_settings().database_url)
     try:
         async with conn.transaction():
+            for t in topics:
+                await conn.execute(
+                    """
+                    insert into admin.library_topics (id, title, blurb, display_order)
+                    values ($1, $2, $3, $4)
+                    on conflict (id) do update set
+                        title = excluded.title,
+                        blurb = excluded.blurb,
+                        display_order = excluded.display_order
+                    """,
+                    t.id.value, t.title, t.blurb, t.display_order,
+                )
             for e in entries:
                 await conn.execute(
                     """
@@ -107,6 +133,7 @@ async def _upsert_rows(entries: list[ManifestEntry]) -> None:
 
 
 def main() -> None:
+    topics = load_topics()
     entries = load_manifest()
     missing = [e.filename for e in entries if not (EXERCISES_DIR / e.filename).is_file()]
     if missing:
@@ -126,8 +153,8 @@ def main() -> None:
         for entry in entries:
             _upload(http, entry)
             print(f"  {entry.category.value:<22} {entry.title}")
-    asyncio.run(_upsert_rows(entries))
-    print(f"exercises: {len(entries)}")
+    asyncio.run(_upsert_rows(topics, entries))
+    print(f"topics: {len(topics)}, exercises: {len(entries)}")
 
 
 if __name__ == "__main__":

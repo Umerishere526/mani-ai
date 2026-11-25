@@ -1,5 +1,5 @@
-# ABOUTME: The exercise catalog and a user's completions.
-# ABOUTME: The catalog is shared config; completions are the user's own rows under RLS.
+# ABOUTME: The exercise catalog, its topics, and a user's completions.
+# ABOUTME: The catalog and topics are shared config; completions are the user's own rows under RLS.
 
 from __future__ import annotations
 
@@ -24,6 +24,15 @@ class Completion(Row):
     exercise_id: uuid.UUID
     helpful: bool | None = None
     completed_at: dt.datetime
+
+
+class LibraryTopic(Row):
+    """A library topic: its id is the category its exercises carry."""
+
+    id: str
+    title: str
+    blurb: str = ""
+    display_order: int = 0
 
 
 class AdminExercise(Exercise):
@@ -73,6 +82,13 @@ async def list_active(
         home_screen, category,
     )
     return Exercise.from_records(rows)
+
+
+async def list_topics(conn: asyncpg.Connection) -> list[LibraryTopic]:
+    rows = await conn.fetch(
+        "select id, title, blurb, display_order from admin.library_topics order by display_order, title"
+    )
+    return LibraryTopic.from_records(rows)
 
 
 async def get(conn: asyncpg.Connection, exercise_id: uuid.UUID | str) -> Exercise | None:

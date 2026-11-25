@@ -223,6 +223,15 @@ class ExerciseOut(BaseModel):
     feedback: FeedbackOut | None = None
 
 
+class TopicOut(BaseModel):
+    """A library topic; its id is the `category` its exercises carry."""
+
+    id: str
+    title: str
+    blurb: str = ""
+    display_order: int = 0
+
+
 class CompletionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
