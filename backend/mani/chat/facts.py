@@ -161,11 +161,12 @@ def _running_line(framework, phase: str | None, *, held: bool) -> str:
         return (f"{framework.name}'s last stage is done and you asked how they feel. This reply is about their safety: "
                 "answer that, and say nothing about the set or a next step. The set stays open and nothing closes now.")
     if phase == FEELINGS:
-        return (f"{framework.name}'s last stage is done and you asked how they feel now. Answer how they feel, warmly, "
-                "in a sentence or two (in Directive, one), never calling the set a success. Recap nothing and force no "
-                "question: if it didn't help or they feel the same, ask what they still need; otherwise offer a next "
-                "step only if one would clearly help, or check they got what they came for only if that is unclear. "
-                "Code closes the set and shows the closing buttons.")
+        return (f"{framework.name}'s last stage is done and you asked how they feel now. Answer how they feel in a "
+                "sentence or two: name briefly, in their words, what moved and what is still open, including any part "
+                "of what they came with that the set did not reach. No praise, never calling the set a success, no "
+                "retelling of the set, and force no question: if it didn't help or they feel the same, ask what they "
+                "still need; otherwise offer a next step only if one would clearly help. Code closes the set and shows "
+                "the closing buttons.")
     stages = stages_of(framework)
     at = stages.index(phase) if phase in stages else 0
     if held:

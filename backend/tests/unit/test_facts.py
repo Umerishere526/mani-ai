@@ -155,6 +155,7 @@ def test_the_last_stage_asks_how_they_feel_and_the_check_in_presumes_no_success(
     assert "ask how they feel now" in last and "set action to finish" in last
     check_in = facts_for(ctx(), running=running("abcde", "feelings_check"))
     assert "never calling the set a success" in check_in and "force no question" in check_in
+    assert "what is still open" in check_in and "No praise" in check_in, "R172: the close names what is still open"
     assert "if it didn't help" in check_in and "only if one would clearly help" in check_in and "is for" not in check_in
 
 
