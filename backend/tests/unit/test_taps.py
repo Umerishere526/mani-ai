@@ -1,5 +1,5 @@
-# ABOUTME: What a tapped button means for the turn: which framework starts, when the five steps, the walk-through or
-# ABOUTME: the example are due, when an offer is set aside, and what the reply is told; a stale button means nothing.
+# ABOUTME: What a tapped button means for the turn: which framework starts, when the five steps or the walk-through
+# ABOUTME: are due, when an offer is set aside, and what the reply is told; a stale button means nothing.
 
 from mani.chat.taps import tap_event
 from mani.chat.techniques import stages_of
@@ -41,10 +41,6 @@ def test_a_lead_in_button_with_no_offer_open_means_nothing_to_the_offer():
         assert (event.explain, event.demonstrate, event.starting) == (None, None, None), label
 
 
-def test_i_need_an_example_asks_for_the_worked_example():
-    assert tap_event(SmartPrompt(label="I need an example"), REGISTRY, offered("abcde", "steps")).example.id == "abcde"
-
-
 def test_talk_more_first_sets_the_offer_aside_and_never_declines_it():
     event = tap_event(SmartPrompt(label="Talk more first"), REGISTRY, offered("abcde", "steps"))
     assert event.set_aside is True and event.starting is None and event.fact
@@ -52,7 +48,7 @@ def test_talk_more_first_sets_the_offer_aside_and_never_declines_it():
 
 def test_no_tap_means_nothing():
     event = tap_event(None, REGISTRY, offered("abcde"))
-    assert (event.fact, event.starting, event.set_aside, event.explain, event.example) == (None, None, False, None, None)
+    assert (event.fact, event.starting, event.set_aside, event.explain) == (None, None, False, None)
 
 
 def test_a_frameworks_stages_are_its_phases_after_the_offer():

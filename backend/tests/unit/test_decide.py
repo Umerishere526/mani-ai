@@ -149,7 +149,7 @@ def test_stage_of_reads_only_the_frameworks_own_stages():
 def test_a_typed_reply_to_the_lead_in_gets_the_five_steps_and_the_start_buttons():
     """muhammad, 2026-11-18: most people type an answer to the lead-in's question; it gets the reply, then the steps."""
     d = decided(reply(), open_offer=offered("abcde"), count_after=6)
-    assert d.show_steps.id == "abcde" and labels(d) == ["Start ABCDE", "I need an example", "Talk more first"]
+    assert d.show_steps.id == "abcde" and labels(d) == ["Start ABCDE", "Talk more first"]
     assert d.technique.outcome is TechniqueOutcome.OFFERED and d.technique.phase == "steps" and d.declined == []
 
 

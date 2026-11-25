@@ -66,13 +66,6 @@ def test_the_five_steps_are_the_clients_in_every_style(abcde):
         assert steps_text(as_framework(abcde), style) == text, style
 
 
-def test_the_worked_example_runs_a_to_e(abcde):
-    from mani.chat.techniques import example_text
-
-    example = example_text(as_framework(abcde))
-    assert "my child is sick" in example and "one step at a time" in example
-
-
 def test_when_a_stage_counts_as_answered_keeps_the_clients_reading(abcde):
     """Lolly, 2026-10-22: A counts only what happened as the event. E is the new belief alone (2026-11-18)."""
     stages = abcde["stages"]

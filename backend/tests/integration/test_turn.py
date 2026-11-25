@@ -148,15 +148,14 @@ async def warm_up(alice, thread_id) -> None:
     await send(alice, thread_id, "my boss keeps adding things")
 
 
-async def abcde_text(kind: str, style: str = "supportive") -> str:
+async def abcde_steps(style: str = "supportive") -> str:
     from mani.chat import techniques
     from mani.prompts import cache
 
-    framework = (await cache.load()).registry.get("abcde")
-    return techniques.steps_text(framework, style) if kind == "steps" else techniques.example_text(framework)
+    return techniques.steps_text((await cache.load()).registry.get("abcde"), style)
 
 
-START = ["Start ABCDE", "I need an example", "Talk more first"]
+START = ["Start ABCDE", "Talk more first"]
 
 
 async def test_a_clear_offer_is_the_lead_in_with_its_three_buttons(alice, model):
@@ -169,8 +168,8 @@ async def test_a_clear_offer_is_the_lead_in_with_its_three_buttons(alice, model)
     assert (await technique_of(alice, thread.id)).outcome is TechniqueOutcome.OFFERED
 
 
-async def test_the_offer_runs_lead_in_steps_example_then_start(alice, model):
-    """The client's sequence document, 2026-11-18: the steps and the example are hers, sent with no model call."""
+async def test_the_offer_runs_lead_in_steps_then_start(alice, model):
+    """The client's sequence document, 2026-11-18: the steps are hers, sent with no model call."""
     scripted = model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"),
                      said("A is for Activating Event. What happened?", stage="activate"),
                      said("B is for Belief. What did you tell yourself?", stage="belief"))
@@ -178,11 +177,8 @@ async def test_the_offer_runs_lead_in_steps_example_then_start(alice, model):
     await warm_up(alice, thread.id)
     await send(alice, thread.id, "i feel like a pushover")
     steps = await send(alice, thread.id, "Not sure")
-    assert scripted.calls == 3 and steps.content == await abcde_text("steps")
+    assert scripted.calls == 3 and steps.content == await abcde_steps()
     assert [p.label for p in steps.prompts] == START
-    example = await send(alice, thread.id, "I need an example")
-    assert scripted.calls == 3 and example.content == await abcde_text("example")
-    assert [p.label for p in example.prompts] == ["Start ABCDE", "Talk more first"]
     await send(alice, thread.id, "Start ABCDE")
     assert (await technique_of(alice, thread.id)).phase == "activate"
     await send(alice, thread.id, "he dumped a report on me friday")
@@ -234,7 +230,7 @@ async def test_a_typed_reply_to_the_lead_in_gets_the_reply_then_the_steps(alice,
     await warm_up(alice, thread.id)
     await send(alice, thread.id, "i feel like a pushover")
     turn = await send(alice, thread.id, "maybe look at what i've actually managed?")
-    assert turn.content == "That's a fair way to start.\n\n" + await abcde_text("steps")
+    assert turn.content == "That's a fair way to start.\n\n" + await abcde_steps()
     assert [p.label for p in turn.prompts] == START
     assert (await technique_of(alice, thread.id)).phase == "steps"
 

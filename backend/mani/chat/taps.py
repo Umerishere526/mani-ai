@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from mani.chat.greeting import (
-    CONTINUE_CHATTING_LABEL, EXAMPLE_LABEL, GIVE_ME_A_TOOL_LABEL, NOT_SURE_LABEL, SHOW_ME_HOW_LABEL,
+    CONTINUE_CHATTING_LABEL, GIVE_ME_A_TOOL_LABEL, NOT_SURE_LABEL, SHOW_ME_HOW_LABEL,
     TALK_MORE_FIRST_LABEL,
 )
 from mani.chat.techniques import FIRST_STAGE_OPENING, Registry, line_of, stages_of
@@ -16,7 +16,6 @@ from mani.models.rows import Framework, Message, MessageRole, SupportStyle, Tech
 NOT_SURE = NOT_SURE_LABEL.lower()
 SHOW_ME_HOW = SHOW_ME_HOW_LABEL.lower()
 GIVE_ME_A_TOOL = GIVE_ME_A_TOOL_LABEL.lower()
-EXAMPLE = EXAMPLE_LABEL.lower()
 TALK_MORE_FIRST = TALK_MORE_FIRST_LABEL.lower()
 CONTINUE_CHATTING = CONTINUE_CHATTING_LABEL.lower()
 
@@ -28,7 +27,6 @@ class TapEvent:
     fact: str | None = None
     starting: Framework | None = None
     explain: Framework | None = None
-    example: Framework | None = None
     demonstrate: Framework | None = None
     set_aside: bool = False
 
@@ -99,8 +97,6 @@ def tap_event(tapped: SmartPrompt | None, registry: Registry, open_offer: Techni
             f"with its line (\"{line_of(offered, first)}\"). If they have already told you what that stage asks, say it "
             "back in a sentence, in their words, and ask only whether it is right or what is missing; otherwise ask "
             "that stage's question."))
-    if offered is not None and label == EXAMPLE:
-        return TapEvent(example=offered)
     if offered is not None and label == TALK_MORE_FIRST:
         return TapEvent(set_aside=True, fact=(
             f"They chose to talk more before trying {offered.name}. Carry on with them; you may offer it again later "

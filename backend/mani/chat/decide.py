@@ -140,7 +140,7 @@ def _answered_offer(base: Decision, open_offer: TechniqueState, offered: Framewo
         return dataclasses.replace(base, prompts=start_buttons(offered, with_example=False),
                                    technique=open_offer.model_copy(update={"phase": STEPS}))
     if offered is not None and open_offer.phase == OFFERING and not tap.set_aside:
-        return dataclasses.replace(base, show_steps=offered, prompts=start_buttons(offered, with_example=True),
+        return dataclasses.replace(base, show_steps=offered, prompts=start_buttons(offered, with_example=False),
                                    technique=open_offer.model_copy(update={"phase": STEPS}))
     return dataclasses.replace(base, retire_technique=True)
 

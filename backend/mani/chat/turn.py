@@ -19,7 +19,7 @@ from mani.chat.greeting import (
 )
 from mani.chat.repairs import clean_title, sent_text, start_buttons
 from mani.chat.reply import TurnReply, shaped
-from mani.chat.techniques import FEELINGS, OFFERING, STEPS, example_text, steps_text
+from mani.chat.techniques import FEELINGS, OFFERING, STEPS, steps_text
 from mani.config import get_settings
 from mani.text import copies_last_reply
 from mani.db import llm_calls, messages as messages_db, pauses, profiles, threads
@@ -166,9 +166,6 @@ async def _turn(
     # A held turn (an open worry, or the question owed after a pause) goes to the model, never to a fixed step.
     if tap.explain is not None and not holding:
         return await _explained(conn, ctx, content, tap.explain, style_name, tapped, client_message_id)
-    if tap.example is not None and not holding:
-        return await _fixed_step(conn, ctx, content, example_text(tap.example),
-                                 start_buttons(tap.example, with_example=False), tapped, client_message_id)
     last_reply = next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None)
     if tapped is None and not holding and copies_last_reply(content, last_reply):
         return await _copied_back(conn, ctx, content, client_message_id)
@@ -410,7 +407,7 @@ async def _explained(conn, ctx, content, framework: Framework, style: str, tappe
     """Not sure: the client's five steps for their style, word for word, with no model call. The offer moves to its
     steps, where the next answer starts it, sets it aside or lets it lapse."""
     turn = await _fixed_step(conn, ctx, content, steps_text(framework, style),
-                             start_buttons(framework, with_example=True), tapped, client_message_id)
+                             start_buttons(framework, with_example=False), tapped, client_message_id)
     if not turn.was_duplicate and ctx.technique is not None:
         await threads.apply(conn, ctx.thread.id, ctx.thread.user_id,
                             threads.ThreadUpdates(technique=ctx.technique.model_copy(update={"phase": STEPS})))
@@ -418,7 +415,7 @@ async def _explained(conn, ctx, content, framework: Framework, style: str, tappe
 
 
 async def _fixed_step(conn, ctx, content, text: str, prompts: list[SmartPrompt], tapped, client_message_id) -> Turn:
-    """One of the client's fixed offer steps (the five steps, the example), sent with its buttons and no model call."""
+    """One of the client's fixed offer steps (the five steps), sent with its buttons and no model call."""
     pair = await messages_db.create_pair(
         conn, ctx.thread.id, content, text, selected_prompt=tapped.label,
         prompt_options=[p.model_dump(mode="json", exclude_none=True) for p in prompts],
