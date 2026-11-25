@@ -12,6 +12,6 @@ export const FORM_TEXTAREA_CLASSES = `${FORM_INPUT_CLASSES} font-mono leading-re
 
 export const FORM_LABEL_CLASSES = "mb-1.5 block text-[0.9375rem] font-medium text-mani-text";
 
-export const FORM_HELPER_CLASSES = "mt-1.5 text-[0.8125rem] text-mani-text-light";
+export const FORM_HELPER_CLASSES = "mt-1.5 text-[0.8125rem] text-mani-text-muted";
 
 export const FORM_ERROR_CLASSES = "mt-1 text-sm text-mani-error";

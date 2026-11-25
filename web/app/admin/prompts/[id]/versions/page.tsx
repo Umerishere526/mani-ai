@@ -65,11 +65,11 @@ export default async function VersionsPage({ params }: VersionsPageProps) {
 
                 <div className="mb-4 grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-mani-text-light">{STRINGS.modelLabel}</span>{" "}
+                    <span className="text-mani-text-muted">{STRINGS.modelLabel}</span>{" "}
                     <span className="font-medium">{version.modelId ?? PROMPTS_STRINGS.defaultModel}</span>
                   </div>
                   <div>
-                    <span className="text-mani-text-light">{STRINGS.parametersLabel}</span>{" "}
+                    <span className="text-mani-text-muted">{STRINGS.parametersLabel}</span>{" "}
                     <span className="font-mono text-xs">{JSON.stringify(version.modelParameters)}</span>
                   </div>
                 </div>

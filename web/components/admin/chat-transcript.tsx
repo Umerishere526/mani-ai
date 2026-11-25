@@ -34,7 +34,7 @@ export function ChatTranscript({ messages }: ChatTranscriptProps) {
                 {isUser ? STRINGS.roleUser : STRINGS.roleMani}
               </div>
               <div className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</div>
-              <div className="mt-2 text-xs text-mani-text-light">{formatMessageTime(message.createdAt)}</div>
+              <div className="mt-2 text-xs text-mani-text-muted">{formatMessageTime(message.createdAt)}</div>
             </div>
           </article>
         );
