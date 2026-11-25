@@ -1,5 +1,5 @@
-// ABOUTME: Display order for the exercise category grid — intentionally omits
-// ABOUTME: NarcissisticDynamics, matching source's product decision, not an oversight.
+// ABOUTME: Display order for the exercise category grid, so the library screen lists
+// ABOUTME: categories in a fixed order rather than the dictionary's key order.
 
 import type { TopicId } from '@/types/exercise';
 

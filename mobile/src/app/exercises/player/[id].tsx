@@ -1,53 +1,38 @@
-import { useEffect, useRef, useState } from "react";
+// ABOUTME: Exercise player screen — title, listed duration, breathing sphere and description,
+// ABOUTME: then a play/pause control with time remaining, and a completion step when it ends.
+
+import { useEffect } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Feather } from "@react-native-vector-icons/feather";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from "react-native-reanimated";
-import { AppHeader, CircularProgressButton, GradientSphere, SecondaryButton, Text } from "@/components/shared";
+import { AppHeader, GradientSphere, SecondaryButton, Text } from "@/components/shared";
+import { ExerciseComplete, ExercisePlaybackControl } from "@/components/exercises";
 import { colors } from "@/lib/tokens";
 import { useResponsiveDimensions } from "@/hooks/useResponsiveDimensions";
+import { useExercisePlayback } from "@/hooks/useExercisePlayback";
 import { formatDuration } from "@/lib/utils";
 import { getExerciseById } from "@/lib/placeholder-exercises";
 import en from "@/dictionaries/en.json";
 
 const GRADIENT_COLORS = [colors.primary[700], colors.primary[900]] as const;
-const SIMULATED_DURATION_MS = 30_000;
-const PROGRESS_TICK_MS = 250;
 
 export default function ExercisePlayerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { isSmallScreen, isLargeScreen } = useResponsiveDimensions();
   const exercise = id ? getExerciseById(id) : undefined;
-
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [hasStarted, setHasStarted] = useState(false);
-  const [elapsedMs, setElapsedMs] = useState(0);
+  const playback = useExercisePlayback((exercise?.durationMinutes ?? 0) * 60_000);
   const descriptionOpacity = useSharedValue(1);
-  const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   useEffect(() => {
-    if (!isPlaying) return;
-    intervalRef.current = setInterval(() => {
-      setElapsedMs((prev) => Math.min(prev + PROGRESS_TICK_MS, SIMULATED_DURATION_MS));
-    }, PROGRESS_TICK_MS);
-    return () => clearInterval(intervalRef.current);
-  }, [isPlaying]);
-
-  useEffect(() => {
-    if (hasStarted) {
+    if (playback.hasStarted) {
       descriptionOpacity.value = withTiming(0, { duration: 500 });
     }
-  }, [hasStarted, descriptionOpacity]);
+  }, [playback.hasStarted, descriptionOpacity]);
 
   const descriptionStyle = useAnimatedStyle(() => ({ opacity: descriptionOpacity.value }));
-
-  const handleTogglePlayback = () => {
-    if (!hasStarted) setHasStarted(true);
-    setIsPlaying((prev) => !prev);
-  };
 
   if (!exercise) {
     return (
@@ -69,7 +54,7 @@ export default function ExercisePlayerScreen() {
       </View>
 
       <View className="items-center" style={{ marginTop: isSmallScreen ? 36 : 60, marginBottom: isSmallScreen ? 36 : 60 }}>
-        <GradientSphere size={100} animated={isPlaying} />
+        <GradientSphere size={100} animated={playback.isPlaying} />
       </View>
 
       <Animated.View
@@ -84,43 +69,30 @@ export default function ExercisePlayerScreen() {
       <View className="flex-1" />
 
       <View className="items-center px-4" style={{ paddingBottom: insets.bottom + 32 }}>
-        {!hasStarted && (
+        {!playback.hasStarted && (
           <SecondaryButton
             label={en.exercises.begin}
-            onPress={handleTogglePlayback}
+            onPress={playback.togglePlayback}
             className="self-stretch"
             accessibilityLabel={en.exercises.beginLabel}
             accessibilityHint={en.exercises.beginHint}
           />
         )}
+        {playback.hasStarted && !playback.isComplete && (
+          <ExercisePlaybackControl
+            isPlaying={playback.isPlaying}
+            progress={playback.progress}
+            remainingSeconds={playback.remainingSeconds}
+            onToggle={playback.togglePlayback}
+          />
+        )}
+        {playback.isComplete && (
+          <ExerciseComplete
+            onContinueChatting={() => router.dismissTo("/chat")}
+            onBackToLibrary={() => router.dismissTo("/exercises")}
+          />
+        )}
       </View>
-
-      {hasStarted && (
-        <View className="absolute left-0 right-0 items-center" style={{ bottom: insets.bottom + 32 }}>
-          <CircularProgressButton
-            progress={elapsedMs / SIMULATED_DURATION_MS}
-            size={88}
-            strokeWidth={4}
-            progressColor="rgba(255,255,255,0.5)"
-            trackColor="rgba(255,255,255,0.15)"
-
-          >
-            <Pressable
-              onPress={handleTogglePlayback}
-              className={isPlaying ? "h-18 w-18 items-center justify-center rounded-full bg-white/8" : "h-18 w-18 items-center justify-center rounded-full bg-secondary-500"}
-              accessibilityRole="button"
-              accessibilityLabel={isPlaying ? en.exercises.pauseLabel : en.exercises.playLabel}
-            >
-              <Feather
-                name={isPlaying ? "pause" : "play"}
-                size={32}
-                color={isPlaying ? colors.text.inverse : colors.primary[500]}
-                style={!isPlaying ? { marginLeft: 4 } : undefined}
-              />
-            </Pressable>
-          </CircularProgressButton>
-        </View>
-      )}
     </View>
   );
 }

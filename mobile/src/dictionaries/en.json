@@ -94,15 +94,14 @@
     "beginHint": "Starts playing the exercise audio",
     "pauseLabel": "Pause exercise",
     "playLabel": "Play exercise",
-    "elapsedTimeLabel": "Elapsed time",
+    "remainingTimeLabel": "Time remaining",
+    "completeTitle": "Exercise complete",
+    "continueChatting": "Continue chatting",
+    "backToLibrary": "Back to library",
     "categories": {
       "EmotionalIntelligence": {
         "title": "Emotional Intelligence",
         "description": "Develop awareness and understanding of your emotions"
-      },
-      "NarcissisticDynamics": {
-        "title": "Narcissistic Dynamics",
-        "description": "Navigate challenging relationship patterns"
       },
       "BuildingHabits": {
         "title": "Building New Habits",

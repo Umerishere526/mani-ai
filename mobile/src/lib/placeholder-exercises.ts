@@ -43,7 +43,6 @@ export const EXERCISES_BY_CATEGORY: Record<string, Exercise[]> = {
   BuildingHabits: [],
   Burnout: [],
   EmotionalIntelligence: [],
-  NarcissisticDynamics: [],
 };
 
 export function getExerciseById(id: string): Exercise | undefined {

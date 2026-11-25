@@ -3,20 +3,10 @@
 
 export type TopicId =
   | 'EmotionalIntelligence'
-  | 'NarcissisticDynamics'
   | 'BuildingHabits'
   | 'Boundaries'
   | 'Anxiety'
   | 'Burnout';
-
-export const TOPICS: readonly { id: TopicId; label: string }[] = [
-  { id: 'EmotionalIntelligence', label: 'Emotional Intelligence' },
-  { id: 'NarcissisticDynamics', label: 'Narcissistic Dynamics' },
-  { id: 'BuildingHabits', label: 'Building Habits' },
-  { id: 'Boundaries', label: 'Boundaries' },
-  { id: 'Anxiety', label: 'Anxiety' },
-  { id: 'Burnout', label: 'Burnout' },
-];
 
 export type ExerciseType = 'Breathing' | 'Meditation' | 'Visualization';
 
