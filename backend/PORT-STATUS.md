@@ -293,13 +293,32 @@ the same change as the work.**
   beyond what was said, repeated acknowledgments and restated feelings (whole conversations 2.41 of 5), yes or no
   checks, belief work before practical help, and questions after a typed stop (CQ-4, CQ-10, CQ-8, CQ-7, CQ-2).
   `mani.md`. Not yet eval-gated.
+- **Supportive and Reflective replies run about 60 to 120 words, in plain words with no figures of speech** (muhammad,
+  2026-11-25). Because manasa (2026-11-25) scored Reflective chats 3 to 5 of 10 for constructed, elaborate and
+  repetitive replies; this newer message beats the 2026-11-18 "more yappy as it grows" (R123): replies still grow
+  within the band. `mani.md` ("How a reply looks"); `enforce.FIGURATIVE_PHRASES` only records `figurative:` in the
+  trace; `tests/unit/test_enforce.py`. Not yet eval-gated.
+- **A reply at the offer never begins a stage; code takes out a stage line or stage question there** (muhammad,
+  2026-11-25). Because Step 1 came before the steps and again after her yes (manasa, chat 2, 2026-11-25).
+  `enforce.without_stage`, `STAGE_LINE`, trace `stage_in_offer`; `test_the_reply_the_steps_follow_begins_no_stage`.
+- **An offer needs a belief they confirmed and a want stated in their own words; a belief Mani inferred is never said
+  as theirs, and a correction drops that reading** (muhammad, 2026-11-25). Because Mani offered sets on its own
+  readings and challenged a belief it had made up (manasa, chats 1 and 2, 2026-11-25; local tests). `mani.md`
+  ("Offering the set of questions"). Not yet eval-gated.
+- **An example, draft or wording is given when asked, in every style, and a shared draft comes back revised**
+  (muhammad, 2026-11-25). Because Reflective refused examples twice (manasa, chats 1 and 2, 2026-11-25, R180).
+  `mani.md` ("How you listen"). Not yet eval-gated.
+- **A good-day check-in is enjoyed with them: no problem-hunting, and they decide when it ends** (muhammad,
+  2026-11-25). Because manasa's positive check-in (chat 3, 2026-11-25, R185). `mani.md`. Not yet eval-gated.
+- **Notes, people and events call the person "they" unless they have said otherwise** (muhammad, 2026-11-25). Because
+  the notes called testers "he" and "her" with nothing to go on. `reply.NO_GENDER` in the schema descriptions.
 - **Inside a set the belief is never argued with before D, and the set opens with one bridge sentence before "A is for
   Activating Event."** (muhammad, 2026-11-18). Because the client's review found Mani disputing at B, leaving D
   nothing new, and the jump into A abrupt. The chat before a set may still offer a fair perspective. `mani.md`
   ("Inside the set of questions"); eval `rule-no-dispute-at-b`, `rule-start-bridge`.
 - **In Supportive and Reflective a reply builds with what they have told: early replies reflect and notice one thing,
   the highlight waits until they have said what happened, what it does to them and what it means, and replies grow
-  longer** (muhammad, 2026-11-18). Because the client found the highlight came too early and asked for replies that
+  longer within the 60 to 120 word band below** (muhammad, 2026-11-18; band 2026-11-25). Because the client found the highlight came too early and asked for replies that
   grow (2026-11-18). This reverses the 2026-11-17 R73 overrule for these two styles. Directive is unchanged. `mani.md`
   ("How you listen", "How a reply looks"); eval `rule-sr-first-reply-builds`, `rule-sr-first-reply-builds-reflective`,
   `rule-sr-highlight-when-laid-out`.
