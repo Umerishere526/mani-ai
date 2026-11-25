@@ -1,7 +1,10 @@
+// ABOUTME: Chat screen route: a new conversation's style picker, then the conversation, its composer and
+// ABOUTME: the suggested-reply buttons; the safety pause blocks sending in every thread.
+
 import { useEffect, useRef, useState } from "react";
-import { Image, KeyboardAvoidingView, Platform, StatusBar, View } from "react-native";
+import { KeyboardAvoidingView, Platform, StatusBar, View } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { AppHeader } from "@/components/shared";
+import { AppHeader, NoiseOverlay } from "@/components/shared";
 import { ChatConversation, ChatOpening, LoadFailed, type ChatInputBarRef } from "@/components/chat";
 import { useChat } from "@/hooks/useChat";
 import { useChatSafety } from "@/providers";
@@ -85,9 +88,7 @@ export default function ChatScreen() {
         <AppHeader onNewChatPress={handleNewChat} />
         {renderBody()}
       </KeyboardAvoidingView>
-      <View className="absolute inset-0 opacity-50" pointerEvents="none">
-        <Image source={require("@/assets/images/noise.png")} className="h-full w-full" resizeMode="repeat" />
-      </View>
+      <NoiseOverlay />
     </View>
   );
 }

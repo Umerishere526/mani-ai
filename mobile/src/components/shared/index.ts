@@ -11,3 +11,4 @@ export { CircularProgressButton, type CircularProgressButtonProps } from './circ
 export { GradientSphere, type GradientSphereProps } from './gradient-sphere';
 export { AppHeader, type AppHeaderProps } from './app-header';
 export { AiDisclosure, type AiDisclosureProps } from './ai-disclosure';
+export { NoiseOverlay } from './noise-overlay';
