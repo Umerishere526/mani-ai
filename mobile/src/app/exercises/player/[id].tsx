@@ -3,7 +3,7 @@
 
 import { useEffect } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from "react-native-reanimated";
@@ -51,54 +51,57 @@ export default function ExercisePlayerScreen() {
       <LinearGradient colors={GRADIENT_COLORS} className="absolute inset-0" />
       <AppHeader showBack backIcon="x" transparent onBack={() => router.back()} />
 
-      <View className="items-center px-4" style={{ marginTop: 80 }}>
-        <Text className="font-sans-semibold text-base text-white">{exercise.title}</Text>
-        {exercise.durationMinutes === null ? null : (
-          <Text className="mt-4 text-lg text-white/60">{formatDuration(exercise.durationMinutes)}</Text>
-        )}
-      </View>
+      {/* Scrolls only when large text makes the screen taller than the phone, so the closing buttons stay reachable. */}
+      <ScrollView contentContainerClassName="grow" bounces={false} showsVerticalScrollIndicator={false}>
+        <View className="items-center px-4" style={{ marginTop: 80 }}>
+          <Text className="font-sans-semibold text-base text-white">{exercise.title}</Text>
+          {exercise.durationMinutes === null ? null : (
+            <Text className="mt-4 text-lg text-white/60">{formatDuration(exercise.durationMinutes)}</Text>
+          )}
+        </View>
 
-      <View className="items-center" style={{ marginTop: isSmallScreen ? 36 : 60, marginBottom: isSmallScreen ? 36 : 60 }}>
-        <GradientSphere size={100} animated={playback.isPlaying} />
-      </View>
+        <View className="items-center" style={{ marginTop: isSmallScreen ? 36 : 60, marginBottom: isSmallScreen ? 36 : 60 }}>
+          <GradientSphere size={100} animated={playback.isPlaying} />
+        </View>
 
-      <Animated.View
-        className="max-w-80 self-center px-6"
-        style={[isLargeScreen && { maxWidth: 380 }, descriptionStyle]}
-      >
-        <Text className={isLargeScreen ? "text-center text-base leading-6 text-secondary-500" : "text-center text-sm leading-5 text-secondary-500"}>
-          {exercise.description}
-        </Text>
-      </Animated.View>
+        <Animated.View
+          className="max-w-80 self-center px-6"
+          style={[isLargeScreen && { maxWidth: 380 }, descriptionStyle]}
+        >
+          <Text className={isLargeScreen ? "text-center text-base leading-6 text-secondary-500" : "text-center text-sm leading-5 text-secondary-500"}>
+            {exercise.description}
+          </Text>
+        </Animated.View>
 
-      <View className="flex-1" />
+        <View className="flex-1" />
 
-      <View className="items-center px-4" style={{ paddingBottom: insets.bottom + 32 }}>
-        {!exercise.recorded && <Text className="text-base text-white/60">{en.exercises.comingSoonItem}</Text>}
-        {exercise.recorded && !playback.hasStarted && (
-          <SecondaryButton
-            label={en.exercises.begin}
-            onPress={playback.togglePlayback}
-            className="self-stretch"
-            accessibilityLabel={en.exercises.beginLabel}
-            accessibilityHint={en.exercises.beginHint}
-          />
-        )}
-        {playback.hasStarted && !playback.isComplete && (
-          <ExercisePlaybackControl
-            isPlaying={playback.isPlaying}
-            progress={playback.progress}
-            remainingSeconds={playback.remainingSeconds}
-            onToggle={playback.togglePlayback}
-          />
-        )}
-        {playback.isComplete && (
-          <ExerciseComplete
-            onContinueChatting={() => router.dismissTo("/chat")}
-            onBackToLibrary={() => router.dismissTo("/exercises")}
-          />
-        )}
-      </View>
+        <View className="items-center px-4" style={{ paddingBottom: insets.bottom + 32 }}>
+          {!exercise.recorded && <Text className="text-base text-white/60">{en.exercises.comingSoonItem}</Text>}
+          {exercise.recorded && !playback.hasStarted && (
+            <SecondaryButton
+              label={en.exercises.begin}
+              onPress={playback.togglePlayback}
+              className="self-stretch"
+              accessibilityLabel={en.exercises.beginLabel}
+              accessibilityHint={en.exercises.beginHint}
+            />
+          )}
+          {playback.hasStarted && !playback.isComplete && (
+            <ExercisePlaybackControl
+              isPlaying={playback.isPlaying}
+              progress={playback.progress}
+              remainingSeconds={playback.remainingSeconds}
+              onToggle={playback.togglePlayback}
+            />
+          )}
+          {playback.isComplete && (
+            <ExerciseComplete
+              onContinueChatting={() => router.dismissTo("/chat")}
+              onVisitLibrary={() => router.dismissTo("/exercises")}
+            />
+          )}
+        </View>
+      </ScrollView>
     </View>
   );
 }
