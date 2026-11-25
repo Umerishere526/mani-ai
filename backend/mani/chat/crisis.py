@@ -22,10 +22,31 @@ CRISIS_REPLY = (
     "I can help with on my own.\n\n"
     f"You deserve to talk to a person who can stay with you properly. {IN_DANGER}"
 )
+# Where to get help for whose danger it is (the reply's safety.about); a danger of unknown kind keeps the suicide line.
+# The body's line says only to call if it is happening now, never what the symptom might be (S13, Safety Guardrails
+# section 2); danger from someone adds the National Domestic Violence Hotline (S14, R152). 911 leads every line. Every
+# number is one of RESOURCES. PROVISIONAL: clinician sign-off required before deploy.
+_HELP: dict[str, str] = {
+    "themselves": (
+        f"If anyone might get hurt, call 911 now, or call or text 988 to talk with someone right away. {OUTSIDE_US}"
+    ),
+    "someone_else": f"If anyone might get hurt, call 911 now. {OUTSIDE_US}",
+    "from_someone": (
+        "If you're in danger, call 911 now. The National Domestic Violence Hotline is 1-800-799-7233 "
+        f"(or text START to 88788). {OUTSIDE_US}"
+    ),
+    "body": f"If this is happening now, call 911. {OUTSIDE_US}",
+}
+
+
+def resources_line(about: str | None) -> str:
+    """Where to get help for whose danger it is."""
+    return _HELP.get(about or "themselves", _HELP["themselves"])
+
+
 # Added after Mani's text when code raised a body worry to danger that the model judged lower: a possible medical
-# emergency gets "call emergency services now" every time (muhammad, 2026-11-18). Wording is ours until the client
-# supplies hers.
-BODY_EMERGENCY = f"If this is happening now, please call 911 or get to the nearest emergency room now. {OUTSIDE_US}"
+# emergency gets "call 911" every time (muhammad, 2026-11-18).
+BODY_EMERGENCY = resources_line("body")
 # What goes out when no host answered and no safety worry was open, so a first message about danger during an outage
 # still reaches the numbers (the design of 2026-11-17). Wording is ours until the client supplies hers.
 TROUBLE_REPLY = f"I'm having trouble replying right now, so please try again in a moment. {IN_DANGER}"
@@ -55,18 +76,9 @@ RETURN_DANGER_REPLY = (
     f"I'm worried about what you just told me. Please call 911 now, or call or text 988. {OUTSIDE_US} "
     "Is anyone with you right now?"
 )
-# The reply on the turn that pauses the chat, by whose danger it is (the reply's safety.about): whom Mani worries for, and the
-# help that fits. A body emergency gets no suicide line; a danger of unknown kind keeps it. Wording is ours (muhammad,
-# 2026-11-13); every number is one of RESOURCES.
-_PAUSE_FOR: dict[str | None, tuple[str, str]] = {
-    "themselves": (
-        "your safety",
-        f"If anyone might get hurt, call 911 now, or call or text 988 to talk with someone right away. {OUTSIDE_US}",
-    ),
-    "someone_else": ("everyone's safety", f"If anyone might get hurt, call 911 now. {OUTSIDE_US}"),
-    "from_someone": ("your safety", f"If anyone might get hurt, call 911 now. {OUTSIDE_US}"),
-    "body": ("your health", f"If this might be an emergency, call 911 now. {OUTSIDE_US}"),
-}
+# Whom Mani worries for on the turn that pauses the chat, by whose danger it is (muhammad, 2026-11-13).
+_WORRIED_FOR = {"themselves": "your safety", "someone_else": "everyone's safety", "from_someone": "your safety",
+                "body": "your health"}
 
 
 def _length(seconds: int) -> str:
@@ -80,9 +92,9 @@ def _length(seconds: int) -> str:
 def pause_reply(about: str | None, seconds: int) -> str:
     """What Mani says on the turn that pauses the chat: where to get help first, 911 leading, then the pause and its
     length said once (S6: a safety screen, not a countdown). PROVISIONAL: clinician sign-off required before deploy."""
-    who, help_now = _PAUSE_FOR.get(about, _PAUSE_FOR["themselves"])
+    who = _WORRIED_FOR.get(about or "themselves", _WORRIED_FOR["themselves"])
     return (
-        f"{help_now}\n\nI'm worried about {who}, so I'm pausing our chat for {_length(seconds)}. "
+        f"{resources_line(about)}\n\nI'm worried about {who}, so I'm pausing our chat for {_length(seconds)}. "
         "We can talk again when you come back."
     )
 
@@ -123,6 +135,12 @@ RESOURCES: list[Resource] = [
     Resource(
         country="US", name="Crisis Text Line", description="Text HOME to reach a trained crisis counselor.",
         sms="741741", hours="24/7",
+    ),
+    # Danger from someone (S14, R152). PROVISIONAL: clinician sign-off required before deploy.
+    Resource(
+        country="US", name="National Domestic Violence Hotline",
+        description="Call, or text START, to reach an advocate.", phone="1-800-799-7233", sms="88788",
+        url="https://www.thehotline.org", hours="24/7",
     ),
     Resource(
         country="US", kind="directory", name="Find a helpline in your country", url="https://findahelpline.com",

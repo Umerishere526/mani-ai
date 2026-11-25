@@ -9,13 +9,15 @@ from mani.chat import crisis
 def test_crisis_resources_list_the_reference_numbers():
     us = {r.name: r for r in crisis.resources_for("us")}
 
-    assert len(us) == 4
+    assert len(us) == 5
     assert us["Emergency services"].phone == "911"
     assert us["988 Suicide & Crisis Lifeline"].phone == "988"
     assert us["988 Suicide & Crisis Lifeline"].sms == "988"
     assert us["988 Suicide & Crisis Lifeline"].url == "https://988lifeline.org"
     assert us["Crisis Text Line"].sms == "741741"
     assert us["Find a helpline in your country"].url == "https://findahelpline.com"
+    assert us["National Domestic Violence Hotline"].phone == "1-800-799-7233"
+    assert us["National Domestic Violence Hotline"].sms == "88788"
 
 
 def test_each_resource_says_what_kind_of_help_it_is():
@@ -25,6 +27,7 @@ def test_each_resource_says_what_kind_of_help_it_is():
         "Emergency services": "emergency",
         "988 Suicide & Crisis Lifeline": "support",
         "Crisis Text Line": "support",
+        "National Domestic Violence Hotline": "support",
         "Find a helpline in your country": "directory",
     }
 
@@ -32,13 +35,13 @@ def test_each_resource_says_what_kind_of_help_it_is():
 def test_the_helpline_directory_is_listed_for_every_country():
     assert [r.url for r in crisis.resources_for("fr")] == ["https://findahelpline.com"]
     assert [r.kind for r in crisis.resources_for("fr")] == ["directory"]
-    assert len(crisis.resources_for()) == 4
+    assert len(crisis.resources_for()) == 5
 
 
 def test_every_number_the_pause_reply_names_is_a_listed_resource():
     listed = {number for r in crisis.RESOURCES for number in (r.phone, r.sms) if number}
     for about in ("themselves", "someone_else", "from_someone", "body", None):
-        named = set(re.findall(r"\d{3,}", crisis.pause_reply(about, 30)))
+        named = set(re.findall(r"\d[\d-]+\d", crisis.pause_reply(about, 30)))
         assert "911" in named and named <= listed, about
 
 
@@ -86,3 +89,20 @@ def test_every_resources_text_gives_the_us_numbers_and_the_directory_for_everywh
         assert "911" in text and "findahelpline.com" in text, name
     for name in ("IN_DANGER", "CRISIS_REPLY", "TROUBLE_REPLY", "RETURN_CHECK_REPLY", "RETURN_DANGER_REPLY"):
         assert "988" in texts[name], name
+
+
+def test_danger_from_someone_names_the_domestic_violence_hotline():
+    """S14 (PROVISIONAL: clinician sign-off required before deploy): threats, coercion or abuse with fear for their
+    safety are danger from someone, and its help adds the National Domestic Violence Hotline (R152)."""
+    for text in (crisis.pause_reply("from_someone", 900), crisis.resources_line("from_someone")):
+        assert "1-800-799-7233" in text and "START to 88788" in text and "911" in text
+    for about in ("themselves", "someone_else", "body", None):
+        assert "799-7233" not in crisis.resources_line(about), about
+
+
+def test_the_body_line_says_call_911_if_it_is_happening_now_without_judging_the_symptom():
+    """S13 (PROVISIONAL: clinician sign-off required before deploy): Safety Guardrails section 2 allows no interpreting of
+    a physical symptom or comment on its severity, so the line never calls it an emergency."""
+    for text in (crisis.resources_line("body"), crisis.pause_reply("body", 900)):
+        assert "If this is happening now, call 911." in text
+        assert "emergency" not in text.lower() and "988" not in text

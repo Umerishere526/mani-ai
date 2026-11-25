@@ -646,6 +646,8 @@ async def test_a_body_danger_the_model_judged_itself_goes_out_as_written(alice, 
 
 
 async def test_a_pausing_body_turn_sends_manis_reply_then_the_pause_line_and_no_call_now_line(alice, model):
+    """S13 (PROVISIONAL: clinician sign-off required before deploy): the pause line leads with the body's own help line,
+    so the call-now line is said once, by the pause."""
     now = Safety(level="danger", about="body", symptom_now="yes")
     model(said("Call your emergency number now.", safety=now),
           said("Okay.", safety=now.model_copy(update={"declined": True})))
@@ -654,7 +656,7 @@ async def test_a_pausing_body_turn_sends_manis_reply_then_the_pause_line_and_no_
     paused = await send(alice, thread.id, "no im not calling anyone")
     assert paused.paused_until is not None
     assert paused.content == "Okay.\n\n" + crisis.pause_reply("body", 900)
-    assert crisis.BODY_EMERGENCY not in paused.content
+    assert paused.content.count(crisis.BODY_EMERGENCY) == 1
 
 
 async def test_an_offer_they_moved_past_is_no_longer_open_and_its_old_button_starts_nothing(alice, model):
