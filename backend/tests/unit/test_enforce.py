@@ -45,7 +45,8 @@ def test_a_nearly_identical_question_counts_as_the_same_and_a_different_one_is_k
     ("Neither was made with a work trip landing on that weekend in mind.",
      "Neither was made with a work trip falling on that weekend in mind."),
     ("A weekend that landed on you both by accident.", "A weekend that fell on you both by accident."),
-    ("Fix the date before you go.", "Sort out the date before you go."),
+    ("Fix the process first, then the feature.", "Repair the process first, then the feature."),
+    ("So you asked for a specific fix.", "So you asked for a specific repair."),
     ("How is that landing?", "How is that hitting?"),
 ])
 def test_a_forbidden_word_reaches_them_as_a_plain_word(written, received):
@@ -247,3 +248,17 @@ def test_an_offer_that_begins_no_stage_goes_out_as_written_and_a_stage_alone_is_
     assert alone.text == "A is for Activating Event." and alone.enforced == [enforce.STAGE_IN_OFFER_KEPT]
     running = sent("A is for Activating Event.", "What happened?", open_chat=False, stage="activate")
     assert running.asked == "What happened?" and running.enforced == []
+
+
+@pytest.mark.parametrize("draft", [
+    'Polite but firm:\n\n"Hi [name], I reported it on [date]. Could you confirm a repair date by Friday? Thanks, [your name]"',
+    "Here's a draft.\n\nSubject: Pay review\n\nHi Sam,\n\nI'd like to talk about my pay.\n\nCould we find 30 minutes "
+    "this week?\n\nThanks,\n[Your name]",
+])
+def test_a_question_inside_wording_written_for_them_stays_and_is_not_mani_asking(draft):
+    """muhammad's Directive run (2026-11-25): the text to the landlord and the raise email were cut at the question
+    the message itself asks, because code took it for a second question of Mani's."""
+    reply = sent(draft, "How long do you want to give him?")
+    assert reply.text == f"{draft}\n\nHow long do you want to give him?"
+    assert reply.asked == "How long do you want to give him?"
+    assert sent("That sounds hard. What happened then? How did you feel?").text == "That sounds hard. How did you feel?"

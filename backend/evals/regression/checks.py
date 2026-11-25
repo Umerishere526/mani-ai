@@ -11,6 +11,7 @@ from evals.reply_rules import genders_named, pronouns, questions
 from mani.chat import greeting
 from mani.chat.crisis import UNREAD_REPLIES
 from mani.chat.enforce import banned_phrases, forbidden_words, interpretive
+from mani.chat.questions import drafted
 from mani.chat.decide import OFFER_FROM_MESSAGE
 
 # Kinds of result. A failed `deterministic` check fails the run; `performance` is reported and fails only under
@@ -173,8 +174,9 @@ def wording_at(c: Conversation, turn: int) -> Result:
     """The reply to an explicit request for wording gives the words, in quotes, in that same reply."""
     if len(c.exchanges) < turn:
         return Result("wording_at", DETERMINISTIC, False, f"the conversation ended before turn {turn}", turn)
-    given = bool(_QUOTED.search(c.exchanges[turn - 1].reply))
-    return Result("wording_at", DETERMINISTIC, given, "" if given else "no quoted wording in the reply", turn)
+    reply = c.exchanges[turn - 1].reply
+    given = bool(_QUOTED.search(reply)) or any(b - a >= 60 for a, b in drafted(reply))
+    return Result("wording_at", DETERMINISTIC, given, "" if given else "no drafted wording in the reply", turn)
 
 
 def helps_at(c: Conversation, turn: int) -> Result:

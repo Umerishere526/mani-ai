@@ -32,11 +32,12 @@ PLAIN_WORDS = {
     "weak": "fragile", "toxic": "hurtful", "negative": "harsh", "struggling": "finding it hard", "journey": "path",
     "landscape": "picture",
     # The other forms of the words, since the list holds "in any form" (manasa 2026-11-25 saw "landing" and "landed";
-    # muhammad's TC-M runs saw "landing on that weekend", "landed on you" and "Fix the date"). "Landing on" and its
+    # muhammad's TC-M runs saw "landing on that weekend", "landed on you" and "Fix the date"); "fix" becomes
+    # "repair", which reads as a noun and a verb alike ("sort out" broke "a fix" into "a sort out", 2026-11-25). "Landing on" and its
     # kin read as an event falling on a date or a person, so they become "falling on"; alone they become "hit".
     "land on": "fall on", "lands on": "falls on", "landed on": "fell on", "landing on": "falling on",
     "lands": "hits", "landed": "hit", "landing": "hitting", "landscapes": "pictures",
-    "fix": "sort out", "fixes": "sorts out", "weaknesses": "limits", "spaces": "rooms", "journeys": "paths",
+    "fix": "repair", "fixes": "repairs", "weaknesses": "limits", "spaces": "rooms", "journeys": "paths",
     "traumas": "painful times", "traumatic": "painful",
 }
 # A sentence that names where to get help, kept on a guarded turn even when it also says a banned line.
@@ -290,13 +291,13 @@ def one_question(text: str, asked: str, *, guarded: bool) -> tuple[str, str, lis
     """The reply held to its first question, the question it asks, and the event, when it still asks more than one:
     the question it chose may itself ask two, and the second usually follows on from the first ("What do you mean? Do
     you mean X or Y?"). A guarded turn keeps every question, recorded as kept."""
-    asking = [sentence for sentence in questions.sentences(text) if questions.asks(sentence)]
+    asking = questions.own_questions(text)
     if len(asking) < 2:
         return text, asked, []
     if guarded:
         return text, asked, [SECOND_QUESTION_KEPT]
-    first = asking[0]
-    return (questions.kept(text, lambda _, sentence: sentence == first or not questions.asks(sentence)), first,
+    first, others = asking[0], set(asking[1:])
+    return (questions.kept(text, lambda _, sentence: sentence == first or sentence not in others), first,
             [SECOND_QUESTION_REMOVED])
 
 

@@ -354,6 +354,9 @@ def test_a_consequential_step_before_the_cause_is_known_fails():
 def test_an_explicit_request_is_answered_in_that_reply():
     asked = chat(turn("can you write the text?", 'Something like: "Hi Sam, the heating has been out for three weeks now."'))
     assert checks.wording_at(asked, 1).passed
+    email = chat(turn("help me write an email", "Here's a draft.\n\nSubject: Pay review\n\nHi Sam,\n\nI'd like to talk about "
+                                                "my pay since I took on the lead role.\n\nThanks,\nAlex"))
+    assert checks.wording_at(email, 1).passed
     dodged = chat(turn("can you write the text?", "What would you want it to say?"))
     assert not checks.wording_at(dodged, 1).passed
     helped = chat(turn("help me decide", "The new job pays more. The commute costs you three hours a day. What matters most?"))

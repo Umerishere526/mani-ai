@@ -27,9 +27,52 @@ def sentences(text: str) -> list[str]:
     return [folded for piece in _pieces(text) if (folded := " ".join(piece.split()))]
 
 
+# Wording written for them to send, whose questions are theirs to ask, never Mani's: a passage in double quotes, or a
+# message laid out as one, from a greeting line ("Hi Sam,", "Dear Ms Lee,", "Subject: …") to its sign-off line.
+_GREETING = re.compile(r"^(?:subject:.*|(?:hi|hello|hey|dear)\b[^\n]{0,40},?)\s*$", re.IGNORECASE | re.MULTILINE)
+_SIGN_OFF = re.compile(r"^(?:thanks|thank you|best|regards|kind regards|best regards|cheers|sincerely|warmly)\b[^\n]{0,20},?\s*$",
+                       re.IGNORECASE | re.MULTILINE)
+
+
+def drafted(text: str) -> list[tuple[int, int]]:
+    """Where the text holds wording written for them to send: each quoted passage and each laid-out message."""
+    spans, start = [], None
+    for i, ch in enumerate(text):
+        if ch == "“" or (ch == '"' and start is None):
+            start = i if start is None else start
+        elif ch in "”\"" and start is not None:
+            spans.append((start, i + 1))
+            start = None
+    if start is not None:
+        spans.append((start, len(text)))
+    for greeting in _GREETING.finditer(text):
+        sign_off = _SIGN_OFF.search(text, greeting.end())
+        spans.append((greeting.start(), sign_off.end() if sign_off else len(text)))
+    return spans
+
+
 def asks(sentence: str) -> bool:
     """Whether a sentence ends on a question mark, past any closing quote."""
     return sentence.rstrip(_CLOSING).endswith("?")
+
+
+def own_asking(text: str) -> list[int]:
+    """The places (in `_pieces(text)`) of the sentences that ask a question of their own: a question inside wording
+    written for them to send is part of that wording, not one Mani asks (muhammad's Directive run, 2026-11-25:
+    "Could you confirm a repair date?" was cut out of the text to the landlord)."""
+    pieces, spans, at, own = _pieces(text), drafted(text), 0, []
+    for i, piece in enumerate(pieces):
+        end = at + len(piece.rstrip()) - 1
+        if piece.strip() and asks(piece.strip()) and not any(a <= end < b for a, b in spans):
+            own.append(i)
+        at += len(piece)
+    return own
+
+
+def own_questions(text: str) -> list[str]:
+    """The text's own questions, folded, in order (see `own_asking`)."""
+    pieces = _pieces(text)
+    return [" ".join(pieces[i].split()) for i in own_asking(text)]
 
 
 def kept(text: str, keep: Callable[[int, str], bool]) -> str:
@@ -49,8 +92,8 @@ def _tidied(text: str) -> str:
 
 
 def last_question(text: str) -> str:
-    """The text's last sentence that ends on a question mark, folded to one line, or empty when it asks nothing."""
-    return next((sentence for sentence in reversed(sentences(text)) if asks(sentence)), "")
+    """The text's last question of its own (see `own_asking`), folded to one line, or empty when it asks nothing."""
+    return next(reversed(own_questions(text)), "")
 
 
 # What an open-chat question can be for (TurnReply.question.intent): what happened, what it does to them, what they
@@ -87,7 +130,7 @@ def held_to_one(text: str, ask: str, *, silenced: str | None) -> tuple[str, str,
     (`silenced`, from `silenced_by`) it asks nothing. Text that asks nothing goes out exactly as written."""
     ask = ask.strip()
     pieces = _pieces(text)
-    asking = [i for i, piece in enumerate(pieces) if piece.strip() and asks(piece.strip())]
+    asking = own_asking(text)
     if silenced:
         cut, ask, why = asking, "", _SILENCED_WHY[silenced] if asking or ask else None
     elif ask:
