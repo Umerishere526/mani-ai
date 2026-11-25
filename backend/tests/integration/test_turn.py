@@ -291,6 +291,17 @@ async def test_after_e_the_feelings_check_then_the_closing_buttons(alice, model)
     assert (await thread_row(alice, thread.id)).understanding["finished"] == ["abcde"]
 
 
+async def test_visit_library_opens_the_section_an_earlier_reply_named(alice, model):
+    """LIB-3: the section a reply names is kept on the thread, so a later Visit library opens it."""
+    model(said("That sounds exhausting.", library="Burnout"),
+          said("The library has exercises for moments like this.", action="library"))
+    thread = await start(alice)
+    await send(alice, thread.id, "i'm running on empty at work")
+    turn = await send(alice, thread.id, "can you give me something to try?")
+    assert [(p.label, p.library) for p in turn.prompts] == [("Visit library", "Burnout")]
+    assert (await thread_row(alice, thread.id)).understanding["library"] == "Burnout"
+
+
 async def test_a_typed_wish_to_stop_gets_a_goodbye_with_no_question_and_the_close(alice, model):
     """R95, the 2026-11-16 relationship test: "Yes, I'm done for now." got another question."""
     model(said("Of course. Take good care tonight.",

@@ -141,6 +141,18 @@ def test_library_shows_the_go_to_library_button():
     assert labels(d) == ["Visit library"] and d.prompts[0].library == "home"
 
 
+def test_visit_library_opens_the_section_that_fits_the_conversation():
+    """LIB-3: the reply's section when it is a real one, else the one the record kept, else the front page."""
+    named = decided(reply(action="library", library="Stress"), record={"library": "Sleep"})
+    assert named.prompts[0].library == "Stress" and named.library == "Stress"
+    kept = decided(reply(action="library", library="NarcissisticDynamics"), record={"library": "Sleep"})
+    assert kept.prompts[0].library == "Sleep" and kept.library == "Sleep"
+    retired = decided(reply(action="library"), record={"library": "NarcissisticDynamics"})
+    assert retired.prompts[0].library == "home" and retired.library is None
+    closed = decided(reply(), running=running("abcde", "feelings_check"), record={"library": "Burnout"})
+    assert [(p.label, p.library) for p in closed.prompts] == [("Continue chatting", None), ("Visit library", "Burnout")]
+
+
 def test_stage_of_reads_only_the_frameworks_own_stages():
     assert stage_of(ABCDE, "made_up", "activate") is None
     assert stage_of(ABCDE, "belief", "activate") == "belief"

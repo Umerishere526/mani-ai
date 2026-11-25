@@ -9,6 +9,8 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, create_model, model_validator
 from pydantic.json_schema import SkipJsonSchema, WithJsonSchema
 
+from mani.llm.schema import LibrarySection
+
 
 class Safety(BaseModel):
     """The model's judgment of their message, which the kept pause rules read."""
@@ -106,6 +108,9 @@ class TurnReply(BaseModel):
     notes: str = Field(description=(
         "Your private working notes for your next turn, under 100 words. People, events and what you said go in their "
         "own fields."))
+    library: str | None = Field(default=None, description=(
+        "The library section closest to what they have talked about, once one clearly is; null until then. One of: "
+        + ", ".join(f'"{section}"' for section in LibrarySection) + "."))
     title: str | None = Field(default=None, description="Only when the facts ask for a title.")
     corrected: bool = Field(default=False, description=(
         "True when their latest message corrects something you said or understood about them."))

@@ -25,6 +25,8 @@ GIST_CHARS = 80
 OPENING_WORDS = 4
 DECLINED = "declined"
 FINISHED = "finished"
+# The library section the conversation is closest to, as the latest reply that named a valid one said.
+LIBRARY = "library"
 # The safety keys: where the question owed after a pause stands, whether a worry settled and whether danger was reached
 # (each lasts the conversation), and whose danger the open worry is about (only while it is open).
 RETURN_CHECK = "return_check"
@@ -47,6 +49,11 @@ def declined(record: dict) -> list[str]:
 def finished(record: dict) -> list[str]:
     """The frameworks finished in this conversation, after which no framework is offered."""
     return list(record.get(FINISHED) or [])
+
+
+def library(record: dict) -> str | None:
+    """The library section the conversation is closest to, or None while no reply has named one."""
+    return record.get(LIBRARY)
 
 
 def replies(record: dict) -> list[dict]:
@@ -127,11 +134,13 @@ def bounded_events(given: list[dict]) -> list[dict]:
 
 
 def with_outcomes(record: dict, *, notes: str | None, people: list[dict], events: list[dict], declined: list[str],
-                  finished: list[str]) -> dict:
+                  finished: list[str], library: str | None = None) -> dict:
     """The record with this turn's outcomes. The reply rewrites its people and events whole each turn, so they replace
-    what is stored; `notes=None` keeps the notes already stored."""
+    what is stored; `notes=None` and `library=None` keep what is already stored."""
     after = {**record, PEOPLE: bounded_people(people), EVENTS: bounded_events(events), DECLINED: declined,
              FINISHED: finished}
     if notes is not None:
         after[NOTES] = notes
+    if library is not None:
+        after[LIBRARY] = library
     return after

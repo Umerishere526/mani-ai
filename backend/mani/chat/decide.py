@@ -14,7 +14,7 @@ from mani.chat.repairs import feelings_buttons, lead_in_buttons, start_buttons
 from mani.chat.reply import TurnReply
 from mani.chat.taps import TapEvent
 from mani.chat.techniques import FEELINGS, OFFERING, STEPS, Registry, stages_of
-from mani.llm.schema import LIBRARY_HOME, SmartPrompt
+from mani.llm.schema import LIBRARY_HOME, LibrarySection, SmartPrompt
 from mani.models.rows import Framework, TechniqueOutcome, TechniqueState
 
 
@@ -36,6 +36,8 @@ class Decision:
     refused: str | None = None
     # The five steps code adds after the reply: a typed answer to the lead-in gets the reply, then the steps.
     show_steps: Framework | None = None
+    # The library section the conversation is closest to, or None while none is known; Visit library opens it.
+    library: str | None = None
 
 
 def stage_of(framework: Framework, reported: str | None, current: str | None) -> str | None:
@@ -55,10 +57,20 @@ def offer_current(open_offer: TechniqueState, message_count: int) -> bool:
     return open_offer.phase != OFFERING or open_offer.at_message_count == message_count
 
 
-def closing_buttons() -> list[SmartPrompt]:
+def library_section(named: str | None, record: dict) -> str | None:
+    """The library section the conversation is closest to: the one this reply names, else the one the record kept,
+    each only when it is one of the library's real sections; else None."""
+    return next((section for section in (named, rec.library(record)) if section in set(LibrarySection)), None)
+
+
+def library_button(section: str | None) -> SmartPrompt:
+    """Visit library, opening the section that fits the conversation, or the library's front page when none does."""
+    return SmartPrompt(label=VISIT_LIBRARY_LABEL, library=section or LIBRARY_HOME)
+
+
+def closing_buttons(section: str | None) -> list[SmartPrompt]:
     """The close: Continue chatting and Visit library."""
-    return [SmartPrompt(label=CONTINUE_CHATTING_LABEL),
-            SmartPrompt(label=VISIT_LIBRARY_LABEL, library=LIBRARY_HOME)]
+    return [SmartPrompt(label=CONTINUE_CHATTING_LABEL), library_button(section)]
 
 
 def decide(
@@ -69,7 +81,8 @@ def decide(
     """The spec's guarantees, in order: a start, a running framework's move, an open offer's answer, a new offer, and
     the library. A guarded turn (a safety worry open or found) changes no framework state and makes no offer. When they
     want to stop, a running or offered set stops too, and the close follows a reply that asks nothing (R95)."""
-    base = Decision(declined=rec.declined(record), finished=rec.finished(record))
+    base = Decision(declined=rec.declined(record), finished=rec.finished(record),
+                    library=library_section(reply.library, record))
     if guarded:
         return dataclasses.replace(base, refused="offer" if reply.action == "offer" else None)
     stopping = reply.question.latest.strip().lower() == WANTS_TO_STOP
@@ -92,10 +105,9 @@ def decide(
                       blocked=(running is not None or open_offer is not None or tap.starting is not None
                                or person_messages < OFFER_FROM_MESSAGE))
     if reply.action == "library" and not decision.prompts:
-        decision = dataclasses.replace(decision, prompts=[
-            SmartPrompt(label=VISIT_LIBRARY_LABEL, library=LIBRARY_HOME)])
+        decision = dataclasses.replace(decision, prompts=[library_button(decision.library)])
     if stopping:
-        decision = dataclasses.replace(decision, prompts=closing_buttons())
+        decision = dataclasses.replace(decision, prompts=closing_buttons(decision.library))
     return decision
 
 
@@ -111,7 +123,7 @@ def _moved(base: Decision, reply: TurnReply, framework: Framework, running: Tech
     if running.phase == FEELINGS:
         # Their answer to how they feel, tapped or typed, closes the set.
         return dataclasses.replace(base, finished=[*base.finished, framework.id], retire_technique=True,
-                                   prompts=closing_buttons())
+                                   prompts=closing_buttons(base.library))
     if reply.action == "stop":
         return dataclasses.replace(base, declined=[*base.declined, framework.id], technique=running.model_copy(
             update={"outcome": TechniqueOutcome.DECLINED, "phase": None}))

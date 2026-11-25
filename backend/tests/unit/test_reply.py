@@ -9,7 +9,7 @@ from mani.chat.reply import TurnReply, shaped
 def test_the_reply_schema_is_accepted_as_a_strict_json_schema():
     schema = to_strict_json_schema(TurnReply)
     assert set(schema["properties"]) == {"question", "people", "events", "text", "said", "action", "framework", "stage",
-                                         "safety", "notes", "title", "corrected"}
+                                         "safety", "notes", "library", "title", "corrected"}
 
 
 

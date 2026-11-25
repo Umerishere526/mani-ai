@@ -2,7 +2,8 @@
 # ABOUTME: and what each reply asked and gave, merged onto what is there so the safety keys are kept, within bounds.
 
 from mani.chat.record import (
-    EVENTS_KEPT, LINE_CHARS, PEOPLE_KEPT, REPLIES_KEPT, declined, events, finished, people, replies, with_outcomes,
+    EVENTS_KEPT, LINE_CHARS, PEOPLE_KEPT, REPLIES_KEPT, declined, events, finished, library, people, replies,
+    with_outcomes,
     with_answer, with_reply,
 )
 
@@ -12,6 +13,13 @@ def test_outcomes_merge_onto_the_record_and_keep_the_safety_keys():
     after = with_outcomes(record, notes=None, people=[], events=[], declined=["abcde"], finished=[])
     assert after == {"notes": "a", "danger_reached": True, "people": [], "events": [], "declined": ["abcde"],
                      "finished": []}
+
+
+def test_a_library_section_is_kept_until_a_reply_names_another():
+    kept = with_outcomes({"library": "Sleep"}, notes=None, people=[], events=[], declined=[], finished=[])
+    assert library(kept) == "Sleep"
+    assert library(with_outcomes(kept, notes=None, people=[], events=[], declined=[], finished=[],
+                                 library="Stress")) == "Stress"
 
 
 def test_new_notes_replace_the_old_ones():

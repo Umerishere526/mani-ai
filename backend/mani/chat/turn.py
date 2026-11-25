@@ -320,7 +320,7 @@ def _updates(ctx, reply: TurnReply, decision, judgment, *, record, check, answer
     fixed words went out in its place."""
     after = rec.with_outcomes(record, notes=reply.notes, people=[p.model_dump() for p in reply.people],
                               events=[e.model_dump() for e in reply.events], declined=decision.declined,
-                              finished=decision.finished)
+                              finished=decision.finished, library=decision.library)
     after = rec.with_answer(after, reply.question.answered)
     if entry is not None:
         after = rec.with_reply(after, **entry)
