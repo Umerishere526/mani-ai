@@ -16,7 +16,7 @@ os.environ["MINUTE_MESSAGE_LIMIT"] = "0"
 # A developer lowers the reasoning effort in .env to try the app; the tests assume the default (effort high).
 os.environ["REASONING_EFFORT"] = "high"
 # The pause tests expect the default length, whatever a developer sets in .env.
-os.environ["CRISIS_PAUSE_SECONDS"] = "30"
+os.environ["CRISIS_PAUSE_SECONDS"] = "900"
 
 if not ENV_FILE.exists():
     # Only a fallback, for a machine with no .env - enough for the unit suite to import

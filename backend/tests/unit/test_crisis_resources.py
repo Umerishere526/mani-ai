@@ -45,18 +45,30 @@ def test_every_number_the_pause_reply_names_is_a_listed_resource():
 def test_the_pause_reply_fits_whose_danger_it_is():
     """The live replays of 2026-11-13: one reply went out for chest pain, a bee sting, a stroke and a friend's overdose,
     saying "your safety" and offering suicide lines for a body emergency."""
-    themselves = crisis.pause_reply("themselves", 30)
-    assert "your safety" in themselves and "988" in themselves and "30 seconds" in themselves
-    assert "pausing our chat for 15 minutes." in crisis.pause_reply("themselves", 900)
-    assert "everyone's safety" in crisis.pause_reply("someone_else", 30)
-    assert "your safety" in crisis.pause_reply("from_someone", 30), "the danger is to them"
+    themselves = crisis.pause_reply("themselves", 900)
+    assert "your safety" in themselves and "988" in themselves and "15 minutes" in themselves
+    assert "pausing our chat for 30 seconds." in crisis.pause_reply("themselves", 30)
+    assert "everyone's safety" in crisis.pause_reply("someone_else", 900)
+    assert "your safety" in crisis.pause_reply("from_someone", 900), "the danger is to them"
     for other in ("someone_else", "from_someone"):
-        assert "988" not in crisis.pause_reply(other, 30)
-    body = crisis.pause_reply("body", 30)
+        assert "988" not in crisis.pause_reply(other, 900)
+    body = crisis.pause_reply("body", 900)
     assert "your health" in body and "911" in body and "988" not in body
-    assert crisis.pause_reply(None, 30) == themselves, "an unknown danger keeps the suicide line"
+    assert crisis.pause_reply(None, 900) == themselves, "an unknown danger keeps the suicide line"
     for about in ("themselves", "someone_else", "from_someone", "body"):
-        assert crisis.pause_reply(about, 30).endswith("We can talk again when you come back."), about
+        assert crisis.pause_reply(about, 900).endswith("We can talk again when you come back."), about
+
+
+def test_the_pause_reply_leads_with_where_to_get_help_and_the_length_comes_after():
+    """S6 (PROVISIONAL: clinician sign-off required before deploy): the pause is a safety screen, not a countdown
+    (Lolly, 2026-11-18: a timer must never be the primary intervention). Its first words are the help, 911 first, so an
+    overdose leads with 911 (R90); the length is said once, after it."""
+    for about in ("themselves", "someone_else", "from_someone", "body", None):
+        reply = crisis.pause_reply(about, 900)
+        first_line = reply.split("\n\n")[0]
+        assert "911" in first_line and "15 minutes" not in first_line, about
+        assert first_line.index("911") < first_line.index("988") if "988" in first_line else True, about
+        assert reply.count("15 minutes") == 1, about
 
 
 def test_every_resources_text_gives_the_us_numbers_and_the_directory_for_everywhere_else():

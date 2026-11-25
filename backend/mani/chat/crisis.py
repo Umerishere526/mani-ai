@@ -78,10 +78,11 @@ def _length(seconds: int) -> str:
 
 
 def pause_reply(about: str | None, seconds: int) -> str:
-    """What Mani says on the turn that pauses the chat."""
+    """What Mani says on the turn that pauses the chat: where to get help first, 911 leading, then the pause and its
+    length said once (S6: a safety screen, not a countdown). PROVISIONAL: clinician sign-off required before deploy."""
     who, help_now = _PAUSE_FOR.get(about, _PAUSE_FOR["themselves"])
     return (
-        f"I'm worried about {who}, so I'm pausing our chat for {_length(seconds)}. {help_now} "
+        f"{help_now}\n\nI'm worried about {who}, so I'm pausing our chat for {_length(seconds)}. "
         "We can talk again when you come back."
     )
 
