@@ -1,5 +1,5 @@
-// ABOUTME: Knows whether the signed-in person has finished onboarding (chosen a default
-// ABOUTME: conversation style), read from GET /v1/profile, so the route guard can send them there.
+// ABOUTME: Knows whether the signed-in person has finished onboarding (chosen a default conversation style) and
+// ABOUTME: their nickname, read from GET /v1/profile, so the route guard can send them there and the menu can greet them.
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { getProfile } from '@/lib/api/profile';
@@ -9,8 +9,9 @@ export type OnboardingStatus = 'signedOut' | 'checking' | 'needed' | 'done' | 'e
 
 interface OnboardingContextValue {
   status: OnboardingStatus;
+  nickname: string | null;
   retry: () => void;
-  complete: () => void;
+  complete: (nickname: string | null) => void;
 }
 
 type CheckedStatus = Extract<OnboardingStatus, 'needed' | 'done' | 'error'>;
@@ -20,7 +21,7 @@ const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 export function OnboardingProvider({ children }: { children: ReactNode }) {
   const { session } = useSession();
   const userId = session?.user?.id ?? null;
-  const [checked, setChecked] = useState<{ userId: string; status: CheckedStatus } | null>(null);
+  const [checked, setChecked] = useState<{ userId: string; status: CheckedStatus; nickname: string | null } | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -28,10 +29,12 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     let isCurrent = true;
     getProfile()
       .then((profile) => {
-        if (isCurrent) setChecked({ userId, status: profile?.support_style ? 'done' : 'needed' });
+        if (isCurrent) {
+          setChecked({ userId, status: profile?.support_style ? 'done' : 'needed', nickname: profile?.nickname ?? null });
+        }
       })
       .catch(() => {
-        if (isCurrent) setChecked({ userId, status: 'error' });
+        if (isCurrent) setChecked({ userId, status: 'error', nickname: null });
       });
     return () => {
       isCurrent = false;
@@ -43,12 +46,13 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
   const value: OnboardingContextValue = {
     status,
+    nickname: checked?.userId === userId ? checked.nickname : null,
     retry: () => {
       setChecked(null);
       setAttempt((count) => count + 1);
     },
-    complete: () => {
-      if (userId) setChecked({ userId, status: 'done' });
+    complete: (nickname) => {
+      if (userId) setChecked({ userId, status: 'done', nickname });
     },
   };
 

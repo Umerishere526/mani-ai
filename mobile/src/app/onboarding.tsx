@@ -16,8 +16,8 @@ export default function OnboardingScreen() {
   const [nickname, setNickname] = useState("");
   const save = useAsyncAction(async (style: ConversationStyle) => {
     const trimmed = nickname.trim();
-    await updateProfile(trimmed === "" ? { support_style: style } : { nickname: trimmed, support_style: style });
-    complete();
+    const saved = await updateProfile(trimmed === "" ? { support_style: style } : { nickname: trimmed, support_style: style });
+    complete(saved?.nickname ?? null);
   });
 
   return (
