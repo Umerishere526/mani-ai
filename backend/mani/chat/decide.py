@@ -14,7 +14,7 @@ from mani.chat.repairs import feelings_buttons, lead_in_buttons, start_buttons
 from mani.chat.reply import TurnReply
 from mani.chat.taps import TapEvent
 from mani.chat.techniques import FEELINGS, OFFERING, STEPS, Registry, stages_of
-from mani.llm.schema import LibrarySection, SmartPrompt
+from mani.llm.schema import LIBRARY_HOME, SmartPrompt
 from mani.models.rows import Framework, TechniqueOutcome, TechniqueState
 
 
@@ -58,7 +58,7 @@ def offer_current(open_offer: TechniqueState, message_count: int) -> bool:
 def closing_buttons() -> list[SmartPrompt]:
     """The close: Continue chatting and Visit library."""
     return [SmartPrompt(label=CONTINUE_CHATTING_LABEL),
-            SmartPrompt(label=VISIT_LIBRARY_LABEL, library=LibrarySection.HOME.value)]
+            SmartPrompt(label=VISIT_LIBRARY_LABEL, library=LIBRARY_HOME)]
 
 
 def decide(
@@ -93,7 +93,7 @@ def decide(
                                or person_messages < OFFER_FROM_MESSAGE))
     if reply.action == "library" and not decision.prompts:
         decision = dataclasses.replace(decision, prompts=[
-            SmartPrompt(label=VISIT_LIBRARY_LABEL, library=LibrarySection.HOME.value)])
+            SmartPrompt(label=VISIT_LIBRARY_LABEL, library=LIBRARY_HOME)])
     if stopping:
         decision = dataclasses.replace(decision, prompts=closing_buttons())
     return decision
