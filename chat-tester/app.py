@@ -16,6 +16,7 @@ from library import render_library
 import crisis_pause
 import session_store
 import trace_view
+import understanding_view
 from copy_button import copy_button
 from login import render_account, render_login, render_nickname
 
@@ -554,16 +555,8 @@ elif submitted and submitted.text:
 
 with st.sidebar:
     st.divider()
-    st.subheader("🧾 What Mani knows")
-    # Mani's notes for its next turn, and the frameworks this conversation declined or finished, as the backend stored
-    # them after the last reply. Sent by the backend only while AI_DEBUG_MODE is on.
-    record = (last_turn or {}).get("understanding")
-    if record:
-        for key, label in (("notes", "Notes"), ("declined", "Declined"), ("finished", "Finished")):
-            if value := record.get(key):
-                st.markdown(f"**{label}:** {' | '.join(value) if isinstance(value, list) else value}")
-    else:
-        st.caption("Nothing yet, or AI_DEBUG_MODE is off in the backend.")
+    # The thread record as the backend stored it after the last reply, sent only while AI_DEBUG_MODE is on.
+    understanding_view.render((last_turn or {}).get("understanding"))
 
     st.divider()
     # The person's conversations, newest activity first. Tapping one opens it to continue; the

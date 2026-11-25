@@ -128,10 +128,11 @@ service, not even the backend.
 ## What to look at
 
 The three developer panels below only appear with `CHAT_TESTER_DEV_MODE=1` in `chat-tester/.env`
-**and** the sidebar's "Show developer details" toggle switched on. "What Mani remembers" shows without
-them. An offer shows the client's three steps: the lead-in's buttons (Not sure / Show me how / Give me a tool), the five
-steps with Start / I need an example / Talk more first, and after the last stage Stronger / More focused / Still a
-bit tired.
+**and** the sidebar's "Show developer details" toggle switched on. "What Mani knows" shows without them: Mani's notes, the
+people and events they spoke of, the replies ledger (each reply's move and gist, the question it asked and their
+answer) and the frameworks declined or finished, all sent only while `AI_DEBUG_MODE=true` in `backend/.env`. An offer
+shows the client's steps as the backend sends them: the lead-in's buttons (Not sure / Show me how / Give me a tool),
+the five steps with Start and Talk more first, and after the last stage how they feel.
 
 - **The sidebar's "Framework state" panel** - a direct read of `thread_technique_state`,
   refreshed on every interaction. Watch `phase` move through a framework's stages as the
