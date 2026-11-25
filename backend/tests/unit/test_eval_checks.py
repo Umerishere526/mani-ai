@@ -1,6 +1,7 @@
 # ABOUTME: Checks the eval's code checks on a reply: they read the words the person receives after the turn's repairs,
 # ABOUTME: a reply outside its limits or against the client's word and pronoun rules fails; fixed lines follow settings.
 
+import json
 from types import SimpleNamespace
 
 from evals import run_eval
@@ -59,14 +60,16 @@ def test_the_reply_s_own_question_is_sent_after_its_text():
 
 def test_the_eval_shows_the_model_the_schema_the_turn_would_choose():
     from mani.chat.facts import NO_OFFER
+    active = ("abcde", "thought_reframe", "structured_problem_solving")
 
     def offers(facts: list[str]) -> list[str] | None:
-        properties = run_eval.reply_schema({"facts": facts}, ("abcde", "thought_reframe")).model_json_schema()["properties"]
+        properties = run_eval.reply_schema({"facts": facts}, active).model_json_schema()["properties"]
         return properties["framework"]["anyOf"][0]["enum"] if "offer" in properties["action"]["enum"] else None
 
     assert offers([NO_OFFER]) is None
-    assert offers(["They declined in this conversation: abcde. Never offer these again."]) == ["thought_reframe"]
-    assert offers([]) == ["abcde", "thought_reframe"]
+    declined = offers(["They declined in this conversation: abcde. Never offer these again."])
+    assert declined == ["thought_reframe", "structured_problem_solving"]
+    assert offers([]) == list(active)
 
 
 def test_the_pause_line_in_a_case_follows_the_configured_length():
@@ -102,3 +105,13 @@ def test_a_gendered_pronoun_the_person_never_used_fails():
     assert run_eval.rule_checks(case, got("What did your boss say when you asked them?")) == []
     told = {**case, "turns": [{"role": "user", "content": "my boss keeps adding tasks and he never says thanks"}]}
     assert run_eval.rule_checks(told, got("What happens when he does?")) == []
+
+
+def test_a_case_after_the_feelings_check_gives_the_model_the_turns_own_facts():
+    from mani.chat.facts import _running_line
+    from mani.chat.techniques import FEELINGS
+
+    told = _running_line(SimpleNamespace(name="ABCDE"), FEELINGS, held=False)
+    cases = json.loads((run_eval.HERE / "cases.json").read_text())
+    after_check = [fact for case in cases["quality"] + cases["rules"] for fact in case["facts"] if fact.startswith("ABCDE's last stage is done")]
+    assert after_check and set(after_check) == {told}

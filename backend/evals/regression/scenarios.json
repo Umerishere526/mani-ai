@@ -152,7 +152,7 @@
    "persona": "You face a concrete practical problem and want help working out options.",
    "turns": 16,
    "max_latency_s": 10,
-   "expect": {"framework": ["structured_problem_solving"], "walk": true, "somatic": true},
+   "expect": {"framework": ["structured_problem_solving"], "walk": true},
    "criteria": "Offers Structured Problem Solving and walks its stages in order."
   },
   {

@@ -779,14 +779,14 @@
    ],
    "reference": null,
    "facts": [
-    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel, warmly, in a sentence or two (in Directive, one), never calling the set a success. Recap nothing and force no question: if it didn't help or they feel the same, ask what they still need; otherwise offer a next step only if one would clearly help, or check they got what they came for only if that is unclear. Code closes the set and shows the closing buttons.",
+    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel in a sentence or two: name briefly, in their words, what moved and what is still open, including any part of what they came with that the set did not reach. No praise, never calling the set a success, no retelling of the set, and force no question: if it didn't help or they feel the same, ask what they still need; otherwise offer a next step only if one would clearly help. Code closes the set and shows the closing buttons.",
     "They finished in this conversation: abcde. Never offer a set again.",
     "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
    ],
    "open_chat": false,
    "checks": {
     "max_questions": 0,
-    "judge": "They say they feel clearer. The reply answers warmly and ends there: it never calls the set a success, asks no question (no 'would you like a next step?', no 'anything else?') and recaps nothing."
+    "judge": "They say they feel clearer. The reply names briefly, in their words, what moved (they feel clearer) and anything still open, then ends there: no praise, it never calls the set a success, never retells the set, and asks no question (no 'would you like a next step?', no 'anything else?')."
    }
   },
   {
@@ -817,7 +817,7 @@
    ],
    "reference": null,
    "facts": [
-    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel, warmly, in a sentence or two (in Directive, one), never calling the set a success. Recap nothing and force no question: if it didn't help or they feel the same, ask what they still need; otherwise offer a next step only if one would clearly help, or check they got what they came for only if that is unclear. Code closes the set and shows the closing buttons.",
+    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel in a sentence or two: name briefly, in their words, what moved and what is still open, including any part of what they came with that the set did not reach. No praise, never calling the set a success, no retelling of the set, and force no question: if it didn't help or they feel the same, ask what they still need; otherwise offer a next step only if one would clearly help. Code closes the set and shows the closing buttons.",
     "They finished in this conversation: abcde. Never offer a set again.",
     "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
    ],
@@ -1266,7 +1266,7 @@
    ],
    "reference": null,
    "facts": [
-    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel, warmly, in a sentence or two (in Directive, one), never calling the set a success. Recap nothing and force no question: if it didn't help or they feel the same, ask what they still need; otherwise offer a next step only if one would clearly help, or check they got what they came for only if that is unclear. Code closes the set and shows the closing buttons.",
+    "ABCDE's last stage is done and you asked how they feel now. Answer how they feel in a sentence or two: name briefly, in their words, what moved and what is still open, including any part of what they came with that the set did not reach. No praise, never calling the set a success, no retelling of the set, and force no question: if it didn't help or they feel the same, ask what they still need; otherwise offer a next step only if one would clearly help. Code closes the set and shows the closing buttons.",
     "They finished in this conversation: abcde. Never offer a set again.",
     "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
    ],
