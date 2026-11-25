@@ -17,10 +17,11 @@ logger = logging.getLogger(__name__)
 # or costing nothing-but-time on a provider that is briefly slow.
 TIMEOUT_SECONDS = 30.0
 
-# Matches FastAPI's own default request body ceiling for this endpoint - rejected here,
-# before the bytes are ever handed to the provider, with our own error shape rather than
-# a platform-level 413 the client cannot branch on.
-MAX_AUDIO_BYTES = 25 * 1024 * 1024
+# Under Vercel's 4.5 MB request body limit, with room for the multipart envelope around the file, so a recording
+# too long is refused here with our own error shape, before the bytes reach the provider, rather than as Vercel's
+# 413 the client cannot branch on. A body past 4.5 MB never reaches this code on Vercel. Four minutes of speech at
+# 128 kbps fits.
+MAX_AUDIO_BYTES = 4 * 1024 * 1024
 
 _client: openai.AsyncOpenAI | None = None
 

@@ -4,10 +4,12 @@
 import hmac
 import logging
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header
 
 from mani import catch_up
 from mani.config import get_settings
+from mani.errors import ErrorCategory, ServiceError
+from mani.models.api import CatchUpOut
 
 logger = logging.getLogger(__name__)
 
@@ -22,13 +24,14 @@ def _check_secret(authorization: str | None) -> None:
     """
     secret = get_settings().cron_secret
     if not secret or not hmac.compare_digest((authorization or "").encode(), f"Bearer {secret}".encode()):
-        raise HTTPException(status_code=401, detail="unauthorized")
+        raise ServiceError("cron call without the right secret", ErrorCategory.UNAUTHENTICATED,
+                           user_message="Not authorized.")
 
 
-@router.get("/catch-up")
-async def run_catch_up(authorization: str | None = Header(default=None)) -> dict:
+@router.get("/catch-up", response_model=CatchUpOut)
+async def run_catch_up(authorization: str | None = Header(default=None)) -> CatchUpOut:
     """Finish what the app left: summaries fallen behind and follow-ups it never asked for. See mani/catch_up.py."""
     _check_secret(authorization)
     done = await catch_up.run()
     logger.info("cron catch-up: %s", done)
-    return done
+    return CatchUpOut(**done)

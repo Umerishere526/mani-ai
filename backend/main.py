@@ -2,6 +2,7 @@
 # ABOUTME: Run with `fastapi dev main.py` from the backend directory.
 
 import logging
+import warnings
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -31,6 +32,9 @@ from mani.routers import (
 )
 
 logger = logging.getLogger(__name__)
+
+# The one third-party warning a chat reply raises, matched as pytest.ini matches it.
+PARSED_SERIALIZER_WARNING = r"(?s).*field_name='parsed'"
 
 
 def error_body(category: ErrorCategory, message: str, retryable: bool, details: dict | None = None) -> dict:
@@ -91,6 +95,10 @@ def create_app() -> FastAPI:
         level=settings.log_level,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+
+    # langchain-openai's structured stream serializes a chunk whose `parsed` field it types as None; pydantic warns on
+    # every chat reply, and the warning quotes the reply (`input_value=`). The reply is intact and the cause upstream.
+    warnings.filterwarnings("ignore", message=PARSED_SERIALIZER_WARNING, category=UserWarning)
 
     if settings.sentry_dsn:
         sentry_sdk.init(

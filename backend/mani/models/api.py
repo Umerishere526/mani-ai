@@ -266,6 +266,13 @@ class TranscriptionOut(BaseModel):
     text: str
 
 
+class CatchUpOut(BaseModel):
+    """What one catch-up run did; a count is None for a job stopped at the run's budget."""
+
+    summaries: int | None
+    follow_ups: int | None
+
+
 class PromptVersionOut(BaseModel):
     id: uuid.UUID
     prompt_id: uuid.UUID

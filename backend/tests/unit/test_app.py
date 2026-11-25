@@ -2,6 +2,7 @@
 # ABOUTME: The error contract is what every frontend branches on, so it is asserted here.
 
 import logging
+import warnings
 
 import pytest
 from fastapi import FastAPI
@@ -195,3 +196,17 @@ def test_an_error_report_carries_no_request_body_and_no_local_variables(monkeypa
     assert seen["send_default_pii"] is False
     assert seen["include_local_variables"] is False
     assert seen["max_request_body_size"] == "never"
+
+
+def test_the_warning_that_quotes_every_chat_reply_is_kept_out_of_the_log():
+    """langchain-openai's structured stream makes pydantic warn on every chat reply, quoting the reply itself. The app
+    silences that one warning when it starts, and only that one."""
+    quoting = ("Pydantic serializer warnings:\n  PydanticSerializationUnexpectedValue(Expected `none` - serialized "
+               "value may not be as expected [field_name='parsed', input_value=Said(text='I told my sister'), "
+               "input_type=Said])")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        create_app()
+        warnings.warn(quoting, UserWarning)
+        with pytest.raises(UserWarning):
+            warnings.warn("any other warning", UserWarning)
