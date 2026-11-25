@@ -162,6 +162,17 @@ async def test_a_forbidden_word_and_a_banned_line_never_reach_them_and_the_trace
     assert turn.trace["enforced"] == ["forbidden_word:land", "forbidden_word:struggling", "banned_line_removed"]
 
 
+async def test_a_long_directive_reply_reaches_them_as_three_sentences(alice, model):
+    """Directive is two or three short sentences, its question included; 7 eval replies ran to 4 or 5 (CQ-3)."""
+    model(said("A job you believe in can still cost too much. You've said it twice. That matters a lot.",
+               question=Question(latest="answer", ask="What feels hardest about it?")))
+    thread = await start(alice, style="Directive")
+    turn = await send(alice, thread.id, "i love the work but it's eating my evenings")
+    assert turn.content == ("A job you believe in can still cost too much. You've said it twice.\n\n"
+                            "What feels hardest about it?")
+    assert turn.trace["enforced"] == ["directive_trimmed"]
+
+
 # Two ordinary exchanges first: an offer may come with the person's 3rd message at the earliest.
 WARM_UP = (said("Go on."), said("Tell me more."))
 

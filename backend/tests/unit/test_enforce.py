@@ -7,8 +7,9 @@ from mani.chat import crisis, enforce
 
 
 def sent(text: str, ask: str = "", *, fixed: bool = False, guarded: bool = False, open_chat: bool = True,
-         latest: str = "answer") -> enforce.Sent:
-    return enforce.sent(text, ask, fixed=fixed, guarded=guarded, open_chat=open_chat, latest=latest)
+         latest: str = "answer", directive: bool = False, helping: bool = False) -> enforce.Sent:
+    return enforce.sent(text, ask, fixed=fixed, guarded=guarded, open_chat=open_chat, latest=latest,
+                        directive=directive, helping=helping)
 
 
 def test_a_guarded_reply_whose_text_already_asks_its_question_asks_it_once():
@@ -92,3 +93,29 @@ def test_a_typed_stop_the_model_missed_is_read_as_one_but_never_on_a_guarded_tur
     assert reply.question.latest == "other"
     kept, events = enforce.read_stop(reply, "I'm done", guarded=True)
     assert kept is reply and events == []
+
+
+def test_a_long_directive_reply_keeps_its_first_sentences_and_its_question():
+    """Directive is two or three short sentences (mani.md); 7 eval replies ran to 4 or 5."""
+    reply = sent("A job you believe in can still cost too much. You've said it twice now. That matters. It keeps "
+                 "coming back.", "When you picture it staying like this, what feels hardest?", directive=True)
+    assert reply.text == ("A job you believe in can still cost too much. You've said it twice now.\n\n"
+                          "When you picture it staying like this, what feels hardest?")
+    assert reply.enforced == [enforce.DIRECTIVE_TRIMMED]
+
+
+@pytest.mark.parametrize(("text", "ask", "why"), [
+    ("One. Two. Three. Four.", "So what would you try first?", "the question leans on what would be cut"),
+    ("Try this:\n1. Write it down.\n2. Read it back.\n3. Say it aloud.", "", "a list"),
+    ("You said no. Why did she push? You held it. Then she left.", "", "the question sits inside the text"),
+])
+def test_a_long_directive_reply_that_would_not_read_whole_goes_out_as_written(text, ask, why):
+    reply = sent(text, ask, directive=True)
+    assert enforce.DIRECTIVE_TRIMMED not in reply.enforced and reply.enforced == [enforce.DIRECTIVE_LONG_KEPT], why
+
+
+def test_the_directive_cap_leaves_help_other_styles_sets_and_guarded_turns_alone():
+    long = "One thing. Two things. Three things. Four things."
+    for kept in (sent(long, directive=True, helping=True), sent(long), sent(long, directive=True, open_chat=False),
+                 sent(long, directive=True, guarded=True, open_chat=False)):
+        assert kept.text == long and kept.enforced == []

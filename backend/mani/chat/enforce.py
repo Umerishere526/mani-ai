@@ -42,9 +42,17 @@ _COURTESIES = frozenset({"ok", "okay", "alright", "all right", "yes", "yeah", "y
                          "thank you", "thanks mani", "thank you mani", "cheers", "take care", "see you", "cool"})
 _CLAUSE = re.compile(r"[.,!?;:\n]+")
 
+# Directive is two or three short sentences, its question included (mani.md, "Your style").
+DIRECTIVE_SENTENCES = 3
+_LIST_LINE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s", re.MULTILINE)
+# Words that open a sentence leaning on the one before it, so it cannot follow a cut: "So what would you try?"
+_LEANS_BACK = ("and", "but", "so", "because", "which", "then", "or", "also", "that's why", "this is why")
+
 # Enforcement events, as the turn trace records them under `enforced`. A word swap is recorded with its word.
 REPEATED_QUESTION = "repeated_question"
 TYPED_STOP = "typed_stop"
+DIRECTIVE_TRIMMED = "directive_trimmed"
+DIRECTIVE_LONG_KEPT = "directive_long_kept"
 FORBIDDEN_WORD = "forbidden_word"
 BANNED_LINE_REMOVED = "banned_line_removed"
 BANNED_LINE_KEPT = "banned_line_kept"
@@ -138,6 +146,37 @@ def read_stop(reply: TurnReply, message: str, *, guarded: bool) -> tuple[TurnRep
     return reply.model_copy(update={"question": question}), [TYPED_STOP]
 
 
+def _leans_back(sentence: str) -> bool:
+    plain = sentence.lower().replace("’", "'")
+    return any(plain == word or plain.startswith(f"{word} ") or plain.startswith(f"{word},") for word in _LEANS_BACK)
+
+
+def _split_question(text: str, asked: str) -> tuple[str, str]:
+    """The text before its question and the question with what joins it, or the whole text and "" when the question
+    does not end it."""
+    if asked and text.endswith(asked):
+        body = text[: len(text) - len(asked)].rstrip()
+        return body, text[len(body):]
+    return text, ""
+
+
+def directive_trimmed(text: str, asked: str) -> tuple[str, list[str]]:
+    """A Directive reply cut to its first sentences so that, with its question, it says DIRECTIVE_SENTENCES at most,
+    and the event. It is cut only where it still reads whole: the cut ends on a full sentence, no list is broken, and
+    the question does not lean on a sentence cut away. Otherwise it goes out as written, recorded as kept long."""
+    sentences = questions.sentences(text)
+    if len(sentences) <= DIRECTIVE_SENTENCES:
+        return text, []
+    body, question = _split_question(text, asked)
+    room = DIRECTIVE_SENTENCES - len(questions.sentences(question))
+    trimmed = questions.kept(body, lambda place, _: place < room)
+    whole = (room >= 1 and (not asked or question) and not _LIST_LINE.search(body)
+             and trimmed.rstrip("\"'”’)").endswith((".", "!")) and not _leans_back(question.strip()))
+    if not whole:
+        return text, [DIRECTIVE_LONG_KEPT]
+    return f"{trimmed}{question}", [DIRECTIVE_TRIMMED]
+
+
 def _plain(sentence: str) -> str:
     return " ".join(_WORDS.findall(sentence.lower().replace("’", "'")))
 
@@ -151,9 +190,11 @@ def repeats(text: str, ask: str) -> bool:
                for sentence in questions.sentences(text) if questions.asks(sentence))
 
 
-def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, latest: str) -> Sent:
+def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, latest: str, directive: bool,
+         helping: bool) -> Sent:
     """The model's words as the person receives them (repairs.sent_text), with the client's rules enforced: each
-    forbidden word swapped for a plain one and each banned line taken out. A guarded turn keeps every sentence and
+    forbidden word swapped for a plain one, each banned line taken out, and a Directive reply in the open chat that
+    gives no help (`helping`) held to DIRECTIVE_SENTENCES. A guarded turn keeps every sentence and
     every question its text asks, so a question it chose that the text already asks is not asked twice. Text that
     carries code's fixed safety words (`fixed`) goes out with no rule applied to it."""
     enforced: list[str] = []
@@ -168,4 +209,7 @@ def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, la
         ask = ""
         enforced.append(REPEATED_QUESTION)
     text, asked, cut = sent_text(text, ask, guarded=guarded, open_chat=open_chat, latest=latest)
+    if directive and open_chat and not guarded and not helping:
+        text, trimmed = directive_trimmed(text, asked)
+        enforced += trimmed
     return Sent(text, asked, cut, enforced)
