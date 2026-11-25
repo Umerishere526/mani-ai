@@ -36,9 +36,6 @@ logger = logging.getLogger(__name__)
 Ask = Callable[..., Awaitable[client.Call | None]]
 # A title is asked for once the thread has a real exchange behind it.
 TITLE_AFTER_MESSAGES = 3
-# The trace and the call link are written once the turn's message is committed, which happens after the response.
-LINK_RETRY_ATTEMPTS = 5
-LINK_RETRY_DELAY_SECONDS = 0.05
 
 
 @dataclass(frozen=True)
@@ -511,33 +508,28 @@ async def has_written_in_earlier_thread(conn: asyncpg.Connection, user_id: str, 
 
 
 async def record_trace(turn: Turn, thread_id: uuid.UUID | str) -> None:
-    """Store the turn's trace once its message is committed. A trace that cannot be stored costs a review, never a
+    """Store the turn's trace beside its committed message. A trace that cannot be stored costs a review, never a
     reply."""
     from mani.db import turn_traces
 
-    await _once_committed(lambda conn: turn_traces.record(
+    await _stored_or_logged(lambda conn: turn_traces.record(
         conn, thread_id=thread_id, message_id=turn.message_id, llm_call_id=turn.llm_call_id, trace=turn.trace,
         raw_reply=turn.raw_reply), f"the trace for message {turn.message_id}")
 
 
 async def link_call(call_id: uuid.UUID, message_id: uuid.UUID) -> None:
-    """Point a recorded model call at the message it produced, once that message is committed."""
-    await _once_committed(lambda conn: llm_calls.attach_message(conn, call_id, message_id),
-                          f"the link from llm call {call_id} to message {message_id}")
+    """Point a recorded model call at the committed message it produced."""
+    await _stored_or_logged(lambda conn: llm_calls.attach_message(conn, call_id, message_id),
+                            f"the link from llm call {call_id} to message {message_id}")
 
 
-async def _once_committed(write: Callable[[asyncpg.Connection], Awaitable[None]], what: str) -> None:
-    """An admin write that needs the turn's message committed, retried while the commit lands. One that never
-    succeeds is logged and swallowed."""
+async def _stored_or_logged(write: Callable[[asyncpg.Connection], Awaitable[None]], what: str) -> None:
+    """An admin write about a turn whose message is already committed (chat/runner.py commits before the route
+    responds). One that fails is logged and swallowed: it costs a record, never a delivered reply."""
     from mani.db import pool
 
-    for attempt in range(1, LINK_RETRY_ATTEMPTS + 1):
-        try:
-            async with pool.as_admin() as conn:
-                await write(conn)
-            return
-        except asyncpg.PostgresError:
-            if attempt == LINK_RETRY_ATTEMPTS:
-                logger.warning("could not store %s after %d attempts", what, LINK_RETRY_ATTEMPTS, exc_info=True)
-                return
-            await asyncio.sleep(LINK_RETRY_DELAY_SECONDS * attempt)
+    try:
+        async with pool.as_admin() as conn:
+            await write(conn)
+    except asyncpg.PostgresError:
+        logger.warning("could not store %s", what, exc_info=True)
