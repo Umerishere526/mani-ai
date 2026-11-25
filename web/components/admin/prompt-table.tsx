@@ -35,7 +35,7 @@ export function PromptTable({ prompts, showModelColumn }: PromptTableProps) {
                 {prompt.name}
               </Link>
               {prompt.description && (
-                <p className="mt-0.5 max-w-xs truncate text-sm text-mani-text-muted">{prompt.description}</p>
+                <p className="mt-0.5 max-w-60 truncate text-sm text-mani-text-muted">{prompt.description}</p>
               )}
             </TableCell>
             {showModelColumn && (

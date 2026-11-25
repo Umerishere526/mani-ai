@@ -18,13 +18,13 @@ export function ThreadRow({ thread }: ThreadRowProps) {
     <tr className="transition-colors duration-150 hover:bg-mani-bg">
       <TableCell>
         <div className="font-medium">{thread.userNickname ?? STRINGS.anonymous}</div>
-        <p className="mt-0.5 max-w-xs truncate text-sm text-mani-text-muted">
+        <p className="mt-0.5 max-w-60 truncate text-sm text-mani-text-muted">
           {thread.userEmail ?? `${thread.userId.slice(0, 8)}...`}
         </p>
       </TableCell>
       <TableCell className="text-sm text-mani-text">{thread.title ?? STRINGS.untitledShort}</TableCell>
       <TableCell className="text-sm text-mani-text-muted">{thread.messageCount}</TableCell>
-      <TableCell className="text-sm text-mani-text-muted">
+      <TableCell className="text-sm whitespace-nowrap text-mani-text-muted">
         {formatRelativeTime(thread.lastMessageAt, {
           justNow: STRINGS.justNow,
           minutesAgoSuffix: STRINGS.minutesAgoSuffix,

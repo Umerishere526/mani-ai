@@ -41,7 +41,7 @@ export function ExerciseCategoryTable({ category, exercises }: ExerciseCategoryT
                   {exercise.title}
                 </Link>
                 {exercise.description && (
-                  <p className="mt-0.5 max-w-xs truncate text-sm text-mani-text-muted">{exercise.description}</p>
+                  <p className="mt-0.5 max-w-60 truncate text-sm text-mani-text-muted">{exercise.description}</p>
                 )}
               </TableCell>
               <TableCell className="text-sm text-mani-text">
