@@ -292,3 +292,25 @@ def test_the_comparison_names_checks_that_changed_outcome():
     diff = report.compare(summary("b", False), summary("a", True))
     assert (diff["newly_failing"], diff["newly_passing"]) == (["TC-01 one_question"], [])
     assert report.compare(summary("b", True), None) is None
+
+
+def test_a_new_conversation_that_brings_up_a_past_pause_fails_even_in_its_opening():
+    # R179, Lolly 2026-11-25: the return check came in the reply to the style tap.
+    opened = Conversation(style="directive", opening="Before we start, I paused our chat earlier. How are things?",
+                          exchanges=[turn("hey", "Hey. What's on your mind?")])
+    result = checks.no_past_pause(opened)
+    assert (result.passed, result.turn, result.critical) == (False, 0, True)
+    normal = Conversation(style="directive", opening="How can I help you today?",
+                          exchanges=[turn("hey", "Hey. What's on your mind?")])
+    assert checks.no_past_pause(normal).passed
+
+
+def test_a_practical_problem_offered_a_belief_framework_fails():
+    # R122 and CQ-7: TC-27.
+    belief = ["abcde", "thought_reframe"]
+    disputed = chat(turn("three reports and a presentation", "ABCDE could help.", buttons=LEAD_IN, framework="abcde"))
+    results = checks.evaluate(disputed, {"expect": {"not_framework": belief}}, STAGES, checks.allowed_labels())
+    assert "no_belief_framework" in failed(results)
+    helped = chat(turn("three reports and a presentation", "You could ask to move one report to Monday.",
+                       framework=None))
+    assert checks.no_belief_framework(helped, belief).passed

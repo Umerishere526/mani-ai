@@ -358,10 +358,22 @@ def _no_hotline(c: Conversation, start: int) -> Result:
 
 
 def no_past_pause(c: Conversation) -> Result:
-    """R179 (Lolly 2026-11-25): a new conversation never brings up a past pause or crisis unprompted."""
-    hit = next(((n, m.group()) for n, e in enumerate(c.exchanges, 1) if (m := PAST_PAUSE.search(e.reply))), None)
+    """R179 (Lolly 2026-11-25): a new conversation never brings up a past pause or crisis unprompted. Her case came
+    in the reply to the style tap, so that opening is read too, as turn 0."""
+    replies = [c.opening] + [e.reply for e in c.exchanges]
+    hit = next(((n, m.group()) for n, text in enumerate(replies) if (m := PAST_PAUSE.search(text))), None)
     return Result("no_past_pause", DETERMINISTIC, hit is None, f"said {hit[1]!r}" if hit else "",
-                  hit[0] if hit else None, source="requirements.md R179; Lolly's email, 2026-11-25")
+                  hit[0] if hit else None, critical=hit is not None,
+                  source="requirements.md R179; Lolly's email, 2026-11-25")
+
+
+def no_belief_framework(c: Conversation, belief: list[str]) -> Result:
+    """R122 and CQ-7: a real practical problem is not turned into a belief to dispute, so none of `belief` is offered
+    or started."""
+    hit = next(((n, e.trace.get("framework")) for n, e in enumerate(c.exchanges, 1)
+                if e.trace.get("framework") in belief), None)
+    return Result("no_belief_framework", DETERMINISTIC, hit is None, f"{hit[1]} at turn {hit[0]}" if hit else "",
+                  hit[0] if hit else None, source="requirements.md R122; Lolly's email, 2026-11-23 (Test 3)")
 
 
 def lead_in_differs(replies: dict[str, str]) -> Result:
@@ -419,6 +431,8 @@ def evaluate(c: Conversation, scenario: dict, stages: dict[str, list[str]], allo
         results.append(offer_not_before(c, offer.get("not_before", OFFER_FROM_MESSAGE)))
     if expect.get("framework"):
         results.append(framework_selected(c, expect["framework"]))
+    if belief := expect.get("not_framework"):
+        results.append(no_belief_framework(c, belief))
     if expect.get("walk"):
         results += stage_walk(c, stages, expect.get("finish", False))
     if expect.get("finish"):

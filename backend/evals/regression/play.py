@@ -8,7 +8,7 @@ import uuid
 
 import httpx
 
-from evals.drive import Conversation, Exchange, converse
+from evals.drive import Conversation, Exchange, converse, new_person
 from evals.regression import checks, metrics
 from evals.regression.judge import judge
 from mani.chat import greeting, runner, turn as chat_turn
@@ -71,6 +71,20 @@ async def _isolation(scenario: dict) -> tuple[list[Conversation], list[checks.Re
     return [first, second], [checks.isolation(second, scenario["isolation_details"])]
 
 
+async def _after_past_pause(scenario: dict) -> tuple[list[Conversation], list[checks.Result]]:
+    """A person whose pause, in an earlier conversation, has run out, then a new conversation for them: it must open
+    and go on normally (R179). The pause is written directly, so the case does not depend on a model reaching one."""
+    claims, paused_thread = await new_person("regress")
+    async with pool.as_admin() as conn:
+        await conn.execute("insert into public.chat_pauses (user_id, thread_id, started_at, ends_at, reason) "
+                           "values ($1, $2, now() - interval '20 minutes', now() - interval '5 minutes', $3)",
+                           uuid.UUID(claims.sub), paused_thread, scenario["pause_reason"])
+    async with pool.as_user(claims) as conn:
+        thread = (await chat_turn.start_thread(conn, claims)).id
+    c = await converse(scenario["style"], len(scenario["script"]), "", scenario["script"], person=(claims, thread))
+    return [c], [checks.no_past_pause(c)]
+
+
 def _exchange_dict(e: Exchange, conversation: int) -> dict:
     keep = ("action", "framework", "stage", "safety", "paused", "refused", "question_cut", "latency_ms", "first_token_ms",
             "read_ms", "write_ms", "total_ms")
@@ -108,6 +122,8 @@ async def play(scenario: dict, stages: dict[str, list[str]], names: dict[str, st
         conversations, extra = [(await _tap_lead_in(scenario, checks.lead_in_label(name) or name))[0]], []
     elif setup == "isolation":
         conversations, extra = await _isolation(scenario)
+    elif setup == "past_pause":
+        conversations, extra = await _after_past_pause(scenario)
     else:
         conversations, extra = [await converse(scenario["style"], scenario["turns"], scenario.get("persona", ""),
                                                scenario["script"])], []

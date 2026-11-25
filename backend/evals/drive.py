@@ -61,6 +61,8 @@ class Conversation:
     error: str | None = None
     claims: Claims | None = None
     thread_id: uuid.UUID | None = None
+    # Mani's reply to the style tap, which opens the conversation before the person's first message.
+    opening: str = ""
 
 
 async def new_person(tag: str) -> tuple[Claims, uuid.UUID]:
@@ -84,7 +86,7 @@ async def converse(style: str, turns: int, persona: str, script: list[str] | Non
     script = script or []
     opened = await runner.send(claims, thread_id, style.capitalize())
     shown = [("MANI", opened.content, [])]
-    record = Conversation(style=style, claims=claims, thread_id=thread_id)
+    record = Conversation(style=style, claims=claims, thread_id=thread_id, opening=opened.content)
     buttons: list[str] = []
     for n in range(turns):
         if n < len(script):
