@@ -32,7 +32,7 @@ export default async function ChatDetailPage({ params }: ChatDetailPageProps) {
             <h1 className="text-[1.75rem] font-semibold tracking-tight text-mani-text">
               {thread.title ?? STRINGS.untitled}
             </h1>
-            <div className="mt-2 flex items-center gap-4">
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
               <p className="text-sm text-mani-text-muted">
                 {STRINGS.userPrefix}
                 {thread.userNickname ?? STRINGS.anonymous} ({thread.userEmail ?? thread.userId})
@@ -49,7 +49,7 @@ export default async function ChatDetailPage({ params }: ChatDetailPageProps) {
               </p>
             </div>
           </div>
-          {thread.crisisDetected && <Badge variant="accent">{STRINGS.crisisDetected}</Badge>}
+          {thread.crisisDetected && <Badge variant="danger">{STRINGS.crisisDetected}</Badge>}
         </div>
 
         <div className="border-t border-mani-border">

@@ -34,7 +34,7 @@ export function ThreadRow({ thread }: ThreadRowProps) {
       </TableCell>
       <TableCell>
         {thread.crisisDetected ? (
-          <Badge variant="accent">{STRINGS.statusCrisis}</Badge>
+          <Badge variant="danger">{STRINGS.statusCrisis}</Badge>
         ) : (
           <Badge variant="success">{STRINGS.statusNormal}</Badge>
         )}

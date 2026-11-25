@@ -56,7 +56,7 @@ export function AdminNav({ email }: AdminNavProps) {
   const pathname = usePathname();
 
   return (
-    <nav className="flex min-h-screen w-64 flex-col bg-mani-sidebar bg-[url('/textures/noise.svg')] bg-blend-soft-light">
+    <nav className="flex min-h-screen w-64 shrink-0 flex-col bg-mani-sidebar bg-[url('/textures/noise.svg')] bg-blend-soft-light">
       <div className="border-b border-white/8 px-5 py-6">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-mani-accent">

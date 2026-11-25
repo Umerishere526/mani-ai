@@ -3,7 +3,7 @@
 
 import type { AdminExercise } from "@/types";
 import dictionary from "@/dictionaries/en.json";
-import { FORM_INPUT_CLASSES, FORM_TEXTAREA_CLASSES, FORM_LABEL_CLASSES, FORM_HELPER_CLASSES } from "../form-field-classes";
+import { FORM_INPUT_CLASSES, FORM_LABEL_CLASSES, FORM_HELPER_CLASSES } from "../form-field-classes";
 
 const STRINGS = dictionary.admin.forms.exercise;
 const CATEGORY_LABELS = dictionary.admin.forms.categories;
@@ -48,7 +48,7 @@ export function ExerciseBasicFields({
           required
           rows={3}
           defaultValue={exercise?.description}
-          className={FORM_TEXTAREA_CLASSES}
+          className={`${FORM_INPUT_CLASSES} leading-relaxed`}
           placeholder={STRINGS.descriptionPlaceholder}
         />
       </div>
