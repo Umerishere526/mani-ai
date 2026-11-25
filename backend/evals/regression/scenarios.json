@@ -1,5 +1,5 @@
 {
- "about": "Draft TC-01 to TC-20, written 2026-11-24, TC-21 to TC-27, written 2026-11-25 for the provisional decisions, TC-28 to TC-34, written 2026-11-25 for Directive as a decision-making coach (scored on the judge's coach rubric), and TC-35 to TC-39 for the framework handoff, from the client's documents and real tests; awaiting muhammad's approval. `script` is sent in order (a button's exact label taps it), then `persona` plays the rest. `expect` keys are read by evals/regression/checks.py. A scenario with status `gap` asks for something paused or removed by a Decision in force: it is reported, never run.",
+ "about": "Draft TC-01 to TC-20, written 2026-11-24, TC-21 to TC-27, written 2026-11-25 for the provisional decisions, TC-28 to TC-34, written 2026-11-25 for Directive as a decision-making coach (scored on the judge's coach rubric), TC-35 to TC-39 for the framework handoff, and TC-40 for emotional understanding, from the client's documents and real tests; awaiting muhammad's approval. `script` is sent in order (a button's exact label taps it), then `persona` plays the rest. `expect` keys are read by evals/regression/checks.py. A scenario with status `gap` asks for something paused or removed by a Decision in force: it is reported, never run.",
  "scenarios": [
   {
    "id": "TC-01",
@@ -694,6 +694,23 @@
     "not_framework": ["abcde", "thought_reframe"]
    },
    "criteria": "Gives practical steps at once; never turns the problem into a belief to examine."
+  },
+  {
+   "id": "TC-40",
+   "title": "Directive: a friend who didn't take their side is understood beyond the disagreement",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's emotional-intelligence brief (acceptance test) and his tester's friend-conflict chat, 2026-11-25"],
+   "script": [
+    "I had a fight with my friend. I'm very sad and angry because she didn't take my side, even though she knew me longer than the other person. I feel betrayed."
+   ],
+   "persona": "Your friend sided with someone else in front of a group; you felt publicly embarrassed and unvalued. She hasn't called since and you expected her to. You don't want to reach out first because it would look like you were wrong. You still care about her. Answer naturally; if Mani offers a set of questions, accept and go through it honestly (your thought in the moment was 'I looked stupid'); when asked how you feel after it, say you feel about the same, because what hurts is her not standing by you.",
+   "turns": 14,
+   "max_latency_s": 12,
+   "expect": {},
+   "criteria": "Sees that the hurt goes beyond the disagreement (betrayal, rejection, feeling unimportant, public embarrassment) and remembers each as it comes up; explores their expectations of the friendship; never concludes the friend was wrong or selfish; understands why they won't reach out first and the difference between wanting an apology and wanting to know they matter to her; tentative readings only; when they feel about the same after a set, does not act as if it worked and names, as a possibility, that the deeper hurt (her not standing by them, not calling) is still there; no false optimism or stock lines."
   }
  
  ]

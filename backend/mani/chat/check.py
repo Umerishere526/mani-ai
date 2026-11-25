@@ -22,7 +22,8 @@ INSTRUCTIONS = """You edit one reply from MANI, a mental-health companion, befor
 leave every other word exactly as it is:
 1. A sentence that states as fact what the person feels, wants, means, why they do something, what their situation \
 "really" is, what will happen, or whether a belief of theirs holds, when they did not say it themselves. Rewrite it to \
-say only what they said, or remove it. Never turn it into a question.
+say only what they said, or as a possibility ("I wonder if…"), or remove it. Never turn it into a question. A reading \
+already marked as a possibility ("I wonder if…", "it might be that…", "maybe") is allowed: leave it as it is.
 2. A verdict on someone else in their story ("That's not much to ask of a friend", "she was wrong"). Rewrite it to take \
 the person's feeling as real without judging the other person, or remove it.
 3. A figure of speech or flowery phrase ("sit with", "stings", "a hard pair", "handing her the win", "the weight in \

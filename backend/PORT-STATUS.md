@@ -323,6 +323,16 @@ the same change as the work.**
   his tester's friend-conflict chat (6.5/10) ran ABCDE on "I looked stupid" instead of the offered belief, asked C
   twice after "I told you" and "you know", said "That's not much to ask of a friend", and left the dilemma of reaching
   out first untouched. `mani.md` ("How you listen", "Inside the set of questions"). Not yet eval-gated.
+- **A reading may be said in `text` once, plainly marked as a possibility ("I wonder if…", "It might be that…"), or put
+  in the question; never as a statement of how things are. Notes keep every feeling and want they named and how they
+  connect; layered and conflicting feelings are explored one possibility at a time; no false optimism or stock
+  empathy lines; when they only want to be heard, no set and no advice; after a set that left them the same, Mani says
+  it looked at one thought and wonders whether the deeper hurt is still there** (muhammad, 2026-11-25). Because his
+  emotional-intelligence brief and Lolly's ChatGPT friendship example (2026-10-26, R30 to R34) both use tentative
+  readings in the reply, which the rule "readings only in the question" (CQ-13, same day) forbade. The reply check
+  leaves marked possibilities as they are. `mani.md`, `check.INSTRUCTIONS`; regression TC-40. ACT, DBT and Behavioral
+  Activation stay paused and Mani still leads no exercise of its own (the library gives them, R141): kept on purpose
+  against the brief's section 7, to raise with Lolly after the demo. Not yet eval-gated.
 - **A reply check: after the chat call, a second short call on the chat's model at effort low rewrites, in Mani's
   text only, readings said as fact, verdicts on other people and figures of speech; it never runs on a safety turn,
   and a rewrite that asks something, grows, or loses a number or a drafted passage is not used** (muhammad,
