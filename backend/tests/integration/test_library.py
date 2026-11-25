@@ -93,3 +93,25 @@ async def test_a_collecting_topic_lists_other_topics_exercises_under_their_subca
     assert work[0].audio_path is None, "an unrecorded item is listed, with no audio"
     assert [(e.title, e.subcategory) for e in calm] == [("Breath", None), ("Story", None)]
     assert sorted(everything) == sorted([breath, story, unrecorded]), "the whole catalog lists each exercise once"
+
+
+async def test_with_no_topics_seeded_the_categories_the_exercises_carry_are_the_topics(alice):
+    """DEP-2 (2026-11-25): hosted has its exercises but not the client's topics until seed_exercises.py runs with the
+    recordings, and the library must not show nothing in between. Run in a transaction that is rolled back, so the
+    shared database keeps its topics."""
+    async with pool.as_admin() as conn:
+        transaction = conn.transaction()
+        await transaction.start()
+        try:
+            await conn.execute("delete from admin.exercise_topic_links")
+            await conn.execute("delete from admin.library_topics")
+            await conn.execute("update admin.exercises set is_active = false")
+            await conn.execute(
+                "insert into admin.exercises (title, category, audio_path, display_order) values "
+                "('Breathe', 'ZzLibraryCalm', 'zz/breathe.mp3', 1), ('Boundaries', 'ZzLibraryWork', 'zz/b.mp3', 2)"
+            )
+            topics = await exercises.list_topics(conn)
+        finally:
+            await transaction.rollback()
+
+    assert [(t.id, t.title) for t in topics] == [("ZzLibraryCalm", "Zz Library Calm"), ("ZzLibraryWork", "Zz Library Work")]

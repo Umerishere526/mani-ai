@@ -340,6 +340,10 @@ the same change as the work.**
   leaves marked possibilities as they are. `mani.md`, `check.INSTRUCTIONS`; regression TC-40. ACT, DBT and Behavioral
   Activation stay paused and Mani still leads no exercise of its own (the library gives them, R141): kept on purpose
   against the brief's section 7, to raise with Lolly after the demo. Not yet eval-gated.
+- **Until the client's topics are seeded, the library's topics are the categories the active exercises carry, titled
+  from their ids** (muhammad, 2026-11-25, DEP-2). Because hosted gets migrations 045 to 047 before
+  `seed_exercises.py` can run (it needs the recordings), and the library must never be empty in between. The client's
+  topics take over as soon as they are seeded. `exercises_db.list_topics`; `test_library.py`.
 - **A reply repair: code finds the rules a reply breaks that it can see (a yes/no or either/or question, a known
   figure of speech, a known reading said as fact) and only then one short call on the chat's model rewrites exactly
   those words; a clean reply makes no call. Never on a safety turn; a repair that asks in the text, grows, drops a

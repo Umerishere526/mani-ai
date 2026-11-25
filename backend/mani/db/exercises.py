@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 import uuid
 from typing import Any
 
@@ -96,10 +97,23 @@ async def list_active(
 
 
 async def list_topics(conn: asyncpg.Connection) -> list[LibraryTopic]:
+    """The client's topics; until they are seeded (scripts/seed_exercises.py needs the recordings), one topic per
+    category the active exercises already carry, titled from it, so the library is never empty (DEP-2, 2026-11-25)."""
     rows = await conn.fetch(
         "select id, title, blurb, display_order from admin.library_topics order by display_order, title"
     )
-    return LibraryTopic.from_records(rows)
+    if rows:
+        return LibraryTopic.from_records(rows)
+    categories = await conn.fetch(
+        "select distinct category from admin.exercises where is_active and category is not null order by category"
+    )
+    return [LibraryTopic(id=row["category"], title=_titled(row["category"]), display_order=place)
+            for place, row in enumerate(categories)]
+
+
+def _titled(category: str) -> str:
+    """A category id as a title: "WorkplaceChallenges" reads "Workplace Challenges"."""
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", category)
 
 
 async def get(conn: asyncpg.Connection, exercise_id: uuid.UUID | str) -> Exercise | None:
