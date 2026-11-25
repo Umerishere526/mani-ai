@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field  # noqa: E402
 
 from evals import reply_rules  # noqa: E402
 from mani.chat import crisis, questions, repairs  # noqa: E402
+from mani.chat.enforce import banned_phrases, forbidden_words  # noqa: E402
 from mani.chat.facts import NO_OFFER, facts_block, framework_guide  # noqa: E402
 from mani.chat.greeting import style_label  # noqa: E402
 from mani.chat.reply import shaped  # noqa: E402
@@ -200,8 +201,8 @@ def rule_checks(case, got) -> list[str]:
     """What code can check from the reply's fields and the words the person receives; empty when it passes. The client's
     forbidden words and banned lines are checked on every rule case (approved by muhammad, 2026-11-24)."""
     failed, checks, text = [], case["checks"], got.get("sent") or ""
-    failed += [f"used forbidden {word!r}" for word in reply_rules.forbidden_words(text)]
-    failed += [f"said banned {line!r}" for line in reply_rules.banned_phrases(text)]
+    failed += [f"used forbidden {word!r}" for word in forbidden_words(text)]
+    failed += [f"said banned {line!r}" for line in banned_phrases(text)]
     if "max_questions" in checks and (count := len(reply_rules.questions(text))) > checks["max_questions"]:
         failed.append(f"{count} questions > {checks['max_questions']}")
     if checks.get("no_invented_pronoun"):

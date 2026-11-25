@@ -3,7 +3,7 @@
 
 import pytest
 
-from evals.reply_rules import forbidden_words
+from mani.chat.enforce import forbidden_words
 from mani.chat.facts import framework_guide
 from mani.chat.techniques import Registry, steps_text
 from mani.models.rows import Framework

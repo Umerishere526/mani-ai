@@ -231,7 +231,7 @@ the same change as the work.**
   scenario script counted words, offers and phrases rather than whether a reply was good, and the rebuild needed a
   scored comparison with ChatGPT; 0.15 is about the noise between runs (2026-11-17). `evals/run_eval.py`: 14 quality
   cases from muhammad's 2026-11-17 comparisons and 31 rule cases (`evals/cases.json`; every rule case also fails on a forbidden word or banned line,
-  `evals/reply_rules.py`), three runs each, scored by
+  `enforce.forbidden_words`, `enforce.banned_phrases`), three runs each, scored by
   `openai/gpt-6.1-sol` with a strict JSON schema, four calls at a time, waiting when OpenRouter's in-flight budget
   refuses one (402). The change and the current prompt and model run one after the other in the same session; the
   change is kept only if its Supportive and Reflective overall is no more than 0.15 below and every rule passes.
@@ -345,7 +345,7 @@ the same change as the work.**
   forbidden words swapped, banned lines removed, a typed stop closes, Directive held to three sentences, a repeated
   stock opener dropped, one question** (muhammad, 2026-11-25). Because prompt-only rules held most but not all of the
   time (the 2026-11-25 eval and suite). Each is recorded under the trace's `enforced`. Fixed safety text and guarded
-  turns are never cut. `enforce.FORBIDDEN_WORDS`, `enforce.BANNED_PHRASES` (shared with `evals/reply_rules.py`);
+  turns are never cut. `enforce.FORBIDDEN_WORDS`, `enforce.BANNED_PHRASES` (the evals and the regression suite check with the same lists);
   tests: `tests/unit/test_enforce.py`.
 - **The reply's schema is chosen per turn: with no offer code would make, `offer` is not shown and `framework` lists
   only offerable sets; validation still reads any value** (muhammad, 2026-11-24). Because a refused offer still went
@@ -800,7 +800,7 @@ the same change as the work.**
 - **Mani never uses the Behavioral Framework's 21 forbidden words or the Safety Guardrails' comfort lines and their
   close variants, in the prompt or in fixed text** (muhammad, 2026-11-24). Because the client's specifications forbid
   them and the prompt and `crisis.py` taught some of them ("I'm not going anywhere", "I'll be here when you come
-  back"). `mani.md` "How you sound", `crisis.CRISIS_REPLY`, `crisis.pause_reply`; `evals/reply_rules.py` checks them.
+  back"). `mani.md` "How you sound", `crisis.CRISIS_REPLY`, `crisis.pause_reply`; `enforce.py` holds the lists, which the evals check too.
 - **Every style gives the practical help asked for (ideas, guidance, a reminder, practice) in that reply, and
   Directive moves toward solutions sooner** (muhammad, 2026-11-24). Because of Lolly's 2026-11-20 answers, which
   supersede the 2026-11-17 overrule of R94 and R105 (the chat gave no solutions). A practice request is answered with

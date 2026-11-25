@@ -7,8 +7,10 @@ import re
 from dataclasses import dataclass
 
 from evals.drive import Conversation
-from evals.reply_rules import banned_phrases, forbidden_words, genders_named, pronouns, questions
+from evals.reply_rules import genders_named, pronouns, questions
 from mani.chat import greeting
+from mani.chat.crisis import UNREAD_REPLIES
+from mani.chat.enforce import banned_phrases, forbidden_words
 from mani.chat.decide import OFFER_FROM_MESSAGE
 
 # Kinds of result. A failed `deterministic` check fails the run; `performance` is reported and fails only under
@@ -128,9 +130,11 @@ def no_repeated_question(c: Conversation) -> Result:
 
 def no_repeated_opener(c: Conversation) -> Result:
     """R116 and Pacing Rules: validation 'natural and varied across turns', never 'reusing the same validation
-    phrases'."""
+    phrases'. The fixed replies of a failed call are code's, not Mani's voice, so they never count."""
     seen: dict[str, int] = {}
     for n, e in enumerate(c.exchanges, 1):
+        if e.reply.strip() in UNREAD_REPLIES:
+            continue
         start = opener(e.reply)
         if len(start.split()) == OPENER_WORDS and start in seen:
             return Result("no_repeated_opener", DETERMINISTIC, False, f"{start!r} opens turns {seen[start]} and {n}", n)

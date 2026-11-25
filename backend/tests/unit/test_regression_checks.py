@@ -6,7 +6,7 @@ from decimal import Decimal
 from evals import regress
 from evals.drive import Conversation, Exchange
 from evals.regression import checks, metrics, report
-from mani.chat import greeting
+from mani.chat import crisis, greeting
 
 STAGES = {"abcde": ["activate", "belief", "consequence", "dispute", "effect"], "thought_reframe": ["surface", "land"]}
 LEAD_IN = list(greeting.LEAD_IN_LABELS)
@@ -51,6 +51,14 @@ def test_the_same_question_in_other_words_is_a_repeat_and_a_new_question_is_not(
     moving = chat(turn("x", "What happens when you say no to your manager?"),
                   turn("y", "Has there been a time it went fine?"))
     assert checks.no_repeated_question(moving).passed
+
+
+def test_a_stock_opener_mani_repeats_fails_but_the_fixed_reply_of_a_failed_call_never_counts():
+    stock = chat(turn("x", "That makes a lot of sense. What happened?"),
+                 turn("y", "That makes a lot of sense. Then what?"))
+    assert checks.no_repeated_opener(stock).turn == 2
+    outage = chat(*[turn(f"m{n}", reply) for n in range(2) for reply in crisis.UNREAD_REPLIES])
+    assert checks.no_repeated_opener(outage).passed
 
 
 def test_mani_saying_him_about_someone_they_only_called_they_fails():

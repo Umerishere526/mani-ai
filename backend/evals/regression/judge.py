@@ -9,8 +9,8 @@ import httpx
 from pydantic import BaseModel, Field
 
 from evals.drive import Conversation, printed
-from evals.reply_rules import FORBIDDEN_WORDS
 from evals.run_eval import JUDGE_MODEL, structured
+from mani.chat.enforce import FORBIDDEN_WORDS
 from mani.config import get_settings
 
 Criterion = Literal["empathy", "relevance", "naturalness", "personalization", "question_quality", "repetition",

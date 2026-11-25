@@ -37,7 +37,8 @@ must avoid**.
 - **Stage sections (§§11–18)** → `admin.frameworks.stages` jsonb, one entry per phase: each stage's `intro`,
   `purpose` and `ready_when`, and the offering's five steps per style.
 - **"Responses MANI Must Avoid"** and the rules repeated across all six → `content/prompts/mani.md`, the one chat
-  prompt, and the rule checks of `backend/evals/` (`reply_rules.py`, `cases.json`).
+  prompt, `mani/chat/enforce.py` (the forbidden words and banned lines), and the rule checks of `backend/evals/`
+  (`reply_rules.py`, `cases.json`).
 - Active today: ABCDE, Thought Reframe and Structured Problem Solving; the other three are in
   `content/frameworks/paused/`. The body check-in was deleted on 2026-11-17.
 
