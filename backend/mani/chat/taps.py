@@ -99,8 +99,8 @@ def tap_event(tapped: SmartPrompt | None, registry: Registry, open_offer: Techni
             "that stage's question."))
     if offered is not None and label == TALK_MORE_FIRST:
         return TapEvent(set_aside=True, fact=(
-            f"They chose to talk more before trying {offered.name}. Carry on with them; you may offer it again later "
-            "when it fits."))
+            f"They chose to talk more before trying {offered.name}. Carry on with them in the open chat; offer it "
+            "again only if they ask for it."))
     if label == CONTINUE_CHATTING:
         return TapEvent(fact="They chose to continue chatting.")
     return TapEvent(fact=f'They tapped the button "{tapped.label}".')

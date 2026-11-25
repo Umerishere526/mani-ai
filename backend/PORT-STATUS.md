@@ -1155,7 +1155,9 @@ the same change as the work.**
   walking the steps on their own situation, inventing nothing, with the same two buttons; Give me a tool starts the
   first stage. A typed answer to the lead-in gets Mani's reply, then the five steps and their buttons
   (`Decision.show_steps`). Talk more first sets the offer
-  aside for now, so it may come back; only a clear no (`action: stop` on an open offer) declines it. The earlier
+  aside: Mani keeps talking in the open chat, never sets `action: stop` for it, and offers that set again only if they
+  ask (muhammad, 2026-11-25; `mani.md` "Offering the set of questions", the tap fact in `taps.py`); only a clear no
+  (`action: stop` on an open offer) declines it. The earlier
   offer (Mani's own sentence with Try it / Tell me more / Keep chatting) is overruled, recorded in
   `docs/client/requirements.md`. `test_the_offer_runs_lead_in_steps_then_start`,
   `test_show_me_how_walks_the_steps_on_their_situation_then_offers_the_start`,
