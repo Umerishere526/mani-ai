@@ -290,9 +290,11 @@ async def _apply(
         text = (crisis.CRISIS_REPLY if holding or judgment.state is not safety.State.CLEAR
                 else crisis.TROUBLE_REPLY)
         decision = decide_mod.Decision(declined=rec.declined(record), finished=rec.finished(record))
-    # Code's own pieces follow the reply only once it says something: the call-now line, and the five steps.
-    if judgment.body_emergency and not judgment.pausing:
-        text = f"{text}\n\n{crisis.BODY_EMERGENCY}"
+    # Code's own pieces follow the reply only once it says something: where to get help, and the five steps. The first
+    # danger of a kind always names its numbers (S2, S7). PROVISIONAL: clinician sign-off required before deploy.
+    resources_added = judgment.resources_due and not crisis.names_help(text, judgment.about)
+    if resources_added:
+        text = f"{text}\n\n{crisis.resources_line(judgment.about)}"
     if decision.show_steps is not None:
         text = f"{text}\n\n{steps_text(decision.show_steps, style)}"
     prompts = decision.prompts
@@ -310,7 +312,7 @@ async def _apply(
     trace = {key: value for key, value in {
         "action": reply.action, "framework": reply.framework, "stage": reply.stage,
         "safety": worry.traced(reply.safety), "paused": judgment.pausing or None,
-        "body_emergency": (judgment.body_emergency and not judgment.pausing) or None,
+        "resources_added": resources_added or None,
         "buttons": [p.label for p in prompts], "latency_ms": call.latency_ms, "first_token_ms": call.first_token_ms,
         "refused": decision.refused,
         "question_cut": cut, "enforced": enforced, "question": reply.question.model_dump() if open_chat and settings.ai_debug_mode else None,

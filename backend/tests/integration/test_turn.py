@@ -14,6 +14,8 @@ from mani.models.rows import TechniqueOutcome, TechniqueState
 from tests.integration.fixtures import ALICE, ScriptedModel, last_user_message_id, said, send, start, thread_row
 
 DANGER = Safety(level="danger", about="themselves", why="took pills")
+# A reply to a first danger message that names the numbers it needs, so code adds no line after it (S2).
+FIRST_REPLY = "Call 911 now, or call or text 988. Are you alone?"
 
 
 def facts_of(scripted) -> str:
@@ -413,10 +415,10 @@ async def test_a_set_stopped_while_the_end_check_waits_leaves_no_question_marked
 
 
 async def test_overdose_on_the_first_message_gets_manis_reply_and_the_next_message_pauses(alice, model):
-    model(said("Call 911 now. Are you alone?", safety=DANGER), said("Please call now.", safety=DANGER))
+    model(said(FIRST_REPLY, safety=DANGER), said("Please call now.", safety=DANGER))
     thread = await start(alice)
     first = await send(alice, thread.id, "i took a bunch of my sleeping pills")
-    assert first.content == "Call 911 now. Are you alone?" and first.paused_until is None and first.crisis_detected
+    assert first.content == FIRST_REPLY and first.paused_until is None and first.crisis_detected
     second = await send(alice, thread.id, "yes alone. i dont want help")
     assert second.paused_until is not None
     assert second.content == "Please call now.\n\n" + crisis.pause_reply("themselves", 900)
@@ -442,9 +444,9 @@ async def test_a_retry_of_a_message_no_host_answered_runs_the_turn_again(alice, 
         unread = await send(alice, thread.id, "i took a bunch of pills", client_message_id=key)
     assert unread.content == crisis.TROUBLE_REPLY
     count = (await thread_row(alice, thread.id)).message_count
-    model(said("Call 911 now. Are you alone?", safety=DANGER))
+    model(said(FIRST_REPLY, safety=DANGER))
     read = await send(alice, thread.id, "i took a bunch of pills", client_message_id=key)
-    assert read.content == "Call 911 now. Are you alone?" and read.crisis_detected and not read.was_duplicate
+    assert read.content == FIRST_REPLY and read.crisis_detected and not read.was_duplicate
     assert (await thread_row(alice, thread.id)).message_count == count, "the unread turn was replaced, not added to"
 
 
@@ -458,7 +460,7 @@ async def test_every_host_failing_on_a_first_danger_message_still_answers(alice,
 async def test_a_held_worry_whose_reply_fails_its_check_twice_still_gets_the_crisis_reply(alice, model, monkeypatch):
     """A reply that says danger without whose fails its check; when the one retry fails too, complete raises, and a
     conversation holding a worry gets the crisis words with its danger kept."""
-    model(said("Call 911 now. Are you alone?", safety=DANGER))
+    model(said(FIRST_REPLY, safety=DANGER))
     thread = await start(alice)
     await send(alice, thread.id, "i took a bunch of pills")
 
@@ -476,7 +478,7 @@ async def test_a_conflict_while_a_worry_is_held_says_where_to_get_help(alice, mo
     """S10 and S9 (PROVISIONAL: clinician sign-off required before deploy): a message that lands while the model thinks
     refuses the turn as a conflict, and while the conversation holds a worry that refusal names 988, 911 and the
     directory. Keeping the discarded read is deferred."""
-    model(said("Call 911 now. Are you alone?", safety=DANGER))
+    model(said(FIRST_REPLY, safety=DANGER))
     thread = await start(alice)
     await send(alice, thread.id, "i took a bunch of pills")
     replies = ScriptedModel(said("Please call now.", safety=DANGER.model_copy(update={"help_in_place": True})))
@@ -632,17 +634,41 @@ async def test_a_body_worry_the_model_held_lower_still_gets_call_now(alice, mode
     model(said("That needs checking soon.", safety=CHEST), said("I'm here with you.", safety=CHEST))
     thread = await start(alice)
     first = await send(alice, thread.id, "my chest is tight and my left arm feels weird")
-    assert first.content.endswith("\n\n" + crisis.BODY_EMERGENCY)
+    assert first.content.endswith("\n\n" + crisis.resources_line("body"))
     assert (await thread_row(alice, thread.id)).safety == "danger"
     second = await send(alice, thread.id, "it's probably just stress")
-    assert crisis.BODY_EMERGENCY not in second.content
+    assert crisis.resources_line("body") not in second.content
 
 
-async def test_a_body_danger_the_model_judged_itself_goes_out_as_written(alice, model):
-    model(said("Call your emergency number now.", safety=Safety(level="danger", about="body", symptom_now="yes")))
+async def test_a_body_danger_the_model_judged_itself_goes_out_as_written_when_it_names_911(alice, model):
+    """S2 (PROVISIONAL: clinician sign-off required before deploy): a reply that already names 911 for the body is sent
+    as written; one that names no number gets the body's line after it."""
+    now = Safety(level="danger", about="body", symptom_now="yes")
+    model(said("Please call 911 now.", safety=now), said("Call your emergency number now.", safety=now))
     thread = await start(alice)
-    turn = await send(alice, thread.id, "my chest is crushing right now")
-    assert turn.content == "Call your emergency number now."
+    assert (await send(alice, thread.id, "my chest is crushing right now")).content == "Please call 911 now."
+    other = await start(alice)
+    turn = await send(alice, other.id, "my chest is crushing right now")
+    assert turn.content == "Call your emergency number now.\n\n" + crisis.resources_line("body")
+
+
+async def test_a_first_danger_message_always_carries_where_to_get_help_even_with_someone_there(alice, model):
+    """S2 and S7 (PROVISIONAL: clinician sign-off required before deploy): since 2026-11-24 only the prompt asked the
+    model for 911 and 988 on a first danger message, so a person stating a plan could get no number. Code adds the
+    line for whose danger it is when the reply lacks its numbers, once, with no pause, also when someone is with them."""
+    with_sister = DANGER.model_copy(update={"help_in_place": True})
+    model(said("That sounds frightening. Is anyone with you?", safety=DANGER),
+          said("I'm glad your sister is there.", safety=with_sister),
+          said("I'm glad she is with you.", safety=with_sister))
+    thread = await start(alice)
+    first = await send(alice, thread.id, "i have pills here and i'm going to take them")
+    assert first.content.endswith("\n\n" + crisis.resources_line("themselves")) and first.paused_until is None
+    assert first.trace["resources_added"]
+    other = await start(alice)
+    helped = await send(alice, other.id, "i took pills but my sister is here")
+    assert helped.content.endswith("\n\n" + crisis.resources_line("themselves")) and helped.paused_until is None
+    again = await send(alice, other.id, "she's staying with me")
+    assert again.content == "I'm glad she is with you.", "the help is said once"
 
 
 async def test_a_pausing_body_turn_sends_manis_reply_then_the_pause_line_and_no_call_now_line(alice, model):
@@ -656,7 +682,7 @@ async def test_a_pausing_body_turn_sends_manis_reply_then_the_pause_line_and_no_
     paused = await send(alice, thread.id, "no im not calling anyone")
     assert paused.paused_until is not None
     assert paused.content == "Okay.\n\n" + crisis.pause_reply("body", 900)
-    assert paused.content.count(crisis.BODY_EMERGENCY) == 1
+    assert paused.content.count(crisis.resources_line("body")) == 1
 
 
 async def test_an_offer_they_moved_past_is_no_longer_open_and_its_old_button_starts_nothing(alice, model):

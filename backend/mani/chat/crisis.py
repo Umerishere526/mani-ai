@@ -44,9 +44,15 @@ def resources_line(about: str | None) -> str:
     return _HELP.get(about or "themselves", _HELP["themselves"])
 
 
-# Added after Mani's text when code raised a body worry to danger that the model judged lower: a possible medical
-# emergency gets "call 911" every time (muhammad, 2026-11-18).
-BODY_EMERGENCY = resources_line("body")
+# The numbers a reply must name for each kind of danger, or code adds the kind's line after it (S2).
+# PROVISIONAL: clinician sign-off required before deploy.
+_NEEDED = {"themselves": ("911", "988"), "someone_else": ("911",), "from_someone": ("911", "799-7233"),
+           "body": ("911",)}
+
+
+def names_help(text: str, about: str | None) -> bool:
+    """Whether the reply already names every number its kind of danger needs."""
+    return all(number in text for number in _NEEDED.get(about or "themselves", _NEEDED["themselves"]))
 # What goes out when no host answered and no safety worry was open, so a first message about danger during an outage
 # still reaches the numbers (the design of 2026-11-17). Wording is ours until the client supplies hers.
 TROUBLE_REPLY = f"I'm having trouble replying right now, so please try again in a moment. {IN_DANGER}"

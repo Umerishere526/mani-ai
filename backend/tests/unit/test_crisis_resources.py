@@ -80,7 +80,9 @@ def test_every_resources_text_gives_the_us_numbers_and_the_directory_for_everywh
     is held named no number at all ("contact your local emergency number")."""
     texts = {
         "IN_DANGER": crisis.IN_DANGER, "CRISIS_REPLY": crisis.CRISIS_REPLY, "TROUBLE_REPLY": crisis.TROUBLE_REPLY,
-        "BODY_EMERGENCY": crisis.BODY_EMERGENCY, "RETURN_CHECK_REPLY": crisis.RETURN_CHECK_REPLY,
+        **{f"resources_line({about})": crisis.resources_line(about)
+           for about in ("themselves", "someone_else", "from_someone", "body", None)},
+        "RETURN_CHECK_REPLY": crisis.RETURN_CHECK_REPLY,
         "RETURN_DANGER_REPLY": crisis.RETURN_DANGER_REPLY,
         **{f"pause_reply({about})": crisis.pause_reply(about, 900)
            for about in ("themselves", "someone_else", "from_someone", "body", None)},
@@ -101,8 +103,8 @@ def test_danger_from_someone_names_the_domestic_violence_hotline():
 
 
 def test_the_body_line_says_call_911_if_it_is_happening_now_without_judging_the_symptom():
-    """S13 (PROVISIONAL: clinician sign-off required before deploy): Safety Guardrails section 2 allows no interpreting of
-    a physical symptom or comment on its severity, so the line never calls it an emergency."""
+    """S13 (PROVISIONAL: clinician sign-off required before deploy): Safety Guardrails section 2 allows no interpreting
+    of a physical symptom or comment on its severity, so the line never calls it an emergency."""
     for text in (crisis.resources_line("body"), crisis.pause_reply("body", 900)):
         assert "If this is happening now, call 911." in text
         assert "emergency" not in text.lower() and "988" not in text

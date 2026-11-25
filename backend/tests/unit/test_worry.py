@@ -37,7 +37,9 @@ def N(**read) -> Safety:
 
 
 ORD, ASK, ANS = Phase.ORDINARY, Phase.ASKING, Phase.ANSWERING
-# What each turn must come to: state after, pauses, a worry settled, the call-now line added, and whose danger is open.
+# What each turn must come to: state after, pauses, a worry settled, where to get help due, and whose danger is open.
+# S2 and S7 (PROVISIONAL: clinician sign-off required before deploy): the first danger of a kind that does not pause is
+# due the help line, even with someone with them; before, only a body worry code raised got it.
 DANGER, UNSURE, CLEAR = "danger", "unsure", "clear"
 T, F = True, False
 
@@ -45,10 +47,10 @@ T, F = True, False
 SEQUENCES = {
     "danger goes on after Mani answered it, so it pauses": (
         [(ORD, D(about="themselves")), (ORD, D(about="themselves"))],
-        [(DANGER, F, F, F, "themselves"), (DANGER, T, F, F, "themselves")]),
+        [(DANGER, F, F, T, "themselves"), (DANGER, T, F, F, "themselves")]),
     "help in place stops the pause": (
         [(ORD, D(about="themselves")), (ORD, D(about="themselves", help_in_place=True))],
-        [(DANGER, F, F, F, "themselves"), (DANGER, F, F, F, "themselves")]),
+        [(DANGER, F, F, T, "themselves"), (DANGER, F, F, F, "themselves")]),
     "asked what they meant and they say it again, the screen comes at once (2026-11-16)": (
         [(ORD, U(about="themselves")), (ORD, D(about="themselves"))],
         [(UNSURE, F, F, F, "themselves"), (DANGER, T, F, F, "themselves")]),
@@ -71,13 +73,13 @@ SEQUENCES = {
         [(UNSURE, F, F, F, "themselves")] * 4),
     "danger they step away from settles on that message": (
         [(ORD, D(about="themselves")), (ORD, N())],
-        [(DANGER, F, F, F, "themselves"), (CLEAR, F, T, F, None)]),
+        [(DANGER, F, F, T, "themselves"), (CLEAR, F, T, F, None)]),
     "danger of one kind never holds an unsure read of another (the review of 2026-11-20)": (
         [(ORD, U(about="body", symptom_now="unsaid")), (ORD, U(about="themselves"))],
         [(DANGER, F, F, T, "body"), (UNSURE, F, F, F, "themselves")]),
     "asked about one kind is not asked about another (the held-back run, 2026-11-16)": (
         [(ORD, U(about="from_someone")), (ORD, D(about="themselves")), (ORD, D(about="themselves"))],
-        [(UNSURE, F, F, F, "from_someone"), (DANGER, F, F, F, "themselves"), (DANGER, T, F, F, "themselves")]),
+        [(UNSURE, F, F, F, "from_someone"), (DANGER, F, F, T, "themselves"), (DANGER, T, F, F, "themselves")]),
     "a body worry the model held lower is raised, with the call-now line once": (
         [(ORD, U(about="body", symptom_now="unsaid")), (ORD, U(about="body", symptom_now="unsaid"))],
         [(DANGER, F, F, T, "body"), (DANGER, F, F, F, "body")]),
@@ -90,26 +92,26 @@ SEQUENCES = {
         [(DANGER, F, F, T, "body"), (UNSURE, F, F, F, "body")]),
     "the kind changes inside one open worry and the call-now line comes once (2026-11-18)": (
         [(ORD, D(about="themselves")), (ORD, U(about="body", symptom_now="unsaid"))],
-        [(DANGER, F, F, F, "themselves"), (DANGER, F, F, T, "body")]),
+        [(DANGER, F, F, T, "themselves"), (DANGER, F, F, T, "body")]),
     "a settled symptom reopens only on their newest word that it is happening (2026-11-11)": (
         [(ORD, U(about="body", symptom_now="unsaid")), (ORD, N()), (ORD, U(about="body", symptom_now="unsaid")),
          (ORD, D(about="body", symptom_now="yes"))],
-        [(DANGER, F, F, T, "body"), (CLEAR, F, T, F, None), (CLEAR, F, F, F, None), (DANGER, F, F, F, "body")]),
+        [(DANGER, F, F, T, "body"), (CLEAR, F, T, F, None), (CLEAR, F, F, F, None), (DANGER, F, F, T, "body")]),
     "a refusal never settles a concern": (
         [(ORD, D(about="themselves")), (ORD, N(declined=True))],
-        [(DANGER, F, F, F, "themselves"), (DANGER, T, F, F, "themselves")]),
+        [(DANGER, F, F, T, "themselves"), (DANGER, T, F, F, "themselves")]),
     "danger lowered to unsure is still danger once asked": (
         [(ORD, D(about="themselves")), (ORD, U(about="themselves")), (ORD, D(about="themselves"))],
-        [(DANGER, F, F, F, "themselves"), (DANGER, T, F, F, "themselves"), (DANGER, T, F, F, "themselves")]),
+        [(DANGER, F, F, T, "themselves"), (DANGER, T, F, F, "themselves"), (DANGER, T, F, F, "themselves")]),
     "a worry that settled and a new one starts over: the first danger message gets Mani's reply": (
         [(ORD, D(about="themselves")), (ORD, N()), (ORD, D(about="themselves")), (ORD, D(about="themselves"))],
-        [(DANGER, F, F, F, "themselves"), (CLEAR, F, T, F, None), (DANGER, F, F, F, "themselves"),
+        [(DANGER, F, F, T, "themselves"), (CLEAR, F, T, F, None), (DANGER, F, F, T, "themselves"),
          (DANGER, T, F, F, "themselves")]),
     # After a settled worry its kind is forgotten. Before, a later danger the model gave no kind inherited the old one:
     # after a body worry it could not pause with a refusal, and after a worry about themselves it paused with none.
     "a danger of no known kind after a settled body worry pauses on a refusal": (
         [(ORD, U(about="body", symptom_now="unsaid")), (ORD, N()), (ORD, D(declined=True)), (ORD, D(declined=True))],
-        [(DANGER, F, F, T, "body"), (CLEAR, F, T, F, None), (DANGER, F, F, F, None), (DANGER, T, F, F, None)]),
+        [(DANGER, F, F, T, "body"), (CLEAR, F, T, F, None), (DANGER, F, F, T, None), (DANGER, T, F, F, None)]),
     # muhammad, 2026-11-24: during an open body worry a danger of no known kind took the body's kind, so its refusal
     # never paused; the body's rule holds only a read about the body.
     "a refused danger of no known kind during an open body worry pauses (2026-11-24)": (
@@ -117,17 +119,17 @@ SEQUENCES = {
         [(DANGER, F, F, T, "body"), (DANGER, T, F, F, "body"), (DANGER, T, F, F, "body")]),
     "a danger of no known kind after a settled worry needs a refusal like any other": (
         [(ORD, D(about="themselves")), (ORD, N()), (ORD, D()), (ORD, D())],
-        [(DANGER, F, F, F, "themselves"), (CLEAR, F, T, F, None), (DANGER, F, F, F, None),
+        [(DANGER, F, F, T, "themselves"), (CLEAR, F, T, F, None), (DANGER, F, F, T, None),
          (DANGER, F, F, F, None)]),
     "the first message back after a pause never pauses, whatever the read reports": (
         [(ASK, D(about="themselves", still_there=True))],
-        [(DANGER, F, F, F, "themselves")]),
+        [(DANGER, F, F, T, "themselves")]),
     "their answer to how things are pauses only when it says the danger is still there": (
         [(ASK, D(about="themselves")), (ANS, D(about="themselves", still_there=True))],
-        [(DANGER, F, F, F, "themselves"), (DANGER, T, F, F, "themselves")]),
+        [(DANGER, F, F, T, "themselves"), (DANGER, T, F, F, "themselves")]),
     "an answer that is fine settles it": (
         [(ASK, D(about="themselves")), (ANS, N())],
-        [(DANGER, F, F, F, "themselves"), (CLEAR, F, T, F, None)]),
+        [(DANGER, F, F, T, "themselves"), (CLEAR, F, T, F, None)]),
     # muhammad, 2026-11-23: "I took more pills" in answer to how things are used to wait one more message for the
     # pause when the model did not also mark it still there.
     "an answer read as danger pauses even when the read does not say it is still there": (
@@ -135,7 +137,7 @@ SEQUENCES = {
         [(CLEAR, F, F, F, None), (DANGER, T, F, F, "themselves")]),
     "an answer read as danger with someone with them does not pause": (
         [(ASK, N()), (ANS, D(about="themselves", help_in_place=True))],
-        [(CLEAR, F, F, F, None), (DANGER, F, F, F, "themselves")]),
+        [(CLEAR, F, F, F, None), (DANGER, F, F, T, "themselves")]),
     "a first message back that is read as no worry and a refusal keeps the question open": (
         [(ASK, N(declined=True))],
         [(UNSURE, F, F, F, None)]),
@@ -149,7 +151,7 @@ def test_each_turn_of_a_sequence_comes_to_what_the_rules_gave_it(name):
     for (phase, read), want in zip(turns, expected, strict=True):
         standing = standing.model_copy(update={"phase": phase})
         outcome = worry.step(standing, read)
-        got = (outcome.state.value, outcome.pausing, outcome.settled_now, outcome.body_emergency, outcome.about)
+        got = (outcome.state.value, outcome.pausing, outcome.settled_now, outcome.resources_due, outcome.about)
         assert got == want, (name, read)
         standing = worry.Standing(
             state=outcome.state, about=outcome.about, phase=phase, settled=standing.settled or outcome.settled_now,

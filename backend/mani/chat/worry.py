@@ -53,9 +53,9 @@ class Outcome:
     about: str | None
     pausing: bool
     settled_now: bool
-    # Code raised this turn to danger on a body worry the model itself judged lower, so the reply gets the call-now line,
-    # once per body worry.
-    body_emergency: bool = False
+    # The first danger of its kind that does not pause: the reply must say where to get help (S2), even with someone
+    # with them (S7). PROVISIONAL: clinician sign-off required before deploy.
+    resources_due: bool = False
     calm: int = 0
 
 
@@ -113,14 +113,14 @@ def step(stood: Standing, read: Safety) -> Outcome:
         goes_on = asked and danger == "now"
     else:
         goes_on = stood.state is State.DANGER
-    # Once per body worry: a conversation already in danger over the body has had the line; danger of another kind has not.
-    body_emergency = (read.about == "body" and read.level != "danger" and after is State.DANGER
-                      and (stood.state is not State.DANGER or stood.about != "body"))
+    pausing = after is State.DANGER and kind_pauses and not read.help_in_place and goes_on
+    # Once per kind of danger: a conversation already in danger of this kind has had the help; another kind has not.
+    resources_due = (after is State.DANGER and not pausing
+                     and (stood.state is not State.DANGER or stood.about != about))
     return Outcome(
-        state=after, about=about if after is not State.CLEAR else None,
-        pausing=after is State.DANGER and kind_pauses and not read.help_in_place and goes_on,
+        state=after, about=about if after is not State.CLEAR else None, pausing=pausing,
         settled_now=stood.state is not State.CLEAR and after is State.CLEAR,
-        body_emergency=body_emergency, calm=stood.calm + 1 if waits else 0,
+        resources_due=resources_due, calm=stood.calm + 1 if waits else 0,
     )
 
 
