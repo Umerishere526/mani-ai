@@ -12,6 +12,7 @@ import dictionary from "@/dictionaries/en.json";
 import { ExerciseBasicFields } from "./exercise-basic-fields";
 import { ExerciseAudioField } from "./exercise-audio-field";
 import { ExerciseClassificationFields } from "./exercise-classification-fields";
+import { FORM_CHECKBOX_CLASSES, FORM_HELPER_CLASSES } from "../form-field-classes";
 
 const STRINGS = dictionary.admin.forms.exercise;
 const COMMON = dictionary.admin.forms;
@@ -76,13 +77,13 @@ export function ExerciseForm({ exercise, submitLabel = STRINGS.defaultSubmit }: 
             name="isActive"
             value="true"
             defaultChecked={exercise?.isActive ?? true}
-            className="h-4 w-4 rounded border-mani-border text-mani-accent focus:ring-mani-accent-light"
+            className={FORM_CHECKBOX_CLASSES}
           />
           <span className="mb-0 text-[0.9375rem] font-medium text-mani-text">
             {STRINGS.activeLabel}
           </span>
         </label>
-        <p className="mt-1 text-xs text-mani-text-muted">{STRINGS.activeHelper}</p>
+        <p className={FORM_HELPER_CLASSES}>{STRINGS.activeHelper}</p>
       </div>
 
       {submitError && (

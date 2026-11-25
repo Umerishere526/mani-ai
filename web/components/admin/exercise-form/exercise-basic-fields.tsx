@@ -3,7 +3,7 @@
 
 import type { AdminExercise } from "@/types";
 import dictionary from "@/dictionaries/en.json";
-import { FORM_INPUT_CLASSES, FORM_LABEL_CLASSES, FORM_HELPER_CLASSES } from "../form-field-classes";
+import { FORM_CHECKBOX_CLASSES, FORM_INPUT_CLASSES, FORM_LABEL_CLASSES, FORM_HELPER_CLASSES } from "../form-field-classes";
 
 const STRINGS = dictionary.admin.forms.exercise;
 
@@ -58,7 +58,7 @@ export function ExerciseBasicFields({
             value="true"
             checked={showOnHomeScreen}
             onChange={(e) => onShowOnHomeScreenChange(e.target.checked)}
-            className="h-4 w-4 rounded border-mani-border text-mani-accent focus:ring-mani-accent-light"
+            className={FORM_CHECKBOX_CLASSES}
           />
           <span className="mb-0 text-[0.9375rem] font-medium text-mani-text">
             {STRINGS.showOnHomeScreenLabel}

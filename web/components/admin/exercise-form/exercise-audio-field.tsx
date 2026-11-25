@@ -2,8 +2,9 @@
 // ABOUTME: Split out from exercise-form.tsx to keep the parent component under the line cap.
 
 import type { AdminExercise } from "@/types";
+import { formatDuration } from "@/lib/utils";
 import dictionary from "@/dictionaries/en.json";
-import { FORM_INPUT_CLASSES, FORM_LABEL_CLASSES } from "../form-field-classes";
+import { FORM_FILE_INPUT_CLASSES, FORM_LABEL_CLASSES } from "../form-field-classes";
 
 const STRINGS = dictionary.admin.forms.exercise;
 
@@ -38,8 +39,7 @@ export function ExerciseAudioField({
           </p>
           <p className="text-sm text-mani-text-muted">
             {STRINGS.audioDurationPrefix}
-            {durationMinutes}
-            {durationMinutes === 1 ? STRINGS.audioDurationSuffix : STRINGS.audioDurationSuffixPlural}
+            {durationMinutes === null ? dictionary.admin.pages.unknown : formatDuration(durationMinutes)}
           </p>
         </div>
       )}
@@ -52,7 +52,7 @@ export function ExerciseAudioField({
           if (file) onFileChange(file);
         }}
         disabled={isUploading}
-        className={FORM_INPUT_CLASSES}
+        className={FORM_FILE_INPUT_CLASSES}
       />
 
       {isUploading && <p className="mt-1 text-sm text-mani-text-muted">{STRINGS.audioUploading}</p>}

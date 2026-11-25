@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge, TableCard, TableCell, TableHeadCell } from "@/components/shared";
 import { ExerciseActions } from "./exercise-actions";
 import type { AdminExercise } from "@/types";
+import { formatDuration } from "@/lib/utils";
 import dictionary from "@/dictionaries/en.json";
 
 const STRINGS = dictionary.admin.pages.exercises;
@@ -45,7 +46,7 @@ export function ExerciseCategoryTable({ category, exercises }: ExerciseCategoryT
                 )}
               </TableCell>
               <TableCell className="text-sm text-mani-text">
-                {exercise.durationMinutes === null ? COMMON.unknown : `${exercise.durationMinutes}${STRINGS.minutesSuffix}`}
+                {exercise.durationMinutes === null ? COMMON.unknown : formatDuration(exercise.durationMinutes)}
               </TableCell>
               <TableCell className="text-sm text-mani-text-muted">{exercise.displayOrder}</TableCell>
               <TableCell>
