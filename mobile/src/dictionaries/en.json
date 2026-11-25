@@ -223,7 +223,10 @@
     "messagesListLabel": "Chat messages",
     "crisisBannerText": "Chat is paused. Tap to view support resources.",
     "crisisBannerLabel": "View crisis resources",
-    "crisisBannerHint": "Opens the safety screen with helplines"
+    "crisisBannerHint": "Opens the safety screen with helplines",
+    "stillThinking": "Still thinking. This reply is taking a little longer than usual.",
+    "sendFailed": "Your message didn't send.",
+    "retrySendLabel": "Try sending your message again"
   },
   "crisis": {
     "buttonLabel": "I need support",

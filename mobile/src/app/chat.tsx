@@ -65,12 +65,14 @@ export default function ChatScreen() {
       <ChatConversation
         messages={chat.state.messages}
         isWaitingForReply={isWaitingForReply}
+        failed={chat.state.failed}
         paused={paused}
         inputValue={inputValue}
         onChangeInput={setInputValue}
         onSend={handleSend}
         onPromptPress={handlePromptPress}
         onPausedPress={safety.openScreen}
+        onRetry={chat.retry}
         chatInputRef={chatInputRef}
       />
     );
