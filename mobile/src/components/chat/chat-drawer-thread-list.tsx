@@ -25,7 +25,7 @@ function renderRow(item: GroupedThreadRow, onThreadPress: (threadId: string) => 
     );
   }
 
-  const title = item.thread.title ?? item.thread.preview ?? en.chat.newConversationFallbackTitle;
+  const title = item.thread.title ?? en.chat.newConversationFallbackTitle;
   return (
     <DrawerActionRow
       onPress={() => onThreadPress(item.thread.id)}

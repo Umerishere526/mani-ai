@@ -202,24 +202,19 @@
       "yesterday": "Yesterday",
       "older": "Older"
     },
-    "styleGreeting": "Hi, it's Mani",
-    "stylePrompt": "How would you like me to speak with you today?",
     "styleOptionsLabel": "Conversation style options",
     "styles": {
       "directive": {
         "label": "Directive",
-        "description": "Mani leads you toward clarity, action, and next steps",
-        "opening": "How can I help you today?"
+        "description": "Mani leads you toward clarity, action, and next steps"
       },
       "supportive": {
         "label": "Supportive",
-        "description": "Mani validates your experience with warmth and encouragement",
-        "opening": "How can I support you today?"
+        "description": "Mani validates your experience with warmth and encouragement"
       },
       "reflective": {
         "label": "Reflective",
-        "description": "Mani reflects back what you share to help you explore it more deeply",
-        "opening": "What's on your mind today?"
+        "description": "Mani reflects back what you share to help you explore it more deeply"
       }
     },
     "navHome": "Home",

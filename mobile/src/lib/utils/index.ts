@@ -6,7 +6,6 @@ export { pickByScreenSize } from "./responsive";
 export { formatClock, formatDuration } from "./format-duration";
 export { exerciseAccessibilityLabel } from "./exercise-accessibility-label";
 export { groupThreadsByDate, getDateGroup, type DateGroup, type GroupedThreadRow } from "./group-threads-by-date";
-export { getConversationStyleOpening } from "./get-conversation-style-opening";
 export { fillTemplate } from "./fill-template";
 export { isValidEmail } from "./is-valid-email";
 export { errorMessage } from "./error-message";

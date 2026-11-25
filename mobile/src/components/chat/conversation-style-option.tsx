@@ -5,16 +5,19 @@ import { Pressable, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import en from '@/dictionaries/en.json';
 import type { ConversationStyle } from '@/types/chat';
+import { cn } from '@/lib/utils';
 import { CardGradient, Text } from '@/components/shared';
 
 export interface ConversationStyleOptionProps {
   style: ConversationStyle;
   onPress: (style: ConversationStyle) => void;
+  /** The person's default style from onboarding, outlined so they can see it. */
+  selected?: boolean;
 }
 
 const SPRING_CONFIG = { duration: 200, dampingRatio: 0.9 };
 
-export function ConversationStyleOption({ style, onPress }: ConversationStyleOptionProps) {
+export function ConversationStyleOption({ style, onPress, selected = false }: ConversationStyleOptionProps) {
   const scale = useSharedValue(1);
   const { label, description } = en.chat.styles[style];
 
@@ -37,7 +40,8 @@ export function ConversationStyleOption({ style, onPress }: ConversationStyleOpt
         accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityHint={description}
-        className="w-full rounded-3xl overflow-hidden px-6 py-4"
+        accessibilityState={{ selected }}
+        className={cn('w-full overflow-hidden rounded-3xl px-6 py-4', selected && 'border-2 border-secondary-500')}
       >
         <CardGradient />
         <View>
