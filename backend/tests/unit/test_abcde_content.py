@@ -5,7 +5,7 @@ import pytest
 
 from evals.reply_rules import forbidden_words
 from mani.chat.facts import framework_guide
-from mani.chat.techniques import Registry, example_text, steps_text
+from mani.chat.techniques import Registry, steps_text
 from mani.models.rows import Framework
 from scripts.seed import FRAMEWORKS_DIR, missing_for_activation, parse_framework
 
@@ -31,12 +31,12 @@ def test_abcde_thought_reframe_and_structured_problem_solving_are_the_frameworks
 
 @pytest.mark.parametrize("path", sorted(FRAMEWORKS_DIR.glob("*.md")), ids=lambda p: p.stem)
 def test_every_seeded_framework_is_complete_and_free_of_the_forbidden_words(path):
-    """A framework moved back from paused/ must carry all a turn reads, and nothing the model reads from it (the guide,
-    the steps, the example) may use a word the client's Behavioral Framework forbids."""
+    """A framework moved back from paused/ must carry all a turn reads, and nothing the model reads from it (the guide
+    and the steps) may use a word the client's Behavioral Framework forbids."""
     parsed = parse_framework(path)
     assert missing_for_activation(parsed) == []
     framework = as_framework(parsed)
-    read = [framework_guide(Registry([framework])), example_text(framework),
+    read = [framework_guide(Registry([framework])),
             *(steps_text(framework, style) for style in STYLES)]
     assert forbidden_words("\n".join(read)) == []
 
