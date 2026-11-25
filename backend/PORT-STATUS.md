@@ -316,6 +316,12 @@ the same change as the work.**
   beyond what was said, repeated acknowledgments and restated feelings (whole conversations 2.41 of 5), yes or no
   checks, belief work before practical help, and questions after a typed stop (CQ-4, CQ-10, CQ-8, CQ-7, CQ-2).
   `mani.md`. Not yet eval-gated.
+- **Code takes out a short verdict line on what they feel or what is going on ("That's what hurts.", "…, that's what
+  stings.", "Betrayed fits.", "That's the part that's hard to get past."), unless it is all the reply says, the turn
+  is guarded, or it is wording written for them to send; most Directive replies are a few of their words and one open
+  question** (muhammad, 2026-11-25). Because his tester found such a line closing nearly every Directive reply, heard
+  as an assumption, as flowery, and as a suggestion every time. `enforce.without_verdicts`, `_VERDICT`, trace
+  `verdict_removed`; `test_enforce.py`.
 - **Supportive and Reflective replies run about 60 to 120 words, in plain words with no figures of speech** (muhammad,
   2026-11-25). Because manasa (2026-11-25) scored Reflective chats 3 to 5 of 10 for constructed, elaborate and
   repetitive replies; this newer message beats the 2026-11-18 "more yappy as it grows" (R123): replies still grow

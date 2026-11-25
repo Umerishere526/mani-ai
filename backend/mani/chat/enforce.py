@@ -80,6 +80,15 @@ FIGURATIVE_PHRASES = ("its own kind of", "a strange shape", "nice shape", "holdi
                       "the weight in it", "weighing on", "holding that", "sitting between us", "a lot to be carrying",
                       "its own rhythm", "fills in the gap", "quiet where", "the silence takes you")
 _FIGURATIVE = re.compile(rf"\b(?:{'|'.join(re.escape(phrase) for phrase in FIGURATIVE_PHRASES)})\b", re.IGNORECASE)
+# A short line that hands down a verdict on what they feel or what is going on ("That's what hurts.", "Being
+# overruled in front of everyone, that's what stings.", "Betrayed fits.", "That's the part that's hard to get past."):
+# the stock close the model added to nearly every reply in muhammad's tester's Directive chat (2026-11-25), heard as a
+# reading said as fact, as flowery, and as a suggestion every time. Cut, never rewritten; a guarded turn keeps it.
+_VERDICT = re.compile(
+    r"^(?:(?:that|this|it)(?:'s| is) (?:what(?! (?:i|you|we|they)\b)|the part|the bit|the hard part|where it|why it)\b"
+    r"[^.?!:]{0,60}"
+    r"|[^.?!,]{3,70}, (?:that|this)(?:'s| is) (?:what(?! (?:i|you|we|they)\b)|the part)\b[^.?!:]{0,40}"
+    r"|\w+ fits)[.!]$", re.IGNORECASE)
 # Statements that tell them what their situation is, means or is about, or that their belief holds: readings said as
 # fact, which the client's testers flagged most (manasa 2026-11-25; muhammad's tester the same day). Only recorded with
 # the phrase, never rewritten, so the eval and the trace can count them; the prompt is the fix.
@@ -113,6 +122,7 @@ SECOND_QUESTION_KEPT = "second_question_kept"
 OPENER_REPEATED_KEPT = "opener_repeated_kept"
 FORBIDDEN_WORD = "forbidden_word"
 BANNED_LINE_REMOVED = "banned_line_removed"
+VERDICT_REMOVED = "verdict_removed"
 BANNED_LINE_KEPT = "banned_line_kept"
 FIGURATIVE = "figurative"
 INTERPRETIVE = "interpretive"
@@ -186,6 +196,17 @@ def _swapped(match: re.Match) -> str:
 def forbidden_in_own_words(text: str) -> list[str]:
     """The forbidden words in Mani's own words: wording written for them to send is left out (see `in_plain_words`)."""
     return [event.split(":", 1)[1] for event in in_plain_words(text)[1]]
+
+
+def without_verdicts(text: str, *, guarded: bool) -> tuple[str, list[str]]:
+    """The text without its verdict lines (see _VERDICT), and the event; a guarded turn and a text that would be left
+    empty keep every word, and wording written for them to send is never touched."""
+    if guarded or not any(_VERDICT.match(sentence) for sentence in questions.sentences(text)):
+        return text, []
+    spans = questions.drafted(text)
+    cut = questions.kept(text, lambda _, sentence: not _VERDICT.match(sentence)
+                         or any(sentence in text[a:b] for a, b in spans))
+    return (cut, [VERDICT_REMOVED]) if cut and cut != text else (text, [])
 
 
 def in_plain_words(text: str) -> tuple[str, list[str]]:
@@ -346,6 +367,8 @@ def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, la
     enforced += sorted({*swapped, *swapped_in_ask})
     text, banned = without_banned_lines(text, ask, guarded=guarded)
     enforced += banned
+    text, verdicts = without_verdicts(text, guarded=guarded)
+    enforced += verdicts
     if offered is not None and not guarded:
         text, ask, staged = without_stage(text, ask, offered=offered, stage=stage)
         enforced += staged

@@ -276,3 +276,26 @@ def test_wording_written_for_them_keeps_its_words_and_is_never_cut_short():
     assert reply.text == draft and reply.enforced == []
     assert enforce.forbidden_in_own_words(draft) == []
     assert enforce.forbidden_in_own_words("Broken nights add up.") == ["broken"]
+
+
+@pytest.mark.parametrize(("written", "received"), [
+    ("You expected her to back you, and she didn't. That's what hurts.", "You expected her to back you, and she didn't."),
+    ("Being overruled in front of everyone, that's what stings.\n\nYour sentence stopped there.", "Your sentence stopped there."),
+    ("Betrayed fits. She's known you longer.\n\nThat's the part that's hard to get past.", "She's known you longer."),
+])
+def test_a_verdict_line_on_what_they_feel_is_taken_out(written, received):
+    """muhammad's tester (2026-11-25): a stock verdict closed nearly every Directive reply, heard as an assumption,
+    as flowery, and as a suggestion every time."""
+    reply = sent(written, directive=True)
+    assert reply.text == received and enforce.VERDICT_REMOVED in reply.enforced
+
+
+@pytest.mark.parametrize("kept", [
+    "That's what hurts.",
+    "That's what I'd do first. Write down what's on your plate.",
+    "That sounds hard. What happened then?",
+])
+def test_a_line_that_is_all_the_reply_says_or_is_advice_is_not_a_verdict(kept):
+    assert sent(kept).text == kept
+    assert sent("You're not alone in this? That's what hurts.", guarded=True, open_chat=False).enforced.count(
+        enforce.VERDICT_REMOVED) == 0
