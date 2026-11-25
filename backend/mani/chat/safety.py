@@ -62,9 +62,11 @@ def after(
 # before deploy.
 HIGH_RISK_PHRASES = (
     "i want to die", "i dont want to live", "i wish i were dead", "i want to hurt myself", "i feel like ending it",
-    "i might kill myself", "i have a plan", "this is my last message", "everyone is better off without me",
-    "i gave my things away", "i wrote letters",
+    "i might kill myself", "this is my last message", "everyone is better off without me",
 )
+# Left to the model's reading, not the floor: the Risk Classification's "I have a plan", "I gave my things away" and
+# "I wrote letters" are everyday words out of context ("I have a plan for the weekend"), and a false alarm is the
+# lockout the client objected to on 2026-11-20.
 
 
 def _plain(text: str) -> str:
@@ -74,4 +76,4 @@ def _plain(text: str) -> str:
 def high_risk(message: str) -> bool:
     """Whether their message holds one of the client's high-risk phrases."""
     plain = _plain(message)
-    return any(phrase in plain for phrase in HIGH_RISK_PHRASES)
+    return any(re.search(rf"\b{re.escape(phrase)}\b", plain) for phrase in HIGH_RISK_PHRASES)
