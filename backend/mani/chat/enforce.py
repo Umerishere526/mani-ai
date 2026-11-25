@@ -17,8 +17,12 @@ from mani.models.rows import Framework
 FORBIDDEN_WORDS = ("heaviest", "weakness", "fixing", "fixed", "space", "broken", "flawed", "stable", "stability",
                    "damaged", "problematic", "baggage", "trauma", "unhealthy", "land", "weak", "toxic", "negative",
                    "struggling", "journey", "landscape")
-# Safety Guardrails, section 6: lines Mani never says.
-BANNED_PHRASES = ("i am here for you", "i'm here for you", "you are not alone", "you're not alone", "i care about you")
+# Safety Guardrails, section 6: lines Mani never says. After them, the presence and burden lines from manasa's crisis
+# test (2026-11-25, CR-6): Mani promises no presence it cannot give and never makes them feel a burden.
+# PROVISIONAL: clinician sign-off required before deploy.
+BANNED_PHRASES = ("i am here for you", "i'm here for you", "you are not alone", "you're not alone", "i care about you",
+                  "i'm not going anywhere", "i'm still here", "i'll be here", "i'm here with you",
+                  "heavier than i can hold", "more than i can hold")
 # A plain word for each forbidden one, used when the model still writes it. Each keeps the sentence's grammar in the
 # uses seen in the eval and suite runs ("they land hard", "you were struggling", "room to think").
 PLAIN_WORDS = {

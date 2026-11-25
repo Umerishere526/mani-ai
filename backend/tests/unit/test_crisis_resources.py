@@ -3,7 +3,7 @@
 
 import re
 
-from mani.chat import crisis
+from mani.chat import crisis, enforce
 
 
 def test_crisis_resources_list_the_reference_numbers():
@@ -108,3 +108,14 @@ def test_the_body_line_says_call_911_if_it_is_happening_now_without_judging_the_
     for text in (crisis.resources_line("body"), crisis.pause_reply("body", 900)):
         assert "If this is happening now, call 911." in text
         assert "emergency" not in text.lower() and "988" not in text
+
+
+def test_no_fixed_safety_text_says_a_banned_line_or_a_forbidden_word():
+    """CR-6: code's own safety words are sent untouched, so they must hold the rules themselves; the old pause line said
+    "I'll be here when you come back". PROVISIONAL: clinician sign-off required before deploy."""
+    fixed = [crisis.IN_DANGER, crisis.CRISIS_REPLY, crisis.TROUBLE_REPLY, crisis.END_CHECK, crisis.RETURN_CHECK_REPLY,
+             crisis.RETURN_DANGER_REPLY, crisis.AFTER_PAUSE_FOLLOW_UP]
+    fixed += [crisis.pause_reply(about, 900) for about in ("themselves", "someone_else", "from_someone", "body", None)]
+    fixed += [crisis.resources_line(about) for about in ("themselves", "someone_else", "from_someone", "body")]
+    for text in fixed:
+        assert not enforce.banned_phrases(text) and not enforce.forbidden_words(text), text

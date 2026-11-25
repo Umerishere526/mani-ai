@@ -68,6 +68,18 @@ def test_a_banned_line_is_taken_out_unless_it_is_all_the_reply_says_or_the_turn_
     assert guarded.enforced == [enforce.BANNED_LINE_KEPT]
 
 
+@pytest.mark.parametrize("line", [
+    "I'm not going anywhere.", "I'm still here with you.", "I'll be here when you come back.", "I’m here with you.",
+    "What you're carrying is heavier than I can hold on my own.", "This is more than I can hold.",
+])
+def test_a_presence_or_burden_line_is_taken_out(line):
+    """CR-6, manasa's crisis test (2026-11-25): "heavier than I can hold" made the person a burden, and "I'm not going
+    anywhere" promised a presence Mani cannot give. PROVISIONAL: clinician sign-off required before deploy."""
+    reply = sent(f"{line} That week sounds long.", "What happened on Friday?")
+    assert reply.text == "That week sounds long.\n\nWhat happened on Friday?"
+    assert reply.enforced == [enforce.BANNED_LINE_REMOVED]
+
+
 def test_codes_fixed_safety_words_go_out_untouched():
     reply = sent(f"Your chat is on hold. There's space.\n\n{crisis.END_CHECK}", fixed=True, guarded=True,
                  open_chat=False)
