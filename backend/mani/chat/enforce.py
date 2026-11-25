@@ -78,7 +78,10 @@ STAGE_LINE = re.compile(r"^[\"'“‘(]?(?:Step \w+ is|[A-E] is for)\b")
 FIGURATIVE_PHRASES = ("its own kind of", "a strange shape", "nice shape", "holding the thread", "cast in", "the loop",
                       # muhammad's local tests (2026-11-25).
                       "the weight in it", "weighing on", "holding that", "sitting between us", "a lot to be carrying",
-                      "its own rhythm", "fills in the gap", "quiet where", "the silence takes you")
+                      "its own rhythm", "fills in the gap", "quiet where", "the silence takes you",
+                      # The 2026-11-25 v15 run.
+                      "sit in the same person", "a heavier thing", "real weight", "the weighing", "the same care",
+                      "sit with", "hard pair", "handing her the win", "stings")
 _FIGURATIVE = re.compile(rf"\b(?:{'|'.join(re.escape(phrase) for phrase in FIGURATIVE_PHRASES)})\b", re.IGNORECASE)
 # A short line that hands down a verdict on what they feel or what is going on ("That's what hurts.", "Being
 # overruled in front of everyone, that's what stings.", "Betrayed fits.", "That's the part that's hard to get past."):

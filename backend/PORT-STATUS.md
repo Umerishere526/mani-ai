@@ -340,14 +340,15 @@ the same change as the work.**
   leaves marked possibilities as they are. `mani.md`, `check.INSTRUCTIONS`; regression TC-40. ACT, DBT and Behavioral
   Activation stay paused and Mani still leads no exercise of its own (the library gives them, R141): kept on purpose
   against the brief's section 7, to raise with Lolly after the demo. Not yet eval-gated.
-- **A reply check: after the chat call, a second short call on the chat's model at effort low rewrites, in Mani's
-  text only, readings said as fact, verdicts on other people and figures of speech; it never runs on a safety turn,
-  and a rewrite that asks something, grows, or loses a number or a drafted passage is not used** (muhammad,
-  2026-11-25, "fix all issues" after the prompt rules held only part of the time across CQ-13 to DIR-6). Adds about
-  1 to 3 s to a turn; `REPLY_CHECK_ENABLED` (default true) and `REPLY_CHECK_SECONDS` (8) turn it off or bound it; any
-  failure sends the reply as written. Recorded as purpose `reply_check` (migration 050); trace `reply_checked`.
-  `mani/chat/check.py`, `runner.run`; `tests/unit/test_check.py`, `tests/integration/test_reply_check.py`. Release:
-  050 before the deploy. Not yet measured live.
+- **A reply repair: code finds the rules a reply breaks that it can see (a yes/no or either/or question, a known
+  figure of speech, a known reading said as fact) and only then one short call on the chat's model rewrites exactly
+  those words; a clean reply makes no call. Never on a safety turn; a repair that asks in the text, grows, drops a
+  number or a drafted passage, or leaves the question closed is not used** (muhammad, 2026-11-25: "fix those too",
+  after the always-on check of the same day cost about 5.5 s a turn and let literary lines through). Any failure or
+  a slow answer (`REPLY_CHECK_SECONDS`, 8) sends the reply as written; `REPLY_CHECK_ENABLED` turns it off. Purpose
+  `reply_check` (migration 050); trace `reply_checked` lists what was found. `mani/chat/check.py`
+  (`problems`, `acceptable`), `enforce.FIGURATIVE_PHRASES`, `INTERPRETIVE_PATTERNS`; `tests/unit/test_check.py`,
+  `tests/integration/test_reply_check.py`. Release: 050 before the deploy. Not yet measured live.
 - **Code takes out a short verdict line on what they feel or what is going on ("That's what hurts.", "…, that's what
   stings.", "Betrayed fits.", "That's the part that's hard to get past."), unless it is all the reply says, the turn
   is guarded, or it is wording written for them to send; most Directive replies are a short line that adds something (never their sentence repeated back, changed the same day after the acceptance test parroted every reply) and one open
