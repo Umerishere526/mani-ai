@@ -469,14 +469,23 @@ async def test_an_edited_first_danger_message_is_danger_going_on_and_an_edit_nev
     assert row.safety == "danger" and row.understanding["danger_reached"]
 
 
-async def test_a_paused_person_is_refused_before_anything_is_paid(alice, model):
+async def test_a_paused_person_is_refused_in_every_conversation_before_anything_is_paid(alice, model):
+    """S18 (PROVISIONAL: clinician sign-off required before deploy): a pause still blocks all of the person's
+    conversations, an earlier one and a new one alike, so a new chat is no way around it."""
+    from mani.auth.deps import require_chat_open
+
     scripted = model(said("Call now.", safety=DANGER), said("Please.", safety=DANGER), said("unused"))
+    earlier = await start(alice)
     thread = await start(alice)
     await send(alice, thread.id, "i took pills")
     await send(alice, thread.id, "alone")
-    with pytest.raises(ServiceError) as refused:
-        await send(alice, thread.id, "hello?")
-    assert refused.value.category is ErrorCategory.CHAT_PAUSED and scripted.calls == 2
+    for refused_in in (thread.id, earlier.id):
+        with pytest.raises(ServiceError) as refused:
+            await send(alice, refused_in, "hello?")
+        assert refused.value.category is ErrorCategory.CHAT_PAUSED
+    with pytest.raises(ServiceError) as new_chat:
+        await require_chat_open(alice)
+    assert new_chat.value.category is ErrorCategory.CHAT_PAUSED and scripted.calls == 2
 
 
 async def test_a_retry_of_a_message_no_host_answered_runs_the_turn_again(alice, model, monkeypatch):
