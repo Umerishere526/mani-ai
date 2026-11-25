@@ -256,6 +256,7 @@
     "help": {
       "supportLine": "If you are thinking about suicide or you need immediate support call or text {number} to connect with a trained crisis counselor",
       "emergencyLine": "If you are in immediate danger, call {number}.",
+      "callNow": "Call {number} now.",
       "call": "Call {number}",
       "text": "Text {number}",
       "directory": "Outside the US: {site}",

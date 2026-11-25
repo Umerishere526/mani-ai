@@ -1,5 +1,5 @@
-// ABOUTME: The secondary lines under the crisis screen while chat is paused: how long the pause runs and the time
-// ABOUTME: chat opens again. A fixed time, never a ticking countdown.
+// ABOUTME: The secondary lines under the crisis screen while chat is paused: that chat is unavailable, how long the
+// ABOUTME: pause runs and the time chat opens again. A fixed time, never a ticking countdown.
 
 import { View } from 'react-native';
 import en from '@/dictionaries/en.json';
@@ -19,6 +19,7 @@ export function CrisisPauseNotice({ pause }: CrisisPauseNoticeProps) {
 
   return (
     <View className="gap-1">
+      <Text className="text-center text-sm text-secondary-500/80">{copy.title}</Text>
       <Text className="text-center text-sm text-secondary-500/80">{fillTemplate(copy.pausedFor, { length })}</Text>
       <Text className="text-center text-sm text-secondary-500/80">{fillTemplate(copy.opensAt, { time })}</Text>
     </View>

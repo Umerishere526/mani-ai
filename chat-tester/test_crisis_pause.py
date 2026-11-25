@@ -82,11 +82,16 @@ def test_after_an_overdose_911_leads_and_get_help_now_calls_it():
     overdose = crisis_pause.Pause(NOW, NOW + timedelta(minutes=15), "overdose")
     other = crisis_pause.Pause(NOW, NOW + timedelta(minutes=15))
 
-    assert "tel:911" in crisis_pause.help_lines(overdose, found)[0]
+    assert crisis_pause.help_lines(overdose, found)[0] == 'Call <a href="tel:911">911</a> now.'
     assert "tel:988" in crisis_pause.help_lines(overdose, found)[1]
     assert crisis_pause.call_first(overdose, found) == EMERGENCY
     assert "tel:988" in crisis_pause.help_lines(other, found)[0]
     assert crisis_pause.call_first(other, found) == LIFELINE
+    # The kinds whose help is emergency services lead with it too; only their own danger leads with 988.
+    for kind in ("someone_else", "from_someone", "body"):
+        lines = crisis_pause.help_lines(crisis_pause.Pause(NOW, NOW + timedelta(minutes=15), kind), found)
+        assert lines[0].startswith("If you are in immediate danger, call") and "tel:988" in lines[1], kind
+    assert "tel:988" in crisis_pause.help_lines(crisis_pause.Pause(NOW, NOW, "themselves"), found)[0]
     # With no emergency line to call, the call line is still offered rather than nothing.
     assert crisis_pause.call_first(overdose, crisis_pause.pick([LIFELINE])) == LIFELINE
 
@@ -207,8 +212,9 @@ def test_a_pause_after_an_overdose_leads_with_911():
     app = _open(backend)
 
     shown = _shown(app)
-    assert '<p class="pause-lead">If you are in immediate danger, call <a href="tel:911">911</a>.</p>' in shown
-    assert 'call or text <a href="tel:988">988</a>' in shown
+    lead = '<p class="pause-lead">Call <a href="tel:911">911</a> now.</p>'
+    assert shown.index(lead) < shown.index('call or text <a href="tel:988">988</a>')
+    assert shown.index(lead) < shown.index("For your safety, chat is paused for 30 seconds.")
     assert [b.url for b in app.get("link_button")] == ["tel:911"]
 
 
@@ -245,8 +251,7 @@ def test_closing_the_pop_up_keeps_the_help_lines_on_the_page():
 
     overdose = PausedBackend()
     overdose.kind = "overdose"
-    assert '<p class="pause-lead">If you are in immediate danger, call <a href="tel:911">911</a>.</p>' in _shown(
-        _closed(overdose))
+    assert '<p class="pause-lead">Call <a href="tel:911">911</a> now.</p>' in _shown(_closed(overdose))
 
     unreachable = _shown(_closed(UnreachableBackend("/v1/crisis/resources")))
     assert 'call or text <a href="tel:988">988</a>' in unreachable and 'call <a href="tel:911">911</a>' in unreachable

@@ -7,7 +7,7 @@ import type { TurnOut } from '@/types/chat-api';
 export interface ChatPause {
   from: string;
   until: string;
-  /** What the pause is for, when the backend says: "overdose" puts emergency services first. */
+  /** What the pause is for, when the backend says: an overdose or whose danger it is. */
   reason: string | null;
 }
 
@@ -34,9 +34,16 @@ export function pauseFromError(error: unknown): ChatPause | null {
   return pauseIn(error.details as PauseStamps | null);
 }
 
-/** After an overdose or poisoning, emergency services lead and 988 is not a substitute (R90). */
-export function emergencyLeads(pause: ChatPause | null): boolean {
-  return pause?.reason === 'overdose';
+/** Which help line leads the crisis screen: "Call 911 now." after an overdose, where 988 is no substitute (R90);
+ * emergency services for danger to someone else, from someone or in the body, whose help is 911; otherwise 988.
+ * PROVISIONAL: clinician sign-off required before deploy. */
+export type HelpLead = 'callNow' | 'emergency' | 'support';
+
+const EMERGENCY_KINDS = ['someone_else', 'from_someone', 'body'];
+
+export function helpLead(pause: ChatPause | null): HelpLead {
+  if (pause?.reason === 'overdose') return 'callNow';
+  return EMERGENCY_KINDS.includes(pause?.reason ?? '') ? 'emergency' : 'support';
 }
 
 export function isPauseActive(pause: ChatPause | null, now: Date): pause is ChatPause {

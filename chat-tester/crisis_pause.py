@@ -24,6 +24,8 @@ SUPPORT = (
     "crisis counselor"
 )
 EMERGENCY = "If you are in immediate danger, call {number}."
+# After an overdose the pop-up opens with this, emergency services before anything else (R90).
+CALL_NOW = "Call {number} now."
 # Every resources text names help outside the US (S11).
 DIRECTORY = "Outside the US: {link}"
 TITLE = "Chat is temporary unavailable"
@@ -34,9 +36,11 @@ OPENS_AGAIN = "Chat opens again in about {minutes}."
 GET_HELP = "Get help now"
 VISIT_LIBRARY = "Visit library"
 # The kinds of danger after which emergency services lead and 911 is the most prominent action, 988 no substitute
-# (R90). The backend names the kind in `paused_for`.
+# (R90): an overdose, and every kind whose help line is 911 alone (crisis._HELP in the backend). Their own danger, or
+# an unknown kind, leads with 988. The backend names the kind in `paused_for`.
 # PROVISIONAL: clinician sign-off required before deploy.
-EMERGENCY_FIRST = ("overdose",)
+OVERDOSE = "overdose"
+EMERGENCY_FIRST = (OVERDOSE, "someone_else", "from_someone", "body")
 # The help the pop-up names when GET /v1/crisis/resources cannot be read, so it never shows no number at all: the
 # backend's US reference lines and the directory for everyone else (RESOURCES in backend/mani/chat/crisis.py), as that
 # route lists them.
@@ -169,11 +173,13 @@ def _link(resource: dict[str, Any]) -> str:
 
 
 def help_lines(pause: Pause, found: Help) -> list[str]:
-    """Where to get help as HTML lines, most prominent first: 988 then 911, or 911 first after an overdose; a line
-    whose number or link is missing is left out."""
+    """Where to get help as HTML lines, the kind's own line first: 988 then 911, or 911 first when the kind's help is
+    emergency services, opening with "Call 911 now." after an overdose; a line whose number or link is missing is left
+    out."""
     e = html.escape
     call = None if found.call is None else e(SUPPORT).format(number=_number(found.call))
-    emergency = None if found.emergency is None else e(EMERGENCY).format(number=_number(found.emergency))
+    emergency_line = CALL_NOW if pause.kind == OVERDOSE else EMERGENCY
+    emergency = None if found.emergency is None else e(emergency_line).format(number=_number(found.emergency))
     directory = None if found.directory is None else e(DIRECTORY).format(link=_link(found.directory))
     ordered = (emergency, call) if pause.emergency_first else (call, emergency)
     return [line for line in (*ordered, directory) if line is not None]

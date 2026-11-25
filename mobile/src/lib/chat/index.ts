@@ -4,13 +4,14 @@
 export { chatReducer, hasStarted, initialChatState, type ChatAction, type ChatState, type PendingSend } from './chat-reducer';
 export { FALLBACK_RESOURCES, helpLines, siteName, type HelpLines } from './help-lines';
 export {
-  emergencyLeads,
+  helpLead,
   isPauseActive,
   opensCrisisScreen,
   pauseFromError,
   pauseIn,
   pauseLength,
   type ChatPause,
+  type HelpLead,
   type PauseUnit,
 } from './pause';
 export { promptAction, type PromptAction } from './prompt-action';

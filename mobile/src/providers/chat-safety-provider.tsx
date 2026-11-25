@@ -5,15 +5,15 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { useLoad } from '@/hooks/useLoad';
 import { useSession } from '@/hooks/useSession';
 import { getProfile } from '@/lib/api/profile';
-import { emergencyLeads, isPauseActive, opensCrisisScreen, pauseFromError, pauseIn, type ChatPause } from '@/lib/chat';
+import { helpLead, isPauseActive, opensCrisisScreen, pauseFromError, pauseIn, type ChatPause, type HelpLead } from '@/lib/chat';
 import type { TurnOut } from '@/types/chat-api';
 
 interface ChatSafetyValue {
   /** The pause running now, or null when chat is open. */
   pause: ChatPause | null;
   isScreenVisible: boolean;
-  /** Emergency services lead the screen (an overdose) instead of the 988 line. */
-  emergencyFirst: boolean;
+  /** Which help line leads the screen, by what the pause is for. */
+  lead: HelpLead;
   noteTurn: (turn: TurnOut, threadId: string) => void;
   noteSendError: (error: unknown) => void;
   openScreen: () => void;
@@ -60,7 +60,7 @@ export function ChatSafetyProvider({ children }: { children: ReactNode }) {
   const value: ChatSafetyValue = {
     pause,
     isScreenVisible,
-    emergencyFirst: emergencyLeads(pause),
+    lead: helpLead(pause),
     noteTurn,
     noteSendError: (error) => startPause(pauseFromError(error)),
     openScreen: () => setScreenVisible(true),

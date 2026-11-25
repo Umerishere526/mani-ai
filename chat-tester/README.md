@@ -12,7 +12,7 @@ endpoint (a conversation's first message through `POST /v1/threads`, which creat
 ## What it simulates versus what is real
 
 - **Real:** every chat turn, every capsule tap, style selection (tapping one of the greeting's
-  three style buttons), framework offers (the lead-in, the five steps and Start), the feelings check after the last stage, the crisis pause (a centred pop-up that leads with where to get help - 988 to call or text, 911, findahelpline.com outside the US, Get help now and Visit library, with 911 first after an overdose - and only beneath it, smaller, that the chat is paused, for how long and about how many minutes are left; no ticking clock; closing it keeps the help lines above the readable conversation, and the Library stays open). All of it
+  three style buttons), framework offers (the lead-in, the five steps and Start), the feelings check after the last stage, the crisis pause (a centred pop-up that leads with where to get help - 988 to call or text, 911, findahelpline.com outside the US, Get help now and Visit library, with 911 first when the danger is to someone else, from someone or in the body, and "Call 911 now." first after an overdose - and only beneath it, smaller, that the chat is paused, for how long and about how many minutes are left; no ticking clock; closing it keeps the help lines above the readable conversation, and the Library stays open). All of it
   goes over HTTP to the actual FastAPI app - nothing here calls the chat code directly.
 - **Real, too:** the library page (sidebar **Library**, or any **Visit library** button). It lists
   every exercise from `GET /v1/exercises` on one page, grouped by topic, each playable from its

@@ -3,7 +3,7 @@
 
 import { ApiError } from '@/lib/api/api-error';
 import type { TurnOut } from '@/types/chat-api';
-import { emergencyLeads, isPauseActive, opensCrisisScreen, pauseFromError, pauseIn, pauseLength } from './pause';
+import { helpLead, isPauseActive, opensCrisisScreen, pauseFromError, pauseIn, pauseLength } from './pause';
 
 const FROM = '2026-11-25T20:02:35Z';
 const UNTIL = '2026-11-25T20:17:35Z';
@@ -31,11 +31,13 @@ describe('the pause', () => {
     expect(pauseFromError(new ApiError({ category: 'network', retryable: true }))).toBeNull();
   });
 
-  it('puts emergency services first only for an overdose', () => {
-    expect(emergencyLeads({ from: FROM, until: UNTIL, reason: 'overdose' })).toBe(true);
-    expect(emergencyLeads({ from: FROM, until: UNTIL, reason: 'self' })).toBe(false);
-    expect(emergencyLeads(pauseIn({ chat_paused_from: FROM, chat_paused_until: UNTIL }))).toBe(false);
-    expect(emergencyLeads(null)).toBe(false);
+  it('leads with the help line of what it is for', () => {
+    const forReason = (reason: string | null) => helpLead({ from: FROM, until: UNTIL, reason });
+    expect(forReason('overdose')).toBe('callNow');
+    expect(['someone_else', 'from_someone', 'body'].map(forReason)).toEqual(['emergency', 'emergency', 'emergency']);
+    expect(forReason('themselves')).toBe('support');
+    expect(helpLead(pauseIn({ chat_paused_from: FROM, chat_paused_until: UNTIL }))).toBe('support');
+    expect(helpLead(null)).toBe('support');
   });
 
   it('is active only until its end', () => {

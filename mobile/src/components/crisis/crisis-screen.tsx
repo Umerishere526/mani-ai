@@ -1,5 +1,5 @@
-// ABOUTME: The crisis pop-up that opens by itself on a crisis or a pause, as the client drew it (R99): the crisis
-// ABOUTME: lines first, then the library and Get help now; while paused, the pause's length and end as secondary text.
+// ABOUTME: The crisis pop-up that opens by itself on a crisis or a pause (R99): the crisis lines first, then the
+// ABOUTME: library and Get help now; while paused, that chat is unavailable, its length and end as secondary text.
 
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
@@ -13,7 +13,7 @@ import { CrisisHelpLines } from './crisis-help-lines';
 import { CrisisPauseNotice } from './crisis-pause-notice';
 
 export function CrisisScreen() {
-  const { pause, isScreenVisible, emergencyFirst, closeScreen } = useChatSafety();
+  const { pause, isScreenVisible, lead, closeScreen } = useChatSafety();
   const { openCrisisDrawer } = useDrawer();
   const copy = en.crisis.pause;
 
@@ -40,11 +40,13 @@ export function CrisisScreen() {
           </Pressable>
 
           <ScrollView contentContainerClassName="items-center gap-5 px-6 pb-8 pt-14" bounces={false}>
-            <Text className="text-center font-sans-semibold text-2xl" accessibilityRole="header">
-              {pause ? copy.title : en.crisis.title}
-            </Text>
+            {pause ? null : (
+              <Text className="text-center font-sans-semibold text-2xl" accessibilityRole="header">
+                {en.crisis.title}
+              </Text>
+            )}
 
-            <CrisisHelpLines emergencyFirst={emergencyFirst} />
+            <CrisisHelpLines lead={lead} />
 
             {pause ? <Text className="text-center text-base leading-6">{copy.library}</Text> : null}
             <View className="w-full gap-3">
