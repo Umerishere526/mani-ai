@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 import uuid
 from typing import TYPE_CHECKING
 
@@ -117,9 +118,17 @@ def to_profile(profile: Profile | None, pause: Pause | None = None) -> ProfileOu
     )
 
 
+def shown_minutes(minutes: float | None) -> float | None:
+    """An exercise's length as a person sees it: to the nearest 30 seconds, halves up, and never 0:00 (R143)."""
+    if minutes is None:
+        return None
+    return max(1, math.floor(minutes * 2 + 0.5)) / 2
+
+
 def to_exercise(exercise: Exercise, audio_url: str | None, feedback: FeedbackOut | None) -> ExerciseOut:
     return ExerciseOut(
-        **exercise.model_dump(exclude={"audio_path"}),
+        **exercise.model_dump(exclude={"audio_path", "duration_minutes"}),
+        duration_minutes=shown_minutes(exercise.duration_minutes),
         recorded=exercise.audio_path is not None,
         audio_url=audio_url,
         feedback=feedback,

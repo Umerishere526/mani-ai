@@ -216,6 +216,7 @@ class ExerciseOut(BaseModel):
     category: str
     # Set when a topic lists this exercise from another topic: the subcategory it is shown under there.
     subcategory: str | None = None
+    # Rounded to the nearest 30 seconds (0.5 minutes), the length the apps show.
     duration_minutes: float | None = None
     display_order: int = 0
     show_on_home_screen: bool = False
