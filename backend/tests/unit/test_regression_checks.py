@@ -208,7 +208,7 @@ def test_give_me_a_tool_must_open_a_stage_in_its_reply():
 
 
 def test_an_invented_or_retired_button_label_fails():
-    assert checks.labels_valid(chat(turn("x", "y", buttons=["It didn't help"])), checks.allowed_labels()).passed
+    assert checks.labels_valid(chat(turn("x", "y", buttons=["I'm not sure yet"])), checks.allowed_labels()).passed
     assert not checks.labels_valid(chat(turn("x", "y", buttons=["Feel calmer now"])), checks.allowed_labels()).passed
     # P1 and P2: the client dropped these.
     for retired in ("Finish for Now", "I need an example"):

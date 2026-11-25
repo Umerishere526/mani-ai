@@ -47,9 +47,9 @@ GIVE_ME_A_TOOL_LABEL = "Give me a tool"
 LEAD_IN_LABELS = (NOT_SURE_LABEL, SHOW_ME_HOW_LABEL, GIVE_ME_A_TOOL_LABEL)
 TALK_MORE_FIRST_LABEL = "Talk more first"
 # How they feel after a framework's last stage, asked before the close (the client's sequence document, 2026-11-18).
-# Neutral, so none presumes it helped and one says it didn't (Lolly, 2026-11-23: "The options must allow users to
-# indicate that something has not helped").
-FEELINGS_LABELS = ("Better", "About the same", "It didn't help")
+# muhammad's wording (2026-11-25), as on main; it overrules Lolly's 2026-11-23 ask that one option say it did not
+# help (see docs/client/requirements.md, Conflicts): "I'm not sure yet" is the one that does not presume it helped.
+FEELINGS_LABELS = ("Feel stronger", "Feel more focused", "I'm not sure yet")
 # The close, in the client's words (Lolly, 2026-11-20: "CONTINUE CHATTING OR VISIT LIBRARY").
 CONTINUE_CHATTING_LABEL = "Continue chatting"
 VISIT_LIBRARY_LABEL = "Visit library"

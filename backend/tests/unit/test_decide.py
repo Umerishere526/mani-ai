@@ -75,7 +75,7 @@ def test_a_typed_yes_that_opens_the_first_stage_starts_the_framework():
 def test_finish_before_the_last_stage_opens_the_feelings_check():
     """The client's 2026-11-17 to 11-23 tests: a framework is not continued just because steps remain."""
     d = decided(reply(action="finish", stage="dispute"), running=running("abcde", "dispute"))
-    assert d.technique.phase == "feelings_check" and labels(d) == ["Better", "About the same", "It didn't help"]
+    assert d.technique.phase == "feelings_check" and labels(d) == ["Feel stronger", "Feel more focused", "I'm not sure yet"]
     assert d.finished == [] and not d.retire_technique
 
 
@@ -83,7 +83,7 @@ def test_finish_on_the_last_stage_opens_the_feelings_check_and_finishes_nothing_
     """The client's sequence document, 2026-11-18: after E, how they feel now, with buttons that let them say it didn't
     help (Lolly, 2026-11-23)."""
     d = decided(reply(action="finish", stage="effective"), running=running("abcde", "effective"))
-    assert labels(d) == ["Better", "About the same", "It didn't help"] and d.technique.phase == "feelings_check"
+    assert labels(d) == ["Feel stronger", "Feel more focused", "I'm not sure yet"] and d.technique.phase == "feelings_check"
     assert d.finished == [] and not d.retire_technique
 
 
@@ -106,7 +106,7 @@ def test_finish_after_danger_asks_the_safety_question_first():
 def test_after_the_safety_question_a_settled_answer_closes_the_framework():
     d = decided(reply(action="finish", stage="effective"), running=running("abcde", "effective"),
                 end_check_due=True, end_check_asked=True)
-    assert labels(d) == ["Better", "About the same", "It didn't help"] and d.technique.phase == "feelings_check" and not d.end_check
+    assert labels(d) == ["Feel stronger", "Feel more focused", "I'm not sure yet"] and d.technique.phase == "feelings_check" and not d.end_check
 
 
 def test_stop_records_the_framework_declined():
@@ -123,7 +123,7 @@ def test_a_settled_answer_to_the_safety_question_closes_the_framework_whatever_t
     """The final review, 2026-11-18: "i'm okay now" with a plain reply left the set on its last stage, no closing
     buttons, and the safety question still marked asked. The old turn closed it on the settled answer alone."""
     d = decided(reply(), running=running("abcde", "effective"), end_check_due=True, end_check_asked=True)
-    assert labels(d) == ["Better", "About the same", "It didn't help"] and d.technique.phase == "feelings_check"
+    assert labels(d) == ["Feel stronger", "Feel more focused", "I'm not sure yet"] and d.technique.phase == "feelings_check"
 
 
 def test_any_other_reply_to_an_open_offer_lets_it_lapse():

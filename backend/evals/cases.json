@@ -812,7 +812,7 @@
     },
     {
      "role": "user",
-     "content": "It didn't help"
+     "content": "I'm not sure yet"
     }
    ],
    "reference": null,
@@ -824,7 +824,7 @@
    "open_chat": false,
    "checks": {
     "max_questions": 1,
-    "judge": "They tapped It didn't help (Lolly, 2026-11-23: the options must let them say something has not helped). The reply takes that plainly, never calls the set a success or says they made progress, and asks at most one question, about what they still need. It FAILS if it presents the exercise as having worked, argues that it helped, or closes without checking what they still need."
+    "judge": "They tapped I'm not sure yet (the option that does not presume the set helped). The reply takes that plainly, never calls the set a success or says they made progress, and asks at most one question, about what they still need. It FAILS if it presents the exercise as having worked, argues that it helped, or closes without checking what they still need."
    }
   },
   {

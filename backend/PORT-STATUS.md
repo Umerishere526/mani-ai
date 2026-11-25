@@ -1159,7 +1159,7 @@ the same change as the work.**
   2026-10-12). Because one prompt, `mani.md`, carries all three styles, and the facts name the conversation's
   style (2026-11-17).
 - **Every button of a framework is the client's, set by code**: Not sure / Show me how / Give me a tool under the
-  lead-in, Start <name> / Talk more first under the steps, Better / About the same / It didn't help after the last
+  lead-in, Start <name> / Talk more first under the steps, Feel stronger / Feel more focused / I'm not sure yet after the last
   stage, Continue chatting / Visit library at the close (`greeting.py`, `repairs.py`, `decide.closing_buttons`); the
   model never writes them. Because the client's sequence document (2026-11-18) names them, and Lolly changed the
   feelings answers (11/23) and the close (11/20). A tap is matched by its label; Start carries the framework's id, so it
@@ -1181,8 +1181,9 @@ the same change as the work.**
   `stage` is the stage whose question it asks; code stores it but never more than one past the stored stage, and the
   starting turn opens the first stage only, even when the chat touched it, as the client's sequence asks every letter
   on its own reply (`decide.stage_of`; 2026-11-18). A stage of another framework changes nothing. `action: finish` on
-  the last stage opens the feelings check: Mani acknowledges the new belief and asks how they feel now, with Better /
-  About the same / It didn't help (Lolly, 2026-11-23: the options must let them say it has not helped), and the next
+  the last stage opens the feelings check: Mani acknowledges the new belief and asks how they feel now, with Feel
+  stronger / Feel more focused / I'm not sure yet (muhammad, 2026-11-25, as on main, overruling Lolly's 2026-11-23 ask
+  that an option say it has not helped; recorded under Conflicts in docs/client/requirements.md), and the next
   answer closes the set with Continue chatting and Visit library and records it finished (phase `feelings_check`, `decide._moved`; 2026-11-18). The closing reply forces no question: a
   next step only when useful, a check only when it is unclear they got what they came for (Lolly 2026-11-20, approved
   by muhammad 2026-11-24, superseding R120; `facts._running_line`); what it says is "The close names what moved". E ends on the new belief, with no
