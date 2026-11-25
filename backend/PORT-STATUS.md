@@ -9,7 +9,7 @@ the same change as the work.**
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
 - Tests: `pytest` runs 493 tests, all passing against the local database (2026-11-25); the tests that mint a
   symmetric token skip on a JWKS-configured project. `scripts/test_db.sh` runs the schema, RLS and privilege suites.
-- Database: 41 migrations (000 to 010, 018 to 042, 044 to 048; 043 is held by a stashed branch), 20 tables
+- Database: 42 migrations (000 to 010, 018 to 042, 044 to 049; 043 is held by a stashed branch), 20 tables
   (10 `public`, 10 `admin`), 3 active frameworks and 2 active prompts seeded (`mani`, `summarization`).
   `admin.exercises` holds the client's 67 library items from `content/exercises/` (31 recorded; "mani-app" held the
   30 earlier rows on 2026-11-13, and 045 to 047 have run only on this machine), with the recorded ones' audio in the
@@ -123,7 +123,7 @@ the same change as the work.**
 | GET | `/v1/admin/prompts/{id}/versions` | history |
 | POST | `/v1/admin/prompts/cache/invalidate` | publish now |
 | GET POST, PATCH DELETE | `/v1/admin/exercises`, `/{id}` | catalog CRUD |
-| GET | `/v1/admin/crisis-events` | review queue |
+| GET, POST | `/v1/admin/crisis-events`, `/{id}/resolve` | review queue; resolve with a note |
 | GET | `/v1/admin/threads` | every person's conversations they have written in, newest activity first; `search` by email or user id |
 | GET | `/v1/admin/exercise-feedback` | every person's library ratings, newest first; `search` by email or user id |
 | GET | `/v1/admin/threads/{id}` | one conversation in full, oldest first; logs the read |
@@ -403,8 +403,8 @@ the same change as the work.**
   (R142; provisional P8), and the recordings are client content that should not be in a public repo (and Vercel builds
   from the repo root, where `backend/.vercelignore` does not apply, so committed audio rode in every function bundle).
   Migrations 045 (`admin.library_topics`), 046 (audio optional) and 047 (`admin.exercise_topic_links`);
-  `scripts/seed_exercises.py`; `GET /v1/exercises/topics`; `tests/integration/test_library.py`. Release order: 045 →
-  046 → 047, deploy, `seed_exercises.py`, upload the MP3s. The MP3s are gitignored: local copies at 64 kbps mono sit in `content/exercises/`, copied from production's
+  `scripts/seed_exercises.py`; `GET /v1/exercises/topics`; `tests/integration/test_library.py`. Release order: see "Before it takes real
+  traffic". The MP3s are gitignored: local copies at 64 kbps mono sit in `content/exercises/`, copied from production's
   bucket, and the seed stops and names any that are missing. The 12 older recordings the repo held were replaced by
   production's re-recordings of 2026-11-09 (same ids, new files, lengths and three titles) and removed from git; they
   remain in `main`'s history. The seed uploads with `x-upsert`, so running it against production would replace
@@ -484,8 +484,8 @@ the same change as the work.**
     person who was lonely and crying after "unsafe with my family" with no danger ever judged; this ends the hold of
     2026-11-16 that turned a second unsure into danger; `test_worry.py`, "a worry the model only ever judged unsure
     never pauses"). A symptom in the body
-    that they have not said stopped is danger now, and when the model judged it lower code adds the call-now line after
-    Mani's text, once per body worry, also on a thread already in danger of another kind (`safety.danger_of`, `crisis.BODY_EMERGENCY`; muhammad, 2026-11-18: a possible medical
+    that they have not said stopped is danger now, and its help is added by code when the reply lacks it (see "The first danger message of each kind always names its
+    help"; `safety.danger_of`, `crisis.names_help`, trace key `resources_added`; muhammad, 2026-11-18: a possible medical
     emergency gets "call emergency services now" every time, over-triggering accepted, after MiniMax held chest pain
     with a strange left arm at unsure in 7 of 30 runs; `test_a_body_worry_that_has_not_stopped_is_danger_now`,
     `test_a_body_worry_the_model_held_lower_still_gets_call_now`). Once a concern settled, only their newest message
@@ -500,10 +500,10 @@ the same change as the work.**
   - The first turn judged danger is recorded in `admin.crisis_events` with whose danger it is, never their words
     (`turn._record_danger`, `threads.mark_crisis`). `threads.crisis_at` (migration 037) keeps when it was last flagged,
     and `recent_crisis` counts its 30 days from it. An edit restores the state (`rewind`).
-  - **When danger continues with nothing in place, the chat pauses for `CRISIS_PAUSE_SECONDS` (default 30); a refusal
+  - **When danger continues with nothing in place, the chat pauses for `CRISIS_PAUSE_SECONDS` (default 900, 15 minutes); a refusal
     is required only for a symptom in the body; nobody is signed out, no conversation takes a message, the Library
     and every conversation stay readable, and the backend is the whole lock** (muhammad, 2026-11-13, and 2026-11-14 for
-    the refusal; 2026-11-23 for the 30 seconds and for reading the conversation after closing the pop-up; this replaces
+    the refusal; 2026-11-23 for reading the conversation after closing the pop-up; this replaces
     "nothing locks" of 2026-11-06 and "help refused is the only block" of 2026-11-11). Because once a crisis is certain
     Mani must stop rather than go round a loop of "please get help", and the production chat of 2026-11-14 never
     paused in 11 turns: "i want to kill myself", about to act right now, nobody with them, nobody called, every
@@ -571,6 +571,51 @@ the same change as the work.**
   - `declined`, `symptom_now` and `still_there` on MiniMax are held by the suite's overdose, chest and dodge
     conversations (`evals/suite.json`) and the rule case `rule-not-safe-after-pause` (`evals/cases.json`); the return
     check needed one sentence in `mani.md`, that a safe answer to the question about a pause judges none (2026-11-17).
+
+- **Danger clears only on their word that they are safe (`TurnReply.safety.says_safe`), someone being with them, or
+  two messages in a row read as no concern after Mani's reply asked; a change of subject is not safety** (muhammad,
+  2026-11-25, provisional S1). Because one calm read cleared "I took pills". `worry.step`, `worry.CALM_TO_CLEAR`;
+  `tests/unit/test_worry.py`. PROVISIONAL: clinician sign-off required before deploy.
+- **The first danger message of each kind always names its help (911 and 988 for themselves; 911 for others and the
+  body; plus 1-800-799-7233 for danger from someone), added by code when the reply lacks it, even with help in place;
+  never a pause on that message** (muhammad, 2026-11-25, provisional S2, S7). Because a first danger reply could reach
+  them with no number. `worry.Outcome.resources_due`, `crisis.names_help`; the trace key `resources_added` (it
+  replaces `body_emergency`). PROVISIONAL: clinician sign-off required before deploy.
+- **A plan with no timeframe and the Risk Classification's HIGH phrases are danger; code raises a lower read on 8
+  unambiguous phrases matched as whole words, and only raises, with no pause on that message; "I have a plan", "I gave
+  my things away" and "I wrote letters" stay with the model, because out of context they are everyday words**
+  (muhammad, 2026-11-25, provisional S3, S4). Because "I wish I were dead" was read as unsure.
+  `safety.HIGH_RISK_PHRASES`, the trace key `raised_by_phrase`;
+  `test_a_high_risk_phrase_the_model_read_lower_is_raised_to_danger_with_help_and_no_pause`,
+  `test_everyday_words_near_a_high_risk_phrase_are_left_to_the_model` in `test_worry.py`. PROVISIONAL: clinician sign-off required before deploy.
+- **Medium phrases get exactly one question: "Are you thinking about hurting yourself, or are you feeling
+  overwhelmed?"** (muhammad, 2026-11-25, provisional S5). Because the client's Risk Classification gives that question.
+  `mani.md` Safety section; `tests/unit/test_seed.py`; the regression check `one_clarifying_question`. PROVISIONAL: clinician sign-off required before deploy.
+- **The pause is 15 minutes; its reply leads with help, 911 first; each pause carries `paused_for` (overdose or the
+  kind)** (muhammad, 2026-11-25, provisional S6). Because of R89 and R90. `config.crisis_pause_seconds` 900,
+  `crisis.pause_reply`, `chat_pauses.paused_for` (migration 049), `paused_for` on a turn and an error, `chat_paused_for` on
+  the profile and the opening; `test_the_pause_reply_leads_with_where_to_get_help_and_the_length_comes_after` in
+  `test_crisis_resources.py`. PROVISIONAL: clinician sign-off required before deploy.
+- **An edit never lowers danger already reached; a rewritten danger message counts as continuation** (muhammad,
+  2026-11-25, provisional S8). Because an edit could undo a crisis. `rewind.held`. PROVISIONAL: clinician sign-off required before deploy.
+- **Every help text and every refusal while a worry is held names 911, 988 and "Outside the US: findahelpline.com";
+  no country detection** (muhammad, 2026-11-25, provisional S9 to S11). Because the outage reply, the 423 and 409
+  bodies could leave someone in danger with no number. `crisis.with_help`, `crisis.OUTSIDE_US`;
+  `test_every_resources_text_gives_the_us_numbers_and_the_directory_for_everywhere_else` in
+  `test_crisis_resources.py`. PROVISIONAL: clinician sign-off required before deploy.
+- **"I'm fine" after a pause is accepted, with one fixed follow-up about who they can reach; a second pause only on
+  continued danger** (muhammad, 2026-11-25, provisional S12). Because R151. `crisis.AFTER_PAUSE_FOLLOW_UP`. PROVISIONAL: clinician sign-off required before deploy.
+- **The body line is "If this is happening now, call 911"; threats, coercion or abuse with fear for safety are danger
+  from someone, with the domestic violence hotline** (muhammad, 2026-11-25, provisional S13, S14). Because the Safety
+  Guardrails (section 2) forbid interpreting a symptom, and R152.
+  `test_the_body_line_says_call_911_if_it_is_happening_now_without_judging_the_symptom`,
+  `test_danger_from_someone_names_the_domestic_violence_hotline` in `test_crisis_resources.py`. PROVISIONAL: clinician sign-off required before deploy.
+- **Admins resolve crisis events with a note (`POST /v1/admin/crisis-events/{id}/resolve`); no external alerting**
+  (muhammad, 2026-11-25, provisional S16). Because the review queue had no way to close an event; alerting needs ops.
+  `routers/admin.py`; `test_an_admin_lists_an_unresolved_crisis_event_and_resolves_it_once` in
+  `tests/integration/test_crisis_events.py`. PROVISIONAL: clinician sign-off required before deploy.
+- **A pause blocks all of the person's conversations** (muhammad, 2026-11-25, provisional S18). Because a new chat must
+  not get around it. `auth/deps.require_chat_open`. PROVISIONAL: clinician sign-off required before deploy.
 
 - **Retired 2026-11-17: the body check-in, paused since 2026-11-05** (muhammad, 2026-11-05: "chat -> framework
   (not somatic)"). Because it was deleted with its code, script and phases rather than kept paused beside a turn
@@ -1124,7 +1169,10 @@ the same change as the work.**
   with the thread. With `AI_DEBUG_MODE` on, a turn returns it as `understanding`, and the chat tester shows the notes,
   declined and finished under "What Mani knows". `tests/unit/test_record.py`,
   `tests/integration/test_record_migration.py`, `tests/sql/test_grants.sql`.
-- **No phrase lists judge the conversation** (muhammad, 2026-10-09). Because literal phrase matching cannot
+- **Retired 2026-11-25 (see "The Risk Classification's HIGH phrases are danger"): no phrase lists judge the
+  conversation** (muhammad, 2026-10-09). Because the client's Risk Classification names phrases that are danger, and
+  "I wish I were dead" was read as unsure; code now holds one short list that only raises (`safety.HIGH_RISK_PHRASES`)
+  and the typed-stop list that only lets someone leave (`enforce.STOP_PHRASES`). Earlier: because literal phrase matching cannot
   read a paraphrase, so its judgments were silently wrong whenever people worded things differently
   (2026-10-09). Code holds no list of what people say, of feeling words, of self-judgments or of pain words; since
   2026-11-17 the safety phrase screen is gone too, and safety is the reply's own judgment. The rules live in
@@ -1167,7 +1215,8 @@ the same change as the work.**
 
 ## Before it takes real traffic
 
-Ordered by what breaks first.
+Ordered by what breaks first. Release order for the fix wave of 2026-11-25: migrations 045 → 046 → 047 → 048 → 049,
+then deploy, `scripts/seed.py`, `scripts/seed_exercises.py`, upload the MP3s.
 
 0. **Zero data retention for summaries and transcription (2026-11-24).** Every call now asks for ZDR endpoints. Before
    deploying, confirm on OpenRouter that `openai/gpt-6-luna` and `openai/whisper-large-v3` have ZDR endpoints and that
