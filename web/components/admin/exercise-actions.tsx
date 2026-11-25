@@ -13,8 +13,6 @@ const STRINGS = dictionary.admin.pages.exercises.actions;
 
 interface ExerciseActionsProps {
   exercise: AdminExercise;
-  canEdit: boolean;
-  canAdmin: boolean;
 }
 
 const SECONDARY_BUTTON =
@@ -22,7 +20,7 @@ const SECONDARY_BUTTON =
 const DANGER_BUTTON =
   "rounded-mani-md border border-mani-border px-3 py-1.5 text-sm font-medium text-mani-error transition-colors duration-200 hover:border-mani-text-light hover:bg-mani-bg disabled:cursor-not-allowed disabled:opacity-50";
 
-export function ExerciseActions({ exercise, canEdit, canAdmin }: ExerciseActionsProps) {
+export function ExerciseActions({ exercise }: ExerciseActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -46,38 +44,32 @@ export function ExerciseActions({ exercise, canEdit, canAdmin }: ExerciseActions
 
   return (
     <div className="flex items-center justify-end gap-2">
-      {canEdit && (
-        <Link href={`/admin/exercises/${exercise.id}`} className={SECONDARY_BUTTON}>
-          {STRINGS.edit}
-        </Link>
-      )}
+      <Link href={`/admin/exercises/${exercise.id}`} className={SECONDARY_BUTTON}>
+        {STRINGS.edit}
+      </Link>
 
-      {canAdmin && (
-        <>
-          <button type="button" onClick={handleToggleActive} disabled={isPending} className={SECONDARY_BUTTON}>
-            {exercise.isActive ? STRINGS.deactivate : STRINGS.activate}
+      <button type="button" onClick={handleToggleActive} disabled={isPending} className={SECONDARY_BUTTON}>
+        {exercise.isActive ? STRINGS.deactivate : STRINGS.activate}
+      </button>
+
+      {showDeleteConfirm ? (
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={handleDelete} disabled={isPending} className={DANGER_BUTTON}>
+            {STRINGS.confirmDelete}
           </button>
-
-          {showDeleteConfirm ? (
-            <div className="flex items-center gap-1">
-              <button type="button" onClick={handleDelete} disabled={isPending} className={DANGER_BUTTON}>
-                {STRINGS.confirmDelete}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={isPending}
-                className={SECONDARY_BUTTON}
-              >
-                {STRINGS.cancel}
-              </button>
-            </div>
-          ) : (
-            <button type="button" onClick={() => setShowDeleteConfirm(true)} className={DANGER_BUTTON}>
-              {STRINGS.delete}
-            </button>
-          )}
-        </>
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(false)}
+            disabled={isPending}
+            className={SECONDARY_BUTTON}
+          >
+            {STRINGS.cancel}
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setShowDeleteConfirm(true)} className={DANGER_BUTTON}>
+          {STRINGS.delete}
+        </button>
       )}
     </div>
   );

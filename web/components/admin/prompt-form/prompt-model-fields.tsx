@@ -1,63 +1,35 @@
-// ABOUTME: Field group for PromptForm — provider/model selects plus model parameters JSON.
+// ABOUTME: Field group for PromptForm — the OpenRouter model id plus model parameters JSON.
 // ABOUTME: Split out from prompt-form.tsx to keep the parent component under the line cap.
 
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
 import type { PromptFormValues } from "@/lib/schema";
-import type { Model, ProviderListItem } from "@/types";
 import dictionary from "@/dictionaries/en.json";
-import { FORM_TEXTAREA_CLASSES, FORM_LABEL_CLASSES, FORM_HELPER_CLASSES, FORM_ERROR_CLASSES } from "../form-field-classes";
-import { PromptProviderSelect } from "./prompt-provider-select";
-import { PromptModelSelect } from "./prompt-model-select";
+import { FORM_INPUT_CLASSES, FORM_TEXTAREA_CLASSES, FORM_LABEL_CLASSES, FORM_HELPER_CLASSES, FORM_ERROR_CLASSES } from "../form-field-classes";
 
 const STRINGS = dictionary.admin.forms.prompt;
 
 interface PromptModelFieldsProps {
   register: UseFormRegister<PromptFormValues>;
   errors: FieldErrors<PromptFormValues>;
-  providers: ProviderListItem[];
-  models: Model[];
-  loadingProviders: boolean;
-  loadingModels: boolean;
-  modelsError: string | null;
-  selectedProvider: string | undefined;
-  currentModelId: string | undefined;
-  isProviderValid: boolean;
 }
 
-export function PromptModelFields({
-  register,
-  errors,
-  providers,
-  models,
-  loadingProviders,
-  loadingModels,
-  modelsError,
-  selectedProvider,
-  currentModelId,
-  isProviderValid,
-}: PromptModelFieldsProps) {
+export function PromptModelFields({ register, errors }: PromptModelFieldsProps) {
   return (
     <div className="border-t border-mani-border pt-6">
       <h3 className="mb-4 text-base font-medium text-mani-text">{STRINGS.modelConfigTitle}</h3>
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <PromptProviderSelect
-          register={register}
-          errors={errors}
-          providers={providers}
-          loadingProviders={loadingProviders}
-          selectedProvider={selectedProvider}
-          isProviderValid={isProviderValid}
+      <div>
+        <label htmlFor="modelId" className={FORM_LABEL_CLASSES}>
+          {STRINGS.modelLabel}
+        </label>
+        <input
+          id="modelId"
+          type="text"
+          {...register("modelId")}
+          placeholder={STRINGS.modelPlaceholder}
+          className={FORM_INPUT_CLASSES}
         />
-        <PromptModelSelect
-          register={register}
-          errors={errors}
-          models={models}
-          loadingModels={loadingModels}
-          modelsError={modelsError}
-          selectedProvider={selectedProvider}
-          currentModelId={currentModelId}
-          isProviderValid={isProviderValid}
-        />
+        {errors.modelId && <p className={FORM_ERROR_CLASSES}>{errors.modelId.message}</p>}
+        <p className={FORM_HELPER_CLASSES}>{STRINGS.modelHelper}</p>
       </div>
 
       <div className="mt-6">

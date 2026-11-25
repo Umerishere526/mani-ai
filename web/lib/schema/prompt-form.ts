@@ -10,7 +10,6 @@ export const promptFormSchema = z.object({
   type: z.enum(PROMPT_TYPES),
   description: z.string().max(500).optional(),
   content: z.string().min(1, "Content is required"),
-  provider: z.string().optional(),
   modelId: z.string().optional(),
   modelParameters: z.string().refine(
     (val) => {

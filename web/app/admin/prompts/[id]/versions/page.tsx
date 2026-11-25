@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/shared";
 import { RollbackButton } from "@/components/admin/rollback-button";
 import { getPromptById, getPromptVersions } from "@/lib/placeholder-prompts";
-import { ADMIN_PERMISSIONS } from "../../../lib/permissions";
 import dictionary from "@/dictionaries/en.json";
 
 const PROMPTS_STRINGS = dictionary.admin.pages.prompts;
@@ -23,8 +22,6 @@ export default async function VersionsPage({ params }: VersionsPageProps) {
   if (!prompt) {
     notFound();
   }
-
-  const { canRollback } = ADMIN_PERMISSIONS;
 
   return (
     <div>
@@ -64,16 +61,10 @@ export default async function VersionsPage({ params }: VersionsPageProps) {
                       <p className="mt-1 text-sm text-mani-text-muted">{version.changeSummary}</p>
                     )}
                   </div>
-                  {canRollback && (
-                    <RollbackButton promptId={id} version={version.version} currentVersion={prompt.version} />
-                  )}
+                  <RollbackButton promptId={id} version={version.version} currentVersion={prompt.version} />
                 </div>
 
-                <div className="mb-4 grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="text-mani-text-light">{STRINGS.providerLabel}</span>{" "}
-                    <span className="font-medium">{version.provider}</span>
-                  </div>
+                <div className="mb-4 grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-mani-text-light">{STRINGS.modelLabel}</span>{" "}
                     <span className="font-medium">{version.modelId}</span>

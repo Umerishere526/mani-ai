@@ -13,10 +13,9 @@ const COMMON = dictionary.admin.pages;
 interface PromptTableProps {
   prompts: Prompt[];
   showModelColumn: boolean;
-  canEditPromptsAndProviders: boolean;
 }
 
-export function PromptTable({ prompts, showModelColumn, canEditPromptsAndProviders }: PromptTableProps) {
+export function PromptTable({ prompts, showModelColumn }: PromptTableProps) {
   return (
     <div className="overflow-hidden rounded-mani-lg bg-mani-bg-card shadow-mani-card">
       <table className="w-full border-collapse">
@@ -60,8 +59,6 @@ export function PromptTable({ prompts, showModelColumn, canEditPromptsAndProvide
               {showModelColumn && (
                 <td className="border-b border-mani-border px-6 py-4 last:border-b-0">
                   <span className="text-sm text-mani-text">{prompt.modelId}</span>
-                  <br />
-                  <span className="text-xs text-mani-text-light">{prompt.provider}</span>
                 </td>
               )}
               <td className="border-b border-mani-border px-6 py-4 last:border-b-0">
@@ -81,11 +78,7 @@ export function PromptTable({ prompts, showModelColumn, canEditPromptsAndProvide
                 </span>
               </td>
               <td className="border-b border-mani-border px-6 py-4 text-right last:border-b-0">
-                <PromptActions
-                  prompt={prompt}
-                  canEdit={canEditPromptsAndProviders}
-                  canAdmin={canEditPromptsAndProviders}
-                />
+                <PromptActions prompt={prompt} />
               </td>
             </tr>
           ))}

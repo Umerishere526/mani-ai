@@ -13,17 +13,14 @@ const STRINGS = dictionary.admin.pages.prompts.actions;
 
 interface PromptActionsProps {
   prompt: Prompt;
-  canEdit: boolean;
-  canAdmin: boolean;
 }
 
-export function PromptActions({ prompt, canEdit, canAdmin }: PromptActionsProps) {
+export function PromptActions({ prompt }: PromptActionsProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleToggleActive = async () => {
-    if (!canAdmin) return;
     setLoading(true);
     setError(null);
     try {
@@ -38,7 +35,6 @@ export function PromptActions({ prompt, canEdit, canAdmin }: PromptActionsProps)
   };
 
   const handleDelete = async () => {
-    if (!canAdmin) return;
     if (!window.confirm(STRINGS.deleteConfirm.replace("{name}", prompt.name))) return;
 
     setLoading(true);
@@ -57,20 +53,16 @@ export function PromptActions({ prompt, canEdit, canAdmin }: PromptActionsProps)
   return (
     <div className="flex items-center justify-end gap-3">
       {error && <span className="mr-2 text-sm text-mani-error">{error}</span>}
-      {canEdit && <ActionLink href={`/admin/prompts/${prompt.id}`}>{STRINGS.edit}</ActionLink>}
+      <ActionLink href={`/admin/prompts/${prompt.id}`}>{STRINGS.edit}</ActionLink>
       <ActionLink variant="muted" href={`/admin/prompts/${prompt.id}/versions`}>
         {STRINGS.history}
       </ActionLink>
-      {canAdmin && (
-        <>
-          <ActionLink variant="muted" onClick={handleToggleActive} disabled={loading}>
-            {prompt.isActive ? STRINGS.deactivate : STRINGS.activate}
-          </ActionLink>
-          <ActionLink variant="danger" onClick={handleDelete} disabled={loading}>
-            {STRINGS.delete}
-          </ActionLink>
-        </>
-      )}
+      <ActionLink variant="muted" onClick={handleToggleActive} disabled={loading}>
+        {prompt.isActive ? STRINGS.deactivate : STRINGS.activate}
+      </ActionLink>
+      <ActionLink variant="danger" onClick={handleDelete} disabled={loading}>
+        {STRINGS.delete}
+      </ActionLink>
     </div>
   );
 }

@@ -18,11 +18,10 @@ const DANGER_BUTTON =
 
 interface HomeScreenExerciseRowProps {
   exercise: AdminExercise;
-  canEdit: boolean;
   position: number;
 }
 
-export function HomeScreenExerciseRow({ exercise, canEdit, position }: HomeScreenExerciseRowProps) {
+export function HomeScreenExerciseRow({ exercise, position }: HomeScreenExerciseRowProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -78,48 +77,44 @@ export function HomeScreenExerciseRow({ exercise, canEdit, position }: HomeScree
           {STRINGS.editButton}
         </a>
 
-        {canEdit && (
+        {isEditing ? (
           <>
-            {isEditing ? (
-              <>
-                <input
-                  type="number"
-                  value={orderValue}
-                  onChange={(e) => setOrderValue(e.target.value)}
-                  className="w-16 rounded-mani-md border border-mani-border bg-mani-bg-card px-2 py-1 text-sm text-mani-text"
-                  min="0"
-                  disabled={isPending}
-                />
-                <button onClick={handleUpdateOrder} disabled={isPending} className={SECONDARY_BUTTON}>
-                  {STRINGS.saveButton}
-                </button>
-                <button
-                  onClick={() => {
-                    setIsEditing(false);
-                    setOrderValue(exercise.displayOrder.toString());
-                  }}
-                  disabled={isPending}
-                  className={SECONDARY_BUTTON}
-                >
-                  {STRINGS.cancelButton}
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => setIsEditing(true)}
-                  disabled={isPending}
-                  title="Edit display order"
-                  className={SECONDARY_BUTTON}
-                >
-                  {STRINGS.orderPrefix}
-                  {exercise.displayOrder}
-                </button>
-                <button onClick={handleRemove} disabled={isPending} className={DANGER_BUTTON}>
-                  {STRINGS.deleteButton}
-                </button>
-              </>
-            )}
+            <input
+              type="number"
+              value={orderValue}
+              onChange={(e) => setOrderValue(e.target.value)}
+              className="w-16 rounded-mani-md border border-mani-border bg-mani-bg-card px-2 py-1 text-sm text-mani-text"
+              min="0"
+              disabled={isPending}
+            />
+            <button onClick={handleUpdateOrder} disabled={isPending} className={SECONDARY_BUTTON}>
+              {STRINGS.saveButton}
+            </button>
+            <button
+              onClick={() => {
+                setIsEditing(false);
+                setOrderValue(exercise.displayOrder.toString());
+              }}
+              disabled={isPending}
+              className={SECONDARY_BUTTON}
+            >
+              {STRINGS.cancelButton}
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => setIsEditing(true)}
+              disabled={isPending}
+              title="Edit display order"
+              className={SECONDARY_BUTTON}
+            >
+              {STRINGS.orderPrefix}
+              {exercise.displayOrder}
+            </button>
+            <button onClick={handleRemove} disabled={isPending} className={DANGER_BUTTON}>
+              {STRINGS.deleteButton}
+            </button>
           </>
         )}
       </div>

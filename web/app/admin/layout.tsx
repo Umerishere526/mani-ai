@@ -1,20 +1,22 @@
 // ABOUTME: Root layout for the admin dashboard — sidebar nav plus a padded content area.
-// ABOUTME: Ported from mani-app's app/admin/layout.tsx; no auth gate exists yet (see permissions.ts).
+// ABOUTME: Requires a signed-in admin; every backend read checks the session again through the same call.
 
 import type { Metadata } from "next";
 import { AdminNav } from "@/components/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
+import dictionary from "@/dictionaries/en.json";
 
 export const metadata: Metadata = {
-  title: "Mani Admin",
-  description: "Mani Admin Dashboard",
+  title: dictionary.admin.meta.title,
+  description: dictionary.admin.meta.description,
 };
 
-const PLACEHOLDER_ADMIN_USER = { email: "admin@example.com" };
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { email } = await requireAdmin();
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-mani-bg">
-      <AdminNav user={PLACEHOLDER_ADMIN_USER} editingEnabled />
+      <AdminNav email={email} />
       <main className="flex-1 animate-fade-in p-8">{children}</main>
     </div>
   );

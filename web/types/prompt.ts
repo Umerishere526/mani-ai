@@ -9,7 +9,6 @@ export interface Prompt {
   type: PromptType;
   description: string | null;
   content: string;
-  provider: string | null;
   modelId: string | null;
   modelParameters: Record<string, unknown>;
   version: number;
@@ -23,7 +22,6 @@ export interface PromptVersion {
   promptId: string;
   version: number;
   content: string;
-  provider: string | null;
   modelId: string | null;
   modelParameters: Record<string, unknown>;
   changeSummary: string | null;

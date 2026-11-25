@@ -6,7 +6,6 @@ import { Badge, EmptyState } from "@/components/shared";
 import { HomeScreenSection } from "@/components/admin/home-screen-section";
 import { ExerciseActions } from "@/components/admin/exercise-actions";
 import { ADMIN_EXERCISES } from "@/lib/placeholder-exercises";
-import { ADMIN_PERMISSIONS } from "../lib/permissions";
 import type { AdminExercise } from "@/types";
 import dictionary from "@/dictionaries/en.json";
 
@@ -15,8 +14,6 @@ const CATEGORY_LABELS = dictionary.admin.forms.categories;
 const COMMON = dictionary.admin.pages;
 
 export default function ExercisesPage() {
-  const { canEdit, canAdmin } = ADMIN_PERMISSIONS;
-
   const libraryExercises = ADMIN_EXERCISES.filter((e) => !e.showOnHomeScreen && e.category !== null);
 
   const exercisesByCategory = libraryExercises.reduce<Record<string, AdminExercise[]>>((acc, exercise) => {
@@ -32,17 +29,15 @@ export default function ExercisesPage() {
     <div>
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-[1.75rem] font-semibold tracking-tight text-mani-text">{STRINGS.title}</h1>
-        {canEdit && (
-          <Link
+        <Link
             href="/admin/exercises/new"
             className="inline-flex items-center justify-center gap-2 rounded-mani-md bg-mani-accent px-5 py-2.5 text-[0.9375rem] font-medium text-white shadow-mani-sm transition-colors duration-200 hover:bg-mani-accent-hover"
           >
             {STRINGS.newButton}
           </Link>
-        )}
       </div>
 
-      <HomeScreenSection exercises={ADMIN_EXERCISES} canEdit={canEdit} />
+      <HomeScreenSection exercises={ADMIN_EXERCISES} />
 
       <div className="mb-4">
         <h2 className="text-lg font-medium text-mani-text">{STRINGS.libraryTitle}</h2>
@@ -52,7 +47,7 @@ export default function ExercisesPage() {
       {libraryExercises.length === 0 ? (
         <EmptyState
           message={STRINGS.empty}
-          action={canEdit ? { label: STRINGS.emptyAction, href: "/admin/exercises/new" } : undefined}
+          action={{ label: STRINGS.emptyAction, href: "/admin/exercises/new" }}
         />
       ) : (
         <div className="space-y-8">
@@ -110,7 +105,7 @@ export default function ExercisesPage() {
                           </Badge>
                         </td>
                         <td className="border-b border-mani-border px-6 py-4 text-right last:border-b-0">
-                          <ExerciseActions exercise={exercise} canEdit={canEdit} canAdmin={canAdmin} />
+                          <ExerciseActions exercise={exercise} />
                         </td>
                       </tr>
                     ))}

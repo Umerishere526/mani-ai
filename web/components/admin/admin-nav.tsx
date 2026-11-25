@@ -5,9 +5,10 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { Server, BookOpen, MessageSquare } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { BookOpen, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { signOutAdmin } from "@/lib/actions/auth";
 import dictionary from "@/dictionaries/en.json";
 import { FileTextIcon, LogOutIcon } from "@/components/shared";
 
@@ -17,7 +18,6 @@ interface NavItem {
   label: string;
   href: string;
   icon: ReactNode;
-  requiresEditing?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -25,13 +25,6 @@ const NAV_ITEMS: NavItem[] = [
     label: NAV_STRINGS.prompts,
     href: "/admin/prompts",
     icon: <FileTextIcon size={18} strokeWidth={1.75} />,
-    requiresEditing: true,
-  },
-  {
-    label: NAV_STRINGS.providers,
-    href: "/admin/providers",
-    icon: <Server size={18} strokeWidth={1.75} />,
-    requiresEditing: true,
   },
   {
     label: NAV_STRINGS.exercises,
@@ -46,20 +39,11 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 interface AdminNavProps {
-  user: {
-    email: string;
-  };
-  editingEnabled?: boolean;
+  email: string;
 }
 
-export function AdminNav({ user, editingEnabled = false }: AdminNavProps) {
+export function AdminNav({ email }: AdminNavProps) {
   const pathname = usePathname();
-  const router = useRouter();
-
-  const handleSignOut = () => {
-    router.push("/auth/login");
-    router.refresh();
-  };
 
   return (
     <nav className="flex min-h-screen w-64 flex-col bg-mani-sidebar bg-[url('/textures/noise.svg')] bg-blend-soft-light">
@@ -76,7 +60,7 @@ export function AdminNav({ user, editingEnabled = false }: AdminNavProps) {
 
       <div className="flex-1 px-3 py-4">
         <div className="space-y-1">
-          {NAV_ITEMS.filter((item) => !item.requiresEditing || editingEnabled).map((item) => {
+          {NAV_ITEMS.map((item) => {
             const isActive = pathname.startsWith(item.href);
             return (
               <Link
@@ -104,19 +88,20 @@ export function AdminNav({ user, editingEnabled = false }: AdminNavProps) {
       </div>
 
       <div className="border-t border-white/8 px-4 py-4">
-        <div className="mb-3 truncate text-sm text-white/50">{user.email}</div>
+        <div className="mb-3 truncate text-sm text-white/50">{email}</div>
         <div className="flex items-center justify-between">
           <span className="rounded-full bg-mani-accent-light px-2.5 py-1 text-xs font-medium text-mani-accent">
             {NAV_STRINGS.adminBadge}
           </span>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="flex items-center gap-1.5 text-sm text-white/50 transition-colors duration-200 hover:text-white"
-          >
-            <LogOutIcon size={16} strokeWidth={1.75} />
-            <span>{NAV_STRINGS.signOut}</span>
-          </button>
+          <form action={signOutAdmin}>
+            <button
+              type="submit"
+              className="flex items-center gap-1.5 text-sm text-white/50 transition-colors duration-200 hover:text-white"
+            >
+              <LogOutIcon size={16} strokeWidth={1.75} />
+              <span>{NAV_STRINGS.signOut}</span>
+            </button>
+          </form>
         </div>
       </div>
     </nav>

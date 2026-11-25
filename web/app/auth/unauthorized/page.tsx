@@ -1,4 +1,4 @@
-// ABOUTME: Shown when a user lacks admin access. Visual only — nothing redirects here yet.
+// ABOUTME: Shown when a signed-in user's token lacks the admin claim; requireAdmin redirects here.
 // ABOUTME: Lives under auth/ (an access-denied state), not admin/ (the section it denies).
 
 import Link from "next/link";
