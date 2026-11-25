@@ -28,7 +28,6 @@ def test_a_nearly_identical_question_counts_as_the_same_and_a_different_one_is_k
     reply = sent("That sounds frightening. Are you hurt?", "Is anyone with you right now?", guarded=True,
                  open_chat=False, latest="other")
     assert reply.text == "That sounds frightening. Are you hurt?\n\nIs anyone with you right now?"
-    assert reply.enforced == []
 
 
 @pytest.mark.parametrize(("written", "received"), [
@@ -146,3 +145,18 @@ def test_a_repeated_opening_that_cannot_go_safely_stays_and_is_recorded(text, gu
 def test_an_opening_used_before_only_in_part_is_not_a_repeat():
     reply = sent("That makes sense. The week piled up.", openers=("That makes things worse",))
     assert reply.enforced == []
+
+
+def test_a_chosen_question_that_asks_two_reaches_them_as_its_first():
+    """At most one question per reply (Pacing Rules); 2 eval replies still asked two."""
+    reply = sent("That week sounds long.", "When you say done, what do you mean? Done with the job, or with her?")
+    assert reply.text == "That week sounds long.\n\nWhen you say done, what do you mean?"
+    assert reply.asked == "When you say done, what do you mean?"
+    assert reply.enforced == [enforce.SECOND_QUESTION_REMOVED]
+
+
+def test_a_guarded_turn_keeps_both_its_questions_and_records_them():
+    reply = sent("That sounds frightening. Are you hurt?", "Is anyone with you right now?", guarded=True,
+                 open_chat=False)
+    assert reply.text == "That sounds frightening. Are you hurt?\n\nIs anyone with you right now?"
+    assert reply.enforced == [enforce.SECOND_QUESTION_KEPT]

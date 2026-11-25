@@ -58,6 +58,8 @@ TYPED_STOP = "typed_stop"
 DIRECTIVE_TRIMMED = "directive_trimmed"
 DIRECTIVE_LONG_KEPT = "directive_long_kept"
 OPENER_DROPPED = "opener_dropped"
+SECOND_QUESTION_REMOVED = "second_question_removed"
+SECOND_QUESTION_KEPT = "second_question_kept"
 OPENER_REPEATED_KEPT = "opener_repeated_kept"
 FORBIDDEN_WORD = "forbidden_word"
 BANNED_LINE_REMOVED = "banned_line_removed"
@@ -207,6 +209,20 @@ def fresh_opener(text: str, openers: list[str], *, guarded: bool) -> tuple[str, 
     return dropped[0].upper() + dropped[1:], [OPENER_DROPPED]
 
 
+def one_question(text: str, asked: str, *, guarded: bool) -> tuple[str, str, list[str]]:
+    """The reply held to its first question, the question it asks, and the event, when it still asks more than one:
+    the question it chose may itself ask two, and the second usually follows on from the first ("What do you mean? Do
+    you mean X or Y?"). A guarded turn keeps every question, recorded as kept."""
+    asking = [sentence for sentence in questions.sentences(text) if questions.asks(sentence)]
+    if len(asking) < 2:
+        return text, asked, []
+    if guarded:
+        return text, asked, [SECOND_QUESTION_KEPT]
+    first = asking[0]
+    return (questions.kept(text, lambda _, sentence: sentence == first or not questions.asks(sentence)), first,
+            [SECOND_QUESTION_REMOVED])
+
+
 def _plain(sentence: str) -> str:
     return " ".join(_WORDS.findall(sentence.lower().replace("’", "'")))
 
@@ -225,7 +241,7 @@ def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, la
     """The model's words as the person receives them (repairs.sent_text), with the client's rules enforced: each
     forbidden word swapped for a plain one, each banned line taken out, and a Directive reply in the open chat that
     gives no help (`helping`) held to DIRECTIVE_SENTENCES, and a stock opening that repeats one of the conversation's
-    `openers` dropped. A guarded turn keeps every sentence and
+    `openers` dropped; a second question left in it is taken out. A guarded turn keeps every sentence and
     every question its text asks, so a question it chose that the text already asks is not asked twice. Text that
     carries code's fixed safety words (`fixed`) goes out with no rule applied to it."""
     enforced: list[str] = []
@@ -240,6 +256,8 @@ def sent(text: str, ask: str, *, fixed: bool, guarded: bool, open_chat: bool, la
         ask = ""
         enforced.append(REPEATED_QUESTION)
     text, asked, cut = sent_text(text, ask, guarded=guarded, open_chat=open_chat, latest=latest)
+    text, asked, extra = one_question(text, asked, guarded=guarded)
+    enforced += extra
     if directive and open_chat and not guarded and not helping:
         text, trimmed = directive_trimmed(text, asked)
         enforced += trimmed

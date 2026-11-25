@@ -184,6 +184,16 @@ async def test_an_opening_this_conversation_already_used_is_dropped_when_the_res
     assert turn.trace["enforced"] == ["opener_dropped"]
 
 
+async def test_a_chosen_question_that_asks_two_reaches_them_as_one(alice, model):
+    """At most one question per reply (Pacing Rules): the chosen question itself may ask two."""
+    model(said("That week sounds long.", question=Question(
+        latest="answer", ask="What happened on Friday? Was it the same as last time?")))
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "friday was the worst of it")
+    assert turn.content == "That week sounds long.\n\nWhat happened on Friday?"
+    assert turn.trace["enforced"] == ["second_question_removed"]
+
+
 # Two ordinary exchanges first: an offer may come with the person's 3rd message at the earliest.
 WARM_UP = (said("Go on."), said("Tell me more."))
 
