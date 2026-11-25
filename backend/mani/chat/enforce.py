@@ -88,7 +88,7 @@ FIGURATIVE_PHRASES = ("its own kind of", "a strange shape", "nice shape", "holdi
                       # Phrases that tell them what something does to them, in figures (2026-11-25).
                       "wears you down", "wear you down", "wearing you down", "takes a toll", "taking a toll",
                       "eats at you", "eating at you", "weighs on you", "gets under your skin", "cuts deep",
-                      "hits hard", "hit hard", "hits you", "sits heavy", "heavy on you")
+                      "sits heavy", "heavy on you")
 _FIGURATIVE = re.compile(rf"\b(?:{'|'.join(re.escape(phrase) for phrase in FIGURATIVE_PHRASES)})\b", re.IGNORECASE)
 # A short line that hands down a verdict on what they feel or what is going on ("That's what hurts.", "Being
 # overruled in front of everyone, that's what stings.", "Betrayed fits.", "That's the part that's hard to get past."):
