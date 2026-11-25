@@ -57,3 +57,20 @@ def test_the_pause_reply_fits_whose_danger_it_is():
     assert crisis.pause_reply(None, 30) == themselves, "an unknown danger keeps the suicide line"
     for about in ("themselves", "someone_else", "from_someone", "body"):
         assert crisis.pause_reply(about, 30).endswith("We can talk again when you come back."), about
+
+
+def test_every_resources_text_gives_the_us_numbers_and_the_directory_for_everywhere_else():
+    """S11 and S9 (PROVISIONAL: clinician sign-off required before deploy): no country detection, so every text that
+    says where to get help names 911, and findahelpline.com for anyone outside the US. The outage reply while a worry
+    is held named no number at all ("contact your local emergency number")."""
+    texts = {
+        "IN_DANGER": crisis.IN_DANGER, "CRISIS_REPLY": crisis.CRISIS_REPLY, "TROUBLE_REPLY": crisis.TROUBLE_REPLY,
+        "BODY_EMERGENCY": crisis.BODY_EMERGENCY, "RETURN_CHECK_REPLY": crisis.RETURN_CHECK_REPLY,
+        "RETURN_DANGER_REPLY": crisis.RETURN_DANGER_REPLY,
+        **{f"pause_reply({about})": crisis.pause_reply(about, 900)
+           for about in ("themselves", "someone_else", "from_someone", "body", None)},
+    }
+    for name, text in texts.items():
+        assert "911" in text and "findahelpline.com" in text, name
+    for name in ("IN_DANGER", "CRISIS_REPLY", "TROUBLE_REPLY", "RETURN_CHECK_REPLY", "RETURN_DANGER_REPLY"):
+        assert "988" in texts[name], name

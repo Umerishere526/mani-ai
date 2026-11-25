@@ -202,25 +202,32 @@ async def _respond(
     shape = shaped(facts.offerable(config, record=record, running=told_running, open_offer=told_offer, holding=held,
                                    person_messages=person_messages, state=before))
     model, parameters, routing = composer.model_settings(config, "mani")
-    call = await ask(
-        [{"role": "system", "content": facts.system_prompt(config, ctx, summary_due=bool(window.dropped))}]
-        + conversation(history)
-        + [{"role": "user", "content": content}, {"role": "system", "content": told}],
-        shape, model=model, purpose=llm_calls.Purpose.CHAT,
-        temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
-        max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
-        reasoning_effort=parameters.get("reasoning_effort"), routing=routing, user_id=claims.user_id,
-        thread_id=ctx.thread.id, prompt_version_id=None,
-    )
-    if call is None:
-        return await _unanswered(conn, ctx, content, crisis.CRISIS_REPLY if holding else crisis.TROUBLE_REPLY,
-                                 before=before, tapped=tapped, client_message_id=client_message_id,
-                                 needs_summary=_summary_due(ctx, window))
-    return await _apply(conn, ctx, call, content=content, tapped=tapped, tap=tap, record=record, running=running,
-                        open_offer=open_offer, check=check, answering=answering, stood=stood, holding=holding,
-                        wants_title=wants_title, end_check_asked=end_check_asked, window=window, config=config,
-                        client_message_id=client_message_id, settings=settings, answer_failure=answer_failure,
-                        style=style_name, person_messages=person_messages)
+    try:
+        call = await ask(
+            [{"role": "system", "content": facts.system_prompt(config, ctx, summary_due=bool(window.dropped))}]
+            + conversation(history)
+            + [{"role": "user", "content": content}, {"role": "system", "content": told}],
+            shape, model=model, purpose=llm_calls.Purpose.CHAT,
+            temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
+            max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
+            reasoning_effort=parameters.get("reasoning_effort"), routing=routing, user_id=claims.user_id,
+            thread_id=ctx.thread.id, prompt_version_id=None,
+        )
+        if call is None:
+            return await _unanswered(conn, ctx, content, crisis.CRISIS_REPLY if holding else crisis.TROUBLE_REPLY,
+                                     before=before, tapped=tapped, client_message_id=client_message_id,
+                                     needs_summary=_summary_due(ctx, window))
+        return await _apply(conn, ctx, call, content=content, tapped=tapped, tap=tap, record=record, running=running,
+                            open_offer=open_offer, check=check, answering=answering, stood=stood, holding=holding,
+                            wants_title=wants_title, end_check_asked=end_check_asked, window=window, config=config,
+                            client_message_id=client_message_id, settings=settings, answer_failure=answer_failure,
+                            style=style_name, person_messages=person_messages)
+    except ServiceError as error:
+        # Any refusal while a worry is held names where to get help (S9, S10). PROVISIONAL: clinician sign-off
+        # required before deploy.
+        if not holding:
+            raise
+        raise crisis.with_help(error) from error
 
 
 async def _apply(

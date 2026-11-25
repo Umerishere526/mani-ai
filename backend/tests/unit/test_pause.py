@@ -47,3 +47,10 @@ def test_the_message_after_the_question_answers_it():
                    understanding=record.return_check({}, str(PAUSE), "asked"))
     assert pause.answering(TurnContext(thread=asked, profile=None, technique=None)) == str(PAUSE)
     assert pause.answering(_turn(_pause(), asked=str(PAUSE))) is None
+
+
+def test_the_refusal_while_paused_says_where_to_get_help():
+    """S9 (PROVISIONAL: clinician sign-off required before deploy): the 423 a paused person gets said only "Please
+    reach out for support", with no number."""
+    refusal = pause.paused_error(_pause()).user_message
+    assert "911" in refusal and "988" in refusal and "findahelpline.com" in refusal

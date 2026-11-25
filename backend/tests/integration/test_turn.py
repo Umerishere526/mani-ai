@@ -11,7 +11,7 @@ from mani.db import threads
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
 from mani.models.rows import TechniqueOutcome, TechniqueState
-from tests.integration.fixtures import ALICE, last_user_message_id, said, send, start, thread_row
+from tests.integration.fixtures import ALICE, ScriptedModel, last_user_message_id, said, send, start, thread_row
 
 DANGER = Safety(level="danger", about="themselves", why="took pills")
 
@@ -470,6 +470,31 @@ async def test_a_held_worry_whose_reply_fails_its_check_twice_still_gets_the_cri
     turn = await send(alice, thread.id, "i don't want help")
     assert turn.content == crisis.CRISIS_REPLY and turn.crisis_detected and turn.paused_until is None
     assert (await thread_row(alice, thread.id)).safety == "danger"
+
+
+async def test_a_conflict_while_a_worry_is_held_says_where_to_get_help(alice, model, monkeypatch):
+    """S10 and S9 (PROVISIONAL: clinician sign-off required before deploy): a message that lands while the model thinks
+    refuses the turn as a conflict, and while the conversation holds a worry that refusal names 988, 911 and the
+    directory. Keeping the discarded read is deferred."""
+    model(said("Call 911 now. Are you alone?", safety=DANGER))
+    thread = await start(alice)
+    await send(alice, thread.id, "i took a bunch of pills")
+    replies = ScriptedModel(said("Please call now.", safety=DANGER.model_copy(update={"help_in_place": True})))
+    landed = False
+
+    async def another_message_lands_while_thinking(*args, **kwargs):
+        nonlocal landed
+        if not landed:
+            landed = True
+            await send(alice, thread.id, "my sister just got here")
+        return await replies(*args, **kwargs)
+
+    monkeypatch.setattr(client, "complete", another_message_lands_while_thinking)
+    with pytest.raises(ServiceError) as refused:
+        await send(alice, thread.id, "i still have them")
+    help_line = refused.value.user_message
+    assert refused.value.category is ErrorCategory.CONFLICT
+    assert "988" in help_line and "911" in help_line and "findahelpline.com" in help_line
 
 
 async def test_a_fallback_reply_keeps_the_notes_and_moves_no_state(alice, model, monkeypatch):

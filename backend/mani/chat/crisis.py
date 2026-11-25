@@ -7,20 +7,25 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from mani.errors import ServiceError
+
+# Every text that says where to get help gives the US numbers and this, with no country detection (S11).
+# PROVISIONAL: clinician sign-off required before deploy.
+OUTSIDE_US = "Outside the US: findahelpline.com."
+# Where to get help, said wherever a message goes out unread for safety: an outage, a refusal for a limit or a pause,
+# and any error while a worry is held (S9). PROVISIONAL: clinician sign-off required before deploy.
+IN_DANGER = f"If you're in danger or thinking about hurting yourself, call 911 now, or call or text 988. {OUTSIDE_US}"
 # A plain, non-clinical acknowledgement that stays on screen while the resource panel opens, so at the most
 # important moment in the product the person never sees nothing.
 CRISIS_REPLY = (
     "I'm really glad you told me that, and I want to be honest with you: this is more than "
     "I can help with on my own.\n\n"
-    "You deserve to talk to a person who can stay with you properly. If you're in "
-    "immediate danger, please contact your local emergency number now."
+    f"You deserve to talk to a person who can stay with you properly. {IN_DANGER}"
 )
-# Where to get help, said wherever a message goes out unread for safety: an outage, or a refusal for a limit.
-IN_DANGER = "If you're in danger or thinking about hurting yourself, call 911 now, or call or text 988."
 # Added after Mani's text when code raised a body worry to danger that the model judged lower: a possible medical
 # emergency gets "call emergency services now" every time (muhammad, 2026-11-18). Wording is ours until the client
 # supplies hers.
-BODY_EMERGENCY = "If this is happening now, please call 911 or get to the nearest emergency room now."
+BODY_EMERGENCY = f"If this is happening now, please call 911 or get to the nearest emergency room now. {OUTSIDE_US}"
 # What goes out when no host answered and no safety worry was open, so a first message about danger during an outage
 # still reaches the numbers (the design of 2026-11-17). Wording is ours until the client supplies hers.
 TROUBLE_REPLY = f"I'm having trouble replying right now, so please try again in a moment. {IN_DANGER}"
@@ -47,18 +52,20 @@ RETURN_CHECK_REPLY = (
 # about the pause and no agreement to carry on (muhammad, 2026-11-20: "I just took the pills" got the question above and
 # lost Mani's own reply). Wording is ours until the client supplies hers.
 RETURN_DANGER_REPLY = (
-    "I'm worried about what you just told me. Please call 911 now, or call or text 988. Is anyone with you right now?"
+    f"I'm worried about what you just told me. Please call 911 now, or call or text 988. {OUTSIDE_US} "
+    "Is anyone with you right now?"
 )
 # The reply on the turn that pauses the chat, by whose danger it is (the reply's safety.about): whom Mani worries for, and the
 # help that fits. A body emergency gets no suicide line; a danger of unknown kind keeps it. Wording is ours (muhammad,
 # 2026-11-13); every number is one of RESOURCES.
 _PAUSE_FOR: dict[str | None, tuple[str, str]] = {
     "themselves": (
-        "your safety", "If anyone might get hurt, call 911 now, or call or text 988 to talk with someone right away.",
+        "your safety",
+        f"If anyone might get hurt, call 911 now, or call or text 988 to talk with someone right away. {OUTSIDE_US}",
     ),
-    "someone_else": ("everyone's safety", "If anyone might get hurt, call 911 now."),
-    "from_someone": ("your safety", "If anyone might get hurt, call 911 now."),
-    "body": ("your health", "If this might be an emergency, call 911 now."),
+    "someone_else": ("everyone's safety", f"If anyone might get hurt, call 911 now. {OUTSIDE_US}"),
+    "from_someone": ("your safety", f"If anyone might get hurt, call 911 now. {OUTSIDE_US}"),
+    "body": ("your health", f"If this might be an emergency, call 911 now. {OUTSIDE_US}"),
 }
 
 
@@ -77,6 +84,13 @@ def pause_reply(about: str | None, seconds: int) -> str:
         f"I'm worried about {who}, so I'm pausing our chat for {_length(seconds)}. {help_now} "
         "We can talk again when you come back."
     )
+
+
+def with_help(error: ServiceError) -> ServiceError:
+    """The same refusal with where to get help after its words, for an error while a worry is held (S9, S10).
+    PROVISIONAL: clinician sign-off required before deploy."""
+    return ServiceError(str(error), error.category, retryable=error.retryable,
+                        user_message=f"{error.user_message} {IN_DANGER}", details=error.details)
 
 
 class Resource(BaseModel):

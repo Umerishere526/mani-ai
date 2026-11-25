@@ -6,7 +6,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from mani.chat import record
+from mani.chat import crisis, record
 from mani.db.threads import TurnContext
 from mani.errors import ErrorCategory, ServiceError
 from mani.models.rows import Pause
@@ -36,11 +36,11 @@ def answering(ctx: TurnContext) -> str | None:
 
 
 def paused_error(pause: Pause) -> ServiceError:
-    """The refusal every chat route gives while a person is paused; the client shows the pause from `paused_from` to
-    `paused_until`."""
+    """The refusal every chat route gives while a person is paused, naming where to get help (S9; PROVISIONAL:
+    clinician sign-off required before deploy); the client shows the pause from `paused_from` to `paused_until`."""
     return ServiceError(
         f"chat for user {pause.user_id} is paused until {pause.ends_at.isoformat()}",
         ErrorCategory.CHAT_PAUSED,
-        user_message="Your chat with Mani is paused for now. Please reach out for support.",
+        user_message=f"Your chat with Mani is paused for now. {crisis.IN_DANGER}",
         details={"paused_from": pause.started_at.isoformat(), "paused_until": pause.ends_at.isoformat()},
     )
