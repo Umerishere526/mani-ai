@@ -214,10 +214,14 @@ class ExerciseOut(BaseModel):
     description: str = ""
     type: str | None = None
     category: str
+    # Set when a topic lists this exercise from another topic: the subcategory it is shown under there.
+    subcategory: str | None = None
     duration_minutes: float | None = None
     display_order: int = 0
     show_on_home_screen: bool = False
     framework_id: str | None = None
+    # False for an item the client has not recorded yet: shown as coming soon, with no audio_url.
+    recorded: bool
     audio_url: str | None = None
     # The caller's own rating of this exercise; null while they have not rated it.
     feedback: FeedbackOut | None = None

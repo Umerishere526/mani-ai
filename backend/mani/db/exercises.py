@@ -12,10 +12,11 @@ from pydantic import BaseModel, ConfigDict
 
 from mani.models.rows import Exercise, Row
 
-COLUMNS = (
-    "id, title, subtitle, description, type, category, audio_path, "
-    "duration_minutes, display_order, show_on_home_screen, framework_id"
+_EXERCISE_COLUMNS = (
+    "id", "title", "subtitle", "description", "type", "category", "audio_path",
+    "duration_minutes", "display_order", "show_on_home_screen", "framework_id",
 )
+COLUMNS = ", ".join(_EXERCISE_COLUMNS)
 ADMIN_COLUMNS = COLUMNS + ", is_active, created_at, updated_at"
 
 
@@ -24,6 +25,12 @@ class Completion(Row):
     exercise_id: uuid.UUID
     helpful: bool | None = None
     completed_at: dt.datetime
+
+
+class ListedExercise(Exercise):
+    """An exercise in a topic's listing: `subcategory` is set when the topic lists it from another topic."""
+
+    subcategory: str | None = None
 
 
 class LibraryTopic(Row):
@@ -66,22 +73,26 @@ async def list_active(
     category: str | None = None,
     *,
     home_screen: bool | None = None,
-) -> list[Exercise]:
+) -> list[ListedExercise]:
     """The catalog a signed-in user may browse, ordered as the portal arranged it.
 
-    `home_screen` None is the whole catalog; True or False narrows it to one side.
+    `category` narrows it to one topic: the exercises it owns, then those it lists from other topics, each under
+    its subcategory. `home_screen` None is the whole catalog; True or False narrows it to one side.
     """
+    columns = ", ".join(f"e.{name}" for name in _EXERCISE_COLUMNS)
     rows = await conn.fetch(
         f"""
-        select {COLUMNS} from admin.exercises
-         where is_active
-           and ($1::boolean is null or show_on_home_screen = $1)
-           and ($2::text is null or category = $2)
-         order by category, display_order, title
+        select {columns}, l.subcategory
+          from admin.exercises e
+          left join admin.exercise_topic_links l on l.exercise_id = e.id and l.topic_id = $2
+         where e.is_active
+           and ($1::boolean is null or e.show_on_home_screen = $1)
+           and ($2::text is null or e.category = $2 or l.topic_id is not null)
+         order by l.display_order nulls first, e.category, e.display_order, e.title
         """,
         home_screen, category,
     )
-    return Exercise.from_records(rows)
+    return ListedExercise.from_records(rows)
 
 
 async def list_topics(conn: asyncpg.Connection) -> list[LibraryTopic]:

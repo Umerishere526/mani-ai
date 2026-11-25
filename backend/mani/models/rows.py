@@ -163,7 +163,8 @@ class Exercise(Row):
     description: str = ""
     type: str | None = None
     category: str
-    audio_path: str
+    # Null for an item the client has not recorded yet, which the library shows as coming soon.
+    audio_path: str | None = None
     duration_minutes: float | None = None
     display_order: int = 0
     show_on_home_screen: bool = False

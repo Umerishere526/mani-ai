@@ -47,6 +47,48 @@
       "title": "Burnout",
       "blurb": "Manage exhaustion, regain your energy, and improve your focus.",
       "displayOrder": 7
+    },
+    {
+      "id": "Stress",
+      "title": "Stress",
+      "blurb": "Manage daily pressures, ease physical tension, and respond more effectively to stressful situations.",
+      "displayOrder": 8
+    },
+    {
+      "id": "WorkplaceChallenges",
+      "title": "Workplace Challenges",
+      "blurb": "",
+      "displayOrder": 9,
+      "collects": [
+        {
+          "subcategory": "Stress & Pressure",
+          "topic": "Stress"
+        },
+        {
+          "subcategory": "Sleep Difficulties",
+          "topic": "Sleep"
+        },
+        {
+          "subcategory": "Worry & Uncertainty",
+          "topic": "ManagingWorry"
+        },
+        {
+          "subcategory": "Setting Boundaries",
+          "topic": "Boundaries"
+        },
+        {
+          "subcategory": "Burnout",
+          "topic": "Burnout"
+        },
+        {
+          "subcategory": "Emotional Intelligence",
+          "topic": "EmotionalIntelligence"
+        },
+        {
+          "subcategory": "Building New Habits",
+          "topic": "BuildingHabits"
+        }
+      ]
     }
   ],
   "exercises": [
@@ -87,6 +129,18 @@
       "durationMinutes": 5.09
     },
     {
+      "id": "130045f8-259e-4b88-8d78-077fc8e10c06",
+      "filename": null,
+      "title": "Beyond the Fog",
+      "subtitle": null,
+      "description": "Beyond the Fog is a visualization that helps you manage uncertainty, focus on what you know, and make decisions without becoming overwhelmed by what you cannot predict.",
+      "type": "Visualization",
+      "category": "Anxiety",
+      "displayOrder": 3,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
       "id": "c3c28d03-cb79-4737-9e96-25b50d73365a",
       "filename": "the-night-drive.mp3",
       "title": "The Night Drive",
@@ -94,9 +148,33 @@
       "description": "The Night Drive is a calming story that uses the familiar sights and sounds of a quiet nighttime drive to help ease anxiety, reduce tension, and relax your mind and body.",
       "type": "Story",
       "category": "Anxiety",
-      "displayOrder": 3,
+      "displayOrder": 4,
       "showOnHomeScreen": false,
       "durationMinutes": 12.24
+    },
+    {
+      "id": "3f05281c-6cf2-4f1f-97a0-bf3bed3a4da3",
+      "filename": null,
+      "title": "Butterfly Hug",
+      "subtitle": null,
+      "description": "Butterfly Hug is a movement exercise that uses gentle, alternating taps across your chest to help settle physical tension and manage anxious feelings.",
+      "type": "Movement",
+      "category": "Anxiety",
+      "displayOrder": 5,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "60bf85c0-7919-45a6-977a-c2faa47d8fa2",
+      "filename": null,
+      "title": "Fight, Flight, Freeze, or Fawn",
+      "subtitle": null,
+      "description": "Fight, Flight, Freeze, or Fawn explains four common responses to stress, helping you recognize these reactions and understand how they may influence your behavior.",
+      "type": "Insight",
+      "category": "Anxiety",
+      "displayOrder": 6,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
     },
     {
       "id": "7f1b2799-67b2-42ef-8c49-53717ff95fee",
@@ -147,6 +225,30 @@
       "durationMinutes": 14.79
     },
     {
+      "id": "ec954f79-bdbc-4a32-bc9c-98807c06d6c9",
+      "filename": null,
+      "title": "The Star Pose",
+      "subtitle": null,
+      "description": "Star Pose is a standing movement that uses an open, steady posture to help you practice physical stability and maintain composure under pressure.",
+      "type": "Movement",
+      "category": "Boundaries",
+      "displayOrder": 4,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "4d5d8e10-92b6-4c14-a627-afbf07b1d854",
+      "filename": null,
+      "title": "The Cost of Saying Yes",
+      "subtitle": null,
+      "description": "The Cost of Saying Yes helps you recognize how agreeing out of guilt or pressure can lead to resentment, overcommitment, and difficulty setting boundaries.",
+      "type": "Insight",
+      "category": "Boundaries",
+      "displayOrder": 5,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
       "id": "db5214f1-4e48-484c-910d-dfcfa52c609b",
       "filename": "bubble-breathing.mp3",
       "title": "Bubble Breathing",
@@ -183,6 +285,18 @@
       "durationMinutes": 6.56
     },
     {
+      "id": "24d2df33-7075-46db-8edd-e818b3941c30",
+      "filename": null,
+      "title": "The New Habit Loop",
+      "subtitle": null,
+      "description": "The New Habit Loop is a visualization that helps you connect a new habit to your daily routine, identify reminders, and make it easier to follow through consistently.",
+      "type": "Visualization",
+      "category": "BuildingHabits",
+      "displayOrder": 3,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
       "id": "eee7850b-9dac-4df3-90ca-e6a6d3c16296",
       "filename": "the-gardeners-shed.mp3",
       "title": "The Gardener’s Shed",
@@ -190,21 +304,33 @@
       "description": "The Gardener’s Shed is a reflective story that helps you understand how patience and consistent effort contribute to lasting progress, even when results are not immediate.",
       "type": "Story",
       "category": "BuildingHabits",
-      "displayOrder": 3,
+      "displayOrder": 4,
       "showOnHomeScreen": false,
       "durationMinutes": 19.15
     },
     {
-      "id": "811a28d4-2bbc-4009-9479-44d75ce2f3c9",
-      "filename": "the-caretakers-cottage.mp3",
-      "title": "The Caretaker’s Cottage",
+      "id": "e496468c-8962-42d0-89c9-88ccc48093b5",
+      "filename": null,
+      "title": "Chair Pose / Building Momentum",
       "subtitle": null,
-      "description": "The Caretaker’s Cottage is a story that helps you disconnect from daily demands, reduce mental fatigue, and take a needed break from ongoing stress and pressure.",
-      "type": "Story",
-      "category": "Burnout",
-      "displayOrder": 3,
+      "description": "Building Momentum is a movement exercise that uses Chair Pose to help improve focus, strengthen persistence, and take consistent steps toward your goals.",
+      "type": "Movement",
+      "category": "BuildingHabits",
+      "displayOrder": 5,
       "showOnHomeScreen": false,
-      "durationMinutes": 10.36
+      "durationMinutes": null
+    },
+    {
+      "id": "695ed226-dfe5-4fed-91ed-a15dd7955c10",
+      "filename": null,
+      "title": "Build Habits That Last",
+      "subtitle": null,
+      "description": "Build Habits That Last explains why realistic goals, manageable actions, and repetition are important when establishing a new routine.",
+      "type": "Insight",
+      "category": "BuildingHabits",
+      "displayOrder": 6,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
     },
     {
       "id": "6b6bf51a-ef8d-4d21-8f32-1db63a66e235",
@@ -253,6 +379,30 @@
       "displayOrder": 3,
       "showOnHomeScreen": false,
       "durationMinutes": 16.18
+    },
+    {
+      "id": "ad63f8ec-9cd5-46b1-b23f-1958097c3273",
+      "filename": null,
+      "title": "Finding Your Balance",
+      "subtitle": null,
+      "description": "Finding Your Balance is a movement exercise that uses physical balance and focused attention to help you stay steady when facing distractions.",
+      "type": "Movement",
+      "category": "EmotionalIntelligence",
+      "displayOrder": 4,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "2b3c8f3b-faea-4130-9ef9-21f78f461892",
+      "filename": null,
+      "title": "How Emotionally Intelligent Are You?",
+      "subtitle": null,
+      "description": "How Emotionally Intelligent Are You? introduces five key emotional intelligence skills, helping you recognize your strengths and identify areas for improvement.",
+      "type": "Insight",
+      "category": "EmotionalIntelligence",
+      "displayOrder": 5,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
     },
     {
       "id": "aa4f0ee8-22ff-421f-b53e-5ca89e6be9d4",
@@ -315,6 +465,18 @@
       "durationMinutes": 11.33
     },
     {
+      "id": "078c9c44-63b1-4b66-bc09-90973797908c",
+      "filename": null,
+      "title": "Draw Love to You",
+      "subtitle": null,
+      "description": "Draw Love to You is a visualization that helps you recognize approval-seeking patterns and maintain your sense of self when forming relationships.",
+      "type": "Visualization",
+      "category": "LoveRelationships",
+      "displayOrder": 5,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
       "id": "6d421888-3fe5-4d16-b709-e21c0d38f923",
       "filename": "releasing-your-ex.mp3",
       "title": "Releasing Your Ex",
@@ -322,7 +484,7 @@
       "description": "Release Your Ex is a visualization that helps you let go of a past relationship, reduce emotional attachment, and shift your attention toward rebuilding your life after a breakup.",
       "type": "Visualization",
       "category": "LoveRelationships",
-      "displayOrder": 5,
+      "displayOrder": 6,
       "showOnHomeScreen": false,
       "durationMinutes": 12.79
     },
@@ -334,7 +496,7 @@
       "description": "The Search for Love is an insightful story that helps you rely less on external validation, build confidence, and recognize your value independently of others.",
       "type": "Story",
       "category": "LoveRelationships",
-      "displayOrder": 6,
+      "displayOrder": 7,
       "showOnHomeScreen": false,
       "durationMinutes": 11.15
     },
@@ -346,9 +508,33 @@
       "description": "After the Storm is a reflective story about seeking approval from others and recognizing your worth without depending on their validation.",
       "type": "Story",
       "category": "LoveRelationships",
-      "displayOrder": 7,
+      "displayOrder": 8,
       "showOnHomeScreen": false,
       "durationMinutes": 13.82
+    },
+    {
+      "id": "046f4108-553c-4c40-a6fd-d71031738a0c",
+      "filename": null,
+      "title": "Bridge Pose",
+      "subtitle": null,
+      "description": "Bridge Pose is a movement exercise that helps you stretch the front of your body, become more aware of physical tension, and practice controlled movement.",
+      "type": "Movement",
+      "category": "LoveRelationships",
+      "displayOrder": 9,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "eed52b89-636d-4ddd-b130-b156d7dce2fe",
+      "filename": null,
+      "title": "The Push Pull Pattern",
+      "subtitle": null,
+      "description": "The Push-Pull Pattern is an educational insight that helps you identify recurring communication patterns, understand why disagreements escalate, and learn how to break the cycle.",
+      "type": "Insight",
+      "category": "LoveRelationships",
+      "displayOrder": 10,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
     },
     {
       "id": "198b45df-9025-4769-8040-0f8179cd6ea7",
@@ -399,6 +585,30 @@
       "durationMinutes": 8.23
     },
     {
+      "id": "7a95abee-9a72-41e9-bdd4-542a7d45afa4",
+      "filename": null,
+      "title": "Child’s Pose",
+      "subtitle": null,
+      "description": "Child’s Pose is a movement exercise that helps you release physical tension, quiet an overactive mind, and take a break from persistent worry.",
+      "type": "Movement",
+      "category": "ManagingWorry",
+      "displayOrder": 4,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "20c59359-19ea-426f-8b2e-6d0163f2c704",
+      "filename": null,
+      "title": "The What If Cycle",
+      "subtitle": null,
+      "description": "The What-If Cycle is an educational insight that helps you recognize unproductive thinking, distinguish solvable problems from uncertainty, and focus on practical action.",
+      "type": "Insight",
+      "category": "ManagingWorry",
+      "displayOrder": 5,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
       "id": "2d042d02-dd73-432b-ac8a-18e68a0c8fbf",
       "filename": "relax-before-sleep.mp3",
       "title": "Relax Before Sleep",
@@ -421,6 +631,270 @@
       "displayOrder": 1,
       "showOnHomeScreen": false,
       "durationMinutes": 5.0
+    },
+    {
+      "id": "256fd5b9-ed3a-479c-8bf5-0158ccbc222c",
+      "filename": null,
+      "title": "Prepare Your Mind for Sleep",
+      "subtitle": null,
+      "description": "Prepare Your Mind for Sleep is a meditation that helps you disconnect from daily demands, set aside unfinished tasks, and mentally unwind before bedtime.",
+      "type": "Meditation",
+      "category": "Sleep",
+      "displayOrder": 2,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "b9c4a95f-810f-429f-b9b8-544b1b9eb6f6",
+      "filename": null,
+      "title": "Insomnia Relaxation",
+      "subtitle": null,
+      "description": "",
+      "type": "Meditation",
+      "category": "Sleep",
+      "displayOrder": 3,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "07ba6921-eff3-4b3b-bcd8-d30871990b87",
+      "filename": null,
+      "title": "Fall Asleep Fast",
+      "subtitle": null,
+      "description": "",
+      "type": "Meditation",
+      "category": "Sleep",
+      "displayOrder": 4,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "ea0e7e1c-4c76-4370-ab7c-7921042256da",
+      "filename": null,
+      "title": "Quieting Your Mind for Sleep",
+      "subtitle": null,
+      "description": "Quieting Your Mind for Sleep is a visualization that uses gentle rainfall to reduce overthinking, calm your mind, and prepare for restful sleep.",
+      "type": "Visualization",
+      "category": "Sleep",
+      "displayOrder": 5,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "dbe54fc7-3306-4b2b-b6f1-984279d275b3",
+      "filename": null,
+      "title": "Sleeping Through the Night",
+      "subtitle": null,
+      "description": "Sleeping Through the Night is a visualization that helps you quiet your mind and relax when nighttime wakefulness interrupts your rest.",
+      "type": "Visualization",
+      "category": "Sleep",
+      "displayOrder": 6,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "e45d6d0e-af88-4fe1-8bff-056da4b4a256",
+      "filename": null,
+      "title": "The Waterfall",
+      "subtitle": null,
+      "description": "The Waterfall is a calming sleep story that helps you leave daily pressures behind and drift naturally into sleep.",
+      "type": "Story",
+      "category": "Sleep",
+      "displayOrder": 7,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "83908dc9-4554-4825-8d04-4aff7574d791",
+      "filename": null,
+      "title": "Breaking the Cycle of Insomnia",
+      "subtitle": null,
+      "description": "Breaking the Cycle of Insomnia is an educational insight that helps you understand why trying to force sleep can keep you awake and how to break that pattern.",
+      "type": "Insight",
+      "category": "Sleep",
+      "displayOrder": 8,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "5c88c0a1-c738-41e8-ae18-441d10176034",
+      "filename": null,
+      "title": "Hand on Heart / Monkey Anchor",
+      "subtitle": null,
+      "description": "Hand-on-Heart Breathing is a breathing exercise that combines gentle breathing with physical awareness to help ease stress, reduce mental fatigue, and regain focus.",
+      "type": "Breathing",
+      "category": "Burnout",
+      "displayOrder": 0,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "a3d2c65c-a3cc-4d32-ae78-7ff6edeb2362",
+      "filename": null,
+      "title": "Deep Release",
+      "subtitle": null,
+      "description": "Deep Release is a meditation that helps you reduce mental overload, release built-up tension, and regain clarity when you feel overwhelmed.",
+      "type": "Meditation",
+      "category": "Burnout",
+      "displayOrder": 1,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "241f1c88-0893-4064-a463-c585ad8208bc",
+      "filename": null,
+      "title": "The Sorting Table",
+      "subtitle": null,
+      "description": "The Sorting Table is a visualization that helps you manage mental overload, identify priorities, and focus on what you can control when you're feeling burned out.",
+      "type": "Visualization",
+      "category": "Burnout",
+      "displayOrder": 2,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "811a28d4-2bbc-4009-9479-44d75ce2f3c9",
+      "filename": "the-caretakers-cottage.mp3",
+      "title": "The Caretaker’s Cottage",
+      "subtitle": null,
+      "description": "The Caretaker’s Cottage is a story that helps you disconnect from daily demands, reduce mental fatigue, and take a needed break from ongoing stress and pressure.",
+      "type": "Story",
+      "category": "Burnout",
+      "displayOrder": 3,
+      "showOnHomeScreen": false,
+      "durationMinutes": 10.36
+    },
+    {
+      "id": "31f2bc43-0e01-4070-a60f-710cd28e1aa6",
+      "filename": null,
+      "title": "Rest and Restore Pose",
+      "subtitle": null,
+      "description": "Rest and Restore Pose is a movement that uses a supported resting position to help ease muscular tension and allow your body to rest comfortably during periods of exhaustion.",
+      "type": "Movement",
+      "category": "Burnout",
+      "displayOrder": 4,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "8071e4a7-1975-496f-9695-5fe016865247",
+      "filename": null,
+      "title": "Running on Empty",
+      "subtitle": null,
+      "description": "Running on Empty helps you understand the difference between normal fatigue and prolonged exhaustion, and why recovery is essential to sustaining your energy and performance.",
+      "type": "Insight",
+      "category": "Burnout",
+      "displayOrder": 5,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "23eacb17-8669-4424-9184-0fef82f072e1",
+      "filename": null,
+      "title": "Breathe In Calm",
+      "subtitle": null,
+      "description": "Breathe In Calm is a breathing exercise that uses slow, even breathing to help settle your breathing rhythm and ease physical tension during stressful moments.",
+      "type": "Breathing",
+      "category": "Stress",
+      "displayOrder": 0,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "6de94590-2394-4f3b-99b6-a7769fe4e427",
+      "filename": null,
+      "title": "The Calming Exhale",
+      "subtitle": null,
+      "description": "The Calming Exhale is a breathing exercise that helps you release tension, regulate your breathing, and regain composure under stress.",
+      "type": "Breathing",
+      "category": "Stress",
+      "displayOrder": 1,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "7f25a294-c34e-4f3e-a255-65c223bfa19b",
+      "filename": null,
+      "title": "Half Smile",
+      "subtitle": null,
+      "description": "Half Smile is a meditation that helps you manage frustration, avoid impulsive reactions, and respond more thoughtfully under stress.",
+      "type": "Meditation",
+      "category": "Stress",
+      "displayOrder": 2,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "80174e8e-a452-48ae-8ad1-83d31b566658",
+      "filename": null,
+      "title": "Stop the Spiral",
+      "subtitle": null,
+      "description": "Stop the Spiral is a meditation that helps you recognize when stressful thoughts are escalating and practice interrupting the pattern before it becomes overwhelming.",
+      "type": "Meditation",
+      "category": "Stress",
+      "displayOrder": 3,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "63e5ffda-e48a-4ae8-991c-d6658427ea4b",
+      "filename": null,
+      "title": "Lighten Your Load",
+      "subtitle": null,
+      "description": "Lighten Your Load is a visualization that helps you prioritize responsibilities, set aside what can wait, and let go of what you cannot control.",
+      "type": "Visualization",
+      "category": "Stress",
+      "displayOrder": 4,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "9ff582a3-e721-4f7a-9fdf-9d2eecef0d2d",
+      "filename": null,
+      "title": "Declutter Your Mind",
+      "subtitle": null,
+      "description": "Declutter Your Mind is a visualization that helps you reduce mental clutter, improve concentration, and think more clearly.",
+      "type": "Visualization",
+      "category": "Stress",
+      "displayOrder": 5,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "83f05967-038f-44ab-9445-4942926c2441",
+      "filename": null,
+      "title": "Every Storm Runs Out of Rain",
+      "subtitle": null,
+      "description": "Every Storm Runs Out of Rain is a reflective story about remembering that difficult periods can change, even when the pressures you are facing feel overwhelming.",
+      "type": "Story",
+      "category": "Stress",
+      "displayOrder": 6,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "e825a9da-f200-4276-a739-68f5922cb3ea",
+      "filename": null,
+      "title": "Finding Calm",
+      "subtitle": null,
+      "description": "Finding Calm is an educational insight that helps you manage ongoing stress and find moments of calm without waiting for difficult situations to be resolved.",
+      "type": "Insight",
+      "category": "Stress",
+      "displayOrder": 7,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
+    },
+    {
+      "id": "c9120eff-8c7c-47bd-98ff-8f04113be0d8",
+      "filename": null,
+      "title": "Release the Tension",
+      "subtitle": null,
+      "description": "Release the Tension is a movement exercise that uses a standing forward fold to help release built-up tension, loosen tight muscles, and reduce physical stress.",
+      "type": "Movement",
+      "category": "Stress",
+      "displayOrder": 8,
+      "showOnHomeScreen": false,
+      "durationMinutes": null
     }
   ]
 }

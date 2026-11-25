@@ -276,6 +276,11 @@ select pg_temp.want('a user cannot read the library topics, and the backend read
   and has_table_privilege('mani_service', 'admin.library_topics', 'SELECT')
   and not has_table_privilege('mani_service', 'admin.library_topics', 'UPDATE'), true);
 
+select pg_temp.want('a user cannot read which topics list an exercise, and the backend reads but cannot edit them',
+  not has_table_privilege('authenticated', 'admin.exercise_topic_links', 'SELECT')
+  and has_table_privilege('mani_service', 'admin.exercise_topic_links', 'SELECT')
+  and not has_table_privilege('mani_service', 'admin.exercise_topic_links', 'INSERT'), true);
+
 -- ---------------------------------------------------------------------------
 -- The privileged paths belong to the backend's role, not to the user's
 -- ---------------------------------------------------------------------------
