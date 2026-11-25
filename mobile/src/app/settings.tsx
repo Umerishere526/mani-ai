@@ -1,5 +1,5 @@
-// ABOUTME: Settings screen — notification preference, account rows (password, email)
-// ABOUTME: and Log Out, which ends the session so the route guard returns to sign-in.
+// ABOUTME: Settings screen — notification preference, account rows (password, email, delete),
+// ABOUTME: the AI disclosure, and Log Out, which ends the session so the guard returns to sign-in.
 
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
