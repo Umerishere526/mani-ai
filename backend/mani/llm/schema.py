@@ -49,7 +49,7 @@ class Button(BaseModel):
         description=(
             "Set only when this button navigates to the library. Null otherwise. "
             f"One of: {_listed([LIBRARY_HOME, *LibrarySection])}. \"home\" is the library's front page: "
-            "use it for a general Go to Library button."
+            "use it for a general Visit library button."
         ),
     )
     decline: bool | None = Field(

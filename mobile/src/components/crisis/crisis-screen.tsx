@@ -17,7 +17,7 @@ export function CrisisScreen() {
   const { openCrisisDrawer } = useDrawer();
   const copy = en.crisis.pause;
 
-  const goToLibrary = () => {
+  const visitLibrary = () => {
     closeScreen();
     router.push('/exercises');
   };
@@ -40,7 +40,6 @@ export function CrisisScreen() {
           </Pressable>
 
           <ScrollView contentContainerClassName="items-center gap-5 px-6 pb-8 pt-14" bounces={false}>
-            {pause ? <Text className="text-sm text-secondary-500/80">{copy.label}</Text> : null}
             <Text className="text-center font-sans-semibold text-2xl" accessibilityRole="header">
               {pause ? copy.title : en.crisis.title}
             </Text>
@@ -50,7 +49,7 @@ export function CrisisScreen() {
             {pause ? <Text className="text-center text-base leading-6">{copy.library}</Text> : null}
             <View className="w-full gap-3">
               <PrimaryButton label={copy.getHelpNow} onPress={getHelpNow} className="w-full" />
-              <PrimaryButton label={copy.goToLibrary} onPress={goToLibrary} className="w-full" />
+              <PrimaryButton label={copy.visitLibrary} onPress={visitLibrary} className="w-full" />
             </View>
 
             {pause ? <CrisisPauseNotice pause={pause} /> : null}

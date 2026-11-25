@@ -136,7 +136,7 @@ def test_a_guarded_turn_changes_no_framework_state():
     assert (d.technique, d.retire_technique, d.declined, d.finished, d.prompts) == (None, False, [], [], [])
 
 
-def test_library_shows_the_go_to_library_button():
+def test_library_shows_the_visit_library_button():
     d = decided(reply(action="library"))
     assert labels(d) == ["Visit library"] and d.prompts[0].library == "home"
 

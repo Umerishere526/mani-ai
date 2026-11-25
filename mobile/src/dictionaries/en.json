@@ -262,11 +262,10 @@
       "linkHint": "Opens your phone or browser"
     },
     "pause": {
-      "label": "Blocker.",
       "title": "Chat is temporary unavailable",
       "library": "You can still access our Library resources.",
       "getHelpNow": "Get help now",
-      "goToLibrary": "Go to library",
+      "visitLibrary": "Visit library",
       "closeLabel": "Close safety screen",
       "pausedFor": "For your safety, chat is paused for {length}.",
       "opensAt": "Chat opens again at {time}.",

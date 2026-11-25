@@ -15,10 +15,10 @@ import client as mani
 
 # The pop-up leads with where to get help; that the chat is paused, and for how long, comes after it as secondary text
 # with no ticking countdown (S6, R90: a timer must never be the primary intervention). The words are the client's drawing
-# of 2026-11-16 ("Blocker." above it and "temporary" as she wrote them: muhammad, 2026-11-16), and the numbers come from
-# GET /v1/crisis/resources.
+# of 2026-11-16 ("temporary" as she wrote it: muhammad, 2026-11-16), and the numbers come from GET /v1/crisis/resources.
+# Its heading is the apps' name for the crisis screen; "Blocker." on her drawing named the screen and is not copy.
 # PROVISIONAL: clinician sign-off required before deploy.
-LABEL = "Blocker."
+HEADING = "Safety Support"
 SUPPORT = (
     "If you are thinking about suicide or you need immediate support call or text {number} to connect with a trained "
     "crisis counselor"
@@ -239,7 +239,7 @@ def banner(client: mani.ManiClient, pause: Pause) -> None:
     _time_left(pause)
 
 
-@st.dialog(LABEL, on_dismiss=_dismiss)
+@st.dialog(HEADING, on_dismiss=_dismiss)
 def render(client: mani.ManiClient, pause: Pause) -> None:
     # Closing it with the cross leaves the conversation to read, with no way to write in it until the pause ends.
     st.html(STYLE)

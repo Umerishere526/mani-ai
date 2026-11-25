@@ -184,6 +184,8 @@ def test_a_paused_chat_leads_with_help_and_says_the_time_left_only_after_it():
     assert 'Outside the US: <a href="https://findahelpline.com" target="_blank">findahelpline.com</a>' in shown
     secondary = "Chat is temporary unavailable. For your safety, chat is paused for 30 seconds."
     assert shown.index(lead) < shown.index(secondary)
+    # "Blocker." named the screen on the client's drawing; it is not copy (2026-11-25).
+    assert [d.proto.dialog.title for d in app.get("dialog")] == ["Safety Support"] and "Blocker" not in shown
     assert "You can still access our Library resources." in shown
     assert "741741" not in shown and "while you reach out" not in shown and "everyone is safe" not in shown
     assert _opens_again_in_minutes(app) == 1
