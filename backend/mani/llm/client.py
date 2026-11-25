@@ -82,9 +82,29 @@ def _described(failure: BaseException | None) -> str:
     if isinstance(failure, _QUOTES_THE_REPLY):
         return type(failure).__name__
     if isinstance(failure, _QUOTES_THEIR_WORDS):
-        host = _host_of(failure)
-        return f"{type(failure).__name__}: {failure.status_code}" + (f" from {host}" if host else "")
+        host, own = _host_of(failure), _openrouters_own(failure)
+        return (f"{type(failure).__name__}: {failure.status_code}" + (f" from {host}" if host else "")
+                + (f" ({own})" if own else ""))
     return f"{type(failure).__name__}: {failure}"
+
+
+def _openrouters_own(failure: openai.APIStatusError) -> str | None:
+    """OpenRouter's own message for an error no provider raised: one with no metadata, which is where a provider's raw
+    body (and anything it quotes of what they wrote) is carried. None otherwise."""
+    error = failure.body.get("error") if isinstance(failure.body, dict) else None
+    if not isinstance(error, dict) or "metadata" in error:
+        return None
+    message = error.get("message")
+    return message if isinstance(message, str) and message else None
+
+
+# OpenRouter refusing to pass a request on, with no provider involved: seen on 2026-11-25 as 23 of 25 calls in one
+# minute failing, every call before and after answering. Nothing was billed, so one retry costs nothing.
+RELAY_REFUSALS = ("Request path cannot be relayed",)
+
+
+def _relay_refused(failure: openai.BadRequestError) -> bool:
+    return _openrouters_own(failure) in RELAY_REFUSALS
 
 
 def _host_of(failure: openai.APIStatusError) -> str | None:
@@ -366,6 +386,17 @@ async def complete[T: BaseModel](
                         usage=llm_calls.Usage(), latency_ms=int((time.perf_counter() - started) * 1000),
                         user_id=user_id, thread_id=thread_id, prompt_version_id=prompt_version_id,
                         error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}, retrying: {exc}",
+                    )
+                    await asyncio.sleep(TRANSIENT_RETRY_DELAY_SECONDS)
+                    continue
+                except openai.BadRequestError as exc:
+                    if not _relay_refused(exc) or attempt == MAX_SCHEMA_ATTEMPTS:
+                        raise
+                    await _record(
+                        purpose=purpose, model=model, outcome=llm_calls.Outcome.PROVIDER_ERROR,
+                        usage=llm_calls.Usage(), latency_ms=int((time.perf_counter() - started) * 1000),
+                        user_id=user_id, thread_id=thread_id, prompt_version_id=prompt_version_id,
+                        error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}, retrying: {_described(exc)}",
                     )
                     await asyncio.sleep(TRANSIENT_RETRY_DELAY_SECONDS)
                     continue

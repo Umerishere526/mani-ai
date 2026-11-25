@@ -261,6 +261,49 @@ async def test_a_provider_blip_is_retried_once(monkeypatch, recorded):
     assert recorded[0]["outcome"] is llm_calls.Outcome.PROVIDER_ERROR
 
 
+def bad_request(body: dict) -> openai.BadRequestError:
+    import httpx
+
+    request = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
+    return openai.BadRequestError("Error code: 400", response=httpx.Response(400, request=request), body=body)
+
+
+async def test_openrouter_refusing_to_relay_is_retried_once_and_says_why(monkeypatch, recorded):
+    """2026-11-25: 23 of 25 calls in one minute came back 400 "Request path cannot be relayed", OpenRouter's own
+    refusal with no provider involved, and each reached the person as the fixed error reply."""
+    relay = bad_request({"error": {"message": "Request path cannot be relayed", "code": 400}})
+    runnable = FakeRunnable(relay, valid("answered on the retry"))
+    install(monkeypatch, runnable)
+    monkeypatch.setattr(client, "TRANSIENT_RETRY_DELAY_SECONDS", 0)
+
+    call = await client.complete(
+        [{"role": "user", "content": "hi"}], Said, model="m",
+        purpose=llm_calls.Purpose.CHAT, settings=settings(),
+    )
+
+    assert call.value.text == "answered on the retry"
+    assert runnable.calls == 2
+    assert "Request path cannot be relayed" in recorded[0]["error_message"]
+
+
+async def test_a_providers_400_is_not_retried_and_keeps_its_body_out(monkeypatch, recorded):
+    """A 400 a provider raised carries its raw body in metadata, which can quote what they wrote: not retried, and
+    only its host is stored."""
+    words = "I keep snapping at my partner"
+    refused = bad_request({"error": {"message": "Provider returned error",
+                                     "metadata": {"provider_name": "DeepInfra", "raw": f"bad input: {words}"}}})
+    runnable = FakeRunnable(refused, valid("never reached"))
+    install(monkeypatch, runnable)
+
+    with pytest.raises(ServiceError):
+        await client.complete(
+            [{"role": "user", "content": "hi"}], Said, model="m",
+            purpose=llm_calls.Purpose.CHAT, settings=settings(),
+        )
+    assert runnable.calls == 1
+    assert words not in recorded[0]["error_message"] and "DeepInfra" in recorded[0]["error_message"]
+
+
 async def test_a_provider_down_twice_fails_the_turn(monkeypatch, recorded):
     install(monkeypatch, FakeRunnable(provider_down(), provider_down()))
     monkeypatch.setattr(client, "TRANSIENT_RETRY_DELAY_SECONDS", 0)
