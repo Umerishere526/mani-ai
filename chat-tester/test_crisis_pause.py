@@ -226,6 +226,30 @@ def test_closing_the_pop_up_leaves_the_conversation_to_read_with_no_way_to_write
     assert not [b for b in app.button if b.key == "edit_last"]
 
 
+def _closed(backend: PausedBackend) -> AppTest:
+    app = _open(backend)
+    app.session_state["pause_dismissed"] = app.session_state["pause"].ends
+    app.run()
+    assert not app.exception
+    return app
+
+
+def test_closing_the_pop_up_keeps_the_help_lines_on_the_page():
+    """R90: what closing does is clear, and the instructions stay reachable after it."""
+    shown = _shown(_closed(PausedBackend()))
+    assert 'call or text <a href="tel:988">988</a>' in shown
+    assert 'If you are in immediate danger, call <a href="tel:911">911</a>.' in shown
+    assert 'Outside the US: <a href="https://findahelpline.com" target="_blank">findahelpline.com</a>' in shown
+
+    overdose = PausedBackend()
+    overdose.kind = "overdose"
+    assert '<p class="pause-lead">If you are in immediate danger, call <a href="tel:911">911</a>.</p>' in _shown(
+        _closed(overdose))
+
+    unreachable = _shown(_closed(UnreachableBackend("/v1/crisis/resources")))
+    assert 'call or text <a href="tel:988">988</a>' in unreachable and 'call <a href="tel:911">911</a>' in unreachable
+
+
 def test_the_pop_up_leaves_out_the_help_it_was_not_given():
     app = _open(PausedBackend(resources=[DIRECTORY]))
 

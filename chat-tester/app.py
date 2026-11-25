@@ -221,7 +221,7 @@ thread_id = (thread or {}).get("id")
 
 st.title("🧠 Mani chat tester")
 if paused is not None and crisis_pause.dismissed(paused):
-    crisis_pause.banner(paused)
+    crisis_pause.banner(client, paused)
 if developer:
     st.caption(f"user: {st.session_state.email}  ·  thread: {thread_id[:8] + '…' if thread_id else 'not started'}")
 

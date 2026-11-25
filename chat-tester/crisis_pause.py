@@ -221,9 +221,21 @@ def dismissed(pause: Pause) -> bool:
     return st.session_state.get("pause_dismissed") == pause.ends
 
 
-def banner(pause: Pause) -> None:
-    """What the page shows beside the readable conversation once the pop-up is closed: only when the chat resumes."""
+def _help(client: mani.ManiClient) -> Help:
+    """The help to name, from the backend, or the fallback lines with a note when it cannot be read."""
+    try:
+        return pick(client.crisis_resources())
+    except mani.ApiError as exc:
+        st.caption(f"Could not load the help numbers, so these are the reference lines: {exc}")
+        return pick(FALLBACK_RESOURCES)
+
+
+def banner(client: mani.ManiClient, pause: Pause) -> None:
+    """What the page shows beside the readable conversation once the pop-up is closed: the help lines stay reachable
+    (R90), then when the chat resumes."""
+    st.html(STYLE)
     st.info(WHILE_READING)
+    st.markdown(words(pause, _help(client)), unsafe_allow_html=True)
     _time_left(pause)
 
 
@@ -231,11 +243,7 @@ def banner(pause: Pause) -> None:
 def render(client: mani.ManiClient, pause: Pause) -> None:
     # Closing it with the cross leaves the conversation to read, with no way to write in it until the pause ends.
     st.html(STYLE)
-    try:
-        found = pick(client.crisis_resources())
-    except mani.ApiError as exc:
-        found = pick(FALLBACK_RESOURCES)
-        st.caption(f"Could not load the help numbers, so these are the reference lines: {exc}")
+    found = _help(client)
     st.markdown(words(pause, found), unsafe_allow_html=True)
     line = call_first(pause, found)
     get_help, library = st.columns(2)
