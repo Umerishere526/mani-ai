@@ -95,6 +95,8 @@ INTERPRETIVE_PATTERNS = (
     r"which is (?:part of |exactly |really )?why",
     r"you(?:'ve| have) already (?:said|decided|chosen|picked)",
     r"you already know",
+    r"that way you (?:never|don't|do not) have to",
+    r"(?:it|this|that) won't (?:shift|change|get better|go away) on its own",
     r"what you(?:'re| are) really",
     r"the real (?:issue|problem|question|fear) is",
 )

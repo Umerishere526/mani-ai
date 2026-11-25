@@ -209,6 +209,9 @@ def test_a_figurative_phrase_is_recorded_and_the_text_goes_out_as_written():
     "So what's stopping you isn't the facts.",
     "The logistics aren't what's holding this up. It's the thought of what they'd make of you.",
     "With nothing coming back, your mind fills in the gap.",
+    # muhammad's tester, work and family (2026-11-25).
+    "You don't know what he'd do, so you stay the reliable one. That way you never have to find out.",
+    "Frustrating, and it won't shift on its own.",
 ])
 def test_a_reading_said_as_fact_is_recorded_and_the_text_goes_out_as_written(written):
     """manasa (2026-11-25) and muhammad's tester: assumptions presented as facts. Each is one of muhammad's local test

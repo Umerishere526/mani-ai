@@ -297,8 +297,11 @@ the same change as the work.**
   already skips `move: help`). `mani.md`; regression TC-28 to TC-34 on the judge's coach rubric
   (`judge.COACH_CRITERIA`), checks `no_advice_before`, `wording_at`, `helps_at`. Not yet eval-gated.
 - **In Directive a fear or feeling they name about a choice is said back and asked about once before options; a
-  choice made on a condition is never their decision; "I can't decide" is not a want for a set of questions**
-  (muhammad, 2026-11-25). Because muhammad's tester found the grandma's-birthday chat jumped to a solution, took "the
+  choice made on a condition is never their decision; "I can't decide" before the core is clear is not a want for a
+  set of questions, but once the core belief is clear in their own words, being stuck with it ("I can't decide",
+  "frustrating") is, and Mani offers then instead of asking again what they would change** (muhammad, 2026-11-25;
+  narrowed the same day because the tester's work-and-family chat stated the belief, said "I can't decide" and
+  "frustrating", and never got the ABCDE offer its own notes planned; TC-35 to TC-39). Because muhammad's tester found the grandma's-birthday chat jumped to a solution, took "the
   trip, if my family didn't mind" as a decision, left "they'll think I'm selfish" unexplored and offered Structured
   Problem Solving on "I can't decide". `mani.md` ("How you listen", "Offering the set of questions"). Not yet
   eval-gated.

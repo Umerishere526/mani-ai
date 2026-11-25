@@ -1,5 +1,5 @@
 {
- "about": "Draft TC-01 to TC-20, written 2026-11-24, TC-21 to TC-27, written 2026-11-25 for the provisional decisions, and TC-28 to TC-34, written 2026-11-25 for Directive as a decision-making coach (scored on the judge's coach rubric), from the client's documents and real tests; awaiting muhammad's approval. `script` is sent in order (a button's exact label taps it), then `persona` plays the rest. `expect` keys are read by evals/regression/checks.py. A scenario with status `gap` asks for something paused or removed by a Decision in force: it is reported, never run.",
+ "about": "Draft TC-01 to TC-20, written 2026-11-24, TC-21 to TC-27, written 2026-11-25 for the provisional decisions, TC-28 to TC-34, written 2026-11-25 for Directive as a decision-making coach (scored on the judge's coach rubric), and TC-35 to TC-39 for the framework handoff, from the client's documents and real tests; awaiting muhammad's approval. `script` is sent in order (a button's exact label taps it), then `persona` plays the rest. `expect` keys are read by evals/regression/checks.py. A scenario with status `gap` asks for something paused or removed by a Decision in force: it is reported, never run.",
  "scenarios": [
   {
    "id": "TC-01",
@@ -577,6 +577,123 @@
     "wording_at": 2
    },
    "criteria": "Drops the coworker topic when asked and helps with the raise email in that reply (a draft, or one essential question then a draft); does not steer back to the coworker."
+  },
+  {
+   "id": "TC-35",
+   "title": "Directive: a clear belief and being stuck lead to the ABCDE or Thought Reframe offer",
+   "group": "framework",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's framework-handoff brief and tester's work-and-family chat, 2026-11-25"],
+   "script": [
+    "I've been feeling overwhelmed lately. There are several things happening at once.",
+    "Work has been overwhelming. My boss keeps adding new tasks while I'm already busy, and I have family responsibilities too. I feel guilty about both.",
+    "I am getting pulled two ways, the project i am working on is very important but i also want to give time to my family",
+    "i usually take on the task, bcz i dont want him to feel that i am unreliable",
+    "i dont know how he would feel, i have created my image of being reliable, but i dont want to disappear",
+    "i just dont want to be seen as unreliable",
+    "i can't decide"
+   ],
+   "persona": "You keep saying yes to your boss so he won't see you as unreliable, and your family gets less of you. If Mani offers a set of questions, say yes and go along with it honestly.",
+   "turns": 11,
+   "max_latency_s": 10,
+   "expect": {
+    "framework": ["abcde", "thought_reframe"]
+   },
+   "criteria": "Understands the work-family pull and the fear of seeming unreliable; claims no motive they did not state; asks what 'disappear' means rather than reading into it; offers ABCDE or Thought Reframe naturally, tied to their words, once the belief is clear and they are stuck; continues into the set when they accept."
+  }
+ ,
+  {
+   "id": "TC-36",
+   "title": "Directive: a declined framework is respected and the conversation goes on",
+   "group": "framework",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's framework-handoff brief and tester's work-and-family chat, 2026-11-25"],
+   "script": [
+    "I've been feeling overwhelmed lately. There are several things happening at once.",
+    "Work has been overwhelming. My boss keeps adding new tasks while I'm already busy, and I have family responsibilities too. I feel guilty about both.",
+    "I am getting pulled two ways, the project i am working on is very important but i also want to give time to my family",
+    "i usually take on the task, bcz i dont want him to feel that i am unreliable",
+    "i dont know how he would feel, i have created my image of being reliable, but i dont want to disappear",
+    "i just dont want to be seen as unreliable",
+    "i can't decide"
+   ],
+   "persona": "Same situation. If Mani offers a set of questions, say no thanks, you'd rather just talk it through. Then keep talking about it.",
+   "turns": 10,
+   "max_latency_s": 10,
+   "expect": {
+    "no_reoffer": true
+   },
+   "criteria": "Offers once at most; after the no, continues helpfully in ordinary conversation without re-offering or pressing."
+  }
+ ,
+  {
+   "id": "TC-37",
+   "title": "Directive: a request for advice is answered instead of a framework",
+   "group": "framework",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's framework-handoff brief and tester's work-and-family chat, 2026-11-25"],
+   "script": [
+    "I've been feeling overwhelmed lately. There are several things happening at once.",
+    "Work has been overwhelming. My boss keeps adding new tasks while I'm already busy, and I have family responsibilities too. I feel guilty about both.",
+    "I am getting pulled two ways, the project i am working on is very important but i also want to give time to my family",
+    "i usually take on the task, bcz i dont want him to feel that i am unreliable",
+    "i dont know how he would feel, i have created my image of being reliable, but i dont want to disappear",
+    "i just dont want to be seen as unreliable",
+    "can you just tell me what to say to my boss next time he adds a task?"
+   ],
+   "persona": "Same situation. You want words for your boss, not an exercise.",
+   "turns": 9,
+   "max_latency_s": 10,
+   "expect": {
+    "wording_at": 7
+   },
+   "criteria": "Gives the words to say in the reply to the request, fitted to their fear of seeming unreliable; does not substitute a framework for the help they asked for."
+  }
+ ,
+  {
+   "id": "TC-38",
+   "title": "Directive: an uncertain belief is clarified, never supplied",
+   "group": "framework",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's framework-handoff brief and tester's work-and-family chat, 2026-11-25"],
+   "script": [
+    "my boss keeps adding tasks and i keep saying yes",
+    "i'm not sure why, i just do"
+   ],
+   "persona": "You genuinely don't know why you say yes. If Mani suggests a reason, say 'maybe, I'm not sure'. Over a few messages you realise you worry he'd be disappointed in you.",
+   "turns": 9,
+   "max_latency_s": 10,
+   "expect": {},
+   "criteria": "Helps them find their own reason without supplying one as fact; offers a framework only after they state a belief in their own words."
+  }
+ ,
+  {
+   "id": "TC-39",
+   "title": "Directive: a purely practical problem gets no belief framework",
+   "group": "framework",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's framework-handoff brief and tester's work-and-family chat, 2026-11-25"],
+   "script": [
+    "my laptop died and my report is due tomorrow morning. what do i do?"
+   ],
+   "persona": "Your laptop won't turn on. You have a phone and a library nearby. You want practical steps.",
+   "turns": 4,
+   "max_latency_s": 10,
+   "expect": {
+    "helps_at": 1,
+    "not_framework": ["abcde", "thought_reframe"]
+   },
+   "criteria": "Gives practical steps at once; never turns the problem into a belief to examine."
   }
  
  ]
