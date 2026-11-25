@@ -83,7 +83,7 @@ FIGURATIVE_PHRASES = ("its own kind of", "a strange shape", "nice shape", "holdi
                       "sit in the same person", "a heavier thing", "real weight", "the weighing", "the same care",
                       "sit with", "hard pair", "handing her the win", "stings",
                       # muhammad's tester, Reflective (2026-11-25).
-                      "happens in you", "the bad feeling like", "sitting with you", "a hard place to be",
+                      "happens in you", "the bad feeling like", "sitting with you", "place to be", "place to be in",
                       "comes up for you",
                       # Phrases that tell them what something does to them, in figures (2026-11-25).
                       "wears you down", "wear you down", "wearing you down", "takes a toll", "taking a toll",
