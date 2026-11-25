@@ -74,7 +74,7 @@ stages:
       - {id: what_happened, about: "what happened or keeps happening, in plain facts"}
       - {id: when_where, about: "when and where it happens, and how often"}
       - {id: who, about: "who was involved and what they said or did"}
-    reach: "If their_case already describes what happened, report activate as known, in their words. A is the situation the confirmed core is about, which may be an ongoing pattern ('when you stop reaching out, days or weeks pass without hearing from anyone'), never simply the latest or most vivid event: a single event that made the pattern hurt more, such as a birthday, is at most a short example inside it, never the frame. Your text says back only that situation, in one sentence, then asks whether that's the situation they'd like to explore. No feeling and no interpretation: those come in B and C. Never ask for it again. The event is the observable trigger (what was said, done, or happened), never their belief about it or its consequences. If their_case has no concrete event, report activate as missing and ask what happened."
+    reach: "If their_case already describes what happened, report activate as known, in their words. A is the situation the confirmed core is about, which may be an ongoing pattern ('when you stop reaching out, days or weeks pass without hearing from anyone'), never simply the latest or most vivid event: a single event that made the pattern hurt more, such as a birthday, is at most a short example inside it, never the frame. Your text says back only that situation, in one sentence, then asks openly what they would add to it or change in it, never as a yes or no check. No feeling and no interpretation: those come in B and C. Never ask for it again. The event is the observable trigger (what was said, done, or happened), never their belief about it or its consequences. If their_case has no concrete event, report activate as missing and ask what happened."
     listen_for: "What happened or has been happening; what they did; what others said or did; and whether they're describing what they observed or what they inferred."
     ready_when: "The situation is clear from what they've said, one event or an ongoing pattern, and it's described as something that happened or keeps happening rather than as their interpretation of it."
     # Optional follow-ups when the event is vague. Ask one at a time, only what's missing.
@@ -84,9 +84,9 @@ stages:
       - "What did others say or do?"
       - "When and where was this?"
     confirm:
-      directive: "From what you've shared, <the event, in their words> seems to be what started these concerns. Is that right?"
-      supportive: "You mentioned <the event, in their words>. Is that what started these feelings?"
-      reflective: "You've mentioned <the event, in their words>. Is that where these concerns began?"
+      directive: "From what you've shared, <the event, in their words> seems to be what started these concerns. What would you add or change in that?"
+      supportive: "You mentioned <the event, in their words>. What else would you add about how these feelings started?"
+      reflective: "You've mentioned <the event, in their words>. When you look back, how did these concerns begin there?"
     missing:
       directive: "What's been happening that's left you feeling <their word for it>?"
       supportive: "What's been happening that's left you feeling so <their word for it>?"
@@ -111,7 +111,7 @@ stages:
       - {id: about_future, about: "what they fear it means for what comes next"}
       - {id: rule, about: "the should or must behind it"}
     # Sent as next_stage_reach on the previous stage, where the reply assesses this stage for the walk.
-    reach: "If several beliefs appear, report belief as partial, with each one in their words, so your text asks which one affected them most. A belief is what they concluded about themselves, others, or what it means for their future. It is never a judgement of whether how they were treated was real or fair. When their_case holds the core they confirmed, report belief as known with the core belief, in their words, so your text says it back and asks whether that's the belief underneath it. The belief is tied to the event but need not be the literal thought they had in that moment: it may be one they recognise looking back, so never ask whether it is exactly what they told themselves then. The first thing they told themselves counts only when it is the core: \"I've ruined everything\" on the way to \"I'm not capable of change\" is not it."
+    reach: "If several beliefs appear, report belief as partial, with each one in their words, so your text asks which one affected them most. A belief is what they concluded about themselves, others, or what it means for their future. It is never a judgement of whether how they were treated was real or fair. When their_case holds the core they confirmed, report belief as known with the core belief, in their words, so your text says it back and asks openly what they would add to it or change in it, never as a yes or no check. The belief is tied to the event but need not be the literal thought they had in that moment: it may be one they recognise looking back, so never ask whether it is exactly what they told themselves then. The first thing they told themselves counts only when it is the core: \"I've ruined everything\" on the way to \"I'm not capable of change\" is not it."
     listen_for: "The conclusion, prediction, rule, demand or judgement they attached to what happened: their self-talk. Unhelpful beliefs often sound absolute ('I always...', 'I'm worthless', 'I can't stand this', 'they should have...', 'it's a disaster'). Notice these for yourself, but never label them to the user."
     ready_when: "They've put one belief into words themselves. If several came up, they've chosen the one that affected them most."
     # Optional follow-ups when the belief is not yet in words. One at a time.
@@ -138,7 +138,7 @@ stages:
       - {id: effects, about: "what it does to their work, health or the people close to them"}
       - {id: in_the_moment, about: "what goes through their mind in the moment it happens"}
       - {id: cost, about: "what it is costing them"}
-    reach: "Report consequence as known where they've tied a feeling or an action to that belief. Where they described feelings or actions that may follow from it but never tied them to it, report it as partial, with those words, so your text says them back and asks whether that's how the belief has affected them. Where their_case already gives the feeling underneath, report consequence as known, in their words, so your text says it back and asks whether that's how the belief has affected them. Feelings and actions they described in the chat before the framework count: say them back together and ask only what else the belief affects, if anything, never for them again. Consequences are both what they feel and what they do: when only feelings are known, report it as partial and ask openly about the other side, such as 'how does it affect the way you are with them?', rather than asking them to confirm your reading. It is known only when both what they feel and what they do are known."
+    reach: "Report consequence as known where they've tied a feeling or an action to that belief. Where they described feelings or actions that may follow from it but never tied them to it, report it as partial, with those words, so your text says them back and asks openly how the belief ties in with them. Where their_case already gives the feeling underneath, report consequence as known, in their words, so your text says it back and asks openly what they would add to it. Feelings and actions they described in the chat before the framework count: say them back together and ask only what else the belief affects, if anything, never for them again. Consequences are both what they feel and what they do: when only feelings are known, report it as partial and ask openly about the other side, such as 'how does it affect the way you are with them?', rather than asking them to confirm your reading. It is known only when both what they feel and what they do are known."
     listen_for: "Emotional consequences, such as anxiety, anger, low mood, guilt, shame, frustration or self-pity, and behavioural ones, such as withdrawing, avoiding, snapping at people, moping, drinking or giving up. Note whether the reaction is working for them or against them, but let them be the one to say so."
     ready_when: "They've named at least one feeling or behaviour themselves as following from the belief. Don't introduce a consequence they didn't name."
     # Optional follow-ups. One at a time.
@@ -150,7 +150,7 @@ stages:
       - when: 'consequence unclear - "It affected everything."'
         reply: "It affected everything. What changed first?"
       - when: "only a feeling or only an action has been named and the other may matter"
-        reply: "You felt <their feeling, in their words>. Did it change anything you did?"
+        reply: "You felt <their feeling, in their words>. What did it change in what you did?"
   dispute:
     title: "D: Dispute"
     carries_case: true
@@ -164,23 +164,23 @@ stages:
       - {id: friend_view, about: "what they would say to a friend in their place"}
       - {id: helpful, about: "whether holding it helps them or holds them back"}
     listen_for: "Keep three things apart: what happened (real, never questioned), their interpretation of it (understandable, never confirmed as fact), and what they assume without knowing. Then sort what they say into two piles and keep them apart. What supports the belief: something real they've noticed, such as a pattern in what they do (pulling back when things get serious is support, not a challenge). What challenges it: something that suggests it isn't completely true, such as having liked people and had chances. Also what they don't yet know, and whether holding the belief is helping them or holding them back."
-    reach: "In said, keep the two piles apart: 'supports: <their words>; challenges: <their words>'. What they said in the chat before the framework counts for either pile: when the chat already holds what supports it, report dispute as partial with the gap 'challenge' from the start, so your text explores only the side not yet examined. If nothing has been said for it yet, report dispute as missing, so your text asks only what supports the belief: what makes it feel true. If they've said what supports it but nothing that challenges it, report it as partial with the gap 'challenge', so your text first acknowledges that what supports it is real, then asks only what makes them question whether it's completely true. Never count support as a challenge because it came as an explanation. When they can't name anything that challenges it ('not that I know of'), never say the belief stands, holds or is supported: that confirms it. Ask one other angle instead, the one that fits: what they actually know against what they assume (an absolute such as 'never' or 'always' is an assumption), what they would say to a friend who believed it, or whether holding it helps them."
-    ready_when: "The belief has been looked at properly. They've said what supports it and, separately, what might challenge it, or considered whether they have enough information to know it's true. Saying the belief comes from fear, worry or the pressure they are under, rather than from something they know or were told, is what challenges it, and answers D once they have been asked once for a concrete moment that challenges it. When their own words already hold both what supports it and what challenges it, D is answered too. They don't have to disprove it. Reflecting on whether the belief helps them is welcome but not required."
+    reach: "In said, keep the two piles apart: 'supports: <their words>; challenges: <their words>'. What they said in the chat before the framework counts for either pile: when the chat already holds what supports it, report dispute as partial with the gap 'challenge' from the start, so your text explores only the side not yet examined. If nothing has been said for it yet, report dispute as missing, so your text asks only what supports the belief: what makes it feel true. If they've said what supports it but nothing that challenges it, report it as partial with the gap 'challenge', so your text first acknowledges that what supports it is real, then asks only what makes them question whether it's completely true. Never count support as a challenge because it came as an explanation. When they can't name anything that challenges it ('not that I know of'), never say the belief stands, holds or is supported: that confirms it. Ask one other angle instead, the one that fits: what they actually know against what they assume (an absolute such as 'never' or 'always' is an assumption), what they would say to a friend who believed it, or how holding it helps them or holds them back."
+    ready_when: "The belief has been looked at properly. They've said what supports it and, separately, what might challenge it, or considered what they would need to know to be sure it's true. Saying the belief comes from fear, worry or the pressure they are under, rather than from something they know or were told, is what challenges it, and answers D once they have been asked once for a concrete moment that challenges it. When their own words already hold both what supports it and what challenges it, D is answered too. They don't have to disprove it. Reflecting on whether the belief helps them is welcome but not required."
     # Optional angles, one per turn, only when they fit and haven't been covered. The three steps run in order, each
     # only if their answers haven't covered it: what makes it feel true, what makes them question it, another way to
     # look at it (the client's review, 2026-10-29).
     question_bank:
       - "What makes this belief feel true?"
       - "What makes you question whether it's completely true?"
-      - "Is there another way to look at it?"
-      - "What makes you think it's true? Is there anything that suggests otherwise?"
-      - "Do you have enough information to know it's true?"
+      - "How else could you look at it?"
+      - "Which part of it do you know for sure, and which part are you assuming?"
+      - "What would you need to know to be sure it's true?"
       - "How is holding on to that belief helping or getting in the way for you?"
       - "If a friend told you this about themselves, what would you say to them?"
     if_unclear:
       - id: information
-        when: "they were asked what might challenge the belief and nothing at all came to mind, so ask only whether they have enough information to know it's true. Never when they said it comes from fear, worry or pressure: that answered D"
-        reply: "Nothing comes to mind. Do you have enough information to know it is true?"
+        when: "they were asked what might challenge the belief and nothing at all came to mind, so ask only what they would need to know to be sure it's true. Never when they said it comes from fear, worry or pressure: that answered D"
+        reply: "Nothing comes to mind. What would you need to know to be sure it is true?"
       - id: challenge
         # The stage whose words fill the reply's slot.
         slot: belief
@@ -246,8 +246,8 @@ convince them the belief is wrong. Clinical terms (rational, irrational, distort
 guide Mani's own understanding but are never said to the user. Mani uses the person's own words.
 
 - Each letter and its name is said when that stage is reached.
-- If the conversation has already answered a stage, Mani says back what they said and confirms
-  it once. It never asks again.
+- If the conversation has already answered a stage, Mani says back what they said once and asks
+  openly what they would add or change. It never asks again.
 - Mani asks one question at a time.
 - The event itself is never questioned when it involves danger or mistreatment. Only what the
   person came to believe about themselves afterwards may be examined.

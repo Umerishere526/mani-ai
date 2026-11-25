@@ -110,7 +110,7 @@ stages:
     explore:
       - {id: situation, about: "the situation, in one plain sentence"}
       - {id: thought, about: "the thought about it they want to look at"}
-    reach: "If their_case already gives the core they confirmed, report thought as known with the core belief, in their words, not the first thought on the way to it. Your text says back the situation in a few words, then the thought, as two separate things (what happens, and what they take it to mean), then asks whether that's what they want to look at. The feeling belongs to Step 2. Never ask for it again. The thought is what they tell themselves, in their words, never a reading of it. If their_case has no clear thought, report thought as missing and ask what keeps coming back to their mind."
+    reach: "If their_case already gives the core they confirmed, report thought as known with the core belief, in their words, not the first thought on the way to it. Your text says back the situation in a few words, then the thought, as two separate things (what happens, and what they take it to mean), then asks openly what they would add to the thought or change in it. Never ask them to confirm it. The feeling belongs to Step 2. Never ask for it again. The thought is what they tell themselves, in their words, never a reading of it. If their_case has no clear thought, report thought as missing and ask what keeps coming back to their mind."
     listen_for: "The situation, whether an actual event or the memory of one, kept separate from the thought about it. Listen for a specific thought about themselves, another person, or the situation, in their words. Specific thoughts are easier to work with than broad ones: 'I'll freeze when she asks about the budget' rather than 'something bad will happen'."
     ready_when: >-
       One specific thought has been identified, in their own words, and it's clear what situation
@@ -147,7 +147,7 @@ stages:
       - {id: feeling, about: "the strongest feeling it brings up"}
       - {id: why_it_hurts, about: "what makes it hurt"}
       - {id: meaning, about: "what it says to them about themselves"}
-    reach: "If their_case or the chat before the framework already gives the feeling underneath and what makes the thought hurt, report painful as known, in their words, so your text says it back and asks whether that's what makes it hard. Never ask for it again."
+    reach: "If their_case or the chat before the framework already gives the feeling underneath and what makes the thought hurt, report painful as known, in their words, so your text says it back and asks openly what they would add to it. Never ask for it again."
     listen_for: "The strongest feeling, which usually falls into one of four groups: fear or anxiety, sadness or low mood, guilt or shame, or anger. Also listen for what they believe the thought says about themselves, another person or the future. If they name more than one strong feeling, the work stays with the strongest one."
     ready_when: "What makes the thought painful is clear, in their words, along with the feeling it brings up most strongly. MANI doesn't assign the meaning or the feeling. No intensity rating is needed."
     if_unclear:
@@ -165,20 +165,20 @@ stages:
       - {id: evidence, about: "what makes it feel true"}
       - {id: complications, about: "anything that complicates it"}
       - {id: facts_vs_feelings, about: "what is fact and what is feeling or fear"}
-    reach: "What they said in the chat before the framework counts: when it already holds what makes the thought convincing, report feels_true as partial with the gap 'complicates' from the start. If nothing has been said for it yet, report feels_true as missing, so your text asks only what makes the thought convincing. If they've said what makes it convincing but haven't been asked whether anything complicates it, report it as partial, with that in their words and the gap 'complicates', so your text asks only whether anything complicates it."
+    reach: "What they said in the chat before the framework counts: when it already holds what makes the thought convincing, report feels_true as partial with the gap 'complicates' from the start. If nothing has been said for it yet, report feels_true as missing, so your text asks only what makes the thought convincing. If they've said what makes it convincing but haven't been asked what complicates it, report it as partial, with that in their words and the gap 'complicates', so your text asks only what, if anything, complicates it."
     listen_for: "The experience, feedback, evidence or pattern that makes the thought convincing, and anything that complicates it. Notice for yourself whether each piece is something that happened (an observation or fact) or something that comes from how it felt (fear, a hunch, 'I just know'). Feelings are real but are weaker evidence than facts."
-    ready_when: "They've said what makes the thought convincing and have been asked whether anything complicates it. 'Nothing complicates it' is a valid answer; they don't have to disprove the thought."
+    ready_when: "They've said what makes the thought convincing and have been asked what complicates it. 'Nothing complicates it' is a valid answer; they don't have to disprove the thought."
     # Optional, one at a time, only when it fits and hasn't been covered.
     question_bank:
       - "What has actually happened that makes it feel true?"
       - "How much of that comes from what happened, and how much from how it felt?"
-      - "Has there been a time when this didn't turn out the way the thought says?"
+      - "When has it turned out differently from the way the thought says?"
     if_unclear:
       - id: complicates
         # The stage whose words fill the reply's slot.
         slot: thought
-        when: "they've said what makes the thought convincing and haven't been asked whether anything complicates it, so ask only that"
-        reply: "Is there anything that complicates the thought that <their thought, in their words>?"
+        when: "they've said what makes the thought convincing and haven't been asked what complicates it, so ask only that"
+        reply: "What makes you question the thought that <their thought, in their words>?"
   alternative:
     title: "Consider Another Interpretation"
     carries_case: true
@@ -197,13 +197,13 @@ stages:
     # Optional, one per turn, choosing the one that fits what they've said.
     # Never use the "worst case" or "control" questions when danger or mistreatment is involved.
     question_bank:
-      - "Is there another way of looking at what happened?"
+      - "How else could you look at what happened?"
       - "How might someone else see this situation?"
-      - "Is this based more on how it feels than on what happened?"
-      - "Would you hold someone else to the standard you're holding yourself to?"
+      - "How much of this comes from how it feels, and how much from what happened?"
+      - "What standard would you hold someone else to in your place?"
       - "How much of this was really in your control?"
       - "If the worst did happen, how would you handle it?"
-      - "Because it happened once, does that make it likely to happen again?"
+      - "Apart from it having happened once, what makes it likely to happen again?"
     if_unclear:
       - when: 'no alternative offered - "There is no other explanation."'
         reply: "This explanation feels certain to you. What part do you know for a fact?"
@@ -225,7 +225,7 @@ stages:
       - {id: holds_up, about: "whether the thought holds up"}
       - {id: new_thought, about: "a thought they can believe that fits what they know"}
       - {id: step, about: "one gentle step from here"}
-    reach: "Report replacement as known only where they've given a thought that fits what they know, said they believe it, or concluded the thought is accurate and named one step they'll take. A permission or intention they give themselves, such as 'trust them more', is part of the thought, never the step. A step that is more of what they said the thought makes them do, such as pulling back, waiting or holding back, is not the step yet: it's partial with the gap 'step', once, so your text asks gently about the person or situation it is about. If they offered a thought without saying they believe it, it's partial, with their words and the gap 'believe', so your text asks whether it feels true to them. Another interpretation from Step 4 is the material, never the replacement thought: until they have put a thought into their own words, it's partial with the gap 'thought'. If they concluded the thought is accurate and named no step yet, it's partial with the gap 'step'."
+    reach: "Report replacement as known only where they've given a thought that fits what they know, said they believe it, or concluded the thought is accurate and named one step they'll take. A permission or intention they give themselves, such as 'trust them more', is part of the thought, never the step. A step that is more of what they said the thought makes them do, such as pulling back, waiting or holding back, is not the step yet: it's partial with the gap 'step', once, so your text asks gently about the person or situation it is about. If they offered a thought without saying they believe it, it's partial, with their words and the gap 'believe', so your text asks how true it feels to them. Another interpretation from Step 4 is the material, never the replacement thought: until they have put a thought into their own words, it's partial with the gap 'thought'. If they concluded the thought is accurate and named no step yet, it's partial with the gap 'step'."
     listen_for: "A thought, in their own words, that fits what's known and that they find believable. It may be cautious, partial or uncertain, and often keeps the feeling while putting it in proportion ('Even though I feel anxious, it's unlikely that...'). Also listen for whether they've concluded the thought is accurate, which means the upset is pointing to a real problem."
     ready_when: >-
       Either (a) they've given a thought, in their own words, that fits what's known and that they
@@ -299,7 +299,7 @@ ABCDE.
 ## Flexible progression
 
 The five steps describe the work, not five compulsory questions. A step the conversation has
-already answered is said back and confirmed once, never asked again. If a believable replacement
+already answered is said back once, with an open question they can add to, never asked again. If a believable replacement
 thought appears early, recognise it. MANI never skips a step silently.
 
 ## Example 1: the thought doesn't hold up
