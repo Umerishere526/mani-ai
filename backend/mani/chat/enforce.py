@@ -81,7 +81,9 @@ FIGURATIVE_PHRASES = ("its own kind of", "a strange shape", "nice shape", "holdi
                       "its own rhythm", "fills in the gap", "quiet where", "the silence takes you",
                       # The 2026-11-25 v15 run.
                       "sit in the same person", "a heavier thing", "real weight", "the weighing", "the same care",
-                      "sit with", "hard pair", "handing her the win", "stings")
+                      "sit with", "hard pair", "handing her the win", "stings",
+                      # muhammad's tester, Reflective (2026-11-25).
+                      "happens in you", "the bad feeling like", "sitting with you", "a hard place to be")
 _FIGURATIVE = re.compile(rf"\b(?:{'|'.join(re.escape(phrase) for phrase in FIGURATIVE_PHRASES)})\b", re.IGNORECASE)
 # A short line that hands down a verdict on what they feel or what is going on ("That's what hurts.", "Being
 # overruled in front of everyone, that's what stings.", "Betrayed fits.", "That's the part that's hard to get past."):

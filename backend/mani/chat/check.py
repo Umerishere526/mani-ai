@@ -25,8 +25,8 @@ _EITHER_OR = re.compile(r"\bor\b", re.IGNORECASE)
 
 INSTRUCTIONS = """You repair one reply from MANI, a mental-health companion, before it is sent. You are told exactly \
 which parts break the rules. Change only those parts, keep their meaning, and leave every other word exactly as it is.
-- A question named as yes/no or either/or: rewrite it as one open question that starts with what, how, when, where, \
-which or who, about the same thing.
+- A question named as yes/no or either/or, or as odd or figurative: rewrite it as one plain open question that starts \
+with what, how, when, where, which or who, about the same thing.
 - A sentence named as a figure of speech: say the same thing in simple everyday English, as a person would text it.
 - A sentence named as a reading said as fact: say it as a possibility ("I wonder if…") or say only what they said.
 Never add a question to the text, advice, or anything new. The text never contains the question: the question goes \
@@ -53,9 +53,11 @@ def _closed(question: str) -> str | None:
 def problems(reply: TurnReply) -> list[str]:
     """The client's rules this reply breaks that code can find, each as an instruction naming the exact words. Drafted
     wording written for them to send is theirs and never counted."""
-    found = []
-    if why := _closed(reply.question.ask):
-        found.append(f'The question "{reply.question.ask.strip()}" {why}.')
+    found, ask = [], reply.question.ask.strip()
+    if why := _closed(ask):
+        found.append(f'The question "{ask}" {why}.')
+    elif ask and enforce.figurative(ask):
+        found.append(f'The question "{ask}" uses odd or figurative words: ask it in plain everyday words.')
     spans = questions.drafted(reply.text)
     for sentence in questions.sentences(reply.text):
         if any(sentence in reply.text[a:b] for a, b in spans):
