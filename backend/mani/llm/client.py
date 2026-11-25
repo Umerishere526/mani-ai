@@ -47,6 +47,8 @@ class Call[T: BaseModel]:
     call_id: uuid.UUID | None
     # From the answering attempt's start to its first streamed chunk; None when none arrived.
     first_token_ms: int | None = None
+    # The sentences the reply check rewrote or took out (mani/chat/check.py), for the turn's trace.
+    checked: tuple[str, ...] = ()
 
 
 # A provider that is briefly down or unreachable. APITimeoutError is a subclass of

@@ -17,6 +17,9 @@ os.environ["MINUTE_MESSAGE_LIMIT"] = "0"
 os.environ["REASONING_EFFORT"] = "high"
 # The pause tests expect the default length, whatever a developer sets in .env.
 os.environ["CRISIS_PAUSE_SECONDS"] = "900"
+# A scripted model answers each call in turn, so the reply check (a second call per turn) is off unless a test turns
+# it on; tests/integration/test_reply_check.py does.
+os.environ["REPLY_CHECK_ENABLED"] = "false"
 
 if not ENV_FILE.exists():
     # Only a fallback, for a machine with no .env - enough for the unit suite to import

@@ -19,6 +19,7 @@ class Outcome(StrEnum):
 class Purpose(StrEnum):
     CHAT = "chat"
     SUMMARIZE = "summarize"
+    REPLY_CHECK = "reply_check"
 
 
 @dataclass(frozen=True)

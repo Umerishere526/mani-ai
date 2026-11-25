@@ -323,6 +323,14 @@ the same change as the work.**
   his tester's friend-conflict chat (6.5/10) ran ABCDE on "I looked stupid" instead of the offered belief, asked C
   twice after "I told you" and "you know", said "That's not much to ask of a friend", and left the dilemma of reaching
   out first untouched. `mani.md` ("How you listen", "Inside the set of questions"). Not yet eval-gated.
+- **A reply check: after the chat call, a second short call on the chat's model at effort low rewrites, in Mani's
+  text only, readings said as fact, verdicts on other people and figures of speech; it never runs on a safety turn,
+  and a rewrite that asks something, grows, or loses a number or a drafted passage is not used** (muhammad,
+  2026-11-25, "fix all issues" after the prompt rules held only part of the time across CQ-13 to DIR-6). Adds about
+  1 to 3 s to a turn; `REPLY_CHECK_ENABLED` (default true) and `REPLY_CHECK_SECONDS` (8) turn it off or bound it; any
+  failure sends the reply as written. Recorded as purpose `reply_check` (migration 050); trace `reply_checked`.
+  `mani/chat/check.py`, `runner.run`; `tests/unit/test_check.py`, `tests/integration/test_reply_check.py`. Release:
+  050 before the deploy. Not yet measured live.
 - **Code takes out a short verdict line on what they feel or what is going on ("That's what hurts.", "…, that's what
   stings.", "Betrayed fits.", "That's the part that's hard to get past."), unless it is all the reply says, the turn
   is guarded, or it is wording written for them to send; most Directive replies are a few of their words and one open

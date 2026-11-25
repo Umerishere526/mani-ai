@@ -13,8 +13,10 @@ from typing import Any
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import rewind, turn as chat_turn
+from mani.chat import check, rewind, turn as chat_turn
 from mani.chat.greeting import style_label
+from mani.chat.reply import TurnReply
+from mani.config import get_settings
 from mani.db import pool, threads
 from mani.db import messages as messages_db
 from mani.errors import ErrorCategory, ServiceError
@@ -133,6 +135,10 @@ async def run(
             raise
         logger.exception("model failed for thread %s; the turn sends its fixed words", thread_id)
         call = None
+    if call is not None and isinstance(call.value, TurnReply):
+        said = next((m["content"] for m in reversed(request.messages) if m.get("role") == "user"), "")
+        call, changed = await check.checked(call, said=said, kwargs=request.kwargs, settings=get_settings())
+        call = replace(call, checked=tuple(changed))
     writing = time.perf_counter()
     async with pool.as_user(claims) as conn:
         turn = await steps(conn, Model(conn, thread_id, request=request, call=call))

@@ -325,7 +325,7 @@ async def _apply(
         "resources_added": resources_added or None, "raised_by_phrase": judgment.raised or None,
         "buttons": [p.label for p in prompts], "latency_ms": call.latency_ms, "first_token_ms": call.first_token_ms,
         "refused": decision.refused,
-        "question_cut": cut, "enforced": enforced, "question": reply.question.model_dump() if open_chat and settings.ai_debug_mode else None,
+        "question_cut": cut, "enforced": enforced, "reply_checked": list(call.checked) or None, "question": reply.question.model_dump() if open_chat and settings.ai_debug_mode else None,
         "notes": reply.notes if settings.ai_debug_mode else None,
     }.items() if value not in (None, "", [], {})}
     return Turn(

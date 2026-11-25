@@ -93,6 +93,10 @@ class Settings(BaseSettings):
     # Used when a prompt row names no model of its own.
     default_chat_model: str = "openai/gpt-6-luna"
     default_summary_model: str = "openai/gpt-6-luna"
+    # The reply check (mani/chat/check.py): a second short call on the chat's model that rewrites readings said as
+    # fact and figures of speech before a reply is sent. It adds a second or two to a turn; off sends replies as written.
+    reply_check_enabled: bool = True
+    reply_check_seconds: float = 8.0
 
     # How much of a thread the model is shown, in characters of message content. Within it the
     # whole thread is sent, so nothing said earlier has to be guessed into a store ahead of time
