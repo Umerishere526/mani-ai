@@ -68,3 +68,27 @@ def test_codes_fixed_safety_words_go_out_untouched():
     reply = sent(f"Your chat is on hold. There's space.\n\n{crisis.END_CHECK}", fixed=True, guarded=True,
                  open_chat=False)
     assert "space" in reply.text and reply.enforced == []
+
+
+@pytest.mark.parametrize(("message", "stop"), [
+    ("I'm done", True), ("Yes, I'm done for now.", True), ("that’s all, thanks", True), ("ok bye!", True),
+    ("enough for today", True), ("I have to go", True), ("let's stop here. thank you", True), ("im good for now", True),
+    # A stop phrase inside something else they are telling Mani is not a wish to stop.
+    ("I'm done with my job", False), ("bye, she said, and left", False), ("I have to go to work tomorrow", False),
+    ("thanks", False),
+])
+def test_a_typed_stop_is_only_a_message_that_says_nothing_but_stop(message, stop):
+    assert enforce.typed_stop(message) is stop
+
+
+def test_a_typed_stop_the_model_missed_is_read_as_one_but_never_on_a_guarded_turn():
+    """Eval rule-typed-done 3/3 and TC-17 asked "what do you mean by done?" (R95)."""
+    from mani.chat.reply import Question, Safety, TurnReply
+
+    reply = TurnReply(text="Okay.", safety=Safety(level="none"), notes="",
+                      question=Question(latest="other", ask="What do you mean by done?"))
+    read, events = enforce.read_stop(reply, "I'm done", guarded=False)
+    assert read.question.latest == "wants_to_stop" and events == [enforce.TYPED_STOP]
+    assert reply.question.latest == "other"
+    kept, events = enforce.read_stop(reply, "I'm done", guarded=True)
+    assert kept is reply and events == []

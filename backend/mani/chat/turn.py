@@ -235,6 +235,8 @@ async def _apply(
     # answer that settles the safety question after a framework's last stage: that one carries the close.
     settles_end_check = end_check_asked and judgment.state is safety.State.CLEAR
     guarded = (holding or judgment.state is not safety.State.CLEAR) and not settles_end_check
+    # A typed wish to stop is read as one, so the close follows with no question (R95).
+    reply, enforced = enforce.read_stop(reply, content, guarded=guarded)
     decision = decide_mod.decide(
         reply, config.registry, thread_id=ctx.thread.id, running=running, open_offer=open_offer, tap=tap,
         record=record, guarded=guarded,
@@ -242,7 +244,7 @@ async def _apply(
         end_check_due=bool(record.get(rec.DANGER_REACHED)) and rec.end_check(record) != rec.END_CHECK_DONE,
         end_check_asked=end_check_asked, person_messages=person_messages,
     )
-    ask, enforced = "", []
+    ask = ""
     if judgment.pausing:
         # Mani's own words for this danger come first, then the pause line (muhammad, 2026-11-20). A question it chose
         # that its text already asks is not asked twice.
@@ -311,7 +313,7 @@ async def _apply(
         paused_from=paused.started_at if paused else None, paused_until=paused.ends_at if paused else None,
         was_duplicate=pair.was_duplicate, needs_summary=_summary_due(ctx, window) and not judgment.pausing,
         llm_call_id=call.call_id, understanding=after if settings.ai_debug_mode else None, trace=trace,
-        raw_reply=reply.model_dump(mode="json") if settings.ai_debug_mode else None,
+        raw_reply=call.value.model_dump(mode="json") if settings.ai_debug_mode else None,
     )
 
 

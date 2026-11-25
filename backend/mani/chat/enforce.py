@@ -9,6 +9,7 @@ from difflib import SequenceMatcher
 
 from mani.chat import questions
 from mani.chat.repairs import sent_text
+from mani.chat.reply import TurnReply
 
 # Behavioral Framework: "The following words must never appear in any Mani response."
 FORBIDDEN_WORDS = ("heaviest", "weakness", "fixing", "fixed", "space", "broken", "flawed", "stable", "stability",
@@ -27,8 +28,23 @@ PLAIN_WORDS = {
 }
 _FORBIDDEN = re.compile(rf"\b(?:(a|an)(\s+))?({'|'.join(FORBIDDEN_WORDS)})\b", re.IGNORECASE)
 
+# A message that is only a wish to stop (R95; Lolly 2026-11-17: respect a clear request to stop without asking another
+# question), with apostrophes left out. It only lets someone leave: it never judges safety and never holds on a
+# guarded turn.
+STOP_PHRASES = frozenset({
+    "im done", "i am done", "thats all", "that is all", "bye", "bye bye", "goodbye", "good bye", "good night",
+    "goodnight", "enough for today", "i have to go", "i need to go", "i gotta go", "gotta go", "lets stop",
+    "lets stop here", "im good for now", "i am good for now",
+})
+# What may come with a stop in the same message and leave it a stop: "ok, I'm done for now. thanks!"
+_STOP_ENDINGS = (" for now", " for today", " now", " here", " then")
+_COURTESIES = frozenset({"ok", "okay", "alright", "all right", "yes", "yeah", "yep", "no", "nope", "thanks",
+                         "thank you", "thanks mani", "thank you mani", "cheers", "take care", "see you", "cool"})
+_CLAUSE = re.compile(r"[.,!?;:\n]+")
+
 # Enforcement events, as the turn trace records them under `enforced`. A word swap is recorded with its word.
 REPEATED_QUESTION = "repeated_question"
+TYPED_STOP = "typed_stop"
 FORBIDDEN_WORD = "forbidden_word"
 BANNED_LINE_REMOVED = "banned_line_removed"
 BANNED_LINE_KEPT = "banned_line_kept"
@@ -90,6 +106,36 @@ def without_banned_lines(text: str, ask: str, *, guarded: bool) -> tuple[str, li
         cut = text
     events = [BANNED_LINE_REMOVED] if cut != text else []
     return cut, [*events, *([BANNED_LINE_KEPT] if banned_phrases(f"{cut} {ask}") else [])]
+
+
+def _stop_clause(clause: str) -> bool:
+    """Whether one clause is a stop phrase, with a courtesy before it ("ok bye") or an ending after it allowed."""
+    first, _, rest = clause.partition(" ")
+    if first in _COURTESIES and rest and _stop_clause(rest):
+        return True
+    for ending in ("", *_STOP_ENDINGS):
+        if clause.endswith(ending) and clause[: len(clause) - len(ending)].strip() in STOP_PHRASES:
+            return True
+    return False
+
+
+def typed_stop(message: str) -> bool:
+    """Whether their message is only a wish to stop: a stop phrase, with nothing beside it but a courtesy ("ok",
+    "thanks"). "I'm done with my job" and "bye, she said" are not one."""
+    plain = message.lower().replace("’", "'").replace("'", "")
+    clauses = [" ".join(re.sub(r"[^a-z ]", " ", clause).split()) for clause in _CLAUSE.split(plain)]
+    clauses = [clause for clause in clauses if clause]
+    return (any(_stop_clause(clause) for clause in clauses)
+            and all(_stop_clause(clause) or clause in _COURTESIES for clause in clauses))
+
+
+def read_stop(reply: TurnReply, message: str, *, guarded: bool) -> tuple[TurnReply, list[str]]:
+    """The reply read as a wish to stop when their message typed one and the model did not read it so, and the event.
+    A guarded turn is never read this way: a stop phrase only lets someone leave, and never settles a worry."""
+    if guarded or reply.question.latest.strip().lower() == questions.WANTS_TO_STOP or not typed_stop(message):
+        return reply, []
+    question = reply.question.model_copy(update={"latest": questions.WANTS_TO_STOP})
+    return reply.model_copy(update={"question": question}), [TYPED_STOP]
 
 
 def _plain(sentence: str) -> str:

@@ -336,6 +336,20 @@ async def test_a_typed_wish_to_stop_gets_a_goodbye_with_no_question_and_the_clos
     assert turn.trace["question_cut"] == "question after a wish to stop"
 
 
+async def test_a_typed_stop_the_model_missed_still_closes_with_no_question_except_on_a_guarded_turn(alice, model):
+    """Eval rule-typed-done (3/3) and TC-17: the model asked what "done" meant, so the stop path never ran (R95)."""
+    model(said("Okay, we can leave it there.", question=Question(latest="other", ask="What do you mean by done?")),
+          said("Okay.", level="unsure", safety=Safety(level="unsure", about="themselves"),
+               question=Question(latest="other", ask="Are you safe right now?")))
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "that's all, thanks")
+    assert turn.content == "Okay, we can leave it there."
+    assert [p.label for p in turn.prompts] == ["Continue chatting", "Visit library"]
+    assert turn.trace["enforced"] == ["typed_stop"]
+    guarded = await send(alice, thread.id, "bye")
+    assert guarded.content == "Okay.\n\nAre you safe right now?" and "enforced" not in guarded.trace
+
+
 async def test_a_finish_after_danger_sends_the_end_check_then_the_close(alice, model):
     model(said("Warm close.", action="finish", stage="effective"),
           said("Glad you're safe. How are you feeling now?", action="finish", stage="effective"),
