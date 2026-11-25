@@ -75,3 +75,15 @@ def test_he_or_she_for_someone_whose_gender_they_never_gave_is_named():
     assert any('says "he"' in p for p in check.problems(guessed, "my boss adds work", "my boss adds work"))
     assert not any('says "he"' in p for p in check.problems(guessed, "my dad adds work", "my dad adds work"))
     assert not any('says "he"' in p for p in check.problems(guessed, "x", "my boss... he never listens"))
+
+
+def test_a_reading_the_model_lists_is_repaired_unless_it_is_said_as_a_possibility():
+    """The model names the sentences that go beyond what they said; code repairs the ones stated as fact (muhammad,
+    2026-11-25: assumptions presented as facts)."""
+    flat = reply("You said she never calls. She doesn't care about the friendship.", "What would you want her to know?")
+    flat = flat.model_copy(update={"readings": ["She doesn't care about the friendship."]})
+    named = check.problems(flat)
+    assert len(named) == 1 and "as if it were fact" in named[0]
+    soft = reply("You said she never calls. I wonder if it feels like she doesn't care.", "What would you want her to know?")
+    soft = soft.model_copy(update={"readings": ["I wonder if it feels like she doesn't care."]})
+    assert check.problems(soft) == []

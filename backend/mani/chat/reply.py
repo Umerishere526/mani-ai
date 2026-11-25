@@ -107,6 +107,11 @@ class TurnReply(BaseModel):
     text: str = Field(description=(
         "What you say to them before your question, exactly as they will read it. It never asks anything: your one "
         "question goes only in question.ask."))
+    readings: list[str] = Field(default_factory=list, description=(
+        "After writing text: every sentence of it that goes beyond what they actually said (what they feel, want, mean "
+        "or believe, why they or someone else did something, what something says about them, or what will happen), "
+        "copied word for word. Empty when every sentence stays with their own words. Code checks each one is said as "
+        "a possibility."))
     said: Said = Field(default_factory=Said, description="What your text gives them.")
     action: Action = Field(
         default="none", description="What happens after this reply."

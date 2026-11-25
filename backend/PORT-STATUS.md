@@ -350,6 +350,10 @@ the same change as the work.**
   from their ids** (muhammad, 2026-11-25, DEP-2). Because hosted gets migrations 045 to 047 before
   `seed_exercises.py` can run (it needs the recordings), and the library must never be empty in between. The client's
   topics take over as soon as they are seeded. `exercises_db.list_topics`; `test_library.py`.
+- **The reply lists every sentence of its text that goes beyond what they said (`readings`); code sends any listed one
+  not said as a possibility to the repair** (muhammad, 2026-11-25, aiming for 4.5 of 5). Because phrase lists could
+  not keep up with new wordings of assumptions stated as fact; the model names its own interpretations better than a
+  pattern does. `TurnReply.readings`, `check._TENTATIVE`, `check.problems`; `tests/unit/test_check.py`.
 - **A reply repair: code finds the rules a reply breaks that it can see (a yes/no or either/or question, a known
   figure of speech, a known reading said as fact) and only then one short call on the chat's model rewrites exactly
   those words; a clean reply makes no call. Never on a safety turn; a repair that asks in the text, grows, drops a

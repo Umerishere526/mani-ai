@@ -59,6 +59,11 @@ class Repaired(BaseModel):
     ask: str = Field(description="The reply's question, rewritten only if it was named; otherwise exactly as given.")
 
 
+# A reading said as a possibility ("I wonder if…", "maybe", "it might be"): what the client asks for, never repaired.
+_TENTATIVE = re.compile(r"\b(?:wonder|maybe|perhaps|might|may|could|possibly|seems?|sounds? like|i guess|i'm guessing|"
+                        r"i imagine|if i'm reading|or not|i'm not sure)\b", re.IGNORECASE)
+
+
 def _closed(question: str) -> str | None:
     """Why a question is not open, or None when it is."""
     question = question.strip()
@@ -101,6 +106,12 @@ def problems(reply: TurnReply, said: str = "", everything: str | None = None) ->
         for gender in sorted(used):
             found.append(f'The reply says "{gender}" for someone whose gender they have not given: say "they", or their '
                          'own words for the person ("your boss").')
+    for reading in reply.readings:
+        reading = " ".join(reading.split())
+        in_text = reading and reading in " ".join(reply.text.split())
+        if in_text and not _TENTATIVE.search(reading):
+            found.append(f'The sentence "{reading}" says something they did not say as if it were fact: say it as a '
+                         'possibility ("I wonder if…", "It might be that…") or say only what they said.')
     spans = questions.drafted(reply.text)
     for sentence in questions.sentences(reply.text):
         if any(sentence in reply.text[a:b] for a, b in spans):
@@ -110,7 +121,7 @@ def problems(reply: TurnReply, said: str = "", everything: str | None = None) ->
                          'that adds something (a link between things they said, or plain warmth), or remove it.')
         elif enforce.figurative(sentence):
             found.append(f'The sentence "{sentence}" is a figure of speech.')
-        elif enforce.interpretive(sentence):
+        elif enforce.interpretive(sentence) and sentence not in " ".join(" ".join(r.split()) for r in reply.readings):
             found.append(f'The sentence "{sentence}" is a reading said as fact.')
     return found
 
