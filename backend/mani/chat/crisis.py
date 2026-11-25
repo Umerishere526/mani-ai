@@ -11,7 +11,8 @@ from mani.errors import ServiceError
 
 # Every text that says where to get help gives the US numbers and this, with no country detection (S11).
 # PROVISIONAL: clinician sign-off required before deploy.
-OUTSIDE_US = "Outside the US: findahelpline.com."
+DIRECTORY = "findahelpline.com"
+OUTSIDE_US = f"Outside the US: {DIRECTORY}."
 # Where to get help, said wherever a message goes out unread for safety: an outage, a refusal for a limit or a pause,
 # and any error while a worry is held (S9). PROVISIONAL: clinician sign-off required before deploy.
 IN_DANGER = f"If you're in danger or thinking about hurting yourself, call 911 now, or call or text 988. {OUTSIDE_US}"
@@ -44,15 +45,15 @@ def resources_line(about: str | None) -> str:
     return _HELP.get(about or "themselves", _HELP["themselves"])
 
 
-# The numbers a reply must name for each kind of danger, or code adds the kind's line after it (S2).
-# PROVISIONAL: clinician sign-off required before deploy.
-_NEEDED = {"themselves": ("911", "988"), "someone_else": ("911",), "from_someone": ("911", "799-7233"),
-           "body": ("911",)}
+# What a reply must name for each kind of danger, or code adds the kind's line after it (S2): the kind's numbers, and
+# the directory for everyone outside the US (S11). PROVISIONAL: clinician sign-off required before deploy.
+_NEEDED = {"themselves": ("911", "988", DIRECTORY), "someone_else": ("911", DIRECTORY),
+           "from_someone": ("911", "799-7233", DIRECTORY), "body": ("911", DIRECTORY)}
 
 
 def names_help(text: str, about: str | None) -> bool:
-    """Whether the reply already names every number its kind of danger needs."""
-    return all(number in text for number in _NEEDED.get(about or "themselves", _NEEDED["themselves"]))
+    """Whether the reply already names everything its kind of danger needs."""
+    return all(needed in text.lower() for needed in _NEEDED.get(about or "themselves", _NEEDED["themselves"]))
 # What goes out when no host answered and no safety worry was open, so a first message about danger during an outage
 # still reaches the numbers (the design of 2026-11-17). Wording is ours until the client supplies hers.
 TROUBLE_REPLY = f"I'm having trouble replying right now, so please try again in a moment. {IN_DANGER}"

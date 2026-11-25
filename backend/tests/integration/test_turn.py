@@ -14,8 +14,9 @@ from mani.models.rows import TechniqueOutcome, TechniqueState
 from tests.integration.fixtures import ALICE, ScriptedModel, last_user_message_id, said, send, start, thread_row
 
 DANGER = Safety(level="danger", about="themselves", why="took pills")
-# A reply to a first danger message that names the numbers it needs, so code adds no line after it (S2).
-FIRST_REPLY = "Call 911 now, or call or text 988. Are you alone?"
+# A reply to a first danger message that names the numbers it needs and the line for outside the US, so code adds no
+# line after it (S2, S11).
+FIRST_REPLY = "Call 911 now, or call or text 988. Outside the US: findahelpline.com. Are you alone?"
 
 
 def facts_of(scripted) -> str:
@@ -720,12 +721,14 @@ async def test_a_body_worry_the_model_held_lower_still_gets_call_now(alice, mode
 
 
 async def test_a_body_danger_the_model_judged_itself_goes_out_as_written_when_it_names_911(alice, model):
-    """S2 (PROVISIONAL: clinician sign-off required before deploy): a reply that already names 911 for the body is sent
-    as written; one that names no number gets the body's line after it."""
+    """S2 (PROVISIONAL: clinician sign-off required before deploy): a reply that already names 911 and
+    findahelpline.com for the body is sent as written; one that names no number gets the body's line after it."""
     now = Safety(level="danger", about="body", symptom_now="yes")
-    model(said("Please call 911 now.", safety=now), said("Call your emergency number now.", safety=now))
+    model(said("Please call 911 now. Outside the US: findahelpline.com.", safety=now),
+          said("Call your emergency number now.", safety=now))
     thread = await start(alice)
-    assert (await send(alice, thread.id, "my chest is crushing right now")).content == "Please call 911 now."
+    sent_as_written = await send(alice, thread.id, "my chest is crushing right now")
+    assert sent_as_written.content == "Please call 911 now. Outside the US: findahelpline.com."
     other = await start(alice)
     turn = await send(alice, other.id, "my chest is crushing right now")
     assert turn.content == "Call your emergency number now.\n\n" + crisis.resources_line("body")
