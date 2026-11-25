@@ -31,10 +31,19 @@ PLAIN_WORDS = {
     "problematic": "hard", "baggage": "history", "trauma": "pain", "unhealthy": "unhelpful", "land": "hit",
     "weak": "fragile", "toxic": "hurtful", "negative": "harsh", "struggling": "finding it hard", "journey": "path",
     "landscape": "picture",
+    # The other forms of the words, since the list holds "in any form" (manasa 2026-11-25 saw "landing" and "landed";
+    # muhammad's TC-M runs saw "landing on that weekend", "landed on you" and "Fix the date"). "Landing on" and its
+    # kin read as an event falling on a date or a person, so they become "falling on"; alone they become "hit".
+    "land on": "fall on", "lands on": "falls on", "landed on": "fell on", "landing on": "falling on",
+    "lands": "hits", "landed": "hit", "landing": "hitting", "landscapes": "pictures",
+    "fix": "sort out", "fixes": "sorts out", "weaknesses": "limits", "spaces": "rooms", "journeys": "paths",
+    "traumas": "painful times", "traumatic": "painful",
 }
 # A sentence that names where to get help, kept on a guarded turn even when it also says a banned line.
 _NAMES_HELP = re.compile(r"\b(?:911|988|1-800-\d{3}-\d{4}|findahelpline)", re.IGNORECASE)
-_FORBIDDEN = re.compile(rf"\b(?:(a|an)(\s+))?({'|'.join(FORBIDDEN_WORDS)})\b", re.IGNORECASE)
+# Every form, longest first so "landed on" wins over "landed" and "landscape" over "land".
+_FORMS = sorted(PLAIN_WORDS, key=len, reverse=True)
+_FORBIDDEN = re.compile(rf"\b(?:(a|an)(\s+))?({'|'.join(re.escape(form) for form in _FORMS)})\b", re.IGNORECASE)
 
 # A message that is only a wish to stop (R95; Lolly 2026-11-17: respect a clear request to stop without asking another
 # question), with apostrophes left out. It only lets someone leave: it never judges safety and never holds on a

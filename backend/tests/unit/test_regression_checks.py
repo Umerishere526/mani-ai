@@ -71,7 +71,8 @@ def test_mani_saying_him_about_someone_they_only_called_they_fails():
 
 def test_a_forbidden_word_fails_only_as_a_whole_word():
     assert checks.no_forbidden_words(chat(turn("x", "It doesn't have to land all at once."))).detail == "used ['land']"
-    assert checks.no_forbidden_words(chat(turn("x", "Where did that idea come from? It landed hard."))).passed
+    assert checks.no_forbidden_words(chat(turn("x", "It landed hard."))).detail == "used ['landed']"
+    assert checks.no_forbidden_words(chat(turn("x", "Where did that idea come from? Near the landmark."))).passed
 
 
 def test_more_than_one_question_fails_in_every_style():

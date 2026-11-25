@@ -86,7 +86,8 @@ def test_a_forbidden_word_or_banned_line_fails_every_rule_case():
     case = {"checks": {}}
     assert run_eval.rule_checks(case, got("You’re not alone. It can feel broken.")) == [
         "used forbidden 'broken'", "said banned \"you're not alone\""]
-    assert run_eval.rule_checks(case, got("That landed hard. What happened next?")) == []
+    assert run_eval.rule_checks(case, got("That landed hard. What happened next?")) == ["used forbidden 'landed'"]
+    assert run_eval.rule_checks(case, got("Past the landmark. What happened next?")) == []
 
 
 def test_a_question_after_a_clear_stop_fails():

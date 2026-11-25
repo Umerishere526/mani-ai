@@ -39,9 +39,14 @@ def test_a_nearly_identical_question_counts_as_the_same_and_a_different_one_is_k
     ("When was the last time someone noticed you were struggling?",
      "When was the last time someone noticed you were finding it hard?"),
     ("Broken nights add up. Give yourself some space.", "Hurt nights add up. Give yourself some room."),
-    # An article before the word still fits the plain word; "landed" and "spaces" are other words.
+    # An article before the word still fits the plain word.
     ("That's an unhealthy loop, and a flawed plan.", "That's an unhelpful loop, and an imperfect plan."),
-    ("It landed on her.", "It landed on her."),
+    # Every form of a word (manasa 2026-11-25; muhammad's TC-M runs the same day).
+    ("Neither was made with a work trip landing on that weekend in mind.",
+     "Neither was made with a work trip falling on that weekend in mind."),
+    ("A weekend that landed on you both by accident.", "A weekend that fell on you both by accident."),
+    ("Fix the date before you go.", "Sort out the date before you go."),
+    ("How is that landing?", "How is that hitting?"),
 ])
 def test_a_forbidden_word_reaches_them_as_a_plain_word(written, received):
     """Behavioral Framework: the forbidden words never appear in a Mani response; the prompt alone let 7 of 158 eval
