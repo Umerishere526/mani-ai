@@ -22,12 +22,29 @@ logger = logging.getLogger(__name__)
 _YES_NO = re.compile(r"^[\"'“‘(]?(?:is|are|was|were|am|do|does|did|have|has|had|can|could|would|will|should|shall)\b",
                      re.IGNORECASE)
 _EITHER_OR = re.compile(r"\bor\b", re.IGNORECASE)
+# A sentence that hands them their own message back: most of its meaningful words are theirs (testers, 2026-11-25:
+# "You feel betrayed because she has known you longer and didn't take your side").
+_WORD = re.compile(r"[a-z']+")
+_SMALL = frozenset("the a an and or but so to of in on at for with you your i me my is are was were be been it its "
+                   "that this they them she he her him we our just not do does did have has had".split())
+ECHO_SHARE, ECHO_WORDS = 0.6, 4
+
+
+def _meaningful(text: str) -> list[str]:
+    return [w.strip("'") for w in _WORD.findall(text.lower().replace("’", "'")) if w.strip("'") not in _SMALL and len(w) > 2]
+
+
+def echoes(sentence: str, said: str) -> bool:
+    """Whether a sentence is mostly their own message given back to them."""
+    words, theirs = _meaningful(sentence), set(_meaningful(said))
+    return len(words) >= ECHO_WORDS and sum(w in theirs for w in words) / len(words) >= ECHO_SHARE
 
 INSTRUCTIONS = """You repair one reply from MANI, a mental-health companion, before it is sent. You are told exactly \
 which parts break the rules. Change only those parts, keep their meaning, and leave every other word exactly as it is.
 - A question named as yes/no or either/or, or as odd or figurative: rewrite it as one plain open question that starts \
 with what, how, when, where, which or who, about the same thing.
 - A sentence named as a figure of speech: say the same thing in simple everyday English, as a person would text it.
+- A sentence named as repeating what they said: replace it as told, never with a question.
 - A sentence named as a reading said as fact: say it as a possibility ("I wonder if…") or say only what they said.
 Never add a question to the text, advice, or anything new. The text never contains the question: the question goes \
 only in `ask`."""
@@ -50,7 +67,7 @@ def _closed(question: str) -> str | None:
     return None
 
 
-def problems(reply: TurnReply) -> list[str]:
+def problems(reply: TurnReply, said: str = "") -> list[str]:
     """The client's rules this reply breaks that code can find, each as an instruction naming the exact words. Drafted
     wording written for them to send is theirs and never counted."""
     found, ask = [], reply.question.ask.strip()
@@ -62,7 +79,10 @@ def problems(reply: TurnReply) -> list[str]:
     for sentence in questions.sentences(reply.text):
         if any(sentence in reply.text[a:b] for a, b in spans):
             continue
-        if enforce.figurative(sentence):
+        if said and not reply.stage and echoes(sentence, said):
+            found.append(f'The sentence "{sentence}" mostly repeats what they just said: replace it with a short line '
+                         'that adds something (a link between things they said, or plain warmth), or remove it.')
+        elif enforce.figurative(sentence):
             found.append(f'The sentence "{sentence}" is a figure of speech.')
         elif enforce.interpretive(sentence):
             found.append(f'The sentence "{sentence}" is a reading said as fact.')
@@ -105,7 +125,7 @@ async def checked(call: client.Call[TurnReply], *, said: str, kwargs: dict, sett
     found goes out at once, with no call; any failure, a slow answer or a repair that does more than it may leaves
     the reply exactly as the chat call wrote it."""
     reply = call.value
-    found = problems(reply) if due(reply, settings) else []
+    found = problems(reply, said) if due(reply, settings) else []
     if not found:
         return call, []
     named = "\n".join(f"- {problem}" for problem in found)

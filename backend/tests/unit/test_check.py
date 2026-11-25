@@ -54,3 +54,15 @@ def test_a_repair_that_also_writes_its_question_into_the_text_keeps_it_only_as_t
     text = "It happens again and again.\n\nWhen you find out after everyone else, what hits you first?"
     assert check._without_question(text, "When you find out after everyone else, what hits you first?") == \
         "It happens again and again."
+
+
+def test_a_sentence_that_hands_them_their_own_message_back_is_named_outside_a_set():
+    """Testers (2026-11-25): replies opened by repeating the person's message."""
+    said = "I'm very sad and angry because she didn't take my side, even though she knew me longer. I feel betrayed."
+    echo = reply("You feel betrayed because she has known you longer and still didn't take your side.",
+                 "What did she say?")
+    named = check.problems(echo, said)
+    assert len(named) == 1 and "repeats what they just said" in named[0]
+    assert check.problems(reply("Being left out by her, of all people, sounds painful.", "What did she say?"), said) == []
+    in_set = echo.model_copy(update={"stage": "activate"})
+    assert check.problems(in_set, said) == []
