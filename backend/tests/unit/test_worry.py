@@ -40,6 +40,9 @@ ORD, ASK, ANS = Phase.ORDINARY, Phase.ASKING, Phase.ANSWERING
 # What each turn must come to: state after, pauses, a worry settled, where to get help due, and whose danger is open.
 # S2 and S7 (PROVISIONAL: clinician sign-off required before deploy): the first danger of a kind that does not pause is
 # due the help line, even with someone with them; before, only a body worry code raised got it.
+# CR-3 (PROVISIONAL: clinician sign-off required before deploy): while danger about a person is held, every reply that
+# does not pause is due it, unless their message says someone is with them (S7); manasa's test (2026-11-25) heard
+# "you do not have to tell anyone you know" after emergency guidance. A body symptom keeps its line once per rise.
 DANGER, UNSURE, CLEAR = "danger", "unsure", "clear"
 T, F = True, False
 
@@ -76,7 +79,7 @@ SEQUENCES = {
     # word that they are safe or someone is with them, or on the second calm message after Mani's reply asked.
     "a change of subject never clears danger, and the second calm message does (S1)": (
         [(ORD, D(about="themselves")), (ORD, N()), (ORD, N())],
-        [(DANGER, F, F, T, "themselves"), (DANGER, F, F, F, "themselves"), (CLEAR, F, T, F, None)]),
+        [(DANGER, F, F, T, "themselves"), (DANGER, F, F, T, "themselves"), (CLEAR, F, T, F, None)]),
     "their word that they are safe clears danger at once (S1)": (
         [(ORD, D(about="themselves")), (ORD, N(says_safe=True))],
         [(DANGER, F, F, T, "themselves"), (CLEAR, F, T, F, None)]),
@@ -85,7 +88,7 @@ SEQUENCES = {
         [(DANGER, F, F, T, "themselves"), (CLEAR, F, T, F, None)]),
     "a calm message held as danger never pauses, and danger said after it does (S1)": (
         [(ORD, D(about="themselves")), (ORD, N()), (ORD, D(about="themselves"))],
-        [(DANGER, F, F, T, "themselves"), (DANGER, F, F, F, "themselves"), (DANGER, T, F, F, "themselves")]),
+        [(DANGER, F, F, T, "themselves"), (DANGER, F, F, T, "themselves"), (DANGER, T, F, F, "themselves")]),
     "danger of one kind never holds an unsure read of another (the review of 2026-11-20)": (
         [(ORD, U(about="body", symptom_now="unsaid")), (ORD, U(about="themselves"))],
         [(DANGER, F, F, T, "body"), (UNSURE, F, F, F, "themselves")]),
@@ -135,7 +138,7 @@ SEQUENCES = {
     "a danger of no known kind after a settled worry needs a refusal like any other": (
         [(ORD, D(about="themselves")), (ORD, N(says_safe=True)), (ORD, D()), (ORD, D())],
         [(DANGER, F, F, T, "themselves"), (CLEAR, F, T, F, None), (DANGER, F, F, T, None),
-         (DANGER, F, F, F, None)]),
+         (DANGER, F, F, T, None)]),
     "the first message back after a pause never pauses, whatever the read reports": (
         [(ASK, D(about="themselves", still_there=True))],
         [(DANGER, F, F, T, "themselves")]),

@@ -57,8 +57,9 @@ class Outcome:
     about: str | None
     pausing: bool
     settled_now: bool
-    # The first danger of its kind that does not pause: the reply must say where to get help (S2), even with someone
-    # with them (S7). PROVISIONAL: clinician sign-off required before deploy.
+    # The reply must say where to get help: the first danger of its kind that does not pause (S2), even with someone
+    # with them (S7), and every later reply that does not pause while danger about a person is held (CR-3).
+    # PROVISIONAL: clinician sign-off required before deploy.
     resources_due: bool = False
     calm: int = 0
     # Code raised the model's read to danger on a high-risk phrase (S4).
@@ -139,9 +140,12 @@ def step(stood: Standing, read: Safety, message: str = "") -> Outcome:
         goes_on = stood.state is State.DANGER
     # Danger held only by the count of calm messages is not danger going on, so it never pauses.
     pausing = after is State.DANGER and not waits and not floored and kind_pauses and not read.help_in_place and goes_on
-    # Once per kind of danger: a conversation already in danger of this kind has had the help; another kind has not.
+    # The first danger of each kind; and while danger about a person is held, every reply, unless their message says
+    # someone is with them (S7). A body symptom's line comes once per rise (muhammad, 2026-11-18). CR-3, PROVISIONAL:
+    # clinician sign-off required before deploy.
+    first_of_kind = stood.state is not State.DANGER or stood.about != about
     resources_due = (after is State.DANGER and not pausing
-                     and (stood.state is not State.DANGER or stood.about != about))
+                     and (first_of_kind or (about != "body" and not read.help_in_place)))
     return Outcome(
         state=after, about=about if after is not State.CLEAR else None, pausing=pausing,
         settled_now=stood.state is not State.CLEAR and after is State.CLEAR,

@@ -17,6 +17,11 @@ from mani.prompts import cache, composer
 SAID_SHOWN = 6
 OPENERS_SHOWN = 4
 NO_OFFER = "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
+# While danger is held, until they say they are safe or someone is with them (CR-3).
+HELD_DANGER = ("Danger is open and not yet resolved: unless their message says they are safe or someone is with them, "
+               "this reply keeps the same emergency guidance (911 or the nearest emergency department, 988 to call or "
+               "text, and someone to be with them now) and never step it down, such as to a helpline alone or to not "
+               "telling anyone.")
 # What a tap on Start says while the turn is held for safety: the set does not start, so its first line is not said.
 HELD_START = ("They tapped to start the set, but this reply is about their safety: it does not start now and you never "
               "say its line.")
@@ -74,6 +79,9 @@ def facts(
         lines.append(f"They finished in this conversation: {', '.join(finished)}. Never offer a set again.")
     if safety != "clear":
         lines.append(f"A safety worry is open in this conversation ({safety}). Judge their message for it first.")
+    if state is State.DANGER:
+        # CR-3. PROVISIONAL: clinician sign-off required before deploy.
+        lines.append(HELD_DANGER)
     if not offerable(config, record=record, running=running, open_offer=open_offer, holding=holding,
                      person_messages=person_messages, state=state):
         lines.append(NO_OFFER)

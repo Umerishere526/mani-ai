@@ -437,6 +437,20 @@ async def test_a_change_of_subject_after_danger_keeps_the_worry_open(alice, mode
     assert (await thread_row(alice, thread.id)).safety == "clear"
 
 
+async def test_every_reply_while_danger_is_held_names_where_to_get_help(alice, model):
+    """CR-3 (PROVISIONAL: clinician sign-off required before deploy): manasa's crisis test (2026-11-25) got emergency
+    guidance, then "You do not have to tell anyone you know" with 988 alone while the danger stood. Every reply that
+    does not pause while danger is held names the numbers, and the facts forbid stepping the guidance down."""
+    scripted = model(said(FIRST_REPLY, safety=DANGER),
+                     said("You do not have to tell anyone you know.", safety=Safety(level="none")))
+    thread = await start(alice)
+    await send(alice, thread.id, "i have pills here and i'm going to take them tonight")
+    later = await send(alice, thread.id, "i don't want to tell anyone")
+    assert later.paused_until is None and later.trace["resources_added"]
+    assert later.content == "You do not have to tell anyone you know.\n\n" + crisis.resources_line("themselves")
+    assert "never step it down" in facts_of(scripted)
+
+
 async def test_a_high_risk_phrase_the_model_read_as_none_is_danger_with_help_and_no_pause(alice, model):
     """S3 and S4 (PROVISIONAL: clinician sign-off required before deploy): "I wish I were dead" is HIGH in the client's
     Risk Classification; read lower by the model, code raises it, records it and adds the help line, with no lockout."""
