@@ -54,6 +54,7 @@ export function RootStack() {
         <Stack.Screen name="exercises" />
         <Stack.Screen name="change-password" options={{ presentation: 'modal' }} />
         <Stack.Screen name="change-email" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="delete-account" options={{ presentation: 'modal' }} />
       </Stack.Protected>
     </Stack>
   );

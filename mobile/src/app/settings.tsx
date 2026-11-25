@@ -58,6 +58,12 @@ export default function SettingsScreen() {
               accessory="chevron"
               onPress={() => router.push("/change-email")}
             />
+            <SettingsRow
+              icon="trash-2"
+              label={en.settings.deleteAccount}
+              accessory="chevron"
+              onPress={() => router.push("/delete-account")}
+            />
           </SettingsSection>
         )}
 

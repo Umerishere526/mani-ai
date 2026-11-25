@@ -57,6 +57,7 @@
     "notifications": "Notifications",
     "changePassword": "Change Password",
     "changeEmail": "Change Email",
+    "deleteAccount": "Delete Account",
     "logOut": "Log Out",
     "loggingOut": "Logging out...",
     "goBackLabel": "Go back"
@@ -117,6 +118,16 @@
     "successTitle": "Success",
     "successMessage": "Your password has been updated.",
     "ok": "OK"
+  },
+  "deleteAccount": {
+    "title": "Delete Account",
+    "explanation": "Deleting your account permanently removes your conversations, your profile and your exercise history. MANI can't recover any of it afterwards.",
+    "continue": "Continue",
+    "confirmWarning": "Are you sure? This can't be undone.",
+    "confirm": "Delete My Account",
+    "confirmHint": "Permanently deletes your account and everything in it",
+    "deleting": "Deleting...",
+    "cancel": "Keep My Account"
   },
   "exercises": {
     "comingSoon": "150+ topics coming soon",
