@@ -44,6 +44,8 @@ which parts break the rules. Change only those parts, keep their meaning, and le
 - A question named as yes/no or either/or, or as odd or figurative: rewrite it as one plain open question that starts \
 with what, how, when, where, which or who, about the same thing.
 - A sentence named as a figure of speech: say the same thing in simple everyday English, as a person would text it.
+- A reply named as saying he or she: change only those words to "they" (and the verb with it) or their own words for \
+the person.
 - A sentence named as repeating what they said: replace it as told, never with a question.
 - A sentence named as a reading said as fact: say it as a possibility ("I wonder if…") or say only what they said.
 Never add a question to the text, advice, or anything new. The text never contains the question: the question goes \
@@ -67,7 +69,21 @@ def _closed(question: str) -> str | None:
     return None
 
 
-def problems(reply: TurnReply, said: str = "") -> list[str]:
+# He or she for someone whose gender they never gave (the 2026-11-25 run: "he" for a boss and a landlord in four
+# scenarios). A word for a person that carries it ("my sister") counts as given.
+_PRONOUNS = {"he": re.compile(r"\b(he|him|his|himself)\b", re.IGNORECASE),
+             "she": re.compile(r"\b(she|her|hers|herself)\b", re.IGNORECASE)}
+_GENDERED = {"he": re.compile(r"\b(brother|father|dad|husband|boyfriend|son|uncle|grand(?:father|pa)|nephew|stepdad|"
+                               r"stepfather|man|guy|fiance)s?\b", re.IGNORECASE),
+             "she": re.compile(r"\b(sister|mother|mom|mum|wife|girlfriend|daughter|aunt|grand(?:mother|ma)|niece|stepmom|"
+                               r"stepmother|woman|girl|fiancee)s?\b", re.IGNORECASE)}
+
+
+def _genders_given(everything: str) -> set[str]:
+    return {g for g in _PRONOUNS if _PRONOUNS[g].search(everything) or _GENDERED[g].search(everything)}
+
+
+def problems(reply: TurnReply, said: str = "", everything: str | None = None) -> list[str]:
     """The client's rules this reply breaks that code can find, each as an instruction naming the exact words. Drafted
     wording written for them to send is theirs and never counted."""
     found, ask = [], reply.question.ask.strip()
@@ -75,6 +91,12 @@ def problems(reply: TurnReply, said: str = "") -> list[str]:
         found.append(f'The question "{ask}" {why}.')
     elif ask and enforce.figurative(ask):
         found.append(f'The question "{ask}" uses odd or figurative words: ask it in plain everyday words.')
+    if everything is not None:
+        given = _genders_given(everything)
+        used = {g for g, pattern in _PRONOUNS.items() if pattern.search(f"{reply.text} {ask}")} - given
+        for gender in sorted(used):
+            found.append(f'The reply says "{gender}" for someone whose gender they have not given: say "they", or their '
+                         'own words for the person ("your boss").')
     spans = questions.drafted(reply.text)
     for sentence in questions.sentences(reply.text):
         if any(sentence in reply.text[a:b] for a, b in spans):
@@ -119,13 +141,14 @@ def acceptable(before: TurnReply, after: Repaired) -> bool:
     return not (before.question.ask.strip() and (not after.ask.strip() or _closed(after.ask)))
 
 
-async def checked(call: client.Call[TurnReply], *, said: str, kwargs: dict, settings: Settings) -> tuple[
+async def checked(call: client.Call[TurnReply], *, said: str, kwargs: dict, settings: Settings,
+                  everything: str | None = None) -> tuple[
         client.Call[TurnReply], list[str]]:
     """The chat call with its reply repaired where code found a broken rule, and what was found. A reply with nothing
     found goes out at once, with no call; any failure, a slow answer or a repair that does more than it may leaves
     the reply exactly as the chat call wrote it."""
     reply = call.value
-    found = problems(reply, said) if due(reply, settings) else []
+    found = problems(reply, said, everything) if due(reply, settings) else []
     if not found:
         return call, []
     named = "\n".join(f"- {problem}" for problem in found)

@@ -136,8 +136,9 @@ async def run(
         logger.exception("model failed for thread %s; the turn sends its fixed words", thread_id)
         call = None
     if call is not None and isinstance(call.value, TurnReply):
-        said = next((m["content"] for m in reversed(request.messages) if m.get("role") == "user"), "")
-        call, changed = await check.checked(call, said=said, kwargs=request.kwargs, settings=get_settings())
+        theirs = [m["content"] for m in request.messages if m.get("role") == "user"]
+        call, changed = await check.checked(call, said=theirs[-1] if theirs else "", everything="\n".join(theirs),
+                                            kwargs=request.kwargs, settings=get_settings())
         call = replace(call, checked=tuple(changed))
     writing = time.perf_counter()
     async with pool.as_user(claims) as conn:

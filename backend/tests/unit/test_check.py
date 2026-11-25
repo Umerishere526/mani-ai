@@ -66,3 +66,11 @@ def test_a_sentence_that_hands_them_their_own_message_back_is_named_outside_a_se
     assert check.problems(reply("Being left out by her, of all people, sounds painful.", "What did she say?"), said) == []
     in_set = echo.model_copy(update={"stage": "activate"})
     assert check.problems(in_set, said) == []
+
+
+def test_he_or_she_for_someone_whose_gender_they_never_gave_is_named():
+    """The 2026-11-25 regression run: "he" for a boss and a landlord in four scenarios."""
+    guessed = reply("That keeps happening.", "What does he say when you push back?")
+    assert any('says "he"' in p for p in check.problems(guessed, "my boss adds work", "my boss adds work"))
+    assert not any('says "he"' in p for p in check.problems(guessed, "my dad adds work", "my dad adds work"))
+    assert not any('says "he"' in p for p in check.problems(guessed, "x", "my boss... he never listens"))
