@@ -10,6 +10,7 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
@@ -23,6 +24,7 @@ from mani.config import get_settings  # noqa: E402
 from mani.db import pool  # noqa: E402
 
 PERSON_MODEL = "openai/gpt-6-luna"
+LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
 PERSON = (
     "You are role-playing a real person using a support chat app called MANI on your phone. {brief}\n"
     "Write like a real person texting: short, casual, sometimes vague, sometimes a typo. Answer what MANI asks only "
@@ -63,6 +65,15 @@ class Conversation:
     thread_id: uuid.UUID | None = None
     # Mani's reply to the style tap, which opens the conversation before the person's first message.
     opening: str = ""
+
+
+def remote_database_refusal(allow_remote: bool) -> str | None:
+    """Why a run that creates test people must not start against this DATABASE_URL, or None when it may."""
+    host = urlparse(get_settings().database_url).hostname
+    if host in LOCAL_HOSTS or allow_remote:
+        return None
+    return (f"Refusing to run against database host {host!r}: the run creates test people and conversations. "
+            "Use a local or dedicated test database, or pass --allow-remote-db for a test project.")
 
 
 async def new_person(tag: str) -> tuple[Claims, uuid.UUID]:

@@ -11,7 +11,6 @@ import os
 import pathlib
 import subprocess
 import sys
-from urllib.parse import urlparse
 
 # A scripted person answers faster than anyone types, so the per-minute limit is off here, as in check_suite.
 os.environ["MINUTE_MESSAGE_LIMIT"] = "0"
@@ -20,14 +19,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 import httpx  # noqa: E402
 
+from evals.drive import remote_database_refusal  # noqa: E402
 from evals.regression import checks, report  # noqa: E402
 from evals.regression.play import error_record, gap_record, play  # noqa: E402
-from mani.config import get_settings  # noqa: E402
 from mani.db import config_tables, pool  # noqa: E402
 from mani.chat.techniques import stages_of  # noqa: E402
 
 SCENARIOS = pathlib.Path(__file__).resolve().parent / "regression" / "scenarios.json"
-LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
 # OpenRouter holds each running request's cost against the balance; a few at a time keeps the holds small.
 CONCURRENCY = 3
 
@@ -114,10 +112,8 @@ async def main(argv: list[str]) -> int:
         for s in scenarios:
             print(f"{s['id']}  {s['group']:<9} {s['status']:<4} {s['style']:<10} {s['title']}")
         return 0
-    host = urlparse(get_settings().database_url).hostname
-    if host not in LOCAL_HOSTS and not args.allow_remote_db:
-        print(f"Refusing to run against database host {host!r}: the suite creates test people and conversations. "
-              "Use a local or dedicated test database, or pass --allow-remote-db for a test project.")
+    if refusal := remote_database_refusal(args.allow_remote_db):
+        print(refusal)
         return 2
     await pool.open_pool()
     try:
