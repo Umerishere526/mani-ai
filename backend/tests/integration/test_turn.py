@@ -291,7 +291,7 @@ async def test_after_e_the_feelings_check_then_the_closing_buttons(alice, model)
     assert "abcde" not in ((await thread_row(alice, thread.id)).understanding.get("finished") or [])
     closed = await send(alice, thread.id, "It didn't help")
     assert "They tapped the button \"It didn't help\"" in facts_of(scripted)
-    assert [p.label for p in closed.prompts] == ["Continue chatting", "Visit library", "Finish for Now"]
+    assert [p.label for p in closed.prompts] == ["Continue chatting", "Visit library"]
     assert (await thread_row(alice, thread.id)).understanding["finished"] == ["abcde"]
 
 
@@ -319,7 +319,7 @@ async def test_a_finish_after_danger_sends_the_end_check_then_the_close(alice, m
     assert [p.label for p in check.prompts] == ["Better", "About the same", "It didn't help"]
     assert (await thread_row(alice, thread.id)).understanding["safety_end_check"] == "done"
     closed = await send(alice, thread.id, "Better")
-    assert [p.label for p in closed.prompts][-1] == "Finish for Now"
+    assert [p.label for p in closed.prompts] == ["Continue chatting", "Visit library"]
 
 
 async def test_a_set_stopped_while_the_end_check_waits_leaves_no_question_marked_as_asked(alice, model):

@@ -50,11 +50,6 @@ def test_talk_more_first_sets_the_offer_aside_and_never_declines_it():
     assert event.set_aside is True and event.starting is None and event.fact
 
 
-def test_finish_for_now_after_the_questions_asks_for_a_goodbye():
-    event = tap_event(SmartPrompt(label="Finish for Now"), REGISTRY, None)
-    assert "ask nothing" in event.fact
-
-
 def test_no_tap_means_nothing():
     event = tap_event(None, REGISTRY, offered("abcde"))
     assert (event.fact, event.starting, event.set_aside, event.explain, event.example) == (None, None, False, None, None)

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 from mani.chat import record as rec
 from mani.chat.questions import WANTS_TO_STOP
-from mani.chat.greeting import CONTINUE_CHATTING_LABEL, FINISH_LABEL, VISIT_LIBRARY_LABEL
+from mani.chat.greeting import CONTINUE_CHATTING_LABEL, VISIT_LIBRARY_LABEL
 from mani.chat.repairs import feelings_buttons, lead_in_buttons, start_buttons
 from mani.chat.reply import TurnReply
 from mani.chat.taps import TapEvent
@@ -55,11 +55,10 @@ def offer_current(open_offer: TechniqueState, message_count: int) -> bool:
     return open_offer.phase != OFFERING or open_offer.at_message_count == message_count
 
 
-def closing_buttons(*, with_finish: bool = True) -> list[SmartPrompt]:
-    """The close: Continue chatting and Visit library, and Finish for Now unless they already said they are done."""
-    buttons = [SmartPrompt(label=CONTINUE_CHATTING_LABEL),
-               SmartPrompt(label=VISIT_LIBRARY_LABEL, library=LibrarySection.HOME.value)]
-    return [*buttons, SmartPrompt(label=FINISH_LABEL)] if with_finish else buttons
+def closing_buttons() -> list[SmartPrompt]:
+    """The close: Continue chatting and Visit library."""
+    return [SmartPrompt(label=CONTINUE_CHATTING_LABEL),
+            SmartPrompt(label=VISIT_LIBRARY_LABEL, library=LibrarySection.HOME.value)]
 
 
 def decide(
@@ -96,7 +95,7 @@ def decide(
         decision = dataclasses.replace(decision, prompts=[
             SmartPrompt(label=VISIT_LIBRARY_LABEL, library=LibrarySection.HOME.value)])
     if stopping:
-        decision = dataclasses.replace(decision, prompts=closing_buttons(with_finish=False))
+        decision = dataclasses.replace(decision, prompts=closing_buttons())
     return decision
 
 

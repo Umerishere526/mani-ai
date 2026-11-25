@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from mani.chat.greeting import (
-    CONTINUE_CHATTING_LABEL, EXAMPLE_LABEL, FINISH_LABEL, GIVE_ME_A_TOOL_LABEL, NOT_SURE_LABEL, SHOW_ME_HOW_LABEL,
+    CONTINUE_CHATTING_LABEL, EXAMPLE_LABEL, GIVE_ME_A_TOOL_LABEL, NOT_SURE_LABEL, SHOW_ME_HOW_LABEL,
     TALK_MORE_FIRST_LABEL,
 )
 from mani.chat.techniques import FIRST_STAGE_OPENING, Registry, line_of, stages_of
@@ -18,7 +18,6 @@ SHOW_ME_HOW = SHOW_ME_HOW_LABEL.lower()
 GIVE_ME_A_TOOL = GIVE_ME_A_TOOL_LABEL.lower()
 EXAMPLE = EXAMPLE_LABEL.lower()
 TALK_MORE_FIRST = TALK_MORE_FIRST_LABEL.lower()
-FINISH = FINISH_LABEL.lower()
 CONTINUE_CHATTING = CONTINUE_CHATTING_LABEL.lower()
 
 
@@ -106,8 +105,6 @@ def tap_event(tapped: SmartPrompt | None, registry: Registry, open_offer: Techni
         return TapEvent(set_aside=True, fact=(
             f"They chose to talk more before trying {offered.name}. Carry on with them; you may offer it again later "
             "when it fits."))
-    if label == FINISH:
-        return TapEvent(fact="They tapped Finish for Now. Say goodbye warmly in a sentence or two, and ask nothing.")
     if label == CONTINUE_CHATTING:
         return TapEvent(fact="They chose to continue chatting.")
     return TapEvent(fact=f'They tapped the button "{tapped.label}".')

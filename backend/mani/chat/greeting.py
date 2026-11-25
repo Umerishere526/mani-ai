@@ -51,10 +51,9 @@ TALK_MORE_FIRST_LABEL = "Talk more first"
 # Neutral, so none presumes it helped and one says it didn't (Lolly, 2026-11-23: "The options must allow users to
 # indicate that something has not helped").
 FEELINGS_LABELS = ("Better", "About the same", "It didn't help")
-# The close, in the client's words (Lolly, 2026-11-20: "CONTINUE CHATTING OR VISIT LIBRARY"), and Finish for Now.
+# The close, in the client's words (Lolly, 2026-11-20: "CONTINUE CHATTING OR VISIT LIBRARY").
 CONTINUE_CHATTING_LABEL = "Continue chatting"
 VISIT_LIBRARY_LABEL = "Visit library"
-FINISH_LABEL = "Finish for Now"
 
 
 def start_label(framework_name: str) -> str:

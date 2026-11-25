@@ -90,7 +90,7 @@ def test_finish_on_the_last_stage_opens_the_feelings_check_and_finishes_nothing_
 def test_any_answer_to_the_feelings_check_closes_the_set_with_the_closing_buttons():
     for answer in (reply(), reply(action="finish"), reply(stage="effective")):
         d = decided(answer, running=running("abcde", "feelings_check"))
-        assert labels(d) == ["Continue chatting", "Visit library", "Finish for Now"] and d.finished == ["abcde"] and d.retire_technique
+        assert labels(d) == ["Continue chatting", "Visit library"] and d.finished == ["abcde"] and d.retire_technique
 
 
 def test_a_guarded_turn_leaves_the_feelings_check_open():
@@ -198,8 +198,8 @@ def test_the_floor_never_closes_an_offer_already_made():
     assert d.show_steps.id == "abcde"
 
 
-def test_a_wish_to_stop_stops_the_set_and_shows_the_close_without_finish():
-    """R95: a typed "I'm done" is respected; Finish for Now would only say goodbye again."""
+def test_a_wish_to_stop_stops_the_set_and_shows_the_close():
+    """R95: a typed "I'm done" is respected."""
     done = Question(latest="wants_to_stop")
     d = decided(reply(question=done, stage="belief"), running=running("abcde", "activate"))
     assert labels(d) == ["Continue chatting", "Visit library"] and d.declined == ["abcde"]
