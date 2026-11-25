@@ -32,6 +32,8 @@ PLAIN_WORDS = {
     "weak": "fragile", "toxic": "hurtful", "negative": "harsh", "struggling": "finding it hard", "journey": "path",
     "landscape": "picture",
 }
+# A sentence that names where to get help, kept on a guarded turn even when it also says a banned line.
+_NAMES_HELP = re.compile(r"\b(?:911|988|1-800-\d{3}-\d{4}|findahelpline)", re.IGNORECASE)
 _FORBIDDEN = re.compile(rf"\b(?:(a|an)(\s+))?({'|'.join(FORBIDDEN_WORDS)})\b", re.IGNORECASE)
 
 # A message that is only a wish to stop (R95; Lolly 2026-11-17: respect a clear request to stop without asking another
@@ -147,13 +149,13 @@ def in_plain_words(text: str) -> tuple[str, list[str]]:
 
 
 def without_banned_lines(text: str, ask: str, *, guarded: bool) -> tuple[str, list[str]]:
-    """The text without the sentences that say a banned line, and the events. A question that says one stays, as does
-    every sentence of a guarded turn and the text's only words when no question (`ask`) follows; each is recorded as
-    kept."""
+    """The text without the sentences that say a banned line, and the events. A question that says one stays, as does a
+    sentence of a guarded turn that names where to get help (CR-6: the lines are cut on crisis turns too, where they
+    were seen) and the text's only words when no question (`ask`) follows; each is recorded as kept."""
     if not banned_phrases(f"{text} {ask}"):
         return text, []
-    cut = text if guarded else questions.kept(
-        text, lambda _, sentence: questions.asks(sentence) or not banned_phrases(sentence))
+    cut = questions.kept(text, lambda _, sentence: questions.asks(sentence) or not banned_phrases(sentence)
+                         or (guarded and bool(_NAMES_HELP.search(sentence))))
     if not cut and not ask.strip():
         cut = text
     events = [BANNED_LINE_REMOVED] if cut != text else []
