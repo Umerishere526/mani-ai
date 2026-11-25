@@ -82,8 +82,17 @@ def _described(failure: BaseException | None) -> str:
     if isinstance(failure, _QUOTES_THE_REPLY):
         return type(failure).__name__
     if isinstance(failure, _QUOTES_THEIR_WORDS):
-        return f"{type(failure).__name__}: {failure.status_code}"
+        host = _host_of(failure)
+        return f"{type(failure).__name__}: {failure.status_code}" + (f" from {host}" if host else "")
     return f"{type(failure).__name__}: {failure}"
+
+
+def _host_of(failure: openai.APIStatusError) -> str | None:
+    """The host OpenRouter names in an error's metadata, which quotes nothing anyone wrote; None when it names none."""
+    error = failure.body.get("error") if isinstance(failure.body, dict) else None
+    metadata = error.get("metadata") if isinstance(error, dict) else None
+    host = metadata.get("provider_name") if isinstance(metadata, dict) else None
+    return host if isinstance(host, str) and host else None
 
 
 # The model calls this instance has in flight, made on first use in the running loop.

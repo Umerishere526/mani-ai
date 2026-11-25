@@ -699,6 +699,25 @@ def test_a_provider_error_is_stored_without_the_body_that_can_quote_their_messag
     assert described == "PermissionDeniedError: 403"
 
 
+def test_a_provider_error_names_the_host_that_refused_and_still_quotes_nothing():
+    """2026-11-25: 19 chat calls failed with a bare 400 and nothing said which host refused them. The host OpenRouter
+    names is kept; the raw body, which can quote what they wrote, is not."""
+    import httpx
+
+    words = "my manager keeps adding tasks"
+    response = httpx.Response(400, request=httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions"))
+    refused = openai.BadRequestError(
+        f"Error code: 400 - raw: {words}", response=response,
+        body={"error": {"code": 400, "message": "Provider returned error",
+                        "metadata": {"provider_name": "Fireworks", "raw": f"invalid schema near '{words}'"}}},
+    )
+
+    described = client._described(refused)
+
+    assert words not in described
+    assert described == "BadRequestError: 400 from Fireworks"
+
+
 async def test_an_empty_reply_is_retried_like_any_reply_that_does_not_parse(monkeypatch, recorded):
     """2026-11-23: a host answered with reasoning tokens and no content. LangChain raises a plain ValueError for that,
     which no retry caught, so a person who wrote "i want to talk about thanksgiving" got the fixed reply with a crisis
