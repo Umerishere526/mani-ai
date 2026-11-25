@@ -53,6 +53,7 @@ export function SendButton({ onPress, disabled = false, filled = true, className
         accessibilityRole="button"
         accessibilityLabel={en.shared.sendButtonLabel}
         accessibilityState={{ disabled }}
+        hitSlop={4}
         className={cn(
           'items-center justify-center rounded-full',
           filled ? 'bg-primary-400' : 'border-[1.5px] border-primary-300 bg-transparent',

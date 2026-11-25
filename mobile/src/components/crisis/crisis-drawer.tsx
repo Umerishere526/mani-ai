@@ -53,6 +53,7 @@ export function CrisisDrawer({ visible, onClose }: CrisisDrawerProps) {
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel={en.crisis.closeLabel}
+            hitSlop={8}
           >
             <Ionicons name="close" size={24} color={colors.secondary[500]} />
           </Pressable>

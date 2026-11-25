@@ -31,6 +31,9 @@ export default function ExerciseCategoriesScreen() {
                 key={category}
                 onPress={() => router.push(`/exercises/${category}`)}
                 className="overflow-hidden rounded-lg p-4 active:opacity-70"
+                accessibilityRole="button"
+                accessibilityLabel={info.title}
+                accessibilityHint={info.description}
               >
                 <CardGradient />
                 <Text

@@ -48,7 +48,15 @@ export function SecondaryButton({
   };
 
   return (
-    <Pressable className={className ?? 'self-center'} onPress={handlePress} disabled={disabled} {...props}>
+    <Pressable
+      className={className ?? 'self-center'}
+      onPress={handlePress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: disabled ?? false }}
+      {...props}
+    >
       <Animated.View
         className="items-center justify-center rounded-full px-8 py-4"
         style={animatedButtonStyle}

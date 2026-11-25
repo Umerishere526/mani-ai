@@ -14,6 +14,8 @@ export function CrisisButton({ className, ...props }: CrisisButtonProps) {
   return (
     <Pressable
       className={cn('items-center justify-center rounded-full bg-secondary-500 px-6 py-4 active:opacity-80', className)}
+      accessibilityRole="button"
+      accessibilityLabel={en.crisis.buttonLabel}
       {...props}
     >
       <Text className="font-sans-semibold text-base text-primary-500">{en.crisis.buttonLabel}</Text>

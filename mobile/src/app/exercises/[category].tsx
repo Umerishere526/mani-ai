@@ -10,7 +10,7 @@ import {
 import { Feather } from "@react-native-vector-icons/feather";
 import { AppHeader, Text } from "@/components/shared";
 import { useResponsiveTypography } from "@/hooks/useResponsiveTypography";
-import { formatDuration } from "@/lib/utils";
+import { exerciseAccessibilityLabel, formatDuration } from "@/lib/utils";
 import { EXERCISES_BY_CATEGORY } from "@/lib/placeholder-exercises";
 import en from "@/dictionaries/en.json";
 import type { TopicId } from "@/types/exercise";
@@ -40,6 +40,9 @@ export default function ExerciseCategoryScreen() {
                 <Pressable
                   onPress={() => router.push(`/exercises/player/${exercise.id}`)}
                   className="flex-row items-center py-4 active:opacity-70"
+                  accessibilityRole="button"
+                  accessibilityLabel={exerciseAccessibilityLabel(exercise)}
+                  accessibilityHint={en.home.exerciseCardHint}
                 >
                   <View className="flex-1">
                     <Text

@@ -12,7 +12,7 @@ interface ActionLinkProps {
 
 function ActionLink({ label, onPress }: ActionLinkProps) {
   return (
-    <Pressable className="py-2 active:opacity-70" onPress={onPress}>
+    <Pressable className="py-2 active:opacity-70" onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
       <Text className="font-sans-medium text-base text-secondary-500 underline">{label}</Text>
     </Pressable>
   );

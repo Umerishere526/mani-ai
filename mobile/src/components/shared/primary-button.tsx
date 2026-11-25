@@ -27,6 +27,9 @@ export function PrimaryButton({
     <Pressable
       onPress={handlePress}
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: disabled ?? false }}
       className={cn(
         'items-center justify-center self-center rounded-full px-8 py-4',
         disabled
