@@ -46,7 +46,8 @@ export function ChatDrawer({
 }: ChatDrawerProps) {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
-  const drawerWidth = screenWidth * DRAWER_WIDTH_RATIO;
+  // A whole-point width, so the closed drawer's right border sits fully off screen.
+  const drawerWidth = Math.round(screenWidth * DRAWER_WIDTH_RATIO);
 
   const slide = useSharedValue(0);
   const overlay = useSharedValue(0);
@@ -75,7 +76,7 @@ export function ChatDrawer({
   const gradientBottomOffset = PROFILE_CONTENT_HEIGHT + insets.bottom + 8;
 
   return (
-    <View className="absolute inset-0" pointerEvents={visible ? 'auto' : 'none'}>
+    <View className="absolute inset-0" pointerEvents={visible ? 'auto' : 'none'} aria-hidden={!visible}>
       <Animated.View className="absolute inset-0 bg-primary-900" style={overlayStyle}>
         <Pressable className="absolute inset-0" onPress={onClose} accessibilityRole="button" accessibilityLabel={en.chat.closeDrawerLabel} />
       </Animated.View>
