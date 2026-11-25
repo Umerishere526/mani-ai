@@ -100,16 +100,6 @@ stages:
         5. Create a Believable Replacement Thought: Knowing what you've looked at, what could you genuinely believe instead?
 
         Are you ready to dive into a real life situation?
-    # The worked example. Ours until the client supplies hers.
-    example: |-
-      Here's how it can go for someone who wasn't invited to a friend's birthday dinner.
-
-      - The thought: My friends don't really care about me.
-      - What makes it painful: It might mean I'll end up on my own.
-      - What makes it feel true: They didn't invite me, and nobody said anything about it. But two of them did call me last week.
-      - Another interpretation: Maybe the dinner was small, or someone assumed I'd been told.
-      - A believable replacement: I wasn't at this dinner, and that hurts, but people in my life do reach out to me.
-
   thought:
     title: "Identify the Thought"
     intro: "Step 1 is Identify the Thought."

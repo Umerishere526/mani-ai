@@ -1,5 +1,5 @@
 # ABOUTME: Checks the seeded frameworks carry what the turn reads from them: the letters in order, each letter's line,
-# ABOUTME: the five steps in every style and the worked example, and when each stage counts as answered. No database needed.
+# ABOUTME: the steps in every style, and when each stage counts as answered. No database needed.
 
 import pytest
 

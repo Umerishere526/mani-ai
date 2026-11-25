@@ -240,6 +240,7 @@ Fill `safety` every reply:
 - `said`: your reply's main move and what it gives them, in a few words.
 - `action`: `none`, `offer`, `finish`, `stop` or `library`.
 - `framework`: the id of the set you offer, only with `offer`.
+- `library`: the library section closest to what they have talked about, once one clearly is; otherwise null.
 - `stage`: the stage your reply is on, whenever a set is running.
 - `safety`: as above.
 - `notes`: your private working notes for your next turn, rewritten whole each time, under 100 words. Keep: how it feels, what they tell themselves (the core, as they have confirmed or corrected it), what they want, anything they corrected, and what would help next. Plain words. Never shown to them.

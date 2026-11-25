@@ -65,16 +65,6 @@ stages:
         - E: Effective new belief (What kind of belief could you hold instead)
 
         Are you ready to dive into a real life situation?
-    # The worked example, the answers from the client's own example conversation (2026-11-18).
-    example: |-
-      Here's how it can go for someone whose boss moved a deadline up while their child was sick.
-
-      - A (what happened): My boss moved the deadline up and my child is sick.
-      - B (the belief): I am failing and I can't keep up with anything.
-      - C (the consequences): I'm just sitting here staring at the screen. I'm paralyzed.
-      - D (the dispute): I've handled tight deadlines before. I'm not a failure, it's just a hard day.
-      - E (the new belief): I have a lot on my plate, but I am capable of doing what I can one step at a time.
-
   activate:
     title: "A: Activating Event"
     intro: "A is for Activating Event."

@@ -114,18 +114,6 @@ stages:
         8. Identify the First Action: What would beginning look like?
 
         Are you ready to dive into a real life situation?
-    # The worked example, the answers from the client's own (Framework Four, 23).
-    example: |-
-      Here's how it can go for someone who missed a report deadline and didn't know what to say to their manager.
-
-      - The problem: I need to tell her the report is late and when I can finish it.
-      - The facts: It was due yesterday, and I can finish it by Thursday. I'm assuming she'll take me off the project.
-      - What's in my control: I can tell her now, take responsibility, and explain how I'll finish.
-      - The outcome: I want her to know I'm dealing with it and not hiding the delay.
-      - The options: I could email, call, or ask for a meeting.
-      - Comparing them: Email is quick and gives her the details. A call is more direct, but she may not be free.
-      - The choice: I'll email now and offer to talk.
-      - The first action: Write the opening sentence, taking responsibility for the missed deadline.
   problem:
     title: "Define the Problem"
     intro: "Step 1 is Define the Problem."
