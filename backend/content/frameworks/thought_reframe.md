@@ -100,7 +100,7 @@ stages:
         5. Create a Believable Replacement Thought: Knowing what you've looked at, what could you genuinely believe instead?
 
         Are you ready to dive into a real life situation?
-    # Sent when they tap I need an example. Ours until the client supplies hers.
+    # The worked example. Ours until the client supplies hers.
     example: |-
       Here's how it can go for someone who wasn't invited to a friend's birthday dinner.
 
@@ -339,7 +339,7 @@ person is at fault, or that the thought must be replaced by a positive one.
 
 When Thought Reframe reaches a meaningful conclusion, MANI acknowledges the person's own
 understanding, or the step they chose, in one short sentence. It doesn't overexplain or reopen
-completed steps. Continue chatting, Visit library and Finish for Now follow (the body check-in is paused), never
+completed steps. Continue chatting and Visit library follow (the body check-in is paused), never
 overriding a request to stop or change topic.
 
 Thought Reframe must not be used to question an accurate experience of abuse, threats, coercion,

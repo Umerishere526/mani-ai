@@ -65,7 +65,7 @@ stages:
         - E: Effective new belief (What kind of belief could you hold instead)
 
         Are you ready to dive into a real life situation?
-    # Sent when they tap I need an example: the answers from the client's own example conversation (2026-11-18).
+    # The worked example, the answers from the client's own example conversation (2026-11-18).
     example: |-
       Here's how it can go for someone whose boss moved a deadline up while their child was sick.
 
@@ -261,7 +261,7 @@ guide Mani's own understanding but are never said to the user. Mani uses the per
 - Mani asks one question at a time.
 - The event itself is never questioned when it involves danger or mistreatment. Only what the
   person came to believe about themselves afterwards may be examined.
-- The session ends with Continue chatting, Visit library and Finish for Now (the body check-in is paused).
+- The session ends with Continue chatting and Visit library (the body check-in is paused).
 
 ## Worked example (for Mani's understanding; not a script)
 

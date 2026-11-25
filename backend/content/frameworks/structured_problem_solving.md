@@ -114,7 +114,7 @@ stages:
         8. Identify the First Action: What would beginning look like?
 
         Are you ready to dive into a real life situation?
-    # Sent when they tap I need an example: the answers from the client's own worked example (Framework Four, 23).
+    # The worked example, the answers from the client's own (Framework Four, 23).
     example: |-
       Here's how it can go for someone who missed a report deadline and didn't know what to say to their manager.
 
