@@ -284,6 +284,15 @@ the same change as the work.**
   which keep their own length (see the build-up entry below), their possibilities questions and their A. If the eval still finds long Directive replies,
   the next step is code counting sentences and asking once more, not another line. `mani.md`; eval
   `rule-directive-short`, `rule-directive-open-question`, `max_sentences`.
+- **A practical problem is understood before options: what they want, what can't change, and, when several causes
+  could explain it, where it breaks down, asked in one plain question; no step with big consequences (replacing
+  someone, ending a job or relationship, money) before the cause is known; once known, two or three options each
+  with a reason and its cost, then a first step; an explicit request (what to do, what to say, a tool, help choosing)
+  is answered in that reply** (muhammad, 2026-11-25). Because the tester's business-owner chat got "it's him… hand the
+  job to someone else" after one sentence of context; the cause was the rule "start with two or three concrete
+  options" (CQ-7, 2026-11-25), which this replaces. Directive help replies take the room they need (the code trim
+  already skips `move: help`). `mani.md`; regression TC-28 to TC-34 on the judge's coach rubric
+  (`judge.COACH_CRITERIA`), checks `no_advice_before`, `wording_at`, `helps_at`. Not yet eval-gated.
 - **In Directive a fear or feeling they name about a choice is said back and asked about once before options; a
   choice made on a condition is never their decision; "I can't decide" is not a want for a set of questions**
   (muhammad, 2026-11-25). Because muhammad's tester found the grandma's-birthday chat jumped to a solution, took "the

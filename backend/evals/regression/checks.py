@@ -157,6 +157,36 @@ def no_reading_as_fact(c: Conversation) -> Result:
     return Result("no_reading_as_fact", GAP, not found, "; ".join(found), source="manasa, 2026-11-25 (R181)")
 
 
+_QUOTED = re.compile(r"[\"“]([^\"”]{25,})[\"”]")
+
+
+def no_advice_before(c: Conversation, turn: int, phrases: list[str]) -> Result:
+    """No reply before `turn` recommends one of the scenario's consequential steps: diagnosis before prescription
+    (muhammad's Directive brief, 2026-11-25)."""
+    for n, e in enumerate(c.exchanges[: turn - 1], 1):
+        if found := [p for p in phrases if p.lower() in e.reply.lower()]:
+            return Result("no_advice_before", DETERMINISTIC, False, f"recommended {found} at turn {n}", n)
+    return Result("no_advice_before", DETERMINISTIC, True)
+
+
+def wording_at(c: Conversation, turn: int) -> Result:
+    """The reply to an explicit request for wording gives the words, in quotes, in that same reply."""
+    if len(c.exchanges) < turn:
+        return Result("wording_at", DETERMINISTIC, False, f"the conversation ended before turn {turn}", turn)
+    given = bool(_QUOTED.search(c.exchanges[turn - 1].reply))
+    return Result("wording_at", DETERMINISTIC, given, "" if given else "no quoted wording in the reply", turn)
+
+
+def helps_at(c: Conversation, turn: int) -> Result:
+    """The reply to an explicit request for help (deciding, what to do) gives help, not only a question back: at least
+    two sentences besides its question."""
+    if len(c.exchanges) < turn:
+        return Result("helps_at", DETERMINISTIC, False, f"the conversation ended before turn {turn}", turn)
+    said = [q for q in re.split(r"(?<=[.!?])\s+", c.exchanges[turn - 1].reply.strip()) if q and not q.endswith("?")]
+    return Result("helps_at", DETERMINISTIC, len(said) >= 2, "" if len(said) >= 2 else "answered with a question only",
+                  turn)
+
+
 def no_banned_phrases(c: Conversation) -> Result:
     source = f"Safety Guardrails; {APPROVED}"
     for n, e in enumerate(c.exchanges, 1):
@@ -442,6 +472,12 @@ def evaluate(c: Conversation, scenario: dict, stages: dict[str, list[str]], allo
                latency_within(c, scenario.get("max_latency_s", 10))]
     if offer_turn(c) is not None:
         results.append(offer_names_framework(c, names or {}))
+    if early := expect.get("no_advice_before"):
+        results.append(no_advice_before(c, early["turn"], early["phrases"]))
+    if (at := expect.get("wording_at")) is not None:
+        results.append(wording_at(c, at))
+    if (at := expect.get("helps_at")) is not None:
+        results.append(helps_at(c, at))
     if offer := expect.get("offer"):
         results.append(offer_not_before(c, offer.get("not_before", OFFER_FROM_MESSAGE)))
     if expect.get("framework"):

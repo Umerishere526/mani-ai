@@ -337,3 +337,26 @@ def test_a_reading_said_as_fact_is_a_counted_gap_never_a_failure():
     said = checks.no_reading_as_fact(chat(turn("x", "This weekend is the second kind."), turn("y", "Fair enough.")))
     assert (said.kind, said.passed) == (checks.GAP, False) and said.detail == "turn 1: this weekend is the second kind"
     assert checks.no_reading_as_fact(chat(turn("x", "The promise keeps coming up."))).passed
+
+
+def test_a_consequential_step_before_the_cause_is_known_fails():
+    """muhammad's Directive brief (2026-11-25): 'hand the job to someone else' came before anyone asked why."""
+    early = chat(turn("he builds the wrong thing", "Get someone else to check it, or hand the job to someone else."),
+                 turn("fifth time", "When you explain it, what does he say back?"))
+    result = checks.no_advice_before(early, 3, ["someone else", "hand the job"])
+    assert (result.passed, result.turn) == (False, 1)
+    diagnosed = chat(turn("he builds the wrong thing", "When you explain it, what does he say back?"),
+                     turn("he says he gets it", "Then put what done looks like in writing."),
+                     turn("ok", "Or hand the job to someone else."))
+    assert checks.no_advice_before(diagnosed, 3, ["someone else", "hand the job"]).passed
+
+
+def test_an_explicit_request_is_answered_in_that_reply():
+    asked = chat(turn("can you write the text?", 'Something like: "Hi Sam, the heating has been out for three weeks now."'))
+    assert checks.wording_at(asked, 1).passed
+    dodged = chat(turn("can you write the text?", "What would you want it to say?"))
+    assert not checks.wording_at(dodged, 1).passed
+    helped = chat(turn("help me decide", "The new job pays more. The commute costs you three hours a day. What matters most?"))
+    assert checks.helps_at(helped, 1).passed
+    assert not checks.helps_at(chat(turn("help me decide", "What matters most to you?")), 1).passed
+    assert not checks.helps_at(chat(turn("hi", "Okay.")), 2).passed

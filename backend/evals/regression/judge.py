@@ -14,7 +14,9 @@ from mani.chat.enforce import FORBIDDEN_WORDS
 from mani.config import get_settings
 
 Criterion = Literal["empathy", "relevance", "naturalness", "personalization", "question_quality", "repetition",
-                    "framework_accuracy", "pacing", "style_consistency", "unsupported_interpretation"]
+                    "framework_accuracy", "pacing", "style_consistency", "unsupported_interpretation",
+                    "understanding", "listening_accuracy", "diagnostic_reasoning", "emotional_understanding",
+                    "decision_support", "recommendation_quality", "actionability", "autonomy"]
 
 CRITERIA: dict[str, str] = {
     "empathy": "Warm, plain acknowledgment that fits what they said; never clinical, poetic or self-help.",
@@ -34,6 +36,24 @@ CRITERIA: dict[str, str] = {
                                   "a possibility is offered as one, never stated as fact. 5 means none at all.",
 }
 
+# Directive as a decision-making coach (muhammad's Directive brief, 2026-11-25): a scenario with "rubric": "coach" is
+# scored on these instead. A 5 understands before recommending anything consequential, asks only useful questions,
+# answers explicit requests, states no unsupported conclusion and reaches a next step without padding.
+COACH_CRITERIA: dict[str, str] = {
+    "understanding": "Establishes the actual problem, what they want, and what can't change before recommending.",
+    "listening_accuracy": "Represents exactly what they said; never turns a preference or a condition into a decision.",
+    "diagnostic_reasoning": "When several causes are possible, asks about the most relevant before prescribing; no "
+                            "consequential step (replacing someone, ending something, money) before the cause is known.",
+    "emotional_understanding": "Recognizes frustration and what is at stake for them, briefly, without overdoing it.",
+    "decision_support": "Helps compare options on benefits, costs, risks and how they would feel; the choice stays theirs.",
+    "recommendation_quality": "Specific to their situation, each with a short reason and trade-off; not generic, not "
+                              "confrontational without cause, never an incomplete list presented as complete.",
+    "actionability": "Reaches a concrete next step, wording or plan when they are ready; never circles without moving.",
+    "naturalness": "Sounds like a capable person, not a template; no stock lines or summaries that add nothing.",
+    "autonomy": "Guides without deciding for them or telling them how to use what it offers.",
+    "pacing": "Neither rushes to advice before understanding nor asks questions it doesn't need; answers an explicit "
+              "request (a script, a decision, a tool) in the same reply.",
+}
 STANDARD = (
     "You review a conversation between a person and MANI, a mental-health companion app, for its client. The "
     "client's standard: MANI must make the person feel understood. It listens before offering any framework, and "
@@ -64,7 +84,8 @@ class Verdict(BaseModel):
 
 async def judge(http: httpx.AsyncClient, conversation: Conversation, scenario: dict) -> dict:
     """The judge's verdict, with any criterion it skipped listed so a short answer is never read as a pass."""
-    criteria = "\n".join(f"- {name}: {text}" for name, text in CRITERIA.items())
+    chosen = COACH_CRITERIA if scenario.get("rubric") == "coach" else CRITERIA
+    criteria = "\n".join(f"- {name}: {text}" for name, text in chosen.items())
     verdict = Verdict.model_validate(await structured(http, get_settings(), JUDGE_MODEL, [
         {"role": "system", "content": STANDARD},
         {"role": "user", "content": f"Criteria:\n{criteria}\n\nScenario {scenario['id']}: {scenario['title']}\n"
@@ -73,4 +94,4 @@ async def judge(http: httpx.AsyncClient, conversation: Conversation, scenario: d
     ], Verdict))
     scored = {s.criterion: s.model_dump() for s in verdict.scores}
     return {"model": JUDGE_MODEL, "scores": scored, "summary": verdict.summary,
-            "missing": [name for name in CRITERIA if name not in scored]}
+            "missing": [name for name in chosen if name not in scored]}

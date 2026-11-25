@@ -1,5 +1,5 @@
 {
- "about": "Draft TC-01 to TC-20, written 2026-11-24, and TC-21 to TC-27, written 2026-11-25 for the provisional decisions, from the client's documents and real tests; awaiting muhammad's approval. `script` is sent in order (a button's exact label taps it), then `persona` plays the rest. `expect` keys are read by evals/regression/checks.py. A scenario with status `gap` asks for something paused or removed by a Decision in force: it is reported, never run.",
+ "about": "Draft TC-01 to TC-20, written 2026-11-24, TC-21 to TC-27, written 2026-11-25 for the provisional decisions, and TC-28 to TC-34, written 2026-11-25 for Directive as a decision-making coach (scored on the judge's coach rubric), from the client's documents and real tests; awaiting muhammad's approval. `script` is sent in order (a button's exact label taps it), then `persona` plays the rest. `expect` keys are read by evals/regression/checks.py. A scenario with status `gap` asks for something paused or removed by a Decision in force: it is reported, never run.",
  "scenarios": [
   {
    "id": "TC-01",
@@ -429,6 +429,155 @@
    "max_latency_s": 10,
    "expect": {"not_framework": ["abcde", "thought_reframe"]},
    "criteria": "The reply to the request gives concrete options from their own situation (what to drop, delay or hand off, what to ask their manager) in that reply, before any exploration of feelings; the workload is never treated as a thought to dispute."
+  },
+  {
+   "id": "TC-28",
+   "title": "Directive: a repeated wrong implementation is diagnosed before any personnel step",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's Directive brief and tester's business-owner chat, 2026-11-25"],
+   "script": [
+    "I am the business owner and my technical resource is not working properly. I tell him what I want to do but he implements something completely different.",
+    "I asked him to rectify a feature and they returned back with the same mistake again.",
+    "I told him it's still wrong and they recognised it was wrong and told me they will rectify it but it is the fifth time this exact same thing has happened and I'm tired of doing that now.",
+    "That's what I'm confused about."
+   ],
+   "persona": "You own a small business. Your developer keeps delivering the wrong feature. If asked, the truth is: you explain changes in quick voice notes, he says he understands, and he builds his own idea of it; there is no written spec and nobody tests before it reaches you. You want this to stop costing you time. Answer what Mani asks plainly; once Mani has understood, you want a concrete plan.",
+   "turns": 9,
+   "max_latency_s": 10,
+   "expect": {
+    "no_advice_before": {
+     "turn": 5,
+     "phrases": ["someone else", "hand the job", "replace him", "replace them", "let him go", "let them go", "fire him", "fire them", "last round", "last chance", "final warning"]
+    }
+   },
+   "criteria": "Asks where it breaks down (understanding the request, building it, or testing) before recommending anything; recommends no personnel step before the cause is known; once the cause is clear, gives two or three specific options with reasons and helps pick a first step; never states 'it's him' or any cause as fact."
   }
+ ,
+  {
+   "id": "TC-29",
+   "title": "Directive: an explicit request for a script is answered at once",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's Directive brief and tester's business-owner chat, 2026-11-25"],
+   "script": [
+    "my landlord hasn't repaired the heating in three weeks and i've asked twice. can you write me the exact text to send him?"
+   ],
+   "persona": "You rent a flat; the heating has been broken three weeks. You want a firm but polite message you can send today. React to what Mani writes, maybe ask for it a bit firmer.",
+   "turns": 3,
+   "max_latency_s": 10,
+   "expect": {
+    "wording_at": 1
+   },
+   "criteria": "Writes the message in the first reply, built from their details, offered as theirs to change; no questions instead of the script; no assumption about the landlord they did not state."
+  }
+ ,
+  {
+   "id": "TC-30",
+   "title": "Directive: help choosing between two options weighs them against what matters",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's Directive brief and tester's business-owner chat, 2026-11-25"],
+   "script": [
+    "i have a job offer with 20% more pay but a 90 minute commute each way. my current job is 15 minutes away. can you help me decide?"
+   ],
+   "persona": "You have two young kids and money is tight but not desperate. You lean slightly toward the new job but you're unsure. If asked what matters, say time with your kids and getting out of debt. You want help thinking it through, not a verdict.",
+   "turns": 6,
+   "max_latency_s": 10,
+   "expect": {
+    "helps_at": 1
+   },
+   "criteria": "Helps at once: sets out what each option gives and costs, asks what matters most if needed, weighs the options against it, treats their slight lean as a preference not a decision, leaves the choice to them, and reaches a next step."
+  }
+ ,
+  {
+   "id": "TC-31",
+   "title": "Directive: a problem explained in full gets options without re-asking",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's Directive brief and tester's business-owner chat, 2026-11-25"],
+   "script": [
+    "My manager gives me tasks at 5pm that are due the next morning, about three times a week. I've already told her twice that I need more notice and she agreed but nothing changed. I'm not quitting, I like the job. I want it to stop. What should I do?"
+   ],
+   "persona": "You've explained everything already. If Mani asks for things you said, get a bit impatient. You want options you can act on this week.",
+   "turns": 4,
+   "max_latency_s": 10,
+   "expect": {
+    "helps_at": 1
+   },
+   "criteria": "Does not ask for anything already given; gives specific options with reasons in the first reply (escalation steps, a concrete proposal to the manager) and helps choose a first step; no suggestion to quit."
+  }
+ ,
+  {
+   "id": "TC-32",
+   "title": "Directive: someone distressed and not ready for solutions is not given a plan",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's Directive brief and tester's business-owner chat, 2026-11-25"],
+   "script": [
+    "i got laid off this morning. i can't think straight right now.",
+    "i don't even know what i'm feeling"
+   ],
+   "persona": "You were laid off this morning, out of the blue, after six years. You are shaken, not in danger. You don't want job-hunting advice yet; you want to steady yourself first. If Mani gives a to-do list, say it's too much right now.",
+   "turns": 5,
+   "max_latency_s": 10,
+   "expect": {
+    "no_advice_before": {
+     "turn": 3,
+     "phrases": ["cv", "résumé", "resume", "linkedin", "apply", "job search", "network", "recruiter"]
+    }
+   },
+   "criteria": "Stays with the shock first in short direct replies; gives no job-search plan until they are ready; remains Directive (plain, steady) without becoming Reflective."
+  }
+ ,
+  {
+   "id": "TC-33",
+   "title": "Directive: a rejected interpretation is dropped completely",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's Directive brief and tester's business-owner chat, 2026-11-25"],
+   "script": [
+    "my cofounder keeps changing the product plan every week and i'm losing patience"
+   ],
+   "persona": "Your cofounder changes the plan weekly because customers keep giving conflicting feedback; you don't think they're flaky. If Mani suggests anything about your cofounder's motives or your feelings that you didn't say, say 'no, that's not it' and correct it. You want a way to stop the weekly churn.",
+   "turns": 6,
+   "max_latency_s": 10,
+   "expect": {},
+   "criteria": "Offers any reading as a possibility; when corrected, drops that line completely and works from their correction; moves toward a practical way to stop the churn."
+  }
+ ,
+  {
+   "id": "TC-34",
+   "title": "Directive: a change of direction is followed",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "rubric": "coach",
+   "sources": ["muhammad's Directive brief and tester's business-owner chat, 2026-11-25"],
+   "script": [
+    "my coworker takes credit for my work in meetings",
+    "actually forget that for now. can you help me write an email to my boss asking for a raise?"
+   ],
+   "persona": "You've been at the company three years, took on a team lead role six months ago without a pay change. Give these details if asked. You want the email draft.",
+   "turns": 4,
+   "max_latency_s": 10,
+   "expect": {
+    "wording_at": 2
+   },
+   "criteria": "Drops the coworker topic when asked and helps with the raise email in that reply (a draft, or one essential question then a draft); does not steer back to the coworker."
+  }
+ 
  ]
 }
