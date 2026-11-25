@@ -86,7 +86,11 @@ INTERPRETIVE_PATTERNS = (
     r"(?:this|that|it)(?:'s| is) (?:the|where the) (?:part|real|core|heart|crux)",
     r"(?:this|that) (?:\w+ )?is the (?:first|second|other) kind",
     r"the (?:belief|thought|fear) (?:stands|holds)",
-    r"you(?:'re| are) not (?:really )?(?:deciding|choosing|asking|worried|upset|angry)",
+    r"you(?:'re| are) not (?:really )?(?:deciding|choosing|asking|worried|upset|angry|stuck|confused)",
+    r"what(?:'s| is) (?:really )?(?:stopping|holding|keeping) you",
+    r"which is (?:part of |exactly |really )?why",
+    r"you(?:'ve| have) already (?:said|decided|chosen|picked)",
+    r"you already know",
     r"what you(?:'re| are) really",
     r"the real (?:issue|problem|question|fear) is",
 )

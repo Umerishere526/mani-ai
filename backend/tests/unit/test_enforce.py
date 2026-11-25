@@ -201,6 +201,11 @@ def test_a_figurative_phrase_is_recorded_and_the_text_goes_out_as_written():
     "Then the belief stands on what you've seen.",
     "You're not deciding between a trip and a birthday.",
     "This is really about being left out.",
+    # muhammad's tester, Directive (2026-11-25).
+    "Those aren't the same kind of thing, which is part of why it's stuck.",
+    "Settled dates make it a straight choice, and you've already said which one you want.",
+    "You're not stuck on information.",
+    "So what's stopping you isn't the facts.",
 ])
 def test_a_reading_said_as_fact_is_recorded_and_the_text_goes_out_as_written(written):
     """manasa (2026-11-25) and muhammad's tester: assumptions presented as facts. Each is one of muhammad's local test
