@@ -65,11 +65,11 @@ def _git_sha() -> str:
         return "unknown"
 
 
-async def _registry() -> tuple[dict[str, list[str]], tuple[str, ...]]:
-    """Each active framework's stages, and their names, from the same table the chat reads."""
+async def _registry() -> tuple[dict[str, list[str]], dict[str, str]]:
+    """Each active framework's stages and its name, by id, from the same table the chat reads."""
     async with pool.as_admin() as conn:
         frameworks = await config_tables.list_active_frameworks(conn)
-    return {f.id: stages_of(f) for f in frameworks}, tuple(f.name for f in frameworks)
+    return {f.id: stages_of(f) for f in frameworks}, {f.id: f.name for f in frameworks}
 
 
 def _runnable(scenario: dict, stages: dict[str, list[str]]) -> bool:
@@ -81,7 +81,7 @@ def _runnable(scenario: dict, stages: dict[str, list[str]]) -> bool:
 
 async def _run(args: argparse.Namespace, scenarios: list[dict]) -> dict:
     stages, names = await _registry()
-    allowed = checks.allowed_labels(names)
+    allowed = checks.allowed_labels(tuple(names.values()))
     rounds = args.bench or 1
     gate = asyncio.Semaphore(CONCURRENCY)
     async with httpx.AsyncClient() as http:
@@ -91,7 +91,7 @@ async def _run(args: argparse.Namespace, scenarios: list[dict]) -> dict:
             async with gate:
                 print(f"… {scenario['id']}{f' #{n}' if args.bench else ''}", flush=True)
                 try:
-                    record = await play(scenario, stages, allowed, judged=not (args.no_judge or args.bench), http=http)
+                    record = await play(scenario, stages, names, allowed, judged=not (args.no_judge or args.bench), http=http)
                 except Exception as error:  # noqa: BLE001 - one scenario's failure never loses the others
                     record = error_record(scenario, error)
             return {**record, "id": f"{record['id']}#{n}" if args.bench else record["id"]}
@@ -127,13 +127,8 @@ async def main(argv: list[str]) -> int:
     out = report.write(run)
     for s in run["scenarios"]:
         failed = [c["check"] for c in s["checks"] if not c["passed"] and c["kind"] == checks.DETERMINISTIC]
-        pending = [c["check"] for c in s["checks"] if not c["passed"] and c["kind"] == checks.PENDING]
         status = "GAP " if s["status"] == "gap" else ("FAIL" if failed else "PASS")
-        print(f"{status}  {s['id']:<8} {', '.join(failed)}{f'  pending: {", ".join(pending)}' if pending else ''}")
-    totals = report.summarize(run)["totals"]
-    print(f"\nPending requirements (awaiting approval), never failing the run: "
-          f"{totals.get(f'{checks.PENDING}_failed', 0)} failed, "
-          f"{totals.get(f'{checks.PENDING}_passed', 0)} passed.")
+        print(f"{status}  {s['id']:<8} {', '.join(failed)}")
     print(f"Report: {out}")
     return _exit_code(run, args.strict_latency)
 

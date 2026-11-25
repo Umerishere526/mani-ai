@@ -25,7 +25,7 @@ async def _send(conversation: Conversation, said: str) -> Exchange:
     got = await runner.send(conversation.claims, conversation.thread_id, said, uuid.uuid4())
     exchange = Exchange(said=said, tapped=True, reply=got.content, buttons=[p.label for p in got.prompts],
                         trace=got.trace or {}, seconds=time.monotonic() - started,
-                        paused=got.paused_until is not None)
+                        paused=got.paused_until is not None, crisis=got.crisis_detected)
     conversation.exchanges.append(exchange)
     return exchange
 
@@ -75,7 +75,8 @@ def _exchange_dict(e: Exchange, conversation: int) -> dict:
     keep = ("action", "framework", "stage", "safety", "paused", "refused", "question_cut", "latency_ms", "first_token_ms",
             "read_ms", "write_ms", "total_ms")
     return {"conversation": conversation, "said": e.said, "tapped": e.tapped, "reply": e.reply, "buttons": e.buttons,
-            "trace": {k: e.trace[k] for k in keep if k in e.trace}, "seconds": round(e.seconds, 3), "paused": e.paused}
+            "trace": {k: e.trace[k] for k in keep if k in e.trace}, "seconds": round(e.seconds, 3), "paused": e.paused,
+            "crisis": e.crisis}
 
 
 def error_record(scenario: dict, error: Exception) -> dict:
@@ -96,8 +97,8 @@ def _head(scenario: dict) -> dict:
             "gap_reason": scenario.get("gap_reason"), "status": "run"}
 
 
-async def play(scenario: dict, stages: dict[str, list[str]], allowed: frozenset[str], *, judged: bool,
-               http: httpx.AsyncClient) -> dict:
+async def play(scenario: dict, stages: dict[str, list[str]], names: dict[str, str], allowed: frozenset[str], *,
+               judged: bool, http: httpx.AsyncClient) -> dict:
     setup = scenario.get("setup")
     if setup == "lead_in_buttons":
         conversations, extra = await _lead_in_buttons(scenario)
@@ -111,7 +112,7 @@ async def play(scenario: dict, stages: dict[str, list[str]], allowed: frozenset[
         conversations, extra = [await converse(scenario["style"], scenario["turns"], scenario.get("persona", ""),
                                                scenario["script"])], []
     main = conversations[0]
-    results = checks.evaluate(main, scenario, stages, allowed, await _refused_after_pause(main)) + extra
+    results = checks.evaluate(main, scenario, stages, allowed, await _refused_after_pause(main), names) + extra
     for other in conversations[1:]:
         if other.error:
             results.append(checks.ran_cleanly(other))

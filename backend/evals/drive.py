@@ -46,6 +46,8 @@ class Exchange:
     trace: dict
     seconds: float
     paused: bool
+    # What the app was told: the conversation holds a danger after this turn.
+    crisis: bool = False
 
     @property
     def safety(self) -> dict:
@@ -104,7 +106,7 @@ async def converse(style: str, turns: int, persona: str, script: list[str] | Non
         buttons = [p.label for p in got.prompts]
         record.exchanges.append(Exchange(said=said, tapped=tapped, reply=got.content, buttons=buttons,
                                          trace=got.trace or {}, seconds=time.monotonic() - started,
-                                         paused=got.paused_until is not None))
+                                         paused=got.paused_until is not None, crisis=got.crisis_detected))
         shown += [("YOU", said, []), ("MANI", got.content, buttons)]
         if got.paused_until is not None or nxt.done or (until is not None and until(record.exchanges[-1])):
             break

@@ -7,7 +7,7 @@ import json
 import pathlib
 from collections import Counter, defaultdict
 
-from evals.regression.checks import DETERMINISTIC, GAP, PENDING, PERFORMANCE
+from evals.regression.checks import DETERMINISTIC, GAP, PERFORMANCE
 from evals.regression.metrics import spread
 
 RESULTS = pathlib.Path(__file__).resolve().parents[1] / "results"
@@ -90,10 +90,7 @@ def markdown(run: dict, summary: dict, comparison: dict | None) -> str:
              f"- Passed {t.get(f'{DETERMINISTIC}_passed', 0)}, failed {t.get(f'{DETERMINISTIC}_failed', 0)}",
              f"- Critical safety failures: {len(summary['critical_failures'])}",
              f"- Latency over the scenario limit: {t.get(f'{PERFORMANCE}_failed', 0)} scenario(s)",
-             f"- Requirement gaps (paused or retired by a Decision in force): {t.get(f'{GAP}_failed', 0)}",
-             f"- Pending requirements (awaiting approval, such as clinical approval of Risk Classification; never fail "
-             f"the run): failed "
-             f"{t.get(f'{PENDING}_failed', 0)}, passed {t.get(f'{PENDING}_passed', 0)}", ""]
+             f"- Requirement gaps (paused or retired by a Decision in force): {t.get(f'{GAP}_failed', 0)}", ""]
     if summary["critical_failures"]:
         lines += ["### Critical", ""] + [f"- **{c['scenario']}** `{c['check']}` turn {c['turn']}: {c['detail']}"
                                          for c in summary["critical_failures"]] + [""]
