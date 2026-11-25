@@ -5,6 +5,7 @@ import { AppHeader } from "@/components/shared";
 import { ChatConversation, ChatOpening, LoadFailed, type ChatInputBarRef } from "@/components/chat";
 import { useChat } from "@/hooks/useChat";
 import { useChatSafety } from "@/providers";
+import { promptAction } from "@/lib/chat";
 import type { SmartPrompt } from "@/types/chat";
 
 export default function ChatScreen() {
@@ -32,8 +33,13 @@ export default function ChatScreen() {
   };
 
   const handlePromptPress = (prompt: SmartPrompt) => {
-    if (paused) return;
-    chat.send(prompt.label);
+    const action = promptAction(prompt);
+    if (action.kind === "library") {
+      router.push(action.section ? `/exercises/${action.section}` : "/exercises");
+      return;
+    }
+    if (paused || isWaitingForReply) return;
+    chat.send(action.text);
   };
 
   const handleNewChat = () => {

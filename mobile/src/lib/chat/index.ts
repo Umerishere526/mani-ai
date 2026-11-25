@@ -13,4 +13,5 @@ export {
   type ChatPause,
   type PauseUnit,
 } from './pause';
+export { promptAction, type PromptAction } from './prompt-action';
 export { errorText, messageFromTurn, messageFromWire, messagesFromWire, threadFromWire } from './to-ui';
