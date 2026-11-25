@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     # thinks before its first token, and the longest of those silences ran past 20 s while its
     # neighbours took 5 (2026-10-21), so a second try usually answers faster than waiting.
     chat_first_token_seconds: float = 15.0
+    # How long a chat call may send nothing before a second request starts on the prompt row's other host, beside
+    # the first; whichever answers first is the reply and the other is cancelled. Providers slowed to 20 to 27 s,
+    # first chunk past 15 s, where 104 turns had their first chunk at p50 2.2 s and p95 4.2 s (2026-11-25), so a race
+    # starts only for a stalled host. No other host, no race.
+    chat_hedge_seconds: float = Field(default=8.0, gt=0)
     # Both attempts of a chat call together, so a retry gets only what the first left. Every wait on a turn's
     # path adds up under the chat-tester's 90 s (PORT-STATUS, "Every wait on a turn adds up under 90 s").
     chat_budget_seconds: float = 65.0

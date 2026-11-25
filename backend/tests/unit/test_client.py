@@ -782,3 +782,123 @@ async def test_an_empty_reply_is_retried_like_any_reply_that_does_not_parse(monk
         (llm_calls.Outcome.SCHEMA_INVALID, None),
         (llm_calls.Outcome.OK, "gen-answered"),
     ]
+
+
+class Host:
+    """One host's answer to a request, as chain.build()'s Runnable streams it: `chunk_at` is when its first chunk
+    arrives (never, when None), `wait` how long it takes in all, and `result` what it comes back with."""
+
+    def __init__(self, result, *, wait: float = 0.0, chunk_at: float | None = None) -> None:
+        self.result, self.wait, self.chunk_at = result, wait, chunk_at
+        self.calls = 0
+        self.cancelled = False
+
+    async def astream(self, messages, config=None):
+        self.calls += 1
+        began = asyncio.get_running_loop().time()
+        try:
+            if self.chunk_at is not None:
+                await asyncio.sleep(self.chunk_at)
+                for callback in config["callbacks"]:
+                    await callback.on_llm_new_token("")
+            await asyncio.sleep(self.wait - (asyncio.get_running_loop().time() - began))
+        except asyncio.CancelledError:
+            self.cancelled = True
+            raise
+        if isinstance(self.result, BaseException):
+            raise self.result
+        for key, value in self.result.items():
+            yield {key: value}
+
+
+TWO_HOSTS = {"only": ["sail-research", "deepinfra"], "sort": "price"}
+
+
+def hosts(monkeypatch, first: Host, other: Host) -> list[dict]:
+    """chain.build answering with `first` for the prompt row's routing and `other` for any other; returns what each
+    build was asked for."""
+    built: list[dict] = []
+
+    def build(*args, routing, session, **kwargs):
+        built.append({"only": routing["only"], "session": session})
+        return first if routing == TWO_HOSTS else other
+
+    monkeypatch.setattr(client.chain, "build", build)
+    return built
+
+
+def racing(**update) -> Settings:
+    return settings().model_copy(update={"chat_hedge_seconds": 0.05, **update})
+
+
+async def test_a_host_that_sends_nothing_is_raced_on_the_other_host_and_the_slower_is_cancelled(monkeypatch, recorded):
+    """REL-2, 2026-11-25: providers slowed to 20 to 27 s with the first chunk past 15 s, and nothing tried elsewhere.
+    Past the hedge wait the other host starts beside the first; its answer is the reply, the stalled request is
+    cancelled, and both are recorded."""
+    stalled, other = Host(valid("too slow"), wait=10), Host(valid("from the other host"), wait=0.05)
+    built = hosts(monkeypatch, stalled, other)
+    began = asyncio.get_running_loop().time()
+
+    call = await client.complete([], Said, model="m", purpose=llm_calls.Purpose.CHAT, routing=TWO_HOSTS,
+                                 thread_id=THREAD, settings=racing())
+
+    assert call.value.text == "from the other host"
+    assert asyncio.get_running_loop().time() - began < 1.0
+    assert built == [{"only": ["sail-research", "deepinfra"], "session": f"{THREAD}:chat"},
+                     {"only": ["deepinfra"], "session": None}], "no sticky key, so the race never re-pins the thread"
+    assert stalled.cancelled
+    assert [(r["outcome"], r["error_message"]) for r in recorded] == [
+        (llm_calls.Outcome.TIMEOUT, "attempt 1/2: not used, attempt 2 answered first and this one was cancelled"),
+        (llm_calls.Outcome.OK, None),
+    ]
+
+
+async def test_a_host_that_has_begun_streaming_is_not_raced(monkeypatch, recorded):
+    streaming, other = Host(valid("streaming"), chunk_at=0.01, wait=0.2), Host(valid("never asked"))
+    built = hosts(monkeypatch, streaming, other)
+
+    call = await client.complete([], Said, model="m", purpose=llm_calls.Purpose.CHAT, routing=TWO_HOSTS,
+                                 settings=racing())
+
+    assert call.value.text == "streaming" and other.calls == 0 and len(built) == 1
+    assert [r["outcome"] for r in recorded] == [llm_calls.Outcome.OK]
+
+
+async def test_the_first_host_still_answers_when_the_raced_host_fails(monkeypatch, recorded):
+    slow, broken = Host(valid("slow but there"), wait=0.3), Host(provider_down())
+    hosts(monkeypatch, slow, broken)
+
+    call = await client.complete([], Said, model="m", purpose=llm_calls.Purpose.CHAT, routing=TWO_HOSTS,
+                                 settings=racing())
+
+    assert call.value.text == "slow but there"
+    assert [(r["outcome"], r["error_message"]) for r in recorded] == [
+        (llm_calls.Outcome.PROVIDER_ERROR, "attempt 2/2: InternalServerError: 503"),
+        (llm_calls.Outcome.OK, None),
+    ]
+
+
+async def test_an_empty_reply_is_retried_on_the_other_host(monkeypatch, recorded):
+    """2026-11-23: a host answered with reasoning and no content. Its retry goes to the host it did not come from."""
+    empty = Host(ValueError(f"Structured Output response {client.NO_CONTENT}"))
+    other = Host(valid("second host"))
+    built = hosts(monkeypatch, empty, other)
+
+    call = await client.complete([], Said, model="m", purpose=llm_calls.Purpose.CHAT, routing=TWO_HOSTS,
+                                 settings=racing(chat_hedge_seconds=8.0))
+
+    assert call.value.text == "second host"
+    assert [b["only"] for b in built] == [["sail-research", "deepinfra"], ["deepinfra"]]
+    assert [r["outcome"] for r in recorded] == [llm_calls.Outcome.SCHEMA_INVALID, llm_calls.Outcome.OK]
+
+
+async def test_with_one_host_allowed_a_silent_call_is_never_raced(monkeypatch, recorded):
+    """A background call, or a chat row naming one host, has nowhere else to go: it keeps waiting on its one request."""
+    slow = Host(valid("one host"), wait=0.2)
+    built: list = []
+    monkeypatch.setattr(client.chain, "build", lambda *a, **kw: built.append(kw["routing"]) or slow)
+
+    call = await client.complete([], Said, model="m", purpose=llm_calls.Purpose.CHAT, routing={"only": ["deepinfra"]},
+                                 settings=racing())
+
+    assert call.value.text == "one host" and slow.calls == 1 and len(built) == 1
