@@ -42,6 +42,9 @@ CALM = "worry_calm"
 IMMEDIACY = "worry_immediacy"
 IMMEDIACY_OPEN = "open"
 IMMEDIACY_ANSWERED = "answered"
+# Whether the open worry paused the chat: it then closes only on their word that they are safe or someone is with them
+# (CR-5). Kept only while the worry is open.
+PAUSED = "worry_paused"
 SAFETY_END_CHECK = "safety_end_check"
 # Where the safety question after a framework's last stage stands.
 END_CHECK_ASKED = "asked"

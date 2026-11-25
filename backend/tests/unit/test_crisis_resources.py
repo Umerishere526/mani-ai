@@ -131,3 +131,13 @@ def test_a_reply_that_names_the_numbers_but_not_the_outside_us_line_still_needs_
     assert not crisis.names_help(reply, "themselves")
     for about in ("themselves", "someone_else", "from_someone", "body", None):
         assert crisis.names_help(crisis.resources_line(about), about), about
+
+
+def test_the_first_message_back_asks_about_immediate_danger_with_the_help():
+    """CR-5 (PROVISIONAL: clinician sign-off required before deploy): the danger a pause rested on is still open when
+    they come back, so code's question is the question of immediate danger, with the numbers."""
+    for about in ("themselves", None):
+        text = crisis.return_check_reply(about)
+        assert crisis.IMMEDIACY_QUESTION in text and crisis.names_help(text, "themselves"), about
+    assert crisis.IMMEDIACY_QUESTION not in crisis.return_check_reply("body")
+    assert crisis.names_help(crisis.return_check_reply("body"), "body")

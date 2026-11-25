@@ -37,7 +37,7 @@ class Standing(BaseModel):
     row were read as no concern while the worry, unsure or danger, stayed open. `end_check`: Mani's last reply asked the safety question
     after a framework's last stage, so this message answers it. `overdose`: the open worry is about an overdose or a
     poisoning. `immediacy`: whether they said if a worry about themselves is immediate (rec.IMMEDIACY_OPEN or
-    rec.IMMEDIACY_ANSWERED), None before they confirmed the thoughts."""
+    rec.IMMEDIACY_ANSWERED), None before they confirmed the thoughts. `paused`: the open worry paused the chat."""
 
     model_config = {"frozen": True}
 
@@ -49,6 +49,7 @@ class Standing(BaseModel):
     end_check: bool = False
     overdose: bool = False
     immediacy: str | None = None
+    paused: bool = False
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,8 @@ class Outcome:
     overdose: bool = False
     # Where the question of immediate danger to themselves stands after this message (CR-1).
     immediacy: str | None = None
+    # The open worry paused the chat, on this message or an earlier one (CR-5).
+    paused: bool = False
 
     @property
     def paused_for(self) -> str | None:
@@ -85,7 +88,7 @@ def standing(ctx: TurnContext, check: ReturnCheck | None, answering: str | None)
     return Standing(state=State(ctx.thread.safety), about=record.get(rec.ABOUT), phase=phase,
                     settled=bool(record.get(rec.SAFETY_SETTLED)), calm=record.get(rec.CALM, 0),
                     end_check=rec.end_check(record) == rec.END_CHECK_ASKED, overdose=bool(record.get(rec.OVERDOSE)),
-                    immediacy=record.get(rec.IMMEDIACY))
+                    immediacy=record.get(rec.IMMEDIACY), paused=bool(record.get(rec.PAUSED)))
 
 
 def step(stood: Standing, read: Safety, message: str = "") -> Outcome:
@@ -123,9 +126,13 @@ def step(stood: Standing, read: Safety, message: str = "") -> Outcome:
     # With no question of Mani's being answered, the first message read as no concern leaves the worry where it was:
     # unsure, or danger unless they said they are safe or someone is with them (S1).
     safe_said = read.says_safe or read.help_in_place
-    waits = ((stood.state is State.UNSURE or (stood.state is State.DANGER and not safe_said))
-             and stood.phase is Phase.ORDINARY and not stood.end_check
-             and after is State.CLEAR and stood.calm + 1 < CALM_TO_CLEAR)
+    counting = ((stood.state is State.UNSURE or (stood.state is State.DANGER and not safe_said))
+                and stood.phase is Phase.ORDINARY and not stood.end_check
+                and after is State.CLEAR and stood.calm + 1 < CALM_TO_CLEAR)
+    # Danger that paused the chat closes only on their word that they are safe or someone is with them, in any phase
+    # and however many calm messages come (CR-5, PROVISIONAL: clinician sign-off required before deploy).
+    held_to_word = stood.paused and stood.state is State.DANGER and not safe_said and after is State.CLEAR
+    waits = counting or held_to_word
     if waits:
         after = stood.state
     if about == "body" and read.about is None and danger != "none":
@@ -155,7 +162,8 @@ def step(stood: Standing, read: Safety, message: str = "") -> Outcome:
         immediacy=_immediacy(stood, read, after, about, safe_said),
         state=after, about=about if after is not State.CLEAR else None, pausing=pausing,
         settled_now=stood.state is not State.CLEAR and after is State.CLEAR,
-        resources_due=resources_due, calm=stood.calm + 1 if waits else 0, raised=floored,
+        resources_due=resources_due, calm=stood.calm + 1 if counting else 0, raised=floored,
+        paused=after is not State.CLEAR and (pausing or stood.paused),
         overdose=after is not State.CLEAR and (read.overdose or stood.overdose),
     )
 
@@ -167,7 +175,12 @@ def _immediacy(stood: Standing, read: Safety, after: State, about: str | None, s
     sign-off required before deploy."""
     if after is State.CLEAR or about != "themselves":
         return None
-    if stood.immediacy == rec.IMMEDIACY_ANSWERED or read.immediacy_said or safe_said:
+    if read.immediacy_said or safe_said:
+        return rec.IMMEDIACY_ANSWERED
+    if stood.phase is Phase.ASKING:
+        # Back after a pause, time has passed: code's question asks it again (CR-5).
+        return rec.IMMEDIACY_OPEN
+    if stood.immediacy == rec.IMMEDIACY_ANSWERED:
         return rec.IMMEDIACY_ANSWERED
     asked = stood.state is not State.CLEAR and stood.about in (None, "themselves")
     confirmed = read.about == "themselves" and (read.level == "danger" or (read.level == "unsure" and asked))
@@ -179,11 +192,13 @@ def record_after(record: dict, outcome: Outcome, *, check: ReturnCheck | None, a
     (both forgotten when it settles), how many calm messages an open worry has had, whether this conversation reached
     danger, and whether a worry settled."""
     after = {key: value for key, value in record.items()
-             if key not in (rec.ABOUT, rec.CALM, rec.OVERDOSE, rec.IMMEDIACY)}
+             if key not in (rec.ABOUT, rec.CALM, rec.OVERDOSE, rec.IMMEDIACY, rec.PAUSED)}
     if outcome.about:
         after[rec.ABOUT] = outcome.about
     if outcome.immediacy:
         after[rec.IMMEDIACY] = outcome.immediacy
+    if outcome.paused:
+        after[rec.PAUSED] = True
     if outcome.overdose:
         after[rec.OVERDOSE] = True
     if outcome.calm:

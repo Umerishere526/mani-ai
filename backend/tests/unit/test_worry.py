@@ -347,3 +347,27 @@ def test_the_record_keeps_where_immediacy_stands_only_while_the_worry_is_open():
     settled = worry.step(worry.Standing(state=State.DANGER, about="themselves", phase=ORD, immediacy="open"),
                          N(says_safe=True))
     assert rec.IMMEDIACY not in worry.record_after(record, settled, check=None, answering=None)
+
+
+def test_danger_a_pause_left_unresolved_closes_only_on_their_word_and_pauses_again_only_if_it_goes_on():
+    """CR-5 (PROVISIONAL: clinician sign-off required before deploy): manasa's crisis test (2026-11-25) asked what
+    happens when someone keeps coming back after a pause without doing anything about their safety. A worry that paused
+    the chat stays danger until they say they are safe or someone is with them: a message back that says nothing of it,
+    an answer that does not say it, and any number of calm messages after keep it open, never pause, and keep the
+    question of immediate danger open. A second pause comes only on danger said again (S12)."""
+    paused = worry.step(worry.Standing(state=State.UNSURE, about="themselves", phase=ORD), D(about="themselves"))
+    assert paused.pausing
+    record = worry.record_after({}, paused, check=None, answering=None)
+    assert record[rec.PAUSED] is True
+    held = worry.Standing(state=State.DANGER, about="themselves", phase=ASK, paused=True,
+                          immediacy=rec.IMMEDIACY_ANSWERED)
+    back = worry.step(held, N())
+    assert back.state is State.DANGER and not back.pausing and back.immediacy == rec.IMMEDIACY_OPEN
+    for phase in (ANS, ORD, ORD, ORD):
+        quiet = worry.step(held.model_copy(update={"phase": phase, "immediacy": rec.IMMEDIACY_OPEN}), N())
+        assert quiet.state is State.DANGER and not quiet.pausing and quiet.resources_due, phase
+    assert worry.step(held.model_copy(update={"phase": ANS}), D(about="themselves")).pausing
+    for safe in (N(says_safe=True), N(help_in_place=True)):
+        settled = worry.step(held.model_copy(update={"phase": ANS}), safe)
+        assert settled.state is State.CLEAR and settled.settled_now
+        assert rec.PAUSED not in worry.record_after(record, settled, check=None, answering=None)

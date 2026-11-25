@@ -76,6 +76,25 @@ RETURN_CHECK_REPLY = (
     "Before anything else, I want to ask about what was happening when I paused our chat. How are things with that "
     f"right now? {IN_DANGER}"
 )
+# The question of immediate danger to themselves (CR-1), asked by code on the first turn back, when the danger the
+# pause rested on is still open (CR-5). Wording is ours until the client supplies hers. PROVISIONAL: clinician sign-off
+# required before deploy.
+IMMEDIACY_QUESTION = (
+    "Are you alone right now, do you have a plan or something you could hurt yourself with, and do you feel you might "
+    "act on it tonight?"
+)
+_RETURN_CHECK_THEMSELVES = (
+    f"Before anything else, I want to ask about what was happening when I paused our chat. {IMMEDIACY_QUESTION} "
+    f"{IN_DANGER}"
+)
+
+
+def return_check_reply(about: str | None) -> str:
+    """Code's question on the first turn back, by whose danger the pause was for: for themselves (or a kind unknown),
+    the question of immediate danger; otherwise how things are with it. Both say where to get help."""
+    return _RETURN_CHECK_THEMSELVES if about in (None, "themselves") else RETURN_CHECK_REPLY
+
+
 # What Mani says on the first turn back when that message itself is read as danger: the way to help, with no question
 # about the pause and no agreement to carry on (muhammad, 2026-11-20: "I just took the pills" got the question above and
 # lost Mani's own reply). Wording is ours until the client supplies hers.
@@ -83,7 +102,7 @@ RETURN_DANGER_REPLY = (
     f"I'm worried about what you just told me. Please call 911 now, or call or text 988. {OUTSIDE_US} "
     "Is anyone with you right now?"
 )
-# The one question after their answer to RETURN_CHECK_REPLY says they are all right: "I'm fine" is taken at its word,
+# The one question after their answer to return_check_reply says they are all right: "I'm fine" is taken at its word,
 # with one gentle follow-up about who they can reach, never a second pause (S12, R151). Wording is ours until the
 # client supplies hers. PROVISIONAL: clinician sign-off required before deploy.
 AFTER_PAUSE_FOLLOW_UP = "If things get hard again, who is someone you could reach out to?"

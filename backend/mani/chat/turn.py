@@ -262,7 +262,8 @@ async def _apply(
     elif decision.end_check:
         text = crisis.END_CHECK
     elif check is not None:
-        text = crisis.RETURN_DANGER_REPLY if reply.safety.level == "danger" else crisis.RETURN_CHECK_REPLY
+        text = (crisis.RETURN_DANGER_REPLY if reply.safety.level == "danger"
+                else crisis.return_check_reply(judgment.about or stood.about))
     elif answering is not None and judgment.state is safety.State.CLEAR:
         # Their answer that they are all right gets code's one follow-up in place of the reply's question (S12).
         # PROVISIONAL: clinician sign-off required before deploy.

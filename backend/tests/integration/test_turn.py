@@ -698,15 +698,41 @@ async def test_the_first_message_back_in_the_paused_conversation_is_asked_about_
     required before deploy): "I'm fine" is accepted with one gentle follow-up about who they can reach (R151), code's
     question in place of the model's, and no second pause."""
     scripted, paused_in = await _a_pause_that_has_run_out(
-        alice, [said("How are things now?"), said("Good to hear it.", question=Question(ask="Anything else?"))], model)
+        alice, [said("How are things now?"),
+                said("Good to hear it.", question=Question(ask="Anything else?"),
+                     safety=Safety(level="none", says_safe=True, help_in_place=True))], model)
     asked = await send(alice, paused_in.id, "back now")
-    assert asked.content == crisis.RETURN_CHECK_REPLY and asked.paused_until is None
+    assert asked.content == crisis.return_check_reply("themselves") and asked.paused_until is None
     assert "Their chat was paused earlier because of a safety worry (took pills)" in facts_of(scripted)
 
     answered = await send(alice, paused_in.id, "i'm okay, my sister is here")
     assert answered.content == "Good to hear it.\n\n" + crisis.AFTER_PAUSE_FOLLOW_UP and answered.paused_until is None
     assert "code adds one question about who they could reach" in facts_of(scripted)
     assert "This message answers it: judge it for safety." in facts_of(scripted)
+    assert (await thread_row(alice, paused_in.id)).safety == "clear"
+
+
+async def test_danger_a_pause_left_unresolved_stays_open_with_help_until_they_say_they_are_safe(alice, model):
+    """CR-5 (PROVISIONAL: clinician sign-off required before deploy): manasa asked how Mani decides what happens when
+    someone keeps coming back after a pause without doing anything about their safety. The first message back gets
+    code's question of immediate danger with the help; answers that never say they are safe or that someone is with
+    them keep the danger open, each reply naming the help, with no second pause unless the danger is said again; their
+    word that they are safe closes it."""
+    quiet = Safety(level="none")
+    scripted, paused_in = await _a_pause_that_has_run_out(alice, [
+        said("How are things now?", safety=quiet), said("Okay.", safety=quiet), said("Tell me more.", safety=quiet),
+        said("Work sounds hard.", safety=quiet), said("I'm glad.", safety=Safety(level="none", says_safe=True)),
+    ], model)
+    back = await send(alice, paused_in.id, "hi")
+    assert back.content == crisis.return_check_reply("themselves")
+    row = await thread_row(alice, paused_in.id)
+    assert row.safety == "danger" and row.understanding["worry_immediacy"] == "open"
+    for message in ("i haven't called anyone", "i don't want to go to the hospital", "can we talk about work"):
+        turn = await send(alice, paused_in.id, message)
+        assert turn.paused_until is None and turn.content.endswith(crisis.resources_line("themselves")), message
+        assert (await thread_row(alice, paused_in.id)).safety == "danger", message
+        assert "alone right now" in facts_of(scripted), message
+    await send(alice, paused_in.id, "i'm safe now, i won't do anything")
     assert (await thread_row(alice, paused_in.id)).safety == "clear"
 
 
@@ -721,7 +747,7 @@ async def test_an_edited_answer_to_the_question_after_a_pause_is_read_as_the_ans
 
     edited = await runner.edit(alice, thread.id, await last_user_message_id(thread.id), "not really, still shaky")
 
-    assert edited.content == "I'm here. What feels shaky?"
+    assert edited.content == "I'm here. What feels shaky?\n\n" + crisis.resources_line("themselves"), "CR-3"
     assert "This message answers it: judge it for safety." in facts_of(scripted)
 
 
