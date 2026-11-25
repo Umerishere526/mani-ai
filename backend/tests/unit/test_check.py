@@ -45,3 +45,11 @@ def test_only_a_repair_that_changes_what_it_was_asked_to_is_sent():
     assert not check.acceptable(before, check.Repaired(text="Lost her. " * 20, ask="Who is she?"))
     help_line = reply("Please call 988 if it gets worse. That stings.", "")
     assert not check.acceptable(help_line, check.Repaired(text="That hurts.", ask=""))
+
+
+def test_a_repair_that_also_writes_its_question_into_the_text_keeps_it_only_as_the_question():
+    """The tester's family chat (2026-11-25): the repair fixed the either/or question and also put it in the text, and
+    the whole repair was discarded."""
+    text = "It happens again and again.\n\nWhen you find out after everyone else, what hits you first?"
+    assert check._without_question(text, "When you find out after everyone else, what hits you first?") == \
+        "It happens again and again."

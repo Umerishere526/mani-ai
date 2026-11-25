@@ -29,7 +29,8 @@ which parts break the rules. Change only those parts, keep their meaning, and le
 which or who, about the same thing.
 - A sentence named as a figure of speech: say the same thing in simple everyday English, as a person would text it.
 - A sentence named as a reading said as fact: say it as a possibility ("I wonder if…") or say only what they said.
-Never add a question to the text, advice, or anything new."""
+Never add a question to the text, advice, or anything new. The text never contains the question: the question goes \
+only in `ask`."""
 
 
 class Repaired(BaseModel):
@@ -64,6 +65,15 @@ def problems(reply: TurnReply) -> list[str]:
         elif enforce.interpretive(sentence):
             found.append(f'The sentence "{sentence}" is a reading said as fact.')
     return found
+
+
+def _without_question(text: str, ask: str) -> str:
+    """The repaired text without the question when the repair also wrote it there (2026-11-25: a correct repair was
+    discarded because the open question it wrote was in the text as well as in `ask`)."""
+    folded = " ".join(ask.split())
+    if not folded:
+        return text
+    return questions.kept(text, lambda _, sentence: sentence != folded)
 
 
 def due(reply: TurnReply, settings: Settings) -> bool:
@@ -108,6 +118,8 @@ async def checked(call: client.Call[TurnReply], *, said: str, kwargs: dict, sett
     except Exception:
         logger.warning("reply repair failed; the reply goes out as written", exc_info=True)
         return call, []
+    repaired_text = _without_question(result.value.text, result.value.ask)
+    result = dataclasses.replace(result, value=result.value.model_copy(update={"text": repaired_text}))
     if not acceptable(reply, result.value):
         return call, []
     question = reply.question.model_copy(update={"ask": result.value.ask.strip() or reply.question.ask})
