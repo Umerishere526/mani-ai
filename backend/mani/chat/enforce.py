@@ -86,7 +86,8 @@ FIGURATIVE_PHRASES = ("its own kind of", "a strange shape", "nice shape", "holdi
                       "happens in you", "the bad feeling like", "sitting with you", "place to be", "place to be in",
                       "comes up for you",
                       # Phrases that tell them what something does to them, in figures (2026-11-25).
-                      "wears you down", "wear you down", "wearing you down", "takes a toll", "taking a toll",
+                      "wears you down", "wear you down", "wearing you down", "wears on you", "wearing on you", "back of the queue",
+                      "running into", "takes a toll", "taking a toll",
                       "eats at you", "eating at you", "weighs on you", "gets under your skin", "cuts deep",
                       "sits heavy", "heavy on you")
 _FIGURATIVE = re.compile(rf"\b(?:{'|'.join(re.escape(phrase) for phrase in FIGURATIVE_PHRASES)})\b", re.IGNORECASE)
