@@ -237,6 +237,20 @@ class TopicOut(BaseModel):
     display_order: int = 0
 
 
+class UploadUrlIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    filename: str = Field(min_length=1, max_length=200)
+    content_type: Literal["audio/mpeg"]
+
+
+class UploadUrlOut(BaseModel):
+    """Where the browser PUTs the file (with Content-Type audio/mpeg), and the audio_path the exercise then holds."""
+
+    path: str
+    upload_url: str
+
+
 class CompletionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

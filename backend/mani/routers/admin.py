@@ -7,6 +7,7 @@ import uuid
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
+from mani import storage
 from mani.auth.deps import AdminUser
 from mani.db import admin_threads, config_tables, exercise_feedback, turn_traces
 from mani.db import exercises as exercises_db
@@ -15,7 +16,7 @@ from mani.db.deps import AdminConn
 from mani.db.exercise_feedback import AdminExerciseFeedback
 from mani.db.exercises import AdminExercise, ExerciseInput
 from mani.errors import ErrorCategory, ServiceError
-from mani.models.api import MessageOut, PromptIn, PromptOut, PromptVersionOut
+from mani.models.api import MessageOut, PromptIn, PromptOut, PromptVersionOut, UploadUrlIn, UploadUrlOut
 from mani.prompts import cache
 from mani.routers.serializers import to_message, to_prompt, to_prompt_version
 
@@ -141,6 +142,13 @@ async def create_exercise(conn: AdminConn, body: ExerciseInput) -> AdminExercise
             user_message="Title, category and audio path are required.",
         )
     return await exercises_db.create(conn, body)
+
+
+@router.post("/exercises/upload-url", response_model=UploadUrlOut)
+async def create_upload_url(_: AdminUser, body: UploadUrlIn) -> UploadUrlOut:
+    """A signed link the portal uploads an exercise's MP3 to directly, so the file never passes through the API."""
+    path = storage.audio_path_for(body.filename)
+    return UploadUrlOut(path=path, upload_url=await storage.signed_upload_url(path))
 
 
 @router.patch("/exercises/{exercise_id}", response_model=AdminExercise)
