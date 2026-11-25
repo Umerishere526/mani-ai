@@ -76,7 +76,8 @@ STAGE_LINE = re.compile(r"^[\"'“‘(]?(?:Step \w+ is|[A-E] is for)\b")
 # with the phrase, never rewritten: a phrase can be literal ("the loop" of a running track), and the prompt is the fix.
 FIGURATIVE_PHRASES = ("its own kind of", "a strange shape", "nice shape", "holding the thread", "cast in", "the loop",
                       # muhammad's local tests (2026-11-25).
-                      "the weight in it", "weighing on", "holding that", "sitting between us", "a lot to be carrying")
+                      "the weight in it", "weighing on", "holding that", "sitting between us", "a lot to be carrying",
+                      "its own rhythm", "fills in the gap", "quiet where", "the silence takes you")
 _FIGURATIVE = re.compile(rf"\b(?:{'|'.join(re.escape(phrase) for phrase in FIGURATIVE_PHRASES)})\b", re.IGNORECASE)
 # Statements that tell them what their situation is, means or is about, or that their belief holds: readings said as
 # fact, which the client's testers flagged most (manasa 2026-11-25; muhammad's tester the same day). Only recorded with
@@ -87,7 +88,9 @@ INTERPRETIVE_PATTERNS = (
     r"(?:this|that) (?:\w+ )?is the (?:first|second|other) kind",
     r"the (?:belief|thought|fear) (?:stands|holds)",
     r"you(?:'re| are) not (?:really )?(?:deciding|choosing|asking|worried|upset|angry|stuck|confused)",
-    r"what(?:'s| is) (?:really )?(?:stopping|holding|keeping) you",
+    r"what(?:'s| is) (?:really )?(?:stopping|holding|keeping) (?:you|this|it)",
+    r"(?:is|are)n't what(?:'s| is) (?:holding|stopping|keeping)",
+    r"your mind (?:fills|goes|jumps|takes)",
     r"which is (?:part of |exactly |really )?why",
     r"you(?:'ve| have) already (?:said|decided|chosen|picked)",
     r"you already know",

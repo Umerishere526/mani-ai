@@ -206,6 +206,8 @@ def test_a_figurative_phrase_is_recorded_and_the_text_goes_out_as_written():
     "Settled dates make it a straight choice, and you've already said which one you want.",
     "You're not stuck on information.",
     "So what's stopping you isn't the facts.",
+    "The logistics aren't what's holding this up. It's the thought of what they'd make of you.",
+    "With nothing coming back, your mind fills in the gap.",
 ])
 def test_a_reading_said_as_fact_is_recorded_and_the_text_goes_out_as_written(written):
     """manasa (2026-11-25) and muhammad's tester: assumptions presented as facts. Each is one of muhammad's local test
