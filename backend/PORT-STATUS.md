@@ -286,9 +286,12 @@ the same change as the work.**
   `rule-directive-short`, `rule-directive-open-question`, `max_sentences`.
 - **A practical problem is understood before options: what they want, what can't change, and, when several causes
   could explain it, where it breaks down, asked in one plain question; no step with big consequences (replacing
-  someone, ending a job or relationship, money) before the cause is known; once known, two or three options each
-  with a reason and its cost, then a first step; an explicit request (what to do, what to say, a tool, help choosing)
-  is answered in that reply** (muhammad, 2026-11-25). Because the tester's business-owner chat got "it's him… hand the
+  someone, ending a job or relationship, money) before the cause is known; once known and they have said what they
+  want to change, the set that fits is offered (Structured Problem Solving for a practical problem) before any options
+  of Mani's own; options with a reason and their cost come directly only when they ask for an answer now, decline or
+  finish the set, or no set fits; an explicit request (what to do, what to say, a tool, help choosing) is answered in
+  that reply** (muhammad, 2026-11-25; the set before options the same day, because a tester found Mani "too solution
+  oriented" with "no framework coming", and the paid run's TC-10 offered none). Because the tester's business-owner chat got "it's him… hand the
   job to someone else" after one sentence of context; the cause was the rule "start with two or three concrete
   options" (CQ-7, 2026-11-25), which this replaces. Directive help replies take the room they need (the code trim
   already skips `move: help`). `mani.md`; regression TC-28 to TC-34 on the judge's coach rubric
