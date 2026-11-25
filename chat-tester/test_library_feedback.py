@@ -17,8 +17,11 @@ class LibraryBackend:
         # What the backend holds, so the page reads back what was saved, as it does from the real API.
         self.ratings = {"e2": {"rating": "down", "reason": "too long", "updated_at": STAMP}}
 
-    def list_exercises(self):
-        exercise = {"category": "Anxiety", "description": "", "duration_minutes": 4, "audio_url": None}
+    def list_topics(self):
+        return [{"id": "Anxiety", "title": "Anxiety", "blurb": ""}]
+
+    def list_exercises(self, topic):
+        exercise = {"category": topic, "description": "", "duration_minutes": 4, "recorded": True, "audio_url": None}
         return [
             {**exercise, "id": "e1", "title": "Bee Breathing", "type": "Breathing", "feedback": self.ratings.get("e1")},
             {**exercise, "id": "e2", "title": "The Night Drive", "type": "Story", "feedback": self.ratings.get("e2")},
@@ -39,8 +42,11 @@ class LibraryBackend:
 def _library():
     import streamlit as st
 
-    from library import render_library
+    from library import open_topic, render_library
 
+    if "opened" not in st.session_state:
+        st.session_state.opened = True
+        open_topic("Anxiety")
     render_library(st.session_state.backend)
 
 

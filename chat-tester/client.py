@@ -285,9 +285,14 @@ class ManiClient:
         """
         return self._call("GET", f"/v1/admin/threads/{thread_id}")
 
-    def list_exercises(self) -> list[dict[str, Any]]:
-        """GET /v1/exercises - the whole library, each item with a signed audio link and the person's own rating."""
-        return self._call("GET", "/v1/exercises")
+    def list_topics(self) -> list[dict[str, Any]]:
+        """GET /v1/exercises/topics - the library's topics in the client's order, each with its title and blurb."""
+        return self._call("GET", "/v1/exercises/topics")
+
+    def list_exercises(self, topic: str) -> list[dict[str, Any]]:
+        """GET /v1/exercises?category= - one topic's exercises, its own first, then those it lists from other topics
+        under their `subcategory`; each with a signed audio link (none while not recorded) and the person's rating."""
+        return self._call("GET", "/v1/exercises", params={"category": topic})
 
     def rate_exercise(self, exercise_id: str, rating: str, reason: str | None = None) -> dict[str, Any]:
         """PUT /v1/exercises/{id}/feedback - a 👍 ("up") or 👎 ("down") on an exercise, replacing any earlier one."""

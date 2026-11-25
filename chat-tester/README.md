@@ -14,12 +14,15 @@ endpoint (a conversation's first message through `POST /v1/threads`, which creat
 - **Real:** every chat turn, every capsule tap, style selection (tapping one of the greeting's
   three style buttons), framework offers (the lead-in, the five steps and Start), the feelings check after the last stage, the crisis pause (a centred pop-up that leads with where to get help - 988 to call or text, 911, findahelpline.com outside the US, Get help now and Visit library, with 911 first when the danger is to someone else, from someone or in the body, and "Call 911 now." first after an overdose - and only beneath it, smaller, that the chat is paused, for how long and about how many minutes are left; no ticking clock; closing it keeps the help lines above the readable conversation, and the Library stays open). All of it
   goes over HTTP to the actual FastAPI app - nothing here calls the chat code directly.
-- **Real, too:** the library page (sidebar **Library**, or any **Visit library** button). It lists
-  every exercise from `GET /v1/exercises` on one page, grouped by topic, each playable from its
-  signed link in one player with 10-second skips; stories also get 0.5x, 1x, 1.5x or 2x speed. Under
-  each player 👍/👎 saves the person's rating at once, then an optional reason and Submit; an admin
-  reviews every rating under **Library feedback**, filtered by email. Visit library opens it rather
-  than sending a message, as the apps navigate there.
+- **Real, too:** the library page (sidebar **Library**, or any **Visit library** button). Its front
+  page lists the client's topics with their blurbs (`GET /v1/exercises/topics`); a topic shows its
+  exercises (`GET /v1/exercises?category=`), and Workplace Challenges groups the ones it lists from
+  other topics under their subcategories. Each recorded exercise plays from its signed link in one
+  player with 10-second skips; stories also get 0.5x, 1x, 1.5x or 2x speed; one not yet recorded
+  says "Coming soon". Under each player 👍/👎 saves the person's rating at once, then an optional
+  reason and Submit; an admin reviews every rating under **Library feedback**, filtered by email.
+  Visit library opens the section the conversation fits rather than sending a message, as the apps
+  navigate there.
 - **Real, too:** sign-in and sign-up, through Supabase Auth with an email and password and the
   publishable (anon) key alone. The backend verifies the token exactly as it will a phone's, and it is
   refreshed when it expires. Each account sees only its own conversations - the backend scopes every

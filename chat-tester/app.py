@@ -12,7 +12,7 @@ import streamlit as st
 
 import client as mani
 from admin_view import render_admin
-from library import render_library
+from library import open_topic, render_library
 import crisis_pause
 import session_store
 import trace_view
@@ -190,6 +190,7 @@ with st.sidebar:
         st.rerun()
     if st.button("📚 Library", use_container_width=True):
         st.session_state.view = "library"
+        open_topic(None)
         st.rerun()
 
 client: mani.ManiClient = st.session_state.client
@@ -500,6 +501,7 @@ if buttons and not pending and paused is None:
         if col.button(button["label"], use_container_width=True, key=f"tap_{index}_{len(st.session_state.messages)}"):
             if button.get("library"):
                 st.session_state.view = "library"
+                open_topic(button["library"])
             elif thread is None:
                 tap_style(button["label"])
             else:

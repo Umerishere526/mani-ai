@@ -8,12 +8,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from "react-native-reanimated";
 import { AppHeader, GradientSphere, SecondaryButton, Text } from "@/components/shared";
-import { ExerciseComplete, ExercisePlaybackControl } from "@/components/exercises";
+import { ExerciseComplete, ExercisePlaybackControl, LibraryLoading } from "@/components/exercises";
 import { colors } from "@/lib/tokens";
 import { useResponsiveDimensions } from "@/hooks/useResponsiveDimensions";
 import { useExercisePlayback } from "@/hooks/useExercisePlayback";
+import { useLoad } from "@/hooks/useLoad";
+import { getExercise } from "@/lib/api/exercises";
 import { formatDuration } from "@/lib/utils";
-import { getExerciseById } from "@/lib/placeholder-exercises";
 import en from "@/dictionaries/en.json";
 
 const GRADIENT_COLORS = [colors.primary[700], colors.primary[900]] as const;
@@ -22,7 +23,8 @@ export default function ExercisePlayerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { isSmallScreen, isLargeScreen } = useResponsiveDimensions();
-  const exercise = id ? getExerciseById(id) : undefined;
+  const loaded = useLoad(id ?? null, () => getExercise(id ?? ""));
+  const exercise = loaded.data;
   const playback = useExercisePlayback((exercise?.durationMinutes ?? 0) * 60_000);
   const descriptionOpacity = useSharedValue(1);
 
@@ -38,7 +40,8 @@ export default function ExercisePlayerScreen() {
     return (
       <View className="flex-1 items-center justify-center">
         <LinearGradient colors={GRADIENT_COLORS} className="absolute inset-0" />
-        <Text className="text-base text-[#FF6B6B]">{en.exercises.failedToLoadExercise}</Text>
+        <AppHeader showBack backIcon="x" transparent onBack={() => router.back()} />
+        <LibraryLoading failed={loaded.failed} onRetry={loaded.retry} />
       </View>
     );
   }
@@ -50,7 +53,9 @@ export default function ExercisePlayerScreen() {
 
       <View className="items-center px-4" style={{ marginTop: 80 }}>
         <Text className="font-sans-semibold text-base text-white">{exercise.title}</Text>
-        <Text className="mt-4 text-lg text-white/60">{formatDuration(exercise.durationMinutes)}</Text>
+        {exercise.durationMinutes === null ? null : (
+          <Text className="mt-4 text-lg text-white/60">{formatDuration(exercise.durationMinutes)}</Text>
+        )}
       </View>
 
       <View className="items-center" style={{ marginTop: isSmallScreen ? 36 : 60, marginBottom: isSmallScreen ? 36 : 60 }}>
@@ -69,7 +74,8 @@ export default function ExercisePlayerScreen() {
       <View className="flex-1" />
 
       <View className="items-center px-4" style={{ paddingBottom: insets.bottom + 32 }}>
-        {!playback.hasStarted && (
+        {!exercise.recorded && <Text className="text-base text-white/60">{en.exercises.comingSoonItem}</Text>}
+        {exercise.recorded && !playback.hasStarted && (
           <SecondaryButton
             label={en.exercises.begin}
             onPress={playback.togglePlayback}

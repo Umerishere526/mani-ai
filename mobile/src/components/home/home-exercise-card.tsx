@@ -3,7 +3,7 @@
 
 import { Pressable } from 'react-native';
 import { CardGradient, Text } from '@/components/shared';
-import { exerciseAccessibilityLabel, formatDuration } from '@/lib/utils';
+import { exerciseAccessibilityLabel, exerciseMeta } from '@/lib/utils';
 import en from '@/dictionaries/en.json';
 import type { Exercise } from '@/types/exercise';
 import type { ResponsiveTypography } from '@/hooks/useResponsiveTypography';
@@ -28,7 +28,7 @@ export function HomeExerciseCard({ exercise, typography, onPress }: HomeExercise
         className="text-xs text-white/60"
         style={{ marginBottom: typography.homeCard.metaMarginBottom }}
       >
-        {formatDuration(exercise.durationMinutes)} • {exercise.type}
+        {exerciseMeta(exercise).join(' • ')}
       </Text>
       <Text className="font-sans-semibold text-white" style={{ fontSize: typography.homeCard.titleFontSize }}>
         {exercise.title}

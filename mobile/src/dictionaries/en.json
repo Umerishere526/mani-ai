@@ -134,7 +134,6 @@
     "failedToLoad": "Failed to load exercises",
     "empty": "No exercises available yet",
     "loadingExerciseLabel": "Loading exercise",
-    "failedToLoadExercise": "Failed to load exercise",
     "failedToLoadAudio": "Failed to load audio. Please try again.",
     "playbackFailed": "Playback failed. Please try again.",
     "begin": "Begin",
@@ -148,28 +147,8 @@
     "completeTitle": "Exercise complete",
     "continueChatting": "Continue chatting",
     "backToLibrary": "Back to library",
-    "categories": {
-      "EmotionalIntelligence": {
-        "title": "Emotional Intelligence",
-        "description": "Develop awareness and understanding of your emotions"
-      },
-      "BuildingHabits": {
-        "title": "Building New Habits",
-        "description": "Create lasting positive changes in your life"
-      },
-      "Boundaries": {
-        "title": "Boundaries",
-        "description": "Learn to set and maintain healthy boundaries"
-      },
-      "Anxiety": {
-        "title": "Anxiety",
-        "description": "Tools and techniques to manage anxious feelings"
-      },
-      "Burnout": {
-        "title": "Burnout",
-        "description": "Recover and prevent emotional exhaustion"
-      }
-    }
+    "comingSoonItem": "Coming soon",
+    "loadingLabel": "Loading the library"
   },
   "shared": {
     "gradientSphereLabel": "Mani sphere",

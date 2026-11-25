@@ -17,3 +17,22 @@ export interface ProfileIn {
   nickname?: string;
   support_style?: ConversationStyle;
 }
+
+export interface ExerciseOut {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  description: string;
+  type: string | null;
+  category: string;
+  subcategory: string | null;
+  duration_minutes: number | null;
+  recorded: boolean;
+  audio_url: string | null;
+}
+
+export interface TopicOut {
+  id: string;
+  title: string;
+  blurb: string;
+}

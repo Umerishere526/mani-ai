@@ -1,6 +1,5 @@
 // ABOUTME: The Home screen's scrollable body — hero sphere/greeting, a list of featured
-// ABOUTME: exercise cards, and a link into the full library. No network layer yet, so the
-// ABOUTME: exercise list is a `homeExercises` prop rather than a live query.
+// ABOUTME: exercise cards, and a link into the full library; the route loads the exercises.
 
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

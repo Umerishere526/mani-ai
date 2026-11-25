@@ -1,7 +1,5 @@
-// ABOUTME: Formats exercise times as m:ss — a listed duration rounded to the nearest 30 seconds
-// ABOUTME: (R143, never below 0:30), and an exact count of seconds for a running clock.
-
-const ROUNDING_SECONDS = 30;
+// ABOUTME: Formats exercise times as m:ss: a listed duration as the API sends it (already rounded to the nearest
+// ABOUTME: 30 seconds, R143), and an exact count of seconds for a running clock.
 
 export function formatClock(totalSeconds: number): string {
   const seconds = Math.max(0, Math.round(totalSeconds));
@@ -10,11 +8,6 @@ export function formatClock(totalSeconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-function roundDurationSeconds(minutes: number): number {
-  const steps = Math.round((minutes * 60) / ROUNDING_SECONDS);
-  return Math.max(ROUNDING_SECONDS, steps * ROUNDING_SECONDS);
-}
-
 export function formatDuration(minutes: number): string {
-  return formatClock(roundDurationSeconds(minutes));
+  return formatClock(minutes * 60);
 }

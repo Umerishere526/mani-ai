@@ -1,4 +1,4 @@
-// ABOUTME: Tests where each kind of button under a reply leads: library sections, the library's front page, and
+// ABOUTME: Tests where each kind of button under a reply leads: library topics, the library's front page, and
 // ABOUTME: technique offers and plain replies sent as their label.
 
 import { promptAction } from './prompt-action';
@@ -8,9 +8,8 @@ describe('promptAction', () => {
     expect(promptAction({ label: 'Try a breathing exercise', library: 'Anxiety' })).toEqual({ kind: 'library', section: 'Anxiety' });
   });
 
-  it('opens the library front page for "home" and for a section the app does not list', () => {
+  it('opens the library front page for "home"', () => {
     expect(promptAction({ label: 'Visit library', library: 'home' })).toEqual({ kind: 'library', section: null });
-    expect(promptAction({ label: 'Visit library', library: 'NarcissisticDynamics' })).toEqual({ kind: 'library', section: null });
   });
 
   it('sends a technique offer and a plain reply as their label', () => {

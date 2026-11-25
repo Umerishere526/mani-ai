@@ -4,7 +4,7 @@
 export { cn } from "./cn";
 export { pickByScreenSize } from "./responsive";
 export { formatClock, formatDuration } from "./format-duration";
-export { exerciseAccessibilityLabel } from "./exercise-accessibility-label";
+export { exerciseAccessibilityLabel, exerciseMeta } from "./exercise-accessibility-label";
 export { groupThreadsByDate, getDateGroup, type DateGroup, type GroupedThreadRow } from "./group-threads-by-date";
 export { fillTemplate } from "./fill-template";
 export { isValidEmail } from "./is-valid-email";

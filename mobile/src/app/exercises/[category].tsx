@@ -1,28 +1,21 @@
-// ABOUTME: Library category screen — lists the exercises in one category, each row
-// ABOUTME: showing duration, type and title, and opens the player when tapped.
+// ABOUTME: Library topic screen — the topic's own exercises, then those it lists from other topics under each
+// ABOUTME: subcategory; a recorded one opens the player, one not yet recorded says Coming soon.
 
 import { useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import {
-  Pressable,
-  ScrollView,
-  View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from "react-native";
-import { Feather } from "@react-native-vector-icons/feather";
+import { ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { AppHeader, Text } from "@/components/shared";
-import { useResponsiveTypography } from "@/hooks/useResponsiveTypography";
-import { exerciseAccessibilityLabel, formatDuration } from "@/lib/utils";
-import { EXERCISES_BY_CATEGORY } from "@/lib/placeholder-exercises";
+import { ExerciseRow, LibraryLoading } from "@/components/exercises";
+import { useLoad } from "@/hooks/useLoad";
+import { getTopicExercises } from "@/lib/api/exercises";
+import { groupBySubcategory } from "@/lib/library";
 import en from "@/dictionaries/en.json";
-import type { TopicId } from "@/types/exercise";
 
 export default function ExerciseCategoryScreen() {
-  const { category } = useLocalSearchParams<{ category: TopicId }>();
+  const { category } = useLocalSearchParams<{ category: string }>();
   const [isScrolled, setIsScrolled] = useState(false);
-  const typography = useResponsiveTypography();
-  const exercises = category ? (EXERCISES_BY_CATEGORY[category] ?? []) : [];
+  const exercises = useLoad(category ?? null, () => getTopicExercises(category ?? ""));
+  const groups = groupBySubcategory(exercises.data ?? []);
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     setIsScrolled(event.nativeEvent.contentOffset.y > 0);
@@ -32,41 +25,25 @@ export default function ExerciseCategoryScreen() {
     <View className="flex-1 bg-primary-900">
       <AppHeader showBack hideBorder={!isScrolled} onBack={() => router.back()} />
       <ScrollView className="flex-1 px-4 pt-4" onScroll={handleScroll} scrollEventThrottle={16}>
-        {exercises.length === 0 ? (
+        {exercises.data === null ? (
+          <LibraryLoading failed={exercises.failed} onRetry={exercises.retry} />
+        ) : groups.length === 0 ? (
           <View className="items-center py-8">
             <Text className="text-base text-white/80">{en.exercises.empty}</Text>
           </View>
         ) : (
-          <View>
-            {exercises.map((exercise) => (
-              <View key={exercise.id}>
-                <Pressable
-                  onPress={() => router.push(`/exercises/player/${exercise.id}`)}
-                  className="flex-row items-center py-4 active:opacity-70"
-                  accessibilityRole="button"
-                  accessibilityLabel={exerciseAccessibilityLabel(exercise)}
-                  accessibilityHint={en.home.exerciseCardHint}
-                >
-                  <View className="flex-1">
-                    <Text
-                      className="mb-1 text-white/60"
-                      style={{ fontSize: typography.caption.fontSize - 2, lineHeight: typography.caption.lineHeight }}
-                    >
-                      {formatDuration(exercise.durationMinutes)} • {exercise.type}
-                    </Text>
-                    <Text
-                      className="font-sans-semibold text-white"
-                      style={{ fontSize: typography.body.fontSize, lineHeight: typography.body.lineHeight }}
-                    >
-                      {exercise.title}
-                    </Text>
-                  </View>
-                  <Feather name="chevron-right" size={20} color="rgba(255,255,255,0.4)" />
-                </Pressable>
-                <View className="h-px bg-white/10" />
-              </View>
-            ))}
-          </View>
+          groups.map((group) => (
+            <View key={group.subcategory ?? ""} className="mb-4">
+              {group.subcategory ? (
+                <Text className="mt-2 font-sans-semibold text-base text-white/80" accessibilityRole="header">
+                  {group.subcategory}
+                </Text>
+              ) : null}
+              {group.exercises.map((exercise) => (
+                <ExerciseRow key={exercise.id} exercise={exercise} />
+              ))}
+            </View>
+          ))
         )}
       </ScrollView>
     </View>

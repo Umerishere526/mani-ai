@@ -1,17 +1,20 @@
-// ABOUTME: Library screen — the exercise categories as gradient cards in a fixed order,
-// ABOUTME: each opening its category's exercise list.
+// ABOUTME: Library screen — the client's topics in her order as gradient cards, each with its blurb, each opening
+// ABOUTME: its topic's exercises. Read from GET /v1/exercises/topics.
 
 import { useState } from "react";
 import { router } from "expo-router";
 import { Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { AppHeader, CardGradient, Text } from "@/components/shared";
+import { LibraryLoading } from "@/components/exercises";
+import { useLoad } from "@/hooks/useLoad";
 import { useResponsiveTypography } from "@/hooks/useResponsiveTypography";
-import { CATEGORY_DISPLAY_ORDER } from "@/lib/exercise-categories";
+import { getTopics } from "@/lib/api/exercises";
 import en from "@/dictionaries/en.json";
 
 export default function ExerciseCategoriesScreen() {
   const typography = useResponsiveTypography();
   const [isScrolled, setIsScrolled] = useState(false);
+  const topics = useLoad("topics", getTopics);
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     setIsScrolled(event.nativeEvent.contentOffset.y > 0);
@@ -26,30 +29,31 @@ export default function ExerciseCategoriesScreen() {
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >
-        <View className="gap-3">
-          {CATEGORY_DISPLAY_ORDER.map((category) => {
-            const info = en.exercises.categories[category];
-            return (
+        {topics.data === null ? (
+          <LibraryLoading failed={topics.failed} onRetry={topics.retry} />
+        ) : (
+          <View className="gap-3">
+            {topics.data.map((topic) => (
               <Pressable
-                key={category}
-                onPress={() => router.push(`/exercises/${category}`)}
+                key={topic.id}
+                onPress={() => router.push(`/exercises/${topic.id}`)}
                 className="overflow-hidden rounded-lg p-4 active:opacity-70"
                 accessibilityRole="button"
-                accessibilityLabel={info.title}
-                accessibilityHint={info.description}
+                accessibilityLabel={topic.title}
+                accessibilityHint={topic.blurb}
               >
                 <CardGradient />
                 <Text
                   className="mb-1 font-sans-semibold text-white"
                   style={{ fontSize: typography.body.fontSize, lineHeight: typography.body.lineHeight }}
                 >
-                  {info.title}
+                  {topic.title}
                 </Text>
-                <Text className="text-sm leading-5 text-white/80">{info.description}</Text>
+                {topic.blurb ? <Text className="text-sm leading-5 text-white/80">{topic.blurb}</Text> : null}
               </Pressable>
-            );
-          })}
-        </View>
+            ))}
+          </View>
+        )}
         <Text className="mt-6 text-center text-base text-white/70">{en.exercises.comingSoon}</Text>
       </ScrollView>
     </View>
